@@ -1,0 +1,5 @@
+Set A, B, C
+
+Intersect(A, B)
+Intersect(B, C)
+Disjoint(A, C)

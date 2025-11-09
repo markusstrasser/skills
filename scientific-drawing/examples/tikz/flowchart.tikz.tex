@@ -1,0 +1,23 @@
+\begin{document}
+\begin{tikzpicture}[node distance=2cm, auto]
+  % Define styles
+  \tikzstyle{startstop} = [rectangle, rounded corners, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=red!30]
+  \tikzstyle{process} = [rectangle, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=blue!30]
+  \tikzstyle{decision} = [diamond, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=green!30]
+  \tikzstyle{arrow} = [thick,->,>=stealth]
+
+  % Nodes
+  \node (start) [startstop] {Start};
+  \node (process1) [process, below of=start] {Process Input};
+  \node (decision1) [decision, below of=process1, yshift=-0.5cm] {Valid?};
+  \node (process2) [process, below of=decision1, yshift=-1cm] {Execute};
+  \node (stop) [startstop, below of=process2] {Stop};
+
+  % Arrows
+  \draw [arrow] (start) -- (process1);
+  \draw [arrow] (process1) -- (decision1);
+  \draw [arrow] (decision1) -- node[anchor=east] {yes} (process2);
+  \draw [arrow] (decision1) -| node[anchor=south, near start] {no} +(-3,0) |- (process1);
+  \draw [arrow] (process2) -- (stop);
+\end{tikzpicture}
+\end{document}

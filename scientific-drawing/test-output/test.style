@@ -1,0 +1,6 @@
+
+forall Set x {
+  x.shape = Circle {
+    r: 50
+  }
+}

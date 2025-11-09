@@ -1,0 +1,6 @@
+{
+  "domain": "./setTheory.domain",
+  "style": ["./venn.style"],
+  "substance": "./venn-diagram.substance",
+  "variation": "VennExample123"
+}
