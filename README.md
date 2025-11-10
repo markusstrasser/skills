@@ -5,26 +5,25 @@ This is the canonical location for all Claude Code skills. Individual projects r
 ## Structure
 
 ```
-Projects/
-├── skills/                    # ← Canonical location (this directory)
-│   ├── architect/
-│   ├── code-research/
-│   ├── computer-use/
-│   ├── debug-mcp-servers/
-│   ├── diagnostics/
-│   ├── llmx-guide/
-│   ├── scientific-drawing/
-│   ├── session-memory/
-│   └── skill-authoring/
-│
-├── evo/skills → ../skills     # ← Symlink
-├── publishing/skills → ../skills
-├── chats/skills → ../skills
-├── demo-app/skills → ../skills
-│
-└── archived/skills-old/       # ← Old duplicates (archived 2025-11-09)
-    ├── evo-skills-20251109/
-    └── publishing-skills-20251109/
+skills/                    # This repository
+├── architect/
+├── code-research/
+├── computer-use/
+├── debug-mcp-servers/
+├── diagnostics/
+├── llmx-guide/
+├── scientific-drawing/
+├── session-memory/
+└── skill-authoring/
+```
+
+**Usage in projects:**
+
+Projects reference these skills via symlinks:
+```
+your-project/
+└── .claude/
+    └── skills → /path/to/this/repo
 ```
 
 ## Benefits
@@ -48,20 +47,29 @@ Projects/
 | `session-memory` | Semantic search across sessions | Nov 6, 2025 |
 | `skill-authoring` | Create and design Agent Skills for Claude Code | Nov 9, 2025 |
 
-## Migration History
 
-**2025-11-09**: Consolidated from distributed skills directories
-- Source: `publishing/skills` (newest versions as of Nov 7)
-- Migrated projects: `evo`, `publishing`, `chats`, `demo-app`
-- Archived: Old duplicates moved to `Projects/archived/skills-old/`
+## Using in Your Projects
 
-## Adding New Projects
+**Option 1: Script (recommended)**
 
-To use these skills in a new project:
+Use the included `link-skill.sh` script for interactive selection:
 
 ```bash
-cd /path/to/new-project
-ln -s ../skills skills  # If project is in Projects/
-# OR
-ln -s /Users/alien/Projects/skills skills  # Absolute path
+cd your-project
+/path/to/skills/skill-authoring/scripts/link-skill.sh
+```
+
+**Option 2: Manual symlink**
+
+```bash
+cd your-project
+mkdir -p .claude
+ln -s /path/to/skills .claude/skills
+```
+
+**Verification:**
+
+```bash
+ls .claude/skills/
+# Should show: architect, code-research, diagnostics, etc.
 ```
