@@ -33,3 +33,17 @@ __pycache__/
 .env.*
 # The '!' is escaped to prevent issues if script is sourced in zsh
 \!.env.example
+
+# ---- Test/Generated Output ----
+test-output/
+*.output/
+*.generated/
+
+# ---- Diagram Renders ----
+# Keep source files, ignore generated renders
+*.png
+*.pdf
+*.gif
+!examples/**/*.png
+!examples/**/*.pdf
+!templates/**/*.png
