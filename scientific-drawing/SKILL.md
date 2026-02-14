@@ -49,6 +49,159 @@ Comprehensive skill for generating high-quality scientific diagrams using the ri
 - Passes Reconstruction Test: "Does seeing this make me go 'oh right'?"
 - Tag card `ai-visual` and `ai-modified`
 
+### Domain-Specific Tools
+
+#### Chemistry — Molecular Structures
+
+**RDKit (Python)** — SMILES → SVG. Best for structural formulas.
+
+```python
+from rdkit import Chem
+from rdkit.Chem.Draw import rdMolDraw2D
+
+mol = Chem.MolFromSmiles('CN1C=NC2=C1C(=O)N(C(=O)N2C)C')  # caffeine
+d = rdMolDraw2D.MolDraw2DSVG(400, 300)
+d.DrawMolecule(mol)
+d.FinishDrawing()
+svg = d.GetDrawingText()  # complete SVG string
+```
+
+Run: `uv run python -c "..."` — RDKit is a project dependency.
+
+Common SMILES: `CCO` (ethanol), `c1ccccc1` (benzene), `CC(=O)O` (acetic acid), `OC[C@@H](O1)[C@@H](O)[C@H](O)[C@@H](O)[C@@H]1O` (glucose).
+
+**chemfig (TikZ)** — Hand-coded molecular structures in LaTeX. Already installed in TeX Live.
+
+```tex
+\usepackage{chemfig}
+\chemfig{H-C(-[2]H)(-[6]H)-C(=O)-OH}  % acetic acid
+```
+
+**chemobabel (TikZ)** — SMILES → chemfig via Open Babel. Requires `-shell-escape`. Installed in TeX Live.
+
+```tex
+\usepackage{chemobabel}
+\smilesobabel{c1ccccc1}{}  % benzene from SMILES
+```
+
+**Typst: alchemist** — Skeletal formulas in Typst (based on CeTZ, chemfig-inspired syntax). Auto-downloads.
+
+```typst
+#import "@preview/alchemist:0.1.8": *
+#skeletize({
+  fragment("CH3")
+  single()
+  fragment("OH")
+})
+```
+
+**Typst: typsium** — Chemical equations and formulas in Typst. Auto-downloads.
+
+```typst
+#import "@preview/typsium:0.3.1": *
+#ce("[Cu(H2O)4]^2+ + 4NH3 -> [Cu(NH3)4]^2+ + 4H2O")
+```
+
+#### Physics — Feynman, Circuits, Optics
+
+**tikz-feynman (TikZ)** — Feynman diagrams with automatic vertex placement. Installed in TeX Live.
+
+```tex
+\usepackage{tikz-feynman}
+\feynmandiagram[horizontal=a to b]{
+  i1 -- [fermion] a -- [fermion] i2,
+  a -- [photon, edge label=\(\gamma\)] b,
+  f1 -- [fermion] b -- [fermion] f2,
+};
+```
+
+**circuitikz (TikZ)** — Circuit diagrams. Huge component library (v1.8+). Installed in TeX Live.
+
+```tex
+\usepackage{circuitikz}
+\begin{circuitikz}
+  \draw (0,0) to[R=$R_1$] (2,0) to[C=$C_1$] (2,-2) -- (0,-2) to[battery1] (0,0);
+\end{circuitikz}
+```
+
+**tikz-optics (TikZ)** — Lenses, mirrors, ray diagrams. Installed in TeX Live.
+
+**Typst: inknertia** — Feynman diagrams, spacetime diagrams, free-body diagrams in Typst. Auto-downloads.
+
+```typst
+#import "@preview/inknertia:0.1.0": feynman
+#import feynman: *
+#feynman((
+  vertex("i1", label: $e^+$), vertex("i2", label: $e^-$),
+  vertex("a"), vertex("b"),
+  vertex("f1", label: $mu^-$), vertex("f2", label: $mu^+$),
+  edge("i1", "a", type: "fermion"),
+  edge("a", "b", type: "photon", label: $gamma$),
+  edge("b", "f1", type: "fermion"),
+))
+```
+
+**Typst: physica** — Math constructs for physics: derivatives, braket notation, tensors, hbar. Auto-downloads.
+
+```typst
+#import "@preview/physica:0.9.8": *
+$braket(psi, phi), pdv(f, x, y, [1,2]), tensor(T, -mu, +nu)$
+```
+
+#### Biology — Trees, Pathways
+
+**forest (TikZ)** — Phylogenetic trees, cladograms, any tree structure. Installed in TeX Live.
+
+```tex
+\usepackage{forest}
+\begin{forest}
+  [Eukaryota [Animalia [Chordata] [Arthropoda]] [Plantae [Angiosperms] [Gymnosperms]]]
+\end{forest}
+```
+
+**RDKit** — Also useful for biochemistry: amino acids, nucleotides, drug molecules. Same SMILES → SVG pipeline.
+
+**Typst: fletcher** — Arrow diagrams (pathway diagrams, commutative diagrams). Auto-downloads.
+
+```typst
+#import "@preview/fletcher:0.5.8" as fletcher: diagram, node, edge
+#diagram(
+  node((0,0), $A$), edge("->", label: "enzyme"),
+  node((1,0), $B$), edge("->"),
+  node((2,0), $C$),
+)
+```
+
+#### Math — Commutative Diagrams, Knots
+
+**tikz-cd (TikZ)** — Commutative diagrams. Installed in TeX Live. Also has [quiver.app](https://q.uiver.app/) GUI for generating code.
+
+```tex
+\usepackage{tikz-cd}
+\begin{tikzcd}
+  A \arrow[r, "f"] \arrow[d, "g"'] & B \arrow[d, "h"] \\
+  C \arrow[r, "k"'] & D
+\end{tikzcd}
+```
+
+#### Neural Networks
+
+**neuralnetwork (TikZ)** — Feedforward network diagrams with layers. Installed in TeX Live.
+
+#### Tool Selection by Domain
+
+| Need | Best tool | Why |
+|------|-----------|-----|
+| Molecular structure from name/SMILES | **RDKit** | One line of Python → SVG. No manual drawing. |
+| Reaction mechanism with arrows | **chemfig** | TikZ-native, good LLM reliability |
+| Chemical equation typesetting | **typsium** (Typst) | Clean syntax, auto-scale brackets |
+| Feynman diagram | **tikz-feynman** (TikZ) or **inknertia** (Typst) | Both have automatic layout |
+| Circuit diagram | **circuitikz** | Largest component library |
+| Phylogenetic tree | **forest** | Best tree layout engine |
+| Commutative diagram | **tikz-cd** or **fletcher** | tikz-cd for LaTeX, fletcher for Typst |
+| Spacetime / free-body diagram | **inknertia** (Typst) | Purpose-built for physics pedagogy |
+| Physics math notation | **physica** (Typst) | Derivatives, brakets, tensors |
+
 ---
 
 ## For Standalone Diagrams (Other Workflows)
