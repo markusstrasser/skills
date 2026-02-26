@@ -43,6 +43,7 @@ your-project/
 | `debug-mcp-servers` | MCP server debugging utilities | Nov 7, 2025 |
 | `diagnostics` | Error diagnosis and health checks | Nov 6, 2025 |
 | `llmx-guide` | LLM provider CLI guide | Nov 7, 2025 |
+| `manim-animations` | Mathematical animations and visualizations with Manim | Nov 18, 2025 |
 | `scientific-drawing` | TikZ/LaTeX figure generation | Nov 8, 2025 |
 | `session-memory` | Semantic search across sessions | Nov 6, 2025 |
 | `skill-authoring` | Create and design Agent Skills for Claude Code | Nov 9, 2025 |
