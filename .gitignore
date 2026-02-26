@@ -38,6 +38,10 @@ __pycache__/
 test-output/
 *.output/
 *.generated/
+temp/
+
+# ---- Manim ----
+media/
 
 # ---- Diagram Renders ----
 # Keep source files, ignore generated renders
