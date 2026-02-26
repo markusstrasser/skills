@@ -19,7 +19,7 @@ Usage: $(basename "$0") FILE [FORMAT] [OPTIONS]
 Generate scientific diagrams using the appropriate tool.
 
 Arguments:
-    FILE          Input file (.typ, .asy, .trio.json, .tikz.tex)
+    FILE          Input file (.typ, .asy, .trio.json, .tikz.tex, .d2)
     FORMAT        Output format (pdf, svg, png) [optional, uses defaults]
     OPTIONS       Tool-specific options
 
@@ -29,12 +29,15 @@ Examples:
     $(basename "$0") plot.asy svg --no-view
     $(basename "$0") sets.trio.json
     $(basename "$0") circuit.tikz.tex
+    $(basename "$0") architecture.d2
+    $(basename "$0") architecture.d2 svg --layout=tala -t 101
 
 Supported formats:
     .typ          Typst/CeTZ diagrams
     .asy          Asymptote graphics
     .trio.json    Penrose diagrams
     .tikz.tex     TikZ diagrams (via node-tikzjax)
+    .d2           D2 diagrams
 EOF
     exit 1
 }
@@ -66,6 +69,9 @@ detect_format() {
             ;;
         *.tikz.tex|*.tikz)
             echo "tikz"
+            ;;
+        *.d2)
+            echo "d2"
             ;;
         *)
             error "Unknown file format: $file"
@@ -165,6 +171,26 @@ generate_tikz() {
     info "Generated: $output"
 }
 
+generate_d2() {
+    local input="$1"
+    local format="${2:-svg}"
+    shift 2 || true
+    local opts=("$@")
+
+    info "Compiling D2 diagram: $input → $format"
+
+    if ! command -v d2 &> /dev/null; then
+        error "d2 not found. Install with: curl -fsSL https://d2lang.com/install.sh | sh | sh"
+    fi
+
+    local output="${input%.d2}.${format}"
+
+    # D2 args: [input] [output] [flags]
+    d2 "${opts[@]}" "$input" "$output"
+
+    info "Generated: $output"
+}
+
 main() {
     if [[ $# -lt 1 ]]; then
         usage
@@ -192,6 +218,9 @@ main() {
             ;;
         tikz)
             generate_tikz "$input" "$@"
+            ;;
+        d2)
+            generate_d2 "$input" "$@"
             ;;
         *)
             error "Unsupported format: $format_type"

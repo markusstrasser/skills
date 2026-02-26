@@ -42,6 +42,11 @@ main() {
         all_ok=false
     fi
 
+    # Check D2
+    if ! check_cmd "d2" "curl -fsSL https://d2lang.com/install.sh | sh | sh" "d2 --version"; then
+        all_ok=false
+    fi
+
     # Check Bun (for Penrose and TikZ)
     if ! check_cmd "bun" "curl -fsSL https://bun.sh/install | bash" "bun --version"; then
         all_ok=false
