@@ -5,6 +5,47 @@ description: Critical gotchas when calling llmx from Python. Non-obvious bugs an
 
 # llmx CLI Gotchas
 
+## GPT-5.2 Timeouts (the #1 issue)
+
+GPT-5.2 with reasoning burns time BEFORE producing output. Default 120s timeout is too low.
+
+**Auto-scaling (v0.4.0+):** When `--timeout` is not explicitly set, llmx auto-scales:
+
+| `--reasoning-effort` | Auto timeout | Typical response time |
+| -------------------- | ------------ | --------------------- |
+| none / low           | 120s         | 1-15s                 |
+| medium               | 300s (5 min) | 30-90s                |
+| high                 | 600s (10 min)| 3-10 min              |
+| xhigh                | 900s (15 min)| 10-30+ min            |
+
+**If you explicitly pass `--timeout N`, auto-scaling is disabled.** Max allowed: 900s.
+
+**Streaming avoids most timeouts:** Non-streaming holds the connection idle during reasoning. Proxies and HTTP clients kill idle connections. `--stream` sends keepalive chunks.
+
+```bash
+# WILL timeout with default settings:
+llmx -m gpt-5.2 --reasoning-effort high --no-stream "complex query"
+
+# WORKS — auto-timeout 600s:
+llmx -m gpt-5.2 --reasoning-effort high "complex query"
+
+# BEST for high/xhigh — streaming avoids idle-connection kills:
+llmx -m gpt-5.2 --reasoning-effort high --stream "complex query"
+
+# For very long tasks, use deep research (background mode, no timeout):
+llmx research "complex multi-source analysis"
+```
+
+**When calling from Python/subprocess:**
+```python
+# Set timeout high for reasoning models
+subprocess.run(
+    ['llmx', '-m', 'gpt-5.2', '--reasoning-effort', 'high', '--stream'],
+    input=prompt, capture_output=True, text=True,
+    timeout=900  # subprocess timeout must also be high
+)
+```
+
 ## Bug: shell=True breaks with parentheses
 
 **Wrong:**
@@ -50,6 +91,24 @@ llmx --provider google <<< "2+2?"
 | --------------------- | ---------------- |
 | llmx CLI              | `gemini-2.5-pro` |
 | tournament MCP judges | `gemini25-pro`   |
+
+## Deep Research (v0.4.0+)
+
+Background-mode research using OpenAI o3/o4-mini. No timeout issues — runs asynchronously.
+
+```bash
+# Full research report with citations (2-10 min, background mode)
+llmx research "economic impact of semaglutide"
+
+# Faster/cheaper with o4-mini
+llmx research --mini "compare React vs Svelte"
+
+# Save output
+llmx research "CRISPR patent landscape" -o report.md
+
+# With code interpreter for data analysis
+llmx research --code-interpreter "global EV trends with data"
+```
 
 ## Image Generation (v0.3.0+)
 
