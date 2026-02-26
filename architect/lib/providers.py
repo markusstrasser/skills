@@ -158,8 +158,8 @@ Use bullet points over paragraphs where possible.
 """
 
     try:
-        # Use llmx with google provider - uses default gemini/gemini-2.5-pro
-        # (no need to specify model since 2.5 Pro is the default)
+        # Use llmx with google provider - uses default gemini/gemini-3-pro-preview (Nov 2025)
+        # (no need to specify model since 3 Pro is the default)
         # Note: Gemini doesn't support reasoning_effort parameter
         result = subprocess.run(
             ['llmx', '--provider', 'google'],

@@ -249,7 +249,7 @@ Decision logic:
                     "compare",
                     "--items", str(items_file),
                     "--prompt", str(prompt_file),
-                    "--judges", "gpt5-codex,gemini25-pro,grok-4",
+                    "--judges", "gpt5-codex,gemini3-pro,grok-4",  # Updated to Gemini 3 Pro (Nov 2025)
                     "--max-rounds", "3",
                     "--output", str(output_file),
                 ]
