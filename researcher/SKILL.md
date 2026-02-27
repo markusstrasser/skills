@@ -60,47 +60,51 @@ User can override with `--quick` or `--deep`. Announce the tier before starting.
 
 ## Domain Profiles
 
-Classify the question's domain. This determines evidence standards, tool priority, and failure modes.
+Classify the question's domain. This determines what non-obvious mistakes to avoid. Evidence hierarchies are standard — these profiles focus on the gotchas you WON'T think of.
 
 ### Scientific / Biomedical
-- **Evidence hierarchy:** Systematic review > RCT > cohort > case-control > case series > mechanistic reasoning > expert opinion
-- **Primary tools:** PubMed (`paper-search`), Semantic Scholar (`research`), ClinVar/gnomAD/PharmGKB (WebFetch)
-- **Fetch obligation:** Always `fetch_paper` + `read_paper` before citing. Abstracts are not primary sources.
-- **Traps:** Mechanistic reasoning without clinical evidence, single-SNP determinism, ignoring effect sizes, rodent-to-human extrapolation, supplement dosage fabrication
-- **Invoke:** `epistemics` skill for evidence grading
+- **Invoke `epistemics` skill** — it has the evidence hierarchy and grading rules.
+- ClinVar single-submitter entries get reclassified often — don't treat as settled. ≥2 stars only.
+- gnomAD frequency alone is not clinical evidence. PRS percentiles are population-relative, not absolute risk.
+- You WILL fabricate supplement dosages and effect sizes under pressure to be precise. Don't.
+- Rodent studies and mechanistic reasoning are hypothesis-generating, not evidence for human protocols.
+- PubMed + `paper-search` for clinical. Exa for recent work (S2 can't filter by date).
 
 ### Trading / Investment
-- **Evidence hierarchy:** Backtest with OOS validation > historical precedent with base rates > natural experiment > analyst consensus (= zero information) > narrative
-- **Primary tools:** DuckDB (project views), SEC EDGAR (WebFetch), Exa (company research), Substacks
-- **Source grading:** Admiralty system (`[A1]`-`[F6]`), not provenance tags. Invoke `source-grading` skill.
-- **Traps:** Confirmation bias on thesis, consensus as signal, survivorship bias in backtests, look-ahead bias (check PIT registry), precision fabrication of financial metrics
-- **Special:** Detrend before claiming correlation. Base-rate every risk. Leads >$10M require ACH.
+- **Invoke `source-grading` skill** — Admiralty grades, not provenance tags.
+- **Detrend before claiming correlation.** We found r=0.86 that dropped to r=0.038 after controlling for market + seasonality.
+- Consensus = zero information. If every analyst says it, the price already reflects it.
+- Leads >$10M require `/competing-hypotheses`. No single-hypothesis confirmation bias.
+- **Predict the data footprint BEFORE querying.** Write what you expect to find, then query. Prevents confirmation bias.
+- Check PIT (point-in-time) safety — congressional trades have 45-day disclosure lag, CMS spending has 365-day lag.
+- Survivorship bias in backtests. Look-ahead bias in feature construction. Both invisible until you check.
+- Absence of expected evidence IS evidence. If your hypothesis predicts X and X isn't there, that's diagnostic.
 
-### Economics / Policy / Regulatory
-- **Evidence hierarchy:** Natural experiment > RCT > diff-in-diff > cross-sectional > case study > expert opinion
-- **Primary tools:** BLS/CMS/Census (WebFetch), FRED, government registries, Exa for policy analysis
-- **Traps:** Ecological fallacy, Goodhart's Law on metrics, confusing correlation with causation in macro data, cherry-picking time windows
-- **Special:** Always check sample size and external validity. Policy effects are context-dependent.
-
-### Mathematics / Formal / CS
-- **Evidence hierarchy:** Proof > empirical benchmark with reproduction > theoretical analysis > simulation > analogy
-- **Primary tools:** arXiv (`paper-search`), Semantic Scholar, context7 (for implementations)
-- **Fetch obligation:** Reproduce derivations, don't cite formulas from memory. Verify theorem statements against source.
-- **Traps:** Precision fabrication (invented coefficients, sample sizes), misremembered theorem conditions, citing results from wrong paper
+### Mathematics / Formal
+- Reproduce derivations from source. Don't cite formulas from training data.
+- You WILL invent coefficients, sample sizes, and p-values. The pattern: real concept + fabricated specifics.
+- Verify probability vs odds at function boundaries (`fuse_evidence` takes odds, not probability — real bug we found).
+- Small-denominator metrics need Empirical Bayes shrinkage, not raw proportions.
 
 ### Investigative / OSINT
-- **Evidence hierarchy:** Primary documents (filings, court records) > enforcement actions > investigative journalism (named sources) > anonymous tips > social media
-- **Primary tools:** DuckDB (entity views), Intelligence MCP, SEC EDGAR, OSHA, WebFetch (government databases), Exa
-- **Source grading:** Admiralty system mandatory. Invoke `source-grading` skill.
-- **Traps:** Confirmation bias (finding what you expect), single-source anchoring, confusing correlation with coordination, missing the null hypothesis (error, not fraud)
-- **Special:** Predict the data footprint BEFORE querying. If your hypothesis is true, what should you see?
+- **Invoke `source-grading` skill** — Admiralty grades mandatory.
+- Grade claims, not datasets. Same dataset has different reliability for different fields (NPPES NPI vs NPPES address).
+- **Predict the data footprint BEFORE querying.** If your hypothesis is true, what should you see in the data?
+- Correlated signals (shared phone + shared address + shared official) can't be summed as independent LLRs. Use composite scoring.
+- Missing data ≠ no evidence. If fraudsters hide information, missingness is evidence FOR fraud.
+- The null hypothesis is always "error, not fraud." Don't skip it.
 
-### Social Science / Humanities
-- **Evidence hierarchy:** Meta-analysis > pre-registered experiment > observational study > qualitative research > theoretical framework > anecdote
-- **Primary tools:** Semantic Scholar, PubMed (for psych/neuro), Exa (for grey literature), Google Scholar via `paper-search`
-- **Traps:** Replication crisis (check if finding replicated), WEIRD samples, p-hacking, narrative over data, overgeneralizing qualitative findings
+### Social Science
+- Replication crisis is real. Check if the finding has been independently replicated before citing.
+- WEIRD samples (Western, Educated, Industrialized, Rich, Democratic) — most psych findings are from US undergrads.
+- Pre-registered studies > post-hoc analysis. Check if the study was pre-registered.
 
-If a question spans domains, name the primary and secondary. Use the stricter evidence standard.
+### Economics / Policy
+- Ecological fallacy: aggregate patterns don't imply individual behavior.
+- Policy effects are context-dependent. What worked in Scandinavia may not transfer.
+- Goodhart's Law: when a metric becomes a target, it ceases to be a good metric.
+
+If a question spans domains, name the primary and secondary. Use the stricter evidence standard. Project-specific routing (which DuckDB views, which databases) lives in `.claude/rules/research-depth.md`.
 
 ## Phase 1 — Ground Truth (always first)
 
