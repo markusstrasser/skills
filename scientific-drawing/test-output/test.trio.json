@@ -1,8 +1,0 @@
-{
-  "domain": "./test.domain",
-  "style": [
-    "./test.style"
-  ],
-  "substance": "./test.substance",
-  "variation": "test-seed"
-}

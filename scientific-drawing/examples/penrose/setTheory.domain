@@ -1,5 +1,0 @@
-type Set
-
-predicate Subset(Set, Set)
-predicate Intersect(Set, Set)
-predicate Disjoint(Set, Set)
