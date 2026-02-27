@@ -1,156 +1,155 @@
 ---
 name: researcher
-description: Autonomous research agent that orchestrates all available MCP tools with epistemic rigor. Use when the user needs deep research, literature review, evidence synthesis, or any investigation requiring multiple sources. Combines deep-research protocol (6-phase workflow) with epistemics (evidence grading) and MCP-aware tool routing.
+description: Autonomous research agent that orchestrates all available MCP tools with epistemic rigor. Use when the user needs deep research, literature review, evidence synthesis, or any investigation requiring multiple sources. Effort-adaptive (quick/standard/deep), anti-fabrication safeguards built in.
 argument-hint: [research question or topic]
 ---
 
 # Researcher
 
-Composite research agent. Orchestrates deep-research (workflow) + epistemics (evidence grading) + all available MCP tools into an effort-adaptive research system.
+Research with the rigor of an investigative journalist, not a search engine. Every claim needs provenance. Inference is fine — but say it's inference, not fact.
 
-**Invoke companion skills at start:**
+**Invoke companion skills if relevant:**
 - **`epistemics`** — if the question touches bio/medical/scientific claims
-- Do NOT re-invoke `deep-research` — this skill supersedes it with MCP-aware routing
+- **`source-grading`** — if this is an investigation/OSINT context (use Admiralty grades)
+
+**Project-specific tool routing and gotchas are in `.claude/rules/research-depth.md`** (if it exists). Check it before starting.
+
+## Available Research Tools
+
+Use whichever of these are available in the current project's `.mcp.json`:
+
+| Tool | What it does | When to use |
+|------|-------------|-------------|
+| `mcp__selve__search` | Personal knowledge search | Prior work, conversations, notes — **always check first** |
+| `mcp__duckdb__execute_query` | Query project DuckDB views | Our data — check before going external |
+| `mcp__intelligence__*` | Entity resolution, dossiers, screening | Investigation targets |
+| `mcp__research__search_papers` | Semantic Scholar search | Finding papers. **No date filtering** — use Exa for recency |
+| `mcp__research__save_paper` | Save paper to local corpus | After finding useful paper |
+| `mcp__research__fetch_paper` | Download PDF + extract text | **Before citing any paper** |
+| `mcp__research__read_paper` | Get full extracted text | Reading a fetched paper |
+| `mcp__research__ask_papers` | Query across papers (Gemini 1M) | Synthesizing multiple papers |
+| `mcp__research__list_corpus` | List saved papers | Check before searching externally |
+| `mcp__research__export_for_selve` | Export for selve embedding | End of session, persist findings |
+| `mcp__paper-search__search_arxiv` | arXiv search | Preprints — flag as `[PREPRINT]` |
+| `mcp__paper-search__search_pubmed` | PubMed search | Clinical/medical literature |
+| `mcp__paper-search__search_biorxiv` | bioRxiv/medRxiv search | Biology/medical preprints |
+| `mcp__exa__web_search_exa` | Semantic web search | Non-obvious connections, expert blogs, recent work |
+| `mcp__exa__company_research_exa` | Company intelligence | Business/financial research |
+| `mcp__exa__get_code_context_exa` | Code/docs search | Technical implementation |
+| `mcp__context7__*` | Library documentation | API/framework questions |
+| WebFetch | Fetch specific URLs | Known databases, filings, regulatory |
+| WebSearch | General web search | News, grey literature |
+
+Not all tools exist in every project. Use what's available. The agent will error on tools not in `.mcp.json` — just skip them.
+
+**Critical rule:** `fetch_paper` then `read_paper` BEFORE citing. Abstracts are not primary sources.
+
+**S2 gotcha:** No date filtering on free tier. ~100 req/5min rate limit. Use Exa for "recent papers on X."
 
 ## Effort Classification
 
 Before doing anything, classify the question:
 
-| Tier | Signals | Tools | Axes | Output |
-|------|---------|-------|------|--------|
-| **Quick** | Factual lookup, single claim, "what is X?" | selve + 1 external | 1 | Inline answer with source |
-| **Standard** | Topic review, comparison, "what do we know about X?" | selve + 2-3 external, save sources | 2 | Research memo with claims table |
-| **Deep** | Literature review, synthesis, novel question, "investigate X" | Parallel subagents, all tools | 3+ | Full report: disconfirmation, verification, search log |
+| Tier | Signals | Axes | Output |
+|------|---------|------|--------|
+| **Quick** | Factual lookup, single claim | 1 | Inline answer with source |
+| **Standard** | Topic review, comparison, "what do we know?" | 2 | Research memo with claims table |
+| **Deep** | Literature review, novel question, "investigate X" | 3+ | Full report with disconfirmation + search log |
 
-User can override with `--quick` or `--deep` in their prompt.
-
-**Announce the tier:** "This is a [quick/standard/deep] research question. Here's my approach: ..."
+User can override with `--quick` or `--deep`. Announce the tier before starting.
 
 ## Phase 1 — Ground Truth (always first)
 
-Before any external search, check what already exists locally:
+Before any external search, check what exists locally:
 
-1. **selve MCP** — `search` for prior work, conversations, notes on this topic
-2. **research MCP** — `list_corpus` / `get_paper` for previously saved papers
-3. **Local docs** — check `docs/research/`, `docs/entities/`, `docs/derived/` for existing analysis
-4. **Training data** — what you know from training (label as [TRAINING-DATA])
+1. **Personal knowledge** — `selve` MCP search if available, or local docs
+2. **Project data** — DuckDB queries, local analysis files, entity docs
+3. **Research corpus** — `list_corpus` for previously saved papers
+4. **Training data** — what you know (label `[TRAINING-DATA]`)
 
-Output: "What I already know / have access to" inventory.
-If local data contradicts a later finding, flag the contradiction.
+Output: "What I already know" inventory. Flag contradictions with later findings.
+**Quick tier:** If ground truth answers the question, stop here.
 
-**For Quick tier:** If ground truth answers the question, stop here.
-
-## Phase 2 — Tool Routing
-
-Select tools based on the question domain:
-
-| Need | Primary | Fallback | Notes |
-|------|---------|----------|-------|
-| Prior personal work | `selve` MCP (search, get_entry) | — | Always first |
-| Saved papers | `research` MCP (get_paper, list_corpus) | — | Check before searching externally |
-| Academic papers | `research` MCP (search_papers) → S2 | `paper-search` MCP (search_arxiv, search_pubmed, search_google_scholar) | Save interesting finds with save_paper |
-| Semantic web search | `exa` MCP (web_search_exa) | WebSearch | Best for non-obvious connections, expert blogs |
-| Preprints | `paper-search` (search_arxiv, search_biorxiv, search_medrxiv) | exa | Flag as [PREPRINT] |
-| Specific databases | WebFetch | — | ClinVar, PharmGKB, FDA, SEC EDGAR |
-| Library/API docs | `context7` (resolve-library-id → query-docs) | `google-dev-knowledge` | Technical questions |
-| General web | WebSearch | exa | News, grey literature, regulatory |
-
-**Tool selection heuristic:**
-- Scientific/medical → research MCP + paper-search + PubMed
-- Technical/engineering → context7 + google-dev-knowledge + exa
-- Investigative/OSINT → exa + WebSearch + WebFetch
-- Personal history → selve MCP first, then external
-
-## Phase 3 — Exploratory Divergence
+## Phase 2 — Exploratory Divergence
 
 **Mandatory:** Name 2+ independent search axes before searching. Different axes reach different literatures.
 
-Axes from deep-research skill:
-- **Genotype-anchored:** SNP → mechanism → intervention
-- **Condition-anchored:** diagnosis → treatment → candidates
-- **Guideline-anchored:** clinical guidelines → standard of care
+Example axes:
+- **Academic-anchored:** concept → literature → state of the art
 - **Mechanism-anchored:** pathway → modulators → evidence
-- **Population-anchored:** "people like the user" → what worked
 - **Investigation-anchored:** entity → enforcement → patterns
-- **Academic-anchored:** concept → literature review → state of the art
-- **Application-anchored:** use case → implementations → lessons learned
+- **Population-anchored:** comparable cases → what happened
+- **Application-anchored:** use case → implementations → lessons
+- **Genotype-anchored:** variant → mechanism → intervention (genomics)
+- **Guideline-anchored:** clinical guidelines → standard of care (medical)
+
+If your axes all start from the same place, you have one axis with multiple queries.
 
 **Search strategy per axis:**
 - Minimum 3 query formulations (vary semantic vs keyword)
-- Use different tools per axis when possible (don't search everything in exa)
-- Scan titles/abstracts from 15+ distinct sources before forming hypotheses
-- **Save promising sources:** call `save_paper` for papers, note URLs for non-papers
+- Use different tools per axis when possible
+- Scan titles/abstracts from 15+ sources before forming hypotheses
+- **Save papers** with `save_paper`, **fetch full text** before citing
 
-**For Quick tier:** 1 axis, 1-2 queries. Skip this phase if ground truth answered it.
-**For Standard tier:** 2 axes, 5+ queries total.
-**For Deep tier:** 3+ axes, 10+ queries, dispatch parallel subagents per axis.
+**Quick:** 1 axis, 1-2 queries. **Standard:** 2 axes, 5+ queries. **Deep:** 3+ axes, 10+ queries.
 
-## Phase 4 — Source Assessment
+## Phase 3 — Hypothesis Formation (Standard + Deep)
 
-For each source that grounds a claim, assess (NOT rigid cross-validation):
+From Phase 2 findings, form 2-3 testable hypotheses as falsifiable claims:
+- "If X is true, we should see Y in the data/literature."
+- "If X is false, we should see Z."
 
-1. **Quality:** What evidence level is this? (Use epistemics hierarchy if bio/medical)
-   - Peer-reviewed journal vs preprint vs blog vs expert opinion
-   - Sample size, methodology, COI, funding source
-   - Replication status (replicated, unreplicated, contradicted)
+## Phase 4 — Disconfirmation (Standard + Deep)
 
-2. **Situating:** Where does this sit in the literature?
-   - Confirms prior work → note what it confirms
-   - Contradicts prior work → flag, investigate which is more authoritative
-   - Extends/novel → assess methodology, note [FRONTIER]
-   - Isolated finding → flag [SINGLE-SOURCE]
-
-3. **Confidence:** What can we reasonably conclude?
-   - A single well-designed RCT outweighs 10 case reports
-   - A frontier preprint doesn't need replication to be worth reporting — just honest assessment
-   - "We don't know yet" is a valid conclusion
-
-**Do NOT require 2+ independent sources.** A frontier paper with strong methodology is valid evidence. Just be honest about what it shows.
-
-## Phase 5 — Exploration-Exploitation Loop
-
-After initial exploration, make the pivot decision:
-
-```
-IF coverage is thin on a sub-question
-  → EXPLOIT: narrow queries, follow references from best paper, go deeper
-
-IF contradictions found between sources
-  → ESCALATE: run disconfirmation search, assess which source is stronger
-
-IF sufficient coverage across axes
-  → SYNTHESIZE: move to output phase
-
-IF question is more complex than initially classified
-  → UPGRADE TIER: e.g., Standard → Deep
-```
-
-**For Deep tier only:** Dispatch parallel subagents on different axes:
-- Split by axis and subtopic, not by tool
-- Include ground truth context in each agent
-- Each agent saves sources independently
-- Synthesis is a separate step after agents return
-
-## Phase 6 — Disconfirmation (Standard + Deep only)
-
-For each key claim, actively search for contradictory evidence:
-- "X does not work", "X failed", "X criticism", "X negative trial"
+For EACH hypothesis, actively search for contradictory evidence:
+- "X does not work", "X failed", "X criticism", "X negative results"
 - "no association between X and Y", "X limitations"
-- Check if the claim is from a single lab/group vs independent replication
+- Check single lab/group vs independent replication
 
-If no contradictory evidence found after genuine effort: note "no contradictory evidence found" (different from "none exists").
+If no contradictory evidence after genuine effort: "no contradictory evidence found" (≠ "none exists").
+**This phase is structurally required.** Output without disconfirmation is incomplete.
 
-**Skip for Quick tier.**
+## Phase 5 — Claim-Level Verification
 
-## Phase 7 — Corpus Building
+For every specific claim in your output:
+
+- **Numbers:** From a source, or generated? If generated → `[ESTIMATED]`
+- **Names:** From a source you accessed, or memory? If memory → verify or label `[UNVERIFIED]`
+- **Existence:** Does this paper actually exist? If you cannot confirm, DO NOT cite it
+- **Attribution:** Does the paper actually say what you think? Use `read_paper` to verify
+
+**YOU WILL FABRICATE under pressure to be precise.** The pattern: real concept + invented specifics (author name, fold-change, sample size). Catch yourself. Vague truth > precise fiction.
+
+## Phase 6 — Diminishing Returns Gate
+
+After each research action, assess marginal yield:
+
+```
+IF last action added new info that changes conclusions → CONTINUE
+IF two independent sources agree, no contradictions   → CONVERGED: synthesize
+IF last 2+ actions added nothing new                  → DIMINISHING: start writing
+IF expanding laterally instead of resolving question   → SCOPE CREEP: refocus
+IF question is more complex than initially classified  → UPGRADE TIER
+```
+
+The goal is sufficient evidence for the stakes level, not exhaustive coverage.
+3 well-read papers beat 20 saved-but-unread papers.
+
+## Phase 7 — Source Assessment
+
+For each source that grounds a claim:
+
+1. **Quality:** Peer-reviewed vs preprint vs blog? Sample size, methodology, COI?
+2. **Situating:** Confirms prior work? Contradicts it? Novel/`[FRONTIER]`? Isolated/`[SINGLE-SOURCE]`?
+3. **Confidence:** Strong methodology > volume of weaker studies. "We don't know yet" is valid.
+
+## Phase 8 — Corpus Building
 
 During and after research:
-- **Papers:** `save_paper` via research MCP for key academic papers
-- **Non-papers:** Note URLs and key content for blogs, reports, API responses (save_source in v0.2)
-- **At session end:** `export_for_selve` so findings persist into unified index
-- **Research memos:** Write to `docs/research/<topic>.md` for significant findings
-
-Next time you research the same topic, Phase 1 ground truth will surface this work.
+- **Papers:** `save_paper` for key finds, `fetch_paper` for papers you cited
+- **Cross-paper synthesis:** `ask_papers` to query across fetched papers
+- **Session end:** `export_for_selve` → run `./selve update` to embed into unified index
+- **Research memos:** Write to project-appropriate location (`docs/research/`, `analysis/`)
 
 ## Output Contract
 
@@ -166,14 +165,13 @@ Answer inline with source citation. No formal report.
 **Ground truth:** [what was already known]
 
 ### Claims Table
-
 | # | Claim | Evidence | Confidence | Source | Status |
 |---|-------|----------|------------|--------|--------|
-| 1 | ... | Grade 3 RCT | HIGH | [DOI] | VERIFIED |
-| 2 | ... | Mechanistic | LOW | [URL] | INFERENCE |
+| 1 | ... | RCT / dataset | HIGH | [DOI/URL] | VERIFIED |
+| 2 | ... | Inference | LOW | [URL] | INFERENCE |
 
 ### Key Findings
-[Findings with source quality assessment]
+[With source quality assessment]
 
 ### What's Uncertain
 [Unresolved questions]
@@ -185,33 +183,61 @@ Answer inline with source citation. No formal report.
 ### Deep Tier
 Standard tier plus:
 - **Disconfirmation results** — contradictory evidence found
-- **Verification log** — claims verified via tool vs training data
-- **Search log** — queries run, tools used, hits/misses (from deep-research Phase 5)
-- **Provenance tags** — every claim tagged [SOURCE: url] / [INFERENCE] / [UNCONFIRMED]
+- **Verification log** — claims verified via tool vs training data, caught fabricating
+- **Search log** — queries run, tools used, hits/misses
+- **Provenance tags** — every claim tagged
 
-## Provenance Standards
+## Provenance Tags
 
 Tag every claim:
-- **[SOURCE: url]** — Directly sourced from a retrieved document
-- **[INFERENCE]** — Logically derived from sourced facts (state the chain)
-- **[UNCONFIRMED]** — Plausible but not verified
-- **[TRAINING-DATA]** — From model training, not retrieved this session
-- **[FRONTIER]** — From unreplicated recent work
+- **`[SOURCE: url]`** — Directly sourced from a retrieved document
+- **`[DATABASE: name]`** — Queried a reference database (ClinVar, gnomAD, DuckDB)
+- **`[DATA]`** — Our own analysis, query reproducible
+- **`[INFERENCE]`** — Logically derived from sourced facts (state the chain)
+- **`[TRAINING-DATA]`** — From model training, not retrieved this session
+- **`[PREPRINT]`** — From unreplicated preprint
+- **`[FRONTIER]`** — From unreplicated recent work
+- **`[UNVERIFIED]`** — Plausible but not verified
 
 Never present inference as sourced fact. Never present training data as retrieved evidence.
 
+**Precedence:** When `source-grading` (Admiralty `[A1]`-`[F6]`) is active during `/investigate` or OSINT workflows, use Admiralty grades instead. Don't mix both.
+
+## Parallel Agent Dispatch (Deep tier)
+
+- Split by **axis and subtopic**, not by tool
+- Include ground truth context in each agent
+- Dispatch verification agent after research agents return
+- Synthesis is a separate step (agents can't see each other's output)
+- 2 agents on 2 axes > 10 agents on 1 axis
+
 ## Anti-Patterns
 
-From deep-research skill (check yourself):
-- **Confirmation loop:** Only searched for supporting evidence
+- **Synthesis mode default:** Summarized training data instead of fetching primary sources. THE failure mode this skill exists to prevent.
+- **Confirmation bias:** Queries like "X validation" instead of "X criticism" or "X failed".
 - **Authority anchoring:** Found one source and stopped
-- **Precision fabrication:** Invented specific numbers
+- **Precision fabrication:** Invented specific numbers under pressure to be precise
+- **Author confabulation:** Remembered finding but not author, generated plausible name
+- **Telephone game:** Cited primary study via review without reading the primary
+- **Directionality error:** Cited real paper but inverted the sign of the finding
 - **Single-axis search:** All queries from same starting point
-- **Ground truth neglect:** Went external without checking local data
-- **Tool tunnel vision:** Used only one MCP when multiple apply
-
-New:
-- **Source hoarding:** Saved 50 papers but read none of them
-- **Tier inflation:** Treated a quick lookup as deep research (wasting time)
-- **Tier deflation:** Gave a quick answer to a deep question (missing nuance)
+- **Ground truth neglect:** Went external without checking local data first
+- **Infinite research:** Kept searching past convergence instead of writing conclusions
+- **Source hoarding:** Saved papers but never fetched/read them
+- **Tier inflation/deflation:** Mismatched effort to stakes
 - **MCP bypass:** Used WebSearch when a specialized MCP tool exists
+- **Scope creep without pushback:** User asks 15 things, attempt all, run out of context. Say "this session can handle N of these well; which are priority?"
+- **Training data as research:** Reciting textbook citations from training without `[TRAINING-DATA]` tags
+- **S2 for recency:** Using Semantic Scholar when Exa is better for recent work
+- **Redundant documentation:** For tools the model already knows, adding instructions is noise
+
+## What Research Shows About Agent Reliability
+
+Evidence from 4 papers (Feb 2026), all read in full. Not aspirational — measured.
+
+- **Instructions alone don't produce reliability.** EoG (IBM, arXiv:2601.17915): giving LLM perfect investigation algorithm as prompt = 0% Majority@3 for 2/3 models. Architecture (external state, deterministic control) produces reliability, not instructions. This skill is necessary but NOT sufficient — hooks, healthchecks, and deterministic scaffolding are what make agents reliable.
+- **Consistency is flat.** Princeton (arXiv:2602.16666): 14 models, 18 months, r=0.02 with time. Same task + same model + different run = different outcome. Retry logic and majority-vote are architectural necessities.
+- **Documentation helps for novel knowledge, not for known APIs.** Agent-Diff (arXiv:2602.11224): +19 pts for genuinely novel APIs, +3.4 for APIs in pre-training. Domain-specific constraints (DuckDB types, ClinVar star ratings) are "novel" = worth encoding. Generic tool routing is "known" = low value.
+- **Simpler beats complex under stress.** ReliabilityBench (arXiv:2601.06112): ReAct > Reflexion under perturbations. More complex reasoning architectures compound failure.
+
+$ARGUMENTS
