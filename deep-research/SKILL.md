@@ -147,6 +147,8 @@ When dispatching multiple agents:
 
 ## Grading Scope
 
-This skill uses the 3-tag provenance system: `[SOURCE]`, `[INFERENCE]`, `[UNCONFIRMED]`. For investigation work, `source-grading` provides the more granular Admiralty A1-F6 system — but these two frameworks should NOT be combined in the same output. Use one or the other based on context.
+This skill uses the 3-tag provenance system: `[SOURCE: url]`, `[INFERENCE]`, `[UNCONFIRMED]`.
+
+**Precedence rule:** When `source-grading` (Admiralty `[A1]`-`[F6]`) is active — i.e., during `/investigate`, forensic, or OSINT workflows — use Admiralty grades instead of the 3-tag system. Do NOT mix both in the same output. When this skill is used standalone (literature reviews, energy research, general research memos), use the 3-tag system.
 
 $ARGUMENTS
