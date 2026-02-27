@@ -58,6 +58,50 @@ Before doing anything, classify the question:
 
 User can override with `--quick` or `--deep`. Announce the tier before starting.
 
+## Domain Profiles
+
+Classify the question's domain. This determines evidence standards, tool priority, and failure modes.
+
+### Scientific / Biomedical
+- **Evidence hierarchy:** Systematic review > RCT > cohort > case-control > case series > mechanistic reasoning > expert opinion
+- **Primary tools:** PubMed (`paper-search`), Semantic Scholar (`research`), ClinVar/gnomAD/PharmGKB (WebFetch)
+- **Fetch obligation:** Always `fetch_paper` + `read_paper` before citing. Abstracts are not primary sources.
+- **Traps:** Mechanistic reasoning without clinical evidence, single-SNP determinism, ignoring effect sizes, rodent-to-human extrapolation, supplement dosage fabrication
+- **Invoke:** `epistemics` skill for evidence grading
+
+### Trading / Investment
+- **Evidence hierarchy:** Backtest with OOS validation > historical precedent with base rates > natural experiment > analyst consensus (= zero information) > narrative
+- **Primary tools:** DuckDB (project views), SEC EDGAR (WebFetch), Exa (company research), Substacks
+- **Source grading:** Admiralty system (`[A1]`-`[F6]`), not provenance tags. Invoke `source-grading` skill.
+- **Traps:** Confirmation bias on thesis, consensus as signal, survivorship bias in backtests, look-ahead bias (check PIT registry), precision fabrication of financial metrics
+- **Special:** Detrend before claiming correlation. Base-rate every risk. Leads >$10M require ACH.
+
+### Economics / Policy / Regulatory
+- **Evidence hierarchy:** Natural experiment > RCT > diff-in-diff > cross-sectional > case study > expert opinion
+- **Primary tools:** BLS/CMS/Census (WebFetch), FRED, government registries, Exa for policy analysis
+- **Traps:** Ecological fallacy, Goodhart's Law on metrics, confusing correlation with causation in macro data, cherry-picking time windows
+- **Special:** Always check sample size and external validity. Policy effects are context-dependent.
+
+### Mathematics / Formal / CS
+- **Evidence hierarchy:** Proof > empirical benchmark with reproduction > theoretical analysis > simulation > analogy
+- **Primary tools:** arXiv (`paper-search`), Semantic Scholar, context7 (for implementations)
+- **Fetch obligation:** Reproduce derivations, don't cite formulas from memory. Verify theorem statements against source.
+- **Traps:** Precision fabrication (invented coefficients, sample sizes), misremembered theorem conditions, citing results from wrong paper
+
+### Investigative / OSINT
+- **Evidence hierarchy:** Primary documents (filings, court records) > enforcement actions > investigative journalism (named sources) > anonymous tips > social media
+- **Primary tools:** DuckDB (entity views), Intelligence MCP, SEC EDGAR, OSHA, WebFetch (government databases), Exa
+- **Source grading:** Admiralty system mandatory. Invoke `source-grading` skill.
+- **Traps:** Confirmation bias (finding what you expect), single-source anchoring, confusing correlation with coordination, missing the null hypothesis (error, not fraud)
+- **Special:** Predict the data footprint BEFORE querying. If your hypothesis is true, what should you see?
+
+### Social Science / Humanities
+- **Evidence hierarchy:** Meta-analysis > pre-registered experiment > observational study > qualitative research > theoretical framework > anecdote
+- **Primary tools:** Semantic Scholar, PubMed (for psych/neuro), Exa (for grey literature), Google Scholar via `paper-search`
+- **Traps:** Replication crisis (check if finding replicated), WEIRD samples, p-hacking, narrative over data, overgeneralizing qualitative findings
+
+If a question spans domains, name the primary and secondary. Use the stricter evidence standard.
+
 ## Phase 1 — Ground Truth (always first)
 
 Before any external search, check what exists locally:
