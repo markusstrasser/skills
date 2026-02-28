@@ -6,6 +6,9 @@ argument-hint: [research question or topic]
 
 # Researcher
 
+## Current Environment
+`!echo "Date: $(date +%Y-%m-%d) | Project: $(basename $PWD) | MCP servers: $(claude mcp list 2>/dev/null | wc -l | tr -d ' ')"`
+
 Research with the rigor of an investigative journalist, not a search engine. Every claim needs provenance. Inference is fine — but say it's inference, not fact.
 
 **Invoke companion skills if relevant:**
@@ -98,10 +101,11 @@ If your axes all start from the same place, you have one axis with multiple quer
 - **Save papers** with `save_paper`, **fetch full text** before citing
 
 **Exa search philosophy (semantic search, not keyword):**
+- **Date-gate fast-moving fields.** For AI agents, ML benchmarks, model capabilities — results from before the current frontier wave are noise. Use `web_search_advanced_exa` with date filters when available, or add explicit date terms ("2025 2026") to queries. If results reference pre-frontier models (e.g., Claude 3.5 when 4.6 exists), they're stale — discard and re-query. Observed failure: 51% of research sessions returned outdated results because no date constraint was set.
 - Exa matches by meaning, not keywords. Query by phrase — describe the *concept* you want results from, not the terms you'd grep for. "Gene-diet interaction abolishing cardiovascular genetic risk" finds different (better) results than "9p21 diet interaction."
 - **Seek insight from adjacent domains.** The most useful context often isn't phrased the same way or even from the same field. Ask: "What knowledge space would contain a brilliant critique of this idea?" Then phrase the query *from that domain's perspective*.
 - **Avoid searching for things you're already certain about** from pre-training that won't have changed. Use your intuition for stable knowledge. Search for things that are *fast-moving* or where new insights likely exist since your cutoff.
-- **Sequential exploration, not shotgun.** Don't fire 10 Exa queries in parallel and flood the context window with noise. Instead: 3 targeted queries → scan summaries → identify which direction has signal → 3 more queries doubling down on the most promising vein. This is an affinity tree, not a broadcast.
+- **Sequential exploration, not shotgun.** Don't fire 10 Exa queries in parallel and flood the context window with noise. Instead: 3 targeted queries → scan summaries → identify which direction has signal → 3 more queries doubling down on the most promising vein. This is an affinity tree, not a broadcast. **Measured: 51% of research sessions violate this** by firing 3-8 simultaneous queries (session audit, 2026-02-28). Query at position 3 in a burst cannot incorporate what query 1 returned. The instruction exists because it's a real failure mode, not a style preference.
 - **Use Exa's `summary` and `highlights` fields** to scan results before pulling full text. Set `maxCharacters` on `text` to limit per-result context. The best sources are usually papers, blog posts, essays, and threads — not marketing pages.
 - **First results may be SEO noise.** Don't stop at the top 3 — scan 8-10 results at summary level, then read the 2-3 that actually have signal.
 
