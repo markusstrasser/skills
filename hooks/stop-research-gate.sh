@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# stop-research-gate.sh — Stop hook that gates research sessions on source tags.
+# Blocks stop (exit 2) if research files were modified without source tags.
+# Soft reminder (exit 0) if research files have tags but quality checklist applies.
+# Checks stop_hook_active to prevent infinite loops. Fails open on error.
+#
+# Deploy as Stop hook. Configurable via env:
+#   RESEARCH_PATHS="docs/|analysis/" ~/Projects/skills/hooks/stop-research-gate.sh
+
+INPUT=$(cat) || exit 0
+
+RESEARCH_PATHS="${RESEARCH_PATHS:-docs/research/|analysis/|docs/entities/}"
+EXCLUDE_PATTERN="${EXCLUDE_PATTERN:-MEMORY\.md|CLAUDE\.md|maintenance-checklist\.md|improvement-log\.md|README\.md}"
+
+echo "$INPUT" | python3 -c "
+import sys, json, os, re, subprocess
+
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+
+# Prevent infinite loops: if we already forced a continue, let it stop
+if data.get('stop_hook_active', False):
+    sys.exit(0)
+
+cwd = data.get('cwd', '')
+if not cwd or not os.path.isdir(os.path.join(cwd, '.git')):
+    sys.exit(0)
+
+research_pattern = os.environ.get('RESEARCH_PATHS', 'docs/research/|analysis/|docs/entities/')
+exclude_pattern = os.environ.get('EXCLUDE_PATTERN', r'MEMORY\.md|CLAUDE\.md|maintenance-checklist\.md|improvement-log\.md|README\.md')
+
+# Find files changed in working tree
+changed = []
+try:
+    r1 = subprocess.run(['git', 'diff', '--name-only', 'HEAD'], cwd=cwd, capture_output=True, text=True, timeout=5)
+    changed += [l for l in r1.stdout.strip().split('\n') if l]
+    r2 = subprocess.run(['git', 'ls-files', '--others', '--exclude-standard'], cwd=cwd, capture_output=True, text=True, timeout=5)
+    changed += [l for l in r2.stdout.strip().split('\n') if l]
+except Exception:
+    sys.exit(0)
+
+# Filter to research-path markdown files, excluding known non-research files
+research_files = [
+    f for f in set(changed)
+    if re.search(research_pattern, f)
+    and f.endswith(('.md', '.txt', '.org'))
+    and not re.search(exclude_pattern, os.path.basename(f))
+]
+
+if not research_files:
+    sys.exit(0)
+
+# Check each research file for source tags
+SOURCE_TAG = re.compile(
+    r'\[SOURCE:|\[DATABASE:|\[DATA\]|\[INFERENCE\]|\[TRAINING-DATA\]|'
+    r'\[PREPRINT\]|\[FRONTIER\]|\[UNVERIFIED\]|\[[A-F][1-6]\]'
+)
+
+missing = []
+for f in research_files:
+    fpath = os.path.join(cwd, f)
+    if not os.path.isfile(fpath):
+        continue
+    with open(fpath) as fh:
+        if not SOURCE_TAG.search(fh.read()):
+            missing.append(f)
+
+if missing:
+    print('BLOCKED: Research files modified without source tags:', file=sys.stderr)
+    for f in missing:
+        print(f'  - {f}', file=sys.stderr)
+    print('Add provenance tags: [SOURCE: url], [DATABASE: name], [DATA], [INFERENCE],', file=sys.stderr)
+    print('[TRAINING-DATA], [PREPRINT], [FRONTIER], [UNVERIFIED], or Admiralty [A1]-[F6].', file=sys.stderr)
+    sys.exit(2)
+
+# Soft reminder: files have tags, but check quality
+print('Research files have source tags. CHECKLIST: (1) Did you fetch primary sources '
+      'or only use training data? (2) Did you search for contradictory evidence? '
+      '(3) Are all claims source-graded?', file=sys.stderr)
+sys.exit(0)
+"
