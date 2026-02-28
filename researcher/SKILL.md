@@ -20,16 +20,16 @@ Use whichever of these are available in the current project's `.mcp.json`:
 
 | Tool | What it does | When to use |
 |------|-------------|-------------|
-| `mcp__selve__search` | Personal knowledge search | Prior work, conversations, notes — **always check first** |
-| `mcp__duckdb__execute_query` | Query project DuckDB views | Our data — check before going external |
-| `mcp__intelligence__*` | Entity resolution, dossiers, screening | Investigation targets |
+| `mcp__selve__search` | Personal knowledge search | Prior work, conversations, notes — **always check first** if available |
+| `mcp__duckdb__execute_query` | Query project DuckDB views | Local data — check before going external |
+| `mcp__intelligence__*` | Entity resolution, dossiers, screening | Investigation targets (if configured) |
 | `mcp__research__search_papers` | Semantic Scholar search | Finding papers. **No date filtering** — use Exa for recency |
 | `mcp__research__save_paper` | Save paper to local corpus | After finding useful paper |
 | `mcp__research__fetch_paper` | Download PDF + extract text | **Before citing any paper** |
 | `mcp__research__read_paper` | Get full extracted text | Reading a fetched paper |
 | `mcp__research__ask_papers` | Query across papers (Gemini 1M) | Synthesizing multiple papers |
 | `mcp__research__list_corpus` | List saved papers | Check before searching externally |
-| `mcp__research__export_for_selve` | Export for selve embedding | End of session, persist findings |
+| `mcp__research__export_for_selve` | Export for knowledge embedding | End of session, persist findings (if configured) |
 | `mcp__paper-search__search_arxiv` | arXiv search | Preprints — flag as `[PREPRINT]` |
 | `mcp__paper-search__search_pubmed` | PubMed search | Clinical/medical literature |
 | `mcp__paper-search__search_biorxiv` | bioRxiv/medRxiv search | Biology/medical preprints |
@@ -60,49 +60,7 @@ User can override with `--quick` or `--deep`. Announce the tier before starting.
 
 ## Domain Profiles
 
-Classify the question's domain. This determines what non-obvious mistakes to avoid. Evidence hierarchies are standard — these profiles focus on the gotchas you WON'T think of.
-
-### Scientific / Biomedical
-- **Invoke `epistemics` skill** — it has the evidence hierarchy and grading rules.
-- ClinVar single-submitter entries get reclassified often — don't treat as settled. ≥2 stars only.
-- gnomAD frequency alone is not clinical evidence. PRS percentiles are population-relative, not absolute risk.
-- You WILL fabricate supplement dosages and effect sizes under pressure to be precise. Don't.
-- Rodent studies and mechanistic reasoning are hypothesis-generating, not evidence for human protocols.
-- PubMed + `paper-search` for clinical. Exa for recent work (S2 can't filter by date).
-
-### Trading / Investment
-- **Invoke `source-grading` skill** — Admiralty grades, not provenance tags.
-- **Detrend before claiming correlation.** We found r=0.86 that dropped to r=0.038 after controlling for market + seasonality.
-- Consensus = zero information. If every analyst says it, the price already reflects it.
-- Leads >$10M require `/competing-hypotheses`. No single-hypothesis confirmation bias.
-- **Predict the data footprint BEFORE querying.** Write what you expect to find, then query. Prevents confirmation bias.
-- Check PIT (point-in-time) safety — congressional trades have 45-day disclosure lag, CMS spending has 365-day lag.
-- Survivorship bias in backtests. Look-ahead bias in feature construction. Both invisible until you check.
-- Absence of expected evidence IS evidence. If your hypothesis predicts X and X isn't there, that's diagnostic.
-
-### Mathematics / Formal
-- Reproduce derivations from source. Don't cite formulas from training data.
-- You WILL invent coefficients, sample sizes, and p-values. The pattern: real concept + fabricated specifics.
-- Verify probability vs odds at function boundaries (`fuse_evidence` takes odds, not probability — real bug we found).
-- Small-denominator metrics need Empirical Bayes shrinkage, not raw proportions.
-
-### Investigative / OSINT
-- **Invoke `source-grading` skill** — Admiralty grades mandatory.
-- Grade claims, not datasets. Same dataset has different reliability for different fields (NPPES NPI vs NPPES address).
-- **Predict the data footprint BEFORE querying.** If your hypothesis is true, what should you see in the data?
-- Correlated signals (shared phone + shared address + shared official) can't be summed as independent LLRs. Use composite scoring.
-- Missing data ≠ no evidence. If fraudsters hide information, missingness is evidence FOR fraud.
-- The null hypothesis is always "error, not fraud." Don't skip it.
-
-### Social Science
-- Replication crisis is real. Check if the finding has been independently replicated before citing.
-- WEIRD samples (Western, Educated, Industrialized, Rich, Democratic) — most psych findings are from US undergrads.
-- Pre-registered studies > post-hoc analysis. Check if the study was pre-registered.
-
-### Economics / Policy
-- Ecological fallacy: aggregate patterns don't imply individual behavior.
-- Policy effects are context-dependent. What worked in Scandinavia may not transfer.
-- Goodhart's Law: when a metric becomes a target, it ceases to be a good metric.
+Classify the question's domain before starting. Domain-specific gotchas (non-obvious mistakes per field) are in **`DOMAINS.md`** alongside this skill. Read it when the domain applies.
 
 If a question spans domains, name the primary and secondary. Use the stricter evidence standard. Project-specific routing (which DuckDB views, which databases) lives in `.claude/rules/research-depth.md`.
 
@@ -138,6 +96,14 @@ If your axes all start from the same place, you have one axis with multiple quer
 - Use different tools per axis when possible
 - Scan titles/abstracts from 15+ sources before forming hypotheses
 - **Save papers** with `save_paper`, **fetch full text** before citing
+
+**Exa search philosophy (semantic search, not keyword):**
+- Exa matches by meaning, not keywords. Query by phrase — describe the *concept* you want results from, not the terms you'd grep for. "Gene-diet interaction abolishing cardiovascular genetic risk" finds different (better) results than "9p21 diet interaction."
+- **Seek insight from adjacent domains.** The most useful context often isn't phrased the same way or even from the same field. Ask: "What knowledge space would contain a brilliant critique of this idea?" Then phrase the query *from that domain's perspective*.
+- **Avoid searching for things you're already certain about** from pre-training that won't have changed. Use your intuition for stable knowledge. Search for things that are *fast-moving* or where new insights likely exist since your cutoff.
+- **Sequential exploration, not shotgun.** Don't fire 10 Exa queries in parallel and flood the context window with noise. Instead: 3 targeted queries → scan summaries → identify which direction has signal → 3 more queries doubling down on the most promising vein. This is an affinity tree, not a broadcast.
+- **Use Exa's `summary` and `highlights` fields** to scan results before pulling full text. Set `maxCharacters` on `text` to limit per-result context. The best sources are usually papers, blog posts, essays, and threads — not marketing pages.
+- **First results may be SEO noise.** Don't stop at the top 3 — scan 8-10 results at summary level, then read the 2-3 that actually have signal.
 
 **Quick:** 1 axis, 1-2 queries. **Standard:** 2 axes, 5+ queries. **Deep:** 3+ axes, 10+ queries.
 
@@ -182,6 +148,23 @@ IF question is more complex than initially classified  → UPGRADE TIER
 
 The goal is sufficient evidence for the stakes level, not exhaustive coverage.
 3 well-read papers beat 20 saved-but-unread papers.
+
+## Phase 6b — Recitation Before Conclusion
+
+Before writing any conclusion or synthesis that draws on multiple sources:
+
+**Restate the specific evidence you're drawing from.** List the concrete data points, not summaries. Then derive the conclusion.
+
+This is the "recitation strategy" (Du et al., EMNLP 2025, arXiv:2510.05381): prompting models to repeat relevant evidence before answering improves accuracy by +4% on long-context tasks. Training-free, model-agnostic. Works because it forces the model to retrieve and hold evidence in recent context before reasoning over it.
+
+```
+WRONG: "The evidence suggests X is effective."
+RIGHT: "Study A found 26% improvement (n=500). Study B found no effect (n=200).
+        Study C found 15% improvement but only in subgroup Y (n=1200).
+        Weighing by sample size and methodology: modest evidence for X, limited to subgroup Y."
+```
+
+This is structural, not stylistic. Recitation surfaces contradictions that narrative synthesis buries.
 
 ## Phase 7 — Source Assessment
 

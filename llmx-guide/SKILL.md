@@ -60,23 +60,49 @@ subprocess.run(f'echo {repr(prompt)} | llmx ...', shell=True)  # BREAKS if promp
 subprocess.run(['llmx', '--provider', 'google'], input=prompt, ...)
 ```
 
-## Bug: --reasoning-effort only works with OpenAI
+## --reasoning-effort works with OpenAI AND Gemini (v0.4.0+)
 
 ```python
-# Works:
-['llmx', '--provider', 'openai', '--reasoning-effort', 'high']
+# GPT-5 -- defaults to high automatically, override to lower:
+['llmx', '-m', 'gpt-5-pro', '--reasoning-effort', 'low']
 
-# Silently ignored or errors:
-['llmx', '--provider', 'google', '--reasoning-effort', 'high']  # WRONG
-['llmx', '--model', 'kimi-k2-thinking', '--reasoning-effort', 'high']  # WRONG
+# Gemini 3.x -- maps to thinkingConfig via LiteLLM:
+['llmx', '-m', 'gemini-3-pro-preview', '--reasoning-effort', 'low']
+
+# Still ignored for Kimi -- use --no-thinking instead:
+['llmx', '-m', 'kimi-k2-thinking', '--no-thinking']  # Switches to instruct model
 ```
+
+**Defaults:** GPT-5 models auto-default to `--reasoning-effort high`. Gemini defaults to `high` server-side (no client default needed). Temperature locked to 1.0 for both GPT-5 and Gemini 3.x thinking models.
 
 ## Model names: hyphens not dots
 
 | Right               | Wrong               |
 | ------------------- | ------------------- |
-| `claude-sonnet-4-5` | `claude-sonnet-4.5` |
-| `kimi-k2-thinking`  | `kimi2-thinking`    |
+| `claude-sonnet-4-6` | `claude-sonnet-4.6` |
+| `kimi-k2.5`         | `kimi-k2-thinking`  |
+
+## Verified Gemini Model Names (tested Feb 28, 2026)
+
+Gemini naming is inconsistent. These are confirmed working:
+
+| Model Name | Status | Use for |
+|------------|--------|---------|
+| `gemini-3-flash-preview` | Works | Cheap pattern extraction, fact-checking (Flash 3 text) |
+| `gemini-3.1-flash-image-preview` | Works | Flash 3.1 with image (no text-only 3.1 Flash yet) |
+| `gemini-3.1-pro-preview` | Works | Architectural review, cross-referencing, large context |
+| `gemini-3-pro-preview` | Works | Older Pro 3.0 |
+| `gemini-2.5-flash` | Works (warns "Lite") | Only for file/semantic search, not chat |
+| `gpt-5.2` | Works | Quantitative/formal analysis |
+
+**404 — DO NOT USE:**
+
+| Wrong Name | Why |
+|------------|-----|
+| `gemini-3-flash` | Missing `-preview` suffix |
+| `gemini-flash-3` | Wrong word order + missing `-preview` |
+
+The `-preview` suffix is required for all Gemini 3.x models. This is a Google naming convention, not an llmx issue.
 
 ## Testing: test small before full pipeline
 
