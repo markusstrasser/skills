@@ -17,6 +17,7 @@ Research with the rigor of an investigative journalist, not a search engine. Eve
 
 **Project-specific tool routing and gotchas are in `.claude/rules/research-depth.md`** (if it exists). Check it before starting.
 
+<tool_reference>
 ## Available Research Tools
 
 Use whichever of these are available in the current project's `.mcp.json`:
@@ -48,6 +49,7 @@ Not all tools exist in every project. Use what's available. The agent will error
 **Critical rule:** `fetch_paper` then `read_paper` BEFORE citing. Abstracts are not primary sources.
 
 **S2 gotcha:** No date filtering on free tier. ~100 req/5min rate limit. Use Exa for "recent papers on X."
+</tool_reference>
 
 ## Effort Classification
 
@@ -191,6 +193,7 @@ During and after research:
 - **Session end:** `export_for_selve` → run `./selve update` to embed into unified index
 - **Research memos:** Write to project-appropriate location (`docs/research/`, `analysis/`)
 
+<output_contract>
 ## Output Contract
 
 ### Quick Tier
@@ -242,6 +245,7 @@ Tag every claim:
 Never present inference as sourced fact. Never present training data as retrieved evidence.
 
 **Precedence:** Admiralty grades (`[A1]`–`[F6]` per `source-grading` skill) are the standard for investigation/OSINT contexts — they grade both source reliability and information credibility. Provenance tags above (`[SOURCE]`, `[DATA]`, etc.) are the standard for general research — they track where a claim came from. When both apply (e.g., `/investigate` triggering `/researcher` for external validation), use Admiralty grades — they're strictly more granular. Don't duplicate by tagging the same claim with both systems.
+</output_contract>
 
 ## Parallel Agent Dispatch (Deep tier)
 
@@ -251,6 +255,7 @@ Never present inference as sourced fact. Never present training data as retrieve
 - Synthesis is a separate step (agents can't see each other's output)
 - 2 agents on 2 axes > 10 agents on 1 axis
 
+<anti_patterns>
 ## Anti-Patterns
 
 - **Synthesis mode default:** Summarized training data instead of fetching primary sources. THE failure mode this skill exists to prevent.
@@ -270,7 +275,9 @@ Never present inference as sourced fact. Never present training data as retrieve
 - **Training data as research:** Reciting textbook citations from training without `[TRAINING-DATA]` tags
 - **S2 for recency:** Using Semantic Scholar when Exa is better for recent work
 - **Redundant documentation:** For tools the model already knows, adding instructions is noise
+</anti_patterns>
 
+<evidence_base>
 ## What Research Shows About Agent Reliability
 
 Evidence from 4 papers (Feb 2026), all read in full. Not aspirational — measured.
@@ -279,5 +286,6 @@ Evidence from 4 papers (Feb 2026), all read in full. Not aspirational — measur
 - **Consistency is flat.** Princeton (arXiv:2602.16666): 14 models, 18 months, r=0.02 with time. Same task + same model + different run = different outcome. Retry logic and majority-vote are architectural necessities.
 - **Documentation helps for novel knowledge, not for known APIs.** Agent-Diff (arXiv:2602.11224): +19 pts for genuinely novel APIs, +3.4 for APIs in pre-training. Domain-specific constraints (DuckDB types, ClinVar star ratings) are "novel" = worth encoding. Generic tool routing is "known" = low value.
 - **Simpler beats complex under stress.** ReliabilityBench (arXiv:2601.06112): ReAct > Reflexion under perturbations. More complex reasoning architectures compound failure.
+</evidence_base>
 
 $ARGUMENTS
