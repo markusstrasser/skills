@@ -87,9 +87,17 @@ Build context files. Constitutional documents go first (if found).
 **Output directory setup:**
 ```bash
 # Persist outputs — NOT /tmp
-REVIEW_DIR=".model-review/$(date +%Y-%m-%d)"
+# Slug from topic prevents collisions when multiple reviews run on the same day
+REVIEW_SLUG=$(echo "$TOPIC" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//' | cut -c1-40)
+REVIEW_DIR=".model-review/$(date +%Y-%m-%d)-${REVIEW_SLUG}"
 mkdir -p "$REVIEW_DIR"
 ```
+
+Where `$TOPIC` is a short label for the review target (e.g., "hook architecture", "search retrieval").
+Use the first 2-3 words of the review subject. Examples:
+- `.model-review/2026-03-01-hook-architecture/`
+- `.model-review/2026-03-01-search-retrieval/`
+- `.model-review/2026-02-28-genomics-split/`
 
 **Gemini 3.1 Pro context** (~50K-200K tokens target):
 ```bash
@@ -457,7 +465,8 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 - **Using same-model instances as "different reviewers."** Claude reviewing Claude = same distribution. This skill exists because cross-model is the only form that provides real adversarial pressure.
 - **Skipping the self-doubt section.** The "Where I'm Likely Wrong" section is the most valuable part of each review. Models that can't identify their own weaknesses are less trustworthy.
 - **Same prompt to both models.** Gemini and GPT have different strengths. Sending the same qualitative prompt to both wastes GPT's formal reasoning capability. Gemini = patterns, GPT = quantitative/formal.
-- **Writing to /tmp.** Review outputs are valuable artifacts. Always persist to `.model-review/YYYY-MM-DD/`.
+- **Writing to /tmp.** Review outputs are valuable artifacts. Always persist to `.model-review/YYYY-MM-DD-topic/`.
+- **Using bare date directories.** `.model-review/2026-03-01/` will collide when two reviews run the same day. Always append a topic slug.
 - **Skipping constitutional check.** Reviews without project-specific anchoring drift into generic advice. Always check for constitution (in CLAUDE.md or standalone) and GOALS.md first.
 - **Mixing review and brainstorming.** Convergent (find errors) and divergent (generate ideas) thinking are cognitively different. Don't ask for both in one prompt — the outputs will be mediocre at both.
 
