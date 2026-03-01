@@ -241,7 +241,7 @@ Tag every claim:
 
 Never present inference as sourced fact. Never present training data as retrieved evidence.
 
-**Precedence:** When `source-grading` (Admiralty `[A1]`-`[F6]`) is active during `/investigate` or OSINT workflows, use Admiralty grades instead. Don't mix both.
+**Precedence:** Admiralty grades (`[A1]`–`[F6]` per `source-grading` skill) are the standard for investigation/OSINT contexts — they grade both source reliability and information credibility. Provenance tags above (`[SOURCE]`, `[DATA]`, etc.) are the standard for general research — they track where a claim came from. When both apply (e.g., `/investigate` triggering `/researcher` for external validation), use Admiralty grades — they're strictly more granular. Don't duplicate by tagging the same claim with both systems.
 
 ## Parallel Agent Dispatch (Deep tier)
 

@@ -2,12 +2,17 @@
 # pretool-search-burst.sh — Detect search query bursts without intermediate reads.
 # PreToolUse hook. Matcher: mcp__exa|mcp__research|mcp__paper-search|WebSearch|WebFetch
 # Fires on search tools (increment) and result-consumption tools (reset).
-# Advisory only: warns after threshold, never blocks.
+# Warns at WARN_THRESHOLD, soft-blocks at BLOCK_THRESHOLD.
+#
+# No `trap 'exit 0' ERR` — intentional. The trap would swallow exit 2 (the block).
+# All non-blocking paths exit 0 explicitly: python fallback via `|| echo ""`,
+# case `*` falls through, script ends with `exit 0`.
+#
+# Testing: SEARCH_BURST_COUNTER=/tmp/test-burst bash pretool-search-burst.sh
 
-trap 'exit 0' ERR
-
-COUNTER_FILE="/tmp/claude-search-burst-${PPID:-0}"
-THRESHOLD=6
+COUNTER_FILE="${SEARCH_BURST_COUNTER:-/tmp/claude-search-burst-${PPID:-0}}"
+WARN_THRESHOLD=4
+BLOCK_THRESHOLD=8
 
 INPUT=$(cat)
 
@@ -19,7 +24,7 @@ try:
     print(data.get('tool_name', ''))
 except:
     print('')
-" 2>/dev/null)
+" 2>/dev/null || echo "")
 
 # Classify: is this a search tool?
 case "$TOOL_NAME" in
@@ -36,11 +41,15 @@ case "$TOOL_NAME" in
         COUNT=$((COUNT + 1))
         echo "$COUNT" > "$COUNTER_FILE"
 
-        if [ "$COUNT" -ge "$THRESHOLD" ]; then
+        if [ "$COUNT" -ge "$BLOCK_THRESHOLD" ]; then
+            echo "$COUNT consecutive search queries without reading results." >&2
+            echo "Earlier results should inform what you search next." >&2
+            echo "Read/scan existing results before adding more queries." >&2
+            exit 2
+        elif [ "$COUNT" -ge "$WARN_THRESHOLD" ]; then
             echo "NOTE: $COUNT search queries fired without pausing to read results." >&2
             echo "Results from earlier queries could narrow what you search next." >&2
             echo "Consider reading/scanning what you have before adding more." >&2
-            # Don't reset — let it keep counting so the message persists
         fi
         ;;
     mcp__research__read_paper|mcp__research__fetch_paper|\

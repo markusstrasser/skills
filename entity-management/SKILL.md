@@ -1,7 +1,8 @@
 ---
 name: entity-management
 description: Versioned knowledge management for entities (people, companies, genes, drugs, stocks). Use when the user wants to profile, track, build a dossier on, or save structured notes about a specific entity. One file per entity, git-versioned, every claim sourced.
-user-invocable: false
+user-invocable: true
+argument-hint: [entity name — person, company, gene, drug, stock]
 ---
 
 # Entity Management
@@ -12,11 +13,13 @@ Track knowledge about individual entities with full provenance. Every edit is a 
 
 ```
 docs/entities/
-├── self/           # User's own profile, cognitive traits
-├── companies/      # Companies under investigation or research
+├── companies/      # Companies under investigation or research (primary)
+├── people/         # Named individuals — officers, insiders, analysts
+├── contracts/      # Key contracts, agreements, JVs
+├── filings/        # SEC filings, court records, regulatory submissions
 ├── genes/          # Individual genes (g6pd.md, ebf3.md)
 ├── drugs/          # Medications, supplements
-├── people/         # Named individuals
+├── self/           # User's own profile, cognitive traits
 └── <category>/     # Any domain-specific category
 ```
 
@@ -48,6 +51,26 @@ Mark as `[UNVERIFIED]` with the source of the claim:
 ### Corrected Claims
 When updating a previous claim, mark as `[CORRECTED]`:
 > "[CORRECTED] Previously stated OR=2.3; actual OR=1.3 per gnomAD v4.1"
+
+## Cross-References (Zettelkasten Pattern)
+
+Entity files should link to related entities. When a gene is a drug target, the gene file links to the drug file and vice versa. When a person is an officer of a company, both files cross-reference.
+
+Format: `→ see [entity-name](../category/entity-name.md)` in the relevant Key Facts row.
+
+This enables traversal: starting from one entity, you can follow links to build a complete picture without relying on search. Based on A-MEM's Zettelkasten-inspired memory architecture (ICLR 2026, arXiv:2502.12110) — structured connections between memories improve retrieval over flat storage.
+
+## Staleness Detection
+
+Every claim in the Key Facts table has a `Date Verified` column. Claims older than 6 months should be flagged for re-verification when the entity file is loaded:
+
+> **STALE:** [N] claims last verified >6 months ago. Re-verify before relying on them.
+
+This is especially critical for: stock prices, company officers, clinical trial status, drug approval status, regulatory filings.
+
+## Progressive Disclosure Within Entity Files
+
+When an entity file exceeds ~200 lines, add a `## Summary` section at the top (after the one-liner) containing ONLY the Key Facts table. This lets agents load the summary without reading the full narrative — reducing context cost when the entity is referenced but not the focus.
 
 ## Never Do This
 

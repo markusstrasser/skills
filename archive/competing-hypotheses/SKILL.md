@@ -28,13 +28,19 @@ For the target `$ARGUMENTS`, generate at minimum THREE competing hypotheses:
 
 Add domain-specific sub-hypotheses as needed.
 
+### Step 1.5: Complexity Gate
+
+Before dispatching agents, assess: can a single agent resolve this with A1/A2-rated sources? If yes, skip ACH — just answer directly. ACH is for genuinely ambiguous cases where the single-agent success rate is below ~45%. Don't use a cannon for a nail.
+
 ### Step 2: Dispatch Competing Agents
 
-Launch **three parallel agents** (Task tool with subagent_type="general-purpose"):
+Launch **three parallel agents** (Task tool with subagent_type="general-purpose"). **Use different models when available** — same-model debate is a martingale for correctness (ACL 2025, arXiv:2508.17536). Different models have different failure modes, biases, and blind spots:
 
-- **Agent A — Prosecution:** Search for enforcement history, ownership anomalies, financial pressure, fraud signatures. Tag all claims [SOURCE: url] or [INFERENCE].
-- **Agent B — Defense:** Search for policy changes, industry trends, M&A, comparable clean entities. Find the BEST innocent explanation.
-- **Agent C — Artifact Investigator:** Search for data reporting changes, known data issues, system migrations, whether anomaly appears in multiple independent sources.
+- **Agent A — Prosecution** (prefer Gemini — different training biases): Search for enforcement history, ownership anomalies, financial pressure, fraud signatures. Tag all claims [SOURCE: url] or [INFERENCE].
+- **Agent B — Defense** (prefer GPT — different blind spots): Search for policy changes, industry trends, M&A, comparable clean entities. Find the BEST innocent explanation.
+- **Agent C — Artifact Investigator** (Claude — strong at structured analysis): Search for data reporting changes, known data issues, system migrations, whether anomaly appears in multiple independent sources.
+
+If multi-model dispatch isn't available, same-model agents still have value via the diagnosticity matrix — but the adversarial pressure is weaker.
 
 ### Step 3: Build the Diagnosticity Matrix
 
@@ -49,6 +55,8 @@ C = Consistent, I = Inconsistent, N = Neutral
 **Key rule:** Evidence that is C/C/C has **zero diagnostic value**. Focus on evidence that eliminates hypotheses.
 
 ### Step 4: Score and Synthesize
+
+**Recitation first:** Before scoring, each agent restates its top 3 most diagnostic evidence items verbatim. This combats lost-in-the-middle effects when synthesizing across agents (Du et al., EMNLP 2025: +4% on RULER, training-free, model-agnostic).
 
 Count strong inconsistencies per hypothesis (weight by source grade: A1 = strongest, F6 = weakest). The surviving hypothesis has the fewest strong inconsistencies.
 

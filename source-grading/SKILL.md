@@ -63,7 +63,7 @@ Write grades as `[Grade: X#]` inline with claims:
 
 ## When to Grade
 
-- **Always** during `investigate` or `deep-research` workflows
+- **Always** during `investigate` or `researcher` workflows
 - **Always** in analysis documents for handoff (attorneys, journalists, government)
 - **Optional** in informal conversation or brainstorming
 - **Required** before any lead enters the diagnosticity matrix in `competing-hypotheses`

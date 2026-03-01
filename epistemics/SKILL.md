@@ -1,12 +1,12 @@
 ---
 name: epistemics
-description: Bio/medical/scientific evidence hierarchy and anti-hallucination rules. Use when conducting claim-heavy medical research, genomics interpretation, supplement evaluation, pharmacogenomics, or clinical evidence synthesis. NOT for casual health questions, software engineering, or physics. Companion to deep-research skill.
+description: Bio/medical/scientific evidence hierarchy and anti-hallucination rules. Use when conducting claim-heavy medical research, genomics interpretation, supplement evaluation, pharmacogenomics, or clinical evidence synthesis. NOT for casual health questions, software engineering, or physics. Companion to researcher skill.
 user-invocable: false
 ---
 
 # Bio/Medical Research Epistemics
 
-Domain-specific guardrails for scientific research. Use alongside `deep-research` for the workflow; this skill provides the evidence hierarchy, anti-hallucination rules, and bio-specific failure modes.
+Domain-specific guardrails for scientific research. Use alongside `researcher` for the workflow; this skill provides the evidence hierarchy, anti-hallucination rules, and bio-specific failure modes.
 
 ## Anti-Hallucination Rules (non-negotiable)
 
@@ -77,17 +77,26 @@ Check yourself against each before outputting:
 - **Inference promotion:** Plausible mechanistic chain presented as decision-grade evidence. Fix: put in explicit INFERENCE section with assumptions + failure modes.
 - **Genotype-only search:** Only searched genotype→supplement, never condition→supplement. Fix: ALWAYS run condition-anchored search axis in parallel.
 
-## LLM-Specific Failure Modes
+## LLM-Specific Failure Modes (updated Feb 2026)
 
-| Model | Failure Mode | Severity |
-|-------|-------------|----------|
-| Claude | Sycophantic hedging; agrees then qualifies until useless | Medium |
-| Claude | Citation-shaped bullshit; plausible references that don't exist | High |
-| Claude | Genotype determinism; treats associations as deterministic | High |
-| GPT | Confident fabrication; invents complete fake studies with authors and N | Critical |
-| GPT | Overcitation; cites 20+ papers, many tangential or unverifiable | Medium |
-| Gemini | Google-source bias; over-relies on Scholar snippets without reading papers | High |
-| Gemini | Length inflation; massive outputs that bury the signal | Medium |
+| Model | Failure Mode | Severity | Notes |
+|-------|-------------|----------|-------|
+| Claude (Opus 4.6) | Sycophantic hedging; agrees then qualifies until useless | Medium | Improved from 4.5 but still present |
+| Claude | Citation-shaped bullshit; plausible references that don't exist | High | CoT unfaithfulness baseline: 7-13% on clean prompts (ICLR 2026) |
+| Claude | Genotype determinism; treats associations as deterministic | High | |
+| GPT (5.2/5.3) | Confident fabrication; invents complete fake studies with authors and N | Critical | Worse with extended thinking enabled |
+| GPT | Overcitation; cites 20+ papers, many tangential or unverifiable | Medium | |
+| Gemini (3.1 Pro) | Google-source bias; over-relies on Scholar snippets without reading papers | High | 1M context invites dumping entire papers without processing |
+| Gemini | Length inflation; massive outputs that bury the signal | Medium | |
+| All models | Implicit post-hoc rationalization; unfaithful CoT on clean prompts | Medium | 7-13% baseline rate (arXiv, ICLR 2026 submission). Not adversarial — happens on normal prompts |
+
+**Cross-model validation:** For high-stakes bio claims (Grade 1-3 evidence affecting clinical decisions), route the same evidence through a second model as independent assessor. Different models have different fabrication patterns — Claude invents plausible-but-wrong citations, GPT invents complete fake studies. Cross-checking catches both.
+
+## Recitation Before Synthesis
+
+Before grading evidence or writing conclusions, **recite the key evidence items verbatim** — restate the study name, N, effect size, and population for each Grade 1-5 source you're relying on. This combats lost-in-the-middle effects when working with many sources (Du et al., EMNLP 2025: +4% accuracy, training-free).
+
+Don't summarize — recite. The act of restating forces attention back to the actual data before the synthesis step where hallucination risk is highest.
 
 ## Self-Audit Checklist
 

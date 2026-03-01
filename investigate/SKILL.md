@@ -10,9 +10,9 @@ You are conducting a forensic investigation. Your job is to find what's wrong, n
 
 ## Linked Skills
 
-- **`competing-hypotheses`** — Use for any lead before handoff
+- **`/competing-hypotheses`** — Standalone skill for structured hypothesis evaluation. Invoke explicitly for significant leads.
 - **`source-grading`** (auto-applied) — Grade every claim on A1-F6 matrix
-- **`deep-research`** — Use for external validation
+- **`/researcher`** — Use for external validation and literature search
 
 ## Core Principles
 
@@ -43,7 +43,7 @@ Concentration, variation, fastest growth, self-attestation patterns.
 Who bills the most? Who grew impossibly fast? Who charges 10x median? Who has 40%+ denial rates but keeps billing?
 
 ### Phase 4: Competing Hypotheses (ACH)
-Invoke `competing-hypotheses` for significant anomalies. Do not skip for leads above $10M.
+Invoke `/competing-hypotheses` or apply ACH methodology directly for significant anomalies. Do not skip for leads above $10M.
 
 ### Phase 5: OSINT Layer
 - **Officer/ownership spider:** Extract officers → find all entities they control
@@ -56,6 +56,9 @@ Journalism, government reports, enforcement actions, academic studies. Search fo
 
 ### Phase 7: Cross-Domain Deep Dive
 SEC filings, PE ownership chains, campaign finance, labor economics, physical verification, credit/bankruptcy.
+
+### Phase 7b: Recitation Before Conclusion
+Before writing synthesis, **restate the specific evidence** — concrete data points, dollar amounts, dates, source grades. Then derive the conclusion. This prevents narrative from burying contradictions. (Du et al., EMNLP 2025: +4% accuracy on long-context tasks, training-free.)
 
 ### Phase 8: Synthesis
 For each lead: ACH result, estimated exposure, EV score, network findings, recommended channel, key uncertainties.

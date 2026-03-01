@@ -9,16 +9,7 @@ description: Critical gotchas when calling llmx from Python. Non-obvious bugs an
 
 GPT-5.2 with reasoning burns time BEFORE producing output. Default 120s timeout is too low.
 
-**Auto-scaling (v0.4.0+):** When `--timeout` is not explicitly set, llmx auto-scales:
-
-| `--reasoning-effort` | Auto timeout | Typical response time |
-| -------------------- | ------------ | --------------------- |
-| none / low           | 120s         | 1-15s                 |
-| medium               | 300s (5 min) | 30-90s                |
-| high                 | 600s (10 min)| 3-10 min              |
-| xhigh                | 900s (15 min)| 10-30+ min            |
-
-**If you explicitly pass `--timeout N`, auto-scaling is disabled.** Max allowed: 900s.
+**Max timeout: 600s.** Validated at CLI level (1-600 range). No auto-scaling exists — set explicitly.
 
 **Streaming avoids most timeouts:** Non-streaming holds the connection idle during reasoning. Proxies and HTTP clients kill idle connections. `--stream` sends keepalive chunks.
 
@@ -26,10 +17,10 @@ GPT-5.2 with reasoning burns time BEFORE producing output. Default 120s timeout 
 # WILL timeout with default settings:
 llmx -m gpt-5.2 --reasoning-effort high --no-stream "complex query"
 
-# WORKS — auto-timeout 600s:
-llmx -m gpt-5.2 --reasoning-effort high "complex query"
+# Set timeout explicitly for reasoning models:
+llmx -m gpt-5.2 --reasoning-effort high --timeout 600 "complex query"
 
-# BEST for high/xhigh — streaming avoids idle-connection kills:
+# BEST — streaming avoids idle-connection kills:
 llmx -m gpt-5.2 --reasoning-effort high --stream "complex query"
 
 # For very long tasks, use deep research (background mode, no timeout):
@@ -38,11 +29,10 @@ llmx research "complex multi-source analysis"
 
 **When calling from Python/subprocess:**
 ```python
-# Set timeout high for reasoning models
 subprocess.run(
     ['llmx', '-m', 'gpt-5.2', '--reasoning-effort', 'high', '--stream'],
     input=prompt, capture_output=True, text=True,
-    timeout=900  # subprocess timeout must also be high
+    timeout=600  # max allowed by llmx CLI
 )
 ```
 
@@ -60,27 +50,41 @@ subprocess.run(f'echo {repr(prompt)} | llmx ...', shell=True)  # BREAKS if promp
 subprocess.run(['llmx', '--provider', 'google'], input=prompt, ...)
 ```
 
-## --reasoning-effort works with OpenAI AND Gemini (v0.4.0+)
+## --reasoning-effort: valid values are minimal/low/medium/high
 
 ```python
-# GPT-5 -- defaults to high automatically, override to lower:
-['llmx', '-m', 'gpt-5-pro', '--reasoning-effort', 'low']
+# GPT-5.2 — supports minimal/low/medium/high:
+['llmx', '-m', 'gpt-5.2', '--reasoning-effort', 'low']
 
-# Gemini 3.x -- maps to thinkingConfig via LiteLLM:
-['llmx', '-m', 'gemini-3-pro-preview', '--reasoning-effort', 'low']
+# GPT-5-codex — supports low/medium/high (no minimal):
+['llmx', '-m', 'gpt-5-codex', '--reasoning-effort', 'medium']
 
-# Still ignored for Kimi -- use --no-thinking instead:
-['llmx', '-m', 'kimi-k2-thinking', '--no-thinking']  # Switches to instruct model
+# Gemini 3.x — supports low/medium/high (no minimal):
+['llmx', '-m', 'gemini-3.1-pro-preview', '--reasoning-effort', 'low']
+
+# Kimi — no --reasoning-effort support. Use --no-thinking instead:
+['llmx', '-m', 'kimi-k2.5', '--no-thinking']  # Switches to instruct model
 ```
 
 **Defaults:** GPT-5 models auto-default to `--reasoning-effort high`. Gemini defaults to `high` server-side (no client default needed). Temperature locked to 1.0 for both GPT-5 and Gemini 3.x thinking models.
+
+## Convenience flags (v0.4.0+)
+
+- `--fast` — Uses Gemini Flash with low reasoning effort (quick queries)
+- `--use-old` — Uses previous model version (e.g., Kimi K2 instead of K2.5)
+- `--no-thinking` — Disables thinking/reasoning (Kimi switches to instruct model)
 
 ## Model names: hyphens not dots
 
 | Right               | Wrong               |
 | ------------------- | ------------------- |
 | `claude-sonnet-4-6` | `claude-sonnet-4.6` |
-| `kimi-k2.5`         | `kimi-k2-thinking`  |
+
+**Kimi models:**
+- `kimi-k2.5` — current default (K2.5 thinking, Jan 2026)
+- `kimi-k2-thinking` — legacy (K2 thinking, Nov 2025). Use `--use-old` flag.
+
+**Default model:** `gemini-3.1-pro-preview` (Gemini 3.1 Pro, Feb 2026)
 
 ## Verified Gemini Model Names (tested Feb 28, 2026)
 
