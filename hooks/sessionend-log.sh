@@ -57,7 +57,27 @@ log_path = os.path.expanduser("~/.claude/session-log.jsonl")
 with open(log_path, "a") as f:
     f.write(json.dumps(log_entry, separators=(",", ":")) + "\n")
 
-# --- Flight receipt (enriched with cockpit data) ---
+# --- Capture recent commits from this session ---
+commits = []
+if cwd and os.path.isdir(cwd):
+    import subprocess
+    # Get session start time from current-session-id file mtime
+    sid_path = os.path.join(cwd, ".claude", "current-session-id")
+    since_arg = None
+    if os.path.isfile(sid_path):
+        mtime = os.path.getmtime(sid_path)
+        since_dt = datetime.fromtimestamp(mtime)
+        since_arg = since_dt.strftime("%Y-%m-%dT%H:%M:%S")
+    if since_arg:
+        try:
+            cmd = ["git", "-C", cwd, "log", "--oneline", "-20", f"--since={since_arg}"]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and result.stdout.strip():
+                commits = [line.strip() for line in result.stdout.strip().split("\n") if line.strip()]
+        except Exception:
+            pass
+
+# --- Flight receipt (enriched with cockpit data + work summary) ---
 duration_ms = int(cockpit.get("duration_ms", 0))
 mins = round(duration_ms / 60000, 1) if duration_ms else 0
 
@@ -75,6 +95,8 @@ receipt = {
     "lines_removed": int(cockpit.get("lines_removed", 0)),
     "transcript_lines": t_lines,
 }
+if commits:
+    receipt["commits"] = commits
 receipt_path = os.path.expanduser("~/.claude/session-receipts.jsonl")
 with open(receipt_path, "a") as f:
     f.write(json.dumps(receipt, separators=(",", ":")) + "\n")
