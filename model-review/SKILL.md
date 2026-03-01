@@ -405,6 +405,18 @@ Build the synthesis from the disposition table. Every INCLUDE item must appear. 
 # Both persist in $REVIEW_DIR
 ```
 
+### Step 7: Plan-Mode Handoff (Optional)
+
+If the synthesis produced concrete INCLUDE items with actionable work, offer the user a plan-mode handoff:
+
+> "Synthesis identified N actionable items. This review used ~X% context. Want me to write an implementation plan and hand off to a fresh context?"
+
+If yes: call `EnterPlanMode`, write the implementation plan referencing INCLUDE items by ID (link to `$REVIEW_DIR/extraction.md`), then `ExitPlanMode`. The clear+execute dialog reclaims context — the plan file is the information bridge.
+
+If no: end here. The synthesis and extraction persist in `$REVIEW_DIR/`.
+
+Don't offer this if all findings are DEFER/REJECT or exploratory with no concrete next steps.
+
 ### Multi-Round Reviews
 
 When running multiple dispatch rounds (e.g., Round 1 architecture + Round 2 red team):
