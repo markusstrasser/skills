@@ -285,9 +285,58 @@ echo "Claim: [model's claim]. Actual code: [paste relevant code]" | \
   llmx -m gemini-3-flash-preview "Is this claim about the code accurate? Be precise."
 ```
 
-### Step 5: Synthesize
+### Step 5: Extract & Enumerate (Anti-Loss Protocol)
 
-Build a trust-ranked synthesis:
+**Why this step exists:** Single-pass synthesis is lossy. The agent biases toward recent, vivid, or structurally convenient ideas and silently drops others. In observed sessions, users had to ask "did you include everything?" 3+ times — each time recovering omissions. The EVE framework (Chen & Fleming, arXiv:2602.06103) shows that separating extraction from synthesis improves recall +24% and precision +29%.
+
+**Do this BEFORE writing any synthesis prose.**
+
+**5a. Extract claims per source.** For each model output, enumerate every discrete idea/recommendation/finding as a numbered item. One idea per line. Keep it mechanical — don't evaluate yet.
+
+```markdown
+## Extraction: gemini-output.md
+G1. [Prediction ledger needed — no structured tracking exists]
+G2. [Signal scanner has silent except blocks — masks failures]
+G3. [DuckDB FTS preserves provenance better than vector DB]
+...
+
+## Extraction: gpt-output.md
+P1. [Universe survivorship bias — S:5, D:5]
+P2. [first_seen_date needed on all records for PIT safety]
+P3. [FDR control mandatory — 5000-50000 implicit hypotheses/month]
+...
+```
+
+**5b. Disposition table.** Every extracted item gets a verdict. No item left undispositioned.
+
+```markdown
+## Disposition Table
+| ID  | Claim (short) | Disposition | Reason |
+|-----|--------------|-------------|--------|
+| G1  | Prediction ledger | INCLUDE — Tier 1 | Both models, verified gap |
+| G2  | Silent except blocks | INCLUDE — Tier 6 | Verified in signal_scanner.py |
+| G3  | DuckDB > vector DB | INCLUDE — YAGNI | Constitutional alignment |
+| P1  | Universe survivorship | INCLUDE — Tier 4 | Verified, no PIT table exists |
+| P2  | first_seen_date | INCLUDE — Tier 1 | Verified, downloads lack it |
+| P3  | FDR control | DEFER | Needs experiment registry first |
+| P7  | Kubernetes deployment | REJECT | Scale mismatch (personal project) |
+| ... | ... | ... | ... |
+```
+
+Valid dispositions: `INCLUDE`, `DEFER (reason)`, `REJECT (reason)`, `MERGE WITH [ID]` (dedup).
+
+**5c. Coverage check.** Before proceeding to synthesis:
+- Count: total extracted, included, deferred, rejected, merged
+- If any ID has no disposition → stop and fix
+- Save extraction + disposition table to `$REVIEW_DIR/extraction.md`
+
+This file is the checklist. If the user asks "did you include everything?" — point them here, not the prose.
+
+### Step 6: Synthesize
+
+Build the synthesis from the disposition table. Every INCLUDE item must appear. Reference IDs so coverage is auditable.
+
+**Trust ranking for included items:**
 
 | Trust Level | Criterion | Action |
 |------------|-----------|--------|
@@ -305,11 +354,20 @@ Build a trust-ranked synthesis:
 **Date:** YYYY-MM-DD
 **Models:** Gemini 3.1 Pro, GPT-5.2
 **Constitutional anchoring:** Yes/No (CONSTITUTION.md, GOALS.md)
+**Extraction:** N items extracted, M included, D deferred, R rejected
 
 ### Verified Findings (adopt)
-| Finding | Source | Verified How |
-|---------|--------|-------------|
-| ... | Gemini + GPT | Checked search.py:312 |
+| ID | Finding | Source | Verified How |
+|----|---------|--------|-------------|
+| G1, P4 | Prediction ledger needed | Gemini + GPT | No prediction table in DuckDB |
+
+### Deferred (with reason)
+| ID | Finding | Why Deferred |
+|----|---------|-------------|
+
+### Rejected (with reason)
+| ID | Finding | Why Rejected |
+|----|---------|-------------|
 
 ### Where I Was Wrong
 | My Original Claim | Reality | Who Caught It |
@@ -325,11 +383,23 @@ Build a trust-ranked synthesis:
 1. ...
 ```
 
-**Save synthesis:**
+**Save both files:**
 ```bash
-# Persist alongside model outputs
-cp synthesis.md "$REVIEW_DIR/synthesis.md"
+# Extraction + disposition (the checklist)
+# Synthesis (the prose)
+# Both persist in $REVIEW_DIR
 ```
+
+### Multi-Round Reviews
+
+When running multiple dispatch rounds (e.g., Round 1 architecture + Round 2 red team):
+
+1. **Extract per round, not per synthesis.** Each round's outputs get their own extraction pass (G1-Gn for round 1 Gemini, G2.1-G2.n for round 2 Gemini, etc.).
+2. **Merge disposition tables across rounds** before writing the final synthesis. Dedup with `MERGE WITH [ID]`.
+3. **Never synthesize a synthesis.** The final prose is written once from the merged disposition table. Don't compress round 1's synthesis — compress round 1's raw extraction alongside round 2's raw extraction.
+4. **Total coverage count** in the final output: "R1: 47 items extracted, R2: 38 items extracted. Final: 85 total, 62 included, 14 deferred, 9 rejected."
+
+This prevents the sawtooth pattern (compress → lose stuff → user catches → patch → compress again → lose different stuff).
 
 ## Known Model Biases
 
@@ -372,6 +442,8 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 
 ## Anti-Patterns
 
+- **Synthesizing without extracting first.** The #1 information loss pattern. Never go from raw model outputs directly to prose synthesis. Always run the extraction + disposition step (Step 5) first. If you skip it, the user will ask "did you include everything?" and you will have lost items.
+- **Synthesizing a synthesis.** Each compression pass drops ideas. If you have Round 1 synthesis + Round 2 outputs, don't compress the Round 1 synthesis — go back to Round 1's raw extraction and merge with Round 2's extraction. One synthesis pass from merged extractions, not cascaded compressions.
 - **Adopting recommendations without code verification.** Both models hallucinated "missing" features that already existed in the codebase.
 - **Treating model agreement as proof.** Two models can be wrong the same way (shared training data). Always verify against source code.
 - **Letting models review their own previous output.** Send fresh prompts, not "here's what you said last time, improve it."
