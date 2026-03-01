@@ -52,7 +52,7 @@ CORRECTION_PATTERNS = [
     (r"not conda", "env-uv-not-conda"),
     (r"python3 not python\b", "env-python3"),
     (r"don't already (have|download)", "idempotency-check"),
-    (r"already (have|download|exist)", "idempotency-check"),
+    (r"we already (have|download)", "idempotency-check"),
     (r"make sure we don't already", "idempotency-check"),
     (r"are you sure.*include", "completeness-verify"),
     (r"did you include all", "completeness-verify"),
@@ -97,6 +97,8 @@ def classify_message(text: str) -> tuple[str, str]:
         return ("SYSTEM", "skill-expansion")
     if clean.startswith("Stop hook feedback:"):
         return ("SYSTEM", "hook-feedback")
+    if "session is being continued from a previous conversation" in clean:
+        return ("SYSTEM", "context-continuation")
 
     # Rubber stamps (exact match on short messages)
     if lower.rstrip(".!") in RUBBER_STAMP_EXACT and len(clean) < 50:
