@@ -2,6 +2,12 @@
 name: researcher
 description: Autonomous research agent that orchestrates all available MCP tools with epistemic rigor. Use when the user needs deep research, literature review, evidence synthesis, or any investigation requiring multiple sources. Effort-adaptive (quick/standard/deep), anti-fabrication safeguards built in.
 argument-hint: [research question or topic]
+hooks:
+  PostToolUse:
+    - matcher: "Write|Edit"
+      hooks:
+        - type: prompt
+          prompt: "The researcher just wrote or edited a file. Check: does every factual claim in the written content have a source citation in brackets (e.g., [DATA], [A2], [Exa], [S2], [PubMed], [arXiv])? Return ok=false listing any unsourced factual assertions. Ignore formatting, headers, and instructions — only check empirical claims."
 ---
 
 # Researcher
