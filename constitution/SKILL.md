@@ -1,13 +1,12 @@
 ---
 name: constitution
-description: Elicit project goals, constitutional principles, and autonomy boundaries through structured questionnaire. Produces CONSTITUTION.md (operational principles) and GOALS.md (personal objectives). Use for any new project or to revisit existing constitutional decisions.
+description: Elicit project goals and constitutional principles through structured questionnaire. Produces a ## Constitution section in CLAUDE.md (operational principles) and GOALS.md (personal objectives). Use for any new project or to revisit existing constitutional decisions.
 user-invocable: true
-disable-model-invocation: true
 ---
 
 # Constitutional Elicitation
 
-You are conducting a structured constitutional elicitation for a software project that uses autonomous AI agents. Your job is to identify tensions, ask the right questions, and produce two artifacts: CONSTITUTION.md (how agents operate) and GOALS.md (what the human wants).
+You are conducting a structured constitutional elicitation for a software project that uses autonomous AI agents. Your job is to identify tensions, ask the right questions, and produce two artifacts: a `## Constitution` section inside CLAUDE.md (how agents operate) and GOALS.md (what the human wants). The constitution goes INTO CLAUDE.md — not as a separate file.
 
 ## Phase 1: Reconnaissance
 
@@ -49,86 +48,84 @@ After reading, identify every tension, contradiction, or ambiguity that would ca
 
 ## Phase 3: Questionnaire
 
-Generate a questionnaire with 12-16 questions, grouped by theme. Each question must:
+Generate a questionnaire with 6-10 questions. Fewer questions, more inference from existing files. Each question must:
 - Identify a specific tension found in Phase 2 (not generic)
 - Offer 3-4 concrete options (letter-coded for quick answers)
 - Include "Something else: ___" as the last option
-- Be answerable in one sentence
 
 Question design principles:
+- Infer answers from existing files when possible — don't ask about what's already clear
+- **Prioritize tradeoff questions over principle questions.** Principles are easy ("be good"). Tradeoffs reveal actual preferences. Present specific binary scenarios that force a choice, then abstract from examples to principles.
+- Half yes/no or tradeoff questions, half open-ended
 - Reference specific files/lines where you found the contradiction
-- Make options mutually exclusive and cover the realistic design space
 - Front-load the most consequential questions (identity, scope, autonomy)
-- End with "hard questions" that determine everything else (success criteria, enforcement priority)
+- Two rounds is fine: first round captures preferences, second round refines based on answers
 
 ## Phase 4: Synthesis
 
-After the human answers, produce two documents:
+After the human answers, produce two artifacts:
 
-### GOALS.md
+### GOALS.md (separate file, human-owned)
 <goals_template>
-# Goals: What This System Is For
+# Goals
 
-**Owner:** Human. Agent must not modify without explicit approval.
+> Human-owned. Agent may propose changes but must not modify without explicit approval.
 
-## Primary Mission
+## Mission
 [What the system exists to do — one paragraph]
 
-## Why This Domain
-[Why this domain was chosen — fast feedback, falsifiability, personal interest]
+## Generative Principle
+[One sentence. What everything derives from. Must be measurable.]
 
-## Target Domain
-[Specific scope — market cap range, geography, sector, whatever constrains the search space]
+## Primary Success Metric
+[How to know it's working]
 
-## Success Metrics (12-Month)
-[3-5 measurable outcomes]
+## Strategy
+[How the mission gets accomplished]
 
-## What's Explicitly Deferred
-[Things the human decided NOT to do yet]
+## Deferred Scope
+[Things explicitly NOT being done yet]
 
-## Capital/Resource Deployment Philosophy
-[How decisions become actions — outbox pattern, graduated autonomy, human gates]
-
-*This document defines WHAT the system optimizes for. See CONSTITUTION.md for HOW it operates.*
+## Exit Condition
+[When does this project become unnecessary?]
 </goals_template>
 
-### CONSTITUTION.md
+### ## Constitution section in CLAUDE.md (not a separate file)
+
+The constitution goes INTO the project's CLAUDE.md as a `## Constitution` heading. This keeps operational principles co-located with operational reference information. The `## Constitution` section is human-protected — agent may propose changes but must not modify without explicit approval.
+
 <constitution_template>
-# Constitution: Operational Principles
+## Constitution
 
-**Human-protected.** Agent may propose changes but must not modify without explicit approval.
+> **Human-protected.** Agent may propose changes but must not modify without explicit approval.
 
-## The Generative Principle
-[One sentence that derives all other principles. Must be falsifiable and measurable.]
+### Generative Principle
+[One sentence that derives all other principles. Must be measurable.]
 
-## Constitutional Principles
+### Principles
 [7-12 numbered principles. Each must be:
 - Derivable from the generative principle
 - Actionable (an agent can follow it without asking for clarification)
 - Testable (you can describe a scenario where it would be violated)]
 
-## Autonomy Boundaries
-### Hard Limits (agent must not, without exception)
-### Autonomous (agent should do without asking)
-### Auto-Commit Standard
-[When can the agent commit knowledge without human review?]
+### Autonomy Boundaries
+**Hard limits:** [never without human]
+**Autonomous:** [do without asking]
 
-## Self-Improvement Governance
-### What the Agent Can Change
-### What Requires Human Approval
-### Rules of Change
-[Evidence standard for modifying rules]
-### Rules of Adjudication
-[How to determine if the system is working — metrics, review cadence]
+### Self-Improvement Governance
+[Rules of change, rules of adjudication, what requires human approval]
 
-## Self-Prompting Priorities (When Human Is Away)
-[Ordered list of autonomous task priorities]
+### Session Architecture
+[Turn limits, context management, subagent patterns]
 
-## Session Architecture
-[Document & Clear, fresh context per task, turn limits, multi-model validation triggers]
+### Known Limitations
+[What can't be enforced architecturally]
 
-*This document defines HOW the system operates. See GOALS.md for WHAT it optimizes toward.*
+### Pre-Registered Tests
+[How to verify this constitution is working — specific testable predictions to check via session-analyst after 2 weeks]
 </constitution_template>
+
+**Process improvement:** Before writing the constitution, draft it and dispatch to `/model-review` for critique. Model review works better on proposals than open questions. When model review disagrees with the user's expressed preference, surface the disagreement explicitly and let the user decide — don't silently adjudicate.
 
 ## Key Research Constraints
 
