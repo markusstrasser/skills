@@ -20,7 +20,7 @@ Find where the human had to intervene but shouldn't have. Every correction, boil
 ## When to Run
 
 - End of a work day (default: today's sessions)
-- After updating CLAUDE.md, CONSTITUTION.md, GOALS.md, or MEMORY.md
+- After updating CLAUDE.md (including Constitution section), GOALS.md, or MEMORY.md
 - After deploying new hooks or skills (to check if they're working)
 - Periodically (weekly) for trend tracking
 

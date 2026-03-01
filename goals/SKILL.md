@@ -21,7 +21,7 @@ You are helping the human clarify what they actually want from this project. Goa
 <exploration>
 Read everything that reveals intent:
 - GOALS.md (if it exists — this is a revision, not creation)
-- CONSTITUTION.md or docs/CONSTITUTION.md (for the generative principle and operational context)
+- CLAUDE.md `## Constitution` section (or standalone CONSTITUTION.md if it exists) for the generative principle and operational context
 - CLAUDE.md (stated purpose, project description)
 - MEMORY.md or persistent memory (prior decisions, constitutional questionnaire results)
 - Any README, docs/, or project description files

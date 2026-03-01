@@ -27,14 +27,21 @@ You are orchestrating a cross-model review. Same-model peer review is a martinga
 Before building context, check if the project has constitutional documents:
 
 ```bash
-# Check for project principles
-CONSTITUTION=$(find . ~/Projects/intel/docs -maxdepth 3 -name "CONSTITUTION.md" 2>/dev/null | head -1)
-GOALS=$(find . ~/Projects/intel/docs -maxdepth 3 -name "GOALS.md" 2>/dev/null | head -1)
+# Check for project principles — constitution may be standalone or a section in CLAUDE.md
+CONSTITUTION=$(find . -maxdepth 3 -name "CONSTITUTION.md" 2>/dev/null | head -1)
+if [ -z "$CONSTITUTION" ]; then
+  # Check for ## Constitution section in CLAUDE.md (preferred location since 2026-03)
+  CLAUDE_MD=$(find . -maxdepth 1 -name "CLAUDE.md" | head -1)
+  if [ -n "$CLAUDE_MD" ] && grep -q "^## Constitution" "$CLAUDE_MD"; then
+    CONSTITUTION="$CLAUDE_MD"  # Use CLAUDE.md — constitution is inline
+  fi
+fi
+GOALS=$(find . -maxdepth 3 -name "GOALS.md" 2>/dev/null | head -1)
 ```
 
-- **If CONSTITUTION.md exists:** Inject as preamble into ALL context bundles. Instruct models to review against project principles, not their own priors.
+- **If constitution found (standalone or in CLAUDE.md):** Inject as preamble into ALL context bundles. Instruct models to review against project principles, not their own priors.
 - **If GOALS.md exists:** Inject into GPT context (quantitative alignment check) and Gemini context (strategic coherence).
-- **If neither exists:** Warn the user: *"No CONSTITUTION.md or GOALS.md found. Reviews will lack project-specific anchoring. Consider `/constitution` or `/goals` first."* Proceed anyway — cross-model review still has value without constitutional grounding.
+- **If neither exists:** Warn the user: *"No constitution (in CLAUDE.md or standalone) or GOALS.md found. Reviews will lack project-specific anchoring. Consider `/constitution` or `/goals` first."* Proceed anyway — cross-model review still has value without constitutional grounding.
 
 ## Mode Selection
 
@@ -187,7 +194,7 @@ For each proposed change: estimated effort, expected impact, risk. Rank by ROI.
 Convert vague claims into falsifiable predictions with success criteria. If a claim can't be made testable, flag it.
 
 ## 4. Constitutional Alignment (Quantified)
-$([ -n "$CONSTITUTION" ] && echo "For each principle in CONSTITUTION.md: coverage score (0-100%), specific gaps, suggested fixes." || echo "No constitution provided — assess internal logical consistency.")
+$([ -n "$CONSTITUTION" ] && echo "For each constitutional principle: coverage score (0-100%), specific gaps, suggested fixes." || echo "No constitution provided — assess internal logical consistency.")
 
 ## 5. My Top 5 Recommendations (different from the originals)
 Ranked by measurable impact. Each must have: (a) what, (b) why with quantitative justification, (c) how to verify with specific metrics.
@@ -353,7 +360,7 @@ Build the synthesis from the disposition table. Every INCLUDE item must appear. 
 **Mode:** Review / Brainstorming
 **Date:** YYYY-MM-DD
 **Models:** Gemini 3.1 Pro, GPT-5.2
-**Constitutional anchoring:** Yes/No (CONSTITUTION.md, GOALS.md)
+**Constitutional anchoring:** Yes/No (CLAUDE.md Constitution section or standalone, GOALS.md)
 **Extraction:** N items extracted, M included, D deferred, R rejected
 
 ### Verified Findings (adopt)
@@ -451,7 +458,7 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 - **Skipping the self-doubt section.** The "Where I'm Likely Wrong" section is the most valuable part of each review. Models that can't identify their own weaknesses are less trustworthy.
 - **Same prompt to both models.** Gemini and GPT have different strengths. Sending the same qualitative prompt to both wastes GPT's formal reasoning capability. Gemini = patterns, GPT = quantitative/formal.
 - **Writing to /tmp.** Review outputs are valuable artifacts. Always persist to `.model-review/YYYY-MM-DD/`.
-- **Skipping constitutional check.** Reviews without project-specific anchoring drift into generic advice. Always check for CONSTITUTION.md/GOALS.md first.
+- **Skipping constitutional check.** Reviews without project-specific anchoring drift into generic advice. Always check for constitution (in CLAUDE.md or standalone) and GOALS.md first.
 - **Mixing review and brainstorming.** Convergent (find errors) and divergent (generate ideas) thinking are cognitively different. Don't ask for both in one prompt — the outputs will be mediocre at both.
 
 $ARGUMENTS
