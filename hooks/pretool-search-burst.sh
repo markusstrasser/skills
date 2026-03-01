@@ -59,6 +59,12 @@ case "$TOOL_NAME" in
         # Consuming search results — reset counter
         echo "0" > "$COUNTER_FILE" 2>/dev/null
         ;;
+    Read|Grep|Glob|mcp__exa__crawling_exa|mcp__exa__deep_researcher_check|\
+    mcp__research__get_source|mcp__research__list_corpus|\
+    mcp__research__save_paper|mcp__research__save_source)
+        # Processing results — reset counter
+        echo "0" > "$COUNTER_FILE" 2>/dev/null
+        ;;
     *)
         # Other tools — don't reset (writing, editing, etc. aren't "reading results")
         ;;
