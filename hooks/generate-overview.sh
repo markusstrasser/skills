@@ -89,8 +89,19 @@ check_deps() {
 # --- Generate a single overview ---
 generate_one() {
   local type="$1"
-  local prompt_file="$PROJECT_ROOT/$OVERVIEW_PROMPT_DIR/${type}.md"
-  local output_dir="$PROJECT_ROOT/$OVERVIEW_OUTPUT_DIR"
+
+  # Support absolute paths (shared prompts) and relative paths (project-local)
+  local prompt_file output_dir
+  if [[ "$OVERVIEW_PROMPT_DIR" = /* ]]; then
+    prompt_file="$OVERVIEW_PROMPT_DIR/${type}.md"
+  else
+    prompt_file="$PROJECT_ROOT/$OVERVIEW_PROMPT_DIR/${type}.md"
+  fi
+  if [[ "$OVERVIEW_OUTPUT_DIR" = /* ]]; then
+    output_dir="$OVERVIEW_OUTPUT_DIR"
+  else
+    output_dir="$PROJECT_ROOT/$OVERVIEW_OUTPUT_DIR"
+  fi
   local output_file="$output_dir/${type}-overview.md"
 
   # Validate prompt exists
@@ -118,11 +129,10 @@ generate_one() {
 
   mkdir -p "$output_dir"
 
-  local temp_content temp_prompt
-  temp_content=$(mktemp /tmp/overview-content-XXXXXX.txt)
-  temp_prompt=$(mktemp /tmp/overview-prompt-XXXXXX.txt)
+  local temp_prompt
+  temp_prompt=$(mktemp /tmp/overview-prompt-$$-${type}-XXXXXX.txt)
 
-  # Step 1: Extract content with repomix
+  # Step 1: Extract content with repomix (--stdout avoids clipboard races)
   local include_pattern=""
   IFS=',' read -ra DIR_ARRAY <<< "$dirs"
   for d in "${DIR_ARRAY[@]}"; do
@@ -134,22 +144,19 @@ generate_one() {
     fi
   done
 
-  local repomix_args=(--copy --output /dev/null --include "$include_pattern")
+  local repomix_args=(--stdout --include "$include_pattern")
   if [[ -n "$OVERVIEW_EXCLUDE" ]]; then
     repomix_args+=(--ignore "$OVERVIEW_EXCLUDE")
   fi
 
-  repomix "${repomix_args[@]}" >/dev/null 2>&1
-  pbpaste > "$temp_content"
-
-  # Step 2: Build prompt
+  # Step 2: Build prompt (instructions + repomix output)
   {
     echo '<instructions>'
     cat "$prompt_file"
     echo '</instructions>'
     echo ''
     echo '<codebase>'
-    cat "$temp_content"
+    repomix "${repomix_args[@]}" 2>/dev/null
     echo '</codebase>'
   } > "$temp_prompt"
 
@@ -160,11 +167,11 @@ generate_one() {
 
   echo "[$type] Generating (~${prompt_tokens} tokens, model: $OVERVIEW_MODEL)..."
 
-  # Step 4: Generate via llmx
-  cat "$temp_prompt" | llmx chat -m "$OVERVIEW_MODEL" > "$output_file" 2>&1
+  # Step 4: Generate via llmx (stderr has info lines — discard)
+  cat "$temp_prompt" | llmx chat -m "$OVERVIEW_MODEL" 2>/dev/null > "$output_file"
 
   # Cleanup
-  rm -f "$temp_content" "$temp_prompt"
+  rm -f "$temp_prompt"
 
   echo "[$type] Done → $output_file"
 }

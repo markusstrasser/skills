@@ -11,9 +11,9 @@ MAX_AGE_DAYS=7
 # Projects to check (add more as they opt in)
 PROJECTS=(
   "$HOME/Projects/intel"
-  "$HOME/Projects/evo"
   "$HOME/Projects/selve"
   "$HOME/Projects/genomics"
+  "$HOME/Projects/meta"
 )
 
 for project_dir in "${PROJECTS[@]}"; do
