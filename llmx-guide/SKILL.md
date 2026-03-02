@@ -84,7 +84,7 @@ subprocess.run(['llmx', '--provider', 'google'], input=prompt, ...)
 - `kimi-k2.5` — current default (K2.5 thinking, Jan 2026)
 - `kimi-k2-thinking` — legacy (K2 thinking, Nov 2025). Use `--use-old` flag.
 
-**Default model:** `gemini-3.1-pro-preview` (Gemini 3.1 Pro, Feb 2026)
+**Default model:** `gemini-3.1-pro-preview` (Gemini 3.1 Pro)
 
 ## Verified Gemini Model Names (tested Feb 28, 2026)
 
@@ -139,6 +139,48 @@ llmx research "CRISPR patent landscape" -o report.md
 # With code interpreter for data analysis
 llmx research --code-interpreter "global EV trends with data"
 ```
+
+## CLI Backends: gemini-cli, codex-cli (v0.5.0+)
+
+Route through Gemini CLI or Codex CLI instead of per-token API billing. Uses Google account / ChatGPT subscription auth.
+
+```bash
+# Basic usage — same interface, subscription pricing
+llmx -p gemini-cli "What is 2+2?"
+llmx -p codex-cli "What is 2+2?"
+
+# With model override
+llmx -p gemini-cli -m gemini-3-flash-preview "quick question"
+llmx -p codex-cli -m o3 "complex question"
+```
+
+**Automatic fallback to API:** When the CLI can't handle a feature, llmx silently falls back to the corresponding API provider (`google` or `openai`). A one-line log is emitted with `--debug`:
+
+```
+[cli→api] gemini-cli → google (structured output not supported by CLI)
+```
+
+**Features that trigger fallback:**
+- `--schema` (structured output)
+- `-s` / `--system` (system messages)
+- `--search` (web search grounding)
+- `--stream` (streaming)
+- `--reasoning-effort` other than `high`
+- CLI binary not found or exits non-zero
+
+**Features that work natively:**
+- Basic prompt → text response
+- Model override (`-m`)
+- Timeout (`--timeout`)
+
+**Programmatic API:**
+```python
+from llmx import chat
+response = chat("What is 2+2?", provider="gemini-cli")
+print(response.content)  # works, falls back to API if CLI fails
+```
+
+**Cost note:** CLI providers are opt-in only (`-p gemini-cli`). Never auto-inferred from model names. Use for simple one-shot calls where subscription pricing saves money.
 
 ## Image Generation (v0.3.0+)
 
