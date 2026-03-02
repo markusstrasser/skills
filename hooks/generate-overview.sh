@@ -145,6 +145,10 @@ generate_one() {
   done
 
   local repomix_args=(--stdout --include "$include_pattern")
+  # Some projects blanket-gitignore .claude/ — opt in via OVERVIEW_NO_GITIGNORE=true
+  if [[ "${OVERVIEW_NO_GITIGNORE:-}" == "true" ]]; then
+    repomix_args+=(--no-gitignore)
+  fi
   if [[ -n "$OVERVIEW_EXCLUDE" ]]; then
     repomix_args+=(--ignore "$OVERVIEW_EXCLUDE")
   fi
