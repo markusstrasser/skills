@@ -51,3 +51,4 @@ media/
 !examples/**/*.png
 !examples/**/*.pdf
 !templates/**/*.png
+.context/*.xml
