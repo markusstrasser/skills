@@ -99,43 +99,83 @@ Use the first 2-3 words of the review subject. Examples:
 - `.model-review/2026-03-01-search-retrieval/`
 - `.model-review/2026-02-28-genomics-split/`
 
+**Pre-computed views (preferred):** Check `.context/` for pre-built repomix views. If present, use these instead of manual assembly — they're deterministic, cached, and properly scoped.
+
+```bash
+CONTEXT_DIR=".context"
+if [ -d "$CONTEXT_DIR" ]; then
+  # Rebuild if needed (Make tracks dependencies — only rebuilds when files change)
+  make -C "$CONTEXT_DIR" all 2>/dev/null
+
+  # Available views — pick by review type:
+  #   constitution.xml  — stable prefix (CLAUDE.md + GOALS.md), enables prompt caching
+  #   full.xml          — everything (Gemini: large context review)
+  #   src.xml           — source code only (code review)
+  #   docs.xml          — documentation (architecture review)
+  #   infra.xml         — scripts/hooks (infrastructure review)
+  #   signatures.xml    — compressed function signatures (quick overview)
+  #   filetree.xml      — directory structure only (orientation)
+  #   diffs.xml         — uncommitted changes (delta review)
+fi
+```
+
+**View selection guidance:**
+| Review type | Gemini context | GPT context |
+|------------|---------------|-------------|
+| Architecture | constitution + full | constitution + signatures |
+| Code review | constitution + src | constitution + src |
+| Infra/hooks | constitution + infra | constitution + infra |
+| Delta review | constitution + diffs | constitution + diffs |
+
+**Compose context files** using pre-computed views or manual assembly:
+
 **Gemini 3.1 Pro context** (~50K-200K tokens target):
 ```bash
-cat > "$REVIEW_DIR/gemini-context.md" << 'HEADER'
+# Option A: Pre-computed views (preferred)
+if [ -f "$CONTEXT_DIR/constitution.xml" ]; then
+  cat "$CONTEXT_DIR/constitution.xml" > "$REVIEW_DIR/gemini-context.md"
+  # Append relevant view(s) based on review type
+  cat "$CONTEXT_DIR/full.xml" >> "$REVIEW_DIR/gemini-context.md"
+else
+  # Option B: Manual assembly (fallback)
+  cat > "$REVIEW_DIR/gemini-context.md" << 'HEADER'
 # CONTEXT: Cross-Model Review of [topic]
 HEADER
 
-# Constitutional preamble (if found)
-if [ -n "$CONSTITUTION" ]; then
-  echo -e "\n# PROJECT CONSTITUTION\nReview against these principles, not your own priors.\n" >> "$REVIEW_DIR/gemini-context.md"
-  cat "$CONSTITUTION" >> "$REVIEW_DIR/gemini-context.md"
+  if [ -n "$CONSTITUTION" ]; then
+    echo -e "\n# PROJECT CONSTITUTION\nReview against these principles, not your own priors.\n" >> "$REVIEW_DIR/gemini-context.md"
+    cat "$CONSTITUTION" >> "$REVIEW_DIR/gemini-context.md"
+  fi
+  if [ -n "$GOALS" ]; then
+    echo -e "\n# PROJECT GOALS\n" >> "$REVIEW_DIR/gemini-context.md"
+    cat "$GOALS" >> "$REVIEW_DIR/gemini-context.md"
+  fi
+  # Append source code, configs, research, docs
 fi
-if [ -n "$GOALS" ]; then
-  echo -e "\n# PROJECT GOALS\n" >> "$REVIEW_DIR/gemini-context.md"
-  cat "$GOALS" >> "$REVIEW_DIR/gemini-context.md"
-fi
-
-# Append source code, configs, research, docs
-# ... include everything. Gemini's strength is pattern-matching over large context.
 ```
 
 **GPT-5.2 context** (~10K-30K tokens target):
 ```bash
-cat > "$REVIEW_DIR/gpt-context.md" << 'HEADER'
+# Option A: Pre-computed views (preferred — use compressed signatures for GPT)
+if [ -f "$CONTEXT_DIR/constitution.xml" ]; then
+  cat "$CONTEXT_DIR/constitution.xml" > "$REVIEW_DIR/gpt-context.md"
+  cat "$CONTEXT_DIR/signatures.xml" >> "$REVIEW_DIR/gpt-context.md" 2>/dev/null || \
+    cat "$CONTEXT_DIR/src.xml" >> "$REVIEW_DIR/gpt-context.md"
+else
+  # Option B: Manual assembly (fallback)
+  cat > "$REVIEW_DIR/gpt-context.md" << 'HEADER'
 # CONTEXT: Cross-Model Review of [topic]
 HEADER
 
-# Constitutional preamble (if found)
-if [ -n "$CONSTITUTION" ]; then
-  echo -e "\n# PROJECT CONSTITUTION\nQuantify alignment gaps. For each principle, assess: coverage (0-100%), consistency, testable violations.\n" >> "$REVIEW_DIR/gpt-context.md"
-  cat "$CONSTITUTION" >> "$REVIEW_DIR/gpt-context.md"
+  if [ -n "$CONSTITUTION" ]; then
+    echo -e "\n# PROJECT CONSTITUTION\nQuantify alignment gaps. For each principle, assess: coverage (0-100%), consistency, testable violations.\n" >> "$REVIEW_DIR/gpt-context.md"
+    cat "$CONSTITUTION" >> "$REVIEW_DIR/gpt-context.md"
+  fi
+  if [ -n "$GOALS" ]; then
+    echo -e "\n# PROJECT GOALS\nAssess quantitative alignment. Which goals are measurably served? Which are neglected?\n" >> "$REVIEW_DIR/gpt-context.md"
+    cat "$GOALS" >> "$REVIEW_DIR/gpt-context.md"
+  fi
 fi
-if [ -n "$GOALS" ]; then
-  echo -e "\n# PROJECT GOALS\nAssess quantitative alignment. Which goals are measurably served? Which are neglected?\n" >> "$REVIEW_DIR/gpt-context.md"
-  cat "$GOALS" >> "$REVIEW_DIR/gpt-context.md"
-fi
-
-# Focused summary — GPT's strength is reasoning depth, not context volume
 ```
 
 **Token budget guidance:**
@@ -154,7 +194,9 @@ fi
 
 **Gemini 3.1 Pro — Architectural/Pattern Review:**
 ```bash
-cat "$REVIEW_DIR/gemini-context.md" | llmx chat -m gemini-3.1-pro-preview \
+llmx chat -m gemini-3.1-pro-preview \
+  -f "$REVIEW_DIR/gemini-context.md" \
+  -s "You are reviewing a codebase. Be concrete. No platitudes. Reference specific code, configs, and findings." \
   -t 0.3 --no-stream --timeout 300 "
 [Describe what's being reviewed]
 
@@ -177,18 +219,16 @@ $([ -n "$CONSTITUTION" ] && echo "Where does the reviewed work violate or neglec
 
 ## 6. Blind Spots In My Own Analysis
 What am I (Gemini) likely getting wrong? Where should you distrust my assessment?
-
-Be concrete. No platitudes. Reference specific code, configs, and findings.
 " > "$REVIEW_DIR/gemini-output.md" 2>&1
 ```
 
 **GPT-5.2 — Quantitative/Formal Analysis:**
 ```bash
-cat "$REVIEW_DIR/gpt-context.md" | llmx chat -m gpt-5.2 \
+llmx chat -m gpt-5.2 \
+  -f "$REVIEW_DIR/gpt-context.md" \
+  -s "You are performing QUANTITATIVE and FORMAL analysis. Gemini is handling qualitative pattern review separately. Focus on what Gemini can't do well. Be precise. Show your reasoning. No hand-waving." \
   --reasoning-effort high --stream --timeout 600 "
 [Describe what's being reviewed]
-
-You are performing QUANTITATIVE and FORMAL analysis. Gemini is handling qualitative pattern review separately. Focus on what Gemini can't do well.
 
 RESPOND WITH EXACTLY:
 
@@ -209,8 +249,6 @@ Ranked by measurable impact. Each must have: (a) what, (b) why with quantitative
 
 ## 6. Where I'm Likely Wrong
 What am I (GPT-5.2) probably getting wrong? Known biases to flag: overconfidence in fabricated specifics, overcautious scope-limiting, production-grade recommendations for personal projects.
-
-Be precise. Show your reasoning. No hand-waving.
 " > "$REVIEW_DIR/gpt-output.md" 2>&1
 ```
 
@@ -220,11 +258,11 @@ Be precise. Show your reasoning. No hand-waving.
 
 **Gemini 3.1 Pro — Creative Exploration:**
 ```bash
-cat "$REVIEW_DIR/gemini-context.md" | llmx chat -m gemini-3.1-pro-preview \
+llmx chat -m gemini-3.1-pro-preview \
+  -f "$REVIEW_DIR/gemini-context.md" \
+  -s "Think divergently. Challenge assumptions. What would a completely different approach look like?" \
   -t 0.8 --no-stream --timeout 300 "
 [Describe the design space to explore]
-
-Think divergently. Challenge assumptions. What would a completely different approach look like?
 
 ## 1. Alternative Architectures
 3 fundamentally different approaches. Not variations — genuinely different paradigms.
@@ -245,11 +283,11 @@ What am I (Gemini) missing because of my training distribution? Where should my 
 
 **GPT-5.2 — Structured Ideation:**
 ```bash
-cat "$REVIEW_DIR/gpt-context.md" | llmx chat -m gpt-5.2 \
+llmx chat -m gpt-5.2 \
+  -f "$REVIEW_DIR/gpt-context.md" \
+  -s "Generate novel approaches with feasibility assessment." \
   --reasoning-effort medium --stream --timeout 300 "
 [Describe the design space to explore]
-
-Generate novel approaches with feasibility assessment.
 
 ## 1. Idea Generation (10 ideas)
 Quick-fire: 10 approaches ranked by novelty. For each: one sentence + feasibility (High/Medium/Low).
@@ -273,14 +311,16 @@ What am I (GPT-5.2) probably biased toward? Where should my suggestions be distr
 **Optional — Flash pattern extraction pass:**
 For large codebases, a cheap Flash pass before the main reviews can surface mechanical issues:
 ```bash
-cat /path/to/large-context.md | llmx chat -m gemini-3-flash-preview \
+llmx chat -m gemini-3-flash-preview \
+  -f /path/to/large-context.md \
+  -s "Mechanical audit only. No analysis, no recommendations." \
   -t 0.2 --no-stream --timeout 120 "
-Mechanical audit only. Find:
+Find:
 - Duplicated content across files
 - Inconsistent naming (model names, paths, conventions)
 - Stale references (wrong versions, deprecated APIs)
 - Missing cross-references between related documents
-Output as a flat list. No analysis, no recommendations.
+Output as a flat list.
 " > "$REVIEW_DIR/flash-audit.md" 2>&1
 ```
 
@@ -296,8 +336,7 @@ For each claim in each review:
 
 Use Flash for rapid fact-checking of specific claims:
 ```bash
-echo "Claim: [model's claim]. Actual code: [paste relevant code]" | \
-  llmx -m gemini-3-flash-preview "Is this claim about the code accurate? Be precise."
+llmx chat -m gemini-3-flash-preview "Claim: [model's claim]. Actual code: [paste relevant code]. Is this claim accurate? Be precise."
 ```
 
 ### Step 5: Extract & Enumerate (Anti-Loss Protocol)
@@ -416,6 +455,21 @@ If yes: call `EnterPlanMode`, write the implementation plan referencing INCLUDE 
 If no: end here. The synthesis and extraction persist in `$REVIEW_DIR/`.
 
 Don't offer this if all findings are DEFER/REJECT or exploratory with no concrete next steps.
+
+### Step 8: Log Review Metrics
+
+After each review, append a line to `.model-review/reviews.jsonl` for cost/quality tracking:
+
+```bash
+echo '{"review_id":"'"$REVIEW_SLUG"'","date":"'"$(date +%Y-%m-%d)"'","project":"'"$(basename $(pwd))"'","topic":"'"$TOPIC"'","mode":"review","views_used":["constitution","full"],"findings_count":N,"included":N,"deferred":N,"rejected":N}' >> .model-review/reviews.jsonl
+```
+
+Fields to populate from the review:
+- `review_id`, `date`, `project`, `topic`, `mode` (review/brainstorm)
+- `views_used` — which `.context/` views were composed into context
+- `findings_count`, `included`, `deferred`, `rejected` — from disposition table
+
+This enables: reviews/month trends, average findings per review, reject rate patterns.
 
 ### Multi-Round Reviews
 

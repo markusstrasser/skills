@@ -1,0 +1,52 @@
+{
+  "type": "object",
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Short identifier, e.g. G1, P3"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "high", "medium", "low", "info"],
+            "description": "Impact severity"
+          },
+          "category": {
+            "type": "string",
+            "enum": ["error", "inconsistency", "missing", "improvement", "architectural", "security", "performance"],
+            "description": "Finding category"
+          },
+          "claim": {
+            "type": "string",
+            "description": "The specific claim or finding"
+          },
+          "evidence": {
+            "type": "string",
+            "description": "Code reference, file path, or reasoning supporting the claim"
+          },
+          "recommendation": {
+            "type": "string",
+            "description": "Concrete action to take"
+          },
+          "narrative": {
+            "type": "string",
+            "description": "Extended reasoning or context (free-form)"
+          }
+        },
+        "required": ["id", "severity", "category", "claim", "recommendation"]
+      }
+    },
+    "blind_spots": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Self-identified weaknesses in this analysis"
+    }
+  },
+  "required": ["findings", "blind_spots"]
+}
