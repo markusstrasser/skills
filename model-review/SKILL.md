@@ -99,90 +99,61 @@ Use the first 2-3 words of the review subject. Examples:
 - `.model-review/2026-03-01-search-retrieval/`
 - `.model-review/2026-02-28-genomics-split/`
 
-**Pre-computed views (preferred):** Check `.context/` for pre-built repomix views. If present, use these instead of manual assembly — they're deterministic, cached, and properly scoped.
+**Choose context scope based on review type:**
 
+| Review scope | When | Context method |
+|-------------|------|----------------|
+| **Broad** (whole codebase, architecture) | "Review our hook architecture", "Audit the pipeline" | `.context/` views — pre-built, deterministic |
+| **Narrow** (specific plan, analysis, code) | "Review this data-wiring plan", "Check this scoring formula" | Manual assembly — just the relevant files |
+
+Most reviews are narrow. Don't dump `full.xml` into a review of one plan document.
+
+**Both approaches always start with constitutional anchoring:**
 ```bash
-CONTEXT_DIR=".context"
-if [ -d "$CONTEXT_DIR" ]; then
-  # Rebuild if needed (Make tracks dependencies — only rebuilds when files change)
-  make -C "$CONTEXT_DIR" all 2>/dev/null
-
-  # Available views — pick by review type:
-  #   constitution.xml  — stable prefix (CLAUDE.md + GOALS.md), enables prompt caching
-  #   full.xml          — everything (Gemini: large context review)
-  #   src.xml           — source code only (code review)
-  #   docs.xml          — documentation (architecture review)
-  #   infra.xml         — scripts/hooks (infrastructure review)
-  #   signatures.xml    — compressed function signatures (quick overview)
-  #   filetree.xml      — directory structure only (orientation)
-  #   diffs.xml         — uncommitted changes (delta review)
+# Constitutional prefix — always include
+if [ -f ".context/constitution.xml" ]; then
+  cat .context/constitution.xml > "$REVIEW_DIR/gemini-context.md"
+  cat .context/constitution.xml > "$REVIEW_DIR/gpt-context.md"
+elif [ -n "$CONSTITUTION" ]; then
+  for f in "$REVIEW_DIR/gemini-context.md" "$REVIEW_DIR/gpt-context.md"; do
+    echo -e "# PROJECT CONSTITUTION\nReview against these principles, not your own priors.\n" > "$f"
+    cat "$CONSTITUTION" >> "$f"
+    [ -n "$GOALS" ] && { echo -e "\n# PROJECT GOALS\n" >> "$f"; cat "$GOALS" >> "$f"; }
+  done
 fi
 ```
 
-**View selection guidance:**
-| Review type | Gemini context | GPT context |
-|------------|---------------|-------------|
-| Architecture | constitution + full | constitution + signatures |
-| Code review | constitution + src | constitution + src |
-| Infra/hooks | constitution + infra | constitution + infra |
-| Delta review | constitution + diffs | constitution + diffs |
-
-**Compose context files** using pre-computed views or manual assembly:
-
-**Gemini 3.1 Pro context** (~50K-200K tokens target):
+**Broad reviews — use `.context/` views:**
 ```bash
-# Option A: Pre-computed views (preferred)
-if [ -f "$CONTEXT_DIR/constitution.xml" ]; then
-  cat "$CONTEXT_DIR/constitution.xml" > "$REVIEW_DIR/gemini-context.md"
-  # Append relevant view(s) based on review type
-  cat "$CONTEXT_DIR/full.xml" >> "$REVIEW_DIR/gemini-context.md"
-else
-  # Option B: Manual assembly (fallback)
-  cat > "$REVIEW_DIR/gemini-context.md" << 'HEADER'
-# CONTEXT: Cross-Model Review of [topic]
-HEADER
+# Rebuild if stale (Make tracks deps)
+make -C .context all 2>/dev/null
 
-  if [ -n "$CONSTITUTION" ]; then
-    echo -e "\n# PROJECT CONSTITUTION\nReview against these principles, not your own priors.\n" >> "$REVIEW_DIR/gemini-context.md"
-    cat "$CONSTITUTION" >> "$REVIEW_DIR/gemini-context.md"
-  fi
-  if [ -n "$GOALS" ]; then
-    echo -e "\n# PROJECT GOALS\n" >> "$REVIEW_DIR/gemini-context.md"
-    cat "$GOALS" >> "$REVIEW_DIR/gemini-context.md"
-  fi
-  # Append source code, configs, research, docs
-fi
+# Available views:
+#   full.xml        — everything (Gemini: large context)
+#   src.xml         — source code only
+#   docs.xml        — documentation
+#   infra.xml       — scripts/hooks
+#   signatures.xml  — compressed function outlines (GPT: smaller context)
+#   filetree.xml    — directory structure only
+#   diffs.xml       — uncommitted changes
 ```
 
-**GPT-5.2 context** (~10K-30K tokens target):
-```bash
-# Option A: Pre-computed views (preferred — use compressed signatures for GPT)
-if [ -f "$CONTEXT_DIR/constitution.xml" ]; then
-  cat "$CONTEXT_DIR/constitution.xml" > "$REVIEW_DIR/gpt-context.md"
-  cat "$CONTEXT_DIR/signatures.xml" >> "$REVIEW_DIR/gpt-context.md" 2>/dev/null || \
-    cat "$CONTEXT_DIR/src.xml" >> "$REVIEW_DIR/gpt-context.md"
-else
-  # Option B: Manual assembly (fallback)
-  cat > "$REVIEW_DIR/gpt-context.md" << 'HEADER'
-# CONTEXT: Cross-Model Review of [topic]
-HEADER
+| Review type | Gemini gets | GPT gets |
+|------------|-------------|----------|
+| Architecture | full.xml | signatures.xml |
+| Code review | src.xml | src.xml |
+| Infra/hooks | infra.xml | infra.xml |
+| Delta review | diffs.xml | diffs.xml |
 
-  if [ -n "$CONSTITUTION" ]; then
-    echo -e "\n# PROJECT CONSTITUTION\nQuantify alignment gaps. For each principle, assess: coverage (0-100%), consistency, testable violations.\n" >> "$REVIEW_DIR/gpt-context.md"
-    cat "$CONSTITUTION" >> "$REVIEW_DIR/gpt-context.md"
-  fi
-  if [ -n "$GOALS" ]; then
-    echo -e "\n# PROJECT GOALS\nAssess quantitative alignment. Which goals are measurably served? Which are neglected?\n" >> "$REVIEW_DIR/gpt-context.md"
-    cat "$GOALS" >> "$REVIEW_DIR/gpt-context.md"
-  fi
-fi
-```
+**Narrow reviews — manual assembly:**
 
-**Token budget guidance:**
-| Model | Sweet spot | Max useful | Strength |
-|-------|-----------|------------|----------|
-| Gemini 3.1 Pro | 80K-150K | ~500K | Pattern matching, cross-referencing across large context |
-| GPT-5.2 | 15K-40K | ~100K | Deep reasoning with `--reasoning-effort high`, formal analysis |
+Append only the specific files under review. Read them with the Read tool and write to context files. Include enough surrounding context for the models to understand the decision space (e.g., for a plan review, include the plan + the files it references).
+
+**Token budgets:**
+| Model | Sweet spot | Max useful | Note |
+|-------|-----------|------------|------|
+| Gemini 3.1 Pro | 80K-150K | ~800K | Handles large context well; quality doesn't degrade until ~1M |
+| GPT-5.2 | 15K-40K | ~100K | Use `signatures.xml` (compressed) instead of `full.xml` |
 
 ### Step 3: Dispatch Reviews (Parallel)
 
@@ -455,21 +426,6 @@ If yes: call `EnterPlanMode`, write the implementation plan referencing INCLUDE 
 If no: end here. The synthesis and extraction persist in `$REVIEW_DIR/`.
 
 Don't offer this if all findings are DEFER/REJECT or exploratory with no concrete next steps.
-
-### Step 8: Log Review Metrics
-
-After each review, append a line to `.model-review/reviews.jsonl` for cost/quality tracking:
-
-```bash
-echo '{"review_id":"'"$REVIEW_SLUG"'","date":"'"$(date +%Y-%m-%d)"'","project":"'"$(basename $(pwd))"'","topic":"'"$TOPIC"'","mode":"review","views_used":["constitution","full"],"findings_count":N,"included":N,"deferred":N,"rejected":N}' >> .model-review/reviews.jsonl
-```
-
-Fields to populate from the review:
-- `review_id`, `date`, `project`, `topic`, `mode` (review/brainstorm)
-- `views_used` — which `.context/` views were composed into context
-- `findings_count`, `included`, `deferred`, `rejected` — from disposition table
-
-This enables: reviews/month trends, average findings per review, reject rate patterns.
 
 ### Multi-Round Reviews
 
