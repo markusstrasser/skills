@@ -6,8 +6,9 @@ hooks:
   PostToolUse:
     - matcher: "Write|Edit"
       hooks:
-        - type: prompt
-          prompt: "The researcher just wrote or edited a file. Check: does every factual claim in the written content have a source citation in brackets (e.g., [DATA], [A2], [Exa], [S2], [PubMed], [arXiv])? Return ok=false listing any unsourced factual assertions. Ignore formatting, headers, and instructions — only check empirical claims."
+        - type: command
+          command: "RESEARCH_PATHS='docs/|analysis/|research/|\\.model-review/' ~/Projects/skills/hooks/postwrite-source-check-semantic.sh"
+          statusMessage: "Checking source citations..."
 ---
 
 # Researcher
