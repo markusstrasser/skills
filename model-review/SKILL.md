@@ -415,9 +415,20 @@ Build the synthesis from the disposition table. Every INCLUDE item must appear. 
 # Both persist in $REVIEW_DIR
 ```
 
-### Step 7: Plan-Mode Handoff (Optional)
+### Step 7: Close the Loop (Mandatory if INCLUDE items exist)
 
-If the synthesis produced concrete INCLUDE items with actionable work, offer the user a plan-mode handoff:
+**The synthesis is not the deliverable — the updated artifact is.** If you stop after writing the synthesis, the user has to tell you to apply the findings. That's supervision waste.
+
+**Case A: Review target is an existing plan or implementation document.**
+Apply verified INCLUDE items directly to the target:
+- Bug fixes → patch the code/schema/config in the plan
+- Architectural additions → add new sections
+- Success criteria fixes → update the criteria
+- Tag each change with the finding ID (e.g., "R2/P4")
+- Don't ask permission — the INCLUDE disposition is the decision
+
+**Case B: Review target is a decision, code, or architecture (no existing plan).**
+Offer a plan-mode handoff:
 
 > "Synthesis identified N actionable items. This review used ~X% context. Want me to write an implementation plan and hand off to a fresh context?"
 
@@ -425,7 +436,8 @@ If yes: call `EnterPlanMode`, write the implementation plan referencing INCLUDE 
 
 If no: end here. The synthesis and extraction persist in `$REVIEW_DIR/`.
 
-Don't offer this if all findings are DEFER/REJECT or exploratory with no concrete next steps.
+**Case C: All findings are DEFER/REJECT or exploratory.**
+Don't offer anything. The synthesis is the deliverable.
 
 ### Multi-Round Reviews
 
