@@ -10,21 +10,45 @@ trap 'exit 0' ERR
 
 INPUT=$(cat)
 
-# Extract agent_type and last_assistant_message
+# Extract agent_type, last_assistant_message, and log completion
 eval "$(echo "$INPUT" | python3 -c '
-import sys, json
+import sys, json, time, os
 try:
     d = json.load(sys.stdin)
     agent_type = d.get("agent_type", "")
+    agent_id = d.get("agent_id", "")
+    session_id = d.get("session_id", "")
     msg = d.get("last_assistant_message", "")
-    # Shell-safe: escape single quotes
+
+    # Compute full length before truncation (R:P4/P12)
+    msg_len = len(msg)
+
+    # Log subagent completion to same JSONL as start events
+    try:
+        entry = json.dumps({
+            "event": "subagent_stop",
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "agent_type": agent_type,
+            "agent_id": agent_id,
+            "session_id": session_id,
+            "output_len": msg_len
+        })
+        logfile = os.path.expanduser("~/.claude/subagent-log.jsonl")
+        with open(logfile, "a") as f:
+            f.write(entry + "\n")
+    except Exception:
+        pass
+
+    # Shell-safe: escape single quotes, truncate for shell use
     agent_type = agent_type.replace("'\''", "'\''\\'\'''\''")
-    msg = msg.replace("'\''", "'\''\\'\'''\''")
+    msg_trunc = msg[:2000].replace("'\''", "'\''\\'\'''\''")
     print(f"AGENT_TYPE='\''{ agent_type }'\''")
-    print(f"MSG='\''{ msg[:2000] }'\''")  # Cap at 2000 chars
+    print(f"MSG='\''{ msg_trunc }'\''")
+    print(f"MSG_LEN={ msg_len }")
 except Exception:
     print("AGENT_TYPE='\'''\''")
     print("MSG='\'''\''")
+    print("MSG_LEN=0")
 ' 2>/dev/null)"
 
 # Skip code-focused subagents where provenance tags are irrelevant
@@ -55,6 +79,12 @@ fi
 
 if [ "$HAS_TAGS" = "false" ]; then
     echo "{\"additionalContext\": \"SUBAGENT PROVENANCE: The $AGENT_TYPE subagent returned factual claims without provenance tags. Before incorporating these claims into your output, verify them or add appropriate tags ([SOURCE:], [SPEC], [TRAINING-DATA], etc.). Unsourced subagent claims compound error across steps.\"}"
+fi
+
+# Result-size check — uses MSG_LEN (full length, computed before truncation)
+if [ "${MSG_LEN:-0}" -gt 2000 ]; then
+    KB=$(( MSG_LEN / 1024 ))
+    echo "{\"additionalContext\": \"SUBAGENT SIZE: ${AGENT_TYPE} returned ${KB}KB. Large results defeat context isolation — ask subagents to return conclusions, not raw data.\"}"
 fi
 
 exit 0
