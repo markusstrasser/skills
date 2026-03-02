@@ -2,6 +2,10 @@ You are generating a developer tooling overview for a software project.
 
 This overview documents automation infrastructure: what runs automatically, how the development environment is configured, and how to operate the system. It is regenerated automatically when tooling changes are detected.
 
+<accuracy>
+Only describe what is concretely configured or implemented in the codebase below. Every hook, skill, script, or MCP server you mention must have a corresponding file or JSON entry in the codebase. Do not infer capabilities from prose, comments, README descriptions, or planning documents. If a config references an external script not present in context, note it as "referenced but not in scope" rather than describing what it might do.
+</accuracy>
+
 <what_to_cover>
 
 ## Claude Code integration

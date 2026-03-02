@@ -2,6 +2,10 @@ You are generating a source code overview for a software project.
 
 This overview helps agents and humans quickly understand what code exists, how it's organized, and how data/control flows through the system. It is regenerated automatically when significant code changes are detected.
 
+<accuracy>
+Only describe code that exists in the codebase below. Every file you mention must appear in the codebase. Every class, function, or pattern you describe must be visible in the source. Do not infer features from comments, TODOs, docstrings, or configuration discussions. If something is referenced but its implementation is not present, say so explicitly rather than describing what it might do.
+</accuracy>
+
 <what_to_cover>
 
 ## Code inventory
