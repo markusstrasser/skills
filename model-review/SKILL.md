@@ -146,7 +146,7 @@ fi
 
 ### Step 3: Dispatch Reviews (Parallel)
 
-Fire both reviews simultaneously. Each model gets a DIFFERENT cognitive task.
+**CRITICAL: Fire both Bash calls in a SINGLE message (two parallel tool calls).** Do NOT wait for one model before calling the other. Both models run independently — dispatch them simultaneously to halve wall-clock time.
 
 ---
 
