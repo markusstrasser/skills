@@ -40,16 +40,19 @@ if echo "$MSG" | grep -qE '\[SOURCE:|\[DATA\]|\[INFERENCE\]|\[SPEC\]|\[CALC\]|\[
     HAS_TAGS=true
 fi
 
-# Log would-block event regardless of outcome
-python3 -c '
+# Log would-block event — pass values via env vars, not shell interpolation in Python
+CLAIMS_VAL="$HAS_CLAIMS" TAGS_VAL="$HAS_TAGS" MLEN="${MSG_LEN:-0}" python3 -c '
 import json, time, os
+has_claims = os.environ.get("CLAIMS_VAL", "false") == "true"
+has_tags = os.environ.get("TAGS_VAL", "false") == "true"
+would_block = has_claims and not has_tags
 entry = json.dumps({
     "event": "researcher_stop_check",
     "ts": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-    "has_claims": '"$([ "$HAS_CLAIMS" = "true" ] && echo "true" || echo "false")"',
-    "has_tags": '"$([ "$HAS_TAGS" = "true" ] && echo "true" || echo "false")"',
-    "would_block": '"$([ "$HAS_CLAIMS" = "true" ] && [ "$HAS_TAGS" = "false" ] && echo "true" || echo "false")"',
-    "output_len": '"${MSG_LEN:-0}"'
+    "has_claims": has_claims,
+    "has_tags": has_tags,
+    "would_block": would_block,
+    "output_len": int(os.environ.get("MLEN", "0"))
 })
 logfile = os.path.expanduser("~/.claude/subagent-log.jsonl")
 with open(logfile, "a") as f:
