@@ -77,6 +77,26 @@ Not all tools exist in every project. Use what's available. The agent will error
 - **Structured extraction:** `firecrawl_scrape` or `firecrawl_extract` for specific URLs with JSON schema.
 - **Rate-limited:** If Exa returns 429, fall back to `brave_web_search` or `perplexity_search`.
 
+### Tool-Class Routing (empirical — EBF3 benchmark, 2026-03-03)
+
+Benchmarked academic-only vs websearch-only vs combined on a real genomics VUS question (N=1, Sonnet, 15 turns each). Three empirical findings that change tool selection:
+
+**1. Websearch first for structured database lookups.**
+Use Exa/Brave/Perplexity to query UniProt, gnomAD, MaveDB, ClinVar, DECIPHER — these are web databases, not literature. Academic tools (S2/PubMed) return papers *about* these databases, not the data itself. In the benchmark, websearch found the exact UniProt domain boundary (Pro263 = IPT/TIG N-terminus) that academic missed entirely because it inferred from EBF1 homology instead of querying EBF3 directly.
+
+**2. Academic tools for citation-verified literature.**
+S2/PubMed produced zero hallucinated citations. Websearch hallucinated a PDB ID (3MUJ doesn't exist), two year errors, and a self-contradiction. Combined hallucinated a journal+page (real author, wrong journal). The failure pattern: websearch tools synthesize from training data + web snippets and confabulate citation details. **Never trust a PMID or PDB ID from websearch without verification via S2 or the actual database.**
+
+**3. Don't run combined without database context.**
+Combined's citation hallucination happened because it reasoned from training-data memory about a less-indexed paper. When database facts (domain boundaries, population frequencies, prior ClinVar entries) are already in context from earlier queries, the model doesn't need to invent. Feed websearch findings into your synthesis step.
+
+**Practical sequence for variant/gene research:**
+1. Websearch: UniProt domain boundaries, gnomAD constraint, MaveDB check, ClinVar entries
+2. Academic: PubMed/S2 for case series, functional data, phenotype literature
+3. Synthesize with both in context — the model has facts to anchor on, not just training memory
+
+**Limitations:** N=1 (genomics VUS query), single model (Sonnet). The routing may differ for other domains. Websearch may outperform academic on fast-moving fields (AI, markets) where S2 indexing lags.
+
 ### Academic Tool Selection
 
 | Need | Best tool | Why not others |
@@ -331,6 +351,8 @@ Never present inference as sourced fact. Never present training data as retrieve
 - **Scope creep without pushback:** User asks 15 things, attempt all, run out of context. Say "this session can handle N of these well; which are priority?"
 - **Training data as research:** Reciting textbook citations from training without `[TRAINING-DATA]` tags
 - **S2 for recency:** Using Semantic Scholar when Exa is better for recent work
+- **Websearch citations as primary:** Trusting PMIDs, PDB IDs, or journal/page citations from websearch tools without S2/database verification. Measured: websearch hallucinated PDB 3MUJ, two year errors, wrong journal attribution in one benchmark run.
+- **Academic tools for database lookups:** Using S2/PubMed to find UniProt annotations, gnomAD frequencies, or ClinVar entries — these return papers *about* databases, not the data. Use websearch to query the databases directly.
 - **Redundant documentation:** For tools the model already knows, adding instructions is noise
 </anti_patterns>
 
