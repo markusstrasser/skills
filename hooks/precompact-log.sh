@@ -68,6 +68,49 @@ if transcript and os.path.isfile(transcript):
     except Exception:
         pass  # CLIR extraction is best-effort
 
+# --- Epistemic nuance density (Phase 1.4) ---
+# Measures hedging/qualifier/provenance density before compaction.
+# compaction-analysis.py reads these fields to track nuance drift.
+# NOTE: This measures density, not causal compaction loss (no PostCompact hook exists).
+hedging_words = ["likely", "approximately", "suggests", "uncertain", "possibly",
+                 "might", "could", "unclear", "tentative", "preliminary"]
+qualifiers = ["however", "on the other hand", "caveat", "limitation", "exception", "but note"]
+provenance_tags = ["[SOURCE:", "[INFERENCE]", "[TRAINING-DATA]", "[PREPRINT]",
+                   "[FRONTIER]", "[UNVERIFIED]", "[SPEC]", "[CALC]", "[DATA]", "[QUOTE]"]
+
+hedging_count = 0
+qualifier_count = 0
+provenance_tag_count = 0
+assistant_word_count = 0
+
+if transcript and os.path.isfile(transcript):
+    try:
+        with open(transcript) as f:
+            for raw_line in f:
+                try:
+                    te = json.loads(raw_line.strip())
+                except Exception:
+                    continue
+                if te.get("type") != "assistant":
+                    continue
+                msg_content = te.get("message", {}).get("content", [])
+                if not isinstance(msg_content, list):
+                    continue
+                for blk in msg_content:
+                    if isinstance(blk, dict) and blk.get("type") == "text":
+                        txt = blk.get("text", "")
+                        words = txt.split()
+                        assistant_word_count += len(words)
+                        lower = txt.lower()
+                        for hw in hedging_words:
+                            hedging_count += lower.count(hw)
+                        for q in qualifiers:
+                            qualifier_count += lower.count(q)
+                        for pt in provenance_tags:
+                            provenance_tag_count += txt.count(pt)
+    except Exception:
+        pass
+
 # --- Git state ---
 modified = []
 branch = ""
@@ -108,6 +151,10 @@ entry = {
         "memory_written": memory_written,
         "task_context": task_context,
     },
+    "hedging_count": hedging_count,
+    "qualifier_count": qualifier_count,
+    "provenance_tag_count": provenance_tag_count,
+    "assistant_word_count": assistant_word_count,
 }
 with open(log_path, "a") as f:
     f.write(json.dumps(entry, separators=(",", ":")) + "\n")
