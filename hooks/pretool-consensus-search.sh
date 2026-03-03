@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # pretool-consensus-search.sh — Warn on epistemically empty search queries.
-# PreToolUse hook. Matcher: same as search-burst (search tools).
+# PreToolUse hook. Matcher: same as search-burst (search + consumption tools).
 # Advisory only (exit 0 + additionalContext). Does not block.
 #
 # Consensus queries ("best X", "top Y", "most undervalued Z") return noise.
@@ -17,7 +17,13 @@ try:
     d = json.load(sys.stdin)
     inp = d.get("tool_input", {})
     # Different tools use different field names
+    # Different tools use different field names for the query
     q = inp.get("query", inp.get("instructions", inp.get("companyName", "")))
+    # Perplexity uses messages array
+    if not q and "messages" in inp:
+        msgs = inp["messages"]
+        if msgs and isinstance(msgs, list):
+            q = msgs[-1].get("content", "")
     print(q)
 except Exception:
     print("")

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # pretool-search-burst.sh — Detect search query bursts without intermediate reads.
-# PreToolUse hook. Matcher: mcp__exa|mcp__research|mcp__paper-search|WebSearch|WebFetch
+# PreToolUse hook. Matcher: mcp__exa|mcp__research|mcp__paper-search|mcp__brave-search|mcp__perplexity|mcp__firecrawl|WebSearch|WebFetch
 # Fires on search tools (increment) and result-consumption tools (reset).
 # Warns at WARN_THRESHOLD, soft-blocks at BLOCK_THRESHOLD.
 #
@@ -34,6 +34,9 @@ case "$TOOL_NAME" in
     mcp__paper-search__search_arxiv|mcp__paper-search__search_pubmed|\
     mcp__paper-search__search_biorxiv|mcp__paper-search__search_medrxiv|\
     mcp__paper-search__search_google_scholar|\
+    mcp__brave-search__brave_web_search|mcp__brave-search__brave_news_search|\
+    mcp__brave-search__brave_image_search|mcp__brave-search__brave_video_search|\
+    mcp__perplexity__perplexity_search|\
     WebSearch)
         # Search tool — increment counter
         COUNT=0
@@ -57,6 +60,11 @@ case "$TOOL_NAME" in
     mcp__research__read_paper|mcp__research__fetch_paper|\
     mcp__research__get_paper|mcp__research__ask_papers|\
     mcp__paper-search__read_*|mcp__paper-search__download_*|\
+    mcp__perplexity__perplexity_ask|mcp__perplexity__perplexity_research|\
+    mcp__perplexity__perplexity_reason|\
+    mcp__firecrawl__firecrawl_scrape|mcp__firecrawl__firecrawl_crawl|\
+    mcp__firecrawl__firecrawl_extract|mcp__firecrawl__firecrawl_agent|\
+    mcp__firecrawl__firecrawl_map|\
     WebFetch)
         # Consuming search results — reset counter
         echo "0" > "$COUNTER_FILE" 2>/dev/null
