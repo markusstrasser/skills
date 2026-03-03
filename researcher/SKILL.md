@@ -48,6 +48,16 @@ Use whichever of these are available in the current project's `.mcp.json`:
 | `mcp__exa__web_search_exa` | Semantic web search | Non-obvious connections, expert blogs, recent work |
 | `mcp__exa__company_research_exa` | Company intelligence | Business/financial research |
 | `mcp__exa__get_code_context_exa` | Code/docs search | Technical implementation |
+| `mcp__brave-search__brave_web_search` | Independent index search | Triangulation with Exa (different index). Fallback when Exa rate-limits. |
+| `mcp__brave-search__brave_news_search` | Dedicated news search | Time-sensitive events (default 24h). Better than Exa category filter for breaking news. |
+| `mcp__perplexity__perplexity_ask` | Grounded factual answer | Quick "What is X?" — one call, cited. Saves search→fetch→synthesize. |
+| `mcp__perplexity__perplexity_research` | Deep multi-source report | Comprehensive topic surveys. Alternative to Exa deep_researcher. Slow (~30s+). |
+| `mcp__perplexity__perplexity_reason` | Chain-of-thought + web | "Why did X happen?" — analytical questions needing reasoning + evidence. |
+| `mcp__perplexity__perplexity_search` | Raw web results | Third search source. Use when you want to control synthesis yourself. |
+| `mcp__firecrawl__firecrawl_scrape` | JS-heavy page scraper | Financial dashboards, dynamic sites that WebFetch/Exa crawling can't handle. |
+| `mcp__firecrawl__firecrawl_extract` | Structured data extraction | JSON Schema extraction from web pages. Company filings, earnings data. |
+| `mcp__firecrawl__firecrawl_crawl` | Recursive site crawl | Investor relations sections, filing indexes. |
+| `mcp__firecrawl__firecrawl_map` | URL discovery | "What pages exist on this site?" before crawling. |
 | `mcp__context7__*` | Library documentation | API/framework questions |
 | WebFetch | Fetch specific URLs | Known databases, filings, regulatory |
 | WebSearch | General web search | News, grey literature |
@@ -57,6 +67,20 @@ Not all tools exist in every project. Use what's available. The agent will error
 **Critical rule:** `fetch_paper` then `read_paper` BEFORE citing. Abstracts are not primary sources.
 
 **S2 gotcha:** No date filtering on free tier. ~100 req/5min rate limit. Use Exa for "recent papers on X."
+
+### Search Routing
+
+- **Factual lookup:** Try `perplexity_ask` first (one call, cited). Fall back to Exa search + WebFetch.
+- **Semantic discovery:** Exa remains primary (neural search, find_similar, categories).
+- **News/events:** `brave_news_search` for last 24h-7d. Exa with date filter for older.
+- **Triangulation:** For high-stakes claims, use Exa + Brave (confirmed independent indexes). Perplexity is NOT confirmed independent — use only as tiebreaker.
+- **Structured extraction:** `firecrawl_scrape` or `firecrawl_extract` for specific URLs with JSON schema.
+- **Rate-limited:** If Exa returns 429, fall back to `brave_web_search` or `perplexity_search`.
+
+### Verification
+
+- `mcp__research__verify_claim` (Exa /answer) remains primary for spot-checking.
+- For critical claims: also check via `brave_web_search` (independent index).
 </tool_reference>
 
 ## Effort Classification
