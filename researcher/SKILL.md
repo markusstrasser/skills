@@ -34,7 +34,7 @@ Use whichever of these are available in the current project's `.mcp.json`:
 | `mcp__selve__search` | Personal knowledge search | Prior work, conversations, notes — **always check first** if available |
 | `mcp__duckdb__execute_query` | Query project DuckDB views | Local data — check before going external |
 | `mcp__intelligence__*` | Entity resolution, dossiers, screening | Investigation targets (if configured) |
-| `mcp__research__search_papers` | Semantic Scholar search | Finding papers. **No date filtering** — use Exa for recency |
+| `mcp__research__search_papers` | Semantic Scholar search (220M+ papers) | Canonical papers, citation counts, structured metadata. **No date filtering** — use Exa for recency |
 | `mcp__research__save_paper` | Save paper to local corpus | After finding useful paper |
 | `mcp__research__fetch_paper` | Download PDF + extract text | **Before citing any paper** |
 | `mcp__research__read_paper` | Get full extracted text | Reading a fetched paper |
@@ -66,7 +66,7 @@ Not all tools exist in every project. Use what's available. The agent will error
 
 **Critical rule:** `fetch_paper` then `read_paper` BEFORE citing. Abstracts are not primary sources.
 
-**S2 gotcha:** No date filtering on free tier. ~100 req/5min rate limit. Use Exa for "recent papers on X."
+**S2 strengths (with API key):** 220M+ papers, structured metadata (citation counts, venues, DOIs), citation graph traversal, OpenAlex fallback. Best for: finding canonical papers, citation analysis, paper-to-paper discovery. Rate limit with key: 1 req/sec (vs 100/5min free). **S2 gotcha:** No date filtering. Use Exa for "recent papers on X." S2 API key set via `S2_API_KEY` env var in `~/.env`.
 
 ### Search Routing
 
@@ -76,6 +76,19 @@ Not all tools exist in every project. Use what's available. The agent will error
 - **Triangulation:** For high-stakes claims, use Exa + Brave (confirmed independent indexes). Perplexity is NOT confirmed independent — use only as tiebreaker.
 - **Structured extraction:** `firecrawl_scrape` or `firecrawl_extract` for specific URLs with JSON schema.
 - **Rate-limited:** If Exa returns 429, fall back to `brave_web_search` or `perplexity_search`.
+
+### Academic Tool Selection
+
+| Need | Best tool | Why not others |
+|------|-----------|---------------|
+| Canonical papers by topic | `search_papers` (S2) | Largest index (220M+), structured metadata, citation counts |
+| Recent papers (<6mo) | `web_search_advanced_exa` with `category: "research paper"` + date filter | S2 has no date filtering |
+| Citation analysis / related papers | `search_papers` (S2) → `save_paper` → `get_paper` | S2 exposes citation graph; arXiv/PubMed don't |
+| Preprints (arXiv) | `search_arxiv` (paper-search) | Direct arXiv API, download+read built in |
+| Clinical/medical literature | `search_pubmed` (paper-search) | MeSH terms, clinical focus |
+| Biology preprints | `search_biorxiv` (paper-search) | Direct bioRxiv API |
+| Full-text synthesis | `search_papers` → `save_paper` → `fetch_paper` → `ask_papers` | Gemini 1M context for multi-paper Q&A |
+| Grey literature / expert blogs | Exa semantic search | Academic APIs don't index blogs/substacks |
 
 ### Verification
 
