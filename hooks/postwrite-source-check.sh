@@ -59,9 +59,11 @@ if [ "$MODE" = "block" ]; then
     echo "BLOCKED: Research file written without provenance tags." >&2
     echo "Add at least one: $TAG_LIST" >&2
     echo "File: $FPATH" >&2
+    ~/Projects/skills/hooks/hook-trigger-log.sh "source-check" "block" "$FPATH" 2>/dev/null || true
     exit 2
 else
     # Advisory mode — warn via additionalContext (injected into conversation)
+    ~/Projects/skills/hooks/hook-trigger-log.sh "source-check" "warn" "$FPATH" 2>/dev/null || true
     echo "{\"additionalContext\": \"PROVENANCE WARNING: Research file written without source tags. File: $FPATH. Add at least one provenance tag: $TAG_LIST. Use [SPEC] to explicitly label speculation.\"}"
     exit 0
 fi

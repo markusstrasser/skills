@@ -45,11 +45,13 @@ case "$TOOL_NAME" in
             echo "$COUNT consecutive search queries without reading results." >&2
             echo "Earlier results should inform what you search next." >&2
             echo "Read/scan existing results before adding more queries." >&2
+            ~/Projects/skills/hooks/hook-trigger-log.sh "search-burst" "block" "$COUNT queries" 2>/dev/null || true
             exit 2
         elif [ "$COUNT" -ge "$WARN_THRESHOLD" ]; then
             echo "NOTE: $COUNT search queries fired without pausing to read results." >&2
             echo "Results from earlier queries could narrow what you search next." >&2
             echo "Consider reading/scanning what you have before adding more." >&2
+            ~/Projects/skills/hooks/hook-trigger-log.sh "search-burst" "warn" "$COUNT queries" 2>/dev/null || true
         fi
         ;;
     mcp__research__read_paper|mcp__research__fetch_paper|\
