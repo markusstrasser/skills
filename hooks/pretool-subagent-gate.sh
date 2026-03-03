@@ -54,7 +54,14 @@ if [ "$STYPE" = "general-purpose" ]; then
     fi
 fi
 
-# Check 4: Delegation cascade tracking
+# Check 4: Research task routed to general-purpose instead of researcher
+if [ "$STYPE" = "general-purpose" ]; then
+    if echo "$DESC" | grep -qiE 'verify|evidence|literature|systematic review|meta.analysis|primary source|PMID|PubMed|cite|citation|research.*claim|check.*paper'; then
+        WARNINGS="${WARNINGS}SUBAGENT TYPE: Research/verification task using general-purpose agent. Use researcher subagent_type instead — it has maxTurns:20, epistemics+source-grading skills, and source-check stop hook. general-purpose agents have no epistemic guardrails. "
+    fi
+fi
+
+# Check 5: Delegation cascade tracking
 CASCADE_FILE="/tmp/claude-agent-cascade-$PPID"
 NON_AGENT_FILE="/tmp/claude-non-agent-$PPID"
 

@@ -48,9 +48,23 @@ esac
 # File must exist to check content
 [ ! -f "$FPATH" ] && exit 0
 
-# Check for provenance tags in the file content
-if grep -qE '\[SOURCE:|\[DATABASE:|\[DATA\]|\[INFERENCE\]|\[SPEC\]|\[CALC\]|\[QUOTE\]|\[TRAINING-DATA\]|\[PREPRINT\]|\[FRONTIER\]|\[UNVERIFIED\]|\[[A-F][1-6]\]' "$FPATH"; then
-    exit 0
+# Check for provenance tags — require DENSITY, not just presence.
+# A file with 1 tag and 50 untagged claims should still warn.
+TAG_COUNT=$(grep -cE '\[SOURCE:|\[DATABASE:|\[DATA\]|\[INFERENCE\]|\[SPEC\]|\[CALC\]|\[QUOTE\]|\[TRAINING-DATA\]|\[PREPRINT\]|\[FRONTIER\]|\[UNVERIFIED\]|\[[A-F][1-6]\]' "$FPATH" 2>/dev/null || echo 0)
+
+if [ "$TAG_COUNT" -gt 0 ]; then
+    # Estimate claim density: lines with numbers, percentages, dates, author-year patterns
+    CLAIM_COUNT=$(grep -cE '[0-9]+%|[0-9]{4}-[0-9]{2}|\$[0-9]|PMID|et al\.|[A-Z][a-z]+ [0-9]{4}|confirmed|refuted|showed|found that|OR [0-9]|P[=<>]' "$FPATH" 2>/dev/null || echo 0)
+    # Threshold: at least 1 tag per 5 claim-bearing lines
+    if [ "$CLAIM_COUNT" -gt 0 ] && [ "$TAG_COUNT" -gt 0 ]; then
+        RATIO=$(( CLAIM_COUNT / TAG_COUNT ))
+        if [ "$RATIO" -le 5 ]; then
+            exit 0
+        fi
+        # Sparse — fall through to warning
+    else
+        exit 0
+    fi
 fi
 
 TAG_LIST="[SOURCE: url], [DATABASE: name], [DATA], [INFERENCE], [SPEC], [CALC], [QUOTE], [TRAINING-DATA], [PREPRINT], [FRONTIER], [UNVERIFIED], or Admiralty [A1]-[F6]"
