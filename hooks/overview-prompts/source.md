@@ -41,7 +41,22 @@ Notable external libraries and what they're used for. Skip standard library.
 </what_to_skip>
 
 <format>
-- Markdown headers (##, ###) for sections
+Start the file with a greppable index block inside an HTML comment. Every subsection in the overview must have a corresponding index line. Prefix tags by type:
+
+```
+<!-- INDEX
+[SCRIPT] name — one-line purpose
+[MODULE] name — one-line purpose
+[CLASS] ClassName — one-line purpose
+[FLOW] source → sink — what moves
+[LIB] package — what it's used for
+-->
+```
+
+Tag types: `[SCRIPT]` for standalone scripts/CLI tools, `[MODULE]` for importable modules, `[CLASS]` for key abstractions, `[FLOW]` for data flows, `[LIB]` for notable dependencies. Use the tag that best fits; don't force every item into one category.
+
+After the index, use markdown subsections (### headings) whose names match the index entries so an agent can grep the index, then jump to the relevant heading.
+
 - Bullet points with module names in backticks
 - 1-2 lines per module, max
 - Tables where comparison is useful (e.g., data sources, external APIs)

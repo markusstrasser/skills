@@ -46,7 +46,22 @@ Notable settings in pyproject.toml, package.json, Makefile, or equivalent:
 </what_to_skip>
 
 <format>
-- Markdown headers for sections
+Start the file with a greppable index block inside an HTML comment. Every subsection in the overview must have a corresponding index line. Prefix tags by type:
+
+```
+<!-- INDEX
+[HOOK] name — what it guards, block/advise
+[SKILL] name — one-line purpose
+[MCP] server-name — capabilities
+[AUTOMATION] name — trigger and purpose
+[CONFIG] file — what it controls
+-->
+```
+
+Tag types: `[HOOK]` for Claude Code hooks, `[SKILL]` for agent skills, `[MCP]` for MCP servers, `[AUTOMATION]` for scheduled/triggered jobs, `[CONFIG]` for notable config files. Use the tag that best fits.
+
+After the index, use markdown subsections (### headings) whose names match the index entries so an agent can grep the index, then jump to the relevant heading.
+
 - Tables for hook/skill/MCP inventories
 - Bullet points for everything else
 - Target: 80-150 lines total
