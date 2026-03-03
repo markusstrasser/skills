@@ -85,6 +85,39 @@ referenced by CI/build systems.
 CLAUDE.md has no section mapping docs/research files to "when to consult."
 The agent sees the CLAUDE.md but has no pointer to the research that should
 inform its decisions.
+
+### 2d. Iterative content (NEVER archive)
+
+**Critical failure mode:** Files that are dated iterations of the same analysis
+(e.g., `report_2026_02_19.md`, `report_2026_02_26.md`) look like supersession
+candidates. They are NOT. Each iteration typically contains:
+
+- Unique analytical angles not present in later versions
+- Intermediate reasoning and exploration paths
+- Verification details that the "final" compressed away
+- Findings that were later overturned (documenting what was believed when)
+
+**Rule: iterative analysis reports are NEVER candidates for archival or deletion.**
+They are candidates for *indexing* — mark the latest as current, list others as
+historical context in the CLAUDE.md index.
+
+**How to detect iterative content:**
+- Multiple files with the same topic stem and different dates
+- Files with names like `*_v1`, `*_v2`, `*_YYYY_MM_DD`
+- Files explicitly referencing/building on each other
+
+**What to do instead of archiving:**
+1. Index all versions in CLAUDE.md with `[current]` / `[historical]` tags
+2. If the latest version is missing corrections found in git log, apply them
+3. Add cross-references between versions so each points to the others
+4. If truly redundant (copy-paste duplicate, not analytical iteration), propose
+   deletion with evidence that no unique content exists — diff the files first
+
+**Example from real failure:** 5 genomics analysis reports archived as
+"superseded by latest." Each contained unique analytical angles, verification
+trails, and intermediate findings absent from the kept version. The "latest"
+also had 5+ stale claims that corrections in later sessions had fixed in the
+individual reports but never propagated forward.
 </problems>
 
 ## Phase 3: Propose changes
