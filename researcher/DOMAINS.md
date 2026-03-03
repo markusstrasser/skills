@@ -4,6 +4,20 @@ Domain-specific gotchas for the researcher skill. These focus on non-obvious mis
 
 If a question spans domains, name the primary and secondary. Use the stricter evidence standard. Project-specific tool routing (which databases, which views) lives in `.claude/rules/research-depth.md` if it exists.
 
+## Exa Category Routing
+
+When using `web_search_advanced_exa`, set `category` to narrow results:
+
+| Domain | Category | When |
+|--------|----------|------|
+| Finance/investing | `financial report` | SEC filings, earnings, annual reports |
+| Academic research | `research paper` | Supplements S2, better recency than S2 free tier |
+| Current events | `news` | Press releases, regulatory announcements |
+| Company analysis | `company` | Company profiles, products, overview |
+| Code/technical | `github` | Repos, issues, discussions |
+
+Omit `category` when the query spans domains or when you want diverse source types.
+
 ## Scientific / Biomedical
 - **Invoke `epistemics` skill** if available — it has the evidence hierarchy and grading rules.
 - ClinVar single-submitter entries get reclassified often — don't treat as settled. ≥2 stars only.

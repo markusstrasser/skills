@@ -40,6 +40,7 @@ Use whichever of these are available in the current project's `.mcp.json`:
 | `mcp__research__read_paper` | Get full extracted text | Reading a fetched paper |
 | `mcp__research__ask_papers` | Query across papers (Gemini 1M) | Synthesizing multiple papers |
 | `mcp__research__list_corpus` | List saved papers | Check before searching externally |
+| `mcp__research__verify_claim` | Verify factual claim via Exa /answer | High-stakes claims: numbers, stats, entity properties. Single-call, cached 7d |
 | `mcp__research__export_for_selve` | Export for knowledge embedding | End of session, persist findings (if configured) |
 | `mcp__paper-search__search_arxiv` | arXiv search | Preprints — flag as `[PREPRINT]` |
 | `mcp__paper-search__search_pubmed` | PubMed search | Clinical/medical literature |
@@ -110,7 +111,17 @@ If your axes all start from the same place, you have one axis with multiple quer
 - **Save papers** with `save_paper`, **fetch full text** before citing
 
 **Exa search philosophy (semantic search, not keyword):**
-- **Match recency filter to field velocity.** Before searching, judge how fast the field moves and filter accordingly. Stable fields (physics, law) need no date gate. Fast fields (AI, crypto, geopolitics) go stale in months — if results reference superseded models, outdated benchmarks, or pre-current-generation tools, discard and re-query with tighter dates. Use `web_search_advanced_exa` date ranges when available, or add year terms to queries.
+- **Use category filters on `web_search_advanced_exa`** when the domain is clear. Categories narrow results to high-signal sources:
+  - `financial report` — SEC filings, earnings, annual reports (investing/finance)
+  - `research paper` — academic papers (supplements S2, better recency filtering)
+  - `news` — press releases, regulatory announcements, current events
+  - `company` — company profiles, about pages
+- **Use `highlights`** to scan results before pulling full text. Set `highlightsQuery` to your claim/topic for relevance-ranked excerpts. Useful for evidence scanning across many results.
+- **Use `summary` with `summaryQuery`** for structured extraction from search results. Example: search "Company X recent earnings" with `enableSummary: true, summaryQuery: "revenue, EPS, guidance"`.
+- **Match recency filter to field velocity.** Before searching, judge how fast the field moves and filter accordingly. Stable fields (physics, law) need no date gate. Fast fields (AI, crypto, geopolitics) go stale in months — if results reference superseded models, outdated benchmarks, or pre-current-generation tools, discard and re-query with tighter dates. Use `web_search_advanced_exa` `startCrawlDate`/`startPublishedDate`:
+  - **Fast (AI, markets):** `startCrawlDate` = 30 days ago
+  - **Medium (biotech, policy):** `startCrawlDate` = 6 months ago
+  - **Stable (physics, law, math):** omit date filter
 - Exa matches by meaning, not keywords. Query by phrase — describe the *concept* you want results from, not the terms you'd grep for. "Gene-diet interaction abolishing cardiovascular genetic risk" finds different (better) results than "9p21 diet interaction."
 - **Seek insight from adjacent domains.** The most useful context often isn't phrased the same way or even from the same field. Ask: "What knowledge space would contain a brilliant critique of this idea?" Then phrase the query *from that domain's perspective*.
 - **Know when to use your own knowledge vs. search.** Your training data is a massive library with a hard expiration date. Use it deliberately:
@@ -149,6 +160,8 @@ For every specific claim in your output:
 - **Names:** From a source you accessed, or memory? If memory → verify or label `[UNVERIFIED]`
 - **Existence:** Does this paper actually exist? If you cannot confirm, DO NOT cite it
 - **Attribution:** Does the paper actually say what you think? Use `read_paper` to verify
+
+**For high-stakes factual claims** (specific numbers, valuations, statistics, entity properties), use `mcp__research__verify_claim` if available. It calls Exa /answer with structured output — one API call, returns verdict + citations. Use for spot-checking, not every claim (costs ~$0.005/call).
 
 **YOU WILL FABRICATE under pressure to be precise.** The pattern: real concept + invented specifics (author name, fold-change, sample size). Catch yourself. Vague truth > precise fiction.
 
