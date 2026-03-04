@@ -28,10 +28,10 @@ You are orchestrating a cross-model review. Same-model peer review is a martinga
 |------|-------|-----|
 | **Gemini** (pattern/architecture) | Pro (`gemini-3.1-pro-preview`) | Deep review — cross-referencing, pattern detection |
 | **GPT** (quantitative/formal) | GPT-5.2 (`gpt-5.2 --reasoning-effort high --stream --timeout 600`) | Deep review — logical inconsistencies, cost-benefit |
-| **Gemini Fast** (extraction) | Flash-Lite (`gemini-3.1-flash-lite`) | Structured extraction in Step 5, mechanical audits |
+| **Gemini Fast** (extraction) | Flash (`gemini-3-flash-preview`) | Structured extraction in Step 5, mechanical audits |
 | **GPT Fast** (extraction) | GPT-5.3 Instant (`gpt-5.3-instant --stream`) | Structured extraction in Step 5, fact-checking |
 
-**Why these models:** Adversarial review needs deep reasoning from both sides. Gemini Pro for cross-referencing across large context; GPT-5.2 with `--reasoning-effort high` for formal fault-finding. **Fast models for extraction:** Step 5 (extract + disposition) is mechanical — fast models do it equally well at 10x lower cost and latency. Use Flash-Lite or GPT-5.3 Instant for claim extraction, not the deep reviewers.
+**Why these models:** Adversarial review needs deep reasoning from both sides. Gemini Pro for cross-referencing across large context; GPT-5.2 with `--reasoning-effort high` for formal fault-finding. **Fast models for extraction:** Step 5 (extract + disposition) is mechanical — fast models do it equally well at 10x lower cost and latency. Use Flash or GPT-5.3 Instant for claim extraction, not the deep reviewers.
 
 **Note on reasoning models and bias:** All four review/extraction models are reasoning/thinking models (2026 generation). Research on LLM-as-judge biases (position bias, self-preference, sycophancy) was primarily measured on pre-reasoning models (GPT-4, Llama-2/3). Reasoning models show measurably lower sycophancy (SYCON Bench, arXiv:2505.23840) and thinking models bypass positional bias by reasoning about information location. The correlated error rates (60% shared wrong answers, Kim et al. ICML 2025) were measured on pre-reasoning Helm models — actual correlation for current reasoning models is likely lower but unmeasured.
 
@@ -340,7 +340,7 @@ llmx chat -m gemini-3-flash-preview "Claim: [model's claim]. Actual code: [paste
 
 **Do this BEFORE writing any synthesis prose.**
 
-**Use fast models for extraction.** This step is mechanical — a fast model (Flash-Lite or GPT-5.3 Instant) extracts just as well as the deep reviewers at 10x lower cost. Dispatch extraction to a fast model from a *different family* than the reviewer to avoid self-preference in what gets extracted:
+**Use fast models for extraction.** This step is mechanical — a fast model (Flash or GPT-5.3 Instant) extracts just as well as the deep reviewers at 10x lower cost. Dispatch extraction to a fast model from a *different family* than the reviewer to avoid self-preference in what gets extracted:
 
 ```bash
 # Extract Gemini's review with GPT-5.3 Instant (cross-family extraction)
@@ -349,8 +349,8 @@ llmx chat -m gpt-5.3-instant --stream --timeout 120 \
   -s "Extract every discrete recommendation, finding, or claim as a numbered list. One item per line. Do not evaluate or filter — extract mechanically." \
   "Extract all discrete ideas from this review." > "$REVIEW_DIR/gemini-extraction.md" 2>&1
 
-# Extract GPT's review with Flash-Lite (cross-family extraction)
-llmx chat -m gemini-3.1-flash-lite --timeout 120 \
+# Extract GPT's review with Flash (cross-family extraction)
+llmx chat -m gemini-3-flash-preview --timeout 120 \
   -f "$REVIEW_DIR/gpt-output.md" \
   -s "Extract every discrete recommendation, finding, or claim as a numbered list. One item per line. Do not evaluate or filter — extract mechanically." \
   "Extract all discrete ideas from this review." > "$REVIEW_DIR/gpt-extraction.md" 2>&1
@@ -518,8 +518,8 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 | **GPT-5.2** | Confident fabrication | Invents specific numbers, file paths, function names with high confidence | Verify every specific claim against actual code |
 | **GPT-5.2** | Overcautious scope | Adds caveats that dilute actionable findings, hedges everything | Push for concrete recommendations |
 | **GPT-5.2** | Production-grade creep | Recommends auth, monitoring, CI/CD for hobby projects | Match recommendations to actual project scale |
-| **Flash-Lite / GPT-5.3 Instant** | Shallow analysis | Good for extraction and pattern matching, bad for architectural judgment | Use ONLY for Step 5 extraction, mechanical audits, and fact-checking |
-| **Flash-Lite / GPT-5.3 Instant** | Recency bias | Defaults to latest patterns even when older ones are better | Don't use for "which approach" decisions |
+| **Flash / GPT-5.3 Instant** | Shallow analysis | Good for extraction and pattern matching, bad for architectural judgment | Use ONLY for Step 5 extraction, mechanical audits, and fact-checking |
+| **Flash / GPT-5.3 Instant** | Recency bias | Defaults to latest patterns even when older ones are better | Don't use for "which approach" decisions |
 
 ## Model-Specific Prompting Notes
 

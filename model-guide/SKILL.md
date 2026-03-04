@@ -9,7 +9,7 @@ argument-hint: '[task description or model name]'
 
 Select the right frontier model for a task and prompt it correctly.
 
-**Models covered:** Claude Opus 4.6, Claude Sonnet 4.6, GPT-5.3 Instant, GPT-5.2, Gemini 3.1 Pro, Gemini 3.1 Flash-Lite, Kimi K2.5.
+**Models covered:** Claude Opus 4.6, Claude Sonnet 4.6, GPT-5.3 Instant, GPT-5.2, Gemini 3.1 Pro, Gemini 3 Flash, Kimi K2.5.
 **Last updated:** 2026-03-04. See CHANGELOG.md for update history.
 
 ## Quick Selection Matrix
@@ -30,7 +30,7 @@ Select the right frontier model for a task and prompt it correctly.
 | **Subagent coding** | Claude Sonnet 4.6 | 79.6% SWE-bench at $3/$15 | Kimi K2.5 (76.8%, much cheaper) |
 | **Doc → schema extraction** | GPT-5.3 Instant | Less preachy, structured output, fast | GPT-5.2 (stronger reasoning) |
 | **Cross-model review** | Pro + GPT-5.2 | Adversarial review needs deep reasoning both sides | -- |
-| **High-volume classification** | Flash-Lite | $0.25/$1.50/M, 1M ctx, dynamic thinking | Gemini 3 Flash ($0.50/$3/M) |
+| **High-volume classification** | Gemini 3 Flash | $0.50/$3/M, 1M ctx | Kimi K2.5 ($0.60/$2.50) |
 | **Bulk cheap analysis** | Kimi K2.5 | $0.60/$2.50, strong reasoning | Gemini 3.1 ($2/$12) |
 | **Multi-agent swarm tasks** | Kimi K2.5 | Native Agent Swarm (100 sub-agents) | -- |
 | **Video understanding** | Kimi K2.5 | VideoMMMU 86.6%, native multimodal | Gemini 3.1 (native video) |
@@ -102,17 +102,17 @@ For complete guide, read `PROMPTING_GPT.md`.
 - **When to use over 5.2:** conversational tasks, schema extraction, anything that doesn't need deep reasoning
 - **When to use 5.2 instead:** math verification, formal analysis, outputs >16K tokens
 
-### Gemini 3.1 Flash-Lite -- "The Budget Workhorse"
+### Gemini 3 Flash -- "The Budget Workhorse"
 
-**Strengths:** $0.25/$1.50/M (cheapest capable model), 1432 Elo on LMArena, 86.9% GPQA Diamond, 1M context, 65K max output, dynamic thinking levels, 2.5x faster TTFT than 2.5 Flash.
+**Strengths:** $0.50/$3/M (cheapest capable Gemini), 1M context, 65K max output, thinking mode.
 **Weaknesses:** Shallower analysis than Pro on complex multi-file reasoning, less tested for deep architectural review.
 
 **Quick prompting tips:**
-- llmx name: `gemini-3.1-flash-lite-preview`
-- Supports `--reasoning-effort low/medium/high` (dynamic thinking levels)
+- llmx name: `gemini-3-flash-preview`
+- Supports `--reasoning-effort low/medium/high`
 - Temperature locked at 1.0 server-side (thinking model)
 - Same prompting patterns as Gemini Pro: query at END, critical constraints at END
-- Best for: high-volume classification, quick cross-model reviews, document processing, mechanical audits
+- Best for: high-volume classification, document processing, mechanical audits, extraction
 - **When to use over Pro:** cost-sensitive tasks, high-volume processing, reviews under 50K context
 - **When to use Pro instead:** architectural review, multi-file cross-referencing, outputs requiring deep reasoning
 
@@ -186,7 +186,7 @@ Run these when using outputs from each model:
 | GPT-5.3 Instant | $1.75 | $14 | 90% input | 128K | 16K |
 | GPT-5.2 | $1.75 | $14 | 90% input | 400K | 100-128K |
 | Gemini 3.1 Pro | $2 | $12 | 75% | 1M | 64K |
-| **Gemini 3.1 Flash-Lite** | **$0.25** | **$1.50** | 90% | 1M | 65K |
+| **Gemini 3 Flash** | **$0.50** | **$3** | 75% | 1M | 65K |
 | Kimi K2.5 | $0.60 | $2.50 | -- | 256K | 96K (thinking) |
 
 **Cost optimization:** Default to Sonnet 4.6 for subagents. Reserve Opus for synthesis, narratives, and orchestration. Use Kimi for bulk work that doesn't need factual precision. This cuts costs 60-80%.
@@ -199,10 +199,10 @@ Claude (orchestrator -- best professional judgment)
   └── Multi-model validation
         ├── review    → Pro + GPT-5.2          [adversarial, ~$3-5]
         ├── pattern   → Gemini 3.1 Pro        [1M context, ARC-AGI-2 77.1%]
-        ├── verify    → Flash-Lite            [$0.25/M, fast fact-check]
+        ├── verify    → Gemini 3 Flash        [$0.50/M, fast fact-check]
         ├── extract   → GPT-5.3              [doc→schema, less preachy]
         ├── math      → GPT-5.2              [MATH 98%, AIME 100%]
-        ├── classify  → Flash-Lite            [$0.25/M, high-volume]
+        ├── classify  → Gemini 3 Flash        [$0.50/M, high-volume]
         ├── bulk      → Kimi K2.5            [$0.60/$2.50, strong reasoning]
         └── compare   → Multiple             [side-by-side for high-stakes]
 ```
