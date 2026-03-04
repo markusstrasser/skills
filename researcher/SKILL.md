@@ -46,8 +46,8 @@ Use whichever of these are available in the current project's `.mcp.json`:
 | `mcp__paper-search__search_pubmed` | PubMed search | Clinical/medical literature |
 | `mcp__paper-search__search_biorxiv` | bioRxiv/medRxiv search | Biology/medical preprints |
 | `mcp__exa__web_search_exa` | Semantic web search | Non-obvious connections, expert blogs, recent work |
+| `mcp__exa__web_search_advanced_exa` | Advanced search (filters, deep, structured) | Entity enrichment (`type: "deep"` + `outputSchema`), date-filtered research, domain-restricted search |
 | `mcp__exa__company_research_exa` | Company intelligence | Business/financial research |
-| `mcp__exa__get_code_context_exa` | Code/docs search | Technical implementation |
 | `mcp__brave-search__brave_web_search` | Independent index search | Triangulation with Exa (different index). Fallback when Exa rate-limits. |
 | `mcp__brave-search__brave_news_search` | Dedicated news search | Time-sensitive events (default 24h). Better than Exa category filter for breaking news. |
 | `mcp__perplexity__perplexity_ask` | Grounded factual answer | Quick "What is X?" — one call, cited. Saves search→fetch→synthesize. |
@@ -72,9 +72,11 @@ Not all tools exist in every project. Use what's available. The agent will error
 
 - **Factual lookup:** Try `perplexity_ask` first (one call, cited). Fall back to Exa search + WebFetch.
 - **Semantic discovery:** Exa remains primary (neural search, find_similar, categories).
+- **Entity enrichment:** `web_search_advanced_exa` with `type: "deep"` + `outputSchema`. Offloads extraction to Exa's agents — structured JSON with per-field citations comes back directly. No post-hoc LLM extraction needed.
+- **High-recall queries:** `web_search_advanced_exa` with `type: "deep"` + `additionalQueries`. Generate 2-3 domain-specific query variations from your context. Exa searches all in parallel, merges + ranks.
 - **News/events:** `brave_news_search` for last 24h-7d. Exa with date filter for older.
 - **Triangulation:** For high-stakes claims, use Exa + Brave (confirmed independent indexes). Perplexity is NOT confirmed independent — use only as tiebreaker.
-- **Structured extraction:** `firecrawl_scrape` or `firecrawl_extract` for specific URLs with JSON schema.
+- **Structured extraction from URLs:** `firecrawl_scrape` or `firecrawl_extract` for specific URLs with JSON schema.
 - **Rate-limited:** If Exa returns 429, fall back to `brave_web_search` or `perplexity_search`.
 
 ### Tool-Class Routing (empirical — EBF3 benchmark, 2026-03-03)
@@ -168,6 +170,20 @@ If your axes all start from the same place, you have one axis with multiple quer
 - **Save papers** with `save_paper`, **fetch full text** before citing
 
 **Exa search philosophy (semantic search, not keyword):**
+- **Use `type: "deep"` on `web_search_advanced_exa` for high-value queries.** Deep search auto-expands your query into parallel sub-searches, ranks + merges results, and generates per-result summaries. 3x cost ($0.015/req vs $0.005 neural) but saves downstream LLM calls. Two power features:
+  - **`outputSchema`** — pass a JSON Schema and get structured extraction with per-field grounding (citations + confidence: low/medium/high). Use for entity enrichment: company details, people profiles, financial data, variant annotations. Eliminates the search→fetch→extract-with-LLM chain.
+  - **`additionalQueries`** — supply 2-3 domain-specific query variations. Your domain knowledge (genomics terminology, financial filing types, specific gene names) produces better variations than Exa's auto-expansion. Always generate these when you have domain context.
+
+  Example: researching a company's financials:
+  ```
+  query: "Acme Corp 2025 annual revenue guidance"
+  type: "deep"
+  additionalQueries: ["Acme Corp 10-K SEC filing 2025", "Acme Corp Q4 earnings call transcript"]
+  outputSchema: {"type": "object", "properties": {"revenue": {"type": "string"}, "guidance": {"type": "string"}, "source": {"type": "string"}}, "required": ["revenue"]}
+  ```
+
+  When NOT to use deep: simple factual lookups (use `type: "auto"`), high-throughput batch queries, when you need >100 results.
+
 - **Use category filters on `web_search_advanced_exa`** when the domain is clear. Categories narrow results to high-signal sources:
   - `financial report` — SEC filings, earnings, annual reports (investing/finance)
   - `research paper` — academic papers (supplements S2, better recency filtering)
