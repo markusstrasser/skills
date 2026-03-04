@@ -1,76 +1,43 @@
-# Claude Skills - Centralized Repository
+# Claude Code Skills
 
-This is the canonical location for all Claude Code skills. Individual projects reference these skills via symlinks.
+Shared skills for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Used across multiple projects via a SessionStart hook or direct copy.
 
-## Structure
+## Skills
 
-```
-skills/                    # This repository
-├── architect/
-├── code-research/
-├── computer-use/
-├── debug-mcp-servers/
-├── diagnostics/
-├── llmx-guide/
-├── scientific-drawing/
-├── session-memory/
-└── skill-authoring/
-```
+| Skill | What it does |
+|-------|-------------|
+| `researcher` | Autonomous multi-source research with epistemic rigor. Orchestrates Exa, Brave, Perplexity, Semantic Scholar, paper-search MCPs. Effort-adaptive. |
+| `epistemics` | Bio/medical/scientific evidence hierarchy. Source-grade-on-write, counterfactual generation. Companion to researcher. |
+| `source-grading` | NATO Admiralty System (A-F reliability, 1-6 credibility). For OSINT, forensic, legal, entity audit work. |
+| `entity-management` | Versioned knowledge files for entities (people, companies, genes, drugs). One file per entity, every claim sourced. |
+| `competing-hypotheses` | Analysis of Competing Hypotheses (ACH). Multi-agent adversarial evaluation with Bayesian LLR scoring. |
+| `causal-check` | Causal inference discipline. Shape-match explanations to observations, define the null, predict footprints. |
+| `investigate` | Deep forensic investigation. Fraud detection, OSINT, billing audits, shell companies. Adversarial, cross-domain. |
+| `model-review` | Cross-model adversarial review via llmx. Dispatches to Gemini and GPT for independent critique. |
+| `model-guide` | Frontier model selection and prompting guide. Which model for which task, known pitfalls. |
+| `llmx-guide` | Gotchas when calling llmx from Python or Bash. Non-obvious bugs and incompatibilities. |
+| `constitution` | Elicit project goals and constitutional principles through structured questionnaire. |
+| `goals` | Elicit, clarify, or revise project goals. Produces or updates GOALS.md. |
+| `retro` | End-of-session retrospective. Extracts failure modes and tooling proposals. |
+| `session-analyst` | Analyzes session transcripts for behavioral anti-patterns. Dispatches to Gemini for analysis. |
+| `supervision-audit` | Audit sessions for wasted supervision. Outputs concrete automation fixes. |
+| `project-upgrade` | Autonomous codebase improvement via Gemini structured analysis. |
+| `agent-pliability` | Make project files more discoverable for agents. Renames, splits, builds indexes. |
+| `debug-mcp-servers` | Debug MCP server loading issues in Claude Code. |
 
-**Usage in projects:**
+## Hooks
 
-Projects reference these skills via symlinks:
-```
-your-project/
-└── .claude/
-    └── skills → /path/to/this/repo
-```
+`hooks/` contains shared hooks for Claude Code — bash loop guards, search burst detection, source attribution checks, epistemic gates, session logging. Referenced by absolute path from each project's `settings.json`.
 
-## Benefits
+## Usage
 
-1. **Single source of truth** - Update skills once, all projects benefit
-2. **No duplication** - Skills evolve independently from projects
-3. **Easy maintenance** - Agent improvements to skills propagate automatically
-4. **Version control** - Old versions archived with timestamps
-
-## Available Skills
-
-| Skill | Description | Last Updated |
-|-------|-------------|--------------|
-| `architect` | Tournament-based architectural decision-making | Nov 7, 2025 |
-| `code-research` | Codebase exploration and analysis | Nov 6, 2025 |
-| `computer-use` | Browser automation and UI control | Nov 6, 2025 |
-| `debug-mcp-servers` | MCP server debugging utilities | Nov 7, 2025 |
-| `diagnostics` | Error diagnosis and health checks | Nov 6, 2025 |
-| `llmx-guide` | LLM provider CLI guide | Nov 7, 2025 |
-| `manim-animations` | Mathematical animations and visualizations with Manim | Nov 18, 2025 |
-| `scientific-drawing` | TikZ/LaTeX figure generation | Nov 8, 2025 |
-| `session-memory` | Semantic search across sessions | Nov 6, 2025 |
-| `skill-authoring` | Create and design Agent Skills for Claude Code | Nov 9, 2025 |
-
-
-## Using in Your Projects
-
-**Option 1: Script (recommended)**
-
-Use the included `link-skill.sh` script for interactive selection:
+Projects pull skills via a SessionStart hook that clones this repo and copies relevant skill directories into `.claude/skills/`. See any project's `session-pull.sh` for the pattern.
 
 ```bash
-cd your-project
-/path/to/skills/skill-authoring/scripts/link-skill.sh
+# Manual: copy specific skills into your project
+cp -r ~/Projects/skills/researcher /your-project/.claude/skills/researcher
 ```
 
-**Option 2: Manual symlink**
+## Archive
 
-```bash
-cd your-project
-mkdir -p .claude
-ln -s /path/to/skills .claude/skills
-```
-
-**Verification:**
-
-```bash
-ls .claude/skills/
-# Should show: architect, code-research, diagnostics, etc.
-```
+`archive/` contains superseded skill versions.
