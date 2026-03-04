@@ -78,6 +78,7 @@ if echo "$MSG" | grep -qE '\[SOURCE:|\[DATABASE:|\[DATA\]|\[INFERENCE\]|\[SPEC\]
 fi
 
 if [ "$HAS_TAGS" = "false" ]; then
+    ~/Projects/skills/hooks/hook-trigger-log.sh "epistemic-gate" "warn" "$AGENT_TYPE: claims without tags" 2>/dev/null || true
     echo "{\"additionalContext\": \"SUBAGENT PROVENANCE: The $AGENT_TYPE subagent returned factual claims without provenance tags. Before incorporating these claims into your output, verify them or add appropriate tags ([SOURCE:], [SPEC], [TRAINING-DATA], etc.). Unsourced subagent claims compound error across steps.\"}"
 fi
 

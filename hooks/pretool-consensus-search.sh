@@ -33,6 +33,7 @@ except Exception:
 
 # Check for consensus/noise query patterns (case-insensitive)
 if echo "$QUERY" | grep -qiE '\b(best|top [0-9]|most undervalued|most promising|most recommended|most popular|highest rated|leading|hottest)\b'; then
+    ~/Projects/skills/hooks/hook-trigger-log.sh "consensus-search" "remind" "${QUERY:0:80}" 2>/dev/null || true
     echo "{\"additionalContext\": \"CONSENSUS SEARCH: Query '${QUERY:0:80}' will return noise, not signal. Consensus queries retrieve popular opinion, not differentiated insight. Consider a systematic screen with specific criteria (market cap range, financial ratios, sector filters) instead.\"}"
 fi
 

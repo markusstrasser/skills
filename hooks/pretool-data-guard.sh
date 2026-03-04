@@ -21,6 +21,7 @@ FPATH=$(echo "$INPUT" | grep -oE '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' |
 [ -z "$FPATH" ] && exit 0
 
 if echo "$FPATH" | grep -qE "$PROTECTED"; then
+    ~/Projects/skills/hooks/hook-trigger-log.sh "data-guard" "block" "$FPATH" 2>/dev/null || true
     echo "$BLOCK_MSG" >&2
     exit 2
 fi

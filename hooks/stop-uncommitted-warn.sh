@@ -76,6 +76,7 @@ print(json.dumps(output))
 ' 2>/dev/null)
 
 if [[ -n "$OUTPUT" ]]; then
+    ~/Projects/skills/hooks/hook-trigger-log.sh "uncommitted-warn" "warn" "uncommitted changes" 2>/dev/null || true
     echo "$OUTPUT"
 fi
 

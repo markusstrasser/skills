@@ -87,6 +87,7 @@ fi
 
 # Emit combined warnings
 if [ -n "$WARNINGS" ]; then
+    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "warn" "${WARNINGS:0:100}" 2>/dev/null || true
     # JSON-safe the warnings
     SAFE_WARN=$(echo "$WARNINGS" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))' 2>/dev/null)
     echo "{\"additionalContext\": ${SAFE_WARN}}"

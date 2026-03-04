@@ -68,6 +68,10 @@ for f in research_files:
             missing.append(f)
 
 if missing:
+    import subprocess as _sp
+    _sp.run([os.path.expanduser('~/Projects/skills/hooks/hook-trigger-log.sh'),
+             'research-gate', 'block', f'{len(missing)} files without tags'],
+            capture_output=True, timeout=5)
     print('BLOCKED: Research files modified without source tags:', file=sys.stderr)
     for f in missing:
         print(f'  - {f}', file=sys.stderr)

@@ -18,6 +18,7 @@ RESULT=$(echo "$HOOK_INPUT" | python3 "$HOOK_DIR/commit-check-parse.py" 2>/dev/n
 
 # Blocking
 if echo "$RESULT" | grep -q "^BLOCK:"; then
+  ~/Projects/skills/hooks/hook-trigger-log.sh "commit-check" "block" "$(echo "$RESULT" | sed 's/^BLOCK://' | head -c 100)" 2>/dev/null || true
   echo "$RESULT" | sed 's/^BLOCK://'
   exit 2
 fi
@@ -45,6 +46,7 @@ if echo "$RESULT" | grep -q "^WARN:"; then
   WARN_TEXT=$(echo "$WARN_TEXT" | sed 's/^ | //; s/ | $//; s/ |  | / | /g')
 
   if [ -n "$WARN_TEXT" ] && [ "$WARN_TEXT" != " " ]; then
+    ~/Projects/skills/hooks/hook-trigger-log.sh "commit-check" "warn" "${WARN_TEXT:0:100}" 2>/dev/null || true
     ESCAPED=$(echo "$WARN_TEXT" | sed 's/"/\\"/g' | tr '\n' ' ')
     echo "{\"additionalContext\": \"COMMIT CHECK: ${ESCAPED}\"}"
   fi
