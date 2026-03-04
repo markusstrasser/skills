@@ -107,6 +107,16 @@ When an entity file exceeds ~200 lines, add a `## Summary` section at the top (a
 - YYYY-MM-DD: [CORRECTED] claim X based on [new source]
 ```
 
+## Conviction Journal (Investment Entities)
+
+For entities with investment conviction tracking (tickers with `conviction_journal` in frontmatter):
+
+- Every conviction change requires a journal entry in YAML frontmatter
+- Schema and vocabulary defined in project-local `.claude/rules/conviction-schema.md`
+- Never silently change the `conviction:` frontmatter field — the journal entry IS the change
+- KL divergence: `sum(p_i * ln(p_i / q_i))`, use 0.001 floor for zero probabilities
+- Evidence field must be a real file path or URL with `[source grade]`
+
 ## Git Conventions
 
 - Every edit is a separate commit
