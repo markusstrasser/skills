@@ -1,6 +1,6 @@
 ---
 name: model-review
-description: Cross-model adversarial review via llmx. Two tiers — default (Flash-Lite + GPT-5.3, fast/cheap) and strong (Gemini Pro + GPT-5.2, deep analysis). Claude selects tier based on scope. Supports review mode (convergent/critical) and brainstorming mode (divergent/creative).
+description: Cross-model adversarial review via llmx. Dispatches to Gemini 3.1 Pro and GPT-5.3 for independent critique, then fact-checks and synthesizes surviving insights. Supports review mode (convergent/critical) and brainstorming mode (divergent/creative). Use --strong for GPT-5.2 deep reasoning on complex architecture.
 argument-hint: [topic or decision to review — e.g., "selve search architecture", "authentication redesign"]
 allowed-tools:
   - Bash
@@ -22,26 +22,16 @@ You are orchestrating a cross-model review. Same-model peer review is a martinga
 - API keys configured for Google (Gemini) and OpenAI (GPT)
 - Gemini Flash for fact-checking (`llmx -m gemini-3-flash-preview`)
 
-## Dispatch Tier Selection
+## Dispatch Models
 
-Two tiers. **Claude selects tier based on scope** — no need for the user to specify unless they want to override.
+| Role | Default | `--strong` override |
+|------|---------|-------------------|
+| **Gemini** (pattern/architecture) | Pro (`gemini-3.1-pro-preview`) | same |
+| **GPT** (quantitative/formal) | GPT-5.3 (`gpt-5.3-chat-latest --reasoning-effort medium`) | GPT-5.2 (`gpt-5.2 --reasoning-effort high --stream --timeout 600`) |
 
-| Tier | Gemini model | GPT model | When to use |
-|------|-------------|-----------|-------------|
-| **Default** | Flash-Lite (`gemini-3.1-flash-lite-preview`) | GPT-5.3 (`gpt-5.3-chat-latest --reasoning-effort medium`) | Most reviews: plans, configs, single-file code, docs, narrow decisions |
-| **Strong** | Pro (`gemini-3.1-pro-preview`) | GPT-5.2 (`gpt-5.2 --reasoning-effort high --stream`) | Multi-file architecture, cross-project changes, constitutional/governance edits, anything touching 3+ repos |
+**When to use `--strong`:** Multi-file architecture, formal proofs, math-heavy reviews, outputs >16K tokens. GPT-5.3 caps at `reasoning_effort: medium` and 16K output — for deep formal analysis, GPT-5.2 with `high` is materially better.
 
-**Selection heuristic:**
-- Context bundle <50K tokens → default
-- Context bundle >50K tokens or involves architectural/multi-project scope → strong
-- User says `--strong` → strong
-- User says `--lite` or `--fast` → default regardless of scope
-
-**Cost comparison:**
-| Tier | Gemini cost | GPT cost | Typical review |
-|------|-----------|---------|---------------|
-| Default | $0.25/$1.50/M | $1.75/$14/M | ~$0.50 |
-| Strong | $2/$12/M | $1.75/$14/M | ~$3-5 |
+**Gemini is always Pro.** Adversarial review needs Pro's cross-referencing depth. Flash-Lite is great for search/structuring but not for finding subtle architectural flaws across large contexts.
 
 ## Pre-Flight: Constitutional Check
 
@@ -173,28 +163,26 @@ Append only the specific files under review. Read them with the Read tool and wr
 **Token budgets:**
 | Model | Sweet spot | Max useful | Note |
 |-------|-----------|------------|------|
-| Gemini 3.1 Flash-Lite (default) | 20K-80K | ~200K | 1M context but shallower analysis at extremes |
-| Gemini 3.1 Pro (strong) | 80K-150K | ~800K | Handles large context well; quality doesn't degrade until ~1M |
+| Gemini 3.1 Pro | 80K-150K | ~800K | Handles large context well; quality doesn't degrade until ~1M |
 | GPT-5.3 (default) | 15K-40K | ~80K | 128K context, 16K max output — watch for truncation |
-| GPT-5.2 (strong) | 15K-40K | ~100K | Use `signatures.xml` (compressed) instead of `full.xml` |
+| GPT-5.2 (--strong) | 15K-40K | ~100K | Use `signatures.xml` (compressed) instead of `full.xml` |
 
 ### Step 3: Dispatch Reviews (Parallel)
 
 **CRITICAL: Fire both Bash calls in a SINGLE message (two parallel tool calls).** Do NOT wait for one model before calling the other. Both models run independently — dispatch them simultaneously to halve wall-clock time.
 
-**Select models based on tier** (see Dispatch Tier Selection above):
+**Select models** (see Dispatch Models above):
 ```bash
-# Default tier (most reviews)
-GEMINI_MODEL="gemini-3.1-flash-lite-preview"
-GEMINI_EFFORT="--reasoning-effort medium"
-GPT_MODEL="gpt-5.3-chat-latest"
+# Gemini — always Pro for adversarial review
+GEMINI_MODEL="gemini-3.1-pro-preview"
+
+# GPT — default: 5.3 (less preachy, fast); --strong: 5.2 (deep formal analysis)
+GPT_MODEL="gpt-5.3-chat-latest"       # default
 GPT_EFFORT="--reasoning-effort medium --stream"
 GPT_TIMEOUT="--timeout 300"
 
-# Strong tier (architecture, multi-project, governance)
-GEMINI_MODEL="gemini-3.1-pro-preview"
-GEMINI_EFFORT=""  # Pro defaults to high server-side
-GPT_MODEL="gpt-5.2"
+# --strong override (GPT only — Gemini stays Pro)
+GPT_MODEL="gpt-5.2"                   # --strong
 GPT_EFFORT="--reasoning-effort high --stream"
 GPT_TIMEOUT="--timeout 600"
 ```
@@ -416,7 +404,7 @@ Build the synthesis from the disposition table. Every INCLUDE item must appear. 
 ```markdown
 ## Cross-Model Review: [topic]
 **Mode:** Review / Brainstorming
-**Tier:** Default (Flash-Lite + GPT-5.3) / Strong (Pro + GPT-5.2)
+**GPT tier:** Default (GPT-5.3) / Strong (GPT-5.2)
 **Date:** YYYY-MM-DD
 **Models:** [actual models used]
 **Constitutional anchoring:** Yes/No (CLAUDE.md Constitution section or standalone, GOALS.md)
@@ -503,24 +491,14 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 | **GPT-5.2** | Confident fabrication | Invents specific numbers, file paths, function names with high confidence | Verify every specific claim against actual code |
 | **GPT-5.2** | Overcautious scope | Adds caveats that dilute actionable findings, hedges everything | Push for concrete recommendations |
 | **GPT-5.2** | Production-grade creep | Recommends auth, monitoring, CI/CD for hobby projects | Match recommendations to actual project scale |
-| **Flash-Lite** | Shallow on complex architecture | Fast and capable (1432 Elo) but less depth than Pro on multi-file reasoning | Use strong tier if review spans 5+ files or architectural decisions |
-| **GPT-5.3** | Medium reasoning only | Max `reasoning_effort: medium` — no deep fault-finding mode | Use GPT-5.2 (strong tier) for formal proofs, complex cost-benefit |
-| **GPT-5.3** | 16K max output | Half of 5.2's output limit — long reviews may truncate | Monitor output completeness, switch to strong if truncated |
+| **GPT-5.3** | Medium reasoning only | Max `reasoning_effort: medium` — no deep fault-finding mode | Use GPT-5.2 (`--strong`) for formal proofs, complex cost-benefit |
+| **GPT-5.3** | 16K max output | Half of 5.2's output limit — long reviews may truncate | Monitor output completeness, switch to `--strong` if truncated |
 | **Flash** | Shallow analysis | Good for pattern matching, bad for architectural judgment | Use ONLY for mechanical audits and fact-checking |
 | **Flash** | Recency bias | Defaults to latest patterns even when older ones are better | Don't use for "which approach" decisions |
 
 ## Model-Specific Prompting Notes
 
-**Gemini 3.1 Flash-Lite (`gemini-3.1-flash-lite-preview`) — Default tier:**
-- 1432 Elo, 86.9% GPQA Diamond — capable enough for most reviews
-- $0.25/M input, $1.50/M output — ~5x cheaper than Pro
-- 1M context window, 65K max output
-- Supports `--reasoning-effort low/medium/high` (dynamic thinking levels)
-- Use `--reasoning-effort medium` for review mode (default), `low` for brainstorming
-- Temperature locked at 1.0 server-side
-- **When to escalate to Pro:** review output is superficial, spans 5+ files, or involves architectural decisions
-
-**Gemini 3.1 Pro — Strong tier:**
+**Gemini 3.1 Pro (always used for review):**
 - Excels at cross-referencing across large context (finds contradictions between file A and file B)
 - **NEVER use `--no-stream` with Gemini 3.1 Pro** — long generations hang indefinitely. Always use default streaming.
 - Temperature is locked at 1.0 server-side for thinking models
@@ -528,7 +506,7 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 - Tends to over-recommend architectural changes (DuckDB migrations, etc.)
 - Always wrap `llmx` calls in `timeout 300` as a hard safety net against API hangs
 
-**GPT-5.3 (`gpt-5.3-chat-latest`) — Default tier:**
+**GPT-5.3 (`gpt-5.3-chat-latest`) — default GPT:**
 - "Less preachy" than 5.2 — fewer defensive disclaimers, more natural
 - 26.8% reduced hallucination with search, 19.7% without (OpenAI claims)
 - Max `--reasoning-effort medium` — no high mode available
@@ -537,7 +515,7 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 - Same pricing as 5.2 ($1.75/$14/M) — no cost saving, just quality improvement
 - **When to escalate to 5.2:** need deep formal analysis, math verification, or output >16K
 
-**GPT-5.2 — Strong tier:**
+**GPT-5.2 — `--strong` GPT:**
 - `--reasoning-effort high` is essential for review mode (burns thinking time for deep fault-finding)
 - `--reasoning-effort medium` for brainstorming mode (avoids tunnel vision)
 - MUST use `--stream` with reasoning-effort high — non-streaming timeouts are common
