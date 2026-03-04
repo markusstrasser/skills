@@ -20,14 +20,16 @@ argument-hint: '[model name or issue description]'
 |-------|-----------|-------|
 | Gemini 3.1 Pro | `gemini-3.1-pro-preview` | **Default model.** `-preview` suffix required for all Gemini 3.x |
 | Gemini 3 Flash | `gemini-3-flash-preview` | Cheap. `-preview` required |
+| Gemini 3.1 Flash-Lite | `gemini-3.1-flash-lite-preview` | Budget: $0.25/$1.50/M, 1M ctx, dynamic thinking |
 | Gemini 3.1 Flash Image | `gemini-3.1-flash-image-preview` | No text-only 3.1 Flash yet |
+| GPT-5.3 Instant | `gpt-5.3-chat-latest` | Reasoning max: **medium only**. Auto-defaults |
 | GPT-5.2 | `gpt-5.2` | Reasoning default: high |
 | GPT-5-Codex | `gpt-5-codex` | No `minimal` reasoning-effort |
 | Kimi K2.5 | `kimi-k2.5` | No `--reasoning-effort`. Use `--no-thinking` |
 | Kimi K2 (legacy) | `kimi-k2-thinking` | Use `--use-old` flag |
 | Claude Sonnet 4.6 | `claude-sonnet-4-6` | Hyphens, not dots |
 
-**404 traps:** `gemini-3-flash` (missing `-preview`), `gemini-flash-3` (wrong order).
+**404 traps:** `gemini-3-flash` (missing `-preview`), `gemini-flash-3` (wrong order), `gpt-5.3` (needs `-chat-latest` suffix), `gpt-5.3-instant` (wrong — use `gpt-5.3-chat-latest`).
 
 ## The Three llmx Footguns
 
@@ -74,9 +76,11 @@ subprocess.run(['llmx', '--provider', 'google'], input=prompt, capture_output=Tr
 
 | Model | Valid values | Default |
 |-------|------------|---------|
+| GPT-5.3 Instant | **medium only** | medium (auto) |
 | GPT-5.2 | minimal, low, medium, high | high |
 | GPT-5-Codex | low, medium, high | high |
-| Gemini 3.x | low, medium, high | high (server-side) |
+| Gemini 3.1 Flash-Lite | low, medium, high | high (server-side) |
+| Gemini 3.x (Pro/Flash) | low, medium, high | high (server-side) |
 | Kimi K2.5 | N/A — use `--no-thinking` | thinking on |
 
 Temperature locked to 1.0 for GPT-5 and Gemini 3.x thinking models.

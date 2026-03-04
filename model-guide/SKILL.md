@@ -9,8 +9,8 @@ argument-hint: '[task description or model name]'
 
 Select the right frontier model for a task and prompt it correctly.
 
-**Models covered:** Claude Opus 4.6, Claude Sonnet 4.6, GPT-5.2, Gemini 3.1 Pro, Kimi K2.5.
-**Last updated:** 2026-02-27. See CHANGELOG.md for update history.
+**Models covered:** Claude Opus 4.6, Claude Sonnet 4.6, GPT-5.3 Instant, GPT-5.2, Gemini 3.1 Pro, Gemini 3.1 Flash-Lite, Kimi K2.5.
+**Last updated:** 2026-03-04. See CHANGELOG.md for update history.
 
 ## Quick Selection Matrix
 
@@ -28,6 +28,9 @@ Select the right frontier model for a task and prompt it correctly.
 | **Abstract pattern recognition** | Gemini 3.1 Pro | ARC-AGI-2 77.1% | Claude (68.8%) |
 | **Long document ingestion** (>200K) | Gemini 3.1 Pro | Native 1M context | GPT-5.2 (400K) |
 | **Subagent coding** | Claude Sonnet 4.6 | 79.6% SWE-bench at $3/$15 | Kimi K2.5 (76.8%, much cheaper) |
+| **Doc → schema extraction** | GPT-5.3 Instant | Less preachy, structured output, fast | GPT-5.2 (stronger reasoning) |
+| **Quick cross-model review** | Flash-Lite + GPT-5.3 | ~$0.50/review, fast | Pro + GPT-5.2 for deep reviews |
+| **High-volume classification** | Flash-Lite | $0.25/$1.50/M, 1M ctx, dynamic thinking | Gemini 3 Flash ($0.50/$3/M) |
 | **Bulk cheap analysis** | Kimi K2.5 | $0.60/$2.50, strong reasoning | Gemini 3.1 ($2/$12) |
 | **Multi-agent swarm tasks** | Kimi K2.5 | Native Agent Swarm (100 sub-agents) | -- |
 | **Video understanding** | Kimi K2.5 | VideoMMMU 86.6%, native multimodal | Gemini 3.1 (native video) |
@@ -84,6 +87,34 @@ For complete guide, read `PROMPTING_CLAUDE.md`.
 - **llmx defaults to `--reasoning-effort high`** for GPT-5 models automatically
 
 For complete guide, read `PROMPTING_GPT.md`.
+
+### GPT-5.3 Instant -- "The Restructurer"
+
+**Strengths:** Less preachy than 5.2 (fewer defensive disclaimers), 26.8% reduced hallucination with search, structured output, fast responses, good for doc→schema extraction.
+**Weaknesses:** Max `reasoning_effort: medium` (no deep analysis), 16K max output (half of 5.2), same pricing as 5.2, 128K context.
+
+**Quick prompting tips:**
+- llmx name: `gpt-5.3-chat-latest` — **NOT** `gpt-5.3` or `gpt-5.3-instant` (404)
+- Auto-defaults to `--reasoning-effort medium` (only supported level)
+- Use `--schema` for structured extraction — combines well with reduced hallucination
+- Same XML format tip as 5.2: `<doc id='1' title='Title'>Content</doc>`
+- Good at: entity extraction from research papers, restructuring documents into schemas, summarization
+- **When to use over 5.2:** conversational tasks, schema extraction, anything that doesn't need deep reasoning
+- **When to use 5.2 instead:** math verification, formal analysis, outputs >16K tokens
+
+### Gemini 3.1 Flash-Lite -- "The Budget Workhorse"
+
+**Strengths:** $0.25/$1.50/M (cheapest capable model), 1432 Elo on LMArena, 86.9% GPQA Diamond, 1M context, 65K max output, dynamic thinking levels, 2.5x faster TTFT than 2.5 Flash.
+**Weaknesses:** Shallower analysis than Pro on complex multi-file reasoning, less tested for deep architectural review.
+
+**Quick prompting tips:**
+- llmx name: `gemini-3.1-flash-lite-preview`
+- Supports `--reasoning-effort low/medium/high` (dynamic thinking levels)
+- Temperature locked at 1.0 server-side (thinking model)
+- Same prompting patterns as Gemini Pro: query at END, critical constraints at END
+- Best for: high-volume classification, quick cross-model reviews, document processing, mechanical audits
+- **When to use over Pro:** cost-sensitive tasks, high-volume processing, reviews under 50K context
+- **When to use Pro instead:** architectural review, multi-file cross-referencing, outputs requiring deep reasoning
 
 ### Gemini 3.1 Pro -- "The Polymath"
 
@@ -152,8 +183,10 @@ Run these when using outputs from each model:
 |-------|:----------:|:-----------:|:--------------:|:-------:|:----------:|
 | Claude Opus 4.6 | $5 | $25 | -- | 200K (1M beta) | 128K |
 | Claude Sonnet 4.6 | $3 | $15 | -- | 200K (1M beta) | 64K |
+| GPT-5.3 Instant | $1.75 | $14 | 90% input | 128K | 16K |
 | GPT-5.2 | $1.75 | $14 | 90% input | 400K | 100-128K |
 | Gemini 3.1 Pro | $2 | $12 | 75% | 1M | 64K |
+| **Gemini 3.1 Flash-Lite** | **$0.25** | **$1.50** | 90% | 1M | 65K |
 | Kimi K2.5 | $0.60 | $2.50 | -- | 256K | 96K (thinking) |
 
 **Cost optimization:** Default to Sonnet 4.6 for subagents. Reserve Opus for synthesis, narratives, and orchestration. Use Kimi for bulk work that doesn't need factual precision. This cuts costs 60-80%.
@@ -164,12 +197,15 @@ Run these when using outputs from each model:
 Claude (orchestrator -- best professional judgment)
   ├── Data tools (DuckDB, CLI tools -- ground truth)
   └── Multi-model validation
-        ├── pattern   → Gemini 3.1 Pro  [1M context, ARC-AGI-2 77.1%]
-        ├── verify    → Gemini 3.1 Pro  [SimpleQA 72.1%, cheap]
-        ├── math      → GPT-5.2         [MATH 98%, AIME 100%]
-        ├── review    → Gemini 3.1 Pro  [1M context, full-doc review]
-        ├── bulk      → Kimi K2.5       [$0.60/$2.50, strong reasoning]
-        └── compare   → Multiple        [side-by-side for high-stakes]
+        ├── review    → Flash-Lite + GPT-5.3  [default tier, ~$0.50]
+        ├── review    → Pro + GPT-5.2         [strong tier, ~$3-5]
+        ├── pattern   → Gemini 3.1 Pro        [1M context, ARC-AGI-2 77.1%]
+        ├── verify    → Flash-Lite            [$0.25/M, fast fact-check]
+        ├── extract   → GPT-5.3              [doc→schema, less preachy]
+        ├── math      → GPT-5.2              [MATH 98%, AIME 100%]
+        ├── classify  → Flash-Lite            [$0.25/M, high-volume]
+        ├── bulk      → Kimi K2.5            [$0.60/$2.50, strong reasoning]
+        └── compare   → Multiple             [side-by-side for high-stakes]
 ```
 
 ## The Hallucination Problem
