@@ -174,8 +174,9 @@ Append only the specific files under review. Read them with the Read tool and wr
 
 **Select models** (see Dispatch Models above):
 ```bash
-# Gemini — always Pro for adversarial review
+# Gemini — Pro with auto-fallback to Flash on rate limit/timeout
 GEMINI_MODEL="gemini-3.1-pro-preview"
+GEMINI_FALLBACK="--fallback gemini-3-flash-preview"
 
 # GPT — always 5.2 with deep reasoning for adversarial review
 GPT_MODEL="gpt-5.2"
@@ -192,7 +193,7 @@ GPT_TIMEOUT="--timeout 600"
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-context.md" \
   -s "You are reviewing a codebase. Be concrete. No platitudes. Reference specific code, configs, and findings." \
-  $GEMINI_EFFORT --timeout 300 "
+  $GEMINI_EFFORT $GEMINI_FALLBACK --timeout 300 "
 [Describe what's being reviewed]
 
 RESPOND WITH EXACTLY THESE SECTIONS:
@@ -256,7 +257,7 @@ What am I (GPT-5.2) probably getting wrong? Known biases to flag: overconfidence
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-context.md" \
   -s "Think divergently. Challenge assumptions. What would a completely different approach look like?" \
-  $GEMINI_EFFORT --timeout 300 "
+  $GEMINI_EFFORT $GEMINI_FALLBACK --timeout 300 "
 [Describe the design space to explore]
 
 ## 1. Alternative Architectures
@@ -529,7 +530,8 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 - Temperature is locked at 1.0 server-side for thinking models
 - Will recommend itself for tasks — always flag self-serving suggestions
 - Tends to over-recommend architectural changes (DuckDB migrations, etc.)
-- Always wrap `llmx` calls in `timeout 300` as a hard safety net against API hangs
+- Always use `$GEMINI_FALLBACK` (→ Flash) so rate limits auto-recover instead of failing
+- `timeout 300` wrapping is now redundant — llmx `--timeout` + `--fallback` handles it
 
 **GPT-5.2 (`gpt-5.2`) — review GPT:**
 - `--reasoning-effort high` is essential for review mode (burns thinking time for deep fault-finding)

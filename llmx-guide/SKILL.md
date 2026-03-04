@@ -31,6 +31,41 @@ argument-hint: '[model name or issue description]'
 
 **404 traps:** `gemini-3-flash` (missing `-preview`), `gemini-flash-3` (wrong order), `gpt-5.3` (needs `-chat-latest` suffix), `gpt-5.3-instant` (wrong — use `gpt-5.3-chat-latest`).
 
+## Error Handling (v0.5.0+)
+
+**Exit codes** — branch on these, don't parse stderr:
+| Code | Meaning | Action |
+|------|---------|--------|
+| 0 | Success | — |
+| 1 | General error | Read stderr for details |
+| 2 | API key missing/invalid | Check env vars |
+| 3 | Rate limit (429/503) | Wait or use `--fallback` |
+| 4 | Timeout | Increase `--timeout` or use `--fallback` |
+| 5 | Model error (context too large, bad params) | Fix request |
+
+**Structured diagnostics** on stderr: `[llmx:ERROR] type=rate_limit provider=google model=gemini-3.1-pro status=429 exit=3`
+
+**`--fallback MODEL`** — auto-retry once with fallback model on rate limit or timeout:
+```bash
+# Pro fails with 503 → automatically retries with Flash
+llmx -m gemini-3.1-pro-preview --fallback gemini-3-flash-preview --timeout 300 "query"
+
+# stderr shows: [llmx:FALLBACK] rate_limit → retrying with gemini-3-flash-preview
+```
+
+**From Python — check exit code:**
+```python
+result = subprocess.run(
+    ['llmx', '-m', 'gemini-3.1-pro-preview', '--fallback', 'gemini-3-flash-preview'],
+    input=prompt, capture_output=True, text=True, timeout=300
+)
+if result.returncode == 3:  # rate limit
+    # llmx already tried fallback if --fallback was set
+    pass
+elif result.returncode == 4:  # timeout
+    pass
+```
+
 ## The Three llmx Footguns
 
 ### 1. GPT-5.2 Timeouts
