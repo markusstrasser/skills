@@ -24,12 +24,16 @@ You are orchestrating a cross-model review. Same-model peer review is a martinga
 
 ## Dispatch Models
 
-| Role | Model |
-|------|-------|
-| **Gemini** (pattern/architecture) | Pro (`gemini-3.1-pro-preview`) |
-| **GPT** (quantitative/formal) | GPT-5.2 (`gpt-5.2 --reasoning-effort high --stream --timeout 600`) |
+| Role | Model | Use |
+|------|-------|-----|
+| **Gemini** (pattern/architecture) | Pro (`gemini-3.1-pro-preview`) | Deep review — cross-referencing, pattern detection |
+| **GPT** (quantitative/formal) | GPT-5.2 (`gpt-5.2 --reasoning-effort high --stream --timeout 600`) | Deep review — logical inconsistencies, cost-benefit |
+| **Gemini Fast** (extraction) | Flash-Lite (`gemini-3.1-flash-lite`) | Structured extraction in Step 5, mechanical audits |
+| **GPT Fast** (extraction) | GPT-5.3 Instant (`gpt-5.3-instant --stream`) | Structured extraction in Step 5, fact-checking |
 
-**Why these models:** Adversarial review needs deep reasoning from both sides. Gemini Pro for cross-referencing across large context; GPT-5.2 with `--reasoning-effort high` for formal fault-finding. GPT-5.3 Instant (max medium reasoning, 16K output) is too shallow for review — use it for schema extraction, not critique.
+**Why these models:** Adversarial review needs deep reasoning from both sides. Gemini Pro for cross-referencing across large context; GPT-5.2 with `--reasoning-effort high` for formal fault-finding. **Fast models for extraction:** Step 5 (extract + disposition) is mechanical — fast models do it equally well at 10x lower cost and latency. Use Flash-Lite or GPT-5.3 Instant for claim extraction, not the deep reviewers.
+
+**Note on reasoning models and bias:** All four review/extraction models are reasoning/thinking models (2026 generation). Research on LLM-as-judge biases (position bias, self-preference, sycophancy) was primarily measured on pre-reasoning models (GPT-4, Llama-2/3). Reasoning models show measurably lower sycophancy (SYCON Bench, arXiv:2505.23840) and thinking models bypass positional bias by reasoning about information location. The correlated error rates (60% shared wrong answers, Kim et al. ICML 2025) were measured on pre-reasoning Helm models — actual correlation for current reasoning models is likely lower but unmeasured.
 
 ## Pre-Flight: Constitutional Check
 
@@ -193,8 +197,8 @@ llmx chat -m $GEMINI_MODEL \
 
 RESPOND WITH EXACTLY THESE SECTIONS:
 
-## 1. Where the Analysis Is Wrong
-Specific errors or oversimplifications. Reference actual code/config.
+## 1. Assessment of Strengths and Weaknesses
+What holds up and what doesn't. Reference actual code/config. Be specific about errors AND what's correct.
 
 ## 2. What Was Missed
 Patterns, problems, or opportunities not identified. Cite files, line ranges, architectural gaps.
@@ -336,6 +340,24 @@ llmx chat -m gemini-3-flash-preview "Claim: [model's claim]. Actual code: [paste
 
 **Do this BEFORE writing any synthesis prose.**
 
+**Use fast models for extraction.** This step is mechanical — a fast model (Flash-Lite or GPT-5.3 Instant) extracts just as well as the deep reviewers at 10x lower cost. Dispatch extraction to a fast model from a *different family* than the reviewer to avoid self-preference in what gets extracted:
+
+```bash
+# Extract Gemini's review with GPT-5.3 Instant (cross-family extraction)
+llmx chat -m gpt-5.3-instant --stream --timeout 120 \
+  -f "$REVIEW_DIR/gemini-output.md" \
+  -s "Extract every discrete recommendation, finding, or claim as a numbered list. One item per line. Do not evaluate or filter — extract mechanically." \
+  "Extract all discrete ideas from this review." > "$REVIEW_DIR/gemini-extraction.md" 2>&1
+
+# Extract GPT's review with Flash-Lite (cross-family extraction)
+llmx chat -m gemini-3.1-flash-lite --timeout 120 \
+  -f "$REVIEW_DIR/gpt-output.md" \
+  -s "Extract every discrete recommendation, finding, or claim as a numbered list. One item per line. Do not evaluate or filter — extract mechanically." \
+  "Extract all discrete ideas from this review." > "$REVIEW_DIR/gpt-extraction.md" 2>&1
+```
+
+**Why cross-family extraction:** Self-preference bias (Wataoka NeurIPS 2024) means a model's own family preferentially surfaces claims written in its style. Using GPT-fast to extract Gemini's claims, and Gemini-fast to extract GPT's claims, avoids this.
+
 **5a. Extract claims per source.** For each model output, enumerate every discrete idea/recommendation/finding as a numbered item. One idea per line. Keep it mechanical — don't evaluate yet.
 
 ```markdown
@@ -475,6 +497,19 @@ This prevents the sawtooth pattern (compress → lose stuff → user catches →
 
 Flag these when they appear in outputs. Don't adopt recommendations that match a model's known bias without independent verification.
 
+### Cross-Model Structural Biases
+
+| Bias | What It Means | Measured Effect | Countermeasure |
+|------|--------------|-----------------|----------------|
+| **Correlated errors** | Models from the same provider/architecture share blindspots | ~60% shared wrong answers when both err (vs 33% random) — Kim et al. ICML 2025, pre-reasoning models | Never use same-family as both reviewer and synthesizer |
+| **Self-preference** | Models prefer text that "reads like" their own distribution (perplexity-driven) | GPT-4: 74.9% demographic parity bias — Wataoka NeurIPS 2024 | Use a different-family model for synthesis; weight cross-family disagreements heavily |
+| **Judge inflation** | LLM judges inflate accuracy of same-provider models | Systematic on Helm leaderboard — Kim et al. ICML 2025 | Cross-family review only. This skill already does this. |
+| **Debate = martingale** | Sequential model discussion doesn't improve expected correctness | Formal proof + 7 benchmarks — Choi et al. 2025 | Vote/extract independently, don't let models respond to each other's reviews |
+
+**Reasoning model caveat:** The above numbers come from pre-reasoning (2024-early 2025) models. Reasoning models (GPT-5.2, Gemini 3.1 Pro, Opus 4.6) show lower sycophancy (SYCON Bench) and bypass positional bias (thinking phase reasons about information location). Correlation rates for reasoning models are unmeasured — likely lower but not zero. Treat the numbers as upper bounds.
+
+### Per-Model Biases
+
 | Model | Bias | How It Manifests | Countermeasure |
 |-------|------|-----------------|----------------|
 | **Gemini 3.1 Pro** | Production-pattern bias | Recommends enterprise patterns (DuckDB migrations, service meshes) for personal projects | Check if recommendation matches project scale |
@@ -483,8 +518,8 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 | **GPT-5.2** | Confident fabrication | Invents specific numbers, file paths, function names with high confidence | Verify every specific claim against actual code |
 | **GPT-5.2** | Overcautious scope | Adds caveats that dilute actionable findings, hedges everything | Push for concrete recommendations |
 | **GPT-5.2** | Production-grade creep | Recommends auth, monitoring, CI/CD for hobby projects | Match recommendations to actual project scale |
-| **Flash** | Shallow analysis | Good for pattern matching, bad for architectural judgment | Use ONLY for mechanical audits and fact-checking |
-| **Flash** | Recency bias | Defaults to latest patterns even when older ones are better | Don't use for "which approach" decisions |
+| **Flash-Lite / GPT-5.3 Instant** | Shallow analysis | Good for extraction and pattern matching, bad for architectural judgment | Use ONLY for Step 5 extraction, mechanical audits, and fact-checking |
+| **Flash-Lite / GPT-5.3 Instant** | Recency bias | Defaults to latest patterns even when older ones are better | Don't use for "which approach" decisions |
 
 ## Model-Specific Prompting Notes
 
@@ -515,9 +550,9 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 - **Synthesizing without extracting first.** The #1 information loss pattern. Never go from raw model outputs directly to prose synthesis. Always run the extraction + disposition step (Step 5) first. If you skip it, the user will ask "did you include everything?" and you will have lost items.
 - **Synthesizing a synthesis.** Each compression pass drops ideas. If you have Round 1 synthesis + Round 2 outputs, don't compress the Round 1 synthesis — go back to Round 1's raw extraction and merge with Round 2's extraction. One synthesis pass from merged extractions, not cascaded compressions.
 - **Adopting recommendations without code verification.** Both models hallucinated "missing" features that already existed in the codebase.
-- **Treating model agreement as proof.** Two models can be wrong the same way (shared training data). Always verify against source code.
-- **Letting models review their own previous output.** Send fresh prompts, not "here's what you said last time, improve it."
-- **Using same-model instances as "different reviewers."** Claude reviewing Claude = same distribution. This skill exists because cross-model is the only form that provides real adversarial pressure.
+- **Treating model agreement as proof.** When both models err, they agree on the *same* wrong answer ~60% of the time (Kim et al. ICML 2025). Agreement is evidence, not proof — verify against source code.
+- **Letting models respond to each other's reviews (debate).** Debate is a martingale — no expected correctness improvement (Choi et al. 2025, formal proof). Independent parallel reviews + voting outperforms sequential discussion. Never implement a "models critique each other's reviews" workflow.
+- **Using same-family reviewers.** Claude reviewing Claude = same distribution. Same-model correction: 59.1% accuracy. Cross-family: 90.4% (FINCH-ZK). This skill exists because cross-family is the only form that provides real adversarial pressure.
 - **Skipping the self-doubt section.** The "Where I'm Likely Wrong" section is the most valuable part of each review. Models that can't identify their own weaknesses are less trustworthy.
 - **Same prompt to both models.** Gemini and GPT have different strengths. Sending the same qualitative prompt to both wastes GPT's formal reasoning capability. Gemini = patterns, GPT = quantitative/formal.
 - **Writing to /tmp.** Review outputs are valuable artifacts. Always persist to `.model-review/YYYY-MM-DD-topic/`.
