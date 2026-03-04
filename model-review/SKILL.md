@@ -1,6 +1,6 @@
 ---
 name: model-review
-description: Cross-model adversarial review via llmx. Dispatches to Gemini 3.1 Pro and GPT-5.3 for independent critique, then fact-checks and synthesizes surviving insights. Supports review mode (convergent/critical) and brainstorming mode (divergent/creative). Use --strong for GPT-5.2 deep reasoning on complex architecture.
+description: Cross-model adversarial review via llmx. Dispatches to Gemini 3.1 Pro and GPT-5.2 for independent critique, then fact-checks and synthesizes surviving insights. Supports review mode (convergent/critical) and brainstorming mode (divergent/creative).
 argument-hint: [topic or decision to review — e.g., "selve search architecture", "authentication redesign"]
 allowed-tools:
   - Bash
@@ -24,14 +24,12 @@ You are orchestrating a cross-model review. Same-model peer review is a martinga
 
 ## Dispatch Models
 
-| Role | Default | `--strong` override |
-|------|---------|-------------------|
-| **Gemini** (pattern/architecture) | Pro (`gemini-3.1-pro-preview`) | same |
-| **GPT** (quantitative/formal) | GPT-5.3 (`gpt-5.3-chat-latest --reasoning-effort medium`) | GPT-5.2 (`gpt-5.2 --reasoning-effort high --stream --timeout 600`) |
+| Role | Model |
+|------|-------|
+| **Gemini** (pattern/architecture) | Pro (`gemini-3.1-pro-preview`) |
+| **GPT** (quantitative/formal) | GPT-5.2 (`gpt-5.2 --reasoning-effort high --stream --timeout 600`) |
 
-**When to use `--strong`:** Multi-file architecture, formal proofs, math-heavy reviews, outputs >16K tokens. GPT-5.3 caps at `reasoning_effort: medium` and 16K output — for deep formal analysis, GPT-5.2 with `high` is materially better.
-
-**Gemini is always Pro.** Adversarial review needs Pro's cross-referencing depth. Flash-Lite is great for search/structuring but not for finding subtle architectural flaws across large contexts.
+**Why these models:** Adversarial review needs deep reasoning from both sides. Gemini Pro for cross-referencing across large context; GPT-5.2 with `--reasoning-effort high` for formal fault-finding. GPT-5.3 Instant (max medium reasoning, 16K output) is too shallow for review — use it for schema extraction, not critique.
 
 ## Pre-Flight: Constitutional Check
 
@@ -164,8 +162,7 @@ Append only the specific files under review. Read them with the Read tool and wr
 | Model | Sweet spot | Max useful | Note |
 |-------|-----------|------------|------|
 | Gemini 3.1 Pro | 80K-150K | ~800K | Handles large context well; quality doesn't degrade until ~1M |
-| GPT-5.3 (default) | 15K-40K | ~80K | 128K context, 16K max output — watch for truncation |
-| GPT-5.2 (--strong) | 15K-40K | ~100K | Use `signatures.xml` (compressed) instead of `full.xml` |
+| GPT-5.2 | 15K-40K | ~100K | Use `signatures.xml` (compressed) instead of `full.xml` |
 
 ### Step 3: Dispatch Reviews (Parallel)
 
@@ -176,13 +173,8 @@ Append only the specific files under review. Read them with the Read tool and wr
 # Gemini — always Pro for adversarial review
 GEMINI_MODEL="gemini-3.1-pro-preview"
 
-# GPT — default: 5.3 (less preachy, fast); --strong: 5.2 (deep formal analysis)
-GPT_MODEL="gpt-5.3-chat-latest"       # default
-GPT_EFFORT="--reasoning-effort medium --stream"
-GPT_TIMEOUT="--timeout 300"
-
-# --strong override (GPT only — Gemini stays Pro)
-GPT_MODEL="gpt-5.2"                   # --strong
+# GPT — always 5.2 with deep reasoning for adversarial review
+GPT_MODEL="gpt-5.2"
 GPT_EFFORT="--reasoning-effort high --stream"
 GPT_TIMEOUT="--timeout 600"
 ```
@@ -404,7 +396,7 @@ Build the synthesis from the disposition table. Every INCLUDE item must appear. 
 ```markdown
 ## Cross-Model Review: [topic]
 **Mode:** Review / Brainstorming
-**GPT tier:** Default (GPT-5.3) / Strong (GPT-5.2)
+**GPT:** GPT-5.2 (reasoning-effort high)
 **Date:** YYYY-MM-DD
 **Models:** [actual models used]
 **Constitutional anchoring:** Yes/No (CLAUDE.md Constitution section or standalone, GOALS.md)
@@ -491,8 +483,6 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 | **GPT-5.2** | Confident fabrication | Invents specific numbers, file paths, function names with high confidence | Verify every specific claim against actual code |
 | **GPT-5.2** | Overcautious scope | Adds caveats that dilute actionable findings, hedges everything | Push for concrete recommendations |
 | **GPT-5.2** | Production-grade creep | Recommends auth, monitoring, CI/CD for hobby projects | Match recommendations to actual project scale |
-| **GPT-5.3** | Medium reasoning only | Max `reasoning_effort: medium` — no deep fault-finding mode | Use GPT-5.2 (`--strong`) for formal proofs, complex cost-benefit |
-| **GPT-5.3** | 16K max output | Half of 5.2's output limit — long reviews may truncate | Monitor output completeness, switch to `--strong` if truncated |
 | **Flash** | Shallow analysis | Good for pattern matching, bad for architectural judgment | Use ONLY for mechanical audits and fact-checking |
 | **Flash** | Recency bias | Defaults to latest patterns even when older ones are better | Don't use for "which approach" decisions |
 
@@ -506,16 +496,7 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 - Tends to over-recommend architectural changes (DuckDB migrations, etc.)
 - Always wrap `llmx` calls in `timeout 300` as a hard safety net against API hangs
 
-**GPT-5.3 (`gpt-5.3-chat-latest`) — default GPT:**
-- "Less preachy" than 5.2 — fewer defensive disclaimers, more natural
-- 26.8% reduced hallucination with search, 19.7% without (OpenAI claims)
-- Max `--reasoning-effort medium` — no high mode available
-- llmx auto-defaults to medium (no need to specify)
-- 128K context, **16K max output** — watch for truncation on long reviews
-- Same pricing as 5.2 ($1.75/$14/M) — no cost saving, just quality improvement
-- **When to escalate to 5.2:** need deep formal analysis, math verification, or output >16K
-
-**GPT-5.2 — `--strong` GPT:**
+**GPT-5.2 (`gpt-5.2`) — review GPT:**
 - `--reasoning-effort high` is essential for review mode (burns thinking time for deep fault-finding)
 - `--reasoning-effort medium` for brainstorming mode (avoids tunnel vision)
 - MUST use `--stream` with reasoning-effort high — non-streaming timeouts are common
