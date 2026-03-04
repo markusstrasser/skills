@@ -29,7 +29,7 @@ Select the right frontier model for a task and prompt it correctly.
 | **Long document ingestion** (>200K) | Gemini 3.1 Pro | Native 1M context | GPT-5.2 (400K) |
 | **Subagent coding** | Claude Sonnet 4.6 | 79.6% SWE-bench at $3/$15 | Kimi K2.5 (76.8%, much cheaper) |
 | **Doc → schema extraction** | GPT-5.3 Instant | Less preachy, structured output, fast | GPT-5.2 (stronger reasoning) |
-| **Quick cross-model review** | Flash-Lite + GPT-5.3 | ~$0.50/review, fast | Pro + GPT-5.2 for deep reviews |
+| **Cross-model review** | Pro + GPT-5.3 | Adversarial review needs Pro depth | Pro + GPT-5.2 (`--strong`) for formal analysis |
 | **High-volume classification** | Flash-Lite | $0.25/$1.50/M, 1M ctx, dynamic thinking | Gemini 3 Flash ($0.50/$3/M) |
 | **Bulk cheap analysis** | Kimi K2.5 | $0.60/$2.50, strong reasoning | Gemini 3.1 ($2/$12) |
 | **Multi-agent swarm tasks** | Kimi K2.5 | Native Agent Swarm (100 sub-agents) | -- |
@@ -197,8 +197,8 @@ Run these when using outputs from each model:
 Claude (orchestrator -- best professional judgment)
   ├── Data tools (DuckDB, CLI tools -- ground truth)
   └── Multi-model validation
-        ├── review    → Flash-Lite + GPT-5.3  [default tier, ~$0.50]
-        ├── review    → Pro + GPT-5.2         [strong tier, ~$3-5]
+        ├── review    → Pro + GPT-5.3          [default, ~$2-3]
+        ├── review    → Pro + GPT-5.2         [--strong, ~$3-5]
         ├── pattern   → Gemini 3.1 Pro        [1M context, ARC-AGI-2 77.1%]
         ├── verify    → Flash-Lite            [$0.25/M, fast fact-check]
         ├── extract   → GPT-5.3              [doc→schema, less preachy]
