@@ -180,7 +180,7 @@ skills/architect/run.sh decide <run-id> defer "" "needs more research"
 
 **Working models (2025-11-07):**
 
-- `gemini-2.5-pro`, `gpt-5-pro`, `grok-4-latest`, `kimi-k2-thinking`, `claude-sonnet-4-5`
+- `gemini-3.1-pro-preview`, `gpt-5-pro`, `grok-4-latest`, `kimi-k2-thinking`, `claude-sonnet-4-5`
 
 **Gotchas:**
 
@@ -193,7 +193,7 @@ skills/architect/run.sh decide <run-id> defer "" "needs more research"
 
 **Gotcha:** Judge names ≠ llmx model names
 
-- llmx: `gemini-2.5-pro` (hyphens, dots)
+- llmx: `gemini-3.1-pro-preview` (hyphens, dots)
 - tournament judges: `gemini25-pro` (no dots, compact)
 
 **Available judges:** `gpt5-pro`, `gemini25-pro`, `grok-4`, `claude-4.5`, `kimi-k2-thinking`

@@ -124,7 +124,7 @@ Falls back to API silently for: `--schema`, `-s`, `--search`, `--stream`, `--rea
 
 | Context | Name |
 |---------|------|
-| llmx CLI | `gemini-2.5-pro` |
+| llmx CLI | `gemini-3.1-pro-preview` |
 | tournament MCP judges | `gemini25-pro` |
 
 $ARGUMENTS

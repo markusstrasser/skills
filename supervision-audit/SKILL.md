@@ -54,7 +54,7 @@ python3 ~/Projects/skills/session-analyst/scripts/extract_transcript.py <project
 Dispatch the raw classification + transcripts to Gemini for deeper pattern analysis:
 
 ```bash
-llmx -p google -m gemini-2.5-pro -f /tmp/supervision_raw.json -f /tmp/supervision_transcripts.md "$(cat <<'PROMPT'
+llmx -p google -m gemini-3.1-pro-preview -f /tmp/supervision_raw.json -f /tmp/supervision_transcripts.md "$(cat <<'PROMPT'
 You are analyzing Claude Code sessions for WASTED HUMAN SUPERVISION — places where the user had to intervene but an automated system could have handled it instead.
 
 You have two inputs:

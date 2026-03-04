@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # --- Defaults (overridden by .claude/overview.conf or env) ---
 OVERVIEW_TYPES="${OVERVIEW_TYPES:-source}"
-OVERVIEW_MODEL="${OVERVIEW_MODEL:-gemini-2.5-flash}"
+OVERVIEW_MODEL="${OVERVIEW_MODEL:-gemini-3-flash-preview}"
 OVERVIEW_OUTPUT_DIR="${OVERVIEW_OUTPUT_DIR:-.claude/overviews}"
 OVERVIEW_PROMPT_DIR="${OVERVIEW_PROMPT_DIR:-.claude/overview-prompts}"
 OVERVIEW_EXCLUDE="${OVERVIEW_EXCLUDE:-}"
@@ -70,7 +70,7 @@ fi
 
 # Re-read after config load (env vars may have been set)
 OVERVIEW_TYPES="${OVERVIEW_TYPES:-source}"
-OVERVIEW_MODEL="${OVERVIEW_MODEL:-gemini-2.5-flash}"
+OVERVIEW_MODEL="${OVERVIEW_MODEL:-gemini-3-flash-preview}"
 OVERVIEW_OUTPUT_DIR="${OVERVIEW_OUTPUT_DIR:-.claude/overviews}"
 OVERVIEW_PROMPT_DIR="${OVERVIEW_PROMPT_DIR:-.claude/overview-prompts}"
 OVERVIEW_EXCLUDE="${OVERVIEW_EXCLUDE:-}"
