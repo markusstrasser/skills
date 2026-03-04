@@ -1,20 +1,77 @@
 ---
 name: retro
-description: End-of-session retrospective. Extracts failure modes, environment struggles, and tooling proposals.
+description: End-of-session retrospective. Extracts failure modes, environment struggles, and tooling proposals. Use after completing a work session, when asked to reflect on what happened, or when the user says "retro" or "retrospective".
 user-invocable: true
-argument-hint: '[project]'
+argument-hint: '[project or focus area]'
 ---
 
-Review what happened in this session:
+# Session Retrospective
 
-1. What went wrong? Name specific failure modes (build-then-undo, token waste, sycophancy, search flooding, wrong assumptions).
-2. Where did you struggle with the environment (paths, dependencies, APIs, permissions, hooks)?
-3. What information would have saved time if you'd known it upfront?
-4. What recurring pattern should become a hook, rule, or skill?
+Review this session systematically. The goal is error correction — turning observations into hooks, rules, or architectural fixes.
 
-Read `improvement-log.md` in the meta project to check for existing entries before proposing new ones.
+## Phase 1 — Evidence Collection ← Procedural
 
-Output format:
-- 3-5 bullet points, each with: **failure mode**, evidence (file/command/line), proposed fix
-- If any finding matches an existing improvement-log entry, note "RECURRING: matches entry from YYYY-MM-DD"
-- Be concise. No platitudes. Name the files, the commands, the exact mistake.
+Scan the session for concrete events:
+
+1. **Failures**: commands that errored, tools that returned wrong results, approaches that were abandoned
+2. **Corrections**: places the user redirected you — what did they say and what were you doing wrong?
+3. **Wasted work**: code written then deleted, searches that found nothing, repeated attempts at the same thing
+4. **Environment friction**: missing dependencies, wrong paths, permission errors, hook blocks, API rate limits
+5. **Time sinks**: what consumed disproportionate turns relative to value delivered?
+
+## Phase 2 — Classification ← Criteria
+
+Classify each finding into exactly one category:
+
+| Category | Definition | Fix type |
+|----------|-----------|----------|
+| **WRONG_ASSUMPTION** | Started from incorrect premise | Rule or check |
+| **ENVIRONMENT** | Tool/path/dep/permission issue | Script or setup fix |
+| **SEARCH_WASTE** | Searched broadly when answer was nearby | Better routing |
+| **BUILD_THEN_UNDO** | Built something, then reverted | Plan-first rule |
+| **SYCOPHANCY** | Agreed when should have pushed back | Pushback rule |
+| **SCOPE_CREEP** | Did more than asked | Constraint |
+| **TOKEN_WASTE** | Burned context on low-value actions | Efficiency rule |
+| **TOOL_MISUSE** | Used wrong tool or wrong parameters | Tool routing |
+
+## Phase 3 — Prior Art Check ← Procedural
+
+Before proposing fixes:
+
+1. Read `improvement-log.md` in the meta project (if accessible)
+2. Check if finding matches an existing entry → mark "RECURRING: matches entry from YYYY-MM-DD"
+3. Check if a hook, rule, or skill already addresses this → note it
+
+## Phase 4 — Output ← Template
+
+```markdown
+## Session Retro — YYYY-MM-DD
+
+**Project:** [name]
+**Session summary:** [1 sentence]
+
+### Findings
+
+| # | Category | What happened | Evidence | Proposed fix | Recurrence |
+|---|----------|--------------|----------|-------------|------------|
+| 1 | WRONG_ASSUMPTION | ... | file:line or command | Rule/hook/skill | NEW or RECURRING |
+
+### Top 3 Improvements (ranked by impact)
+
+1. **[Fix]** — because [evidence]. Implementation: [hook|rule|skill|script].
+2. ...
+3. ...
+
+### What Went Well (max 2)
+
+- [Concrete thing, not a platitude]
+```
+
+## Guardrails
+
+- No platitudes ("overall good session", "learned a lot"). Name files, commands, exact mistakes.
+- No generic advice ("be more careful next time"). Every fix must be a concrete hook, rule, skill, or script.
+- If nothing went wrong, say so in one line. Don't invent findings.
+- Max 5 findings. If more exist, pick the 5 with highest recurrence or impact.
+
+$ARGUMENTS
