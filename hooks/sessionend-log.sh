@@ -100,6 +100,20 @@ if commits:
 receipt_path = os.path.expanduser("~/.claude/session-receipts.jsonl")
 with open(receipt_path, "a") as f:
     f.write(json.dumps(receipt, separators=(",", ":")) + "\n")
+
+# --- Clean up agent state files ---
+ppid = os.getppid()
+for suffix in ["state", "tool", "prompt", "spinner", "error", "agent", "debrief"]:
+    p = f"/tmp/claude-tab-{suffix}-{ppid}"
+    try:
+        os.unlink(p)
+    except FileNotFoundError:
+        pass
+# Also clean up the agent aggregate file
+try:
+    os.unlink(f"/tmp/claude-agent-{ppid}")
+except FileNotFoundError:
+    pass
 '
 
 exit 0

@@ -120,10 +120,12 @@ def classify_message(text: str) -> tuple[str, str]:
             if re.search(pattern, clean, re.IGNORECASE):
                 return ("CORRECTION", name)
 
-    # Depth nudges — borderline, could be new agency or correction
-    for pattern, name in DEEPER_PATTERNS:
-        if re.search(pattern, lower):
-            return ("CORRECTION", name)
+    # Depth nudges — only count as CORRECTION if bare/short (< 50 chars).
+    # Longer messages with "go deeper" include specific scope = new agency.
+    if len(clean) < 50:
+        for pattern, name in DEEPER_PATTERNS:
+            if re.search(pattern, lower):
+                return ("CORRECTION", name)
 
     # Default: genuine new agency
     return ("NEW_AGENCY", "direction")
