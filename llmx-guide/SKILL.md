@@ -12,19 +12,20 @@ argument-hint: '[model name or issue description]'
 1. **Model name correct?** Hyphens not dots (`claude-sonnet-4-6` not `claude-sonnet-4.6`)
 2. **Timeout set?** Reasoning models need `--timeout 600` or `--stream`
 3. **Using `shell=True`?** Don't — parentheses in prompts break it. Use list args + `input=`
-4. **Test small first:** `llmx --provider google <<< "2+2?"` before full pipeline
+4. **Know the transport:** `openai` prefers `codex exec`, `google` prefers `gemini`, then falls back to API
+5. **Test small first:** `llmx --provider google <<< "2+2?"` before full pipeline
 
 ## Model Names & Defaults
 
 | Model | llmx name | Notes |
 |-------|-----------|-------|
-| Gemini 3.1 Pro | `gemini-3.1-pro-preview` | **Default model.** `-preview` suffix required for all Gemini 3.x |
+| Gemini 3.1 Pro | `gemini-3.1-pro-preview` | **Default Google model.** `google` prefers Gemini CLI when installed |
 | Gemini 3 Flash | `gemini-3-flash-preview` | Cheap. `-preview` required |
 | Gemini 3 Flash | `gemini-3-flash-preview` | Budget: $0.50/$3/M, 1M ctx |
 | Gemini 3.1 Flash Image | `gemini-3.1-flash-image-preview` | No text-only 3.1 Flash yet |
 | GPT-5.3 Instant | `gpt-5.3-chat-latest` | Reasoning max: **medium only**. Auto-defaults |
-| GPT-5.4 | `gpt-5.4` | Reasoning default: high. 1M context. |
-| GPT-5.2 (legacy) | `gpt-5.2` | Reasoning default: high. 400K context. |
+| GPT-5.4 | `gpt-5.4` | **Default OpenAI model.** `openai` prefers Codex CLI when installed. API fallback defaults reasoning to `high`; `xhigh` is also supported. |
+| GPT-5.2 (legacy) | `gpt-5.2` | Legacy OpenAI default. 400K context. |
 | GPT-5-Codex | `gpt-5-codex` | No `minimal` reasoning-effort |
 | Kimi K2.5 | `kimi-k2.5` | No `--reasoning-effort`. Use `--no-thinking` |
 | Kimi K2 (legacy) | `kimi-k2-thinking` | Use `--use-old` flag |
@@ -113,7 +114,7 @@ subprocess.run(['llmx', '--provider', 'google'], input=prompt, capture_output=Tr
 | Model | Valid values | Default |
 |-------|------------|---------|
 | GPT-5.3 Instant | **medium only** | medium (auto) |
-| GPT-5.4 | minimal, low, medium, high | high |
+| GPT-5.4 | none, minimal, low, medium, high, xhigh | high |
 | GPT-5.2 | minimal, low, medium, high | high |
 | GPT-5-Codex | low, medium, high | high |
 | Gemini 3 Flash | low, medium, high | high (server-side) |
@@ -155,11 +156,40 @@ llmx vision video.mp4 -p "list UI elements" # video
 
 ### CLI Backends (subscription pricing)
 ```bash
-llmx -p gemini-cli "question"   # Google account auth
-llmx -p codex-cli "question"    # ChatGPT subscription auth
+llmx -p google "question"       # prefers Gemini CLI, falls back to API
+llmx -p openai "question"       # prefers Codex CLI, falls back to API
+llmx -p gemini-cli "question"   # force Gemini CLI transport
+llmx -p codex-cli "question"    # force Codex CLI transport
 ```
 
-Falls back to API silently for: `--schema`, `-s`, `--search`, `--stream`, `--reasoning-effort` != high.
+Falls back to API for:
+
+- Gemini CLI: `--schema`, `-s`, `--search`, `--stream`
+- Codex CLI: `-s`, `--search`, `--stream`
+- Both CLIs ignore explicit `--reasoning-effort`; they use their own default thinking behavior
+- Codex CLI now handles `--schema` via `codex exec --output-schema`
+
+### Codex CLI Reasoning Default
+
+`llmx -p openai` inherits Codex CLI's own reasoning default. llmx does **not** pass a reasoning-effort flag to `codex exec`.
+
+Set the Codex CLI default in `~/.codex/config.toml`:
+
+```toml
+model = "gpt-5.4"
+model_reasoning_effort = "xhigh"
+```
+
+One-off override:
+
+```bash
+codex exec -c 'model_reasoning_effort="xhigh"' "question"
+```
+
+Practical implication:
+
+- `llmx -p openai ...` on a machine with `model_reasoning_effort = "xhigh"` uses Codex CLI at `xhigh`
+- If llmx falls back to the OpenAI API, llmx's own default is `high` unless you pass `--reasoning-effort`
 
 ## Judge Names ≠ Model Names
 
