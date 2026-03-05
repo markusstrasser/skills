@@ -1,6 +1,6 @@
 ---
 name: model-review
-description: Cross-model adversarial review via llmx. Dispatches to Gemini 3.1 Pro and GPT-5.2 for independent critique, then fact-checks and synthesizes surviving insights. Supports review mode (convergent/critical) and brainstorming mode (divergent/creative).
+description: Cross-model adversarial review via llmx. Dispatches to Gemini 3.1 Pro and GPT-5.4 for independent critique, then fact-checks and synthesizes surviving insights. Supports review mode (convergent/critical) and brainstorming mode (divergent/creative).
 argument-hint: [topic or decision to review — e.g., "selve search architecture", "authentication redesign"]
 allowed-tools:
   - Bash
@@ -27,11 +27,11 @@ You are orchestrating a cross-model review. Same-model peer review is a martinga
 | Role | Model | Use |
 |------|-------|-----|
 | **Gemini** (pattern/architecture) | Pro (`gemini-3.1-pro-preview`) | Deep review — cross-referencing, pattern detection |
-| **GPT** (quantitative/formal) | GPT-5.2 (`gpt-5.2 --reasoning-effort high --stream --timeout 600`) | Deep review — logical inconsistencies, cost-benefit |
+| **GPT** (quantitative/formal) | GPT-5.4 (`gpt-5.4 --reasoning-effort high --stream --timeout 600`) | Deep review — logical inconsistencies, cost-benefit |
 | **Gemini Fast** (extraction) | Flash (`gemini-3-flash-preview`) | Structured extraction in Step 5, mechanical audits |
 | **GPT Fast** (extraction) | GPT-5.3 Instant (`gpt-5.3-instant --stream`) | Structured extraction in Step 5, fact-checking |
 
-**Why these models:** Adversarial review needs deep reasoning from both sides. Gemini Pro for cross-referencing across large context; GPT-5.2 with `--reasoning-effort high` for formal fault-finding. **Fast models for extraction:** Step 5 (extract + disposition) is mechanical — fast models do it equally well at 10x lower cost and latency. Use Flash or GPT-5.3 Instant for claim extraction, not the deep reviewers.
+**Why these models:** Adversarial review needs deep reasoning from both sides. Gemini Pro for cross-referencing across large context; GPT-5.4 with `--reasoning-effort high` for formal fault-finding. **Fast models for extraction:** Step 5 (extract + disposition) is mechanical — fast models do it equally well at 10x lower cost and latency. Use Flash or GPT-5.3 Instant for claim extraction, not the deep reviewers.
 
 **Note on reasoning models and bias:** All four review/extraction models are reasoning/thinking models (2026 generation). Research on LLM-as-judge biases (position bias, self-preference, sycophancy) was primarily measured on pre-reasoning models (GPT-4, Llama-2/3). Reasoning models show measurably lower sycophancy (SYCON Bench, arXiv:2505.23840) and thinking models bypass positional bias by reasoning about information location. The correlated error rates (60% shared wrong answers, Kim et al. ICML 2025) were measured on pre-reasoning Helm models — actual correlation for current reasoning models is likely lower but unmeasured.
 
@@ -166,7 +166,7 @@ Append only the specific files under review. Read them with the Read tool and wr
 | Model | Sweet spot | Max useful | Note |
 |-------|-----------|------------|------|
 | Gemini 3.1 Pro | 80K-150K | ~800K | Handles large context well; quality doesn't degrade until ~1M |
-| GPT-5.2 | 15K-40K | ~100K | Use `signatures.xml` (compressed) instead of `full.xml` |
+| GPT-5.4 | 40K-100K | ~400K | 1M context now available — can handle larger reviews than 5.2 |
 
 ### Step 3: Dispatch Reviews (Parallel)
 
@@ -179,7 +179,7 @@ GEMINI_MODEL="gemini-3.1-pro-preview"
 GEMINI_FALLBACK="--fallback gemini-3-flash-preview"
 
 # GPT — always 5.2 with deep reasoning for adversarial review
-GPT_MODEL="gpt-5.2"
+GPT_MODEL="gpt-5.4"
 GPT_EFFORT="--reasoning-effort high --stream"
 GPT_TIMEOUT="--timeout 600"
 ```
@@ -244,7 +244,7 @@ $([ -n "$CONSTITUTION" ] && echo "For each constitutional principle: coverage sc
 Ranked by measurable impact. Each must have: (a) what, (b) why with quantitative justification, (c) how to verify with specific metrics.
 
 ## 6. Where I'm Likely Wrong
-What am I (GPT-5.2) probably getting wrong? Known biases to flag: overconfidence in fabricated specifics, overcautious scope-limiting, production-grade recommendations for personal projects.
+What am I (GPT-5.4) probably getting wrong? Known biases to flag: overconfidence in fabricated specifics, overcautious scope-limiting, production-grade recommendations for personal projects.
 " > "$REVIEW_DIR/gpt-output.md" 2>&1
 ```
 
@@ -298,7 +298,7 @@ Ideas that work poorly alone but well together. Cross-pollinate from the list ab
 Pre-mortem: for the top 3, what's the most likely failure mode?
 
 ## 5. Where I'm Likely Wrong
-What am I (GPT-5.2) probably biased toward? Where should my suggestions be distrusted?
+What am I (GPT-5.4) probably biased toward? Where should my suggestions be distrusted?
 " > "$REVIEW_DIR/gpt-brainstorm.md" 2>&1
 ```
 
@@ -419,7 +419,7 @@ Build the synthesis from the disposition table. Every INCLUDE item must appear. 
 ```markdown
 ## Cross-Model Review: [topic]
 **Mode:** Review / Brainstorming
-**GPT:** GPT-5.2 (reasoning-effort high)
+**GPT:** GPT-5.4 (reasoning-effort high)
 **Date:** YYYY-MM-DD
 **Models:** [actual models used]
 **Constitutional anchoring:** Yes/No (CLAUDE.md Constitution section or standalone, GOALS.md)
@@ -507,7 +507,7 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 | **Judge inflation** | LLM judges inflate accuracy of same-provider models | Systematic on Helm leaderboard — Kim et al. ICML 2025 | Cross-family review only. This skill already does this. |
 | **Debate = martingale** | Sequential model discussion doesn't improve expected correctness | Formal proof + 7 benchmarks — Choi et al. 2025 | Vote/extract independently, don't let models respond to each other's reviews |
 
-**Reasoning model caveat:** The above numbers come from pre-reasoning (2024-early 2025) models. Reasoning models (GPT-5.2, Gemini 3.1 Pro, Opus 4.6) show lower sycophancy (SYCON Bench) and bypass positional bias (thinking phase reasons about information location). Correlation rates for reasoning models are unmeasured — likely lower but not zero. Treat the numbers as upper bounds.
+**Reasoning model caveat:** The above numbers come from pre-reasoning (2024-early 2025) models. Reasoning models (GPT-5.4, Gemini 3.1 Pro, Opus 4.6) show lower sycophancy (SYCON Bench) and bypass positional bias (thinking phase reasons about information location). Correlation rates for reasoning models are unmeasured — likely lower but not zero. Treat the numbers as upper bounds.
 
 ### Per-Model Biases
 
@@ -516,9 +516,9 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 | **Gemini 3.1 Pro** | Production-pattern bias | Recommends enterprise patterns (DuckDB migrations, service meshes) for personal projects | Check if recommendation matches project scale |
 | **Gemini 3.1 Pro** | Self-recommendation | Suggests using Gemini for tasks, recommends Google services | Flag any self-serving suggestions |
 | **Gemini 3.1 Pro** | Instruction dropping | Ignores structured output format in long contexts | Re-prompt if output sections are missing |
-| **GPT-5.2** | Confident fabrication | Invents specific numbers, file paths, function names with high confidence | Verify every specific claim against actual code |
-| **GPT-5.2** | Overcautious scope | Adds caveats that dilute actionable findings, hedges everything | Push for concrete recommendations |
-| **GPT-5.2** | Production-grade creep | Recommends auth, monitoring, CI/CD for hobby projects | Match recommendations to actual project scale |
+| **GPT-5.4** | Confident fabrication | Invents specific numbers, file paths, function names with high confidence | Verify every specific claim against actual code |
+| **GPT-5.4** | Overcautious scope | Adds caveats that dilute actionable findings, hedges everything | Push for concrete recommendations |
+| **GPT-5.4** | Production-grade creep | Recommends auth, monitoring, CI/CD for hobby projects | Match recommendations to actual project scale |
 | **Flash / GPT-5.3 Instant** | Shallow analysis | Good for extraction and pattern matching, bad for architectural judgment | Use ONLY for Step 5 extraction, mechanical audits, and fact-checking |
 | **Flash / GPT-5.3 Instant** | Recency bias | Defaults to latest patterns even when older ones are better | Don't use for "which approach" decisions |
 
@@ -533,7 +533,7 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 - Always use `$GEMINI_FALLBACK` (→ Flash) so rate limits auto-recover instead of failing
 - `timeout 300` wrapping is now redundant — llmx `--timeout` + `--fallback` handles it
 
-**GPT-5.2 (`gpt-5.2`) — review GPT:**
+**GPT-5.4 (`gpt-5.4`) — review GPT:**
 - `--reasoning-effort high` is essential for review mode (burns thinking time for deep fault-finding)
 - `--reasoning-effort medium` for brainstorming mode (avoids tunnel vision)
 - MUST use `--stream` with reasoning-effort high — non-streaming timeouts are common

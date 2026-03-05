@@ -23,7 +23,8 @@ argument-hint: '[model name or issue description]'
 | Gemini 3 Flash | `gemini-3-flash-preview` | Budget: $0.50/$3/M, 1M ctx |
 | Gemini 3.1 Flash Image | `gemini-3.1-flash-image-preview` | No text-only 3.1 Flash yet |
 | GPT-5.3 Instant | `gpt-5.3-chat-latest` | Reasoning max: **medium only**. Auto-defaults |
-| GPT-5.2 | `gpt-5.2` | Reasoning default: high |
+| GPT-5.4 | `gpt-5.4` | Reasoning default: high. 1M context. |
+| GPT-5.2 (legacy) | `gpt-5.2` | Reasoning default: high. 400K context. |
 | GPT-5-Codex | `gpt-5-codex` | No `minimal` reasoning-effort |
 | Kimi K2.5 | `kimi-k2.5` | No `--reasoning-effort`. Use `--no-thinking` |
 | Kimi K2 (legacy) | `kimi-k2-thinking` | Use `--use-old` flag |
@@ -68,9 +69,9 @@ elif result.returncode == 4:  # timeout
 
 ## The Three llmx Footguns
 
-### 1. GPT-5.2 Timeouts
+### 1. GPT-5.4 Timeouts
 
-GPT-5.2 with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning — proxies and HTTP clients kill idle connections. Default 120s is too low.
+GPT-5.4 (and 5.2) with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning — proxies and HTTP clients kill idle connections. Default 120s is too low.
 
 **Max timeout: 600s** (validated at CLI level, 1-600 range). No auto-scaling exists — set explicitly.
 
@@ -78,11 +79,11 @@ GPT-5.2 with reasoning burns time BEFORE producing output. Non-streaming holds t
 
 ```bash
 # WILL timeout:
-llmx -m gpt-5.2 --reasoning-effort high --no-stream "complex query"
+llmx -m gpt-5.4 --reasoning-effort high --no-stream "complex query"
 
 # Fix — stream (best) or explicit timeout:
-llmx -m gpt-5.2 --reasoning-effort high --stream "complex query"
-llmx -m gpt-5.2 --reasoning-effort high --timeout 600 "complex query"
+llmx -m gpt-5.4 --reasoning-effort high --stream "complex query"
+llmx -m gpt-5.4 --reasoning-effort high --timeout 600 "complex query"
 
 # For very long tasks — deep research runs in background (no timeout):
 llmx research "complex multi-source analysis"
@@ -91,7 +92,7 @@ llmx research "complex multi-source analysis"
 From Python:
 ```python
 subprocess.run(
-    ['llmx', '-m', 'gpt-5.2', '--reasoning-effort', 'high', '--stream'],
+    ['llmx', '-m', 'gpt-5.4', '--reasoning-effort', 'high', '--stream'],
     input=prompt, capture_output=True, text=True,
     timeout=600  # max allowed by llmx CLI
 )
@@ -112,6 +113,7 @@ subprocess.run(['llmx', '--provider', 'google'], input=prompt, capture_output=Tr
 | Model | Valid values | Default |
 |-------|------------|---------|
 | GPT-5.3 Instant | **medium only** | medium (auto) |
+| GPT-5.4 | minimal, low, medium, high | high |
 | GPT-5.2 | minimal, low, medium, high | high |
 | GPT-5-Codex | low, medium, high | high |
 | Gemini 3 Flash | low, medium, high | high (server-side) |

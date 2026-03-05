@@ -22,6 +22,37 @@ Track what changes with each model release so you know what to update.
 - One prompting guide per model family for easy updates
 - BENCHMARKS.md is the most frequently updated file
 
+## 2026-03-05 -- GPT-5.4 Release
+
+**GPT-5.4 replaces GPT-5.2** as frontier GPT model. Variants: base, Thinking, Pro.
+
+### Key changes
+- Context window: 400K → 1M tokens (matches Claude/Gemini)
+- SimpleQA: ~72% inferred (33% fewer claim errors vs 5.2's 58%) — now tied with Claude/Gemini
+- Native computer use added
+- Tool Search API — avoids dumping all tool definitions into prompt
+- Consolidates GPT-5.3-Codex coding capabilities
+- GDPval: 83% (OpenAI's benchmark, not Artificial Analysis Elo)
+- APEX-Agents benchmark leader (law + finance)
+- Uses fewer tokens per solution vs 5.2
+
+### What's still unknown (update when available)
+- Exact pricing (marked TBD)
+- Most benchmark scores (MATH, AIME, GPQA, ARC-AGI-2, IFEval, SWE-bench)
+- Exact llmx model name (assumed `gpt-5.4` following 5.2 pattern)
+- Max output tokens
+
+### Files updated
+- SKILL.md: selection matrix, model profile, cost table, hallucination table, validation checklist
+- BENCHMARKS.md: GPT-5.2 → GPT-5.4, SimpleQA updated, pricing TBD
+- PROMPTING_GPT.md: title, context window, hallucination section
+- model-review SKILL.md: dispatch model updated
+- llmx-guide SKILL.md: model name updated
+- postwrite-frontier-timeliness.sh: current frontier reference
+- Global ~/.claude/CLAUDE.md: model reference
+- project-upgrade SKILL.md: dispatch model
+- constitution SKILL.md: prompting tip
+
 ## Update Checklist
 
 When a new frontier model releases:

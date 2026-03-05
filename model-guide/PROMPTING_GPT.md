@@ -1,6 +1,6 @@
-# GPT-5.2 Prompting Guide
+# GPT-5.4 Prompting Guide
 
-Specific to GPT-5.2 with thinking (high effort). Updated 2026-02-27.
+Specific to GPT-5.4 with thinking (high effort). Updated 2026-03-05. Most GPT-5.4 prompting patterns carry forward — GPT-5.4 adds 1M context, native computer use, Tool Search, and fewer hallucinations.
 
 **Sources:** OpenAI official docs (developers.openai.com).
 
@@ -8,7 +8,7 @@ Specific to GPT-5.2 with thinking (high effort). Updated 2026-02-27.
 
 ## 1. Thinking Mode -- The Default
 
-GPT-5.2 with thinking enabled at high effort is the version that hits the frontier benchmarks (MATH 98%, AIME 100%, DocVQA 95%). Always use thinking mode for non-trivial work.
+GPT-5.4 with thinking enabled at high effort is the version that hits the frontier benchmarks (MATH 98%, AIME 100%, DocVQA 95%). Always use thinking mode for non-trivial work.
 
 ### Critical Rules
 
@@ -82,7 +82,7 @@ OpenAI defines a strict authority chain: `developer` > `user` > `assistant`.
 
 ## 3. Structured Outputs & JSON
 
-GPT-5.2 has the best native structured output support of any frontier model.
+GPT-5.4 has the best native structured output support of any frontier model.
 
 ### The Hierarchy
 
@@ -102,11 +102,11 @@ GPT-5.2 has the best native structured output support of any frontier model.
 
 ---
 
-## 4. Long Context (400K tokens)
+## 4. Long Context (1M tokens)
 
 ### Document Formatting
 
-Use **XML format** for multiple documents (best performing with GPT-5.2 thinking):
+Use **XML format** for multiple documents (best performing with GPT-5.4 thinking):
 ```xml
 <doc id='1' title='Annual Report'>Content here</doc>
 <doc id='2' title='Competitor Analysis'>Content here</doc>
@@ -120,23 +120,23 @@ Use **XML format** for multiple documents (best performing with GPT-5.2 thinking
 
 ## 5. Hallucination -- The #1 Risk
 
-GPT-5.2 has **58% SimpleQA** -- it hallucinates 42% of factual questions. Even with thinking enabled, factual recall is its weakest category among frontier models.
+GPT-5.4 has **~72% SimpleQA** (inferred from OpenAI's "33% fewer claim errors vs 5.2") -- significantly improved from 5.2's 58%, now roughly tied with Claude/Gemini. Still a ~28% error rate on factual questions.
 
-**The core problem:** GPT almost never refuses to answer (2% not-attempted rate on SimpleQA). It will **confidently fabricate** rather than say "I don't know." Thinking mode improves reasoning but does NOT fix factual recall.
+**The improvement:** GPT-5.4 closed most of the hallucination gap. But it still rarely refuses to answer — it will **confidently fabricate** rather than say "I don't know." Web search remains the most impactful mitigation.
 
 ### With Thinking Enabled
 - Medical cases (HealthBench): 1.6% error rate vs GPT-4o's 15.8% -- thinking helps enormously for *reasoning over* provided facts
-- But SimpleQA factual recall is still 58% -- thinking doesn't help *remembering* facts
-- GPT-5.2 is ~80% less likely to have reasoning errors than o3 -- but factual errors persist
+- SimpleQA improved to ~72% -- both reasoning and factual recall improved in 5.4
+- GPT-5.4 is OpenAI's most factual model to date, but ~28% error rate remains
 
 ### Mitigation Techniques
 
-1. **Enable web search** for fact-sensitive queries -- drops error to ~5% (SimpleQA 95.1%). This is the single most impactful mitigation.
+1. **Enable web search** for fact-sensitive queries -- drops error to ~5%. This is the single most impactful mitigation.
 2. **Ask for citations inline** -- forces two errors to hallucinate (fact + fabricated citation)
 3. **Provide grounding context** -- the closer source material is to the desired answer, the less it invents
 4. **Give an "out":** `"Respond with 'not found' if the answer isn't present in the documents"`
 5. **Use Structured Outputs** with mandatory fields for confidence/source
-6. **Cross-validate** with Claude or Gemini (both at 72% SimpleQA) for fact-sensitive claims
+6. **Cross-validate** with Claude or Gemini for fact-sensitive claims (all three now ~72% SimpleQA)
 
 ---
 
@@ -166,7 +166,7 @@ GPT-5.2 has **58% SimpleQA** -- it hallucinates 42% of factual questions. Even w
 | Type | Duration |
 |------|----------|
 | In-Memory | 5-10 min idle, max 1 hour |
-| Extended (24h) | Up to 24 hours (GPT-5.2 supported) |
+| Extended (24h) | Up to 24 hours (GPT-5.4 supported) |
 
 Monitor: check `usage.prompt_tokens_details.cached_tokens` in API response.
 
@@ -185,7 +185,7 @@ Monitor: check `usage.prompt_tokens_details.cached_tokens` in API response.
 
 ## 8. Vision
 
-GPT-5.2 with thinking is **best-in-class for document understanding**:
+GPT-5.4 with thinking is **best-in-class for document understanding**:
 - DocVQA: 95% (best of any frontier model)
 - ScreenSpot-Pro: 86.3% (best UI element detection)
 
@@ -203,14 +203,14 @@ GPT-5.2 with thinking is **best-in-class for document understanding**:
 
 ## 9. Key Differences from Claude/Gemini/Kimi
 
-| Aspect | GPT-5.2 (thinking) | Claude 4.6 | Gemini 3.1 | Kimi K2.5 |
+| Aspect | GPT-5.4 (thinking) | Claude 4.6 | Gemini 3.1 | Kimi K2.5 |
 |--------|---------|-----------|-----------|-----------|
 | Structured Outputs | Native, guaranteed | Tool_use workaround | Via function calling | OpenAI-compatible |
 | Prompt caching | Automatic, 90% off | Manual markers | Automatic, 75% off | None |
 | Thinking control | `reasoning.effort` (low/med/high) | `output_config.effort` (low-max) | `thinkingLevel` (minimal-high) | On/off toggle |
 | CoT prompting | **Hurts** when thinking on | Helps (`<thinking>` tags) | Replace with thinkingLevel | Use thinking mode |
 | Reasoning persistence | `previous_response_id` | Adaptive interleaved | Thought signatures | Not available |
-| Hallucination | Poor (SimpleQA 58%) | Best tied (72%) | Best tied (72.1%) | Worst (37%) |
+| Hallucination | ~72% SimpleQA (tied) | Best tied (72%) | Best tied (72.1%) | Worst (37%) |
 | Refusal rate | Almost never refuses (2%) | More selective | More selective | Moderate |
 | Math | **Best** (MATH 98%, AIME 100%) | 93% | 91.1% | 98%, AIME 96% |
 | Vision/OCR | **Best** (DocVQA 95%) | Good (93%) | Good | Good (MMMU-Pro 78.5%) |

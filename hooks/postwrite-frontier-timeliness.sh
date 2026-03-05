@@ -117,7 +117,7 @@ except Exception:
 
 print(f"TIMELINESS WARNING: {os.path.basename(fpath)} cites pre-frontier models "
       f"without staleness disclaimer: {", ".join(unique_models)}", file=sys.stderr)
-print("These models findings may not transfer to current frontier (Opus 4.6, GPT-5.2, Gemini 3.1).", file=sys.stderr)
+print("These models findings may not transfer to current frontier (Opus 4.6, GPT-5.4, Gemini 3.1).", file=sys.stderr)
 print("Add disclaimer: \"pre-frontier evidence, validity uncertain\" or note \"scale-independent\" if the finding transfers.", file=sys.stderr)
 sys.exit(0)
 ' "$FPATH" 2>&1 >&2

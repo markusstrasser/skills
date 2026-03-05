@@ -214,7 +214,7 @@ Understanding the architecture helps with prompting:
 
 ## 12. Key Differences from Claude/GPT/Gemini
 
-| Aspect | Kimi K2.5 | Claude 4.6 | GPT-5.2 | Gemini 3.1 |
+| Aspect | Kimi K2.5 | Claude 4.6 | GPT-5.4 | Gemini 3.1 |
 |--------|-----------|-----------|---------|-----------|
 | Price (in/out MTok) | **$0.60/$2.50** | $5/$25 | $1.75/$14 | $2/$12 |
 | Thinking control | On/off toggle | Adaptive effort | Integrated | thinkingLevel |

@@ -144,6 +144,6 @@ These are empirically validated — apply to every constitution:
 This skill is designed to work when pasted into any frontier model:
 - XML tags for structure (Claude-native, GPT/Gemini tolerate)
 - Instructions explicit and at the end (Gemini drops early constraints)
-- No "think step by step" (hurts GPT-5.2 thinking mode)
+- No "think step by step" (hurts GPT-5.4 thinking mode)
 - Options are letter-coded for quick human response
 - Templates use concrete field names, not vague categories

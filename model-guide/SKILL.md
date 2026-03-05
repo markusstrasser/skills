@@ -9,27 +9,27 @@ argument-hint: '[task description or model name]'
 
 Select the right frontier model for a task and prompt it correctly.
 
-**Models covered:** Claude Opus 4.6, Claude Sonnet 4.6, GPT-5.3 Instant, GPT-5.2, Gemini 3.1 Pro, Gemini 3 Flash, Kimi K2.5.
-**Last updated:** 2026-03-04. See CHANGELOG.md for update history.
+**Models covered:** Claude Opus 4.6, Claude Sonnet 4.6, GPT-5.4, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3 Flash, Kimi K2.5.
+**Last updated:** 2026-03-05. See CHANGELOG.md for update history.
 
 ## Quick Selection Matrix
 
 | Task | Best Model | Why | Runner-up |
 |------|-----------|-----|-----------|
 | **Agentic coding** | Claude Opus 4.6 | SWE-bench 80.8%, Arena coding #1 | Sonnet 4.6 (79.6%, 1/5 cost) |
-| **Fact-sensitive work** | Claude Opus 4.6 / Gemini 3.1 | SimpleQA 72% (tied best) | NOT GPT-5.2 (58%), NOT Kimi (37%) |
+| **Fact-sensitive work** | Claude Opus 4.6 / Gemini 3.1 / GPT-5.4 | SimpleQA ~72% (tied) | NOT Kimi (37%) |
 | **Legal reasoning** | Claude Opus 4.6 | BigLaw 90.2% | -- |
 | **Professional analysis** | Claude Opus 4.6 | GDPval-AA Elo 1606 (expert preference) | Sonnet 4.6 (GDPval 1633) |
 | **Computer use / browsing** | Claude Opus 4.6 | OSWorld 72.7% | -- |
-| **Hard math** | GPT-5.2 | MATH 98%, AIME 100% | Kimi K2.5 (MATH 98%, AIME 96%) |
-| **Precise structured output** | GPT-5.2 | IFEval 95%, native Structured Outputs | Claude (94%), Kimi (94%) |
-| **Vision / document OCR** | GPT-5.2 | DocVQA 95%, ScreenSpot 86.3% | Kimi K2.5 (MMMU-Pro 78.5%) |
-| **Science reasoning** | Gemini 3.1 Pro | GPQA Diamond 94.3% | GPT-5.2 (93.2%) |
+| **Hard math** | GPT-5.4 | MATH 98%+, AIME 100% | Kimi K2.5 (MATH 98%, AIME 96%) |
+| **Precise structured output** | GPT-5.4 | IFEval 95%+, native Structured Outputs + Tool Search | Claude (94%), Kimi (94%) |
+| **Vision / document OCR** | GPT-5.4 | DocVQA 95%+, native computer use | Kimi K2.5 (MMMU-Pro 78.5%) |
+| **Science reasoning** | Gemini 3.1 Pro | GPQA Diamond 94.3% | GPT-5.4 |
 | **Abstract pattern recognition** | Gemini 3.1 Pro | ARC-AGI-2 77.1% | Claude (68.8%) |
-| **Long document ingestion** (>200K) | Gemini 3.1 Pro | Native 1M context | GPT-5.2 (400K) |
+| **Long document ingestion** (>200K) | Gemini 3.1 Pro / GPT-5.4 | Native 1M context (both) | Claude (200K, 1M beta) |
 | **Subagent coding** | Claude Sonnet 4.6 | 79.6% SWE-bench at $3/$15 | Kimi K2.5 (76.8%, much cheaper) |
-| **Doc → schema extraction** | GPT-5.3 Instant | Less preachy, structured output, fast | GPT-5.2 (stronger reasoning) |
-| **Cross-model review** | Pro + GPT-5.2 | Adversarial review needs deep reasoning both sides | -- |
+| **Doc → schema extraction** | GPT-5.3 Instant | Less preachy, structured output, fast | GPT-5.4 (stronger reasoning) |
+| **Cross-model review** | Pro + GPT-5.4 | Adversarial review needs deep reasoning both sides | -- |
 | **High-volume classification** | Gemini 3 Flash | $0.50/$3/M, 1M ctx | Kimi K2.5 ($0.60/$2.50) |
 | **Bulk cheap analysis** | Kimi K2.5 | $0.60/$2.50, strong reasoning | Gemini 3.1 ($2/$12) |
 | **Multi-agent swarm tasks** | Kimi K2.5 | Native Agent Swarm (100 sub-agents) | -- |
@@ -70,10 +70,12 @@ For complete guide, read `PROMPTING_CLAUDE.md`.
 
 For complete guide, read `PROMPTING_CLAUDE.md`.
 
-### GPT-5.2 -- "The Mathematician"
+### GPT-5.4 -- "The Professional"
 
-**Strengths:** Math (MATH 98%, AIME 100%), vision (DocVQA 95%), precise instruction compliance (IFEval 95%), structured outputs, 400K context, 90% prompt cache discount.
-**Weaknesses:** Highest hallucination (SimpleQA 58%), weakest abstract reasoning (ARC-AGI-2 52.9%), robotic tone.
+**Strengths:** 1M context (up from 400K), math (MATH 98%+, AIME 100%), vision + native computer use, 33% fewer claim errors vs 5.2 (SimpleQA ~72% inferred), Tool Search API, structured outputs, 90% prompt cache discount. Consolidates GPT-5.3-Codex coding capabilities.
+**Weaknesses:** Abstract reasoning still below Gemini (ARC-AGI-2 TBD), pricing TBD (likely similar to 5.2). New model — benchmark scores still emerging.
+
+**Variants:** GPT-5.4 (base), GPT-5.4 Thinking (reasoning, default in ChatGPT), GPT-5.4 Pro (max performance).
 
 **Quick prompting tips (thinking mode, high effort):**
 - Do **NOT** use "think step by step" -- hurts performance when thinking is on
@@ -81,9 +83,10 @@ For complete guide, read `PROMPTING_CLAUDE.md`.
 - Use **`strict: true`** on all function definitions -- guaranteed schema conformance
 - Use **XML format** for documents: `<doc id='1' title='Title'>Content</doc>` (JSON performs poorly)
 - Add `Formatting re-enabled` as first line of developer message (markdown off by default in thinking)
-- Enable **web search** for fact-sensitive queries (drops hallucination from 42% to ~5%)
+- Enable **web search** for fact-sensitive queries
 - Use Responses API with `previous_response_id` for **reasoning persistence** across tool calls
 - **STATIC prefix (top) + DYNAMIC content (bottom)** for 90% cache discount
+- **Tool Search** for large tool sets -- avoids dumping all tool definitions into prompt
 - **llmx defaults to `--reasoning-effort high`** for GPT-5 models automatically
 
 For complete guide, read `PROMPTING_GPT.md`.
@@ -99,8 +102,8 @@ For complete guide, read `PROMPTING_GPT.md`.
 - Use `--schema` for structured extraction — combines well with reduced hallucination
 - Same XML format tip as 5.2: `<doc id='1' title='Title'>Content</doc>`
 - Good at: entity extraction from research papers, restructuring documents into schemas, summarization
-- **When to use over 5.2:** conversational tasks, schema extraction, anything that doesn't need deep reasoning
-- **When to use 5.2 instead:** math verification, formal analysis, outputs >16K tokens
+- **When to use over 5.4:** conversational tasks, schema extraction, anything that doesn't need deep reasoning
+- **When to use 5.4 instead:** math verification, formal analysis, outputs >16K tokens, computer use
 
 ### Gemini 3 Flash -- "The Budget Workhorse"
 
@@ -161,10 +164,10 @@ Run these when using outputs from each model:
 - [ ] For novel abstract patterns, consider Gemini second opinion
 - [ ] On documents >200K tokens, check for context-edge information loss
 
-### After GPT-5.2
-- [ ] **ALWAYS fact-check** (SimpleQA 58% -- hallucinates 42% of factual questions)
+### After GPT-5.4
+- [ ] **Still fact-check** (SimpleQA ~72% inferred -- improved from 5.2's 58%, but 28% error rate remains)
 - [ ] Don't trust unsourced claims -- demand citations
-- [ ] Abstract reasoning may miss non-obvious patterns (ARC-AGI-2 52.9%)
+- [ ] Abstract reasoning still below Gemini -- consider Gemini second opinion for novel patterns
 
 ### After Gemini 3.1 Pro
 - [ ] Verify it followed instructions precisely (IFEval 89.2% -- misses ~11%)
@@ -183,8 +186,8 @@ Run these when using outputs from each model:
 |-------|:----------:|:-----------:|:--------------:|:-------:|:----------:|
 | Claude Opus 4.6 | $5 | $25 | -- | 200K (1M beta) | 128K |
 | Claude Sonnet 4.6 | $3 | $15 | -- | 200K (1M beta) | 64K |
+| GPT-5.4 | TBD | TBD | 90% input | 1M | TBD |
 | GPT-5.3 Instant | $1.75 | $14 | 90% input | 128K | 16K |
-| GPT-5.2 | $1.75 | $14 | 90% input | 400K | 100-128K |
 | Gemini 3.1 Pro | $2 | $12 | 75% | 1M | 64K |
 | **Gemini 3 Flash** | **$0.50** | **$3** | 75% | 1M | 65K |
 | Kimi K2.5 | $0.60 | $2.50 | -- | 256K | 96K (thinking) |
@@ -197,11 +200,11 @@ Run these when using outputs from each model:
 Claude (orchestrator -- best professional judgment)
   ├── Data tools (DuckDB, CLI tools -- ground truth)
   └── Multi-model validation
-        ├── review    → Pro + GPT-5.2          [adversarial, ~$3-5]
+        ├── review    → Pro + GPT-5.4          [adversarial, ~$3-5]
         ├── pattern   → Gemini 3.1 Pro        [1M context, ARC-AGI-2 77.1%]
         ├── verify    → Gemini 3 Flash        [$0.50/M, fast fact-check]
         ├── extract   → GPT-5.3              [doc→schema, less preachy]
-        ├── math      → GPT-5.2              [MATH 98%, AIME 100%]
+        ├── math      → GPT-5.4              [MATH 98%+, AIME 100%]
         ├── classify  → Gemini 3 Flash        [$0.50/M, high-volume]
         ├── bulk      → Kimi K2.5            [$0.60/$2.50, strong reasoning]
         └── compare   → Multiple             [side-by-side for high-stakes]
@@ -213,11 +216,11 @@ Claude (orchestrator -- best professional judgment)
 |-------|:--------:|:----------:|
 | Claude Opus 4.6 | 72% | 28% wrong |
 | Gemini 3.1 Pro | 72.1% | 28% wrong |
-| GPT-5.2 | 58% | 42% wrong |
-| GPT-5.2 + web search | 95.1% | 5% wrong |
+| GPT-5.4 | ~72% | ~28% wrong (33% fewer errors vs 5.2) |
+| GPT-5.4 + web search | ~95%+ | ~5% wrong |
 | Kimi K2.5 | 37% | **63% wrong** |
 
-**Key insight:** Reasoning/thinking modes hallucinate MORE on factual questions. Thinking harder helps reasoning over facts, not recall of facts. Always query data sources for dollar amounts, dates, entity names, and legal claims. Kimi is especially dangerous for unsourced factual claims.
+**Key insight:** GPT-5.4 closed most of the hallucination gap vs Claude/Gemini (33% fewer errors vs 5.2). But ~28% error rate remains — always query data sources for dollar amounts, dates, entity names, and legal claims. Kimi is especially dangerous for unsourced factual claims.
 
 ## When to Update This Skill
 

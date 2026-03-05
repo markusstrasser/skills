@@ -154,7 +154,7 @@ config = types.GenerateContentConfig(tools=[grounding_tool])
 
 ## 8. Long Context (1M Tokens Native)
 
-Gemini's biggest advantage -- 5x Claude standard, 2.5x GPT-5.2.
+Gemini's biggest advantage -- 5x Claude standard. GPT-5.4 now also supports 1M.
 
 ### Structure
 - **Query at the END** after all context (critical for Gemini)
@@ -237,7 +237,7 @@ Official Gemini guidance emphasizes few-shot more strongly than other models:
 
 ## 13. Key Differences from Claude/GPT/Kimi
 
-| Aspect | Gemini 3.1 | Claude 4.6 | GPT-5.2 | Kimi K2.5 |
+| Aspect | Gemini 3.1 | Claude 4.6 | GPT-5.4 | Kimi K2.5 |
 |--------|-----------|-----------|---------|-----------|
 | Temperature | Keep at 1.0 (lowering degrades) | Lower OK | Lower OK | 1.0 thinking, 0.6 instant |
 | Query placement | END (critical) | Bottom (30% better) | End preferred | Flexible |

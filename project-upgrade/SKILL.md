@@ -262,7 +262,7 @@ PYEOF
 
 ## Phase 3: Cross-Validate (Optional)
 
-For high-stakes projects, send a focused summary to GPT-5.2 for second opinion:
+For high-stakes projects, send a focused summary to GPT-5.4 for second opinion:
 
 ```bash
 # Only if findings.json has >10 items or user requested thorough mode
@@ -287,7 +287,7 @@ for f in sorted(files):
 " | head -20 | while read filepath; do
       [ -f "$filepath" ] && echo -e "\n## $filepath\n\`\`\`\n$(cat "$filepath")\n\`\`\`"
     done
-  } | llmx chat -m gpt-5.2 --reasoning-effort high --stream --timeout 600 "
+  } | llmx chat -m gpt-5.4 --reasoning-effort high --stream --timeout 600 "
 Gemini analyzed a codebase and produced findings (JSON above). Your job:
 
 1. For each finding: is it CORRECT? Does the code actually have this issue?
