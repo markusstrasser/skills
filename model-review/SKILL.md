@@ -35,6 +35,16 @@ You are orchestrating a cross-model review. Same-model peer review is a martinga
 
 **Note on reasoning models and bias:** All four review/extraction models are reasoning/thinking models (2026 generation). Research on LLM-as-judge biases (position bias, self-preference, sycophancy) was primarily measured on pre-reasoning models (GPT-4, Llama-2/3). Reasoning models show measurably lower sycophancy (SYCON Bench, arXiv:2505.23840) and thinking models bypass positional bias by reasoning about information location. The correlated error rates (60% shared wrong answers, Kim et al. ICML 2025) were measured on pre-reasoning Helm models — actual correlation for current reasoning models is likely lower but unmeasured.
 
+## CLI-First Prompting Rule
+
+`llmx -p google` and `llmx -p openai` fall back to API transport if you use `-s`. If you want `gemini-cli` / `codex-cli` by default, inline the system instructions at the top of the prompt with a `<system>...</system>` block and omit `-s`.
+
+Treat that `<system>` block honestly:
+
+- It is prompt text, not a true transport-level system role
+- It preserves CLI transport, which is often cheaper and more reliable for repeated review work
+- If you need a true system channel or structured features that only API transport supports, use `-s` and accept the fallback
+
 ## Pre-Flight: Constitutional Check
 
 Before building context, check if the project has constitutional documents:
@@ -192,8 +202,11 @@ GPT_TIMEOUT="--timeout 600"
 ```bash
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-context.md" \
-  -s "You are reviewing a codebase. Be concrete. No platitudes. Reference specific code, configs, and findings." \
   $GEMINI_EFFORT $GEMINI_FALLBACK --timeout 300 "
+<system>
+You are reviewing a codebase. Be concrete. No platitudes. Reference specific code, configs, and findings.
+</system>
+
 [Describe what's being reviewed]
 
 RESPOND WITH EXACTLY THESE SECTIONS:
@@ -222,8 +235,11 @@ What am I (Gemini) likely getting wrong? Where should you distrust my assessment
 ```bash
 llmx chat -m $GPT_MODEL \
   -f "$REVIEW_DIR/gpt-context.md" \
-  -s "You are performing QUANTITATIVE and FORMAL analysis. Gemini is handling qualitative pattern review separately. Focus on what Gemini can't do well. Be precise. Show your reasoning. No hand-waving." \
   $GPT_EFFORT $GPT_TIMEOUT "
+<system>
+You are performing QUANTITATIVE and FORMAL analysis. Gemini is handling qualitative pattern review separately. Focus on what Gemini can't do well. Be precise. Show your reasoning. No hand-waving.
+</system>
+
 [Describe what's being reviewed]
 
 RESPOND WITH EXACTLY:
@@ -256,8 +272,11 @@ What am I (GPT-5.4) probably getting wrong? Known biases to flag: overconfidence
 ```bash
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-context.md" \
-  -s "Think divergently. Challenge assumptions. What would a completely different approach look like?" \
   $GEMINI_EFFORT $GEMINI_FALLBACK --timeout 300 "
+<system>
+Think divergently. Challenge assumptions. What would a completely different approach look like?
+</system>
+
 [Describe the design space to explore]
 
 ## 1. Alternative Architectures
@@ -281,8 +300,11 @@ What am I (Gemini) missing because of my training distribution? Where should my 
 ```bash
 llmx chat -m $GPT_MODEL \
   -f "$REVIEW_DIR/gpt-context.md" \
-  -s "Generate novel approaches with feasibility assessment." \
   $GPT_EFFORT $GPT_TIMEOUT "
+<system>
+Generate novel approaches with feasibility assessment.
+</system>
+
 [Describe the design space to explore]
 
 ## 1. Idea Generation (10 ideas)
@@ -309,8 +331,11 @@ For large codebases, a cheap Flash pass before the main reviews can surface mech
 ```bash
 llmx chat -m gemini-3-flash-preview \
   -f /path/to/large-context.md \
-  -s "Mechanical audit only. No analysis, no recommendations." \
   --timeout 120 "
+<system>
+Mechanical audit only. No analysis, no recommendations.
+</system>
+
 Find:
 - Duplicated content across files
 - Inconsistent naming (model names, paths, conventions)
@@ -347,14 +372,22 @@ llmx chat -m gemini-3-flash-preview "Claim: [model's claim]. Actual code: [paste
 # Extract Gemini's review with GPT-5.3 Instant (cross-family extraction)
 llmx chat -m gpt-5.3-instant --stream --timeout 120 \
   -f "$REVIEW_DIR/gemini-output.md" \
-  -s "Extract every discrete recommendation, finding, or claim as a numbered list. One item per line. Do not evaluate or filter — extract mechanically." \
-  "Extract all discrete ideas from this review." > "$REVIEW_DIR/gemini-extraction.md" 2>&1
+  "
+<system>
+Extract every discrete recommendation, finding, or claim as a numbered list. One item per line. Do not evaluate or filter — extract mechanically.
+</system>
+
+Extract all discrete ideas from this review." > "$REVIEW_DIR/gemini-extraction.md" 2>&1
 
 # Extract GPT's review with Flash (cross-family extraction)
 llmx chat -m gemini-3-flash-preview --timeout 120 \
   -f "$REVIEW_DIR/gpt-output.md" \
-  -s "Extract every discrete recommendation, finding, or claim as a numbered list. One item per line. Do not evaluate or filter — extract mechanically." \
-  "Extract all discrete ideas from this review." > "$REVIEW_DIR/gpt-extraction.md" 2>&1
+  "
+<system>
+Extract every discrete recommendation, finding, or claim as a numbered list. One item per line. Do not evaluate or filter — extract mechanically.
+</system>
+
+Extract all discrete ideas from this review." > "$REVIEW_DIR/gpt-extraction.md" 2>&1
 ```
 
 **Why cross-family extraction:** Self-preference bias (Wataoka NeurIPS 2024) means a model's own family preferentially surfaces claims written in its style. Using GPT-fast to extract Gemini's claims, and Gemini-fast to extract GPT's claims, avoids this.

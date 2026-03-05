@@ -12,7 +12,7 @@ argument-hint: '[model name or issue description]'
 1. **Model name correct?** Hyphens not dots (`claude-sonnet-4-6` not `claude-sonnet-4.6`)
 2. **Timeout set?** Reasoning models need `--timeout 600` or `--stream`
 3. **Using `shell=True`?** Don't — parentheses in prompts break it. Use list args + `input=`
-4. **Know the transport:** `openai` prefers `codex exec`, `google` prefers `gemini`, then falls back to API
+4. **Know the transport and fallback triggers:** `openai` prefers `codex exec`, `google` prefers `gemini`, then falls back to API
 5. **Test small first:** `llmx --provider google <<< "2+2?"` before full pipeline
 
 ## Model Names & Defaults
@@ -168,6 +168,29 @@ Falls back to API for:
 - Codex CLI: `-s`, `--search`, `--stream`
 - Both CLIs ignore explicit `--reasoning-effort`; they use their own default thinking behavior
 - Codex CLI now handles `--schema` via `codex exec --output-schema`
+
+### CLI-First System Prompt Pattern
+
+If you want CLI transport by default, **do not use `-s`**. `-s` becomes an API-fallback trigger for both Google and OpenAI providers.
+
+Instead, inline the system instructions at the top of the prompt or context file:
+
+```bash
+cat <<'EOF' | llmx chat -p openai -m gpt-5.4 --timeout 600
+<system>
+You are reviewing code. Be concrete. Reference specific files and tradeoffs.
+</system>
+
+Review this design:
+- ...
+EOF
+```
+
+Important caveat:
+
+- `<system>...</system>` is just prompt text, not a transport-level system role
+- It preserves `gemini-cli` / `codex-cli` usage, but the model may treat it as advisory text rather than a hard system channel
+- If you need a true system role, use `-s` and accept API fallback
 
 ### Codex CLI Reasoning Default
 
