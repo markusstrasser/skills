@@ -112,7 +112,8 @@ Build context files. Constitutional documents go first (if found).
 # Persist outputs — NOT /tmp
 # Slug from topic prevents collisions when multiple reviews run on the same day
 REVIEW_SLUG=$(echo "$TOPIC" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//' | cut -c1-40)
-REVIEW_DIR=".model-review/$(date +%Y-%m-%d)-${REVIEW_SLUG}"
+REVIEW_ID=$(openssl rand -hex 3)
+REVIEW_DIR=".model-review/$(date +%Y-%m-%d)-${REVIEW_SLUG}-${REVIEW_ID}"
 mkdir -p "$REVIEW_DIR"
 ```
 
@@ -184,19 +185,19 @@ Append only the specific files under review. Read them with the Read tool and wr
 
 **Select models** (see Dispatch Models above):
 ```bash
-# Gemini — Pro with auto-fallback to Flash on rate limit/timeout
+# Gemini — Pro, no fallback (should just work)
 GEMINI_MODEL="gemini-3.1-pro-preview"
-GEMINI_FALLBACK="--fallback gemini-3-flash-preview"
 # IMPORTANT: Gemini 3.1 Pro defaults to 8K maxOutputTokens server-side.
 # Always use --max-tokens 65536 on Gemini dispatches to prevent silent truncation.
 GEMINI_MAX_TOKENS="--max-tokens 65536"
 
-# GPT — 5.4 with deep reasoning, auto-fallback to 5.2 on quota/rate limit
+# GPT — 5.4 with deep reasoning, no fallback
 GPT_MODEL="gpt-5.4"
-GPT_FALLBACK="--fallback gpt-5.2"
 GPT_EFFORT="--reasoning-effort high --stream"
 GPT_TIMEOUT="--timeout 600"
 ```
+
+**IMPORTANT — Bash timeout:** When dispatching via the Bash tool, always set `timeout: 360000` (6 minutes) on the Bash tool call. The default 120s Bash timeout kills the process before llmx finishes. llmx's own `--timeout` handles the real deadline.
 
 ---
 
@@ -206,7 +207,7 @@ GPT_TIMEOUT="--timeout 600"
 ```bash
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-context.md" \
-  $GEMINI_MAX_TOKENS $GEMINI_FALLBACK --timeout 300 "
+  $GEMINI_MAX_TOKENS --timeout 300 "
 <system>
 You are reviewing a codebase. Be concrete. No platitudes. Reference specific code, configs, and findings. It is $(date +%Y-%m-%d).
 </system>
@@ -239,7 +240,7 @@ What am I (Gemini) likely getting wrong? Where should you distrust my assessment
 ```bash
 llmx chat -m $GPT_MODEL \
   -f "$REVIEW_DIR/gpt-context.md" \
-  $GPT_EFFORT $GPT_FALLBACK $GPT_TIMEOUT "
+  $GPT_EFFORT $GPT_TIMEOUT "
 <system>
 You are performing QUANTITATIVE and FORMAL analysis. Gemini is handling qualitative pattern review separately. Focus on what Gemini can't do well. Be precise. Show your reasoning. No hand-waving.
 </system>
@@ -279,7 +280,7 @@ Gemini's brainstorming role is the *wild generator* — maximize novelty, ignore
 ```bash
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-context.md" \
-  $GEMINI_MAX_TOKENS $GEMINI_FALLBACK --timeout 300 "
+  $GEMINI_MAX_TOKENS --timeout 300 "
 <system>
 You are the wild generator. Maximize novelty. Ignore feasibility, cost, and practicality — another model handles that. Your job is ideas that nobody else would propose. Challenge every assumption. What would a completely different paradigm look like? It is $(date +%Y-%m-%d).
 </system>
@@ -307,7 +308,7 @@ What am I (Gemini) missing because of my training distribution? Where should my 
 ```bash
 llmx chat -m $GPT_MODEL \
   -f "$REVIEW_DIR/gpt-context.md" \
-  $GPT_EFFORT $GPT_FALLBACK $GPT_TIMEOUT "
+  $GPT_EFFORT $GPT_TIMEOUT "
 <system>
 Generate novel approaches with feasibility assessment.
 </system>
@@ -360,7 +361,7 @@ After receiving both brainstorm outputs, identify the 2-3 dominant paradigms acr
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-brainstorm.md" \
   -f "$REVIEW_DIR/gpt-brainstorm.md" \
-  $GEMINI_MAX_TOKENS $GEMINI_FALLBACK --timeout 300 "
+  $GEMINI_MAX_TOKENS --timeout 300 "
 <system>
 You are generating COUNTER-proposals. The ideas below have already been proposed. Your job is to find what was MISSED. It is $(date +%Y-%m-%d).
 </system>
@@ -592,8 +593,7 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 - Temperature is locked at 1.0 server-side for thinking models
 - Will recommend itself for tasks — always flag self-serving suggestions
 - Tends to over-recommend architectural changes (DuckDB migrations, etc.)
-- Always use `$GEMINI_FALLBACK` (→ Flash) so rate limits auto-recover instead of failing
-- `timeout 300` wrapping is now redundant — llmx `--timeout` + `--fallback` handles it
+- llmx default timeout is now 300s; use `--timeout 300` explicitly in dispatch commands
 
 **GPT-5.4 (`gpt-5.4`) — review GPT:**
 - `--reasoning-effort high` is essential for review mode (burns thinking time for deep fault-finding)
