@@ -84,7 +84,7 @@ Check yourself against each before outputting:
 | Claude (Opus 4.6) | Sycophantic hedging; agrees then qualifies until useless | Medium | Improved from 4.5 but still present |
 | Claude | Citation-shaped bullshit; plausible references that don't exist | High | CoT unfaithfulness baseline: 7-13% on clean prompts (ICLR 2026) |
 | Claude | Genotype determinism; treats associations as deterministic | High | |
-| GPT (5.2/5.3) | Confident fabrication; invents complete fake studies with authors and N | Critical | Worse with extended thinking enabled |
+| GPT (5.2–5.4) | Confident fabrication; invents complete fake studies with authors and N | Critical | Worse with extended thinking enabled. 5.4 improved (SimpleQA ~72%) but still rarely refuses — fabricates confidently |
 | GPT | Overcitation; cites 20+ papers, many tangential or unverifiable | Medium | |
 | Gemini (3.1 Pro) | Google-source bias; over-relies on Scholar snippets without reading papers | High | 1M context invites dumping entire papers without processing |
 | Gemini | Length inflation; massive outputs that bury the signal | Medium | |

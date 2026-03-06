@@ -72,8 +72,8 @@ For complete guide, read `PROMPTING_CLAUDE.md`.
 
 ### GPT-5.4 -- "The Professional"
 
-**Strengths:** 1M context (up from 400K), math (MATH 98%+, AIME 100%), vision + native computer use, 33% fewer claim errors vs 5.2 (SimpleQA ~72% inferred), Tool Search API, structured outputs, 90% prompt cache discount. Consolidates GPT-5.3-Codex coding capabilities.
-**Weaknesses:** Abstract reasoning still below Gemini (ARC-AGI-2 TBD), pricing TBD (likely similar to 5.2). New model — benchmark scores still emerging.
+**Strengths:** 1M context (up from 400K), math (MATH 98%+, AIME 100%), vision + native computer use, 33% fewer claim errors vs 5.2 (SimpleQA ~72% inferred), Tool Search API, structured outputs, 90% prompt cache discount. Consolidates GPT-5.3-Codex coding capabilities. First general-purpose model rated **High capability in Cybersecurity** (Preparedness Framework) — strong at CTF, CVE exploitation, end-to-end cyber operations.
+**Weaknesses:** Abstract reasoning still below Gemini (ARC-AGI-2 TBD), pricing TBD (likely similar to 5.2). CoT controllability is near-zero (0.3% at 10k chars) — you cannot steer what the model reasons about via prompts. CoT monitorability lower than GPT-5 Thinking overall (but near-100% for agentic misalignment detection).
 
 **Variants:** GPT-5.4 (base), GPT-5.4 Thinking (reasoning, default in ChatGPT), GPT-5.4 Pro (max performance).
 
@@ -118,6 +118,20 @@ For complete guide, read `PROMPTING_GPT.md`.
 - Best for: high-volume classification, document processing, mechanical audits, extraction
 - **When to use over Pro:** cost-sensitive tasks, high-volume processing, reviews under 50K context
 - **When to use Pro instead:** architectural review, multi-file cross-referencing, outputs requiring deep reasoning
+
+### Gemini 3.1 Flash-Lite -- "The Speed Demon"
+
+**Strengths:** $0.25/$1.50/M (**cheapest frontier model**), 99th percentile speed (389 tok/s), 1M context, 1000K output. Best cost/speed ratio for high-volume workloads.
+**Weaknesses:** Lower intelligence (34 vs Flash 46, Pro 57), not Pareto-optimal (Flash non-reasoning is cheaper AND smarter), struggles with complex reasoning.
+
+**Quick prompting tips:**
+- llmx name: `gemini-3.1-flash-lite-preview`
+- **3x cheaper than Flash**, 12x cheaper than Pro — use for ultra-high-volume tasks
+- Same 1M context window as other Gemini 3 models
+- Best for: translation, content moderation, UI generation, simulations, simple classification
+- **When to use over Flash:** pure speed matters, maximum cost reduction on simple tasks
+- **When to use Flash/Pro instead:** reasoning, math, multi-step analysis, fact-sensitive work
+- Released March 3, 2026 — monitor for stability before production use
 
 ### Gemini 3.1 Pro -- "The Polymath"
 
@@ -168,6 +182,7 @@ Run these when using outputs from each model:
 - [ ] **Still fact-check** (SimpleQA ~72% inferred -- improved from 5.2's 58%, but 28% error rate remains)
 - [ ] Don't trust unsourced claims -- demand citations
 - [ ] Abstract reasoning still below Gemini -- consider Gemini second opinion for novel patterns
+- [ ] Destructive action avoidance: 0.86 (slightly below GPT-5.3-Codex 0.88) -- verify file operations in agentic use
 
 ### After Gemini 3.1 Pro
 - [ ] Verify it followed instructions precisely (IFEval 89.2% -- misses ~11%)

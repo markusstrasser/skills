@@ -29,7 +29,7 @@ You are orchestrating a cross-model review. Same-model peer review is a martinga
 | **Gemini** (pattern/architecture) | Pro (`gemini-3.1-pro-preview`) | Deep review — cross-referencing, pattern detection |
 | **GPT** (quantitative/formal) | GPT-5.4 (`gpt-5.4 --reasoning-effort high --stream --timeout 600`) | Deep review — logical inconsistencies, cost-benefit |
 | **Gemini Fast** (extraction) | Flash (`gemini-3-flash-preview`) | Structured extraction in Step 5, mechanical audits |
-| **GPT Fast** (extraction) | GPT-5.3 Instant (`gpt-5.3-instant --stream`) | Structured extraction in Step 5, fact-checking |
+| **GPT Fast** (extraction) | GPT-5.3 Instant (`gpt-5.3-chat-latest --stream`) | Structured extraction in Step 5, fact-checking |
 
 **Why these models:** Adversarial review needs deep reasoning from both sides. Gemini Pro for cross-referencing across large context; GPT-5.4 with `--reasoning-effort high` for formal fault-finding. **Fast models for extraction:** Step 5 (extract + disposition) is mechanical — fast models do it equally well at 10x lower cost and latency. Use Flash or GPT-5.3 Instant for claim extraction, not the deep reviewers.
 
@@ -370,7 +370,7 @@ llmx chat -m gemini-3-flash-preview "Claim: [model's claim]. Actual code: [paste
 
 ```bash
 # Extract Gemini's review with GPT-5.3 Instant (cross-family extraction)
-llmx chat -m gpt-5.3-instant --stream --timeout 120 \
+llmx chat -m gpt-5.3-chat-latest --stream --timeout 120 \
   -f "$REVIEW_DIR/gemini-output.md" \
   "
 <system>

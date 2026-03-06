@@ -30,7 +30,7 @@ GPT-5.4 with thinking enabled at high effort is the version that hits the fronti
 ```python
 # Direct API
 response = client.responses.create(
-    model="gpt-5.2",
+    model="gpt-5.4",
     reasoning={"effort": "high"},  # minimal, low, medium, high
     input=[...]
 )
@@ -38,9 +38,9 @@ response = client.responses.create(
 
 ```bash
 # Via llmx (our unified CLI) -- defaults to high effort for GPT-5 models
-llmx -m gpt-5-pro "complex query"                                  # Defaults to --reasoning-effort high
-llmx -m gpt-5-pro --reasoning-effort high --stream "complex query"  # Explicit (same result)
-llmx -m gpt-5-pro --reasoning-effort low "simple query"             # Override for speed/cost
+llmx -m gpt-5.4 "complex query"                                    # Defaults to --reasoning-effort high
+llmx -m gpt-5.4 --reasoning-effort high --stream "complex query"    # Explicit (same result)
+llmx -m gpt-5.4 --reasoning-effort low "simple query"               # Override for speed/cost
 ```
 
 | Effort | Use When | llmx auto-timeout |
@@ -53,6 +53,15 @@ llmx -m gpt-5-pro --reasoning-effort low "simple query"             # Override f
 ### Reasoning Persistence
 
 Use the Responses API with `store: true` and pass `previous_response_id`. This preserves internal reasoning state across tool calls, directly improving accuracy on multi-step tasks. The Chat Completions API does NOT preserve reasoning items, increasing token usage and reducing quality.
+
+### CoT Controllability (System Card, March 2026)
+
+GPT-5.4 Thinking has **near-zero CoT controllability**: only 0.3% of 10k-character reasoning chains can be steered by user instructions (e.g., avoiding keywords, formatting constraints on the chain). This means:
+- You **cannot** control what the model thinks about via prompting
+- Don't waste prompt space trying to shape the reasoning chain — shape the *output* instead
+- This is a safety property (low obfuscation ability) but also a practical constraint
+
+CoT **monitorability** is lower than GPT-5 Thinking overall, but near-100% for detecting agentic misalignment. Safety monitors reading the CoT can still catch problematic reasoning.
 
 ### Markdown in Thinking Mode
 
