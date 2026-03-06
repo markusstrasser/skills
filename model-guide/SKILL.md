@@ -10,7 +10,7 @@ argument-hint: '[task description or model name]'
 Select the right frontier model for a task and prompt it correctly.
 
 **Models covered:** Claude Opus 4.6, Claude Sonnet 4.6, GPT-5.4, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3 Flash, Kimi K2.5.
-**Last updated:** 2026-03-05. See CHANGELOG.md for update history.
+**Last updated:** 2026-03-06. See CHANGELOG.md for update history.
 
 ## Quick Selection Matrix
 
@@ -73,9 +73,12 @@ For complete guide, read `PROMPTING_CLAUDE.md`.
 ### GPT-5.4 -- "The Professional"
 
 **Strengths:** 1M context (up from 400K), math (MATH 98%+, AIME 100%), vision + native computer use, 33% fewer claim errors vs 5.2 (SimpleQA ~72% inferred), Tool Search API, structured outputs, 90% prompt cache discount. Consolidates GPT-5.3-Codex coding capabilities. First general-purpose model rated **High capability in Cybersecurity** (Preparedness Framework) — strong at CTF, CVE exploitation, end-to-end cyber operations.
-**Weaknesses:** Abstract reasoning still below Gemini (ARC-AGI-2 TBD), pricing TBD (likely similar to 5.2). CoT controllability is near-zero (0.3% at 10k chars) — you cannot steer what the model reasons about via prompts. CoT monitorability lower than GPT-5 Thinking overall (but near-100% for agentic misalignment detection).
+**Weaknesses:** Abstract reasoning still below Gemini (ARC-AGI-2 TBD). CoT controllability is near-zero (0.3% at 10k chars) — you cannot steer what the model reasons about via prompts. CoT monitorability lower than GPT-5 Thinking overall (but near-100% for agentic misalignment detection).
+**Pricing:** $2.50/$15.00 per MTok (<272K context), $5.00/$22.50 (>272K). 90% cache discount. 272K boundary means long-context work costs 2x — prefer Gemini for bulk 1M ingestion.
 
-**Variants:** GPT-5.4 (base), GPT-5.4 Thinking (reasoning, default in ChatGPT), GPT-5.4 Pro (max performance).
+**Variants:** GPT-5.4 (base), GPT-5.4 Thinking (reasoning, default in ChatGPT), GPT-5.4 Pro (max performance, slow — test manually).
+
+**Effort levels:** `none` (no reasoning, enables temperature/top_p), `minimal`, `low`, `medium`, `high` (default via llmx), `xhigh` (max compute).
 
 **Quick prompting tips (thinking mode, high effort):**
 - Do **NOT** use "think step by step" -- hurts performance when thinking is on
@@ -201,13 +204,14 @@ Run these when using outputs from each model:
 |-------|:----------:|:-----------:|:--------------:|:-------:|:----------:|
 | Claude Opus 4.6 | $5 | $25 | -- | 200K (1M beta) | 128K |
 | Claude Sonnet 4.6 | $3 | $15 | -- | 200K (1M beta) | 64K |
-| GPT-5.4 | TBD | TBD | 90% input | 1M | TBD |
+| GPT-5.4 (<272K) | $2.50 | $15.00 | 90% ($0.25) | 1M | TBD |
+| GPT-5.4 (>272K) | $5.00 | $22.50 | 90% ($0.50) | 1M | TBD |
 | GPT-5.3 Instant | $1.75 | $14 | 90% input | 128K | 16K |
 | Gemini 3.1 Pro | $2 | $12 | 75% | 1M | 64K |
 | **Gemini 3 Flash** | **$0.50** | **$3** | 75% | 1M | 65K |
 | Kimi K2.5 | $0.60 | $2.50 | -- | 256K | 96K (thinking) |
 
-**Cost optimization:** Default to Sonnet 4.6 for subagents. Reserve Opus for synthesis, narratives, and orchestration. Use Kimi for bulk work that doesn't need factual precision. This cuts costs 60-80%.
+**Cost optimization:** Default to Sonnet 4.6 for subagents. Reserve Opus for synthesis, narratives, and orchestration. Use Kimi for bulk work that doesn't need factual precision. GPT-5.4 with cache hits ($0.25/M input) is the cheapest frontier reasoning — but only for cache-friendly workloads with static prefixes. For long-context (>272K), Gemini Pro ($2/$12) is cheaper than GPT-5.4 ($5/$22.50).
 
 ## Multi-Model Architecture Pattern
 

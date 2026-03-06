@@ -1,6 +1,6 @@
 # Frontier Model Benchmarks
 
-**Last updated:** 2026-03-05
+**Last updated:** 2026-03-06
 **Sources:** Artificial Analysis, LLM Stats, SWE-bench.com, LMSYS Chatbot Arena, official docs (Anthropic, OpenAI, Google DeepMind, Moonshot AI).
 
 ## Head-to-Head: Current Frontier
@@ -35,7 +35,8 @@
 |-------|:----------:|:-----------:|:--------------:|:-------:|:----------:|
 | Claude Opus 4.6 | $5.00 | $25.00 | -- | 200K (1M beta) | 128K |
 | Claude Sonnet 4.6 | $3.00 | $15.00 | -- | 200K (1M beta) | 64K |
-| GPT-5.4 | TBD | TBD | 90% input | 1M | TBD |
+| GPT-5.4 (<272K) | $2.50 | $15.00 | 90% ($0.25) | 1M | TBD |
+| GPT-5.4 (>272K) | $5.00 | $22.50 | 90% ($0.50) | 1M | TBD |
 | Gemini 3.1 Pro | $2.00 | $12.00 | 75% | 1M | 64K |
 | Kimi K2.5 | $0.60 | $2.50 | -- | 256K | 96K (thinking) |
 

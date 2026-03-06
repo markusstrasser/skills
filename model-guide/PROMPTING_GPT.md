@@ -1,6 +1,6 @@
 # GPT-5.4 Prompting Guide
 
-Specific to GPT-5.4 with thinking (high effort). Updated 2026-03-05. Most GPT-5.4 prompting patterns carry forward — GPT-5.4 adds 1M context, native computer use, Tool Search, and fewer hallucinations.
+Specific to GPT-5.4 with thinking (high effort). Updated 2026-03-06. Most GPT-5.4 prompting patterns carry forward — GPT-5.4 adds 1M context, native computer use, Tool Search, and fewer hallucinations.
 
 **Sources:** OpenAI official docs (developers.openai.com).
 
@@ -9,6 +9,16 @@ Specific to GPT-5.4 with thinking (high effort). Updated 2026-03-05. Most GPT-5.
 ## 1. Thinking Mode -- The Default
 
 GPT-5.4 with thinking enabled at high effort is the version that hits the frontier benchmarks (MATH 98%, AIME 100%, DocVQA 95%). Always use thinking mode for non-trivial work.
+
+### `none` Effort — Non-Thinking Mode
+
+Setting `reasoning.effort: "none"` disables internal reasoning entirely. This is the **only** way to use `temperature`, `top_p`, and `logprobs` — these parameters are unavailable at any other effort level.
+
+```bash
+llmx -m gpt-5.4 --reasoning-effort none --temperature 0.9 "creative writing prompt"
+```
+
+Use `none` for: creative generation needing temperature control, logprob analysis, classification where reasoning overhead isn't worth it.
 
 ### Critical Rules
 
@@ -31,7 +41,7 @@ GPT-5.4 with thinking enabled at high effort is the version that hits the fronti
 # Direct API
 response = client.responses.create(
     model="gpt-5.4",
-    reasoning={"effort": "high"},  # minimal, low, medium, high
+    reasoning={"effort": "high"},  # none, minimal, low, medium, high, xhigh
     input=[...]
 )
 ```
@@ -45,14 +55,24 @@ llmx -m gpt-5.4 --reasoning-effort low "simple query"               # Override f
 
 | Effort | Use When | llmx auto-timeout |
 |--------|----------|:-:|
+| `xhigh` | Maximum compute — hardest problems, Pro-lite behavior | 600s (10 min) |
 | `high` | Complex reasoning, math, analysis, coding -- **use this for serious work** | 600s (10 min) |
 | `medium` | Balanced cost/quality for moderate tasks | 300s (5 min) |
 | `low` | Moderate queries, cost-sensitive | 120s |
 | `minimal` | Simple queries, high-volume, latency-sensitive | 120s |
+| `none` | No reasoning — enables temperature/top_p/logprobs | 120s |
 
 ### Reasoning Persistence
 
 Use the Responses API with `store: true` and pass `previous_response_id`. This preserves internal reasoning state across tool calls, directly improving accuracy on multi-step tasks. The Chat Completions API does NOT preserve reasoning items, increasing token usage and reducing quality.
+
+### `phase` Parameter (Responses API)
+
+For multi-step agentic tasks, set `phase` on assistant messages to prevent early stopping:
+- `"commentary"` — intermediate updates, preambles before tool calls
+- `"final_answer"` — completed response
+
+Without `phase`, the model may treat intermediate commentary as a final answer and stop prematurely. Important for pipelines with tool call sequences.
 
 ### CoT Controllability (System Card, March 2026)
 
@@ -216,7 +236,7 @@ GPT-5.4 with thinking is **best-in-class for document understanding**:
 |--------|---------|-----------|-----------|-----------|
 | Structured Outputs | Native, guaranteed | Tool_use workaround | Via function calling | OpenAI-compatible |
 | Prompt caching | Automatic, 90% off | Manual markers | Automatic, 75% off | None |
-| Thinking control | `reasoning.effort` (low/med/high) | `output_config.effort` (low-max) | `thinkingLevel` (minimal-high) | On/off toggle |
+| Thinking control | `reasoning.effort` (none/low/med/high/xhigh) | `output_config.effort` (low-max) | `thinkingLevel` (minimal-high) | On/off toggle |
 | CoT prompting | **Hurts** when thinking on | Helps (`<thinking>` tags) | Replace with thinkingLevel | Use thinking mode |
 | Reasoning persistence | `previous_response_id` | Adaptive interleaved | Thought signatures | Not available |
 | Hallucination | ~72% SimpleQA (tied) | Best tied (72%) | Best tied (72.1%) | Worst (37%) |

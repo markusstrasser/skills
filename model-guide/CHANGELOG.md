@@ -53,6 +53,25 @@ Track what changes with each model release so you know what to update.
 - project-upgrade SKILL.md: dispatch model
 - constitution SKILL.md: prompting tip
 
+## 2026-03-06 -- GPT-5.4 Pricing + Full Effort Spectrum
+
+### Key changes
+- GPT-5.4 pricing confirmed: $2.50/$15.00 (<272K), $5.00/$22.50 (>272K), 90% cache discount
+- Full reasoning effort spectrum documented: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`
+- `none` effort enables temperature/top_p/logprobs (only way to use these params)
+- `xhigh` effort verified working via llmx
+- `phase` parameter documented (Responses API: `commentary`/`final_answer` for multi-step tasks)
+- 272K pricing boundary noted — long-context work costs 2x input
+- GPT-5.4 Pro noted as variant (slow, manual testing recommended)
+
+### Not added (user decision)
+- gpt-5-mini ($0.25/$2.00) and gpt-5-nano ($0.05/$0.40) exist and work via llmx but intentionally excluded from guide
+
+### Files updated
+- SKILL.md: pricing table, model profile (pricing, effort levels, Pro note)
+- BENCHMARKS.md: pricing table
+- PROMPTING_GPT.md: none/xhigh effort, phase parameter, effort table, key differences table
+
 ## Update Checklist
 
 When a new frontier model releases:
