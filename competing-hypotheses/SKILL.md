@@ -64,6 +64,8 @@ For investment theses, also consider:
 4. **Already priced in** (market knows this)
 5. **Structural rather than temporary** (the anomaly IS the new normal)
 
+**Independence check (denial prompting):** After generating H1, state its core mechanism in one sentence. Then generate H2 under the constraint: "Explain the observation WITHOUT {H1's mechanism}." Repeat for H3. If you can't generate a hypothesis without H1's mechanism, note it — that's evidence H1 is strongly supported. Hypotheses that share a core mechanism aren't truly competing; they're variations. This prevents the common failure where H2 and H3 are weaker versions of H1 in different dress.
+
 **Assign prior probabilities** from base rates or domain knowledge. Must sum to 1.0.
 
 ## Phase 3: Predict Data Footprints (BEFORE querying)

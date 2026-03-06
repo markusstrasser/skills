@@ -346,6 +346,28 @@ Output as a flat list.
 " > "$REVIEW_DIR/flash-audit.md" 2>&1
 ```
 
+### Step 3b: Denial Round (Brainstorming Mode Only)
+
+After receiving both brainstorm outputs, identify the 2-3 dominant paradigms across both responses. Re-query Gemini (cheaper) with the following to catch Artificial Hivemind convergence — both models often propose the same paradigms despite generating independently:
+
+```bash
+llmx chat -m $GEMINI_MODEL \
+  -f "$REVIEW_DIR/gemini-brainstorm.md" \
+  -f "$REVIEW_DIR/gpt-brainstorm.md" \
+  $GEMINI_FALLBACK --timeout 300 "
+<system>
+You are generating COUNTER-proposals. The ideas below have already been proposed. Your job is to find what was MISSED.
+</system>
+
+The following paradigms were proposed by two independent models:
+[List the 2-3 dominant paradigms from both outputs]
+
+Now propose 3 approaches that do NOT use any of these paradigms. What fundamentally different angle has been missed? Think from adjacent domains, adversarial perspectives, or radical simplification.
+" > "$REVIEW_DIR/denial-round.md" 2>&1
+```
+
+Merge denial-round results into Step 5 extraction alongside the main brainstorm outputs.
+
 ### Step 4: Fact-Check Outputs (MANDATORY)
 
 **Both models hallucinate. Never adopt a recommendation without verification.**

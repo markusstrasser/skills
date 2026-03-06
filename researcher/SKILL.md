@@ -152,6 +152,8 @@ Output: "What I already know" inventory. Flag contradictions with later findings
 
 **Mandatory:** Name 2+ independent search axes before searching. Different axes reach different literatures.
 
+**Divergent expansion (before selecting axes):** Brainstorm 8-10 different angles for this question — adjacent domains, adversarial framings, unconventional entry points, what a critic would investigate, what a practitioner in a different field would search for. Push for breadth over plausibility. THEN select the 2-3 most promising as your search axes. The point: if you name axes directly, you'll pick the same 2 axes every agent would pick (the "Artificial Hivemind" effect — LLMs converge on the same outputs within and across models). The brainstorm-then-select step defeats this.
+
 Example axes:
 - **Academic-anchored:** concept → literature → state of the art
 - **Mechanism-anchored:** pathway → modulators → evidence

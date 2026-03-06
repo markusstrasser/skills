@@ -28,6 +28,7 @@ Analyze session transcripts for behavioral patterns that no linter or static ana
 5. **Advisory rule violations** — Things CLAUDE.md/rules say to do but the agent didn't
 6. **Missing disconfirmation** — Research without contradictory evidence search
 7. **Source grading gaps** — Claims in research files without provenance tags
+8. **First-answer convergence** — Agent received a design/architecture/strategy/research task and implemented the first approach without generating alternatives. Signals: no exploration of different approaches, task clearly involves a design choice, went from problem statement to implementation in <3 turns. Not every task needs divergence — flag only when the task involved a genuine design space.
 
 ## What This Does NOT Detect
 Dead code (use vulture/ast), style issues (use ruff/eslint), type errors (use mypy/tsc). Those are static analysis problems, not behavioral ones.
