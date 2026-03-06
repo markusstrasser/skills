@@ -62,6 +62,24 @@ def ancestors(node: str, parents: dict[str, set[str]]) -> set[str]:
     return visited
 
 
+def has_cycle(children: dict[str, set[str]], nodes: set[str]) -> bool:
+    """Detect cycles via Kahn's algorithm (topological sort). Returns True if cycle exists."""
+    in_degree: dict[str, int] = {n: 0 for n in nodes}
+    for src in children:
+        for dst in children[src]:
+            in_degree[dst] = in_degree.get(dst, 0) + 1
+    queue = deque(n for n, d in in_degree.items() if d == 0)
+    count = 0
+    while queue:
+        n = queue.popleft()
+        count += 1
+        for child in children.get(n, set()):
+            in_degree[child] -= 1
+            if in_degree[child] == 0:
+                queue.append(child)
+    return count != len(nodes)
+
+
 # ---------------------------------------------------------------------------
 # Path enumeration (DFS, bounded by node count — fine for small DAGs)
 # ---------------------------------------------------------------------------
@@ -81,8 +99,11 @@ def _all_directed_paths(src: str, dst: str, children: dict[str, set[str]]) -> li
     return results
 
 
+MAX_PATHS = 200
+
+
 def _all_undirected_paths(src: str, dst: str, children: dict[str, set[str]],
-                          parents: dict[str, set[str]], max_paths: int = 200) -> list[list[str]]:
+                          parents: dict[str, set[str]], max_paths: int = MAX_PATHS) -> list[list[str]]:
     """All undirected paths (ignoring arrow direction) between src and dst.
 
     Each path is a list of nodes. We also track edge directions so callers
@@ -154,17 +175,6 @@ def _is_path_blocked(path: list[str], conditioned: set[str],
     return False
 
 
-def _is_backdoor_path(path: list[str], treatment: str, children: dict[str, set[str]]) -> bool:
-    """A backdoor path has an arrow INTO treatment at the first step."""
-    if len(path) < 2:
-        return False
-    second = path[1]
-    # It's a backdoor path if treatment is NOT a parent of the second node
-    # i.e., the edge goes second -> treatment (arrow into treatment)
-    return treatment not in children.get(path[0], set()) or \
-           (second in children.get(path[0], set())) is False
-
-
 def classify_paths(treatment: str, outcome: str,
                    children: dict[str, set[str]], parents: dict[str, set[str]]):
     """Classify all paths between treatment and outcome."""
@@ -198,24 +208,47 @@ def validate(spec: dict[str, Any]) -> dict[str, Any]:
     outcome = spec["outcome"]
     edges = spec["edges"]
     proposed = set(spec.get("proposed_controls", []))
+    unobserved = set(spec.get("unobserved", []))
 
     children, parents, nodes = build_graph(edges)
+
+    # Bug 2: Acyclicity check
+    if has_cycle(children, nodes):
+        return {
+            "valid": False,
+            "error": "Graph contains a cycle. Input must be a DAG (directed acyclic graph).",
+            "problems": [],
+            "paths": {},
+        }
+
     treat_desc = descendants(treatment, children)
-    treat_anc = ancestors(treatment, parents)
+    outcome_desc = descendants(outcome, children)
 
     # Classify paths
     causal_paths, backdoor_paths = classify_paths(treatment, outcome, children, parents)
+    path_truncated = len(_all_undirected_paths(treatment, outcome, children, parents)) >= MAX_PATHS
 
     # Identify nodes on causal paths (mediators)
     mediator_nodes: set[str] = set()
     for p in causal_paths:
         mediator_nodes.update(p[1:-1])  # exclude treatment and outcome
 
-    # Classify each proposed control
+    # Bug 1 fix: Two-pass classification. First pass identifies clear violations.
+    # Second pass checks collider opening for the full remaining set.
     problems: list[dict[str, str]] = []
-    clean_controls: set[str] = set()
+    remaining: set[str] = set()  # controls that survive first pass
 
-    for var in proposed:
+    for var in sorted(proposed):  # sorted for determinism
+        # Bug 3: Variable not in DAG
+        if var not in nodes:
+            problems.append({
+                "variable": var,
+                "issue": "not_in_dag",
+                "explanation": f"{var} is not present in the DAG. Cannot assess its causal role.",
+                "severity": "ERROR",
+            })
+            continue
+
         if var == treatment or var == outcome:
             problems.append({
                 "variable": var,
@@ -225,8 +258,31 @@ def validate(spec: dict[str, Any]) -> dict[str, Any]:
             })
             continue
 
+        # Bug 6: Unobserved nodes cannot be in adjustment set
+        if var in unobserved:
+            problems.append({
+                "variable": var,
+                "issue": "unobserved",
+                "explanation": f"{var} is unobserved and cannot be conditioned on.",
+                "severity": "ERROR",
+            })
+            continue
+
+        # Bug 4: Descendants of outcome (check before treatment descendants —
+        # a node downstream of Y via X->Y->D is more specifically an outcome issue)
+        if var in outcome_desc:
+            problems.append({
+                "variable": var,
+                "issue": "descendant_of_outcome",
+                "explanation": (
+                    f"{var} is a descendant of {outcome}. "
+                    f"Conditioning on it can induce bias."
+                ),
+                "severity": "ERROR",
+            })
+            continue
+
         if var in treat_desc:
-            # Check if it's a mediator specifically
             if var in mediator_nodes:
                 problems.append({
                     "variable": var,
@@ -250,38 +306,34 @@ def validate(spec: dict[str, Any]) -> dict[str, Any]:
                 })
             continue
 
-        # Check if conditioning on this variable opens a collider path.
-        # A collider path is naturally blocked. Conditioning on the collider
-        # (or its descendant) opens it, creating a spurious association.
-        is_collider_problem = False
-        all_paths = _all_undirected_paths(treatment, outcome, children, parents)
-        for p in all_paths:
-            if var not in p:
+        remaining.add(var)
+
+    # Second pass: check if the full remaining set opens any collider paths
+    all_paths = _all_undirected_paths(treatment, outcome, children, parents)
+    collider_victims: set[str] = set()
+    for p in all_paths:
+        for i in range(1, len(p) - 1):
+            node = p[i]
+            if node not in remaining:
                 continue
-            idx = p.index(var)
-            if not _is_collider(p, idx, children):
+            if not _is_collider(p, i, children):
                 continue
-            # Path is blocked without conditioning on var (collider is unconditioned).
-            # Check: does conditioning on var (plus other clean controls) unblock it?
-            without_var = clean_controls - {var}
-            with_var = clean_controls | {var}
-            blocked_without = _is_path_blocked(p, without_var, children)
-            blocked_with = _is_path_blocked(p, with_var, children)
+            # Would conditioning on remaining open this previously-blocked path?
+            blocked_without = _is_path_blocked(p, remaining - {node}, children)
+            blocked_with = _is_path_blocked(p, remaining, children)
             if blocked_without and not blocked_with:
-                is_collider_problem = True
+                collider_victims.add(node)
                 problems.append({
-                    "variable": var,
+                    "variable": node,
                     "issue": "collider",
                     "explanation": (
-                        f"{var} is a collider on path {format_path(p, children)}. "
+                        f"{node} is a collider on path {format_path(p, children)}. "
                         f"Conditioning on it opens a spurious association."
                     ),
                     "severity": "ERROR",
                 })
-                break
 
-        if not is_collider_problem:
-            clean_controls.add(var)
+    clean_controls = remaining - collider_victims
 
     # Check if clean controls block all backdoor paths
     blocked_paths: list[str] = []
@@ -292,9 +344,19 @@ def validate(spec: dict[str, Any]) -> dict[str, Any]:
         else:
             unblocked_paths.append(format_path(p, children))
 
+    # Bug 6: Check for unidentifiable paths (only blockable via unobserved nodes)
+    unidentifiable_paths: list[str] = []
+    if unobserved and unblocked_paths:
+        for p in backdoor_paths:
+            if _is_path_blocked(p, clean_controls, children):
+                continue
+            # Try blocking with all nodes including unobserved
+            all_possible = (clean_controls | unobserved) - {treatment, outcome}
+            if _is_path_blocked(p, all_possible, children):
+                unidentifiable_paths.append(format_path(p, children))
+
     # Also check: does the proposed set (including bad controls) open any paths?
     opened_paths: list[str] = []
-    all_paths = _all_undirected_paths(treatment, outcome, children, parents)
     for p in all_paths:
         if tuple(p) in {tuple(cp) for cp in causal_paths}:
             continue
@@ -308,7 +370,7 @@ def validate(spec: dict[str, Any]) -> dict[str, Any]:
     suggested = clean_controls.copy()
     # If there are unblocked backdoor paths, try adding available pre-treatment nodes
     if unblocked_paths:
-        for var in nodes - {treatment, outcome} - treat_desc:
+        for var in sorted(nodes - {treatment, outcome} - treat_desc - unobserved):
             test_set = suggested | {var}
             all_blocked = all(
                 _is_path_blocked(p, test_set, children) for p in backdoor_paths
@@ -331,6 +393,13 @@ def validate(spec: dict[str, Any]) -> dict[str, Any]:
         result["paths"]["unblocked"] = unblocked_paths
     if opened_paths:
         result["paths"]["opened_by_conditioning"] = opened_paths
+    if unidentifiable_paths:
+        result["paths"]["unidentifiable"] = unidentifiable_paths
+        result["unidentifiable"] = True
+
+    # Bug 7: Warn on path truncation
+    if path_truncated:
+        result["warning"] = "Path enumeration truncated at 200. Results may be incomplete for dense graphs."
 
     return result
 
@@ -358,6 +427,7 @@ def main():
     parser.add_argument("--outcome", "-o", help="Outcome variable")
     parser.add_argument("--edges", "-e", help="Edges as 'A->B,B->C,...'")
     parser.add_argument("--controls", "-c", help="Proposed controls as 'X,Y,...'")
+    parser.add_argument("--unobserved", "-u", help="Unobserved nodes as 'U1,U2,...'")
     parser.add_argument("--test", action="store_true", help="Run built-in test cases")
     args = parser.parse_args()
 
@@ -372,6 +442,8 @@ def main():
             "edges": parse_edge_string(args.edges),
             "proposed_controls": [c.strip() for c in args.controls.split(",")] if args.controls else [],
         }
+        if args.unobserved:
+            spec["unobserved"] = [u.strip() for u in args.unobserved.split(",")]
     else:
         raw = sys.stdin.read().strip()
         if not raw:
@@ -394,13 +466,26 @@ def run_tests():
     failed = 0
 
     def check(name: str, spec: dict, expect_valid: bool,
-              expect_issues: list[str] | None = None):
+              expect_issues: list[str] | None = None,
+              expect_error: bool = False,
+              expect_unidentifiable: bool = False,
+              expect_warning: str | None = None):
         nonlocal passed, failed
         result = validate(spec)
-        ok = result["valid"] == expect_valid
+
+        ok = True
+        if expect_error:
+            ok = ok and "error" in result
+        else:
+            ok = ok and result["valid"] == expect_valid
         if expect_issues:
             found_issues = {p["issue"] for p in result["problems"]}
             ok = ok and all(i in found_issues for i in expect_issues)
+        if expect_unidentifiable:
+            ok = ok and result.get("unidentifiable", False)
+        if expect_warning:
+            ok = ok and expect_warning in result.get("warning", "")
+
         status = "PASS" if ok else "FAIL"
         if not ok:
             failed += 1
@@ -408,9 +493,8 @@ def run_tests():
             passed += 1
         print(f"  [{status}] {name}")
         if not ok:
-            print(f"         expected valid={expect_valid}, got valid={result['valid']}")
-            print(f"         problems: {json.dumps(result['problems'], indent=4)}")
-            print(f"         paths: {json.dumps(result['paths'], indent=4)}")
+            print(f"         expected valid={expect_valid}, error={expect_error}")
+            print(f"         result: {json.dumps(result, indent=4)}")
 
     print("Running DAG validation tests...\n")
 
@@ -517,6 +601,131 @@ def run_tests():
         },
         expect_valid=False,
     )
+
+    # --- New tests ---
+
+    # 7. Acyclicity rejection
+    check(
+        "Cycle detection (A->B->C->A)",
+        {
+            "treatment": "A",
+            "outcome": "C",
+            "edges": [
+                ["A", "B"],
+                ["B", "C"],
+                ["C", "A"],
+            ],
+            "proposed_controls": [],
+        },
+        expect_valid=False,
+        expect_error=True,
+    )
+
+    # 8. Unknown variable flagging
+    check(
+        "Unknown variable not in DAG",
+        {
+            "treatment": "X",
+            "outcome": "Y",
+            "edges": [
+                ["X", "Y"],
+                ["C", "X"],
+                ["C", "Y"],
+            ],
+            "proposed_controls": ["C", "GHOST"],
+        },
+        expect_valid=False,
+        expect_issues=["not_in_dag"],
+    )
+
+    # 9. Outcome descendant flagging
+    check(
+        "Descendant of outcome flagged",
+        {
+            "treatment": "X",
+            "outcome": "Y",
+            "edges": [
+                ["X", "Y"],
+                ["Y", "D"],
+                ["C", "X"],
+                ["C", "Y"],
+            ],
+            "proposed_controls": ["C", "D"],
+        },
+        expect_valid=False,
+        expect_issues=["descendant_of_outcome"],
+    )
+
+    # 10. Unobserved node blocking
+    check(
+        "Unobserved confounder (unidentifiable)",
+        {
+            "treatment": "X",
+            "outcome": "Y",
+            "edges": [
+                ["X", "Y"],
+                ["U", "X"],
+                ["U", "Y"],
+            ],
+            "unobserved": ["U"],
+            "proposed_controls": [],
+        },
+        expect_valid=False,
+        expect_unidentifiable=True,
+    )
+
+    # 11. Unobserved node proposed as control
+    check(
+        "Unobserved node proposed as control",
+        {
+            "treatment": "X",
+            "outcome": "Y",
+            "edges": [
+                ["X", "Y"],
+                ["U", "X"],
+                ["U", "Y"],
+            ],
+            "unobserved": ["U"],
+            "proposed_controls": ["U"],
+        },
+        expect_valid=False,
+        expect_issues=["unobserved"],
+    )
+
+    # 12. Order-independence: collider detection same with sorted vs reverse-sorted controls
+    # X <- A -> C <- B -> Y with proposed {A, C}
+    # A is a valid control (blocks A->X), C is a collider. Must get same answer regardless of order.
+    spec_collider_order = {
+        "treatment": "X",
+        "outcome": "Y",
+        "edges": [
+            ["A", "X"],
+            ["A", "C"],
+            ["B", "C"],
+            ["B", "Y"],
+            ["X", "Y"],
+        ],
+        "proposed_controls": ["A", "C"],
+    }
+    result_sorted = validate(spec_collider_order)
+
+    spec_collider_order_rev = dict(spec_collider_order)
+    spec_collider_order_rev["proposed_controls"] = ["C", "A"]
+    result_rev = validate(spec_collider_order_rev)
+
+    order_ok = (
+        result_sorted["valid"] == result_rev["valid"]
+        and set(v["variable"] for v in result_sorted["problems"])
+        == set(v["variable"] for v in result_rev["problems"])
+    )
+    if order_ok:
+        passed += 1
+        print("  [PASS] Order-independence (sorted vs reverse-sorted controls)")
+    else:
+        failed += 1
+        print("  [FAIL] Order-independence (sorted vs reverse-sorted controls)")
+        print(f"         sorted result:  valid={result_sorted['valid']}, problems={[p['variable'] for p in result_sorted['problems']]}")
+        print(f"         reverse result: valid={result_rev['valid']}, problems={[p['variable'] for p in result_rev['problems']]}")
 
     print(f"\n{passed} passed, {failed} failed out of {passed + failed}")
     sys.exit(1 if failed else 0)
