@@ -42,7 +42,7 @@ Classifications:
 - **Outcome (Y):** What you're measuring the effect on.
 - **Pre-treatment confounder (C):** Causes both X and Y. Temporally before X. These are the variables you SHOULD control for.
 - **Mediator (M):** On the causal path X -> M -> Y. Do NOT control for unless you are explicitly decomposing direct vs indirect effects.
-- **Descendant of treatment (D):** Caused by X. Do NOT control for — creates collider bias.
+- **Descendant of treatment (D):** Caused by X. Do NOT control for total-effect estimation. Two failure modes: (1) **over-control** — blocks part of the causal path, attenuating the effect; (2) **collider bias** — if D also has other parents affecting Y, conditioning on D opens a spurious path. Many descendants trigger both.
 - **Descendant of outcome:** Caused by Y. Do NOT control for.
 - **Instrument (Z):** Causes X but has no direct effect on Y. Useful for IV estimation, not for OLS controls.
 - **Collider:** Caused by two or more variables. Conditioning on it opens a spurious path between its parents.
@@ -56,8 +56,7 @@ Represent the causal structure using text notation. Every arrow is a substantive
 ```
 Sex -> Test_Score
 Sex -> Items_Complete -> Test_Score   (Items_Complete is a DESCENDANT of treatment!)
-Education -> Sex                      [no — pre-treatment, direction is Education -> Test_Score]
-Education -> Test_Score
+Education -> Test_Score               (pre-treatment; Sex cannot cause Education for biological sex)
 Room_Conditions -> Test_Score         (nuisance, not on causal path from X to Y)
 ```
 
@@ -110,7 +109,7 @@ Flag anything that matches:
 
 | Pattern | Flag | What goes wrong |
 |---------|------|-----------------|
-| Descendant of X used as control | **COLLIDER BIAS** | Conditioning on a descendant of treatment induces spurious association between X and other causes of the descendant. Can reverse the sign of the true effect. |
+| Descendant of X used as control | **OVER-CONTROL / COLLIDER BIAS** | Over-control: blocks part of the causal effect (attenuates estimate). Collider bias: if the descendant has other parents affecting Y, conditioning opens a spurious path. Can reverse the sign of the true effect. |
 | Mediator used as control | **OVER-CONTROL** | Blocks the causal path X -> M -> Y. You get the direct effect minus the mediated effect, not the total causal effect. |
 | Variable not in DAG | **UNJUSTIFIED** | What is the causal story? If you can't place it in the DAG, you can't justify including it. |
 | Collider being conditioned on | **SPURIOUS PATH OPENED** | Conditioning on a collider opens a non-causal path between its parents. |
