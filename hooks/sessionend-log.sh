@@ -114,6 +114,11 @@ try:
     os.unlink(f"/tmp/claude-agent-{ppid}")
 except FileNotFoundError:
     pass
+for p in (f"/tmp/claude-last-notify-{ppid}", f"/tmp/claude-cost-over-{ppid}"):
+    try:
+        os.unlink(p)
+    except FileNotFoundError:
+        pass
 '
 
 exit 0
