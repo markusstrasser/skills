@@ -31,7 +31,18 @@ argument-hint: '[model name or issue description]'
 | Kimi K2 (legacy) | `kimi-k2-thinking` | Use `--use-old` flag |
 | Claude Sonnet 4.6 | `claude-sonnet-4-6` | Hyphens, not dots |
 
-**404 traps:** `gemini-3-flash` (missing `-preview`), `gemini-flash-3` (wrong order), `gpt-5.3` (needs `-chat-latest` suffix), `gpt-5.3-instant` (wrong — use `gpt-5.3-chat-latest`).
+**404 traps:** `gemini-3-flash` (missing `-preview`), `gemini-flash-3` (wrong order), `gpt-5.3` (needs `-chat-latest` suffix), `gpt-5.3-instant` (NOT in litellm model map as of v1.82 — use `gpt-5.3-chat-latest` or prefix as `openai/gpt-5.3-instant`).
+
+## Token Limits (litellm 1.82)
+
+| Model | Max Input | Max Output | Notes |
+|-------|----------|-----------|-------|
+| GPT-5.4 | 1,050,000 | 128,000 | |
+| GPT-5.2 | 272,000 | 128,000 | |
+| GPT-5.3 Chat | 128,000 | 16,384 | Smallest output cap — watch for truncation |
+| o4-mini | 200,000 | 100,000 | |
+| Gemini 3.1 Pro | 1,048,576 | 65,536 | Server default is 8K — always pass `--max-tokens 65536` |
+| Gemini 3 Flash | 1,048,576 | 65,535 | |
 
 ## Error Handling (v0.5.0+)
 
