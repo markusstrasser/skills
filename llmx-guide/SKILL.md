@@ -72,9 +72,9 @@ elif result.returncode == 4:  # timeout
 
 ### 1. GPT-5.4 Timeouts
 
-GPT-5.4 (and 5.2) with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning — proxies and HTTP clients kill idle connections. Default 120s is too low.
+GPT-5.4 (and 5.2) with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning — proxies and HTTP clients kill idle connections. Default is 300s (since llmx 0.5.2).
 
-**Max timeout: 600s** (validated at CLI level, 1-600 range). No auto-scaling exists — set explicitly.
+**Max timeout: 900s** (validated at CLI level, 1-900 range). For review dispatches use `--timeout 600`.
 
 **Streaming avoids most timeouts** because `--stream` sends keepalive chunks during reasoning.
 
