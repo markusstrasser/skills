@@ -70,21 +70,30 @@ Not all tools exist in every project. Use what's available. The agent will error
 
 ### Search Routing
 
-- **Factual lookup:** Try `perplexity_ask` first (one call, cited). Fall back to Exa search + WebFetch.
+- **Factual lookup:** Exa search + WebFetch, or `verify_claim` (Exa /answer, cached 7d).
 - **Semantic discovery:** Exa remains primary (neural search, find_similar, categories).
 - **Entity enrichment:** `web_search_advanced_exa` with `type: "deep"` + `outputSchema`. Offloads extraction to Exa's agents — structured JSON with per-field citations comes back directly. No post-hoc LLM extraction needed.
 - **High-recall queries:** `web_search_advanced_exa` with `type: "deep"` + `additionalQueries`. Generate 2-3 domain-specific query variations from your context. Exa searches all in parallel, merges + ranks.
 - **News/events:** `brave_news_search` for last 24h-7d. Exa with date filter for older.
-- **Triangulation:** For high-stakes claims, use Exa + Brave (confirmed independent indexes). Perplexity is NOT confirmed independent — use only as tiebreaker.
+- **Triangulation:** For high-stakes claims, use Exa + Brave (confirmed independent indexes). Perplexity is NOT confirmed independent — don't use for triangulation.
 - **Structured extraction from URLs:** `firecrawl_scrape` or `firecrawl_extract` for specific URLs with JSON schema.
-- **Rate-limited:** If Exa returns 429, fall back to `brave_web_search` or `perplexity_search`.
+- **Rate-limited:** If Exa returns 429, fall back to `brave_web_search`.
+
+### Perplexity — expensive, use selectively ($0.14/call avg)
+
+Perplexity Sonar is ~5x more expensive per query than Exa+WebFetch. Don't use for breadth-first search or routine lookups. Use only when it's the decisive tool:
+
+- **`perplexity_reason`:** Complex "why" questions where you need reasoning + grounded evidence in one call. Not for simple facts.
+- **`perplexity_research`:** Deep topic surveys where Exa Research isn't available or you need a second opinion on a complex synthesis. Slow (~30s+), expensive.
+- **`perplexity_ask`:** Only when you need a quick synthesized answer AND don't want to spend 3 tool calls on search→fetch→synthesize. Not the default for factual lookups — use Exa/Brave first.
+- **`perplexity_search`:** Don't use. Exa/Brave are better raw search engines with confirmed independent indexes.
 
 ### Tool-Class Routing (empirical — EBF3 benchmark, 2026-03-03)
 
 Benchmarked academic-only vs websearch-only vs combined on a real genomics VUS question (N=1, Sonnet, 15 turns each). Three empirical findings that change tool selection:
 
 **1. Websearch first for structured database lookups.**
-Use Exa/Brave/Perplexity to query UniProt, gnomAD, MaveDB, ClinVar, DECIPHER — these are web databases, not literature. Academic tools (S2/PubMed) return papers *about* these databases, not the data itself. In the benchmark, websearch found the exact UniProt domain boundary (Pro263 = IPT/TIG N-terminus) that academic missed entirely because it inferred from EBF1 homology instead of querying EBF3 directly.
+Use Exa/Brave to query UniProt, gnomAD, MaveDB, ClinVar, DECIPHER — these are web databases, not literature. Academic tools (S2/PubMed) return papers *about* these databases, not the data itself. In the benchmark, websearch found the exact UniProt domain boundary (Pro263 = IPT/TIG N-terminus) that academic missed entirely because it inferred from EBF1 homology instead of querying EBF3 directly.
 
 **2. Academic tools for citation-verified literature.**
 S2/PubMed produced zero hallucinated citations. Websearch hallucinated a PDB ID (3MUJ doesn't exist), two year errors, and a self-contradiction. Combined hallucinated a journal+page (real author, wrong journal). The failure pattern: websearch tools synthesize from training data + web snippets and confabulate citation details. **Never trust a PMID or PDB ID from websearch without verification via S2 or the actual database.**
