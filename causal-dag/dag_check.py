@@ -948,7 +948,398 @@ def run_tests():
         print(f"         sorted result:  valid={result_sorted['valid']}, problems={[p['variable'] for p in result_sorted['problems']]}")
         print(f"         reverse result: valid={result_rev['valid']}, problems={[p['variable'] for p in result_rev['problems']]}")
 
-    # 13. Strict mode rejects old-format edges
+    # --- Phase 4: Expanded test suite (50+ cases) ---
+
+    # 16-20. Multiple minimal adjustment sets
+    # Two independent confounders each create their own backdoor path — both must be controlled
+    check(
+        "Two independent confounders — controlling only one is insufficient",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"], ["C1", "X"], ["C1", "Y"], ["C2", "X"], ["C2", "Y"]],
+            "proposed_controls": ["C1"],
+        },
+        expect_valid=False,
+    )
+    check(
+        "Two independent confounders — controlling both is valid",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"], ["C1", "X"], ["C1", "Y"], ["C2", "X"], ["C2", "Y"]],
+            "proposed_controls": ["C1", "C2"],
+        },
+        expect_valid=True,
+    )
+    # Multiple minimal sets: C1->C2->X, C1->Y. Either {C1} or {C2} blocks the single backdoor
+    check(
+        "Multiple minimal sets — controlling upstream C1 sufficient",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"], ["C1", "C2"], ["C2", "X"], ["C1", "Y"]],
+            "proposed_controls": ["C1"],
+        },
+        expect_valid=True,
+    )
+    check(
+        "Multiple minimal sets — controlling downstream C2 also sufficient",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"], ["C1", "C2"], ["C2", "X"], ["C1", "Y"]],
+            "proposed_controls": ["C2"],
+        },
+        expect_valid=True,
+    )
+    check(
+        "Three independent confounders — all must be controlled",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [
+                ["X", "Y"], ["C1", "X"], ["C1", "Y"],
+                ["C2", "X"], ["C2", "Y"], ["C3", "X"], ["C3", "Y"],
+            ],
+            "proposed_controls": ["C1", "C2", "C3"],
+        },
+        expect_valid=True,
+    )
+    check(
+        "Chain confounders: A->B->X, A->Y (must control A, not B)",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"], ["A", "B"], ["B", "X"], ["A", "Y"]],
+            "proposed_controls": ["A"],
+        },
+        expect_valid=True,
+    )
+
+    # 21-25. Dense graphs (>10 nodes)
+    check(
+        "Dense graph — 12 nodes, proper adjustment",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [
+                ["X", "Y"], ["C1", "X"], ["C1", "Y"],
+                ["C2", "X"], ["C2", "Y"], ["C3", "C1"], ["C3", "C2"],
+                ["N1", "N2"], ["N2", "N3"], ["N3", "N4"],
+                ["N4", "Y"], ["N5", "X"], ["N5", "N1"],
+            ],
+            "proposed_controls": ["C1", "C2", "N5"],
+        },
+        expect_valid=True,
+    )
+    check(
+        "Dense graph — mediator in long chain",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [
+                ["X", "M1"], ["M1", "M2"], ["M2", "M3"], ["M3", "Y"],
+                ["C", "X"], ["C", "Y"],
+            ],
+            "proposed_controls": ["C", "M1"],
+        },
+        expect_valid=False,
+        expect_issues=["mediator"],
+    )
+    check(
+        "Wide graph — 10 independent confounders",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"]] + [[f"C{i}", "X"] for i in range(10)]
+                     + [[f"C{i}", "Y"] for i in range(10)],
+            "proposed_controls": [f"C{i}" for i in range(10)],
+        },
+        expect_valid=True,
+    )
+    check(
+        "Wide graph — missing one confounder",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"]] + [[f"C{i}", "X"] for i in range(10)]
+                     + [[f"C{i}", "Y"] for i in range(10)],
+            "proposed_controls": [f"C{i}" for i in range(9)],  # missing C9
+        },
+        expect_valid=False,
+    )
+    check(
+        "Diamond graph: C->X, C->M, M->Y, X->Y",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["C", "X"], ["C", "M"], ["M", "Y"], ["X", "Y"]],
+            "proposed_controls": ["C"],
+        },
+        expect_valid=True,
+    )
+
+    # 26-28. M-bias / butterfly
+    check(
+        "M-bias: U1->X, U1->Z, U2->Z, U2->Y — controlling Z is wrong",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"], ["U1", "X"], ["U1", "Z"], ["U2", "Z"], ["U2", "Y"]],
+            "proposed_controls": ["Z"],
+        },
+        expect_valid=False,
+        expect_issues=["collider"],
+    )
+    check(
+        "M-bias: not controlling Z is correct",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"], ["U1", "X"], ["U1", "Z"], ["U2", "Z"], ["U2", "Y"]],
+            "proposed_controls": [],
+        },
+        expect_valid=True,
+    )
+    check(
+        "Butterfly: two M-bias structures sharing treatment",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [
+                ["X", "Y"],
+                ["U1", "X"], ["U1", "Z1"], ["U2", "Z1"], ["U2", "Y"],
+                ["U3", "X"], ["U3", "Z2"], ["U4", "Z2"], ["U4", "Y"],
+            ],
+            "proposed_controls": [],
+        },
+        expect_valid=True,
+    )
+
+    # 29-31. Mediator decomposition
+    check(
+        "Direct + indirect: controlling M gives direct effect only",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "M"], ["M", "Y"], ["X", "Y"], ["C", "X"], ["C", "Y"]],
+            "proposed_controls": ["C", "M"],
+        },
+        expect_valid=False,
+        expect_issues=["mediator"],
+    )
+    check(
+        "Parallel mediators: X->M1->Y, X->M2->Y",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "M1"], ["M1", "Y"], ["X", "M2"], ["M2", "Y"],
+                       ["C", "X"], ["C", "Y"]],
+            "proposed_controls": ["C"],
+        },
+        expect_valid=True,
+    )
+    check(
+        "Serial mediators: X->M1->M2->Y",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "M1"], ["M1", "M2"], ["M2", "Y"], ["C", "X"], ["C", "Y"]],
+            "proposed_controls": ["C", "M2"],
+        },
+        expect_valid=False,
+        expect_issues=["mediator"],
+    )
+
+    # 32-34. Instrumental variable structures
+    check(
+        "IV: Z->X->Y, controlling Z is harmless but unnecessary",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["Z", "X"], ["X", "Y"]],
+            "proposed_controls": ["Z"],
+        },
+        expect_valid=True,
+    )
+    check(
+        "IV with confounder: Z->X, X->Y, U->X, U->Y",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["Z", "X"], ["X", "Y"], ["U", "X"], ["U", "Y"]],
+            "unobserved": ["U"],
+            "proposed_controls": [],
+        },
+        expect_valid=False,
+        expect_unidentifiable=True,
+    )
+    check(
+        "Invalid IV: Z->X, Z->Y (violates exclusion)",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["Z", "X"], ["Z", "Y"], ["X", "Y"]],
+            "proposed_controls": ["Z"],
+        },
+        expect_valid=True,  # Z is a valid confounder control here
+    )
+
+    # 35-38. Latent confounders
+    check(
+        "Two latent confounders — fully unidentifiable",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"], ["U1", "X"], ["U1", "Y"], ["U2", "X"], ["U2", "Y"]],
+            "unobserved": ["U1", "U2"],
+            "proposed_controls": [],
+        },
+        expect_valid=False,
+        expect_unidentifiable=True,
+    )
+    check(
+        "One latent, one observed — partial identification",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"], ["U", "X"], ["U", "Y"], ["C", "X"], ["C", "Y"]],
+            "unobserved": ["U"],
+            "proposed_controls": ["C"],
+        },
+        expect_valid=False,
+        expect_unidentifiable=True,
+    )
+    check(
+        "Latent confounder with proxy: U->P, U->X, U->Y",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"], ["U", "X"], ["U", "Y"], ["U", "P"]],
+            "unobserved": ["U"],
+            "proposed_controls": ["P"],
+        },
+        expect_valid=False,  # P doesn't block U->X or U->Y
+    )
+    check(
+        "Latent on non-backdoor path — not a problem",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"], ["X", "M"], ["U", "M"], ["U", "D"]],
+            "unobserved": ["U"],
+            "proposed_controls": [],
+        },
+        expect_valid=True,
+    )
+
+    # 39-49. Edge cases
+    check(
+        "Single edge X->Y, no controls",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"]],
+            "proposed_controls": [],
+        },
+        expect_valid=True,
+    )
+    check(
+        "Treatment equals outcome",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"]],
+            "proposed_controls": ["X"],
+        },
+        expect_valid=False,
+        expect_issues=["treatment_or_outcome"],
+    )
+    check(
+        "Outcome proposed as control",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"]],
+            "proposed_controls": ["Y"],
+        },
+        expect_valid=False,
+        expect_issues=["treatment_or_outcome"],
+    )
+    check(
+        "Self-loop detection",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"], ["X", "X"]],
+            "proposed_controls": [],
+        },
+        expect_valid=False,
+        expect_error=True,
+    )
+    check(
+        "Disconnected confounder (no path to treatment or outcome)",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "Y"], ["A", "B"]],
+            "proposed_controls": ["A"],
+        },
+        expect_valid=True,  # A doesn't cause problems, just unnecessary
+    )
+    check(
+        "Long chain: X->A->B->C->D->Y with confounder",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [
+                ["X", "A"], ["A", "B"], ["B", "C"], ["C", "D"], ["D", "Y"],
+                ["E", "X"], ["E", "Y"],
+            ],
+            "proposed_controls": ["E"],
+        },
+        expect_valid=True,
+    )
+    check(
+        "Long chain — controlling intermediate blocks causal path",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [
+                ["X", "A"], ["A", "B"], ["B", "C"], ["C", "D"], ["D", "Y"],
+                ["E", "X"], ["E", "Y"],
+            ],
+            "proposed_controls": ["E", "B"],
+        },
+        expect_valid=False,
+        expect_issues=["mediator"],
+    )
+    check(
+        "Multiple treatments sharing confounder",
+        {
+            "treatment": "X1", "outcome": "Y",
+            "edges": [["X1", "Y"], ["X2", "Y"], ["C", "X1"], ["C", "X2"], ["C", "Y"]],
+            "proposed_controls": ["C"],
+        },
+        expect_valid=True,
+    )
+    check(
+        "Descendant of treatment that's also ancestor of outcome",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["X", "D"], ["D", "Y"]],
+            "proposed_controls": ["D"],
+        },
+        expect_valid=False,
+        expect_issues=["mediator"],
+    )
+    check(
+        "Fork structure: C->X, C->Y (pure confounding, no direct effect)",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["C", "X"], ["C", "Y"]],
+            "proposed_controls": ["C"],
+        },
+        expect_valid=True,
+    )
+    check(
+        "Fork structure: not controlling C leaves path open",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [["C", "X"], ["C", "Y"]],
+            "proposed_controls": [],
+        },
+        expect_valid=False,
+    )
+
+    # 50. New-format edges work correctly for validation
+    check(
+        "New-format edges with justifications",
+        {
+            "treatment": "X", "outcome": "Y",
+            "edges": [
+                {"from": "X", "to": "Y", "temporal_justification": "Treatment precedes outcome"},
+                {"from": "C", "to": "X", "temporal_justification": "C measured before treatment"},
+                {"from": "C", "to": "Y", "temporal_justification": "C affects outcome"},
+            ],
+            "proposed_controls": ["C"],
+        },
+        expect_valid=True,
+    )
+
+    # --- Phase 1 tests (strict mode / uncertain edges) ---
+
+    # 51. Strict mode rejects old-format edges
     strict_old_format = {
         "treatment": "X",
         "outcome": "Y",
