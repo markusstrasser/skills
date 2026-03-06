@@ -129,6 +129,26 @@ The quality of an explanation is measured by its specificity to the observed pat
 
 ---
 
+## 15. Frontier Model Causal Reasoning Limits (2026 Evidence)
+
+LLMs retrieve causal associations, not reason causally. Key numbers from T3 benchmark (Chang, Stanford, arXiv:2601.08258):
+
+| Model | L1 Association | L3 Counterfactual | Primary failure |
+|-------|---------------|-------------------|-----------------|
+| GPT-4-Turbo | 100% | 71.5% | Over-hedge 12% |
+| GPT-5.2 | 95% | 59.5% | Over-hedge 15%, Fatalism 10% |
+| Claude Sonnet 4.5 | 80% | 56.0% | Fatalism 14% |
+
+**Scaling Paradox:** Bigger models are WORSE at counterfactuals (GPT-5.2 < GPT-4-Turbo). RLHF safety training suppresses causal judgment — the model defaults to "CONDITIONAL" 92% of the time.
+
+**Rung Collapse (arXiv:2602.11675):** Formally proven that autoregressive training provides no gradient signal to distinguish P(Y|X) from P(Y|do(X)). LLMs operate at Pearl's Rung 1 and dress it as Rung 2.
+
+**Implication for skills:** Don't trust the LLM to reason causally from prompts alone. Use deterministic scaffolding (DAGs, back-door criterion checks, `dag_check.py`) to catch what the model cannot.
+
+**Counter-evidence:** CauGym (arXiv:2602.06337, 2026) shows causal post-training on a 14B model hits 93.5% on CaLM vs 55.4% for o3. But this requires specialized training, not available in general-purpose models.
+
+---
+
 ## Meta-Principle: Error Correction IS the Product
 
 Corrections (detrending lessons, hallucination catches, resolution fixes) ARE the tacit knowledge that compounds. Track epistemic evolution. Retractions, upgrades, and downgrades are the artifacts that compound intelligence.

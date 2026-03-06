@@ -123,6 +123,35 @@ Otherwise, compute manually: posterior ∝ prior × Π(likelihoods). Normalize.
 - **Inconsistency scores**: Heuer's method — most negative = most inconsistent = REJECT
 - **Separation**: log-odds gap between top two hypotheses. >1.0 = strong, <0.5 = inconclusive
 
+## Phase 5b: Inference to Best Explanation (IBE) Scoring
+
+After Bayesian scoring, apply explanatory quality criteria. Bayesian LLR tells you which hypothesis is most consistent with evidence; IBE tells you which is the BEST explanation.
+
+For each surviving hypothesis (posterior > 0.10), score on 5 dimensions:
+
+| Criterion | Question | Score 1-5 |
+|-----------|----------|-----------|
+| **Explanatory scope** | How many of the observations does this hypothesis explain? (not just "consistent with" — actively explains) | |
+| **Specificity** | Does this hypothesis predict the EXACT pattern observed, or just "something like it"? | |
+| **Parsimony** | How many independent assumptions does this hypothesis require? Fewer = better. | |
+| **Unification** | Does this hypothesis connect previously unrelated observations? | |
+| **Fertility** | What NEW testable predictions does this hypothesis generate? More = better. | |
+
+**Scoring rules:**
+- A hypothesis that explains 8/10 observations specifically scores higher than one that is "consistent with" all 10 vaguely
+- A hypothesis requiring 2 assumptions beats one requiring 5, even if the 5-assumption version fits slightly better
+- **Fertility is the tiebreaker.** If two hypotheses score similarly, the one that predicts more NEW checkable things wins — it's more falsifiable, which means it's more informative
+
+**Output format:**
+```
+IBE Scoring:
+  H1 (measurement surface): scope=4, specificity=4, parsimony=3, unification=5, fertility=4 → IBE=20
+  H2 (latent g gap):        scope=3, specificity=2, parsimony=4, unification=2, fertility=2 → IBE=13
+  H3 (school pipeline):     scope=3, specificity=3, parsimony=3, unification=3, fertility=3 → IBE=15
+```
+
+**Integration with Bayesian scoring:** IBE does NOT override posteriors. It supplements them. If Bayesian posterior says H1=0.45, H2=0.35, and IBE says H1 is also the best explanation, that's converging evidence. If they disagree (high posterior but poor explanation), flag for investigation — the hypothesis may be fitting noise.
+
 ## Phase 6: Kill or Promote
 
 Based on the ACH result:

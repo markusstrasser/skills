@@ -105,6 +105,43 @@ For each surviving hypothesis, evaluate:
 | Hypothesis | Temporal | Magnitude | Scope | Mechanism | New prediction | Total |
 |-----------|----------|-----------|-------|-----------|---------------|-------|
 
+## Phase 3b: Recursive Causal Audit (RCA)
+
+Before committing, verify each surviving hypothesis step-by-step. This catches over-hedging (the dominant failure mode for frontier models — GPT-5.2 defaults to CONDITIONAL 92% of the time on ambiguous counterfactuals) and under-specified mechanism chains.
+
+For the top 2 hypotheses, trace the causal chain:
+
+**Step 1 — Mechanism chain:** Write each link in the causal chain explicitly.
+```
+H1: Reg FD → selective disclosure ended → information edge lost → alpha on new positions disappeared
+     [policy]        [mechanism]              [intermediate]            [observable]
+```
+
+**Step 2 — Link-by-link audit:** For each link, ask:
+- Is this link **directional** (A causes B, not just correlated)?
+- Is this link **necessary** (without A, would B still happen)?
+- Is this link **proportional** (does the size of A predict the size of B)?
+- Could there be a **confounder** between A and B that you haven't named?
+- Is any variable in this chain a **descendant** of the treatment? If so, you cannot condition on it without introducing collider bias.
+
+**Step 3 — Identify the weakest link.** Which link has the least evidence? That's where to focus next.
+
+**Step 4 — Check for bad controls.** If the analysis involves regression:
+- List every control variable
+- For each: is it pre-treatment, post-treatment, or a descendant of treatment?
+- **Any descendant of treatment used as a control is a bad control** — flag immediately
+- If this is a complex model, invoke `/causal-dag` for full DAG validation
+
+**Output format:**
+```
+RCA for H1:
+  Chain: A → B → C → D
+  Link A→B: [directional: yes/no] [necessary: yes/no] [proportional: yes/no] [confounder risk: low/med/high]
+  Link B→C: ...
+  Weakest link: B→C (no direct evidence, inferred from timing)
+  Bad controls: [none / list]
+```
+
 ## Phase 4: Commit or Escalate
 
 Based on specificity ranking:
@@ -137,6 +174,7 @@ Every `/causal-check` output MUST include:
 
 ## Relationship to Other Skills
 
+- `/causal-dag` — DAG construction + back-door validation for regression specs. Use when the causal check involves regression modeling. Phase 3b can escalate to full `/causal-dag` when the adjustment set is complex.
 - `/competing-hypotheses` — full ACH matrix with Bayesian scoring. Use for entity-level investigation, leads >$10M. Heavier machinery, more evidence-gathering.
 - `/causal-check` — lighter-weight causal discipline for "why" questions. Focuses on observation geometry and explanatory specificity. Can escalate to ACH if the question warrants it.
 - `/thesis-check` — forward-looking investment stress test. Use after `/causal-check` establishes what happened and why.
