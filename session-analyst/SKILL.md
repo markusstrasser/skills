@@ -29,6 +29,7 @@ Analyze session transcripts for behavioral patterns that no linter or static ana
 6. **Missing disconfirmation** — Research without contradictory evidence search
 7. **Source grading gaps** — Claims in research files without provenance tags
 8. **First-answer convergence** — Agent received a design/architecture/strategy/research task and implemented the first approach without generating alternatives. Signals: no exploration of different approaches, task clearly involves a design choice, went from problem statement to implementation in <3 turns. Not every task needs divergence — flag only when the task involved a genuine design space.
+9. **Missing phase artifacts** — Agent made a design/architecture decision (high uncertainty + high irreversibility) without producing auditable phase artifacts. Look for: architectural choices without written alternatives, strategy selection without rationale document, shared infrastructure changes without options explored. Constitution Principle #6 requires divergent-options + selection-rationale for design decisions. Not needed for: routine implementation, bug fixes, low-stakes choices.
 
 ## What This Does NOT Detect
 Dead code (use vulture/ast), style issues (use ruff/eslint), type errors (use mypy/tsc). Those are static analysis problems, not behavioral ones.

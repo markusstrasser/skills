@@ -165,16 +165,22 @@ Output: "What I already know" inventory. Flag contradictions with later findings
 
 **Axis diversity rule:** Selected axes must come from different categories — at least one mechanism-based, one adversarial/critical, and one from an adjacent domain or historical precedent. If all axes start from the same intellectual tradition, you have one axis with multiple queries, not genuine diversity. The point: if you name axes directly, you'll pick the same 2 axes every agent would pick (the "Artificial Hivemind" effect — LLMs converge on the same outputs within and across models). The brainstorm-then-select step defeats this.
 
-Example axes:
-- **Academic-anchored:** concept → literature → state of the art
-- **Mechanism-anchored:** pathway → modulators → evidence
-- **Investigation-anchored:** entity → enforcement → patterns
-- **Population-anchored:** comparable cases → what happened
-- **Application-anchored:** use case → implementations → lessons
-- **Genotype-anchored:** variant → mechanism → intervention (genomics)
-- **Guideline-anchored:** clinical guidelines → standard of care (medical)
+**Axis categories (select from different categories, not the same one twice):**
 
-If your axes all start from the same place, you have one axis with multiple queries.
+| Category | Entry point | Example |
+|----------|------------|---------|
+| **Mechanism** | pathway → modulators → evidence | "How does X work?" |
+| **Adversarial/critical** | failure modes → criticism → limitations | "Why would X NOT work?" |
+| **Adjacent domain** | analogous problem in unrelated field | "Who else solved something like X?" |
+| **Historical** | prior attempts → what happened → lessons | "When was X tried before?" |
+| **Practitioner** | implementation → operational reality → gotchas | "What do people who use X daily say?" |
+| **Academic** | concept → literature → state of the art | "What does the research say about X?" |
+| **Population** | comparable cases → outcomes → what differed | "Who else has X and what happened?" |
+| **Application** | use case → implementations → results | "Where has X been deployed?" |
+| **Genotype** | variant → mechanism → intervention | (genomics-specific) |
+| **Guideline** | clinical guidelines → standard of care | (medical-specific) |
+
+Pick axes from at least 2 different categories. If all your axes are Academic, you have one axis with multiple queries.
 
 **Search strategy per axis:**
 - Minimum 3 query formulations (vary semantic vs keyword)
