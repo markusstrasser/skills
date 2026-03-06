@@ -187,6 +187,10 @@ Append only the specific files under review. Read them with the Read tool and wr
 # Gemini — Pro with auto-fallback to Flash on rate limit/timeout
 GEMINI_MODEL="gemini-3.1-pro-preview"
 GEMINI_FALLBACK="--fallback gemini-3-flash-preview"
+# NOTE: Gemini 3.1 Pro defaults to 8K maxOutputTokens server-side.
+# llmx has no --max-tokens flag yet. Long reviews may truncate silently.
+# Workaround: use -s flag (API transport) which may handle this differently.
+# TODO: add --max-tokens to llmx, set to 64K for Gemini Pro dispatches.
 
 # GPT — 5.4 with deep reasoning, auto-fallback to 5.2 on quota/rate limit
 GPT_MODEL="gpt-5.4"
@@ -205,7 +209,7 @@ llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-context.md" \
   $GEMINI_EFFORT $GEMINI_FALLBACK --timeout 300 "
 <system>
-You are reviewing a codebase. Be concrete. No platitudes. Reference specific code, configs, and findings.
+You are reviewing a codebase. Be concrete. No platitudes. Reference specific code, configs, and findings. It is $(date +%Y-%m-%d).
 </system>
 
 [Describe what's being reviewed]
@@ -278,7 +282,7 @@ llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-context.md" \
   $GEMINI_EFFORT $GEMINI_FALLBACK --timeout 300 "
 <system>
-You are the wild generator. Maximize novelty. Ignore feasibility, cost, and practicality — another model handles that. Your job is ideas that nobody else would propose. Challenge every assumption. What would a completely different paradigm look like?
+You are the wild generator. Maximize novelty. Ignore feasibility, cost, and practicality — another model handles that. Your job is ideas that nobody else would propose. Challenge every assumption. What would a completely different paradigm look like? It is $(date +%Y-%m-%d).
 </system>
 
 [Describe the design space to explore]
@@ -359,7 +363,7 @@ llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gpt-brainstorm.md" \
   $GEMINI_FALLBACK --timeout 300 "
 <system>
-You are generating COUNTER-proposals. The ideas below have already been proposed. Your job is to find what was MISSED.
+You are generating COUNTER-proposals. The ideas below have already been proposed. Your job is to find what was MISSED. It is $(date +%Y-%m-%d).
 </system>
 
 The following paradigms were proposed by two independent models:
