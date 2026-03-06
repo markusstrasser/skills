@@ -152,7 +152,9 @@ Output: "What I already know" inventory. Flag contradictions with later findings
 
 **Mandatory:** Name 2+ independent search axes before searching. Different axes reach different literatures.
 
-**Divergent expansion (before selecting axes):** Brainstorm 8-10 different angles for this question — adjacent domains, adversarial framings, unconventional entry points, what a critic would investigate, what a practitioner in a different field would search for. Push for breadth over plausibility. THEN select the 2-3 most promising as your search axes. The point: if you name axes directly, you'll pick the same 2 axes every agent would pick (the "Artificial Hivemind" effect — LLMs converge on the same outputs within and across models). The brainstorm-then-select step defeats this.
+**Divergent expansion (before selecting axes):** Brainstorm 8-10 different angles for this question — adjacent domains, adversarial framings, unconventional entry points, what a critic would investigate, what a practitioner in a different field would search for. Generate 30+ if the question is high-stakes — by idea #12 you exhaust high-probability clusters and reach genuinely novel angles (Latent Space Exhaustion). Push for breadth over plausibility. THEN select the 2-3 most promising as your search axes.
+
+**Axis diversity rule:** Selected axes must come from different categories — at least one mechanism-based, one adversarial/critical, and one from an adjacent domain or historical precedent. If all axes start from the same intellectual tradition, you have one axis with multiple queries, not genuine diversity. The point: if you name axes directly, you'll pick the same 2 axes every agent would pick (the "Artificial Hivemind" effect — LLMs converge on the same outputs within and across models). The brainstorm-then-select step defeats this.
 
 Example axes:
 - **Academic-anchored:** concept → literature → state of the art
