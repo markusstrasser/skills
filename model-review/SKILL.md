@@ -188,8 +188,9 @@ Append only the specific files under review. Read them with the Read tool and wr
 GEMINI_MODEL="gemini-3.1-pro-preview"
 GEMINI_FALLBACK="--fallback gemini-3-flash-preview"
 
-# GPT — always 5.2 with deep reasoning for adversarial review
+# GPT — 5.4 with deep reasoning, auto-fallback to 5.2 on quota/rate limit
 GPT_MODEL="gpt-5.4"
+GPT_FALLBACK="--fallback gpt-5.2"
 GPT_EFFORT="--reasoning-effort high --stream"
 GPT_TIMEOUT="--timeout 600"
 ```
@@ -235,7 +236,7 @@ What am I (Gemini) likely getting wrong? Where should you distrust my assessment
 ```bash
 llmx chat -m $GPT_MODEL \
   -f "$REVIEW_DIR/gpt-context.md" \
-  $GPT_EFFORT $GPT_TIMEOUT "
+  $GPT_EFFORT $GPT_FALLBACK $GPT_TIMEOUT "
 <system>
 You are performing QUANTITATIVE and FORMAL analysis. Gemini is handling qualitative pattern review separately. Focus on what Gemini can't do well. Be precise. Show your reasoning. No hand-waving.
 </system>
@@ -300,7 +301,7 @@ What am I (Gemini) missing because of my training distribution? Where should my 
 ```bash
 llmx chat -m $GPT_MODEL \
   -f "$REVIEW_DIR/gpt-context.md" \
-  $GPT_EFFORT $GPT_TIMEOUT "
+  $GPT_EFFORT $GPT_FALLBACK $GPT_TIMEOUT "
 <system>
 Generate novel approaches with feasibility assessment.
 </system>
