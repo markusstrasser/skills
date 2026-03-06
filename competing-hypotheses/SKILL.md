@@ -127,27 +127,34 @@ Otherwise, compute manually: posterior ∝ prior × Π(likelihoods). Normalize.
 
 After Bayesian scoring, apply explanatory quality criteria. Bayesian LLR tells you which hypothesis is most consistent with evidence; IBE tells you which is the BEST explanation.
 
-For each surviving hypothesis (posterior > 0.10), score on 5 dimensions:
+For each surviving hypothesis (posterior > 0.10), evaluate on 5 dimensions using **pairwise dominance comparison**, not numeric scoring:
 
-| Criterion | Question | Score 1-5 |
-|-----------|----------|-----------|
-| **Explanatory scope** | How many of the observations does this hypothesis explain? (not just "consistent with" — actively explains) | |
-| **Specificity** | Does this hypothesis predict the EXACT pattern observed, or just "something like it"? | |
-| **Parsimony** | How many independent assumptions does this hypothesis require? Fewer = better. | |
-| **Unification** | Does this hypothesis connect previously unrelated observations? | |
-| **Fertility** | What NEW testable predictions does this hypothesis generate? More = better. | |
+| Criterion | Question |
+|-----------|----------|
+| **Explanatory scope** | How many of the observations does this hypothesis actively explain (not just "consistent with")? |
+| **Specificity** | Does this hypothesis predict the EXACT pattern observed, or just "something like it"? |
+| **Parsimony** | How many independent assumptions does this hypothesis require? Fewer = better. |
+| **Unification** | Does this hypothesis connect previously unrelated observations? |
+| **Fertility** | What NEW testable predictions does this hypothesis generate? More = better. |
 
-**Scoring rules:**
-- A hypothesis that explains 8/10 observations specifically scores higher than one that is "consistent with" all 10 vaguely
-- A hypothesis requiring 2 assumptions beats one requiring 5, even if the 5-assumption version fits slightly better
-- **Fertility is the tiebreaker.** If two hypotheses score similarly, the one that predicts more NEW checkable things wins — it's more falsifiable, which means it's more informative
+**Dominance comparison (not additive scoring):**
+- Compare hypotheses pairwise on each criterion: H1 > H2, H1 = H2, or H1 < H2
+- **Dominance:** H1 dominates H2 if H1 ≥ H2 on all criteria and H1 > H2 on at least one
+- **Non-dominance:** if neither dominates, state the tradeoff explicitly ("H1 is more parsimonious but H2 has broader scope")
+- **Fertility is the tiebreaker.** When tradeoffs are close, the hypothesis generating more NEW checkable predictions wins — it's more falsifiable
+
+**Why not numeric totals:** Equal-weight additive scoring (scope + specificity + ...) assumes interval scales, commensurable dimensions, and equal weights — none of which are justified. Dominance comparison avoids these assumptions.
 
 **Output format:**
 ```
-IBE Scoring:
-  H1 (measurement surface): scope=4, specificity=4, parsimony=3, unification=5, fertility=4 → IBE=20
-  H2 (latent g gap):        scope=3, specificity=2, parsimony=4, unification=2, fertility=2 → IBE=13
-  H3 (school pipeline):     scope=3, specificity=3, parsimony=3, unification=3, fertility=3 → IBE=15
+IBE Dominance:
+  H1 vs H2: H1 wins on scope (8/10 vs 4/10), specificity (exact pattern vs vague),
+             unification (links 3 prior findings). H2 wins on parsimony (2 vs 4 assumptions).
+             H1 dominates on 3/5, loses on 1. → H1 preferred.
+  H1 vs H3: H1 wins on scope, unification. H3 wins on parsimony.
+             Tied on specificity, fertility. → H1 preferred (broader explanatory reach).
+  H2 vs H3: Neither dominates. H2 more parsimonious, H3 more fertile.
+             → Non-dominated pair; both survive for further evidence.
 ```
 
 **Integration with Bayesian scoring:** IBE does NOT override posteriors. It supplements them. If Bayesian posterior says H1=0.45, H2=0.35, and IBE says H1 is also the best explanation, that's converging evidence. If they disagree (high posterior but poor explanation), flag for investigation — the hypothesis may be fitting noise.
