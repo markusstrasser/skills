@@ -269,13 +269,16 @@ What am I (GPT-5.4) probably getting wrong? Known biases to flag: overconfidence
 
 #### Brainstorming Mode Prompts
 
-**Gemini — Creative Exploration:**
+**Gemini — Wild Generator (maximize novelty):**
+
+Gemini's brainstorming role is the *wild generator* — maximize novelty, ignore feasibility. GPT's role is structured ideation with feasibility assessment. This asymmetric split avoids both models producing the same "responsible creativity" output. Gemini goes wide, GPT goes deep.
+
 ```bash
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-context.md" \
   $GEMINI_EFFORT $GEMINI_FALLBACK --timeout 300 "
 <system>
-Think divergently. Challenge assumptions. What would a completely different approach look like?
+You are the wild generator. Maximize novelty. Ignore feasibility, cost, and practicality — another model handles that. Your job is ideas that nobody else would propose. Challenge every assumption. What would a completely different paradigm look like?
 </system>
 
 [Describe the design space to explore]

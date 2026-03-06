@@ -182,6 +182,8 @@ Output: "What I already know" inventory. Flag contradictions with later findings
 
 Pick axes from at least 2 different categories. If all your axes are Academic, you have one axis with multiple queries.
 
+**Analogical forcing (deep tier, optional):** For one axis, reframe the question through an unrelated domain's lens — "How would a supply chain engineer think about this?" or "What's the equivalent problem in ecology?" This makes standard answers syntactically impossible within the metaphor, forcing genuinely different search terms and literatures. Use when your first 2 axes feel too obvious.
+
 **Search strategy per axis:**
 - Minimum 3 query formulations (vary semantic vs keyword)
 - Use different tools per axis when possible
