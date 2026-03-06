@@ -9,6 +9,13 @@ Usage:
     echo '{"treatment":"X", "outcome":"Y", "edges":[["X","Y"]], "proposed_controls":[]}' | uv run python3 dag_check.py
     uv run python3 dag_check.py --treatment X --outcome Y --edges "X->M,M->Y,X->Y,C->X,C->Y" --controls "C"
     uv run python3 dag_check.py --test
+    uv run python3 dag_check.py --consensus --test
+
+Edge formats (both accepted):
+    Old: [["A","B"], ["B","C"]]
+    New: [{"from":"A","to":"B","temporal_justification":"A precedes B"}, ...]
+
+In --strict mode, the new format with temporal_justification is required.
 """
 
 from __future__ import annotations
@@ -199,18 +206,80 @@ def classify_paths(treatment: str, outcome: str,
 
 
 # ---------------------------------------------------------------------------
+# Edge normalization
+# ---------------------------------------------------------------------------
+
+def normalize_edges(raw_edges: list, strict: bool = False) -> tuple[list[list[str]], list[str], list[str]]:
+    """Normalize edge input to [src, dst] pairs. Returns (edges, warnings, uncertain_edges).
+
+    Accepts two formats:
+      Old: [["A", "B"], ...]
+      New: [{"from": "A", "to": "B", "temporal_justification": "..."}, ...]
+
+    In strict mode, rejects edges missing temporal_justification.
+    Edges with "?" in justification are flagged as uncertain.
+    """
+    edges: list[list[str]] = []
+    warnings: list[str] = []
+    uncertain: list[str] = []
+
+    for e in raw_edges:
+        if isinstance(e, dict):
+            src = e.get("from", "")
+            dst = e.get("to", "")
+            justification = e.get("temporal_justification", "")
+            if strict and not justification:
+                raise ValueError(
+                    f"Edge {src}->{dst} missing temporal_justification (required in strict mode)"
+                )
+            if justification and "?" in justification:
+                uncertain.append(f"{src}->{dst}")
+            edges.append([src, dst])
+        elif isinstance(e, (list, tuple)) and len(e) >= 2:
+            if strict:
+                raise ValueError(
+                    f"Edge {e[0]}->{e[1]} uses old format. "
+                    f"Strict mode requires {{\"from\", \"to\", \"temporal_justification\"}} format."
+                )
+            warnings.append(
+                f"Edge {e[0]}->{e[1]} uses old [src, dst] format. "
+                f"Consider using {{\"from\", \"to\", \"temporal_justification\"}} for metacognitive audit."
+            )
+            edges.append([e[0], e[1]])
+        else:
+            raise ValueError(f"Unrecognized edge format: {e}")
+
+    return edges, warnings, uncertain
+
+
+# ---------------------------------------------------------------------------
 # Main validation
 # ---------------------------------------------------------------------------
 
-def validate(spec: dict[str, Any]) -> dict[str, Any]:
+def validate(spec: dict[str, Any], strict: bool = False) -> dict[str, Any]:
     """Validate a proposed adjustment set against the back-door criterion."""
     treatment = spec["treatment"]
     outcome = spec["outcome"]
-    edges = spec["edges"]
+
+    # Normalize edges (supports old and new format)
+    try:
+        edges, edge_warnings, uncertain_edges = normalize_edges(spec["edges"], strict=strict)
+    except ValueError as exc:
+        return {
+            "valid": False,
+            "error": str(exc),
+            "problems": [],
+            "paths": {},
+        }
+
     proposed = set(spec.get("proposed_controls", []))
     unobserved = set(spec.get("unobserved", []))
 
     children, parents, nodes = build_graph(edges)
+
+    # Attach edge metadata to result
+    _edge_warnings = edge_warnings
+    _uncertain_edges = uncertain_edges
 
     # Bug 2: Acyclicity check
     if has_cycle(children, nodes):
@@ -397,11 +466,144 @@ def validate(spec: dict[str, Any]) -> dict[str, Any]:
         result["paths"]["unidentifiable"] = unidentifiable_paths
         result["unidentifiable"] = True
 
+    # Edge metadata
+    if _uncertain_edges:
+        result["uncertain_edges"] = _uncertain_edges
+    if _edge_warnings:
+        result["edge_warnings"] = _edge_warnings
+
     # Bug 7: Warn on path truncation
     if path_truncated:
         result["warning"] = "Path enumeration truncated at 200. Results may be incomplete for dense graphs."
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Consensus mode: edge-structure voting across N specifications
+# ---------------------------------------------------------------------------
+
+def consensus(specs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Vote on edge structure across N independently generated specifications.
+
+    Instead of filtering on adjustment-set validity (which rewards under-specified
+    DAGs), we vote on edge agreement. The consensus DAG is then validated.
+    """
+    if len(specs) < 2:
+        return {"error": "Consensus requires at least 2 specifications."}
+
+    # Verify all specs share treatment/outcome
+    treatments = {s["treatment"] for s in specs}
+    outcomes = {s["outcome"] for s in specs}
+    if len(treatments) > 1 or len(outcomes) > 1:
+        return {"error": f"All specs must share treatment/outcome. Got treatments={treatments}, outcomes={outcomes}"}
+
+    treatment = specs[0]["treatment"]
+    outcome = specs[0]["outcome"]
+    n = len(specs)
+
+    # Extract edge sets from each spec
+    edge_counts: dict[tuple[str, str], int] = {}
+    for spec in specs:
+        edges, _, _ = normalize_edges(spec["edges"])
+        seen: set[tuple[str, str]] = set()
+        for src, dst in edges:
+            key = (src, dst)
+            if key not in seen:
+                edge_counts[key] = edge_counts.get(key, 0) + 1
+                seen.add(key)
+
+    # Compute agreement
+    threshold = 0.6
+    edge_agreement: dict[str, dict[str, Any]] = {}
+    consensus_edges: list[list[str]] = []
+    contested_edges: list[list[str]] = []
+
+    for (src, dst), count in sorted(edge_counts.items()):
+        agreement = count / n
+        label = f"{src}->{dst}"
+        edge_agreement[label] = {"present_in": count, "agreement": round(agreement, 2)}
+        if agreement >= threshold:
+            consensus_edges.append([src, dst])
+        else:
+            contested_edges.append([src, dst])
+
+    # Collect proposed controls across specs (union for analysis)
+    all_controls: set[str] = set()
+    for spec in specs:
+        all_controls.update(spec.get("proposed_controls", []))
+    all_unobserved: set[str] = set()
+    for spec in specs:
+        all_unobserved.update(spec.get("unobserved", []))
+
+    # Validate the consensus DAG
+    consensus_spec = {
+        "treatment": treatment,
+        "outcome": outcome,
+        "edges": consensus_edges,
+        "proposed_controls": sorted(all_controls),
+    }
+    if all_unobserved:
+        consensus_spec["unobserved"] = sorted(all_unobserved)
+
+    consensus_result = validate(consensus_spec)
+
+    # Classify adjustment sets: must-adjust / optional / forbidden
+    children, parents, nodes = build_graph(consensus_edges)
+    treat_desc = descendants(treatment, children)
+
+    must_adjust: list[str] = []
+    forbidden: list[str] = []
+    optional: list[str] = []
+
+    for var in sorted(nodes - {treatment, outcome}):
+        if var in treat_desc:
+            forbidden.append(var)
+        elif var in all_unobserved:
+            forbidden.append(var)
+        else:
+            # Check if needed to block any backdoor path
+            causal_paths, backdoor_paths = classify_paths(treatment, outcome, children, parents)
+            test_controls = {v for v in nodes - {treatment, outcome} - treat_desc - all_unobserved}
+            without = test_controls - {var}
+            all_blocked_without = all(_is_path_blocked(p, without, children) for p in backdoor_paths)
+            all_blocked_with = all(_is_path_blocked(p, test_controls, children) for p in backdoor_paths)
+            if all_blocked_with and not all_blocked_without:
+                must_adjust.append(var)
+            else:
+                optional.append(var)
+
+    # Agreement summary
+    agreed_count = len(consensus_edges)
+    total_count = len(edge_counts)
+    pct = round(agreed_count / total_count * 100) if total_count > 0 else 0
+
+    recommendation_parts: list[str] = []
+    if pct >= 80:
+        recommendation_parts.append(f"High structural consensus ({pct}% edges agreed).")
+    elif pct >= 50:
+        recommendation_parts.append(f"Moderate structural consensus ({pct}% edges agreed).")
+    else:
+        recommendation_parts.append(f"Low structural consensus ({pct}% edges agreed). Consider more discussion before proceeding.")
+
+    if contested_edges:
+        contested_labels = [f"{s}->{d}" for s, d in contested_edges]
+        recommendation_parts.append(f"Contested edges: {', '.join(contested_labels)} — review before including.")
+
+    return {
+        "n_specs": n,
+        "edge_agreement": edge_agreement,
+        "consensus_edges": consensus_edges,
+        "contested_edges": contested_edges,
+        "consensus_dag_valid": consensus_result["valid"],
+        "consensus_adjustment_set": consensus_result.get("adjustment_set", []),
+        "adjustment_categories": {
+            "must_adjust": must_adjust,
+            "optional": optional,
+            "forbidden": forbidden,
+        },
+        "recommendation": " ".join(recommendation_parts),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -428,12 +630,31 @@ def main():
     parser.add_argument("--edges", "-e", help="Edges as 'A->B,B->C,...'")
     parser.add_argument("--controls", "-c", help="Proposed controls as 'X,Y,...'")
     parser.add_argument("--unobserved", "-u", help="Unobserved nodes as 'U1,U2,...'")
+    parser.add_argument("--strict", action="store_true",
+                        help="Require temporal_justification for each edge")
+    parser.add_argument("--consensus", action="store_true",
+                        help="Run consensus mode (vote on edge structure across N specs)")
     parser.add_argument("--test", action="store_true", help="Run built-in test cases")
     args = parser.parse_args()
+
+    if args.test and args.consensus:
+        run_consensus_tests()
+        return
 
     if args.test:
         run_tests()
         return
+
+    if args.consensus:
+        raw = sys.stdin.read().strip()
+        if not raw:
+            print("Consensus mode requires JSON array of specs on stdin", file=sys.stderr)
+            sys.exit(1)
+        specs = json.loads(raw)
+        result = consensus(specs)
+        json.dump(result, sys.stdout, indent=2)
+        print()
+        sys.exit(0)
 
     if args.treatment and args.outcome and args.edges:
         spec = {
@@ -451,7 +672,7 @@ def main():
             sys.exit(1)
         spec = json.loads(raw)
 
-    result = validate(spec)
+    result = validate(spec, strict=args.strict)
     json.dump(result, sys.stdout, indent=2)
     print()
     sys.exit(0 if result["valid"] else 1)
@@ -726,6 +947,117 @@ def run_tests():
         print("  [FAIL] Order-independence (sorted vs reverse-sorted controls)")
         print(f"         sorted result:  valid={result_sorted['valid']}, problems={[p['variable'] for p in result_sorted['problems']]}")
         print(f"         reverse result: valid={result_rev['valid']}, problems={[p['variable'] for p in result_rev['problems']]}")
+
+    # 13. Strict mode rejects old-format edges
+    strict_old_format = {
+        "treatment": "X",
+        "outcome": "Y",
+        "edges": [["X", "Y"], ["C", "X"], ["C", "Y"]],
+        "proposed_controls": ["C"],
+    }
+    result_strict = validate(strict_old_format, strict=True)
+    if "error" in result_strict and "old format" in result_strict["error"].lower():
+        passed += 1
+        print("  [PASS] Strict mode rejects old-format edges")
+    else:
+        failed += 1
+        print("  [FAIL] Strict mode rejects old-format edges")
+        print(f"         result: {json.dumps(result_strict, indent=4)}")
+
+    # 14. Uncertain edges flagged (justification contains "?")
+    uncertain_spec = {
+        "treatment": "X",
+        "outcome": "Y",
+        "edges": [
+            {"from": "X", "to": "Y", "temporal_justification": "Treatment precedes outcome"},
+            {"from": "C", "to": "X", "temporal_justification": "C measured before X?"},
+            {"from": "C", "to": "Y", "temporal_justification": "C affects Y"},
+        ],
+        "proposed_controls": ["C"],
+    }
+    result_uncertain = validate(uncertain_spec)
+    if result_uncertain.get("uncertain_edges") == ["C->X"]:
+        passed += 1
+        print("  [PASS] Uncertain edge flagged (justification contains '?')")
+    else:
+        failed += 1
+        print("  [FAIL] Uncertain edge flagged (justification contains '?')")
+        print(f"         uncertain_edges: {result_uncertain.get('uncertain_edges')}")
+
+    # 15. Old-format edges accepted in non-strict mode with warning
+    non_strict_old = {
+        "treatment": "X",
+        "outcome": "Y",
+        "edges": [["X", "Y"]],
+        "proposed_controls": [],
+    }
+    result_non_strict = validate(non_strict_old)
+    if result_non_strict["valid"] and result_non_strict.get("edge_warnings"):
+        passed += 1
+        print("  [PASS] Old-format edges accepted in non-strict mode with warning")
+    else:
+        failed += 1
+        print("  [FAIL] Old-format edges accepted in non-strict mode with warning")
+        print(f"         valid={result_non_strict['valid']}, warnings={result_non_strict.get('edge_warnings')}")
+
+    print(f"\n{passed} passed, {failed} failed out of {passed + failed}")
+    sys.exit(1 if failed else 0)
+
+
+def run_consensus_tests():
+    """Test cases for --consensus mode."""
+    passed = 0
+    failed = 0
+
+    print("Running consensus tests...\n")
+
+    # CT1: 5 specs, 3 agree on M->Y edge, 2 don't
+    base_edges = [["C", "X"], ["C", "Y"], ["X", "Y"]]
+    specs_agree = [
+        {"treatment": "X", "outcome": "Y", "edges": base_edges + [["M", "Y"]], "proposed_controls": ["C"]},
+        {"treatment": "X", "outcome": "Y", "edges": base_edges + [["M", "Y"]], "proposed_controls": ["C"]},
+        {"treatment": "X", "outcome": "Y", "edges": base_edges + [["M", "Y"]], "proposed_controls": ["C"]},
+        {"treatment": "X", "outcome": "Y", "edges": base_edges, "proposed_controls": ["C"]},
+        {"treatment": "X", "outcome": "Y", "edges": base_edges, "proposed_controls": ["C"]},
+    ]
+    result = consensus(specs_agree)
+    m_y_agreement = result["edge_agreement"].get("M->Y", {}).get("agreement", 0)
+    # M->Y is in 3/5 = 0.6 => exactly at threshold, should be consensus
+    if m_y_agreement == 0.6 and ["M", "Y"] in result["consensus_edges"]:
+        passed += 1
+        print("  [PASS] CT1: 3/5 agree on M->Y (60% = threshold)")
+    else:
+        failed += 1
+        print(f"  [FAIL] CT1: M->Y agreement={m_y_agreement}, in consensus={['M','Y'] in result.get('consensus_edges', [])}")
+
+    # CT2: All-identical specs → 100% agreement
+    identical = [
+        {"treatment": "X", "outcome": "Y", "edges": [["C", "X"], ["C", "Y"], ["X", "Y"]], "proposed_controls": ["C"]},
+    ] * 4
+    result2 = consensus(identical)
+    all_100 = all(v["agreement"] == 1.0 for v in result2["edge_agreement"].values())
+    if all_100 and len(result2["contested_edges"]) == 0:
+        passed += 1
+        print("  [PASS] CT2: Identical specs → 100% agreement, no contested")
+    else:
+        failed += 1
+        print(f"  [FAIL] CT2: all_100={all_100}, contested={result2['contested_edges']}")
+
+    # CT3: Completely different specs → low agreement
+    diff_specs = [
+        {"treatment": "X", "outcome": "Y", "edges": [["X", "Y"], ["A", "X"], ["A", "Y"]], "proposed_controls": ["A"]},
+        {"treatment": "X", "outcome": "Y", "edges": [["X", "Y"], ["B", "X"], ["B", "Y"]], "proposed_controls": ["B"]},
+        {"treatment": "X", "outcome": "Y", "edges": [["X", "Y"], ["D", "X"], ["D", "Y"]], "proposed_controls": ["D"]},
+    ]
+    result3 = consensus(diff_specs)
+    # X->Y is in all 3, but A/B/D edges are unique → each 33% agreement → contested
+    n_contested = len(result3["contested_edges"])
+    if n_contested >= 6 and "Low" in result3["recommendation"]:
+        passed += 1
+        print("  [PASS] CT3: Different specs → low agreement, many contested")
+    else:
+        failed += 1
+        print(f"  [FAIL] CT3: contested={n_contested}, recommendation={result3['recommendation']}")
 
     print(f"\n{passed} passed, {failed} failed out of {passed + failed}")
     sys.exit(1 if failed else 0)

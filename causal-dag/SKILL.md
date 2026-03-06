@@ -53,12 +53,24 @@ Classifications:
 
 Represent the causal structure using text notation. Every arrow is a substantive claim about the world — treat it as such.
 
+**For each edge, provide a temporal justification** explaining why the direction is correct. This is enforced by `dag_check.py` in `--strict` mode: edges without `temporal_justification` are rejected.
+
 ```
-Sex -> Test_Score
-Sex -> Items_Complete -> Test_Score   (Items_Complete is a DESCENDANT of treatment!)
-Education -> Test_Score               (pre-treatment; Sex cannot cause Education for biological sex)
-Room_Conditions -> Test_Score         (nuisance, not on causal path from X to Y)
+Sex -> Test_Score          [temporal: sex is fixed at birth, precedes test]
+Sex -> Items_Complete      [temporal: engagement affected by sex during test]
+Items_Complete -> Test_Score [temporal: completion precedes scoring]
+Education -> Test_Score    [temporal: education acquired before test session]
+Room_Conditions -> Test_Score [temporal: room conditions exist before testing begins]
 ```
+
+When providing edges to `dag_check.py`, use the structured format:
+```json
+{"edges": [
+  {"from": "Sex", "to": "Test_Score", "temporal_justification": "Sex fixed at birth, precedes test"},
+  {"from": "C", "to": "X", "temporal_justification": "C measured before treatment?"}
+]}
+```
+Edges with `?` in the justification are flagged as uncertain in the output.
 
 Rules:
 - Every arrow must have a direction and a justification
@@ -202,9 +214,27 @@ A naive agent might specify: `Test_Score ~ Sex + Education + Items_Complete + Ro
 
 ---
 
+## Consensus Mode (--consensus)
+
+When multiple agents or analysts independently specify DAGs for the same treatment/outcome, use consensus mode to vote on edge structure:
+
+```bash
+echo '[spec1, spec2, spec3, ...]' | uv run python3 dag_check.py --consensus
+```
+
+Consensus votes on **edge agreement** (what fraction of specs include each edge), NOT on adjustment-set validity. This avoids rewarding under-specified DAGs that omit real confounders.
+
+- Edges with ≥60% agreement form the consensus DAG
+- Contested edges (<60%) are flagged for review
+- The consensus DAG is then validated for adjustment-set correctness
+- Adjustment variables are classified: must-adjust / optional / forbidden
+
+---
+
 ## Relationship to Other Skills
 
 - **`/causal-check`** — Lightweight "why did X happen" analysis for observations. Use `/causal-dag` when you need to SPECIFY a regression model. Use `/causal-check` when you need to EXPLAIN an observed outcome.
+- **`/causal-robustness`** — Post-estimation sensitivity analysis (PySensemakr). Use AFTER fitting an OLS model specified via `/causal-dag`. Quantifies how robust the estimate is to unmeasured confounding.
 - **`/competing-hypotheses`** — Structured hypothesis comparison. Use AFTER `/causal-dag` has established the causal structure. The DAG tells you which hypotheses are testable and what the confounding structure looks like.
 - **`/researcher`** — May invoke `/causal-dag` when the research involves regression or causal analysis. The researcher skill should not specify regressions without running this first.
 
