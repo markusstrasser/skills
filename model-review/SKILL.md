@@ -187,10 +187,9 @@ Append only the specific files under review. Read them with the Read tool and wr
 # Gemini — Pro with auto-fallback to Flash on rate limit/timeout
 GEMINI_MODEL="gemini-3.1-pro-preview"
 GEMINI_FALLBACK="--fallback gemini-3-flash-preview"
-# NOTE: Gemini 3.1 Pro defaults to 8K maxOutputTokens server-side.
-# llmx has no --max-tokens flag yet. Long reviews may truncate silently.
-# Workaround: use -s flag (API transport) which may handle this differently.
-# TODO: add --max-tokens to llmx, set to 64K for Gemini Pro dispatches.
+# IMPORTANT: Gemini 3.1 Pro defaults to 8K maxOutputTokens server-side.
+# Always use --max-tokens 65536 on Gemini dispatches to prevent silent truncation.
+GEMINI_MAX_TOKENS="--max-tokens 65536"
 
 # GPT — 5.4 with deep reasoning, auto-fallback to 5.2 on quota/rate limit
 GPT_MODEL="gpt-5.4"
@@ -207,7 +206,7 @@ GPT_TIMEOUT="--timeout 600"
 ```bash
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-context.md" \
-  $GEMINI_EFFORT $GEMINI_FALLBACK --timeout 300 "
+  $GEMINI_MAX_TOKENS $GEMINI_FALLBACK --timeout 300 "
 <system>
 You are reviewing a codebase. Be concrete. No platitudes. Reference specific code, configs, and findings. It is $(date +%Y-%m-%d).
 </system>
@@ -280,7 +279,7 @@ Gemini's brainstorming role is the *wild generator* — maximize novelty, ignore
 ```bash
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-context.md" \
-  $GEMINI_EFFORT $GEMINI_FALLBACK --timeout 300 "
+  $GEMINI_MAX_TOKENS $GEMINI_FALLBACK --timeout 300 "
 <system>
 You are the wild generator. Maximize novelty. Ignore feasibility, cost, and practicality — another model handles that. Your job is ideas that nobody else would propose. Challenge every assumption. What would a completely different paradigm look like? It is $(date +%Y-%m-%d).
 </system>
@@ -361,7 +360,7 @@ After receiving both brainstorm outputs, identify the 2-3 dominant paradigms acr
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-brainstorm.md" \
   -f "$REVIEW_DIR/gpt-brainstorm.md" \
-  $GEMINI_FALLBACK --timeout 300 "
+  $GEMINI_MAX_TOKENS $GEMINI_FALLBACK --timeout 300 "
 <system>
 You are generating COUNTER-proposals. The ideas below have already been proposed. Your job is to find what was MISSED. It is $(date +%Y-%m-%d).
 </system>
