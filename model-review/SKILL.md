@@ -199,7 +199,9 @@ GPT_TIMEOUT="--timeout 600"
 
 **IMPORTANT — Bash timeout:** When dispatching via the Bash tool, always set `timeout: 360000` (6 minutes) on the Bash tool call. The default 120s Bash timeout kills the process before llmx finishes. llmx's own `--timeout` handles the real deadline.
 
-**Output capture:** Use `--output FILE` (or `-o FILE`) to write output to a file. This writes directly via Python (no shell buffering) — the file has content immediately on completion, not 0 bytes until process exit like `> file` redirects.
+**Output capture:** Use `--output FILE` (or `-o FILE`) to write output to a file. This writes directly via Python (no shell buffering) — the file has content immediately on completion, not 0 bytes until process exit like `> file` redirects. Never use `> file` shell redirects with llmx. Never use `PYTHONUNBUFFERED` — the buffering is in the shell redirect, not Python.
+
+**NEVER downgrade models on failure.** If Gemini Pro or GPT-5.4 fails, the problem is the dispatch (timeout, redirect, context size, rate limit) — not the model. Diagnose: check stderr, check exit code, check `llmx --debug`. Never swap to Flash, GPT-5.2, or GPT-5.3 as a "fix" — you lose the deep reasoning that's the entire point of model-review.
 
 **CRITICAL — Context size:** Compact context before dispatch. 50K context → API calls take 5-10 min (get killed). 2K summary context → 52s Gemini, 218s GPT. Summarize the key points from source files into a compact context bundle rather than concatenating full files.
 

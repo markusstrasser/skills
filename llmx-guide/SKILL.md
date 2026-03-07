@@ -12,8 +12,18 @@ argument-hint: '[model name or issue description]'
 1. **Model name correct?** Hyphens not dots (`claude-sonnet-4-6` not `claude-sonnet-4.6`)
 2. **Timeout set?** Reasoning models need `--timeout 600` or `--stream`
 3. **Using `shell=True`?** Don't — parentheses in prompts break it. Use list args + `input=`
-4. **Know the transport and fallback triggers:** `openai` prefers `codex exec`, `google` prefers `gemini`, then falls back to API
-5. **Test small first:** `llmx --provider google <<< "2+2?"` before full pipeline
+4. **Using `-o FILE`?** Never use `> file` shell redirects — they buffer until exit
+5. **Know the transport and fallback triggers:** `openai` prefers `codex exec`, `google` prefers `gemini`, then falls back to API
+
+## When llmx Fails — Diagnose, Don't Downgrade
+
+**Never swap to a weaker model as a "fix."** If GPT-5.4 or Gemini Pro fails, the problem is the dispatch — not the model. Switching to Flash or GPT-5.2 loses the capability you needed.
+
+**Diagnostic steps (in order):**
+1. Check exit code: `echo $?` — tells you rate limit (3), timeout (4), or model error (5)
+2. Check stderr: llmx prints `[llmx:ERROR] type=... provider=... status=...`
+3. Re-run with `--debug` on a small prompt to isolate
+4. Common fixes: increase `--timeout`, add `--stream`, reduce context size, check API key
 
 ## Model Names & Defaults
 
@@ -79,7 +89,7 @@ elif result.returncode == 4:  # timeout
     pass
 ```
 
-## The Three llmx Footguns
+## The Four llmx Footguns
 
 ### 1. GPT-5.4 Timeouts
 
@@ -110,7 +120,29 @@ subprocess.run(
 )
 ```
 
-### 2. shell=True + Parentheses
+### 2. Output Capture
+
+**Use `--output FILE` (or `-o FILE`).** Writes via Python (unbuffered), not shell redirect.
+
+```bash
+# CORRECT — output goes to both stdout and file:
+llmx -m gpt-5.4 -f context.md --timeout 600 -o output.md "query"
+
+# BROKEN — never use shell redirects with llmx:
+llmx -m gpt-5.4 "query" > output.md    # 0 bytes until process exits
+llmx -m gpt-5.4 "query" > output.md &  # 0 bytes if killed
+
+# BROKEN — these don't help either:
+stdbuf -oL llmx "query" > output.md    # buffering is in shell >, not Python
+PYTHONUNBUFFERED=1 llmx "query" > out  # same — shell > is the problem
+```
+
+**When dispatching from Claude Code:**
+1. Use `-o FILE` for file output — never `> file`
+2. Set Bash tool `timeout: 360000` (6 min) — default 120s kills llmx early
+3. Compact context before dispatch — 2K context → 52s, 50K → may hang
+
+### 3. shell=True + Parentheses
 
 ```python
 # BREAKS if prompt has ():
@@ -120,7 +152,7 @@ subprocess.run(f'echo {repr(prompt)} | llmx ...', shell=True)
 subprocess.run(['llmx', '--provider', 'google'], input=prompt, capture_output=True, text=True)
 ```
 
-### 3. Reasoning Effort Values
+### 4. Reasoning Effort Values
 
 | Model | Valid values | Default |
 |-------|------------|---------|
@@ -175,10 +207,12 @@ llmx -p codex-cli "question"    # force Codex CLI transport
 
 Falls back to API for:
 
-- Gemini CLI: `--schema`, `-s`, `--search`, `--stream`
+- Gemini CLI: `--schema`, `-s`, `--search`, `--stream`, `--max-tokens`
 - Codex CLI: `-s`, `--search`, `--stream`
 - Both CLIs ignore explicit `--reasoning-effort`; they use their own default thinking behavior
 - Codex CLI now handles `--schema` via `codex exec --output-schema`
+- `--max-tokens` forces API because Gemini CLI defaults to 8K with no override
+- `--output` works with both CLI and API transport (Python-level, not shell)
 
 ### CLI-First System Prompt Pattern
 
