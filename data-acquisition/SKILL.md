@@ -12,13 +12,17 @@ argument-hint: '[URL, site name, or scraping problem]'
 ```
 What are you downloading?
 
+0. Quick probe — is this URL alive? What's on this page?
+   → WebFetch (built-in, no setup) or Exa crawling
+   → Use BEFORE building any pipeline
+
 1. Direct file URL (CSV, ZIP, JSON, PDF)?
    → curl/requests first. If SSL fails → fallback chain (§Fallback Chain)
    → If Cloudflare/bot detection → curl_cffi or Scrapfly
 
 2. Page behind login/SSO?
    → claude-in-chrome (user's live Chrome session) — ONLY reliable approach
-   → See §Authenticated Sessions
+   → STOP if you hit CAPTCHA, MFA, or login wall — ask the human
 
 3. Page behind Cloudflare/anti-bot?
    → curl_cffi (TLS fingerprint impersonation) — try first, free
@@ -34,6 +38,11 @@ What are you downloading?
    → claude-in-chrome for authenticated sites
    → Browserbase for non-authenticated complex flows
    → Playwright local for simple non-protected sites
+
+6. Stuck after 2-3 attempts?
+   → STOP. Tell the user what you tried and what failed.
+   → Don't build increasingly elaborate workarounds.
+   → The blocker might be access-tier (membership, license), not technical.
 ```
 
 ## Available Tools
@@ -142,7 +151,7 @@ with sync_playwright() as p:
 
 **Workflow:**
 ```
-1. mcp__claude-in-chrome__tabs_context_mcp  → get tab IDs
+1. mcp__claude-in-chrome__tabs_context_mcp  → get tab IDs (ALWAYS first)
 2. mcp__claude-in-chrome__navigate          → go to URL
 3. mcp__claude-in-chrome__find              → locate elements by description
 4. mcp__claude-in-chrome__computer          → click, type, scroll, screenshot
@@ -156,7 +165,46 @@ with sync_playwright() as p:
 - JS for data extraction: `javascript_tool` for reading DOM programmatically
 - `find` for natural language element location: `find(query="download button")`
 
-### 5. Playwright (local) — Headless Browser
+**When to ask the human for help:**
+- **CAPTCHA or visual challenge** — you can't solve these. Ask the user to complete it, then resume.
+- **MFA / 2FA prompt** — the user must enter their code. Wait for them.
+- **Login required and user isn't logged in** — don't try to enter credentials. Tell the user to log in manually in Chrome, then continue.
+- **Site asks for terms acceptance / license agreement** — the user must review and accept. Don't click "I agree" on their behalf for legal agreements.
+- **Download leads to a file picker / OS dialog** — you can't interact with OS-level dialogs. Ask the user to handle it.
+- **Repeated failures after 2-3 attempts** — stop, explain what you tried, ask for guidance.
+
+**Downloads:**
+- Clicked downloads go to the user's Chrome Downloads folder (usually `~/Downloads/`)
+- After triggering a download, wait a few seconds, then check `~/Downloads/` for the new file
+- Move/copy the file to the project data directory — don't leave it in Downloads
+- Always verify: `file <downloaded>` to check type, `head -5` to check for HTML traps
+
+**JS gotchas:**
+- `await` in `javascript_tool` requires wrapping: `(async () => { ... })()`
+- Return values containing URLs with query strings may show as `[BLOCKED: Cookie/query string data]` — simplify queries to avoid returning raw URLs
+- Don't trigger `alert()`, `confirm()`, or `prompt()` — browser dialogs block the extension completely. Use `console.log()` + `read_console_messages` instead.
+
+### 5. WebFetch — Quick Page Grabs (Claude Code built-in)
+
+**What:** Claude Code's built-in `WebFetch` tool. Fetches a URL and returns content. No authentication, no JS rendering.
+
+**When:** Quick checks — is this URL alive? What does this page say? Grab a JSON API response. Check if a download link works before building a full pipeline.
+
+**Limitations:** No cookies/auth, no JS rendering, may be blocked by Cloudflare. Falls back gracefully — use it as a fast probe before reaching for heavier tools.
+
+### 6. Exa — AI-Powered Search & Crawl (MCP)
+
+**What:** Exa search API available via MCP. `web_search_exa` for finding URLs, `crawling_exa` for extracting page content cleanly.
+
+**When:** Finding download URLs, discovering dataset pages, extracting structured content from known URLs. Good for content extraction without browser automation.
+
+```
+mcp__exa__web_search_exa       → find pages by topic
+mcp__exa__crawling_exa         → extract clean content from a URL
+mcp__exa__web_search_advanced_exa → filtered search (date, domain, etc.)
+```
+
+### 7. Playwright (local) — Headless Browser
 
 **When:** Simple sites without bot detection. Rendering JS locally. Testing.
 
@@ -165,7 +213,7 @@ with sync_playwright() as p:
 - Persistent context with Chrome profile copies cookies but NOT server-side sessions
 - Use Playwright's own Chromium, not system Chrome, for automation
 
-### 6. Plain requests/curl — Always Try First
+### 8. Plain requests/curl — Always Try First
 
 ```python
 import requests
