@@ -1,6 +1,6 @@
 ---
 name: data-acquisition
-description: Web scraping and data download toolkit — Scrapfly, Browserbase, curl_cffi, claude-in-chrome, Playwright. Covers which tool for which situation, API keys, fallback chains, authenticated session approaches, and what doesn't work on macOS. Use when downloading data, scraping websites, or automating browser interactions.
+description: Web scraping and data download toolkit — curl_cffi, Scrapfly, Firecrawl, Browserbase, claude-in-chrome, Exa, Playwright. Covers which tool for which situation, API keys, fallback chains, structured extraction, authenticated session approaches, and what doesn't work on macOS. Use when downloading data, scraping websites, or automating browser interactions.
 user-invocable: true
 argument-hint: '[URL, site name, or scraping problem]'
 ---
@@ -29,17 +29,21 @@ What are you downloading?
    → Scrapfly (asp=True) — paid fallback, handles JS rendering too
    → Browserbase — cloud browser, last resort for complex JS
 
-4. Need to render JavaScript?
+4. Need structured data from a page (not just raw HTML)?
+   → Firecrawl extract — pass JSON schema, get typed output
+   → Firecrawl also good for site crawl/map (discover all URLs on a domain)
+
+5. Need to render JavaScript?
    → Scrapfly with render_js=True
    → Browserbase (full cloud Chromium)
    → Playwright local — only if site doesn't block automation
 
-5. Need to interact (click, fill forms, navigate)?
+6. Need to interact (click, fill forms, navigate)?
    → claude-in-chrome for authenticated sites
    → Browserbase for non-authenticated complex flows
    → Playwright local for simple non-protected sites
 
-6. Stuck after 2-3 attempts?
+7. Stuck after 2-3 attempts?
    → STOP. Tell the user what you tried and what failed.
    → Don't build increasingly elaborate workarounds.
    → The blocker might be access-tier (membership, license), not technical.
@@ -204,7 +208,68 @@ mcp__exa__crawling_exa         → extract clean content from a URL
 mcp__exa__web_search_advanced_exa → filtered search (date, domain, etc.)
 ```
 
-### 7. Playwright (local) — Headless Browser
+### 7. Firecrawl — Scrape, Crawl, Extract (MCP or API)
+
+**What:** API that scrapes pages into clean markdown and extracts structured JSON via LLM. Also crawls entire sites and maps URL structures.
+
+**Key:** `FIRECRAWL_API_KEY` in `.env.local` (starts with `fc-`). MCP server: `firecrawl-mcp` (npx).
+
+**When:** You need structured data from a page (not just raw HTML). Pass a JSON schema, get typed output. Also good for site-wide crawl/discovery.
+
+**Unique strengths (things other tools don't do):**
+- **Structured extraction** — define a JSON schema, Firecrawl returns typed data. "Get all download links and file sizes from this page" in one call.
+- **Site crawl** — recursively follow links across a domain, get markdown for each page
+- **Site map** — discover all URLs on a domain without scraping content (good for finding download pages)
+- **Batch scrape** — many URLs in one call with the same schema
+
+**MCP tools:**
+```
+firecrawl_scrape    → single page to markdown/JSON
+firecrawl_crawl     → recursive site crawl
+firecrawl_extract   → structured extraction with schema + prompt
+firecrawl_map       → discover URLs on a domain
+firecrawl_search    → search + scrape in one call
+```
+
+**Python (direct API):**
+```python
+from firecrawl import Firecrawl
+
+fc = Firecrawl(api_key=os.environ["FIRECRAWL_API_KEY"])
+
+# Clean markdown from a page
+result = fc.scrape(url="https://example.com/datasets")
+print(result.data["markdown"])
+
+# Structured extraction with schema
+schema = {
+    "type": "object",
+    "properties": {
+        "datasets": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "url": {"type": "string"},
+                    "size": {"type": "string"}
+                }
+            }
+        }
+    }
+}
+result = fc.extract(
+    urls=["https://example.com/datasets"],
+    prompt="Extract all dataset names, download URLs, and file sizes",
+    schema=schema,
+)
+```
+
+**Install:** `uv add firecrawl` or use MCP (`npx -y firecrawl-mcp`)
+
+**Limitations:** No auth/cookies (use claude-in-chrome for login-gated sites). Anti-bot handling weaker than Scrapfly's `asp=True`. Costs per scrape.
+
+### 8. Playwright (local) — Headless Browser
 
 **When:** Simple sites without bot detection. Rendering JS locally. Testing.
 
@@ -213,7 +278,7 @@ mcp__exa__web_search_advanced_exa → filtered search (date, domain, etc.)
 - Persistent context with Chrome profile copies cookies but NOT server-side sessions
 - Use Playwright's own Chromium, not system Chrome, for automation
 
-### 8. Plain requests/curl — Always Try First
+### 9. Plain requests/curl — Always Try First
 
 ```python
 import requests
@@ -262,6 +327,7 @@ All keys live in `.env.local` at project root (gitignored):
 
 ```bash
 SCRAPFLY_KEY=scp-live-...        # Same key works across projects
+FIRECRAWL_API_KEY=fc-...         # Also available as MCP (firecrawl-mcp)
 BROWSERBASE_API_KEY=bb_live_...
 BROWSERBASE_PROJECT_ID=...
 ```
