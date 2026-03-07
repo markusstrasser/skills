@@ -199,6 +199,10 @@ GPT_TIMEOUT="--timeout 600"
 
 **IMPORTANT — Bash timeout:** When dispatching via the Bash tool, always set `timeout: 360000` (6 minutes) on the Bash tool call. The default 120s Bash timeout kills the process before llmx finishes. llmx's own `--timeout` handles the real deadline.
 
+**Output capture:** Use `--output FILE` (or `-o FILE`) to write output to a file. This writes directly via Python (no shell buffering) — the file has content immediately on completion, not 0 bytes until process exit like `> file` redirects.
+
+**CRITICAL — Context size:** Compact context before dispatch. 50K context → API calls take 5-10 min (get killed). 2K summary context → 52s Gemini, 218s GPT. Summarize the key points from source files into a compact context bundle rather than concatenating full files.
+
 ---
 
 #### Review Mode Prompts
@@ -207,7 +211,8 @@ GPT_TIMEOUT="--timeout 600"
 ```bash
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-context.md" \
-  $GEMINI_MAX_TOKENS --timeout 300 "
+  $GEMINI_MAX_TOKENS --timeout 300 \
+  -o "$REVIEW_DIR/gemini-output.md" "
 <system>
 You are reviewing a codebase. Be concrete. No platitudes. Reference specific code, configs, and findings. It is $(date +%Y-%m-%d).
 </system>
@@ -233,14 +238,15 @@ $([ -n "$CONSTITUTION" ] && echo "Where does the reviewed work violate or neglec
 
 ## 6. Blind Spots In My Own Analysis
 What am I (Gemini) likely getting wrong? Where should you distrust my assessment?
-" > "$REVIEW_DIR/gemini-output.md" 2>&1
+"
 ```
 
 **GPT — Quantitative/Formal Analysis:**
 ```bash
 llmx chat -m $GPT_MODEL \
   -f "$REVIEW_DIR/gpt-context.md" \
-  $GPT_EFFORT $GPT_TIMEOUT "
+  $GPT_EFFORT $GPT_TIMEOUT \
+  -o "$REVIEW_DIR/gpt-output.md" "
 <system>
 You are performing QUANTITATIVE and FORMAL analysis. Gemini is handling qualitative pattern review separately. Focus on what Gemini can't do well. Be precise. Show your reasoning. No hand-waving.
 </system>
@@ -266,7 +272,7 @@ Ranked by measurable impact. Each must have: (a) what, (b) why with quantitative
 
 ## 6. Where I'm Likely Wrong
 What am I (GPT-5.4) probably getting wrong? Known biases to flag: overconfidence in fabricated specifics, overcautious scope-limiting, production-grade recommendations for personal projects.
-" > "$REVIEW_DIR/gpt-output.md" 2>&1
+"
 ```
 
 ---
@@ -280,7 +286,8 @@ Gemini's brainstorming role is the *wild generator* — maximize novelty, ignore
 ```bash
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-context.md" \
-  $GEMINI_MAX_TOKENS --timeout 300 "
+  $GEMINI_MAX_TOKENS --timeout 300 \
+  -o "$REVIEW_DIR/gemini-brainstorm.md" "
 <system>
 You are the wild generator. Maximize novelty. Ignore feasibility, cost, and practicality — another model handles that. Your job is ideas that nobody else would propose. Challenge every assumption. What would a completely different paradigm look like? It is $(date +%Y-%m-%d).
 </system>
@@ -301,14 +308,15 @@ Where is complexity not earning its keep? What could be radically simplified?
 
 ## 5. Blind Spots
 What am I (Gemini) missing because of my training distribution? Where should my creativity be distrusted?
-" > "$REVIEW_DIR/gemini-brainstorm.md" 2>&1
+"
 ```
 
 **GPT — Structured Ideation:**
 ```bash
 llmx chat -m $GPT_MODEL \
   -f "$REVIEW_DIR/gpt-context.md" \
-  $GPT_EFFORT $GPT_TIMEOUT "
+  $GPT_EFFORT $GPT_TIMEOUT \
+  -o "$REVIEW_DIR/gpt-brainstorm.md" "
 <system>
 Generate novel approaches with feasibility assessment.
 </system>
@@ -329,7 +337,7 @@ Pre-mortem: for the top 3, what's the most likely failure mode?
 
 ## 5. Where I'm Likely Wrong
 What am I (GPT-5.4) probably biased toward? Where should my suggestions be distrusted?
-" > "$REVIEW_DIR/gpt-brainstorm.md" 2>&1
+"
 ```
 
 ---
@@ -339,7 +347,8 @@ For large codebases, a cheap Flash pass before the main reviews can surface mech
 ```bash
 llmx chat -m gemini-3-flash-preview \
   -f /path/to/large-context.md \
-  --timeout 120 "
+  --timeout 120 \
+  -o "$REVIEW_DIR/flash-audit.md" "
 <system>
 Mechanical audit only. No analysis, no recommendations.
 </system>
@@ -350,7 +359,7 @@ Find:
 - Stale references (wrong versions, deprecated APIs)
 - Missing cross-references between related documents
 Output as a flat list.
-" > "$REVIEW_DIR/flash-audit.md" 2>&1
+"
 ```
 
 ### Step 3b: Denial Round (Brainstorming Mode Only)
@@ -360,8 +369,8 @@ After receiving both brainstorm outputs, identify the 2-3 dominant paradigms acr
 ```bash
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-brainstorm.md" \
-  -f "$REVIEW_DIR/gpt-brainstorm.md" \
-  $GEMINI_MAX_TOKENS --timeout 300 "
+  $GEMINI_MAX_TOKENS --timeout 300 \
+  -o "$REVIEW_DIR/denial-round.md" "
 <system>
 You are generating COUNTER-proposals. The ideas below have already been proposed. Your job is to find what was MISSED. It is $(date +%Y-%m-%d).
 </system>
@@ -370,7 +379,7 @@ The following paradigms were proposed by two independent models:
 [List the 2-3 dominant paradigms from both outputs]
 
 Now propose 3 approaches that do NOT use any of these paradigms. What fundamentally different angle has been missed? Think from adjacent domains, adversarial perspectives, or radical simplification.
-" > "$REVIEW_DIR/denial-round.md" 2>&1
+"
 ```
 
 Merge denial-round results into Step 5 extraction alongside the main brainstorm outputs.
@@ -402,22 +411,22 @@ llmx chat -m gemini-3-flash-preview "Claim: [model's claim]. Actual code: [paste
 # Extract Gemini's review with GPT-5.3 Instant (cross-family extraction)
 llmx chat -m gpt-5.3-chat-latest --stream --timeout 120 \
   -f "$REVIEW_DIR/gemini-output.md" \
-  "
+  -o "$REVIEW_DIR/gemini-extraction.md" "
 <system>
 Extract every discrete recommendation, finding, or claim as a numbered list. One item per line. Do not evaluate or filter — extract mechanically.
 </system>
 
-Extract all discrete ideas from this review." > "$REVIEW_DIR/gemini-extraction.md" 2>&1
+Extract all discrete ideas from this review."
 
 # Extract GPT's review with Flash (cross-family extraction)
 llmx chat -m gemini-3-flash-preview --timeout 120 \
   -f "$REVIEW_DIR/gpt-output.md" \
-  "
+  -o "$REVIEW_DIR/gpt-extraction.md" "
 <system>
 Extract every discrete recommendation, finding, or claim as a numbered list. One item per line. Do not evaluate or filter — extract mechanically.
 </system>
 
-Extract all discrete ideas from this review." > "$REVIEW_DIR/gpt-extraction.md" 2>&1
+Extract all discrete ideas from this review."
 ```
 
 **Why cross-family extraction:** Self-preference bias (Wataoka NeurIPS 2024) means a model's own family preferentially surfaces claims written in its style. Using GPT-fast to extract Gemini's claims, and Gemini-fast to extract GPT's claims, avoids this.
