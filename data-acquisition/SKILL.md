@@ -1,161 +1,281 @@
 ---
 name: data-acquisition
-description: Hard-won lessons for downloading datasets from academic repositories (ICPSR, NCES, Dataverse, etc.) and authenticated web scraping. Use when acquiring research data, navigating gated archives, or automating downloads through authenticated browser sessions. Prevents wasted cycles on dead-end approaches.
+description: Web scraping and data download toolkit — Scrapfly, Browserbase, curl_cffi, claude-in-chrome, Playwright. Covers which tool for which situation, API keys, fallback chains, authenticated session approaches, and what doesn't work on macOS. Use when downloading data, scraping websites, or automating browser interactions.
 user-invocable: true
-argument-hint: '[dataset name or repository URL]'
+argument-hint: '[URL, site name, or scraping problem]'
 ---
 
-# Data Acquisition — Anti-Waste Playbook
+# Data Acquisition & Web Scraping Toolkit
 
-Every rule below was learned by failing first. Follow the decision tree before writing any download code.
-
-## Decision Tree: Can I Get This Data?
+## Tool Selection — Decision Tree
 
 ```
-1. Is it on a Dataverse instance (Harvard, UNC, etc.)?
-   → YES: curl/wget directly. No auth needed. Best case.
-   → NO: continue
+What are you downloading?
 
-2. Is it on ICPSR?
-   → Check which ICPSR archive (see §ICPSR below)
-   → DSDR archive + per-dataset format buttons visible? → Downloadable via Chrome session
-   → DSDR archive + no format buttons on data rows? → RESTRICTED despite "public-use" label
-   → ICPSR archive (not DSDR)? → Requires institutional membership for data files
-   → Study-level download only returns codebooks. Always.
+1. Direct file URL (CSV, ZIP, JSON, PDF)?
+   → curl/requests first. If SSL fails → fallback chain (§Fallback Chain)
+   → If Cloudflare/bot detection → curl_cffi or Scrapfly
 
-3. Is it on NCES?
-   → Check DataLab Online Codebook (JS SPA, only 1991+ studies)
-   → HS&B (1980s) is NOT in Online Codebook — only in PowerStats (remote analysis, no download)
-   → HSLS/ELS/NELS/ECLS-K ARE in Online Codebook with downloadable microdata
+2. Page behind login/SSO?
+   → claude-in-chrome (user's live Chrome session) — ONLY reliable approach
+   → See §Authenticated Sessions
 
-4. Is it behind any login wall?
-   → See §Authenticated Downloads below
+3. Page behind Cloudflare/anti-bot?
+   → curl_cffi (TLS fingerprint impersonation) — try first, free
+   → Scrapfly (asp=True) — paid fallback, handles JS rendering too
+   → Browserbase — cloud browser, last resort for complex JS
+
+4. Need to render JavaScript?
+   → Scrapfly with render_js=True
+   → Browserbase (full cloud Chromium)
+   → Playwright local — only if site doesn't block automation
+
+5. Need to interact (click, fill forms, navigate)?
+   → claude-in-chrome for authenticated sites
+   → Browserbase for non-authenticated complex flows
+   → Playwright local for simple non-protected sites
 ```
 
-## ICPSR Architecture (critical)
+## Available Tools
 
-### Three tiers of ICPSR access
+### 1. curl_cffi — TLS Fingerprint Impersonation
 
-| Tier | URL pattern | Data files? | What you need |
-|------|-------------|-------------|---------------|
-| **DSDR (public)** | `icpsr.umich.edu/web/DSDR/studies/{id}` | YES if per-dataset rows show sizes + format buttons | Free ICPSR account + terms acceptance |
-| **DSDR (restricted label)** | Same URL, but data rows have no size/no download button | NO | Restricted Data Use Agreement |
-| **ICPSR archive** | `icpsr.umich.edu/web/ICPSR/studies/{id}` | Codebooks only | Institutional ICPSR membership |
+**What:** Drop-in `requests` replacement that impersonates real browser TLS fingerprints. Bypasses most bot detection without a headless browser.
 
-### How to tell before wasting time
+**When:** Cloudflare, Akamai, or other TLS-fingerprint-based blocks. First thing to try before paying for Scrapfly.
 
-1. Go to `https://www.icpsr.umich.edu/web/DSDR/studies/{id}/datadocumentation`
-2. Look at the dataset table (DS0, DS1, DS2...)
-3. **If DS1+ rows show a Size column value (e.g., "85 MB") AND have a download button** → data is downloadable
-4. **If DS1+ rows show blank Size and no download button** → data is restricted, stop here
-5. DS0 is always documentation-only
+**Install:** `uv add curl_cffi` or `uvx --with curl_cffi python3 script.py`
 
-### ICPSR terms acceptance flow
+```python
+from curl_cffi import requests
 
-The "I Agree" button does NOT appear on the `/terms` page. It appears as a **React modal** when you click a per-dataset download button on the `/datadocumentation` page. The flow:
+# Impersonate Chrome
+resp = requests.get(url, impersonate="chrome")
 
-1. Navigate to `/datadocumentation`
-2. Click the download icon on a dataset row
-3. Select a format (Stata, SPSS, etc.) from the dropdown
-4. Terms modal appears → scroll to bottom → click "Agree"
-5. Redirects to "Your Download Should Begin Shortly" page with meta-refresh
+# With headers
+resp = requests.get(url, impersonate="chrome", headers={"Accept": "application/json"})
 
-### ICPSR download URL patterns
-
-```
-# Study-level (ALWAYS codebooks only — don't bother)
-https://www.icpsr.umich.edu/web/{archive}/studies/{id}/versions/{ver}/download/spss
-
-# Per-dataset (works for DSDR public studies)
-https://www.icpsr.umich.edu/web/{archive}/studies/{id}/versions/{ver}/datasets/{dsNum}/download/stata
-
-# Meta-refresh redirect page extracts actual download UUID:
-<meta http-equiv="refresh" content="...url=https://pcms.icpsr.umich.edu/pcms/performDownload/{uuid}">
+# Streaming large files
+resp = requests.get(url, impersonate="chrome", stream=True)
+with open(dest, "wb") as f:
+    for chunk in resp.iter_content(chunk_size=1 << 20):
+        f.write(chunk)
 ```
 
-### Known DSDR studies that actually deliver data
+**Gotcha:** `curl_cffi` is a C library binding — won't work in pure-Python environments. Needs system-level install on some platforms.
 
-| Study | ICPSR ID | Size | Works? |
-|-------|----------|------|--------|
-| FFCWS (Fragile Families) | 31622 | 2 GB (all years) | YES — per-dataset download with format buttons |
-| SECCYD Phase I-IV | 21940, 21941, 21942, 22361 | ? | NO — "public-use" label but data rows have no download buttons |
+### 2. Scrapfly — Anti-Bot API
 
-## NCES Architecture
+**What:** Paid API that handles Cloudflare, renders JS, rotates proxies. Last resort for direct downloads when curl_cffi fails.
 
-- **DataLab Online Codebook** (`nces.ed.gov/datalab/onlinecodebook/`): JS SPA, only lists 1991+ studies (ECLS-K, ELS, HSLS, NELS, NHES, SSOCS, SASS). HS&B not included.
-- **DataLab PowerStats** (`nces.ed.gov/datalab/`): Remote analysis (regressions, tables) — includes HS&B, but NO microdata download.
-- **Old Online Codebook** (`nces.ed.gov/surveys/*/OnlineCodebook/`): Decommissioned, returns HTTP 500.
-- **Restricted-use license**: Individual researchers can apply regardless of institution. Separate from ICPSR membership.
+**Key:** `SCRAPFLY_KEY` in `.env.local` (same key across projects)
 
-## Authenticated Downloads — What Works and What Doesn't
+**When:** SSL failures + Cloudflare + bot detection that curl_cffi can't beat. Also good for JS-rendered content.
 
-### What DOES NOT work (don't try these)
+```python
+from scrapfly import ScrapflyClient, ScrapeConfig
+import os
 
-| Approach | Why it fails |
+key = os.environ.get("SCRAPFLY_KEY", "")
+# Or load from .env.local:
+# for line in open(".env.local"):
+#     if line.startswith("SCRAPFLY_KEY="): key = line.split("=",1)[1].strip()
+
+client = ScrapflyClient(key=key)
+
+# Basic scrape
+result = client.scrape(ScrapeConfig(url=url, asp=True, country="us"))
+
+# With JS rendering
+result = client.scrape(ScrapeConfig(url=url, asp=True, render_js=True, country="us"))
+
+# Content is in result.content (str or bytes)
+```
+
+**Install:** `uv add scrapfly-sdk`
+
+**Cost:** ~$0.001-0.01 per request depending on features. `asp=True` (anti-scraping protection) costs more.
+
+### 3. Browserbase — Cloud Browser
+
+**What:** Full cloud Chromium browser controlled via Playwright CDP. Good for complex JS sites that need real browser behavior.
+
+**Keys:** `BROWSERBASE_API_KEY` and `BROWSERBASE_PROJECT_ID` in `.env.local`
+
+**When:** Complex multi-step flows on non-authenticated sites. NOT for SSO/Google-login sites (Google blocks cloud browsers).
+
+```python
+from playwright.sync_api import sync_playwright
+import os, json, urllib.request
+
+# Create session
+data = json.dumps({"projectId": os.environ["BROWSERBASE_PROJECT_ID"]}).encode()
+req = urllib.request.Request(
+    "https://api.browserbase.com/v1/sessions",
+    data=data,
+    headers={
+        "x-bb-api-key": os.environ["BROWSERBASE_API_KEY"],
+        "Content-Type": "application/json",
+    },
+    method="POST",
+)
+session = json.loads(urllib.request.urlopen(req).read())
+
+# Connect via Playwright
+with sync_playwright() as p:
+    browser = p.chromium.connect_over_cdp(
+        f"wss://connect.browserbase.com?apiKey={os.environ['BROWSERBASE_API_KEY']}&sessionId={session['id']}"
+    )
+    page = browser.contexts[0].pages[0]
+    page.goto("https://example.com")
+    # ... interact ...
+    browser.close()
+```
+
+**Install:** `uv add playwright && playwright install chromium`
+
+### 4. claude-in-chrome — User's Live Chrome Session
+
+**What:** MCP tools that control the user's actual Chrome browser via the Claude extension. Only way to use existing authenticated sessions (SSO, Google login, institutional access).
+
+**When:** ANY site requiring login — ICPSR, NCES, bank portals, institutional archives. This is the ONLY approach that works for SSO-authenticated sessions.
+
+**Workflow:**
+```
+1. mcp__claude-in-chrome__tabs_context_mcp  → get tab IDs
+2. mcp__claude-in-chrome__navigate          → go to URL
+3. mcp__claude-in-chrome__find              → locate elements by description
+4. mcp__claude-in-chrome__computer          → click, type, scroll, screenshot
+5. mcp__claude-in-chrome__javascript_tool   → run JS in page context
+6. mcp__claude-in-chrome__get_page_text     → extract page content
+```
+
+**Key patterns:**
+- Wait after navigation: `computer(action="wait", duration=3)`
+- Screenshot before clicking: `computer(action="screenshot")` to see what's there
+- JS for data extraction: `javascript_tool` for reading DOM programmatically
+- `find` for natural language element location: `find(query="download button")`
+
+### 5. Playwright (local) — Headless Browser
+
+**When:** Simple sites without bot detection. Rendering JS locally. Testing.
+
+**Gotchas on macOS:**
+- Chrome `--remote-debugging-port=9222` does NOT work — macOS App Sandbox blocks it
+- Persistent context with Chrome profile copies cookies but NOT server-side sessions
+- Use Playwright's own Chromium, not system Chrome, for automation
+
+### 6. Plain requests/curl — Always Try First
+
+```python
+import requests
+resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0 ..."}, timeout=120, stream=True)
+```
+
+## The Fallback Chain (from intel/tools/download.py)
+
+Ordered by cost — free strategies first:
+
+```
+1. requests.get()              — plain HTTP, works 80% of the time
+2. requests.get(verify=False)  — SSL certificate issues
+3. curl --insecure             — different TLS stack, catches edge cases
+4. curl --tlsv1.2 --insecure  — force TLS 1.2 for old servers
+5. Scrapfly (asp=True)         — paid, handles Cloudflare/anti-bot
+```
+
+Each strategy checks for **HTML traps** (got a landing page instead of data) and cleans up partial files on failure. Logs to `manifest.jsonl` for retry.
+
+## Per-Domain Gotchas
+
+| Domain | Issue | Solution |
+|--------|-------|----------|
+| `sec.gov` | Requires email in User-Agent, rate limit 10 req/sec | `User-Agent: project-name admin@email.com`, 0.1s delay |
+| `bls.gov` | Blocks default UA | Use browser UA string |
+| `data.cms.gov` | SPA redirects, HTML trap | Check Content-Type, verify file isn't HTML |
+| `census.gov` | Rate limits | 0.5s delay between requests |
+| `lda.senate.gov` | Aggressive rate limit | 2.5s delay |
+| ICPSR (Keycloak SSO) | Cookies don't transfer, session is server-side | claude-in-chrome only |
+| Google accounts | Blocks cloud browsers | claude-in-chrome only |
+
+## What Does NOT Work (Don't Try)
+
+| Approach | Failure mode |
 |----------|-------------|
-| **browser_cookie3** | Extracts Chrome cookies but server-side sessions don't transfer. ICPSR returns `session = {}`. |
-| **Chrome `--remote-debugging-port=9222`** | macOS App Sandbox prevents Chrome from opening the port. `lsof` confirms nothing listening. |
-| **Playwright persistent context with Chrome profile** | Copies cookies but session state doesn't transfer for SSO-authenticated sites. |
-| **Browserbase cloud browser + Google SSO** | Google blocks automated login from cloud browsers (fingerprint detection). |
-| **Browserbase + email/password login** | Only works if the site has native email/password auth. ICPSR uses Keycloak SSO — "Sign in with email" is hidden behind a button click, and if the account was created via Google SSO, there is no password. |
-| **Direct `fetch()`/`curl` with extracted cookies** | 403 on API endpoints. Server validates session integrity beyond cookies. |
+| **browser_cookie3 for SSO sites** | Extracts cookies from Chrome's cookie DB, but server-side sessions don't transfer. Site sees empty session. |
+| **Chrome `--remote-debugging-port` on macOS** | App Sandbox prevents port from opening. `lsof` shows nothing. |
+| **Playwright persistent context + Chrome profile** | Copies cookies/local storage but SSO session state lives server-side. Doesn't work for ICPSR, Google, etc. |
+| **Browserbase + Google SSO** | Google fingerprints cloud browser environments and blocks login. |
+| **Browserbase + Keycloak email login** | If account was created via Google SSO, there is no password. "Sign in with email" button exists but login fails. |
 
-### What DOES work
+## API Keys Location
 
-| Approach | When to use | Notes |
-|----------|-------------|-------|
-| **claude-in-chrome MCP tools** | User has Chrome open and logged in | Navigate, click, accept terms, trigger downloads through the user's live session. The ONLY reliable approach for SSO-authenticated sites. |
-| **Direct URL download (curl/wget)** | Public data on Dataverse, direct file URLs | No auth needed. Always try this first. |
-| **Chrome DevTools console script** | User can paste JS into DevTools | Works when you need programmatic downloads within an authenticated session. Useful as a fallback if chrome MCP unavailable. |
-
-### claude-in-chrome workflow for authenticated downloads
-
-```
-1. tabs_context_mcp → get existing tabs
-2. navigate → go to the repository's datadocumentation page
-3. find/javascript_tool → locate dataset rows, format buttons
-4. computer (click) → click download button → format dropdown appears
-5. computer (click) → select format (Stata recommended for social science)
-6. If terms modal appears:
-   a. computer (scroll) → scroll to bottom of modal
-   b. computer (click) → click "Agree"
-7. Wait for "Your Download Should Begin Shortly" page
-8. Check ~/Downloads/ for the zip
-9. Verify zip contains data files (not just codebooks): unzip -l | grep '.sav|.dta|.dat'
-```
-
-### Critical: always verify downloads contain data
+All keys live in `.env.local` at project root (gitignored):
 
 ```bash
-# After ANY ICPSR download, check for actual data files:
-unzip -l downloaded.zip | grep -iE '\.(sav|dta|dat|csv|tsv|por|sas7bdat|xpt) '
-
-# If you only see .pdf, .txt, .html → codebook-only. Data is gated.
-# Real data downloads show files like: 31622-0001-Data.dta (289 MB)
+SCRAPFLY_KEY=scp-live-...        # Same key works across projects
+BROWSERBASE_API_KEY=bb_live_...
+BROWSERBASE_PROJECT_ID=...
 ```
 
-## Dataverse (easiest path)
+Load pattern:
+```python
+from pathlib import Path
+env = Path(__file__).resolve().parents[1] / ".env.local"
+for line in env.read_text().splitlines():
+    if "=" in line and not line.startswith("#"):
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip())
+```
 
-Dataverse instances (Harvard, UNC, etc.) serve data directly. No auth, no terms modals, no institutional walls.
+## Download Verification
+
+Always verify downloads contain what you expect:
 
 ```bash
-# UNC Dataverse example (Add Health):
-curl -L -o wave1.tab "https://dataverse.unc.edu/api/access/datafile/{fileId}"
+# Check file type
+file downloaded.zip                      # should say "Zip archive data"
 
-# Harvard Dataverse:
-curl -L -o data.tab "https://dataverse.harvard.edu/api/access/datafile/{fileId}"
+# Check zip contents for actual data (not just docs)
+unzip -l downloaded.zip | grep -iE '\.(sav|dta|dat|csv|tsv|parquet|sas7bdat|xpt) '
+
+# Check for HTML trap (got a login page instead of data)
+head -5 downloaded.csv                   # should NOT start with <!DOCTYPE
+python3 -c "open('f.zip','rb').read(4)" # should be PK\x03\x04 for zip
+
+# Check file size is reasonable
+ls -lh downloaded.zip                    # 70 MB zip is real; 21 KB is codebook-only
 ```
 
-Always check Dataverse FIRST before trying ICPSR for any dataset.
+## Resumable Downloads
 
-## Probe Scripts: Don't Accumulate
+For large files (>100 MB), use resume-capable downloads:
 
-After acquisition attempts (successful or failed), **delete probe scripts**. They accumulate fast (we generated 32 in one session) and add no value once the download succeeds or the dead end is documented. The lessons belong in this skill and in the project's access playbook, not in throwaway scripts.
+```python
+import os
+from curl_cffi import requests
+
+def download_resumable(url, dest):
+    headers = {}
+    mode = "wb"
+    if os.path.exists(dest):
+        size = os.path.getsize(dest)
+        headers["Range"] = f"bytes={size}-"
+        mode = "ab"
+
+    resp = requests.get(url, impersonate="chrome", headers=headers, stream=True)
+    if resp.status_code == 416:  # Range not satisfiable = already complete
+        return
+
+    with open(dest, mode) as f:
+        for chunk in resp.iter_content(chunk_size=1 << 20):
+            f.write(chunk)
+```
 
 ## Anti-Patterns
 
-1. **Don't retry the same wall with more code.** If ICPSR returns codebooks, writing a fancier downloader won't produce data files. The wall is access-tier, not technical.
-2. **Don't trust "freely available" or "public-use" labels.** Always verify by checking whether data rows have download buttons AND sizes.
-3. **Don't build Playwright/Puppeteer automation for SSO sites.** Google blocks cloud browsers. macOS blocks CDP ports. Session cookies don't transfer. Use the user's live Chrome session via claude-in-chrome.
-4. **Don't download study-level zips from ICPSR.** They're always codebook-only. Use per-dataset downloads from the datadocumentation page.
-5. **Don't accumulate probe scripts.** Document the lesson, delete the script.
+1. **Don't build Playwright automation for SSO sites.** Use claude-in-chrome.
+2. **Don't retry a wall with fancier code.** If the blocker is access-tier (not technical), stop coding.
+3. **Don't accumulate probe/download scripts.** Document the lesson, delete the script.
+4. **Don't use `browser_cookie3` for anything beyond simple cookie-auth sites.** SSO breaks it.
+5. **Don't pay for Scrapfly/Browserbase before trying curl_cffi.** Free first, paid last.
