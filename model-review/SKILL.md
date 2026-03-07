@@ -1,6 +1,6 @@
 ---
 name: model-review
-description: Cross-model adversarial review via llmx. Dispatches to Gemini 3.1 Pro and GPT-5.4 for independent critique, then fact-checks and synthesizes surviving insights. Supports review mode (convergent/critical) and brainstorming mode (divergent/creative).
+description: Cross-model adversarial review via llmx. Dispatches to Gemini 3.1 Pro and GPT-5.4 for independent critique, then fact-checks and synthesizes surviving insights. Convergent/critical mode only — for divergent ideation, use /brainstorm.
 argument-hint: [topic or decision to review — e.g., "selve search architecture", "authentication redesign"]
 allowed-tools:
   - Bash
@@ -66,30 +66,16 @@ GOALS=$(find . -maxdepth 3 -name "GOALS.md" 2>/dev/null | head -1)
 - **If GOALS.md exists:** Inject into GPT context (quantitative alignment check) and Gemini context (strategic coherence).
 - **If neither exists:** Warn the user: *"No constitution (in CLAUDE.md or standalone) or GOALS.md found. Reviews will lack project-specific anchoring. Consider `/constitution` or `/goals` first."* Proceed anyway — cross-model review still has value without constitutional grounding.
 
-## Mode Selection
+## Mode
 
-Choose the mode BEFORE building context. These are cognitively different tasks.
-
-### Review Mode (default)
-**Convergent thinking.** Find what's wrong: errors, inconsistencies, missed edge cases, violations of stated principles.
+This skill is **convergent/critical only** — find what's wrong: errors, inconsistencies, missed edge cases, violations of stated principles.
 
 - Lower temperature for Gemini (`-t 0.3`) — more deterministic, stern
 - GPT reasoning-effort high — deep fault-finding
 - Prompts ask "what's wrong" and "where does this break"
 - Output: ranked list of problems with verification criteria
 
-### Brainstorming Mode
-**Divergent thinking.** Generate new ideas, alternative approaches, novel connections.
-
-- Default/higher temperature for Gemini (`-t 0.8`) — more creative
-- GPT reasoning-effort medium — broader exploration, less tunnel vision
-- Prompts ask "what else could work" and "what's the unconventional approach"
-- Output: ranked list of ideas with feasibility assessment
-
-Select mode based on the review target:
-- Code/architecture/decisions → **Review mode**
-- Strategy/design space/exploration → **Brainstorming mode**
-- User can override with `--brainstorm` or `--review`
+For **divergent ideation** (generate ideas, alternative approaches, novel connections), use `/brainstorm`.
 
 ## The Process
 
@@ -101,7 +87,7 @@ Identify:
 - **The decision/recommendation/code** under review
 - **Who made it** (you, a previous Claude session, a human)
 - **What evidence exists** (code, configs, research, benchmarks)
-- **Mode:** Review (default) or Brainstorming
+- **Mode:** Review (convergent)
 
 ### Step 2: Bundle Context
 
@@ -279,71 +265,6 @@ What am I (GPT-5.4) probably getting wrong? Known biases to flag: overconfidence
 
 ---
 
-#### Brainstorming Mode Prompts
-
-**Gemini — Wild Generator (maximize novelty):**
-
-Gemini's brainstorming role is the *wild generator* — maximize novelty, ignore feasibility. GPT's role is structured ideation with feasibility assessment. This asymmetric split avoids both models producing the same "responsible creativity" output. Gemini goes wide, GPT goes deep.
-
-```bash
-llmx chat -m $GEMINI_MODEL \
-  -f "$REVIEW_DIR/gemini-context.md" \
-  $GEMINI_MAX_TOKENS --timeout 300 \
-  -o "$REVIEW_DIR/gemini-brainstorm.md" "
-<system>
-You are the wild generator. Maximize novelty. Ignore feasibility, cost, and practicality — another model handles that. Your job is ideas that nobody else would propose. Challenge every assumption. What would a completely different paradigm look like? It is $(date +%Y-%m-%d).
-</system>
-
-[Describe the design space to explore]
-
-## 1. Alternative Architectures
-3 fundamentally different approaches. Not variations — genuinely different paradigms.
-
-## 2. What Adjacent Fields Do Differently
-Patterns from other domains that could apply here. Cite specific systems or papers.
-
-## 3. The Unconventional Idea
-The approach that seems wrong but might work. Explain why it could succeed despite looking odd.
-
-## 4. What's Being Over-Engineered
-Where is complexity not earning its keep? What could be radically simplified?
-
-## 5. Blind Spots
-What am I (Gemini) missing because of my training distribution? Where should my creativity be distrusted?
-"
-```
-
-**GPT — Structured Ideation:**
-```bash
-llmx chat -m $GPT_MODEL \
-  -f "$REVIEW_DIR/gpt-context.md" \
-  $GPT_EFFORT $GPT_TIMEOUT \
-  -o "$REVIEW_DIR/gpt-brainstorm.md" "
-<system>
-Generate novel approaches with feasibility assessment.
-</system>
-
-[Describe the design space to explore]
-
-## 1. Idea Generation (10 ideas)
-Quick-fire: 10 approaches ranked by novelty. For each: one sentence + feasibility (High/Medium/Low).
-
-## 2. Deep Dive on Top 3
-For each: architecture sketch, estimated effort, risk, what makes it non-obvious.
-
-## 3. Combination Plays
-Ideas that work poorly alone but well together. Cross-pollinate from the list above.
-
-## 4. What Would Break Each Approach
-Pre-mortem: for the top 3, what's the most likely failure mode?
-
-## 5. Where I'm Likely Wrong
-What am I (GPT-5.4) probably biased toward? Where should my suggestions be distrusted?
-"
-```
-
----
-
 **Optional — Flash pattern extraction pass:**
 For large codebases, a cheap Flash pass before the main reviews can surface mechanical issues:
 ```bash
@@ -363,28 +284,6 @@ Find:
 Output as a flat list.
 "
 ```
-
-### Step 3b: Denial Round (Brainstorming Mode Only)
-
-After receiving both brainstorm outputs, identify the 2-3 dominant paradigms across both responses. Re-query Gemini (cheaper) with the following to catch Artificial Hivemind convergence — both models often propose the same paradigms despite generating independently:
-
-```bash
-llmx chat -m $GEMINI_MODEL \
-  -f "$REVIEW_DIR/gemini-brainstorm.md" \
-  $GEMINI_MAX_TOKENS --timeout 300 \
-  -o "$REVIEW_DIR/denial-round.md" "
-<system>
-You are generating COUNTER-proposals. The ideas below have already been proposed. Your job is to find what was MISSED. It is $(date +%Y-%m-%d).
-</system>
-
-The following paradigms were proposed by two independent models:
-[List the 2-3 dominant paradigms from both outputs]
-
-Now propose 3 approaches that do NOT use any of these paradigms. What fundamentally different angle has been missed? Think from adjacent domains, adversarial perspectives, or radical simplification.
-"
-```
-
-Merge denial-round results into Step 5 extraction alongside the main brainstorm outputs.
 
 ### Step 4: Fact-Check Outputs (MANDATORY)
 
@@ -492,7 +391,7 @@ Build the synthesis from the disposition table. Every INCLUDE item must appear. 
 
 ```markdown
 ## Cross-Model Review: [topic]
-**Mode:** Review / Brainstorming
+**Mode:** Review
 **GPT:** GPT-5.4 (reasoning-effort high)
 **Date:** YYYY-MM-DD
 **Models:** [actual models used]
@@ -608,7 +507,7 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 
 **GPT-5.4 (`gpt-5.4`) — review GPT:**
 - `--reasoning-effort high` is essential for review mode (burns thinking time for deep fault-finding)
-- `--reasoning-effort medium` for brainstorming mode (avoids tunnel vision)
+- `--reasoning-effort medium` for extraction tasks only
 - MUST use `--stream` with reasoning-effort high — non-streaming timeouts are common
 - Temperature locked at 1.0. `--timeout 600` minimum for high reasoning effort
 - Tends toward overcautious "production-grade" recommendations for personal projects
@@ -633,6 +532,6 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 - **Writing to /tmp.** Review outputs are valuable artifacts. Always persist to `.model-review/YYYY-MM-DD-topic/`.
 - **Using bare date directories.** `.model-review/2026-03-01/` will collide when two reviews run the same day. Always append a topic slug.
 - **Skipping constitutional check.** Reviews without project-specific anchoring drift into generic advice. Always check for constitution (in CLAUDE.md or standalone) and GOALS.md first.
-- **Mixing review and brainstorming.** Convergent (find errors) and divergent (generate ideas) thinking are cognitively different. Don't ask for both in one prompt — the outputs will be mediocre at both.
+- **Mixing review and brainstorming.** This skill is convergent only. For divergent ideation, use `/brainstorm`.
 
 $ARGUMENTS
