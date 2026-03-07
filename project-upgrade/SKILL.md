@@ -158,11 +158,11 @@ Send the codebase to Gemini 3.1 Pro with a highly structured prompt. The prompt 
 
 **Temperature 0.3** — we want analytical precision, not creativity.
 
-**IMPORTANT:** Gemini 3.1 Pro defaults to 8,192 max output tokens. For large codebases with many findings, the JSON output WILL be silently truncated. If llmx supports `--max-tokens` for output, set it to 32768+. Otherwise, watch for truncated JSON errors in the parser and consider splitting the analysis by directory.
+**IMPORTANT:** Always pass `--max-tokens 65536` on Gemini dispatches — the server default is 8K which silently truncates large JSON output.
 
 ```bash
 cat "$UPGRADE_DIR/codebase.md" | llmx chat -m gemini-3.1-pro-preview \
-  -t 0.3 --no-stream --timeout 600 "
+  -t 0.3 --no-stream --timeout 600 --max-tokens 65536 "
 You are analyzing an entire codebase for CONCRETE, VERIFIABLE improvements. Not vague suggestions — specific issues with specific fixes.
 
 PROJECT: $PROJECT_NAME
