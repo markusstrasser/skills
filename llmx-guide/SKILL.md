@@ -97,7 +97,7 @@ GPT-5.4 (and 5.2) with reasoning burns time BEFORE producing output. Non-streami
 
 **Max timeout: 900s** (validated at CLI level, 1-900 range). For review dispatches use `--timeout 600`.
 
-**Streaming avoids most timeouts** because `--stream` sends keepalive chunks during reasoning.
+**Wall-clock enforcement (v0.5.3+):** `--timeout` is enforced via SIGALRM, not httpx socket timeout. This means the process will actually exit after N seconds of real time — even with streaming keepalives or chunked transfer. Before v0.5.3, streaming calls could hang indefinitely past the timeout value.
 
 ```bash
 # WILL timeout:

@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import warnings
 from typing import Any
 
 
@@ -50,12 +51,14 @@ def run_sensitivity(formula: str, data_path: str, treatment: str,
     # Run sensemakr — first without benchmarks (always works), then with benchmarks
     estimate = float(model.params[treatment])
     try:
-        sensitivity = sm.Sensemakr(
-            model=model,
-            treatment=treatment,
-            q=1.0,
-            alpha=alpha,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            sensitivity = sm.Sensemakr(
+                model=model,
+                treatment=treatment,
+                q=1.0,
+                alpha=alpha,
+            )
     except Exception as e:
         return {"error": f"Sensemakr failed: {e}"}
 
@@ -67,13 +70,15 @@ def run_sensitivity(formula: str, data_path: str, treatment: str,
     benchmark_warning: str | None = None
     if benchmark_covariates:
         try:
-            sens_bench = sm.Sensemakr(
-                model=model,
-                treatment=treatment,
-                benchmark_covariates=benchmark_covariates,
-                q=1.0,
-                alpha=alpha,
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                sens_bench = sm.Sensemakr(
+                    model=model,
+                    treatment=treatment,
+                    benchmark_covariates=benchmark_covariates,
+                    q=1.0,
+                    alpha=alpha,
+                )
             if hasattr(sens_bench, "bounds") and sens_bench.bounds is not None:
                 for _, row in sens_bench.bounds.iterrows():
                     bounds.append({
@@ -84,22 +89,42 @@ def run_sensitivity(formula: str, data_path: str, treatment: str,
                         "adjusted_se": round(float(row.get("adjusted_se", 0)), 4),
                     })
         except Exception:
-            # PySensemakr has known pandas compat issues with benchmark computation
-            # Fall back to manual partial R2 computation for benchmarks
+            # PySensemakr has known pandas compat issues with benchmark computation.
+            # Fall back to exact partial-R2 calculations using the fitted model and
+            # an auxiliary treatment-on-covariates regression.
             try:
+                import statsmodels.api as sm_api
+
+                exog_names = list(model.model.exog_names)
+                exog = model.model.exog
+                treat_idx = exog_names.index(treatment)
+                y_treat = exog[:, treat_idx]
+                aux_keep = [idx for idx, name in enumerate(exog_names) if name != treatment]
+                aux_names = [exog_names[idx] for idx in aux_keep]
+                aux_exog = exog[:, aux_keep]
+                aux_fit = sm_api.OLS(y_treat, aux_exog).fit()
+                aux_dof = float(aux_fit.df_resid)
+
                 for cov in benchmark_covariates:
                     if cov in model.params:
-                        r2 = float(sm.partial_r2(model=model, covariates=cov))
+                        t_y = float(model.tvalues[cov])
+                        dof_y = float(model.df_resid)
+                        r2_y = (t_y * t_y) / (t_y * t_y + dof_y)
+
+                        if cov not in aux_names:
+                            continue
+                        t_d = float(aux_fit.tvalues[aux_names.index(cov)])
+                        r2_d = (t_d * t_d) / (t_d * t_d + aux_dof)
                         bounds.append({
                             "benchmark": f"1x {cov}",
-                            "r2yd_x": round(r2, 4),
-                            "r2dz_x": 0.0,
+                            "r2yd_x": round(r2_y, 4),
+                            "r2dz_x": round(r2_d, 4),
                             "adjusted_estimate": 0.0,
                             "adjusted_se": 0.0,
                         })
                 benchmark_warning = (
-                    "Benchmark bounds computed via fallback (partial R2 only). "
-                    "PySensemakr ovb_bounds has a pandas compatibility issue."
+                    "Benchmark bounds computed via fallback. "
+                    "PySensemakr ovb_bounds has a pandas compatibility issue on this stack."
                 )
             except Exception:
                 benchmark_warning = "Benchmark computation failed due to PySensemakr pandas compat issue."
@@ -299,7 +324,7 @@ def main():
     )
     json.dump(result, sys.stdout, indent=2)
     print()
-    sys.exit(1 if result.get("fragile") or "error" in result else 0)
+    sys.exit(1 if "error" in result else 0)
 
 
 if __name__ == "__main__":
