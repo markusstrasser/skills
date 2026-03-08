@@ -282,6 +282,71 @@ Practical implication:
 - `llmx -p openai ...` on a machine with `model_reasoning_effort = "xhigh"` uses Codex CLI at `xhigh`
 - If llmx falls back to the OpenAI API, llmx's own default is `high` unless you pass `--reasoning-effort`
 
+## CLI-First Usage (Subscription Pricing)
+
+Gemini CLI and Codex CLI use flat subscription pricing — zero marginal cost per query. Prefer them for routine tasks.
+
+### When to Use CLIs vs API
+
+| Use CLI when | Use API when |
+|-------------|-------------|
+| Simple Q&A, summaries, reviews | Need `--max-tokens` (Gemini CLI caps at 8K) |
+| Output fits in 8K tokens | Need structured output (`--schema`) |
+| Don't need system prompts | Need `-s` system prompt (true role, not inline) |
+| Don't need streaming | Need `--stream` for progressive output |
+| Cost matters (subscription = free) | Need search grounding (`--search`) |
+
+### Piping Context Files
+
+CLIs accept `-f FILE` for context. Use `.claude/overviews/` (5-10KB compressed project summaries) for codebase-aware queries at zero cost:
+
+```bash
+# Code review with project context (Gemini CLI, free)
+llmx -p google -f .claude/overviews/source-overview.md "Review the error handling in the orchestrator pipeline"
+
+# Architecture question (Codex CLI, free)
+llmx -p openai -f .claude/overviews/source-overview.md -f .claude/overviews/tooling-overview.md "How does the telemetry pipeline flow?"
+
+# Specific file review (pipe file as context)
+llmx -p google -f src/providers.py "Find bugs in this code"
+```
+
+### Context Budget
+
+| Backend | Max useful context | Notes |
+|---------|-------------------|-------|
+| Gemini CLI | ~200K chars | Beyond this, CLI may OOM or slow down |
+| Codex CLI | ~100K chars | More conservative |
+| API (Gemini) | 1M tokens | Use for large codebases |
+| API (GPT-5.4) | 1M tokens | Use for large codebases |
+
+**Rule of thumb:** If your `-f` files total <50KB, use CLI. If >200KB, use API.
+
+### CLI for Agents (Claude Code / Codex)
+
+When dispatching from an agent context:
+
+```bash
+# Quick codebase question (zero cost, ~5-15s)
+llmx -p google -f .claude/overviews/source-overview.md "What files handle authentication?"
+
+# Code review with inline system prompt (stays on CLI)
+cat <<'EOF' | llmx -p openai -m gpt-5.4 -o review.md
+<system>You are reviewing code. Be concrete. Reference specific files.</system>
+
+$(cat src/main.py)
+
+Review this for bugs and security issues.
+EOF
+
+# Batch review — loop over files (each call is free)
+for f in src/*.py; do
+  llmx -p google -f "$f" -o "reviews/$(basename "$f").md" "Review this file for bugs"
+done
+```
+
+**Avoid** `-s` flag with CLIs — it forces API fallback. Use inline `<system>` tags instead (advisory, not true system role, but preserves CLI transport).
+
 ## Judge Names ≠ Model Names
 
 | Context | Name |
