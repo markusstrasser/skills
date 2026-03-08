@@ -151,7 +151,7 @@ For complete guide, read `PROMPTING_GPT.md`.
 - **Grounding with Google Search** reduces hallucination ~40% -- unique capability
 - Use **few-shot examples always** -- matters more for Gemini than other models
 - Add `"Remember it is 2026"` -- Gemini benefits from explicit date anchoring
-- **llmx supports `--reasoning-effort`** for Gemini (maps to thinkingLevel via LiteLLM)
+- **llmx supports `--reasoning-effort`** for Gemini (maps to thinkingLevel internally)
 
 For complete guide, read `PROMPTING_GEMINI.md`.
 

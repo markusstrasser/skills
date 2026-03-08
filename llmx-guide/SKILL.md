@@ -112,7 +112,7 @@ GPT-5.4 (and 5.2) with reasoning burns time BEFORE producing output. Non-streami
 
 **Max timeout: 900s** (validated at CLI level, 1-900 range). For review dispatches use `--timeout 600`.
 
-**Wall-clock enforcement (v0.5.3+):** `--timeout` is enforced via SIGALRM, not httpx socket timeout. This means the process will actually exit after N seconds of real time — even with streaming keepalives or chunked transfer. Before v0.5.3, streaming calls could hang indefinitely past the timeout value.
+**Wall-clock enforcement:** For OpenAI-compatible providers, `--timeout` is enforced via SIGALRM as a safety net. For Google, a server-side deadline replaces SIGALRM entirely (see below). Both ensure the process actually exits after N seconds of real time.
 
 **`max_completion_tokens` vs `max_tokens` (v0.6.0+):** GPT-5.x uses `max_completion_tokens` not `max_tokens` at the API level. llmx handles this automatically — `--max-tokens` maps to the correct parameter per provider. **Important:** for reasoning models, `max_completion_tokens` includes reasoning tokens. If you set `--max-tokens 4096` on GPT-5.4 with reasoning, the model may exhaust the budget on thinking and produce truncated output. Use 16K+ for reasoning models.
 

@@ -236,7 +236,7 @@ What am I (Gemini) likely getting wrong? Where should you distrust my assessment
 ```bash
 llmx chat -m $GPT_MODEL \
   -f "$REVIEW_DIR/gpt-context.md" \
-  $GPT_EFFORT $GPT_TIMEOUT \
+  $GPT_EFFORT $GPT_TIMEOUT --max-tokens 16384 \
   -o "$REVIEW_DIR/gpt-output.md" "
 <system>
 You are performing QUANTITATIVE and FORMAL analysis. Gemini is handling qualitative pattern review separately. Focus on what Gemini can't do well. Be precise. Show your reasoning. No hand-waving.

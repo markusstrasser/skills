@@ -69,7 +69,7 @@ config = types.GenerateContentConfig(
     thinking_config=types.ThinkingConfig(thinking_level="low")
 )
 
-# Via llmx (maps --reasoning-effort to thinkingConfig via LiteLLM)
+# Via llmx (maps --reasoning-effort to thinkingConfig internally)
 llmx -m gemini-3-pro-preview --reasoning-effort low "simple query"
 llmx -m gemini-3-pro-preview "complex query"  # Defaults to high server-side
 ```
