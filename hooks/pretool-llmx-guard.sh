@@ -14,7 +14,7 @@ echo "$CMD" | grep -q 'llmx' || exit 0
 WARNINGS=""
 
 # 1. Shell redirect with llmx output (not context file building with cat/echo)
-if echo "$CMD" | grep -qE 'llmx\s+chat.*>\s*["\$/"a-zA-Z]'; then
+if echo "$CMD" | grep -qE 'llmx\s+(chat|research|image|svg|vision)?.*[^2]>\s*["\$\./~a-zA-Z]'; then
   WARNINGS="${WARNINGS}[llmx-guard] Shell redirect detected. Use --output/-o instead of > file — shell redirects buffer until process exit.\n"
 fi
 
@@ -29,12 +29,12 @@ if echo "$CMD" | grep -qE '(stdbuf|script\s+-q).*llmx'; then
 fi
 
 # 4. max_tokens with GPT-5.x reasoning models (should be max_completion_tokens, but llmx handles this — warn about small values)
-if echo "$CMD" | grep -qE 'gpt-5\.[234]' && echo "$CMD" | grep -qE -- '--max-tokens\s+[0-9]{1,4}[^0-9]'; then
+if echo "$CMD" | grep -qE 'gpt-5\.[234]' && echo "$CMD" | grep -qE -- '--max-tokens\s+[0-9]{1,4}(\s|$)'; then
   WARNINGS="${WARNINGS}[llmx-guard] Small --max-tokens with GPT-5.x reasoning model. max_completion_tokens includes reasoning tokens — use 16384+ to avoid truncated output.\n"
 fi
 
 # 5. Old LiteLLM model prefixes (deprecated in v0.6.0)
-if echo "$CMD" | grep -qE 'llmx.*-m\s+(gemini/|openai/|xai/|moonshot/)'; then
+if echo "$CMD" | grep -qE 'llmx.*(-m|--model)\s+(gemini/|openai/|xai/|moonshot/)'; then
   WARNINGS="${WARNINGS}[llmx-guard] LiteLLM-style model prefix detected (gemini/, openai/, etc). Prefixes are deprecated in v0.6.0 — use bare model names.\n"
 fi
 

@@ -34,11 +34,10 @@ argument-hint: '[model name or issue description]'
 |-------|-----------|-------|
 | Gemini 3.1 Pro | `gemini-3.1-pro-preview` | **Default Google model.** `google` prefers Gemini CLI when installed |
 | Gemini 3 Flash | `gemini-3-flash-preview` | Cheap. `-preview` required |
-| Gemini 3 Flash | `gemini-3-flash-preview` | Budget: $0.50/$3/M, 1M ctx |
 | Gemini 3.1 Flash Image | `gemini-3.1-flash-image-preview` | No text-only 3.1 Flash yet |
 | GPT-5.3 Instant | `gpt-5.3-chat-latest` | Reasoning max: **medium only**. Auto-defaults |
 | GPT-5.4 | `gpt-5.4` | **Default OpenAI model.** `openai` prefers Codex CLI when installed. API fallback defaults reasoning to `high`; `xhigh` is also supported. |
-| GPT-5.2 (legacy) | `gpt-5.2` | Legacy OpenAI default. 400K context. |
+| GPT-5.2 (legacy) | `gpt-5.2` | Legacy OpenAI default. |
 | GPT-5-Codex | `gpt-5-codex` | No `minimal` reasoning-effort |
 | Kimi K2.5 | `kimi-k2.5` | No `--reasoning-effort`. Use `--no-thinking` |
 | Kimi K2 (legacy) | `kimi-k2-thinking` | Use `--use-old` flag |
@@ -158,7 +157,7 @@ PYTHONUNBUFFERED=1 llmx "query" > out  # same — shell > is the problem
 
 **When dispatching from Claude Code:**
 1. Use `-o FILE` for file output — never `> file`
-2. Set Bash tool `timeout: 360000` (6 min) — default 120s kills llmx early
+2. Set Bash tool `timeout: 660000` (11 min) — must exceed llmx's `--timeout` value
 3. Compact context before dispatch — 2K context → 52s, 50K → may hang
 
 ### 3. shell=True + Parentheses

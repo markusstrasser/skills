@@ -70,7 +70,7 @@ GOALS=$(find . -maxdepth 3 -name "GOALS.md" 2>/dev/null | head -1)
 
 This skill is **convergent/critical only** — find what's wrong: errors, inconsistencies, missed edge cases, violations of stated principles.
 
-- Lower temperature for Gemini (`-t 0.3`) — more deterministic, stern
+- Lower temperature for Gemini (`-t 0.3`) — more deterministic, stern. Note: thinking models lock temperature to 1.0 regardless of -t value.
 - GPT reasoning-effort high — deep fault-finding
 - Prompts ask "what's wrong" and "where does this break"
 - Output: ranked list of problems with verification criteria
@@ -186,7 +186,7 @@ GPT_TIMEOUT="--timeout 600"
 # For reasoning models, 16K+ recommended to avoid truncated output.
 ```
 
-**IMPORTANT — Bash timeout:** When dispatching via the Bash tool, always set `timeout: 360000` (6 minutes) on the Bash tool call. The default 120s Bash timeout kills the process before llmx finishes. llmx's own `--timeout` handles the real deadline.
+**IMPORTANT — Bash timeout:** When dispatching via the Bash tool, always set `timeout: 660000` (11 minutes — must exceed llmx --timeout value) on the Bash tool call. The default 120s Bash timeout kills the process before llmx finishes. llmx's own `--timeout` handles the real deadline.
 
 **Output capture:** Use `--output FILE` (or `-o FILE`) to write output to a file. This writes directly via Python (no shell buffering) — the file has content immediately on completion, not 0 bytes until process exit like `> file` redirects. Never use `> file` shell redirects with llmx. Never use `PYTHONUNBUFFERED` — the buffering is in the shell redirect, not Python.
 
@@ -231,6 +231,7 @@ $([ -n "$CONSTITUTION" ] && echo "Where does the reviewed work violate or neglec
 What am I (Gemini) likely getting wrong? Where should you distrust my assessment?
 "
 ```
+# Check stderr for transport switches, fallbacks, and truncation warnings
 
 **GPT — Quantitative/Formal Analysis:**
 ```bash
@@ -265,6 +266,7 @@ Ranked by measurable impact. Each must have: (a) what, (b) why with quantitative
 What am I (GPT-5.4) probably getting wrong? Known biases to flag: overconfidence in fabricated specifics, overcautious scope-limiting, production-grade recommendations for personal projects.
 "
 ```
+# Check stderr for transport switches, fallbacks, and truncation warnings
 
 ---
 
