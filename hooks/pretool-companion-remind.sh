@@ -24,14 +24,38 @@ TOOL="$CLAUDE_TOOL_NAME"
 CMD=""
 QUERY=""
 FPATH=""
+IS_SEARCH_TOOL=false
 if [ "$TOOL" = "Bash" ]; then
   CMD=$(echo "$INPUT" | jq -r '.command // empty' 2>/dev/null)
-elif echo "$TOOL" | grep -qE 'mcp__exa|mcp__research|mcp__paper-search|mcp__brave-search|mcp__firecrawl|WebSearch|WebFetch'; then
-  QUERY=$(echo "$INPUT" | jq -r '(.query // .search_query // .prompt // .url // "") | ascii_downcase' 2>/dev/null)
+elif echo "$TOOL" | grep -qE 'mcp__exa|mcp__research|mcp__paper-search|mcp__brave-search|mcp__firecrawl|mcp__perplexity|WebSearch|WebFetch'; then
+  QUERY=$(echo "$INPUT" | jq -r '(.query // .search_query // .prompt // .url // .claim // "") | ascii_downcase' 2>/dev/null)
+  IS_SEARCH_TOOL=true
 elif [ "$TOOL" = "Write" ] || [ "$TOOL" = "Edit" ]; then
   FPATH=$(echo "$INPUT" | jq -r '.file_path // empty' 2>/dev/null)
   # Also grab content for Write, new_string for Edit
   CONTENT=$(echo "$INPUT" | jq -r '(.content // .new_string // "") | .[0:2000]' 2>/dev/null)
+fi
+
+# --- Counter-based triggers (fires after N occurrences, not on first) ---
+COUNTER_DIR="$REMINDER_DIR/counters"
+mkdir -p "$COUNTER_DIR" 2>/dev/null
+
+increment_counter() {
+  local name="$1"
+  local file="$COUNTER_DIR/$name"
+  local count=0
+  [ -f "$file" ] && count=$(cat "$file")
+  count=$((count + 1))
+  echo "$count" > "$file"
+  echo "$count"
+}
+
+# Track search API calls for researcher skill reminder
+if $IS_SEARCH_TOOL; then
+  SEARCH_COUNT=$(increment_counter "search-api")
+  if [ "$SEARCH_COUNT" -eq 3 ]; then
+    remind "researcher" "3+ search API calls this session. Load the researcher skill (/researcher) for routing guidance: S2 for literature (free, structured), Exa for semantic discovery, Brave for triangulation, verify_claim for spot-checks. Axis diversity and phase separation prevent shallow convergence."
+  fi
 fi
 
 # =============================================================
@@ -80,6 +104,25 @@ fi
 # --- source-grading: intel-context DuckDB/SQL queries ---
 if [ -n "$CMD" ] && echo "$CMD" | grep -qiE 'duckdb|\.sql|SELECT.*FROM.*WHERE' && echo "$CLAUDE_PROJECT_DIR" | grep -qiE 'intel'; then
   remind "source-grading" "SQL query in intel context. Consider source-grading for data provenance — NATO Admiralty grades on source reliability."
+fi
+
+# --- perplexity demotion: nudge away from demoted endpoints ---
+if echo "$TOOL" | grep -qE 'perplexity_search|perplexity_ask'; then
+  remind "perplexity-demoted" "perplexity_search/ask are demoted (5x Exa cost). Use Exa or Brave for breadth queries. Reserve perplexity_reason (complex why) and perplexity_research (deep survey) for decisive use only."
+fi
+
+# --- S2 nudge: paper-by-name queries should use Semantic Scholar first ---
+if [ -n "$QUERY" ] && echo "$TOOL" | grep -qE 'mcp__exa|mcp__brave|WebSearch'; then
+  if echo "$QUERY" | grep -qiE 'paper|arxiv|preprint|et al\.?|icml|neurips|emnlp|acl |iclr|cvpr|aaai|naacl|colm |iccv'; then
+    remind "s2-for-papers" "Paper/venue name detected in web search. Use S2 (search_papers) first — free, structured metadata, citation counts, zero hallucinated citations. Fall back to Exa only if S2 misses."
+  fi
+fi
+
+# --- verify_claim: intel entity/research writes should spot-check claims ---
+if [ -n "$FPATH" ] && echo "$CLAUDE_PROJECT_DIR" | grep -qiE 'intel'; then
+  if echo "$FPATH" | grep -qiE 'entities/|docs/research/|analysis/'; then
+    remind "verify-claims-intel" "Writing intel research/entity file. Use verify_claim to spot-check key financial claims (~\$0.005/call, cached 7d). Cheap insurance against hallucinated numbers."
+  fi
 fi
 
 # =============================================================
