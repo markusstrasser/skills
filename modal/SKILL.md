@@ -18,9 +18,15 @@ container_idle_timeout=N      →  scaledown_window=N
 allow_concurrent_inputs=N     →  @modal.concurrent(max_inputs=N)  # decorator
 max_inputs=N                  →  single_use_containers=True  # v1.3+, now boolean
 Function.web_url              →  Function.get_web_url()
+modal.web_endpoint             →  modal.fastapi_endpoint  # clarifies FastAPI dep
 modal.Mount(...)              →  REMOVED — use Image.add_local_python_source()
 mount= parameter              →  REMOVED everywhere
 app.run(show_progress=True)   →  REMOVED
+modal.gpu.H100() objects      →  gpu="H100" strings (case-insensitive)
+@modal.build decorator        →  Image.run_function() or Volumes
+Image.copy_local_dir/file     →  Image.add_local_dir/file (default: runtime mount, copy=True for layer)
+.lookup()                     →  .from_name() + .hydrate() for metadata
+Custom __init__ on @app.cls   →  modal.parameter() annotations (str/int/bool/bytes only)
 .resolve()                    →  REMOVED from Modal objects
 Function.spawn (generators)   →  REMOVED — spawn no longer supports generators
 FunctionCall.get_gen           →  REMOVED
