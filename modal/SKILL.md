@@ -502,6 +502,16 @@ output_manager.set_timestamps(True)
 
 11. **`dev_suffix` in `.modal.toml`** — override ephemeral app URL suffix for consistent dev URLs across runs.
 
+12. **`ephemeral_disk` range** — valid range is 524,288–3,145,728 MiB (~500 GiB–3 TiB). Values outside this range error at function creation. Omit the parameter entirely for default disk.
+
+13. **Volume FUSE partial write leak** — Modal's FUSE layer can expose partially-written files to other containers even without `vol.commit()`. Don't checkpoint on intermediate output files — checkpoint on a completion marker (e.g., summary JSON written atomically via `os.replace()` only after all work finishes).
+
+14. **`modal volume rm` may fail** if the volume is mounted by a running function or sandbox. Stop all consumers first.
+
+15. **`Image.from_registry` Python conflicts** — some Docker images (e.g., `broadinstitute/gatk`) bundle an incompatible Python. Use `Image.micromamba()` with conda packages instead to control the Python version.
+
+16. **C++ build deps in images** — if your image builds C/C++ code, install BOTH `gcc` AND `g++`. Some Makefiles use `$(CXX)` which specifically requires `g++`.
+
 ## MANDATORY: Test Before Deploying
 
 **Never deploy a new Modal script straight to a full run.** Follow this order:
