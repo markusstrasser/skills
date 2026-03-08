@@ -77,29 +77,68 @@ for l in sorted(today, key=lambda x: ('HIGH','MEDIUM','LOW').index(x['severity']
 "
 ```
 
-If no HIGH findings, report the MEDIUM summary and stop. Don't validate LOWs.
+If no HIGH findings, scan MEDIUMs for the high-true-positive patterns (unchecked returncode, divergent copies, code duplication) — these are often misclassified. Don't validate LOWs.
 
-## Step 4: Validate HIGH Findings
+## Step 4: Validate ALL HIGH Findings
 
 **This is the critical step. Models hallucinate code issues.**
 
-For each HIGH finding (up to 10 per invocation):
+Validate **every** HIGH finding, not a sample. Read the actual code for each one. If there are 60 HIGHs, validate 60. Batch reads in parallel to go fast.
+
+**Do NOT categorize-then-skip.** "38 broad except findings" is not a verdict — each one lives in different code with different risk profiles. A bare except in a clinical output generator is dangerous; the same pattern in a `validate()` tool-availability check is correct. Read the code, judge individually.
+
+### Triage by context, not by pattern name
+
+The scout reports patterns. You judge whether the pattern matters *in that location*:
+
+| Context | Broad except is... | Unchecked returncode is... |
+|---------|--------------------|----|
+| Clinical/report output | **CONFIRMED** — silent data loss | **CONFIRMED** — garbage in reports |
+| External API/network call | FALSE POSITIVE — correct pattern | N/A |
+| `validate()` tool checks | FALSE POSITIVE — expected | FALSE POSITIVE |
+| Post-output stats gathering | FALSE POSITIVE — acceptable | **PARTIAL** — should warn |
+| Checkpoint/resume loading | **PARTIAL** — should log | N/A |
+| Documented design (CLAUDE.md) | FALSE POSITIVE | FALSE POSITIVE |
+
+### Common real bugs (from observed data)
+
+These patterns have a >50% true positive rate:
+- **Unchecked `subprocess.run` returncode before parsing stdout** — silently produces garbage
+- **Divergent function copies** — ranking/scoring functions duplicated across files with drift
+- **Code duplication across sibling scripts** — stat helpers, loaders copy-pasted identically
+- **Silent error swallowing in data-producing paths** — `except Exception: pass` where the output is consumed downstream
+
+These patterns have a >75% false positive rate:
+- "Broad except" in network calls, validate(), stats gathering, lazy imports
+- "Inconsistent return type" across modal scripts (dict vs string) — style debt, not bugs
+- "Missing init_stage/finalize_stage" — lifecycle gaps, not data correctness
+- "Uses subprocess.run instead of run_cmd" — style inconsistency unless returncode is also unchecked
+
+### For each finding
 
 1. **Read the actual file** at the cited location. Line numbers are typically wrong by 30-110 lines — search for the function/pattern name instead.
 2. **Determine verdict:**
    - **CONFIRMED** — the issue exists and is worth fixing
-   - **PARTIAL** — issue exists but line is wrong or severity overstated
-   - **FALSE POSITIVE** — the code doesn't have this issue
+   - **PARTIAL** — issue exists but severity overstated or fix risks behavior change
+   - **FALSE POSITIVE** — the code doesn't have this issue, or the pattern is correct for context
 3. **For CONFIRMED findings with straightforward fixes** (<20 lines changed):
    - Implement the fix
-   - Verify the script still loads: `cd ~/Projects/$PROJECT && uv run python3 $FILE --help 2>/dev/null || uv run python3 -c "import importlib.util; s=importlib.util.spec_from_file_location('m','$FILE'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)" 2>&1 | tail -3`
-   - Commit in the target project repo: `[perf] Fix: description — code-review finding`
+   - Verify the script still loads: `cd ~/Projects/$PROJECT && uv run python3 -c "import sys; sys.path.insert(0,'.'); import $MODULE" 2>&1 | tail -3`
+   - Commit in the target project repo with appropriate scope tag
+
+### Commit format
+
+Use the project's commit conventions, not a fixed format. Tag with the relevant scope:
+- `[curation]` for classification/ranking logic fixes
+- `[pipeline]` for subprocess handling, error propagation
+- `[refactor]` for deduplication, shared module extraction
 
 **Do NOT fix:**
 - Findings that require understanding business logic you haven't read
 - LIKE/fuzzy join patterns (usually deliberate for entity matching)
 - Test files (side-effect tests may look like dead code)
 - Issues where the fix might change behavior
+- Style-only inconsistencies with no correctness impact (return type mismatches, naming conventions)
 
 ## Step 5: Report
 
@@ -132,11 +171,16 @@ If running via `/loop`, this output helps the user see progress across invocatio
 /code-review dead-code
 ```
 
+## Expected False Positive Rate
+
+Gemini's "patterns" focus produces ~75% false positives on HIGHs (observed on genomics, 60 HIGHs → 8 confirmed, 7 partial, 45 FP). Most FPs are "broad except" in contexts where it's the correct pattern. The validation step is where value is created — the scout is a noisy signal generator.
+
 ## What This Skill Does NOT Do
 
 - **Does not use API credits for the scout.** Gemini CLI and Codex CLI are free/subscription.
-- **Does not fix everything.** Only straightforward HIGH findings get implemented. The rest are logged for manual review.
-- **Does not skip validation.** Every fix requires reading the actual code first. Gemini fabricates line numbers ~100% of the time.
+- **Does not fix everything.** Only CONFIRMED findings with straightforward fixes get committed. PARTIAL findings are reported.
+- **Does not skip validation.** Every HIGH finding requires reading the actual code. Gemini fabricates line numbers ~100% of the time.
 - **Does not review the same file twice.** Findings are deduplicated by content hash across runs.
+- **Does not categorize-then-dismiss.** "38 broad except findings" is not a verdict. Each one gets individual assessment based on what code it's in.
 
 $ARGUMENTS
