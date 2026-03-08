@@ -10,7 +10,7 @@ argument-hint: '[task description or model name]'
 Select the right frontier model for a task and prompt it correctly.
 
 **Models covered:** Claude Opus 4.6, Claude Sonnet 4.6, GPT-5.4, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3 Flash, Kimi K2.5.
-**Last updated:** 2026-03-06. See CHANGELOG.md for update history.
+**Last updated:** 2026-03-07. See CHANGELOG.md for update history.
 
 ## Quick Selection Matrix
 
@@ -29,7 +29,7 @@ Select the right frontier model for a task and prompt it correctly.
 | **Long document ingestion** (>200K) | Gemini 3.1 Pro / GPT-5.4 | Native 1M context (both) | Claude (200K, 1M beta) |
 | **Subagent coding** | Claude Sonnet 4.6 | 79.6% SWE-bench at $3/$15 | Kimi K2.5 (76.8%, much cheaper) |
 | **Doc → schema extraction** | GPT-5.3 Instant | Less preachy, structured output, fast | GPT-5.4 (stronger reasoning) |
-| **Cross-model review** | Pro + GPT-5.4 | Adversarial review needs deep reasoning both sides | -- |
+| **Cross-model review** | Pro + GPT-5.4 | Cross-family required (+31pp accuracy, FINCH-ZK). Same-family = no adversarial pressure | -- |
 | **High-volume classification** | Gemini 3 Flash | $0.50/$3/M, 1M ctx | Kimi K2.5 ($0.60/$2.50) |
 | **Bulk cheap analysis** | Kimi K2.5 | $0.60/$2.50, strong reasoning | Gemini 3.1 ($2/$12) |
 | **Multi-agent swarm tasks** | Kimi K2.5 | Native Agent Swarm (100 sub-agents) | -- |
@@ -176,6 +176,11 @@ For complete guide, read `PROMPTING_KIMI.md`.
 
 Run these when using outputs from each model:
 
+### All Models
+- [ ] **Don't trust reasoning traces as evidence of correctness.** CoT faithfulness baseline: 7-13% unfaithful (multiple sources). The model can reach the right answer via wrong reasoning, or vice versa.
+- [ ] **Cross-family review for non-trivial decisions.** Same-model correction: 59.1% accuracy. Cross-family: 90.4% (FINCH-ZK). Same-family models share ~60% of errors (Kim et al. ICML 2025).
+- [ ] **Sequential debate doesn't improve correctness** (martingale proof, Choi et al. ACL 2025). Use independent parallel reviews + voting, not models critiquing each other.
+
 ### After Claude Opus/Sonnet 4.6
 - [ ] Cross-check mathematical derivations (MATH 93% < GPT's 98%)
 - [ ] For novel abstract patterns, consider Gemini second opinion
@@ -186,6 +191,7 @@ Run these when using outputs from each model:
 - [ ] Don't trust unsourced claims -- demand citations
 - [ ] Abstract reasoning still below Gemini -- consider Gemini second opinion for novel patterns
 - [ ] Destructive action avoidance: 0.86 (slightly below GPT-5.3-Codex 0.88) -- verify file operations in agentic use
+- [ ] `max_completion_tokens` includes reasoning tokens — 4096 + high effort = 0 output. Use 16384+ for reasoning models
 
 ### After Gemini 3.1 Pro
 - [ ] Verify it followed instructions precisely (IFEval 89.2% -- misses ~11%)
@@ -228,6 +234,8 @@ Claude (orchestrator -- best professional judgment)
         ├── bulk      → Kimi K2.5            [$0.60/$2.50, strong reasoning]
         └── compare   → Multiple             [side-by-side for high-stakes]
 ```
+
+**Cross-family rule:** Never use the same model family for both review and synthesis. GPT reviewing GPT = self-preference bias (74.9% demographic parity bias, Wataoka NeurIPS 2024). Gemini Flash fallback for Gemini Pro review = same family, defeats adversarial purpose. Use GPT-fast to extract Gemini claims, Gemini-fast to extract GPT claims.
 
 ## The Hallucination Problem
 

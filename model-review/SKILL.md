@@ -70,7 +70,7 @@ GOALS=$(find . -maxdepth 3 -name "GOALS.md" 2>/dev/null | head -1)
 
 This skill is **convergent/critical only** — find what's wrong: errors, inconsistencies, missed edge cases, violations of stated principles.
 
-- Lower temperature for Gemini (`-t 0.3`) — more deterministic, stern. Note: thinking models lock temperature to 1.0 regardless of -t value.
+- Gemini 3.1 Pro locks temperature to 1.0 server-side (thinking model) — do NOT pass `-t`, it has no effect.
 - GPT reasoning-effort high — deep fault-finding
 - Prompts ask "what's wrong" and "where does this break"
 - Output: ranked list of problems with verification criteria
