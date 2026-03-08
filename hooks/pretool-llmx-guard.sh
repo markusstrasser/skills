@@ -33,7 +33,13 @@ if echo "$CMD" | grep -qE 'gpt-5\.[234]' && echo "$CMD" | grep -qE -- '--max-tok
   WARNINGS="${WARNINGS}[llmx-guard] Small --max-tokens with GPT-5.x reasoning model. max_completion_tokens includes reasoning tokens — use 16384+ to avoid truncated output.\n"
 fi
 
-# 5. Old LiteLLM model prefixes (deprecated in v0.6.0)
+# 5. Gemini 2.5 forbidden — user mandate: always use gemini-3.1-pro
+if echo "$CMD" | grep -qiE 'gemini.?2\.5'; then
+  echo "[llmx-guard] BLOCKED: Gemini 2.5 is forbidden. Use gemini-3.1-pro instead." >&2
+  exit 2
+fi
+
+# 6. Old LiteLLM model prefixes (deprecated in v0.6.0)
 if echo "$CMD" | grep -qE 'llmx.*(-m|--model)\s+(gemini/|openai/|xai/|moonshot/)'; then
   WARNINGS="${WARNINGS}[llmx-guard] LiteLLM-style model prefix detected (gemini/, openai/, etc). Prefixes are deprecated in v0.6.0 — use bare model names.\n"
 fi
