@@ -27,9 +27,12 @@ fi
 if echo "$RESULT" | grep -q "^WARN:"; then
   WARN_TEXT=$(echo "$RESULT" | sed 's/^WARN://')
 
-  # Body warning only applies when >1 file staged
+  # Body warning: required for research/decisions, advisory for multi-file commits
   STAGED_COUNT=$(git diff --cached --name-only 2>/dev/null | wc -l | tr -d ' ')
-  if [ "$STAGED_COUNT" -le 1 ]; then
+  CONCEPT_FILES=$(git diff --cached --name-only 2>/dev/null | grep -cE '^(research/|decisions/|docs/research/)' | tr -d ' ')
+  if [ "$CONCEPT_FILES" -gt 0 ]; then
+    WARN_TEXT=$(echo "$WARN_TEXT" | sed "s/NOBODY/Concept files (research\\/decisions) staged — body REQUIRED. Name the concept affected and what changed./g")
+  elif [ "$STAGED_COUNT" -le 1 ]; then
     WARN_TEXT=$(echo "$WARN_TEXT" | sed 's/ | NOBODY//g; s/NOBODY | //g; s/NOBODY//g')
   else
     WARN_TEXT=$(echo "$WARN_TEXT" | sed "s/NOBODY/${STAGED_COUNT} files staged but no body — add trigger, changes, impact./g")
