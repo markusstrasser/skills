@@ -320,7 +320,7 @@ llmx -p google -f src/providers.py "Find bugs in this code"
 | API (Gemini) | 1M tokens | Use for large codebases |
 | API (GPT-5.4) | 1M tokens | Use for large codebases |
 
-**Rule of thumb:** If your `-f` files total <50KB, use CLI. If >200KB, use API.
+**Rule of thumb:** CLI handles 80-100KB comfortably (tested). Use API for >200KB or when you need `--max-tokens`, `--stream`, `-s`, or `--search` (these force API fallback).
 
 ### CLI for Agents (Claude Code / Codex)
 
