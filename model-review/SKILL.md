@@ -171,16 +171,19 @@ Append only the specific files under review. Read them with the Read tool and wr
 
 **Select models** (see Dispatch Models above):
 ```bash
-# Gemini — Pro, no fallback (should just work)
+# Gemini — Pro with Flash fallback for rate limits
 GEMINI_MODEL="gemini-3.1-pro-preview"
 # IMPORTANT: Gemini 3.1 Pro defaults to 8K maxOutputTokens server-side.
 # Always use --max-tokens 65536 on Gemini dispatches to prevent silent truncation.
 GEMINI_MAX_TOKENS="--max-tokens 65536"
+GEMINI_FALLBACK="--fallback gemini-3-flash-preview"
 
 # GPT — 5.4 with deep reasoning, no fallback
 GPT_MODEL="gpt-5.4"
 GPT_EFFORT="--reasoning-effort high --stream"
 GPT_TIMEOUT="--timeout 600"
+# Note: GPT-5.x uses max_completion_tokens (includes reasoning tokens).
+# For reasoning models, 16K+ recommended to avoid truncated output.
 ```
 
 **IMPORTANT — Bash timeout:** When dispatching via the Bash tool, always set `timeout: 360000` (6 minutes) on the Bash tool call. The default 120s Bash timeout kills the process before llmx finishes. llmx's own `--timeout` handles the real deadline.
@@ -199,7 +202,7 @@ GPT_TIMEOUT="--timeout 600"
 ```bash
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-context.md" \
-  $GEMINI_MAX_TOKENS --timeout 300 \
+  $GEMINI_MAX_TOKENS $GEMINI_FALLBACK --timeout 300 \
   -o "$REVIEW_DIR/gemini-output.md" "
 <system>
 You are reviewing a codebase. Be concrete. No platitudes. Reference specific code, configs, and findings. It is $(date +%Y-%m-%d).
@@ -504,6 +507,9 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 - Will recommend itself for tasks — always flag self-serving suggestions
 - Tends to over-recommend architectural changes (DuckDB migrations, etc.)
 - llmx default timeout is now 300s; use `--timeout 300` explicitly in dispatch commands
+- **Google server-side deadline (v0.6.0+):** Timeout is now enforced server-side via `google-genai` SDK (min 10s), eliminating SIGALRM hang issues
+- **Always use `--fallback gemini-3-flash-preview`** on Gemini dispatches — Google rate limits are more frequent than OpenAI's
+- **Truncation detection (v0.6.0+):** llmx emits `[llmx:WARN] output may be truncated` — check stderr after dispatch. If truncated, increase `--max-tokens`
 
 **GPT-5.4 (`gpt-5.4`) — review GPT:**
 - `--reasoning-effort high` is essential for review mode (burns thinking time for deep fault-finding)

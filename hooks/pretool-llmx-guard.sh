@@ -28,6 +28,16 @@ if echo "$CMD" | grep -qE '(stdbuf|script\s+-q).*llmx'; then
   WARNINGS="${WARNINGS}[llmx-guard] stdbuf/script won't fix output buffering. Use --output/-o flag instead.\n"
 fi
 
+# 4. max_tokens with GPT-5.x reasoning models (should be max_completion_tokens, but llmx handles this — warn about small values)
+if echo "$CMD" | grep -qE 'gpt-5\.[234]' && echo "$CMD" | grep -qE -- '--max-tokens\s+[0-9]{1,4}[^0-9]'; then
+  WARNINGS="${WARNINGS}[llmx-guard] Small --max-tokens with GPT-5.x reasoning model. max_completion_tokens includes reasoning tokens — use 16384+ to avoid truncated output.\n"
+fi
+
+# 5. Old LiteLLM model prefixes (deprecated in v0.6.0)
+if echo "$CMD" | grep -qE 'llmx.*-m\s+(gemini/|openai/|xai/|moonshot/)'; then
+  WARNINGS="${WARNINGS}[llmx-guard] LiteLLM-style model prefix detected (gemini/, openai/, etc). Prefixes are deprecated in v0.6.0 — use bare model names.\n"
+fi
+
 if [ -n "$WARNINGS" ]; then
   echo -e "$WARNINGS" >&2
 fi

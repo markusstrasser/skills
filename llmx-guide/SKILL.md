@@ -13,7 +13,8 @@ argument-hint: '[model name or issue description]'
 2. **Timeout set?** Reasoning models need `--timeout 600` or `--stream`
 3. **Using `shell=True`?** Don't — parentheses in prompts break it. Use list args + `input=`
 4. **Using `-o FILE`?** Never use `> file` shell redirects — they buffer until exit
-5. **Know the transport and fallback triggers:** `openai` prefers `codex exec`, `google` prefers `gemini`, then falls back to API
+5. **Model name format?** No provider prefixes needed (`gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`). Old prefixed names still accepted with deprecation warning.
+6. **Know the transport and fallback triggers:** `openai` prefers `codex exec`, `google` prefers `gemini`, then falls back to API
 
 ## When llmx Fails — Diagnose, Don't Downgrade
 
@@ -21,9 +22,11 @@ argument-hint: '[model name or issue description]'
 
 **Diagnostic steps (in order):**
 1. Check exit code: `echo $?` — tells you rate limit (3), timeout (4), or model error (5)
-2. Check stderr: llmx prints `[llmx:ERROR] type=... provider=... status=...`
-3. Re-run with `--debug` on a small prompt to isolate
-4. Common fixes: increase `--timeout`, add `--stream`, reduce context size, check API key
+2. Check stderr: llmx prints JSON diagnostics to stderr (v0.6.0+): `{"error": "rate_limit", "provider": "google", "model": "...", "exit_code": 3, "action": "use --fallback or wait"}`
+3. Check for transport switch warnings: `[llmx:TRANSPORT] gemini-cli → google-api (max_tokens not supported by CLI)`
+4. Check for truncation warnings: `[llmx:WARN] output may be truncated`
+5. Re-run with `--debug` on a small prompt to isolate
+6. Common fixes: increase `--timeout`, add `--stream`, reduce context size, check API key
 
 ## Model Names & Defaults
 
@@ -41,9 +44,13 @@ argument-hint: '[model name or issue description]'
 | Kimi K2 (legacy) | `kimi-k2-thinking` | Use `--use-old` flag |
 | Claude Sonnet 4.6 | `claude-sonnet-4-6` | Hyphens, not dots |
 
-**404 traps:** `gemini-3-flash` (missing `-preview`), `gemini-flash-3` (wrong order), `gpt-5.3` (needs `-chat-latest` suffix), `gpt-5.3-instant` (NOT in litellm model map as of v1.82 — use `gpt-5.3-chat-latest` or prefix as `openai/gpt-5.3-instant`).
+**Model name format (v0.6.0+):** No provider prefixes needed. Use `gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`. Old LiteLLM-style prefixed names (`gemini/`, `openai/`, `xai/`, `moonshot/`) still accepted with deprecation warning. Will be removed in a future version.
 
-## Token Limits (litellm 1.82)
+**Model name suggestions:** If you typo a model name, llmx suggests the closest match: `"gemini-3.1-pro not found; did you mean gemini-3.1-pro-preview?"`
+
+**404 traps:** `gemini-3-flash` (missing `-preview`), `gemini-flash-3` (wrong order), `gpt-5.3` (needs `-chat-latest` suffix).
+
+## Token Limits
 
 | Model | Max Input | Max Output | Notes |
 |-------|----------|-----------|-------|
@@ -54,7 +61,7 @@ argument-hint: '[model name or issue description]'
 | Gemini 3.1 Pro | 1,048,576 | 65,536 | Server default is 8K — always pass `--max-tokens 65536` |
 | Gemini 3 Flash | 1,048,576 | 65,535 | |
 
-## Error Handling (v0.5.0+)
+## Error Handling (v0.6.0+)
 
 **Exit codes** — branch on these, don't parse stderr:
 | Code | Meaning | Action |
@@ -66,7 +73,15 @@ argument-hint: '[model name or issue description]'
 | 4 | Timeout | Increase `--timeout` or use `--fallback` |
 | 5 | Model error (context too large, bad params) | Fix request |
 
-**Structured diagnostics** on stderr: `[llmx:ERROR] type=rate_limit provider=google model=gemini-3.1-pro status=429 exit=3`
+**Structured diagnostics** on stderr (JSON, v0.6.0+):
+```json
+{"error": "rate_limit", "provider": "google", "model": "gemini-3.1-pro-preview", "exit_code": 3, "action": "use --fallback or wait"}
+```
+
+**Additional stderr signals (v0.6.0+):**
+- Transport switch: `[llmx:TRANSPORT] gemini-cli → google-api (max_tokens not supported by CLI)`
+- Truncation warning: `[llmx:WARN] output may be truncated`
+- Model suggestion: `"gemini-3.1-pro not found; did you mean gemini-3.1-pro-preview?"`
 
 **`--fallback MODEL`** — auto-retry once with fallback model on rate limit or timeout:
 ```bash
@@ -91,13 +106,17 @@ elif result.returncode == 4:  # timeout
 
 ## The Four llmx Footguns
 
-### 1. GPT-5.4 Timeouts
+### 1. GPT-5.x Timeouts and max_completion_tokens
 
 GPT-5.4 (and 5.2) with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning — proxies and HTTP clients kill idle connections. Default is 300s (since llmx 0.5.2).
 
 **Max timeout: 900s** (validated at CLI level, 1-900 range). For review dispatches use `--timeout 600`.
 
 **Wall-clock enforcement (v0.5.3+):** `--timeout` is enforced via SIGALRM, not httpx socket timeout. This means the process will actually exit after N seconds of real time — even with streaming keepalives or chunked transfer. Before v0.5.3, streaming calls could hang indefinitely past the timeout value.
+
+**`max_completion_tokens` vs `max_tokens` (v0.6.0+):** GPT-5.x uses `max_completion_tokens` not `max_tokens` at the API level. llmx handles this automatically — `--max-tokens` maps to the correct parameter per provider. **Important:** for reasoning models, `max_completion_tokens` includes reasoning tokens. If you set `--max-tokens 4096` on GPT-5.4 with reasoning, the model may exhaust the budget on thinking and produce truncated output. Use 16K+ for reasoning models.
+
+**Google server-side deadline (v0.6.0+):** Google models now use a server-side deadline timeout (via `google-genai` SDK) instead of SIGALRM. Minimum 10s. This eliminates the old SIGALRM hang problem where streaming keepalives could prevent timeout enforcement.
 
 ```bash
 # WILL timeout:
@@ -160,11 +179,15 @@ subprocess.run(['llmx', '--provider', 'google'], input=prompt, capture_output=Tr
 | GPT-5.4 | none, minimal, low, medium, high, xhigh | high |
 | GPT-5.2 | minimal, low, medium, high | high |
 | GPT-5-Codex | low, medium, high | high |
-| Gemini 3 Flash | low, medium, high | high (server-side) |
-| Gemini 3.x (Pro/Flash) | low, medium, high | high (server-side) |
+| Gemini 3 Flash | low, medium, high | high (server-side, via `thinking_config`) |
+| Gemini 3.x (Pro/Flash) | low, medium, high | high (server-side, via `thinking_config`) |
 | Kimi K2.5 | N/A — use `--no-thinking` | thinking on |
 
 Temperature locked to 1.0 for GPT-5 and Gemini 3.x thinking models.
+
+**Google API note:** Google uses `thinking_config` with `thinking_level` (not `reasoning_effort`) under the hood. llmx translates `--reasoning-effort` to the correct parameter per provider — you don't need to know this unless debugging raw API calls.
+
+**OpenRouter streaming guard (v0.6.0+):** OpenRouter occasionally sends empty `choices` arrays in streaming chunks. llmx now guards against this — if you see `IndexError` on `choices[0]` in older versions, upgrade.
 
 ## Convenience Flags
 
@@ -201,6 +224,7 @@ llmx vision video.mp4 -p "list UI elements" # video
 ```bash
 llmx -p google "question"       # prefers Gemini CLI, falls back to API
 llmx -p openai "question"       # prefers Codex CLI, falls back to API
+llmx -p claude "question"       # Claude CLI backend (v0.6.0+, non-nested contexts only)
 llmx -p gemini-cli "question"   # force Gemini CLI transport
 llmx -p codex-cli "question"    # force Codex CLI transport
 ```
