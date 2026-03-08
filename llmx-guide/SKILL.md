@@ -313,14 +313,18 @@ llmx -p google -f src/providers.py "Find bugs in this code"
 
 ### Context Budget
 
-| Backend | Max useful context | Notes |
-|---------|-------------------|-------|
-| Gemini CLI | ~200K chars | Beyond this, CLI may OOM or slow down |
-| Codex CLI | ~100K chars | More conservative |
-| API (Gemini) | 1M tokens | Use for large codebases |
-| API (GPT-5.4) | 1M tokens | Use for large codebases |
+Neither CLI truncates user input (verified from source code). Input goes directly to API.
 
-**Rule of thumb:** CLI handles 80-100KB comfortably (tested). Use API for >200KB or when you need `--max-tokens`, `--stream`, `-s`, or `--search` (these force API fallback).
+| Backend | Model context | Practical limit | Input truncation? |
+|---------|--------------|-----------------|-------------------|
+| Gemini CLI | 1M tokens (~4MB) | ~200KB before slowdown | No — 400 error if exceeded |
+| Codex CLI | 272K-848K tokens | ~200KB+ | No — auto-compacts history |
+| API (Gemini) | 1M tokens | Full window | No |
+| API (GPT-5.4) | 1M tokens | Full window | No |
+
+**Tested:** 80KB code batches via both CLIs work reliably. 200KB causes timeouts on thinking models.
+
+**What forces API fallback** (costs money): `--max-tokens`, `--stream`, `-s`, `--search`. Avoid these to stay on free CLI transport.
 
 ### CLI for Agents (Claude Code / Codex)
 
