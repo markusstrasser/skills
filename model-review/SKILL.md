@@ -300,10 +300,17 @@ For each claim in each review:
 2. **Research claims** — Check if the cited paper/finding actually says what the model claims. Models often distort findings to support their argument.
 3. **"Missing feature" claims** — Grep the codebase. The feature may already exist. Models frequently recommend adding things that are already implemented.
 
-Use Flash for rapid fact-checking of specific claims:
+Use a **different model family** than the one that generated the claim for fact-checking. Cross-family verification improves accuracy by +31pp vs same-family (FINCH-ZK, Amazon 2025). Concretely:
+
 ```bash
-llmx chat -m gemini-3-flash-preview "Claim: [model's claim]. Actual code: [paste relevant code]. Is this claim accurate? Be precise."
+# Fact-check Gemini's claims with GPT (cross-family)
+llmx chat -m gpt-5.3-chat-latest --stream "Claim: [Gemini's claim]. Actual code: [paste relevant code]. Is this claim accurate? Be precise."
+
+# Fact-check GPT's claims with Flash (cross-family)
+llmx chat -m gemini-3-flash-preview "Claim: [GPT's claim]. Actual code: [paste relevant code]. Is this claim accurate? Be precise."
 ```
+
+For code claims, always verify by reading the actual file first — no model substitutes for `grep`/`Read`.
 
 ### Step 5: Extract & Enumerate (Anti-Loss Protocol)
 
