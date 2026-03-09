@@ -1,6 +1,6 @@
 ---
 name: brainstorm
-description: Multi-model divergent ideation via llmx. Dispatches to Gemini 3.1 Pro (wild generator) and GPT-5.4 (structured ideation), then runs a denial round to break Artificial Hivemind convergence. For convergent critique, use /model-review instead.
+description: Divergent ideation via systematic perturbation — denial cascades, domain forcing, constraint inversion. Multi-model dispatch optional (volume, not diversity). For convergent critique, use /model-review.
 argument-hint: [design space to explore — e.g., "memory architecture alternatives", "how to structure the feedback loop"]
 allowed-tools:
   - Bash
@@ -12,29 +12,21 @@ allowed-tools:
   - Task
 ---
 
-# Multi-Model Brainstorming
+# Divergent Ideation via Perturbation
 
-You are orchestrating divergent ideation across models. The goal is novelty — ideas that no single model would produce alone. Same-model brainstorming converges to the same ideas (Artificial Hivemind). Cross-model with denial prompting breaks this.
+You are orchestrating divergent ideation. The goal is ideas that escape the default attractor basin — the high-probability outputs that any model (including you) produces first.
 
-**This skill is DIVERGENT only.** For convergent critique (find errors, verify claims), use `/model-review`.
+**Core mechanism:** Systematic perturbation of the search space (denial, domain forcing, constraint inversion), not model diversity. Models trained on similar data converge on similar ideas regardless of vendor. The prompting structure does the work.
+
+**This skill is DIVERGENT only.** For convergent critique, use `/model-review`.
 
 ## Prerequisites
 
-- `llmx` CLI installed (`which llmx`)
-- API keys configured for Google (Gemini) and OpenAI (GPT)
+- `llmx` CLI optional — skill works without it (you run all rounds). With llmx, perturbation rounds run in parallel for speed.
 
-## Dispatch Models
+## Pre-Flight
 
-| Role | Model | Why |
-|------|-------|-----|
-| **Wild generator** | Gemini 3.1 Pro (`gemini-3.1-pro-preview`) | Maximize novelty, ignore feasibility. Large context for cross-domain mapping. |
-| **Structured ideation** | GPT-5.4 (`gpt-5.4 --reasoning-effort medium --stream --timeout 600`) | Feasibility-assessed ideas. Medium reasoning = broader exploration, less tunnel vision. |
-| **Denial round** | Gemini 3.1 Pro | Cheapest deep model for counter-proposals against dominant paradigms. |
-| **Extraction** | Flash / GPT-5.3 Instant | Mechanical extraction in Step 4 — fast models do this equally well. |
-
-## Pre-Flight: Constitutional Check
-
-Before building context, check if the project has constitutional documents:
+### Constitutional Check
 
 ```bash
 CONSTITUTION=$(find . -maxdepth 3 -name "CONSTITUTION.md" 2>/dev/null | head -1)
@@ -47,8 +39,17 @@ fi
 GOALS=$(find . -maxdepth 3 -name "GOALS.md" 2>/dev/null | head -1)
 ```
 
-- **If found:** Inject as preamble. Instruct models to brainstorm within project principles, not their own priors.
-- **If neither exists:** Proceed — brainstorming still has value without constitutional grounding.
+If found, inject as preamble so generation stays within project principles.
+
+### llmx & Output Setup
+
+```bash
+LLMX_AVAILABLE=$(which llmx 2>/dev/null && echo "yes" || echo "no")
+TOPIC_SLUG=$(echo "$TOPIC" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//' | cut -c1-40)
+BRAINSTORM_ID=$(openssl rand -hex 3)
+BRAINSTORM_DIR=".brainstorm/$(date +%Y-%m-%d)-${TOPIC_SLUG}-${BRAINSTORM_ID}"
+mkdir -p "$BRAINSTORM_DIR"
+```
 
 ## The Process
 
@@ -57,249 +58,230 @@ GOALS=$(find . -maxdepth 3 -name "GOALS.md" 2>/dev/null | head -1)
 State clearly what's being explored: `$ARGUMENTS`
 
 Identify:
-- **The question or design space** to explore
-- **Current approach** (if any) — what exists that we're looking beyond
+- **The question or design space**
+- **Current approach** (if any) — what we're looking beyond
 - **Constraints** — hard limits vs soft preferences
-- **What "good" looks like** — how will ideas be evaluated?
+- **What "good" looks like** — evaluation criteria
 
-### Step 2: Bundle Context
+### Step 2: Human Seed
 
-Build compact context. Brainstorming needs enough context to understand the design space, not full codebases.
+Before any generation, ask the user:
 
-**Output directory setup:**
-```bash
-TOPIC_SLUG=$(echo "$TOPIC" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//' | cut -c1-40)
-REVIEW_ID=$(openssl rand -hex 3)
-BRAINSTORM_DIR=".brainstorm/$(date +%Y-%m-%d)-${TOPIC_SLUG}-${REVIEW_ID}"
-mkdir -p "$BRAINSTORM_DIR"
-```
+> "What's your weirdest or half-baked idea for this, even if it seems wrong? Your tacit knowledge is the only genuinely independent input — models share training data, you don't."
 
-**Constitutional prefix (if found):**
-```bash
-if [ -n "$CONSTITUTION" ]; then
-  for f in "$BRAINSTORM_DIR/gemini-context.md" "$BRAINSTORM_DIR/gpt-context.md"; do
-    echo -e "# PROJECT CONSTITUTION\nBrainstorm within these principles.\n" > "$f"
-    cat "$CONSTITUTION" >> "$f"
-    [ -n "$GOALS" ] && { echo -e "\n# PROJECT GOALS\n" >> "$f"; cat "$GOALS" >> "$f"; }
-  done
-fi
-```
+If the user provides seeds, use them as starting points. If they say "just run it," proceed without.
 
-Append only the relevant context (current approach, constraints, related code) to both context files. Summarize — don't dump full files.
+### Step 3: Initial Generation
 
-**CRITICAL — Context size:** Compact context before dispatch. 50K context = 5-10 min API calls (get killed). 2K summary = fast. Summarize key points rather than concatenating full files.
+Generate 10+ approaches. Cast wide — no evaluation yet.
 
-### Step 3: Dispatch Brainstorms (Parallel)
-
-**CRITICAL: Fire both Bash calls in a SINGLE message (two parallel tool calls).** Both models run independently — dispatch simultaneously to halve wall-clock time.
-
-**IMPORTANT — Bash timeout:** Set `timeout: 360000` (6 minutes) on the Bash tool call. The default 120s kills the process before llmx finishes.
-
-**Output capture:** Use `--output FILE` (or `-o FILE`). Never use `> file` shell redirects with llmx.
-
-**NEVER downgrade models on failure.** If Pro or GPT-5.4 fails, diagnose (stderr, exit code, `llmx --debug`). Never swap to Flash or GPT-5.3 — you lose the deep thinking.
+**With llmx:** Dispatch to an external model for parallel volume while you also generate your own set.
 
 ```bash
-GEMINI_MODEL="gemini-3.1-pro-preview"
-GEMINI_MAX_TOKENS="--max-tokens 65536"
-
-GPT_MODEL="gpt-5.4"
-GPT_EFFORT="--reasoning-effort medium --stream"
-GPT_TIMEOUT="--timeout 600"
-```
-
-**Gemini — Wild Generator (maximize novelty):**
-
-Gemini's role is the *wild generator* — maximize novelty, ignore feasibility. This is asymmetric by design: Gemini goes wide, GPT goes deep.
-
-```bash
-llmx chat -m $GEMINI_MODEL \
-  -f "$BRAINSTORM_DIR/gemini-context.md" \
-  $GEMINI_MAX_TOKENS --timeout 300 \
-  -o "$BRAINSTORM_DIR/gemini-brainstorm.md" "
+# Model choice is pragmatic, not for "diversity" — any deep model works
+llmx chat -m gemini-3.1-pro-preview \
+  ${CONSTITUTION:+-f "$BRAINSTORM_DIR/context.md"} \
+  --max-tokens 65536 --timeout 300 \
+  -o "$BRAINSTORM_DIR/external-generation.md" "
 <system>
-You are the wild generator. Maximize novelty. Ignore feasibility, cost, and practicality — another model handles that. Your job is ideas that nobody else would propose. Challenge every assumption. What would a completely different paradigm look like? It is $(date +%Y-%m-%d).
+Generate approaches to the design space below. Maximize breadth — 10+ genuinely different approaches, not variations on a theme. No feasibility filtering yet. It is $(date +%Y-%m-%d).
 </system>
 
-[Describe the design space to explore]
+[Design space + constraints + human seeds if any]
 
-## 1. Alternative Architectures
-3 fundamentally different approaches. Not variations — genuinely different paradigms.
-
-## 2. What Adjacent Fields Do Differently
-Patterns from other domains that could apply here. Cite specific systems or papers.
-
-## 3. The Unconventional Idea
-The approach that seems wrong but might work. Explain why it could succeed despite looking odd.
-
-## 4. What's Being Over-Engineered
-Where is complexity not earning its keep? What could be radically simplified?
-
-## 5. Blind Spots
-What am I (Gemini) missing because of my training distribution? Where should my creativity be distrusted?
-"
+For each approach: one paragraph on the mechanism and why it differs from the others."
 ```
 
-**GPT — Structured Ideation:**
+Simultaneously, generate your own 10+ approaches. Write to `$BRAINSTORM_DIR/claude-generation.md`.
+
+**Without llmx:** Generate 10+ approaches yourself. Write to `$BRAINSTORM_DIR/initial-generation.md`.
+
+### Step 4: Perturbation Rounds (The Core Mechanism)
+
+Three independent perturbation axes. **With llmx, dispatch all three in parallel** (three Bash calls in one message, `timeout: 360000`). Without llmx, run them sequentially yourself.
+
+First: identify the 3-5 dominant paradigms from Step 3. These are what we're escaping.
+
+#### 4a: Denial Cascade (2 rounds)
+
+Round 1 forbids the dominant paradigms. Round 2 forbids Round 1's output too. Novelty rises continuously with denial depth (NEOGAUGE, NAACL 2025). This is the primary divergence mechanism.
+
 ```bash
-llmx chat -m $GPT_MODEL \
-  -f "$BRAINSTORM_DIR/gpt-context.md" \
-  $GPT_EFFORT $GPT_TIMEOUT \
-  -o "$BRAINSTORM_DIR/gpt-brainstorm.md" "
+# Round 1
+llmx chat -m gemini-3.1-pro-preview \
+  --max-tokens 65536 --timeout 300 \
+  -o "$BRAINSTORM_DIR/denial-r1.md" "
 <system>
-Generate novel approaches with feasibility assessment.
+DENIAL ROUND. The approaches below are FORBIDDEN — you cannot use them or their variants. Propose 5 fundamentally different approaches that share no paradigm with the forbidden list. It is $(date +%Y-%m-%d).
 </system>
 
-[Describe the design space to explore]
+## Forbidden Paradigms
+[List 3-5 dominant paradigms from initial generation with brief descriptions]
 
-## 1. Idea Generation (10 ideas)
-Quick-fire: 10 approaches ranked by novelty. For each: one sentence + feasibility (High/Medium/Low).
+## Design Space
+[Original design space description]
 
-## 2. Deep Dive on Top 3
-For each: architecture sketch, estimated effort, risk, what makes it non-obvious.
-
-## 3. Combination Plays
-Ideas that work poorly alone but well together. Cross-pollinate from the list above.
-
-## 4. What Would Break Each Approach
-Pre-mortem: for the top 3, what's the most likely failure mode?
-
-## 5. Where I'm Likely Wrong
-What am I (GPT-5.4) probably biased toward? Where should my suggestions be distrusted?
-"
+For each: the mechanism, why it differs from ALL forbidden paradigms, one reason it might work."
 ```
 
-### Step 3b: Denial Round (Mandatory)
-
-After receiving both outputs, identify the 2-3 dominant paradigms across both responses. Re-query Gemini to catch Artificial Hivemind convergence — both models often propose the same paradigms despite generating independently:
-
 ```bash
-llmx chat -m $GEMINI_MODEL \
-  -f "$BRAINSTORM_DIR/gemini-brainstorm.md" \
-  $GEMINI_MAX_TOKENS --timeout 300 \
-  -o "$BRAINSTORM_DIR/denial-round.md" "
+# Round 2
+llmx chat -m gemini-3.1-pro-preview \
+  -f "$BRAINSTORM_DIR/denial-r1.md" \
+  --max-tokens 65536 --timeout 300 \
+  -o "$BRAINSTORM_DIR/denial-r2.md" "
 <system>
-You are generating COUNTER-proposals. The ideas below have already been proposed. Your job is to find what was MISSED. It is $(date +%Y-%m-%d).
+DENIAL ROUND 2. Everything above is now ALSO forbidden. Go deeper — what paradigm hasn't been touched at all? What would someone from a completely unrelated field propose? 3+ approaches. It is $(date +%Y-%m-%d).
 </system>
 
-The following paradigms were proposed by two independent models:
-[List the 2-3 dominant paradigms from both outputs]
+## Also Forbidden Now
+[Paradigms from Round 1]
 
-Now propose 3 approaches that do NOT use any of these paradigms. What fundamentally different angle has been missed? Think from adjacent domains, adversarial perspectives, or radical simplification.
-"
+3+ approaches sharing no paradigm with anything above."
 ```
 
-### Step 4: Extract & Enumerate (Anti-Loss Protocol)
+#### 4b: Domain Forcing
 
-**Do this BEFORE writing any synthesis.** Single-pass synthesis drops ideas silently.
+Pick 3 domains **unrelated** to the problem. Distant domains, not adjacent ones — the discomfort is the mechanism.
 
-Use fast models from a *different family* than the generator for extraction (cross-family avoids self-preference bias):
+**Domain pools** (pick one from each row):
+- **Natural systems:** evolutionary biology, immunology, ecology, neuroscience, geology, mycorrhizal networks
+- **Human institutions:** common law, military logistics, jazz improvisation, kitchen brigade, air traffic control, insurance underwriting
+- **Engineering:** civil engineering, control theory, materials science, packet switching, compiler design, wastewater treatment
 
 ```bash
-# Extract Gemini's ideas with GPT-5.3 Instant
-llmx chat -m gpt-5.3-chat-latest --stream --timeout 120 \
-  -f "$BRAINSTORM_DIR/gemini-brainstorm.md" \
-  -o "$BRAINSTORM_DIR/gemini-extraction.md" "
+llmx chat -m gpt-5.4 \
+  --reasoning-effort medium --stream --timeout 600 \
+  -o "$BRAINSTORM_DIR/domain-forcing.md" "
 <system>
-Extract every discrete idea, approach, or insight as a numbered list. One item per line. Do not evaluate or filter — extract mechanically.
+Map a design challenge to three unrelated domains. For each domain: what's the analogous problem, how does that domain solve it, what transfers back. It is $(date +%Y-%m-%d).
 </system>
 
-Extract all discrete ideas from this brainstorm."
+## Design Challenge
+[Original design space description]
 
-# Extract GPT's ideas with Flash
+## Domain 1: [chosen domain]
+Analogous problem? How does this domain solve it? What transfers back?
+
+## Domain 2: [chosen domain]
+Same.
+
+## Domain 3: [chosen domain]
+Same."
+```
+
+#### 4c: Constraint Inversion
+
+Identify 2-3 key assumptions of the current approach. Flip them. This forces the model into a different feasibility landscape where different solutions are optimal — and those solutions often transfer back.
+
+```bash
+llmx chat -m gpt-5.4 \
+  --reasoning-effort medium --stream --timeout 600 \
+  -o "$BRAINSTORM_DIR/constraint-inversion.md" "
+<system>
+For each inverted assumption, design the best solution under that altered constraint. Then identify what transfers back to reality. It is $(date +%Y-%m-%d).
+</system>
+
+## Design Space
+[Original description]
+
+## Inversion 1: [e.g., 'What if compute were free but storage cost \$1/byte?']
+Best design under this constraint. What transfers back?
+
+## Inversion 2: [e.g., 'What if we had 1000x the data but couldn't iterate?']
+Best design. What transfers?
+
+## Inversion 3: [e.g., 'What if this had to work for 50 years without updates?']
+Best design. What transfers?"
+```
+
+### Step 5: Extract & Enumerate (Anti-Loss Protocol)
+
+**Do this BEFORE synthesis.** Single-pass synthesis drops ideas.
+
+Mechanically extract every discrete idea from all artifacts:
+
+```bash
+cat "$BRAINSTORM_DIR"/*generation*.md \
+    "$BRAINSTORM_DIR"/denial-r*.md \
+    "$BRAINSTORM_DIR"/domain-forcing.md \
+    "$BRAINSTORM_DIR"/constraint-inversion.md \
+    > "$BRAINSTORM_DIR/all-raw.md" 2>/dev/null
+```
+
+If llmx available, dispatch extraction to a fast model:
+
+```bash
 llmx chat -m gemini-3-flash-preview --timeout 120 \
-  -f "$BRAINSTORM_DIR/gpt-brainstorm.md" \
-  -o "$BRAINSTORM_DIR/gpt-extraction.md" "
+  -f "$BRAINSTORM_DIR/all-raw.md" \
+  -o "$BRAINSTORM_DIR/extraction.md" "
 <system>
-Extract every discrete idea, approach, or insight as a numbered list. One item per line. Do not evaluate or filter — extract mechanically.
+Extract every discrete idea, approach, or insight as a numbered list. One per line. Tag the source (initial/denial-r1/denial-r2/domain/constraint). Do not evaluate — extract mechanically.
 </system>
 
-Extract all discrete ideas from this brainstorm."
-
-# Extract denial round with Flash
-llmx chat -m gemini-3-flash-preview --timeout 120 \
-  -f "$BRAINSTORM_DIR/denial-round.md" \
-  -o "$BRAINSTORM_DIR/denial-extraction.md" "
-<system>
-Extract every discrete idea as a numbered list. One item per line.
-</system>
-
-Extract all discrete ideas."
+Extract all discrete ideas from the brainstorm artifacts."
 ```
 
-**Disposition table.** Every extracted item gets a verdict:
+If no llmx, extract yourself. Then build the disposition table:
 
 ```markdown
 ## Disposition Table
 | ID  | Idea (short) | Source | Disposition | Reason |
 |-----|-------------|--------|-------------|--------|
-| G1  | Event-sourced memory | Gemini | EXPLORE | Novel, low effort to prototype |
-| G2  | Biological immune system model | Gemini | PARK | Interesting but no clear path |
-| P1  | Append-only log + views | GPT | EXPLORE | Feasible, overlaps G1 |
-| D1  | No memory at all | Denial | EXPLORE | Radical simplification worth testing |
-| P5  | Kubernetes operator | GPT | REJECT | Scale mismatch |
+| I3  | Event-sourced memory | Initial | EXPLORE | Novel, low effort |
+| D1  | Append-only log | Denial R1 | MERGE w/ I3 | Same paradigm |
+| D5  | No memory at all | Denial R2 | EXPLORE | Radical simplification |
+| F2  | Immune system model | Domain | PARK | Interesting, no path yet |
+| C1  | Offline-first design | Constraint | EXPLORE | Transfers well |
 ```
 
-Valid dispositions: `EXPLORE` (worth pursuing), `PARK` (interesting, not now), `REJECT` (bad fit), `MERGE WITH [ID]` (dedup).
+Dispositions: `EXPLORE` (pursue), `PARK` (not now), `REJECT` (bad fit), `MERGE WITH [ID]` (dedup).
 
-**Coverage check:** Count total extracted, explore, park, reject, merged. Every ID must have a disposition. Save to `$BRAINSTORM_DIR/extraction.md`.
+**Coverage check:** Every extracted item must have a disposition. Count totals.
 
-### Step 5: Synthesize
-
-Build synthesis from the disposition table. Group EXPLORE items by paradigm family.
-
-**Output format:**
+### Step 6: Synthesize
 
 ```markdown
 ## Brainstorm: [topic]
 **Date:** YYYY-MM-DD
-**Models:** Gemini 3.1 Pro (wild), GPT-5.4 (structured), Gemini 3.1 Pro (denial)
-**Constitutional anchoring:** Yes/No
-**Extraction:** N items extracted, E explore, P parked, R rejected
+**Perturbation:** Denial ×2, Domain forcing ×3, Constraint inversion ×3
+**Human seeds:** [yes/no]
+**Extraction:** N items total → E explore, P parked, R rejected
 
-### Ideas to Explore (ranked by novelty x feasibility)
-| Rank | ID(s) | Idea | Why It's Non-Obvious | Effort | Risk |
-|------|-------|------|---------------------|--------|------|
+### Ideas to Explore (ranked by novelty × feasibility)
+| Rank | ID(s) | Idea | Why Non-Obvious | Effort | Risk |
+|------|-------|------|----------------|--------|------|
 
-### Parked (interesting, not now)
+### Parked
 | ID | Idea | Why Parked |
 
 ### Rejected
 | ID | Idea | Why Rejected |
 
 ### Paradigm Gaps
-What design space was NOT covered by any model? What domains weren't consulted?
+What design space was NOT covered? What domains or constraints went unexplored?
 
 ### Suggested Next Step
-Which 1-2 ideas should be prototyped first? What's the cheapest validation?
+Which 1-2 ideas to prototype first? Cheapest validation?
 ```
 
-Save synthesis to `$BRAINSTORM_DIR/synthesis.md`.
+Save to `$BRAINSTORM_DIR/synthesis.md`.
 
-### Step 6: Bridge to Action (Optional)
+### Step 7: Bridge to Action
 
-If EXPLORE items suggest concrete implementation:
+If EXPLORE items suggest implementation:
 
-> "Brainstorm identified N ideas worth exploring. Want me to write a plan for the top 1-2, or run `/model-review` on a specific idea to stress-test it?"
+> "Brainstorm identified N ideas worth exploring. Want a plan for the top 1-2, or `/model-review` to stress-test a specific idea?"
 
-Don't auto-implement brainstorm output — divergent ideas need convergent validation first.
-
-## Known Model Biases (Brainstorming Context)
-
-| Model | Bias | Countermeasure |
-|-------|------|----------------|
-| **Gemini 3.1 Pro** | Enterprise-pattern gravity — "wild" ideas still look like Google architecture | Watch for Kubernetes, Spanner, Pub/Sub showing up as "unconventional" |
-| **Gemini 3.1 Pro** | Self-recommendation — suggests Gemini/Google services | Flag any self-serving suggestions |
-| **GPT-5.4** | Feasibility conservatism — kills novel ideas too early with "but scaling..." | Medium reasoning-effort helps; still watch for premature narrowing |
-| **GPT-5.4** | Production-grade creep — adds auth, monitoring, CI/CD to brainstorm sketches | Remind: brainstorm, not architecture review |
-| **Both** | Artificial Hivemind — same paradigms despite independent generation | Denial round is the countermeasure. If denial round ALSO converges, flag it. |
+Don't auto-implement — divergent ideas need convergent validation first.
 
 ## Anti-Patterns
 
-- **Mixing brainstorming with critique.** This skill generates ideas. Don't evaluate feasibility during generation (that's GPT's structured role). Don't ask "what's wrong with this codebase" — use `/model-review`.
-- **Skipping the denial round.** The denial round catches the 2-3 paradigms both models converge on. Without it, you get the Artificial Hivemind — two models producing the same ideas with different words.
-- **Implementing brainstorm output directly.** Divergent ideas need convergent validation. Prototype the cheapest version or stress-test with `/model-review` before building.
-- **Synthesizing without extracting.** Same anti-pattern as model-review — single-pass synthesis drops ideas. Always extract first.
-- **Dumping full codebases as context.** Brainstorming needs design space understanding, not line-by-line code. Summarize the current approach and constraints.
+- **Evaluating during generation.** Steps 3-4 generate. Steps 5-6 evaluate. Don't mix.
+- **Skipping denial rounds.** Initial generation IS the attractor basin. Denial is how you escape it.
+- **"Related" domains for domain forcing.** Adjacent fields converge to the same basin. Pick distant domains.
+- **Implementing brainstorm output directly.** Prototype cheaply or stress-test with `/model-review` first.
+- **Synthesizing without extracting.** Drops ideas silently. Always extract first.
+- **Treating model choice as the diversity mechanism.** The prompting structure (denial, domains, inversions) produces divergence. Model choice is for volume and availability.
 
 $ARGUMENTS
