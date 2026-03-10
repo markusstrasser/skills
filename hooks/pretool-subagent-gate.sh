@@ -6,7 +6,9 @@
 # 1. Suggestion/brainstorm pattern in description
 # 2. Single-tool pattern (short description matching direct-tool verbs)
 # 3. general-purpose when Explore would work
-# 4. Delegation cascade (3+ consecutive Agent calls)
+# 4. Research task routed to general-purpose
+# 5. File-edit intent via subagent (should use Edit/Write directly)
+# 6. Delegation cascade (3+ consecutive Agent calls, with known-limitations prompt)
 
 trap 'exit 0' ERR
 
@@ -61,7 +63,24 @@ if [ "$STYPE" = "general-purpose" ]; then
     fi
 fi
 
-# Check 5: Delegation cascade tracking
+# Check 5: File-edit intent via subagent
+PROMPT=$(echo "$INPUT" | python3 -c '
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print(d.get("tool_input", {}).get("prompt", ""))
+except Exception:
+    pass
+' 2>/dev/null)
+
+if echo "$DESC $PROMPT" | grep -qiE 'edit (the |a |this )?file|write (to |the )?file|modify (the |a )?file|update (the |a )?file|fix (the |a |this )?(code|file|bug|issue)|implement (the |a |this )?|create (a |the )?file|add (to|code|a function|the)'; then
+    # Exception: worktree isolation is fine for code changes
+    if ! echo "$INPUT" | grep -q '"worktree"'; then
+        WARNINGS="${WARNINGS}SUBAGENT FILE EDIT: Description/prompt suggests file modification. Agent() creates isolated context — use Edit/Write directly for file changes. If you need isolated code changes, use isolation: worktree. "
+    fi
+fi
+
+# Check 6: Delegation cascade tracking
 CASCADE_FILE="/tmp/claude-agent-cascade-$PPID"
 NON_AGENT_FILE="/tmp/claude-non-agent-$PPID"
 
@@ -80,9 +99,9 @@ COUNT=$((COUNT + 1))
 echo "$COUNT" > "$CASCADE_FILE"
 
 if [ "$COUNT" -ge 5 ]; then
-    WARNINGS="${WARNINGS}SUBAGENT CASCADE (${COUNT}): 5+ consecutive Agent calls without other tool use. This suggests sequential work being delegated when it should run directly. Consider whether these tasks actually need subagent isolation. "
+    WARNINGS="${WARNINGS}SUBAGENT CASCADE (${COUNT}): 5+ consecutive Agent calls without other tool use. This suggests sequential work being delegated when it should run directly. Consider whether these tasks actually need subagent isolation. Have you surfaced known limitations of this approach before investing further? "
 elif [ "$COUNT" -ge 3 ]; then
-    WARNINGS="${WARNINGS}SUBAGENT CASCADE (${COUNT}): 3+ consecutive Agent calls. Check if these are truly independent — sequential chains should run directly. "
+    WARNINGS="${WARNINGS}SUBAGENT CASCADE (${COUNT}): 3+ consecutive Agent calls. Check if these are truly independent — sequential chains should run directly. Have you surfaced known limitations/ceilings of the current approach? "
 fi
 
 # Emit combined warnings
