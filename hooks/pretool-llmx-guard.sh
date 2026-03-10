@@ -22,14 +22,17 @@ if echo "$CMD" | grep -qiE 'gemini.?2\.5'; then
 fi
 
 # Invalid/hallucinated flags — these don't exist in llmx
-# Known valid long flags: --model --timeout --max-tokens --reasoning-effort --fallback
-# --stream --schema --search --output --fast --use-old --no-thinking --debug --provider
+# Known valid long flags (from `llmx chat --help`):
+# --model --provider --temperature --reasoning-effort --stream --no-stream
+# --compare --providers --timeout --debug --json --list-providers --no-thinking
+# --use-old --fast --search --system --file --schema --max-tokens --output --fallback
 INVALID_FLAGS=""
 for flag in $(echo "$CMD" | grep -oE -- '--[a-z][-a-z]*' | sort -u); do
   case "$flag" in
     --model|--timeout|--max-tokens|--reasoning-effort|--fallback) ;;
     --stream|--schema|--search|--output|--fast|--use-old|--no-thinking|--debug) ;;
-    --provider|--no-stream|--mini|--help|--version) ;;
+    --provider|--providers|--no-stream|--mini|--help|--version) ;;
+    --compare|--json|--temperature|--system|--file|--list-providers) ;;
     *) INVALID_FLAGS="${INVALID_FLAGS} ${flag}" ;;
   esac
 done
