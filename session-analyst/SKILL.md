@@ -31,6 +31,15 @@ Analyze session transcripts for behavioral patterns that no linter or static ana
 8. **First-answer convergence** — Agent received a design/architecture/strategy/research task and implemented the first approach without generating alternatives. Signals: no exploration of different approaches, task clearly involves a design choice, went from problem statement to implementation in <3 turns. Not every task needs divergence — flag only when the task involved a genuine design space.
 9. **Missing phase artifacts** — Agent made a design/architecture decision (high uncertainty + high irreversibility) without producing auditable phase artifacts. Look for: architectural choices without written alternatives, strategy selection without rationale document, shared infrastructure changes without options explored. Constitution Principle #6 requires divergent-options + selection-rationale for design decisions. Not needed for: routine implementation, bug fixes, low-stakes choices.
 
+### MAST-Informed Failure Modes (Berkeley NeurIPS 2025, empirically validated κ=0.88)
+These 5 modes from the MAST taxonomy are not covered by the 9 categories above. They represent 32% of multi-agent system failures:
+
+10. **Information withholding** — Agent had contradictory or qualifying evidence in context but didn't surface it. Signals: research found a negative result but the synthesis omits it, agent read a file with a caveat but didn't mention it, disconfirming evidence buried in a tool result goes unreported.
+11. **Conversation reset** — Agent lost prior context and re-asked questions or re-did work already completed. Common post-compaction. Signals: agent reads a file it already read and summarized, asks user for info already provided, repeats a search already done.
+12. **Reasoning-action mismatch** — Agent stated a plan or rationale but then took different actions. Distinct from build-then-undo (which is building then reverting). This is saying X then doing Y. Signals: "I'll check the tests first" then edits without testing, "let me verify" then commits without verifying.
+13. **Loss of conversation history** — Agent references information no longer in context or confuses details from different parts of the session. Signals: wrong file paths, misremembered function names, conflated two different issues.
+14. **Premature task termination** — Agent declared task complete without verifying success or while steps remained. Signals: "done!" without running tests, partial implementation presented as complete, TODO items left without flagging.
+
 ## What This Does NOT Detect
 Dead code (use vulture/ast), style issues (use ruff/eslint), type errors (use mypy/tsc). Those are static analysis problems, not behavioral ones.
 
@@ -64,6 +73,19 @@ You are analyzing Claude Code session transcripts for behavioral anti-patterns. 
 
 6. MISSING PUSHBACK: Did the user propose something questionable and the agent went along? Look for technically suboptimal decisions the agent should have flagged.
 
+7. INFORMATION WITHHOLDING: Did the agent have contradictory or qualifying evidence but fail to surface it? Look for: negative results omitted from synthesis, caveats in tool results not reported, disconfirming evidence ignored.
+
+8. CONVERSATION RESET: Did the agent lose prior context and redo work? Look for: re-reading files already read and summarized, re-asking questions already answered, repeating completed searches. Common after compaction.
+
+9. REASONING-ACTION MISMATCH: Did the agent say one thing but do another? Look for: stated plan not followed ("I'll check tests first" then edits without testing), "let me verify" then commits unverified, stated rationale contradicts actual action taken.
+
+10. PREMATURE TERMINATION: Did the agent declare done without verification or with steps remaining? Look for: "done!" without running tests, partial implementation presented as complete, TODO items left without flagging.
+
+For each finding, also classify the ROOT CAUSE as one of:
+- **system-design** — fixable by hooks, architecture, tooling (MAST: 44% of failures)
+- **agent-capability** — fixable by instructions, model choice, prompting
+- **task-specification** — fixable by better task decomposition or prompts
+
 For each finding, output this exact format:
 
 ### [CATEGORY]: [one-line summary]
@@ -72,6 +94,7 @@ For each finding, output this exact format:
 - **Failure mode:** [category name from agent-failure-modes.md, or "NEW: description"]
 - **Proposed fix:** [hook | skill | rule | CLAUDE.md change | architectural]
 - **Severity:** [low | medium | high] based on wasted effort or risk
+- **Root cause:** [system-design | agent-capability | task-specification]
 
 If a session has no notable anti-patterns, say so explicitly — do not fabricate findings.
 Output ONLY the findings, no preamble.
@@ -100,6 +123,7 @@ Report to user:
 - **Evidence:** [what happened, with message excerpts]
 - **Failure mode:** [link to agent-failure-modes.md category, or "NEW"]
 - **Proposed fix:** [hook | skill | rule | CLAUDE.md change | architectural]
+- **Root cause:** [system-design | agent-capability | task-specification]
 - **Status:** [ ] proposed
 ```
 
