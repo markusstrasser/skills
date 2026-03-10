@@ -14,7 +14,7 @@ argument-hint: '[model name or issue description]'
 3. **Using `shell=True`?** Don't — parentheses in prompts break it. Use list args + `input=`
 4. **Using `-o FILE`?** Never use `> file` shell redirects — they buffer until exit
 5. **Model name format?** No provider prefixes needed (`gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`). Old prefixed names still accepted with deprecation warning.
-6. **Know the transport and fallback triggers:** `openai` prefers `codex exec`, `google` prefers `gemini`, then falls back to API for `--max-tokens`, `--stream`, `--search`
+6. **Know the transport and fallback triggers:** `openai` prefers `codex exec`, `google` prefers `gemini`. Falls back to API for: `--schema`, `--search`, `--stream`, `--max-tokens`
 
 ## When llmx Fails — Diagnose, Don't Downgrade
 
@@ -111,7 +111,7 @@ GPT-5.4 (and 5.2) with reasoning burns time BEFORE producing output. Non-streami
 
 **Max timeout: 900s** (validated at CLI level, 1-900 range). For review dispatches use `--timeout 600`.
 
-**Wall-clock enforcement:** For OpenAI-compatible providers, `--timeout` is enforced via SIGALRM as a safety net. For Google, SIGALRM is the primary mechanism, with a thread-based join as backup: SDK calls run in a daemon thread with `join(remaining_time)`, so if C-level SSL reads block SIGALRM, the main thread still regains control and raises timeout. The `--fallback` model logic is preserved (the thread approach avoids `os._exit` which would kill the process). Both ensure the process actually exits after N seconds of real time.
+**Wall-clock enforcement:** SDK calls run in a daemon thread with `join(remaining_time)`. If SIGALRM can't interrupt a C-level SSL read, the thread join ensures the main thread regains control. `--fallback` logic is preserved.
 
 **`max_completion_tokens` vs `max_tokens` (v0.6.0+):** GPT-5.x uses `max_completion_tokens` not `max_tokens` at the API level. llmx handles this automatically — `--max-tokens` maps to the correct parameter per provider. **Important:** for reasoning models, `max_completion_tokens` includes reasoning tokens. If you set `--max-tokens 4096` on GPT-5.4 with reasoning, the model may exhaust the budget on thinking and produce truncated output. Use 16K+ for reasoning models.
 
