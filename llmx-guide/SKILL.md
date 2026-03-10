@@ -14,7 +14,7 @@ argument-hint: '[model name or issue description]'
 3. **Using `shell=True`?** Don't — parentheses in prompts break it. Use list args + `input=`
 4. **Using `-o FILE`?** Never use `> file` shell redirects — they buffer until exit
 5. **Model name format?** No provider prefixes needed (`gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`). Old prefixed names still accepted with deprecation warning.
-6. **Know the transport and fallback triggers:** `openai` prefers `codex exec`, `google` prefers `gemini`, then falls back to API
+6. **Know the transport and fallback triggers:** `openai` prefers `codex exec`, `google` prefers `gemini`, then falls back to API for `--max-tokens`, `--stream`, `--search`
 
 ## When llmx Fails — Diagnose, Don't Downgrade
 
@@ -111,7 +111,7 @@ GPT-5.4 (and 5.2) with reasoning burns time BEFORE producing output. Non-streami
 
 **Max timeout: 900s** (validated at CLI level, 1-900 range). For review dispatches use `--timeout 600`.
 
-**Wall-clock enforcement:** For OpenAI-compatible providers, `--timeout` is enforced via SIGALRM as a safety net. For Google, a server-side deadline replaces SIGALRM entirely (see below). Both ensure the process actually exits after N seconds of real time.
+**Wall-clock enforcement:** For OpenAI-compatible providers, `--timeout` is enforced via SIGALRM as a safety net. For Google, SIGALRM is the primary mechanism, with a thread-based join as backup: SDK calls run in a daemon thread with `join(remaining_time)`, so if C-level SSL reads block SIGALRM, the main thread still regains control and raises timeout. The `--fallback` model logic is preserved (the thread approach avoids `os._exit` which would kill the process). Both ensure the process actually exits after N seconds of real time.
 
 **`max_completion_tokens` vs `max_tokens` (v0.6.0+):** GPT-5.x uses `max_completion_tokens` not `max_tokens` at the API level. llmx handles this automatically — `--max-tokens` maps to the correct parameter per provider. **Important:** for reasoning models, `max_completion_tokens` includes reasoning tokens. If you set `--max-tokens 4096` on GPT-5.4 with reasoning, the model may exhaust the budget on thinking and produce truncated output. Use 16K+ for reasoning models.
 
@@ -230,20 +230,24 @@ llmx -p codex-cli "question"    # force Codex CLI transport
 
 Falls back to API for:
 
-- Gemini CLI: `--schema`, `-s`, `--search`, `--stream`, `--max-tokens`
-- Codex CLI: `-s`, `--search`, `--stream`
+- Gemini CLI: `--schema`, `--search`, `--stream`, `--max-tokens`
+- Codex CLI: `--search`, `--stream`
 - Both CLIs ignore explicit `--reasoning-effort`; they use their own default thinking behavior
 - Codex CLI now handles `--schema` via `codex exec --output-schema`
 - `--max-tokens` forces API because Gemini CLI defaults to 8K with no override
 - `--output` works with both CLI and API transport (Python-level, not shell)
 
-### CLI-First System Prompt Pattern
+### System Prompts with CLIs
 
-If you want CLI transport by default, **do not use `-s`**. `-s` becomes an API-fallback trigger for both Google and OpenAI providers.
+`-s` / `--system` now works with CLI transport. System messages are folded into the prompt as `<system>...</system>` XML tags, so `-s` no longer forces API fallback.
 
-Instead, inline the system instructions at the top of the prompt or context file:
+Both approaches work:
 
 ```bash
+# Using -s flag (now stays on CLI — system text folded into prompt as <system> XML)
+llmx -p openai -m gpt-5.4 --timeout 600 -s "You are reviewing code. Be concrete." "Review this design"
+
+# Inline system tags (equivalent, also stays on CLI)
 cat <<'EOF' | llmx chat -p openai -m gpt-5.4 --timeout 600
 <system>
 You are reviewing code. Be concrete. Reference specific files and tradeoffs.
@@ -254,11 +258,7 @@ Review this design:
 EOF
 ```
 
-Important caveat:
-
-- `<system>...</system>` is just prompt text, not a transport-level system role
-- It preserves `gemini-cli` / `codex-cli` usage, but the model may treat it as advisory text rather than a hard system channel
-- If you need a true system role, use `-s` and accept API fallback
+Note: in both cases, `<system>...</system>` is prompt text, not a transport-level system role. The model treats it as advisory text rather than a hard system channel. The behavior is identical whether you use `-s` or inline tags.
 
 ### Codex CLI Reasoning Default
 
@@ -292,7 +292,6 @@ Gemini CLI and Codex CLI use flat subscription pricing — zero marginal cost pe
 |-------------|-------------|
 | Simple Q&A, summaries, reviews | Need `--max-tokens` (Gemini CLI caps at 8K) |
 | Output fits in 8K tokens | Need structured output (`--schema`) |
-| Don't need system prompts | Need `-s` system prompt (true role, not inline) |
 | Don't need streaming | Need `--stream` for progressive output |
 | Cost matters (subscription = free) | Need search grounding (`--search`) |
 
@@ -324,7 +323,7 @@ Neither CLI truncates user input (verified from source code). Input goes directl
 
 **Tested:** 80KB code batches via both CLIs work reliably. 200KB causes timeouts on thinking models.
 
-**What forces API fallback** (costs money): `--max-tokens`, `--stream`, `-s`, `--search`. Avoid these to stay on free CLI transport.
+**What forces API fallback** (costs money): `--max-tokens`, `--stream`, `--search`. Avoid these to stay on free CLI transport.
 
 ### CLI for Agents (Claude Code / Codex)
 
@@ -349,7 +348,7 @@ for f in src/*.py; do
 done
 ```
 
-**Avoid** `-s` flag with CLIs — it forces API fallback. Use inline `<system>` tags instead (advisory, not true system role, but preserves CLI transport).
+`-s` works with CLIs — system messages are folded into the prompt as `<system>` XML tags, staying on CLI transport.
 
 ## Judge Names ≠ Model Names
 
