@@ -49,9 +49,14 @@ Dead code (use vulture/ast), style issues (use ruff/eslint), type errors (use my
 Parse the project argument from $ARGUMENTS. Default: last 5 sessions.
 
 ```bash
+# Claude Code sessions
 python3 ~/Projects/skills/session-analyst/scripts/extract_transcript.py <project> --sessions <N> --output /tmp/session_analysis_input.md
+
+# Codex CLI sessions (GPT-5.4 via OpenAI) — same interface, reads ~/.codex/state_5.sqlite + rollout JSONL
+python3 ~/Projects/skills/session-analyst/scripts/extract_codex_transcript.py <project> --sessions <N> --output /tmp/session_analysis_input.md
 ```
 
+Use whichever extractor matches the sessions you want to analyze. Both produce identical markdown format.
 Verify the output is reasonable (<100KB, readable markdown).
 
 ### Step 2: Dispatch to Gemini
