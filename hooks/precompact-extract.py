@@ -122,6 +122,10 @@ def main():
     recent_tools = []
     memory_written = False
     task_context = ""
+    task_subjects = []  # all TaskCreate/TaskUpdate subjects
+
+    # Forward-looking state
+    last_user_message = ""
 
     # ─── Single pass through transcript ───────────────────────────────
 
@@ -156,8 +160,12 @@ def main():
                             fp = inp.get("file_path", "")
                             if "MEMORY.md" in fp or "/memory/" in fp:
                                 memory_written = True
-                        if name in ("TaskCreate", "TaskUpdate") and not task_context:
-                            task_context = inp.get("subject", inp.get("description", ""))[:120]
+                        if name in ("TaskCreate", "TaskUpdate"):
+                            subj = inp.get("subject", inp.get("description", ""))[:120]
+                            if subj and not task_context:
+                                task_context = subj
+                            if subj and subj not in task_subjects:
+                                task_subjects.append(subj)
 
                     # ── Assistant text → metrics + content extraction ──
                     if block.get("type") == "text" and msg_type == "assistant":
@@ -202,13 +210,16 @@ def main():
                                 if not is_near_dup(sent, buckets["decisions"]):
                                     buckets["decisions"].append(sent)
 
-                    # ── User corrections (#f prefix) ──
+                    # ── User text → last message + corrections ──
                     if block.get("type") == "text" and msg_type == "human":
                         user_txt = block.get("text", "").strip()
                         if user_txt.startswith("#f"):
                             correction = user_txt[2:].strip()[:200]
                             if correction:
                                 user_corrections.append(correction)
+                        # Track last substantive user message (skip very short ones)
+                        if len(user_txt) > 10:
+                            last_user_message = user_txt
 
         except Exception:
             pass  # Entire extraction is best-effort
@@ -287,10 +298,27 @@ def main():
     out.append("# Resume Checkpoint")
     out.append("")
     out.append("Written by PreCompact hook at " + ts + ".")
-    out.append("Read this file after compaction or at session start to re-orient.")
+    out.append("This is a handoff document. Prioritize what remains over what happened.")
     out.append("")
 
-    # ── Epistemic content (FIRST — most valuable for re-orientation) ──
+    # ── Forward-looking content (FIRST — what to do next) ──
+
+    if last_user_message:
+        out.append("## Last Request")
+        # Truncate to 300 chars
+        msg = last_user_message.replace("\n", " ").strip()
+        if len(msg) > 300:
+            msg = msg[:297] + "..."
+        out.append(msg)
+        out.append("")
+
+    if task_subjects:
+        out.append("## Pending Tasks")
+        for subj in task_subjects:
+            out.append("- " + subj)
+        out.append("")
+
+    # ── Epistemic content ──
 
     if has_epistemic:
         out.append("## Epistemic Content")
