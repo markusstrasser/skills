@@ -56,11 +56,11 @@ Before proposing fixes:
 |---|----------|--------------|----------|-------------|------------|
 | 1 | WRONG_ASSUMPTION | ... | file:line or command | Rule/hook/skill | NEW or RECURRING |
 
-### Top 3 Improvements (ranked by impact)
+### Improvements (ranked by impact)
 
 1. **[Fix]** — because [evidence]. Implementation: [hook|rule|skill|script].
 2. ...
-3. ...
+(list all actionable improvements — don't cap at 3)
 
 ### What Went Well (max 2)
 
