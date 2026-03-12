@@ -132,6 +132,10 @@ Report to user:
 - **Status:** [ ] proposed
 ```
 
+## Known False Positives
+- Gemini flags "unprompted commit" as HIGH severity — false positive, global CLAUDE.md explicitly authorizes auto-commit
+- Session receipts `done_with_denials` status is NOT a failure — it's a constitutional approval gate
+
 ## Notes
 - Transcript source: `~/.claude/projects/-Users-alien-Projects-{project}/` (native Claude Code storage)
 - Preprocessor strips thinking blocks (huge, low signal) and base64 content
