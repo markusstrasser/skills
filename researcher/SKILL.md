@@ -58,11 +58,12 @@ Use whichever of these are available in the current project's `.mcp.json`:
 | `mcp__firecrawl__firecrawl_extract` | Structured data extraction | JSON Schema extraction from web pages. Company filings, earnings data. |
 | `mcp__firecrawl__firecrawl_crawl` | Recursive site crawl | Investor relations sections, filing indexes. |
 | `mcp__firecrawl__firecrawl_map` | URL discovery | "What pages exist on this site?" before crawling. |
+| `mcp__scite__search_literature` | Citation-stance search (1.6B+ citations) | Literature audits, disconfirmation search, checking if a claim is supported/contrasted in the literature. Returns Smart Citation snippets with stance classification (supporting/contrasting/mentioning). |
 | `mcp__context7__*` | Library documentation | API/framework questions |
 | WebFetch | Fetch specific URLs | Known databases, filings, regulatory |
 | WebSearch | General web search | News, grey literature |
 
-Not all tools exist in every project. Use what's available. The agent will error on tools not in `.mcp.json` — just skip them.
+Not all tools exist in every project. User-scope MCPs (scite, paper-search, perplexity, brave-search, exa) are available in all projects. Project `.mcp.json` has project-specific MCPs.
 
 **Critical rule:** `fetch_paper` then `read_paper` BEFORE citing. Abstracts are not primary sources.
 
@@ -115,16 +116,30 @@ Combined's citation hallucination happened because it reasoned from training-dat
 | Canonical papers by topic | `search_papers` (S2) | Largest index (220M+), structured metadata, citation counts |
 | Recent papers (<6mo) | `web_search_advanced_exa` with `category: "research paper"` + date filter | S2 has no date filtering |
 | Citation analysis / related papers | `search_papers` (S2) → `save_paper` → `get_paper` | S2 exposes citation graph; arXiv/PubMed don't |
+| Citation stance (support/contrast) | `search_literature` (scite) | 1.6B+ classified citations. Unique: tells you if papers *support* or *contrast* a claim |
+| Disconfirmation search | `search_literature` (scite) with contrasting focus | Directly surfaces contradictory evidence — better than "X criticism" keyword hacks |
 | Preprints (arXiv) | `search_arxiv` (paper-search) | Direct arXiv API, download+read built in |
 | Clinical/medical literature | `search_pubmed` (paper-search) | MeSH terms, clinical focus |
 | Biology preprints | `search_biorxiv` (paper-search) | Direct bioRxiv API |
 | Full-text synthesis | `search_papers` → `save_paper` → `fetch_paper` → `ask_papers` | Gemini 1M context for multi-paper Q&A |
 | Grey literature / expert blogs | Exa semantic search | Academic APIs don't index blogs/substacks |
 
+### Scite — citation stance search (user-scope, available everywhere)
+
+Scite indexes 1.6B+ citation statements classified as **supporting**, **contrasting**, or **mentioning**. Unique capability — no other tool tells you the *direction* of how papers cite each other.
+
+- **Disconfirmation (Phase 4):** Search for contrasting citations on your hypothesis. Scite surfaces papers that explicitly contradict a claim — more targeted than keyword-based "X criticism" queries.
+- **Literature audits:** Check if a specific claim has been supported or contested across the literature.
+- **Novelty checks:** Before writing a claim, check if it's already in the literature and which direction the evidence points.
+- **Coverage caveat:** Skews biomedical. Thin on psychometrics, measurement invariance, some social sciences.
+- **Not for:** paper discovery (use S2), full-text reading (use fetch_paper), recent preprints (use arXiv/Exa).
+- **Citation format:** Always check `editorialNotices` for retractions before citing. Links: `https://doi.org/{doi}`.
+
 ### Verification
 
 - `mcp__research__verify_claim` (Exa /answer) remains primary for spot-checking.
 - For critical claims: also check via `brave_web_search` (independent index).
+- For citation stance: use `mcp__scite__search_literature` to check if a claim is supported or contrasted in published literature.
 </tool_reference>
 
 ## Effort Classification
