@@ -261,6 +261,21 @@ For EACH hypothesis, actively search for contradictory evidence:
 If no contradictory evidence after genuine effort: "no contradictory evidence found" (≠ "none exists").
 **This phase is structurally required.** Output without disconfirmation is incomplete.
 
+### Phase 4b — Citation Stance Verification (if scite MCP available)
+
+After your own disconfirmation search, verify the top 3 synthesis claims against scite's citation stance data:
+
+1. For each major synthesis claim ("the literature supports X", "evidence suggests Y"):
+   - Search scite: `search_literature` with the claim's core terms
+   - Check `tally.contrasting` — if >0, contrasting citations exist
+   - Read the contrasting citation `snippet` text to assess relevance
+2. If contrasting citations exist but your Phase 4 search didn't find them → flag as **missed negative**
+3. If scite has no coverage (0 results) → note `[SCITE: NO COVERAGE]` — don't treat absence as confirmation
+
+**Output:** Add a "Citation Stance Check" row to the claims table with scite tally (S:supporting, C:contrasting, M:mentioning) for each checked claim. Example: `[SCITE: S:12 C:3 M:45]`
+
+**Cost:** ~$0 (scite is user-scope MCP, no per-query cost). Run on top 3 claims only to stay focused.
+
 ## Phase 5 — Claim-Level Verification
 
 For every specific claim in your output:
