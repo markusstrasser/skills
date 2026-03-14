@@ -103,9 +103,30 @@ elif result.returncode == 4:  # timeout
     pass
 ```
 
-## The Four llmx Footguns
+## The Five llmx Footguns
 
-### 1. GPT-5.x Timeouts and max_completion_tokens
+### 1. Gemini CLI Hangs on Context Files with Thinking Models
+
+Gemini CLI transport (`gemini-cli`) hangs indefinitely when given context files (`-f`) with thinking models (Pro, Flash thinking). The process consumes CPU but never produces output or times out. Observed with files as small as 5KB.
+
+**Root cause:** Unknown — likely Gemini CLI's thinking mode interacts badly with piped file context. Non-thinking Flash works fine on the same files.
+
+**Fix:** Always use `--stream` when dispatching review/analysis prompts with `-f` context files to Gemini thinking models. `--stream` forces API transport, which works reliably.
+
+```bash
+# HANGS — Gemini CLI transport with context file + thinking model:
+llmx chat -m gemini-3.1-pro-preview -f context.md --timeout 300 "Review this"
+
+# WORKS — --stream forces API transport:
+llmx chat -m gemini-3.1-pro-preview -f context.md --timeout 300 --stream "Review this"
+
+# WORKS — Flash (non-thinking) on CLI transport:
+llmx chat -m gemini-3-flash-preview -f context.md --timeout 120 "Review this"
+```
+
+**Impact on model-review skill:** All Gemini Pro dispatches with `-f` must include `--stream`. This forces API transport (costs money instead of free CLI), but is the only reliable path. Budget ~$0.01-0.05 per review at 5-30KB context.
+
+### 2. GPT-5.x Timeouts and max_completion_tokens
 
 GPT-5.4 (and 5.2) with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning — proxies and HTTP clients kill idle connections. Default is 300s (since llmx 0.5.2).
 

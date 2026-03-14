@@ -173,17 +173,18 @@ Append only the specific files under review. Read them with the Read tool and wr
 ```bash
 # Gemini — Pro with Flash fallback for rate limits
 GEMINI_MODEL="gemini-3.1-pro-preview"
-# IMPORTANT: Gemini 3.1 Pro defaults to 8K maxOutputTokens server-side.
-# Always use --max-tokens 65536 on Gemini dispatches to prevent silent truncation.
-GEMINI_MAX_TOKENS="--max-tokens 65536"
+# MUST use --stream for Gemini Pro with -f context files.
+# Gemini CLI transport hangs indefinitely on context files with thinking models.
+# --stream forces API transport (~$0.01-0.05/review) but is the only reliable path.
+GEMINI_STREAM="--stream"
 GEMINI_FALLBACK="--fallback gemini-3-flash-preview"
 
 # GPT — 5.4 with deep reasoning, no fallback
 GPT_MODEL="gpt-5.4"
 GPT_EFFORT="--reasoning-effort high --stream"
 GPT_TIMEOUT="--timeout 600"
-# Note: GPT-5.x uses max_completion_tokens (includes reasoning tokens).
-# For reasoning models, 16K+ recommended to avoid truncated output.
+# Note: --stream forces API transport (CLI doesn't support streaming).
+# GPT-5.x max_completion_tokens includes reasoning tokens — 16K is fine.
 ```
 
 **IMPORTANT — Bash timeout:** When dispatching via the Bash tool, always set `timeout: 660000` (11 minutes — must exceed llmx --timeout value) on the Bash tool call. The default 120s Bash timeout kills the process before llmx finishes. llmx's own `--timeout` handles the real deadline.
@@ -202,10 +203,11 @@ GPT_TIMEOUT="--timeout 600"
 ```bash
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-context.md" \
-  $GEMINI_MAX_TOKENS $GEMINI_FALLBACK --timeout 300 \
+  $GEMINI_STREAM $GEMINI_FALLBACK --timeout 300 \
   -o "$REVIEW_DIR/gemini-output.md" "
 <system>
 You are reviewing a codebase. Be concrete. No platitudes. Reference specific code, configs, and findings. It is $(date +%Y-%m-%d).
+Budget: ~2000 words. Dense tables and lists over prose.
 </system>
 
 [Describe what's being reviewed]
@@ -241,6 +243,7 @@ llmx chat -m $GPT_MODEL \
   -o "$REVIEW_DIR/gpt-output.md" "
 <system>
 You are performing QUANTITATIVE and FORMAL analysis. Gemini is handling qualitative pattern review separately. Focus on what Gemini can't do well. Be precise. Show your reasoning. No hand-waving.
+Budget: ~2000 words. Tables over prose. Source-grade claims.
 </system>
 
 [Describe what's being reviewed]
@@ -511,14 +514,14 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 
 **Gemini 3.1 Pro (always used for review):**
 - Excels at cross-referencing across large context (finds contradictions between file A and file B)
-- **NEVER use `--no-stream` with Gemini 3.1 Pro** — long generations hang indefinitely. Always use default streaming.
+- **MUST use `--stream` with `-f` context files.** Gemini CLI transport hangs indefinitely on context files with thinking models. `--stream` forces API transport (~$0.01-0.05/review). This is non-negotiable — without `--stream`, the process hangs forever with no output and no timeout.
+- **Bare mode (v0.5.3+):** llmx auto-sets `HOME=~/.gemini-bare` to skip MCP/skills/extensions loading. ~40% faster. Requires `~/.gemini-bare/.gemini/settings.json` with admin overrides + `oauth_creds.json`.
 - Temperature is locked at 1.0 server-side for thinking models
 - Will recommend itself for tasks — always flag self-serving suggestions
 - Tends to over-recommend architectural changes (DuckDB migrations, etc.)
 - llmx default timeout is now 300s; use `--timeout 300` explicitly in dispatch commands
-- **Google server-side deadline (v0.6.0+):** Timeout is now enforced server-side via `google-genai` SDK (min 10s), eliminating SIGALRM hang issues
 - **Always use `--fallback gemini-3-flash-preview`** on Gemini dispatches — Google rate limits are more frequent than OpenAI's
-- **Truncation detection (v0.6.0+):** llmx emits `[llmx:WARN] output may be truncated` — check stderr after dispatch. If truncated, increase `--max-tokens`
+- **Parallel dispatch caveat:** Multiple gemini-cli processes can contend if bare mode isn't set up (each loads 7+ MCP servers). Bare mode eliminates this.
 
 **GPT-5.4 (`gpt-5.4`) — review GPT:**
 - `--reasoning-effort high` is essential for review mode (burns thinking time for deep fault-finding)
