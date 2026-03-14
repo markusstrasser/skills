@@ -10,7 +10,8 @@ STATE_FILE="/tmp/claude-epistemic-domain-${CLAUDE_SESSION_ID:-default}"
 [ -f "$STATE_FILE" ] && exit 0
 
 DOMAIN="general"
-PROJECT="${CLAUDE_PROJECT_DIR:-}"
+# CLAUDE_PROJECT_DIR may or may not be set; fall back to CWD
+PROJECT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 
 # 1. Override: check for explicit domain file in project root
 if [ -n "$PROJECT" ] && [ -f "$PROJECT/.claude/epistemic-domain" ]; then
