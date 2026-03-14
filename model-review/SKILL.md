@@ -349,17 +349,19 @@ Extract all discrete ideas from this review."
 
 **5a. Extract claims per source.** For each model output, enumerate every discrete idea/recommendation/finding as a numbered item. One idea per line. Keep it mechanical — don't evaluate yet.
 
+**Anonymize during disposition.** Use anonymous labels (A1-An, B1-Bn) in the disposition table — not model names. This prevents identity-driven bias during synthesis (Choi et al. arXiv:2510.07517 found model identity biases peer evaluation). Reveal model identities only in the "Model Errors" section where you need to know which model to distrust.
+
 ```markdown
-## Extraction: gemini-output.md
-G1. [Prediction ledger needed — no structured tracking exists]
-G2. [Signal scanner has silent except blocks — masks failures]
-G3. [DuckDB FTS preserves provenance better than vector DB]
+## Extraction: Reviewer A
+A1. [Prediction ledger needed — no structured tracking exists]
+A2. [Signal scanner has silent except blocks — masks failures]
+A3. [DuckDB FTS preserves provenance better than vector DB]
 ...
 
-## Extraction: gpt-output.md
-P1. [Universe survivorship bias — S:5, D:5]
-P2. [first_seen_date needed on all records for PIT safety]
-P3. [FDR control mandatory — 5000-50000 implicit hypotheses/month]
+## Extraction: Reviewer B
+B1. [Universe survivorship bias — S:5, D:5]
+B2. [first_seen_date needed on all records for PIT safety]
+B3. [FDR control mandatory — 5000-50000 implicit hypotheses/month]
 ...
 ```
 
