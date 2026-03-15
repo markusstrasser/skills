@@ -204,8 +204,28 @@ def compute_fan_in(project_root: Path, files: list[tuple[Path, str]]) -> dict[st
     return fan_in
 
 
-def collect_files(project_root: Path) -> list[tuple[Path, str]]:
-    """Collect all source files, return as (path, category) pairs."""
+def collect_files(
+    project_root: Path, files_from: Path | None = None
+) -> list[tuple[Path, str]]:
+    """Collect source files, return as (path, category) pairs.
+
+    If files_from is provided, only include those files plus their direct
+    importers (fan-in neighbors). This enables diff-aware mode.
+    """
+    # If files_from specified, restrict to those files + their importers
+    restrict_to: set[str] | None = None
+    if files_from and files_from.exists():
+        seed_files = {
+            line.strip()
+            for line in files_from.read_text().strip().split("\n")
+            if line.strip()
+        }
+        # Always include config files for context
+        restrict_to = set(seed_files)
+        # Add direct importers of changed files (so we see callers too)
+        importers = _find_importers(project_root, seed_files)
+        restrict_to.update(importers)
+
     git_files = get_git_tracked_files(project_root)
     use_git = len(git_files) > 0
 
@@ -225,6 +245,11 @@ def collect_files(project_root: Path) -> list[tuple[Path, str]]:
 
             # Skip if git-tracked files are available and this isn't tracked
             if use_git and rel_str not in git_files:
+                continue
+
+            # In diff-aware mode, skip files not in the restrict set
+            # (but always include config files for context)
+            if restrict_to is not None and rel_str not in restrict_to and filename not in CONFIG_PRIORITY:
                 continue
 
             # Skip large files
@@ -260,10 +285,48 @@ def collect_files(project_root: Path) -> list[tuple[Path, str]]:
     return result
 
 
-def dump(project_root: Path, max_tokens: int) -> str:
+def _find_importers(project_root: Path, seed_files: set[str]) -> set[str]:
+    """Find files that import any of the seed files (direct importers only)."""
+    # Extract module names from seed file paths
+    seed_modules = set()
+    for f in seed_files:
+        p = Path(f)
+        if p.suffix == ".py":
+            seed_modules.add(p.stem)
+
+    if not seed_modules:
+        return set()
+
+    importers = set()
+    import_pattern = re.compile(r'(?:from\s+\.?(\w+)|import\s+(\w+))')
+
+    for root_str, dirs, files in os.walk(project_root):
+        root = Path(root_str)
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        for filename in files:
+            if not filename.endswith(".py"):
+                continue
+            filepath = root / filename
+            rel_str = str(filepath.relative_to(project_root))
+            if rel_str in seed_files:
+                continue  # Don't add seed files as their own importers
+            try:
+                content = filepath.read_text(encoding="utf-8", errors="replace")
+            except (OSError, PermissionError):
+                continue
+            for match in import_pattern.finditer(content):
+                imported = match.group(1) or match.group(2)
+                if imported in seed_modules:
+                    importers.add(rel_str)
+                    break  # One match is enough
+
+    return importers
+
+
+def dump(project_root: Path, max_tokens: int, files_from: Path | None = None) -> str:
     """Build the structured markdown document."""
     project_name = project_root.name
-    files = collect_files(project_root)
+    files = collect_files(project_root, files_from=files_from)
 
     # Compute fan-in for priority ordering when budget is tight
     fan_in = compute_fan_in(project_root, files)
@@ -333,6 +396,7 @@ def main():
     parser.add_argument("project_root", type=Path, help="Path to project root")
     parser.add_argument("--output", "-o", type=Path, help="Output file (default: stdout)")
     parser.add_argument("--max-tokens", type=int, default=400_000, help="Token budget (default: 400K)")
+    parser.add_argument("--files-from", type=Path, help="File listing changed files (diff-aware mode)")
     args = parser.parse_args()
 
     project_root = args.project_root.resolve()
@@ -340,7 +404,7 @@ def main():
         print(f"ERROR: {project_root} is not a directory", file=sys.stderr)
         sys.exit(1)
 
-    result = dump(project_root, args.max_tokens)
+    result = dump(project_root, args.max_tokens, files_from=args.files_from)
 
     if args.output:
         args.output.write_text(result)
