@@ -107,16 +107,57 @@ PROMPT
 )"
 ```
 
-### Step 3: Review and Append
+### Step 3: Stage Findings
 1. Read the Gemini output critically — it may hallucinate session details
 2. Cross-check any specific claims against the transcript
-3. Append validated findings to `~/Projects/meta/improvement-log.md` with today's date
-4. If a finding maps to a known failure mode, reference it. If new, flag as "NEW"
+3. Save validated findings as JSON for the auto-triage pipeline:
+
+```bash
+# Write findings to a temp JSON file
+cat > /tmp/session_findings.json << 'EOF'
+{
+  "findings": [
+    {
+      "category": "TOKEN WASTE",
+      "summary": "Description of the finding",
+      "severity": "medium",
+      "evidence": "Specific evidence from transcript",
+      "root_cause": "system-design|agent-capability|task-specification",
+      "proposed_fix": "hook|skill|rule|CLAUDE.md change|architectural",
+      "session_uuid": "uuid-prefix",
+      "project": "project-name"
+    }
+  ],
+  "sessions_analyzed": 5,
+  "actionable_count": 3
+}
+EOF
+
+# Ingest into auto-triage staging DB
+uv run python3 ~/Projects/meta/scripts/finding-triage.py ingest /tmp/session_findings.json
+
+# Check if any findings are ready for auto-promotion (2+ recurrences)
+uv run python3 ~/Projects/meta/scripts/finding-triage.py promote --dry-run
+```
+
+4. If `promote --dry-run` shows findings ready for promotion, run without `--dry-run` to auto-append to improvement-log.md.
+5. For novel high-severity findings, also append directly to improvement-log.md (don't wait for recurrence).
+
+### Step 3b (Optional): Shape Pre-Filter
+Before dispatching to Gemini, check which sessions are structurally anomalous:
+
+```bash
+uv run python3 ~/Projects/meta/scripts/session-shape.py --days 1 --project <project>
+```
+
+Focus deep analysis on flagged sessions. Skip sessions with normal structural profiles unless you have specific concerns.
 
 ### Step 4: Summary
 Report to user:
 - Sessions analyzed: N
-- Findings: N (by category)
+- Shape anomalies detected: N
+- Findings staged: N (by category)
+- Ready for promotion: N (2+ recurrences)
 - New failure modes discovered: N
 - Proposed fixes: list
 

@@ -105,13 +105,48 @@ fi
 
 ## Phase 1: Dump Codebase
 
-Bundle the entire codebase into a structured document for Gemini.
+### Diff-Aware Mode (recommended for repeat runs)
+
+If a `.project-upgrade/last-baseline.sha` file exists, only analyze changed files + their import graph. 10x cheaper, can run daily.
 
 ```bash
-uv run python3 "$(dirname "$0")/scripts/dump_codebase.py" \
-  "$PROJECT_ROOT" \
-  --output "$UPGRADE_DIR/codebase.md" \
-  --max-tokens 400000
+LAST_SHA_FILE="$PROJECT_ROOT/.project-upgrade/last-baseline.sha"
+DIFF_MODE="false"
+
+if [ -f "$LAST_SHA_FILE" ]; then
+  LAST_SHA=$(cat "$LAST_SHA_FILE")
+  if git rev-parse --verify "$LAST_SHA" >/dev/null 2>&1; then
+    CHANGED_FILES=$(git diff --name-only "$LAST_SHA" HEAD -- '*.py' '*.js' '*.ts' '*.rs' '*.go' '*.sh')
+    if [ -n "$CHANGED_FILES" ]; then
+      DIFF_MODE="true"
+      echo "$CHANGED_FILES" > "$UPGRADE_DIR/changed-files.txt"
+      echo "Diff-aware mode: $(echo "$CHANGED_FILES" | wc -l | tr -d ' ') files changed since $(echo $LAST_SHA | head -c 8)"
+    else
+      echo "No files changed since last run. Nothing to analyze."
+      exit 0
+    fi
+  fi
+fi
+```
+
+### Full Dump (first run or when --full flag is passed)
+
+Bundle the codebase into a structured document for Gemini.
+
+```bash
+if [ "$DIFF_MODE" = "true" ]; then
+  # Dump only changed files + their direct importers
+  uv run python3 "$(dirname "$0")/scripts/dump_codebase.py" \
+    "$PROJECT_ROOT" \
+    --output "$UPGRADE_DIR/codebase.md" \
+    --max-tokens 400000 \
+    --files-from "$UPGRADE_DIR/changed-files.txt"
+else
+  uv run python3 "$(dirname "$0")/scripts/dump_codebase.py" \
+    "$PROJECT_ROOT" \
+    --output "$UPGRADE_DIR/codebase.md" \
+    --max-tokens 400000
+fi
 ```
 
 If `dump_codebase.py` doesn't exist or fails, do it inline:
@@ -503,6 +538,13 @@ Generate before/after comparison:
 ```
 
 Save to `$UPGRADE_DIR/report.md`.
+
+### Save Baseline SHA (for diff-aware next run)
+
+```bash
+git rev-parse HEAD > "$PROJECT_ROOT/.project-upgrade/last-baseline.sha"
+echo "Saved baseline SHA for next diff-aware run: $(cat $PROJECT_ROOT/.project-upgrade/last-baseline.sha | head -c 8)"
+```
 
 ## Anti-Patterns
 
