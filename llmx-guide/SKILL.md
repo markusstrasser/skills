@@ -14,7 +14,8 @@ argument-hint: '[model name or issue description]'
 3. **Using `shell=True`?** Don't — parentheses in prompts break it. Use list args + `input=`
 4. **Using `-o FILE`?** Never use `> file` shell redirects — they buffer until exit
 5. **Model name format?** No provider prefixes needed (`gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`). Old prefixed names still accepted with deprecation warning.
-6. **Know the transport and fallback triggers:** `openai` prefers `codex exec`, `google` prefers `gemini`. Falls back to API for: `--schema`, `--search`, `--stream`, `--max-tokens`
+6. **Know the transport triggers:** `google` prefers `gemini` CLI (free). Falls back to API for: `--schema`, `--search`, `--stream`, `--max-tokens`. GPT goes direct to API (codex-cli disabled).
+7. **Hangs in agent context?** Claude Code's Bash tool pipes stdin without EOF. If llmx hangs via Bash but works via `python3 -c "from llmx.providers import chat; ..."`, it's a stdin issue. Fixed in current llmx (skips stdin when prompt provided).
 
 ## When llmx Fails — Diagnose, Don't Downgrade
 
