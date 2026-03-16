@@ -94,9 +94,10 @@ fi
 
 # --- ADVISORY checks (warnings only) ---
 
-# 0. Gemini without --stream — CLI transport hits capacity limits (429), hangs on thinking models
-if echo "$CMD" | grep -qiE 'gemini' && ! echo "$CMD" | grep -qE -- '--stream'; then
-  WARNINGS="${WARNINGS}[llmx-guard] Gemini without --stream. CLI transport hits capacity limits (429) and hangs on thinking models. Add --stream to force API transport.\n"
+# 0. Gemini Pro without --stream — CLI transport hangs on thinking models + piped input, hits capacity limits
+#    Flash/Lite on CLI is fine (non-thinking, better capacity) — no warning needed
+if echo "$CMD" | grep -qiE 'gemini-3\.1-pro|gemini-3-pro' && ! echo "$CMD" | grep -qE -- '--stream'; then
+  WARNINGS="${WARNINGS}[llmx-guard] Gemini Pro without --stream. CLI transport hangs on thinking models and hits capacity limits. Add --stream for API transport. (Flash on CLI is fine.)\n"
 fi
 
 # 0b. --fallback used — model should be the model, no silent switching
