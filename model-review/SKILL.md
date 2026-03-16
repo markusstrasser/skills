@@ -171,13 +171,13 @@ Append only the specific files under review. Read them with the Read tool and wr
 
 **Select models** (see Dispatch Models above):
 ```bash
-# Gemini — Pro with Flash fallback for rate limits
+# Gemini — Pro only. No fallback — model should be the model.
 GEMINI_MODEL="gemini-3.1-pro-preview"
 # MUST use --stream for Gemini Pro with -f context files.
 # Gemini CLI transport hangs indefinitely on context files with thinking models.
 # --stream forces API transport (~$0.01-0.05/review) but is the only reliable path.
+# Also bypasses CLI free-tier capacity exhaustion (429 errors).
 GEMINI_STREAM="--stream"
-GEMINI_FALLBACK="--fallback gemini-3-flash-preview"
 
 # GPT — 5.4 with deep reasoning, no fallback
 GPT_MODEL="gpt-5.4"
@@ -203,7 +203,7 @@ GPT_TIMEOUT="--timeout 600"
 ```bash
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-context.md" \
-  $GEMINI_STREAM $GEMINI_FALLBACK --timeout 300 \
+  $GEMINI_STREAM --timeout 300 \
   -o "$REVIEW_DIR/gemini-output.md" "
 <system>
 You are reviewing a codebase. Be concrete. No platitudes. Reference specific code, configs, and findings. It is $(date +%Y-%m-%d).
@@ -522,7 +522,7 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 - Will recommend itself for tasks — always flag self-serving suggestions
 - Tends to over-recommend architectural changes (DuckDB migrations, etc.)
 - llmx default timeout is now 300s; use `--timeout 300` explicitly in dispatch commands
-- **Always use `--fallback gemini-3-flash-preview`** on Gemini dispatches — Google rate limits are more frequent than OpenAI's
+- **No `--fallback`.** If Gemini Pro fails, surface the error — don't silently switch to Flash. The model IS the model. Diagnose: check exit code, stderr, retry with `--stream` (API transport bypasses CLI capacity limits).
 - **Parallel dispatch caveat:** Multiple gemini-cli processes can contend if bare mode isn't set up (each loads 7+ MCP servers). Bare mode eliminates this.
 
 **GPT-5.4 (`gpt-5.4`) — review GPT:**

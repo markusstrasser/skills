@@ -94,6 +94,16 @@ fi
 
 # --- ADVISORY checks (warnings only) ---
 
+# 0. Gemini without --stream — CLI transport hits capacity limits (429), hangs on thinking models
+if echo "$CMD" | grep -qiE 'gemini' && ! echo "$CMD" | grep -qE -- '--stream'; then
+  WARNINGS="${WARNINGS}[llmx-guard] Gemini without --stream. CLI transport hits capacity limits (429) and hangs on thinking models. Add --stream to force API transport.\n"
+fi
+
+# 0b. --fallback used — model should be the model, no silent switching
+if echo "$CMD" | grep -qE -- '--fallback'; then
+  WARNINGS="${WARNINGS}[llmx-guard] --fallback silently switches models on failure. Prefer --stream (API transport) over --fallback (model downgrade). Diagnose failures, don't mask them.\n"
+fi
+
 # 1. Shell redirect with llmx output
 if echo "$CMD" | grep -qE 'llmx\s+(chat|research|image|svg|vision)?.*[^2]>\s*["\$\./~a-zA-Z]'; then
   WARNINGS="${WARNINGS}[llmx-guard] Shell redirect detected. Use --output/-o instead of > file — shell redirects buffer until process exit.\n"

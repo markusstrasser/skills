@@ -68,13 +68,13 @@ argument-hint: '[model name or issue description]'
 | 0 | Success | — |
 | 1 | General error | Read stderr for details |
 | 2 | API key missing/invalid | Check env vars |
-| 3 | Rate limit (429/503) | Wait or use `--fallback` |
-| 4 | Timeout | Increase `--timeout` or use `--fallback` |
+| 3 | Rate limit (429/503) | Wait, or add `--stream` (API transport has separate capacity from CLI) |
+| 4 | Timeout | Increase `--timeout`, or add `--stream` for API transport |
 | 5 | Model error (context too large, bad params) | Fix request |
 
 **Structured diagnostics** on stderr (JSON, v0.6.0+):
 ```json
-{"error": "rate_limit", "provider": "google", "model": "gemini-3.1-pro-preview", "exit_code": 3, "action": "use --fallback or wait"}
+{"error": "rate_limit", "provider": "google", "model": "gemini-3.1-pro-preview", "exit_code": 3, "action": "wait or use --stream (API transport)"}
 ```
 
 **Additional stderr signals (v0.6.0+):**
@@ -82,25 +82,18 @@ argument-hint: '[model name or issue description]'
 - Truncation warning: `[llmx:WARN] output may be truncated`
 - Model suggestion: `"gemini-3.1-pro not found; did you mean gemini-3.1-pro-preview?"`
 
-**`--fallback MODEL`** — auto-retry once with fallback model on rate limit or timeout:
-```bash
-# Pro fails with 503 → automatically retries with Flash
-llmx -m gemini-3.1-pro-preview --fallback gemini-3-flash-preview --timeout 300 "query"
+**`--fallback MODEL`** — exists but **not recommended**. Silent model switching masks failures. If you asked for Pro, you should get Pro or an error. Prefer `--stream` (forces API transport, bypasses CLI capacity limits) over `--fallback` (switches to a weaker model).
 
-# stderr shows: [llmx:FALLBACK] rate_limit → retrying with gemini-3-flash-preview
-```
-
-**From Python — check exit code:**
+**From Python — check exit code and diagnose:**
 ```python
 result = subprocess.run(
-    ['llmx', '-m', 'gemini-3.1-pro-preview', '--fallback', 'gemini-3-flash-preview'],
-    input=prompt, capture_output=True, text=True, timeout=300
+    ['llmx', '-m', 'gemini-3.1-pro-preview', '--stream', '--timeout', '300'],
+    input=prompt, capture_output=True, text=True, timeout=360
 )
-if result.returncode == 3:  # rate limit
-    # llmx already tried fallback if --fallback was set
-    pass
+if result.returncode == 3:  # rate limit — API transport has separate capacity
+    print(f"Rate limited: {result.stderr}")
 elif result.returncode == 4:  # timeout
-    pass
+    print(f"Timeout: {result.stderr}")
 ```
 
 ## The Five llmx Footguns
@@ -132,7 +125,7 @@ GPT-5.4 (and 5.2) with reasoning burns time BEFORE producing output. Non-streami
 
 **Max timeout: 900s** (validated at CLI level, 1-900 range). For review dispatches use `--timeout 600`.
 
-**Wall-clock enforcement:** SDK calls run in a daemon thread with `join(remaining_time)`. If SIGALRM can't interrupt a C-level SSL read, the thread join ensures the main thread regains control. `--fallback` logic is preserved.
+**Wall-clock enforcement:** SDK calls run in a daemon thread with `join(remaining_time)`. If SIGALRM can't interrupt a C-level SSL read, the thread join ensures the main thread regains control.
 
 **`max_completion_tokens` vs `max_tokens` (v0.6.0+):** GPT-5.x uses `max_completion_tokens` not `max_tokens` at the API level. llmx handles this automatically — `--max-tokens` maps to the correct parameter per provider. **Important:** for reasoning models, `max_completion_tokens` includes reasoning tokens. If you set `--max-tokens 4096` on GPT-5.4 with reasoning, the model may exhaust the budget on thinking and produce truncated output. Use 16K+ for reasoning models.
 
@@ -344,7 +337,7 @@ Neither CLI truncates user input (verified from source code). Input goes directl
 
 **Tested:** 80KB code batches via both CLIs work reliably. 200KB causes timeouts on thinking models.
 
-**What forces API fallback** (costs money): `--max-tokens`, `--stream`, `--search`. Avoid these to stay on free CLI transport.
+**What forces API transport** (costs money): `--max-tokens`, `--stream`, `--search`. For Gemini, `--stream` is recommended — CLI transport hits capacity limits (429) and hangs on thinking models.
 
 ### CLI for Agents (Claude Code / Codex)
 
