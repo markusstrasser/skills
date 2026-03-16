@@ -22,7 +22,7 @@ argument-hint: '[model name or issue description]'
 
 **Diagnostic steps (in order):**
 1. Check exit code: `echo $?` — tells you rate limit (3), timeout (4), or model error (5)
-2. Check stderr: llmx prints JSON diagnostics to stderr (v0.6.0+): `{"error": "rate_limit", "provider": "google", "model": "...", "exit_code": 3, "action": "use --fallback or wait"}`
+2. Check stderr: llmx prints JSON diagnostics to stderr (v0.6.0+): `{"error": "rate_limit", "provider": "google", "model": "...", "exit_code": 3, "action": "wait and retry"}`
 3. Check for transport switch warnings: `[llmx:TRANSPORT] gemini-cli → google-api (max_tokens not supported by CLI)`
 4. Check for truncation warnings: `[llmx:WARN] output may be truncated`
 5. Re-run with `--debug` on a small prompt to isolate

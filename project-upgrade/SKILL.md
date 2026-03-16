@@ -197,7 +197,7 @@ Send the codebase to Gemini 3.1 Pro with a highly structured prompt. The prompt 
 
 ```bash
 cat "$UPGRADE_DIR/codebase.md" | llmx chat -m gemini-3.1-pro-preview \
-  -t 0.3 --no-stream --timeout 600 --max-tokens 65536 "
+  -t 0.3 --stream --timeout 600 --max-tokens 65536 "
 You are analyzing an entire codebase for CONCRETE, VERIFIABLE improvements. Not vague suggestions — specific issues with specific fixes.
 
 PROJECT: $PROJECT_NAME

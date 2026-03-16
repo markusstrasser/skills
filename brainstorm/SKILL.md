@@ -81,7 +81,7 @@ Generate 10+ approaches. Cast wide — no evaluation yet.
 # Model choice is pragmatic, not for "diversity" — any deep model works
 llmx chat -m gemini-3.1-pro-preview \
   ${CONSTITUTION:+-f "$BRAINSTORM_DIR/context.md"} \
-  --max-tokens 65536 --timeout 300 \
+  --stream --max-tokens 65536 --timeout 300 \
   -o "$BRAINSTORM_DIR/external-generation.md" "
 <system>
 Generate approaches to the design space below. Maximize breadth — 10+ genuinely different approaches, not variations on a theme. No feasibility filtering yet. It is $(date +%Y-%m-%d).
@@ -109,7 +109,7 @@ Round 1 forbids the dominant paradigms. Round 2 forbids Round 1's output too. No
 ```bash
 # Round 1
 llmx chat -m gemini-3.1-pro-preview \
-  --max-tokens 65536 --timeout 300 \
+  --stream --max-tokens 65536 --timeout 300 \
   -o "$BRAINSTORM_DIR/denial-r1.md" "
 <system>
 DENIAL ROUND. The approaches below are FORBIDDEN — you cannot use them or their variants. Propose 5 fundamentally different approaches that share no paradigm with the forbidden list. It is $(date +%Y-%m-%d).
@@ -128,7 +128,7 @@ For each: the mechanism, why it differs from ALL forbidden paradigms, one reason
 # Round 2
 llmx chat -m gemini-3.1-pro-preview \
   -f "$BRAINSTORM_DIR/denial-r1.md" \
-  --max-tokens 65536 --timeout 300 \
+  --stream --max-tokens 65536 --timeout 300 \
   -o "$BRAINSTORM_DIR/denial-r2.md" "
 <system>
 DENIAL ROUND 2. Everything above is now ALSO forbidden. Go deeper — what paradigm hasn't been touched at all? What would someone from a completely unrelated field propose? 3+ approaches. It is $(date +%Y-%m-%d).
