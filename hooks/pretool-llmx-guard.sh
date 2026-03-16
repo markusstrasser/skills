@@ -13,6 +13,30 @@ echo "$CMD" | grep -q 'llmx' || exit 0
 
 WARNINGS=""
 
+# --- SPIN-LOOP detection (per-session llmx call counter) ---
+LLMX_COUNTER="/tmp/claude-llmx-count-${PPID:-0}"
+LLMX_COUNT=0
+[ -f "$LLMX_COUNTER" ] && LLMX_COUNT=$(cat "$LLMX_COUNTER" 2>/dev/null || echo 0)
+LLMX_COUNT=$((LLMX_COUNT + 1))
+echo "$LLMX_COUNT" > "$LLMX_COUNTER"
+
+if [ "$LLMX_COUNT" -ge 6 ]; then
+  echo "[llmx-guard] BLOCKED: $LLMX_COUNT llmx calls this session. This looks like a spin loop." >&2
+  echo "  - Diagnose WHY previous calls failed (check stderr, exit code)" >&2
+  echo "  - Don't retry the same command — try a different model or approach" >&2
+  echo "  - If rate-limited, wait or use a different provider" >&2
+  # Log trigger for ROI analysis
+  ~/Projects/skills/hooks/hook-trigger-log.sh "llmx-spin-loop" "block" "$LLMX_COUNT calls" 2>/dev/null || true
+  exit 2
+fi
+
+if [ "$LLMX_COUNT" -ge 4 ]; then
+  WARNINGS="${WARNINGS}[llmx-guard] WARNING: $LLMX_COUNT llmx calls this session. Approaching spin-loop territory.\n"
+  WARNINGS="${WARNINGS}  - After 2 failures: diagnose before retrying (check stderr/exit code)\n"
+  WARNINGS="${WARNINGS}  - Use --fallback for automatic model fallback on rate limits\n"
+  WARNINGS="${WARNINGS}  - Blocked at 6 calls.\n"
+fi
+
 # --- BLOCKING checks (exit 2) ---
 
 # Gemini 2.5 forbidden — user mandate: always use gemini-3.1-pro
