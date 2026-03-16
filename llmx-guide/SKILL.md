@@ -68,9 +68,10 @@ argument-hint: '[model name or issue description]'
 | 0 | Success | — |
 | 1 | General error | Read stderr for details |
 | 2 | API key missing/invalid | Check env vars |
-| 3 | Rate limit (429/503) | Wait, or add `--stream` (API transport has separate capacity from CLI) |
+| 3 | Rate limit (429/503, transient) | Wait, or add `--stream` (API transport has separate capacity from CLI) |
 | 4 | Timeout | Increase `--timeout`, or add `--stream` for API transport |
 | 5 | Model error (context too large, bad params) | Fix request |
+| 6 | **Quota/billing exhausted** (permanent) | Top up billing. NOT transient — retries won't help |
 
 **Structured diagnostics** on stderr (JSON, v0.6.0+):
 ```json
