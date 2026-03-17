@@ -73,7 +73,7 @@ If the user provides seeds, use them as starting points. If they say "just run i
 
 ### Step 3: Initial Generation
 
-Generate 10+ approaches. Cast wide — no evaluation yet.
+Generate 15-20 approaches. Cast wide — no evaluation yet. Optimize for volume and diversity over individual brilliance — research confirms LLMs are competitive with humans on creative volume but not at distribution extremes (Nature Human Behaviour 2025). More seeds = more raw material for perturbation.
 
 **With llmx:** Dispatch to an external model for parallel volume while you also generate your own set.
 
@@ -84,7 +84,7 @@ llmx chat -m gemini-3.1-pro-preview \
   --stream --max-tokens 65536 --timeout 300 \
   -o "$BRAINSTORM_DIR/external-generation.md" "
 <system>
-Generate approaches to the design space below. Maximize breadth — 10+ genuinely different approaches, not variations on a theme. No feasibility filtering yet. It is $(date +%Y-%m-%d).
+Generate approaches to the design space below. Maximize breadth — 15-20 genuinely different approaches, not variations on a theme. No feasibility filtering yet. It is $(date +%Y-%m-%d).
 </system>
 
 [Design space + constraints + human seeds if any]
@@ -92,13 +92,15 @@ Generate approaches to the design space below. Maximize breadth — 10+ genuinel
 For each approach: one paragraph on the mechanism and why it differs from the others."
 ```
 
-Simultaneously, generate your own 10+ approaches. Write to `$BRAINSTORM_DIR/claude-generation.md`.
+Simultaneously, generate your own 15-20 approaches. Write to `$BRAINSTORM_DIR/claude-generation.md`.
 
-**Without llmx:** Generate 10+ approaches yourself. Write to `$BRAINSTORM_DIR/initial-generation.md`.
+**Without llmx:** Generate 15-20 approaches yourself. Write to `$BRAINSTORM_DIR/initial-generation.md`.
 
 ### Step 4: Perturbation Rounds (The Core Mechanism)
 
 Three independent perturbation axes. **With llmx, dispatch all three in parallel** (three Bash calls in one message, `timeout: 360000`). Without llmx, run them sequentially yourself.
+
+**Knowledge injection (before perturbation):** Query 2-3 tangential domain examples via Exa (if available) to expand the solution space before running perturbation rounds. E.g., if brainstorming about memory architectures, search for how biology, common law, or supply chain logistics handles memory/persistence. Feed retrieved examples as context into the perturbation rounds. This primes the search space with real-world mechanisms that denial alone might not surface.
 
 First: identify the 3-5 dominant paradigms from Step 3. These are what we're escaping.
 
@@ -236,6 +238,8 @@ If no llmx, extract yourself. Then build the disposition table:
 ```
 
 Dispositions: `EXPLORE` (pursue), `PARK` (not now), `REJECT` (bad fit), `MERGE WITH [ID]` (dedup).
+
+For EXPLORE items, note which technique generated it (initial/denial/domain/constraint/knowledge-injection) to track which methods produce the most useful ideas across sessions.
 
 **Coverage check:** Every extracted item must have a disposition. Count totals.
 
