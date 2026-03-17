@@ -47,6 +47,16 @@ Classifications:
 - **Instrument (Z):** Causes X but has no direct effect on Y. Useful for IV estimation, not for OLS controls.
 - **Collider:** Caused by two or more variables. Conditioning on it opens a spurious path between its parents.
 
+### Verification Gate 1
+
+Before proceeding to DAG construction, verify:
+
+1. **Completeness:** Is every variable classified into exactly one role? No unclassified variables.
+2. **Plausible alternatives:** Are there variables that could defensibly be classified differently? List them with the alternative classification and what evidence would resolve it.
+3. **Confounder check:** For each pre-treatment confounder, confirm it causes BOTH treatment and outcome (not just correlates with them). State the mechanism for each direction.
+
+If verification fails, revise Phase 1 before proceeding. Do not push classification errors forward — they corrupt the entire DAG.
+
 ---
 
 ## Phase 2: Draw the DAG
@@ -78,6 +88,17 @@ Rules:
 - Temporal ordering constrains direction: causes precede effects. If A happens before B, the arrow cannot go B -> A.
 - Do NOT add edges "just in case" — each edge is a claim. Unjustified edges create unjustified adjustment requirements.
 - If there might be an unobserved common cause (U), draw it: `U -> X, U -> Y [unobserved]`
+
+### Verification Gate 2
+
+Before proceeding to adjustment sets, verify the DAG structure:
+
+1. **Temporal defensibility:** For each directed edge, is the temporal ordering defensible? Flag any edge where the direction is assumed rather than known.
+2. **Missing edges:** Are there pairs of variables with no path that could plausibly have a direct connection? Omitted edges are claims of no causal relationship — make them deliberately.
+3. **Collider identification:** Identify all colliders (nodes with two+ incoming edges) and verify each is intentional — not an artifact of missing edges.
+4. **Cycle check:** Temporal ordering should prevent cycles, but verify no circular dependencies exist.
+
+If verification fails at any point, revise the DAG before proceeding. Structural errors here propagate to incorrect adjustment sets.
 
 ---
 
