@@ -31,16 +31,16 @@ print(f'{total:.2f}')
 TRIGGER="$HOME/Projects/skills/hooks/hook-trigger-log.sh"
 SPEND_INT=${SPEND%.*}
 
-if [ "$SPEND_INT" -ge 100 ] 2>/dev/null; then
+if [ "$SPEND_INT" -ge 1000 ] 2>/dev/null; then
     "$TRIGGER" "cost-guard" "block" "daily_spend=\$$SPEND cmd=$(echo "$CMD" | head -c 80)" 2>/dev/null || true
     cat <<EOF
-{"decision":"block","reason":"Daily API spend \$$SPEND exceeds \$100 limit. Defer non-essential API calls."}
+{"decision":"block","reason":"Daily API spend \$$SPEND exceeds \$1000 limit. Defer non-essential API calls or get human approval."}
 EOF
     exit 2
-elif [ "$SPEND_INT" -ge 50 ] 2>/dev/null; then
+elif [ "$SPEND_INT" -ge 500 ] 2>/dev/null; then
     "$TRIGGER" "cost-guard" "warn" "daily_spend=\$$SPEND cmd=$(echo "$CMD" | head -c 80)" 2>/dev/null || true
     cat <<EOF
-{"decision":"allow","additionalContext":"Cost warning: daily spend at \$$SPEND (limit: \$100). Consider batching or deferring API calls."}
+{"decision":"allow","additionalContext":"Cost warning: daily spend at \$$SPEND (warn at \$500, block at \$1000). Consider batching or deferring."}
 EOF
     exit 0
 fi
