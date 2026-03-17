@@ -35,22 +35,20 @@ def parse_plan(path):
         text = open(path).read(8000)
     except Exception:
         return None
-    status = None
+    # Only surface plans with explicit YAML frontmatter status
     fm = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
-    if fm:
-        m = re.search(r"^status:\s*(.+)$", fm.group(1), re.MULTILINE)
-        if m:
-            status = m.group(1).strip().strip("\"'")
+    if not fm:
+        return None
+    m = re.search(r"^status:\s*(.+)$", fm.group(1), re.MULTILINE)
+    if not m:
+        return None
+    status = m.group(1).strip().strip("\"'")
+    if status not in ("partial", "running"):
+        return None
     phases = re.findall(r"^#{2,3}\s+Phase\s+\d.*$", text, re.MULTILINE)
     total = len(phases)
     done = sum(1 for p in phases if re.search(r"(DONE|done|\u2713|\u2705|\[x\])", p))
-    if status is None and total > 0:
-        status = "complete" if done == total else "partial"
-    elif status is None:
-        m = re.search(r"\*\*Status:\*\*\s*(.+?)(?:\n|\|)", text)
-        if m and re.search(r"(partial|running|in.progress|wip)", m.group(1), re.I):
-            status = "partial"
-    return (status, done, total) if status in ("partial", "running") else None
+    return (status, done, total)
 
 incomplete = []
 for f in sorted(glob.glob(os.path.join(plans_dir, "*.md"))):
