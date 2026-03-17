@@ -26,6 +26,19 @@ Feed entire codebase to Gemini 3.1 Pro (1M context), get structured findings, tr
 
 ## Phase 0: Pre-Flight
 
+### Check Prior Artifacts
+
+Before scanning, check if recent skill artifacts exist — they save re-discovery time:
+
+```bash
+ls ~/.claude/artifacts/$PROJECT_NAME/code-review-*.json 2>/dev/null
+ls ~/.claude/artifacts/$PROJECT_NAME/model-review-*.json 2>/dev/null
+```
+
+If recent artifacts exist (within last 7 days), read them and incorporate their findings into Phase 2 triage. Don't re-scan for issues already identified by code-review or model-review.
+
+### Environment
+
 ```bash
 PROJECT_ROOT="${ARGUMENTS:-$(pwd)}"
 PROJECT_ROOT=$(cd "$PROJECT_ROOT" && pwd)  # resolve to absolute

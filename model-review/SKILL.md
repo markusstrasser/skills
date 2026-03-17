@@ -554,4 +554,32 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 - **Skipping constitutional check.** Reviews without project-specific anchoring drift into generic advice. Always check for constitution (in CLAUDE.md or standalone) and GOALS.md first.
 - **Mixing review and brainstorming.** This skill is convergent only. For divergent ideation, use `/brainstorm`.
 
+## Artifact Handoff
+
+After writing the synthesis, write a JSON artifact for downstream pipeline consumption:
+
+```bash
+mkdir -p ~/.claude/artifacts/$(basename $PWD)
+```
+
+Write to `~/.claude/artifacts/$(basename $PWD)/model-review-$(date +%Y-%m-%d).json`:
+```json
+{
+  "skill": "model-review",
+  "project": "PROJECT",
+  "date": "YYYY-MM-DD",
+  "type": "review-synthesis",
+  "review_dir": ".model-review/YYYY-MM-DD-topic/",
+  "content": {
+    "topic": "...",
+    "include_count": N,
+    "defer_count": M,
+    "reject_count": K,
+    "key_findings": ["finding1", "finding2"]
+  }
+}
+```
+
+This lets subsequent pipeline steps (implementation, project-upgrade) consume review findings without re-reading the full review directory.
+
 $ARGUMENTS

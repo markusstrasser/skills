@@ -155,6 +155,34 @@ Print a summary:
 
 If running via `/loop`, this output helps the user see progress across invocations.
 
+### Artifact Output
+
+After reporting, write a JSON artifact for downstream skills (e.g., `project-upgrade`):
+
+```bash
+mkdir -p ~/.claude/artifacts/$PROJECT
+```
+
+Write to `~/.claude/artifacts/$PROJECT/code-review-$(date +%Y-%m-%d).json`:
+```json
+{
+  "skill": "code-review",
+  "project": "$PROJECT",
+  "date": "YYYY-MM-DD",
+  "type": "findings-report",
+  "content": {
+    "focus": "$FOCUS",
+    "findings_total": N,
+    "confirmed": A,
+    "false_positive": B,
+    "fixed": D,
+    "unfixed_confirmed": [{"file": "...", "issue": "...", "severity": "HIGH"}]
+  }
+}
+```
+
+This lets `/project-upgrade` pick up where code-review left off without re-scanning.
+
 ## Usage Examples
 
 ```
