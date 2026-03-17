@@ -57,6 +57,16 @@ For full reasoning principles underlying this skill, read `references/reasoning-
 > **Magnitude:** [effect size, sigma from norm]
 > **Lag window:** [how far back to search for causes]
 
+### Verification Gate
+
+Before generating hypotheses, verify the observation characterization:
+
+1. **Residual geometry check:** Is the shape classification correct? A sharp break misclassified as gradual erosion will generate wrong-shaped hypotheses. Re-examine the data.
+2. **Null adequacy:** Have you defined the null process? Without a null, you can't distinguish signal from background. If the null fully explains the observation, stop — no special cause needed.
+3. **Magnitude sanity:** Is the effect size actually outside normal variance? If it's within 1 sigma of the null, the observation may not need a causal explanation at all.
+
+If any check fails, revise Phase 0 before proceeding.
+
 ## Phase 1: Generate Shape-Constrained Hypotheses
 
 Generate 3-5 candidate explanations. Constrained by geometry:
