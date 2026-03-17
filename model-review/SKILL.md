@@ -16,6 +16,12 @@ allowed-tools:
 
 You are orchestrating a cross-model review. Same-model peer review is a martingale — no expected correctness improvement (ACL 2025, arXiv:2508.17536). Cross-model review provides real adversarial pressure because models have different failure modes, training biases, and blind spots.
 
+## Session Awareness
+
+`!cat ~/.claude/active-agents.json 2>/dev/null | python3 -c "import sys,json,time; entries=json.load(sys.stdin); active=[e for e in entries if time.time()-e.get('started_at',0)<7200]; print(f'{len(active)} active sessions') if len(active)>=3 else None" 2>/dev/null`
+
+If 3+ sessions active: prefix questions with project name + review topic. Batch decisions.
+
 ## Prerequisites
 
 - `llmx` CLI installed (`which llmx`)

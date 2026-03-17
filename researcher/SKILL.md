@@ -18,6 +18,9 @@ hooks:
 
 Research with the rigor of an investigative journalist, not a search engine. Every claim needs provenance. Inference is fine — but say it's inference, not fact.
 
+**Session awareness:** `!cat ~/.claude/active-agents.json 2>/dev/null | python3 -c "import sys,json,time; entries=json.load(sys.stdin); active=[e for e in entries if time.time()-e.get('started_at',0)<7200]; print(f'{len(active)} active sessions') if len(active)>=3 else None" 2>/dev/null`
+If 3+ sessions active: prefix questions with project name. Keep questions shorter. Batch ambiguous items instead of asking one at a time.
+
 **Invoke companion skills if relevant:**
 - **`epistemics`** — if the question touches bio/medical/scientific claims
 - **`source-grading`** — if this is an investigation/OSINT context (use Admiralty grades)
