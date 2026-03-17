@@ -82,6 +82,8 @@ Write predictions in a table:
 For each cell, assign P(evidence | hypothesis) as a number in (0, 1).
 These are LIKELIHOODS, not posteriors. They answer: "If this hypothesis were true, how likely would we see this evidence?"
 
+**Diagnosticity focus:** Prioritize predictions that DISTINGUISH hypotheses — evidence items where the likelihood varies widely across hypotheses. Evidence consistent with all hypotheses equally is confirmatory but not diagnostic. The most valuable predictions are those where P(evidence | H1) >> P(evidence | H2) or vice versa.
+
 ## Phase 4: Gather Evidence
 
 Query your data sources to test each prediction.
@@ -160,6 +162,27 @@ IBE Dominance:
 ```
 
 **Integration with Bayesian scoring:** IBE does NOT override posteriors. It supplements them. If Bayesian posterior says H1=0.45, H2=0.35, and IBE says H1 is also the best explanation, that's converging evidence. If they disagree (high posterior but poor explanation), flag for investigation — the hypothesis may be fitting noise.
+
+## Phase 5c: Falsification Queries (POPPER-inspired)
+
+For each surviving hypothesis (posterior > 0.10, not yet killed):
+
+1. **Generate measurable implications.** For each hypothesis H, ask: "If H is true, what specific, observable evidence SHOULD exist that we haven't checked yet?" Generate 2-3 implications per hypothesis.
+
+2. **Relevance check.** For each implication, verify: "Is this implication genuinely entailed by the hypothesis, or could it be true regardless?" Discard implications that would hold under multiple hypotheses (low diagnosticity). Only keep implications that distinguish this hypothesis from its competitors.
+
+3. **Execute falsification searches.** For each high-diagnosticity implication, search for evidence:
+   - Use available research tools (Exa, Brave, S2, databases, data queries)
+   - Record what you found AND what you didn't find (pertinent negatives)
+   - Source-grade each finding
+
+4. **Update the ACH matrix.** Add the new evidence items from the falsification searches. Rescore using the same Bayesian method as Phase 5.
+
+5. **Termination.** Stop when: (a) one hypothesis dominates on diagnosticity-weighted evidence, OR (b) you've exhausted 3 rounds of falsification without convergence (flag as genuinely ambiguous).
+
+**When to skip:** If the hypothesis space is narrow (2 hypotheses, both well-evidenced) and additional searching is unlikely to be diagnostic, skip directly to Phase 6.
+
+**Statistical rigor note:** In data-rich domains where falsification experiments can produce p-values, use sequential testing (see POPPER framework, arXiv:2502.09858). In qualitative domains (OSINT, intelligence analysis), falsification queries produce directional evidence, not statistical proof. State this explicitly in the report.
 
 ## Phase 6: Kill or Promote
 
