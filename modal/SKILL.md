@@ -152,8 +152,9 @@ modal.config.set("async_warnings", False)
 
 ### Eager Image Building (v1.2+)
 ```python
+app = modal.App.lookup("my-app", create_if_missing=True)
 image = modal.Image.debian_slim().pip_install("torch")
-image.build()  # Build now, don't wait for function invocation
+image.build(app)  # Build now, blocks until done. Catches failures early.
 ```
 
 ### Python 3.14 Support (v1.3+)
@@ -451,6 +452,9 @@ sandbox2.mount_image(snapshot)
 # Interactive container shell
 modal shell scripts/script.py
 
+# Shell into a RUNNING sandbox
+modal shell sb-12345abcdef
+
 # Container logs
 modal container logs <container-id>
 modal app logs <app-name> --timestamps
@@ -463,6 +467,86 @@ modal volume get my-volume remote.txt local.txt
 modal dashboard
 modal dashboard apps
 modal dashboard volumes
+
+# Changelog query (v1.3.5+ — useful for discovering features)
+modal changelog --since=1.2
+modal changelog --since=2025-12-01
+modal changelog --newer
+```
+
+### Eager Image Building (v1.2+)
+Build an image without running any function — catches all apt/pip/conda failures early:
+```python
+app = modal.App.lookup("probe", create_if_missing=True)
+image = modal.Image.debian_slim().apt_install("samtools").pip_install("pysam")
+
+with modal.enable_output():
+    image.build(app)  # Blocks until build completes. Fails fast on bad deps.
+```
+
+### Sandbox-as-REPL Workflow
+Use Sandboxes programmatically to validate images before deploying. This replaces the
+write-deploy-fail-fix cycle with probe-verify-deploy:
+```python
+import modal
+
+app = modal.App.lookup("probe", create_if_missing=True)
+image = modal.Image.debian_slim().apt_install("samtools", "bcftools")
+
+# Step 1: Build image (catches apt/pip failures — no GPU cost)
+with modal.enable_output():
+    image.build(app)
+
+# Step 2: Spawn a sandbox and test interactively
+sb = modal.Sandbox.create(image=image, app=app, timeout=300)
+
+# Verify tools exist and work
+p = sb.exec("samtools", "--version")
+print(p.stdout.read())  # Works? Great. Doesn't? Fix image and rebuild.
+
+# Check library linkage (the Aldy problem — C shared libs)
+p = sb.exec("python3", "-c", "import pysam; print(pysam.__version__)")
+print(p.stdout.read(), p.stderr.read())
+
+# Check volume paths (mount read-only for safety)
+vol = modal.Volume.from_name("my-data")
+sb2 = modal.Sandbox.create(image=image, app=app, volumes={"/data": vol.read_only()})
+p = sb2.exec("ls", "/data/input/")
+print(p.stdout.read())
+
+sb.terminate()
+sb2.terminate()
+```
+
+### Named Sandboxes (v1.1.1+ — persistent dev environments)
+```python
+# Create a named sandbox that persists across script runs
+sb = modal.Sandbox.create("python3", "-m", "http.server", name="dev-server", app=app)
+
+# Later, reconnect to it
+sb = modal.Sandbox.from_name("dev-server")
+p = sb.exec("curl", "http://localhost:8000/")
+```
+
+### Sandbox Snapshots (v1.3.4+)
+```python
+# Snapshot a directory to persist across sandbox lifetimes
+snapshot = sb.snapshot_directory("/project")
+sb.terminate()
+
+# Mount the snapshot into a new sandbox
+sb2 = modal.Sandbox.create(app=app)
+sb2.mount_image("/project", snapshot)
+
+# Full filesystem snapshot → reusable image
+snapshot_image = sb.snapshot_filesystem()
+```
+
+### Sandbox Lifecycle (v1.3.4+)
+```python
+sb.detach()                   # Keep sandbox running after script exits
+sb.terminate(wait=True)       # Block until sandbox fully stopped
+sb.reload_volumes()           # Refresh mounted volumes (v1.0.5+)
 ```
 
 ### Programmatic output control
@@ -512,15 +596,74 @@ output_manager.set_timestamps(True)
 
 16. **C++ build deps in images** — if your image builds C/C++ code, install BOTH `gcc` AND `g++`. Some Makefiles use `$(CXX)` which specifically requires `g++`.
 
+17. **`subprocess` + `capture_output=True` hides errors from `modal app logs`** — container logs only show the parent function's stdout/stderr. Subprocess output captured in Python variables never appears in `modal app logs`. For debugging, write subprocess output to a volume log file instead: `stdout=log_f, stderr=subprocess.STDOUT`.
+
+18. **GPU contention across ephemeral apps** — `.starmap()` holds all worker containers alive for the duration. Workspace-wide GPU limits block ALL new GPU apps, regardless of GPU type. You cannot use `Function.update_autoscaler()` on ephemeral apps (only deployed). Only options: wait for starmap to finish, or stop the blocking app.
+
+19. **Stale volume results after `app stop`** — killing an app mid-run leaves old results on the volume. A subsequent run's results file may actually be from a PREVIOUS run. Always check timestamps or add a run ID/timestamp field to results JSON to distinguish stale data from fresh failures.
+
+20. **Empty files not persisted on volumes** — writing a 0-byte file and calling `vol.commit()` may not persist the file. If you need to detect "ran but produced no output," write a sentinel value (e.g., `"(empty)"`) instead of an empty string.
+
+21. **Subprocess log files invisible until `vol.commit()`** — writing subprocess output to a volume file (`stdout=log_f`) means nothing is visible until the subprocess finishes AND `vol.commit()` runs. If the subprocess hangs, the container burns GPU hours with zero visibility. **Fix:** flush + commit periodically from a background thread, OR use `subprocess.Popen` with a polling loop that commits every N minutes:
+```python
+import threading, time
+def periodic_commit(vol, interval=300):
+    while not _done.is_set():
+        vol.commit()
+        _done.wait(interval)
+_done = threading.Event()
+t = threading.Thread(target=periodic_commit, args=(vol, 300), daemon=True)
+t.start()
+# ... run subprocess ...
+_done.set()
+vol.commit()  # final
+```
+
+22. **`.starmap()` cost trap** — `.starmap(args)` with N args on a function with `max_containers` unset will spin up one container per input. Each container stays alive for the full starmap duration even if idle between sequential tasks. **Always set `max_containers` explicitly** and estimate: `cost = max_containers × wall_time × gpu_price`. For 100 tasks at 1h each with 10 containers = 10h × 10 × $1.10 = $110.
+
+23. **Cost guard: always set `timeout` conservatively** — if your script should finish in 2h, set `timeout=10800` (3h), not `timeout=43200` (12h). A hung process with a 12h timeout burns 12h of GPU. The timeout is your cost circuit breaker.
+
+## MANDATORY: Cost Awareness
+
+**Real-world lesson: $400 spent in 2 days, 60% wasted.** #1 cause: unbounded `.starmap()` auto-scaling ($227 when $82 would have sufficed).
+
+**Before launching ANY GPU job, calculate and state the expected cost:**
+```
+containers × expected_hours × $/hr = $expected
+```
+
+### Non-negotiable checklist (every GPU launch):
+1. **`max_containers` set** — never let Modal auto-scale GPU containers unbounded
+2. **`timeout` = 1.5× expected** — this is your cost circuit breaker. A 12h timeout on a 2h job = 12h of GPU if it hangs.
+3. **Cost stated** — say "$X expected" in the launch message. If >$20, get user confirmation.
+4. **Log visibility** — any job >30min must have periodic `vol.commit()` (every 5min). A subprocess that writes to a file but never commits = silent GPU burn with zero visibility.
+5. **No redundant evals** — don't run serial then parallel. Pick one path. A "quick serial test" at full scale is not a test, it's a redundant full run.
+6. **For `.starmap()`**: `max_containers=min(len(tasks), budget / (expected_hours * gpu_price))`
+7. **Early stopping** — for training jobs, check eval metrics at intervals. If metrics plateau at useless levels (e.g., 15% eval_acc after 80% of epochs), stop early rather than hoping the last 20% of training will help.
+8. **Intermediate snapshots** — any long-running job (>1h) must save intermediate results to the volume, not just at the end. If a 6h job times out at hour 5 with results only saved at completion, all compute is wasted. Pattern:
+   - Set periodic evaluation intervals (e.g., every 200 epochs instead of only at the final epoch)
+   - In the `vol.commit()` polling loop, detect new output files and copy them to the volume
+   - Save with timestamps or step numbers so you can resume from the last snapshot
+   ```python
+   # In the commit loop, look for new evaluator output:
+   for fname in os.listdir(output_dir):
+       if fname not in saved_snapshots:
+           shutil.copy2(os.path.join(output_dir, fname), volume_snapshot_dir)
+           saved_snapshots.add(fname)
+   vol.commit()
+   ```
+
 ## MANDATORY: Test Before Deploying
 
 **Never deploy a new Modal script straight to a full run.** Follow this order:
 
 1. **Local syntax check**: `python -c "import ast; ast.parse(open('script.py').read())"`
-2. **Dry-run validate**: Quick function that checks inputs exist and tools work (< 2 min)
+2. **Image probe**: `image.build(app)` — catches ALL image build failures (apt, pip, conda, linkage) without GPU cost. In genomics: `just probe <stage>` for full validation (sandbox + tool checks), or `just run <stage>` which auto-probes build-only.
 3. **Smoke test on small data**: Subset or first N records (< 5 min)
-4. **Interactive debug**: `modal shell scripts/script.py` for container access
+4. **Interactive debug**: `modal shell scripts/script.py` for container access, or use the Sandbox-as-REPL workflow above
 5. **Full run**: Only after steps 1-3 pass
+
+For new tools with complex C/system dependencies (like Aldy, pysam, htslib), use the full Sandbox probe to verify library linkage BEFORE the first `modal run`.
 
 ## Reference Docs
 
