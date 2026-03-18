@@ -38,9 +38,10 @@ Classify each finding into exactly one category:
 
 Before proposing fixes:
 
-1. Read `improvement-log.md` in the meta project (if accessible)
-2. Check if finding matches an existing entry → mark "RECURRING: matches entry from YYYY-MM-DD"
-3. Check if a hook, rule, or skill already addresses this → note it
+1. Run: `grep -c "^### " ~/Projects/meta/improvement-log.md` to confirm file is accessible
+2. Search for similar findings: `grep -i "KEYWORD" ~/Projects/meta/improvement-log.md | head -5` (use the most distinctive word from each finding)
+3. Check if finding matches an existing entry → mark "RECURRING: matches entry from YYYY-MM-DD"
+4. Check if a hook, rule, or skill already addresses this → note it
 
 ## Phase 4 — Output ← Template
 
@@ -67,10 +68,26 @@ Before proposing fixes:
 - [Concrete thing, not a platitude]
 ```
 
+## Phase 5 — Persist Findings
+
+Write findings as JSON to `~/Projects/meta/artifacts/session-retro/`:
+
+```bash
+mkdir -p ~/Projects/meta/artifacts/session-retro
+```
+
+Write `{date}-manual.json` with schema:
+```json
+{"findings": [{"category": "...", "summary": "...", "severity": "high|medium|low", "evidence": "...", "project": "...", "proposed_fix": "..."}], "source": "manual-retro"}
+```
+
+This feeds into `finding-triage.py ingest` for deduplication and auto-promotion.
+
 ## Guardrails
 
 - No platitudes ("overall good session", "learned a lot"). Name files, commands, exact mistakes.
 - No generic advice ("be more careful next time"). Every fix must be a concrete hook, rule, skill, or script.
+- If a finding has no actionable fix (benign behavior, expected noise), it is NOT a finding. Don't waste a slot on it.
 - If nothing went wrong, say so in one line. Don't invent findings.
 - Max 5 findings. If more exist, pick the 5 with highest recurrence or impact.
 
