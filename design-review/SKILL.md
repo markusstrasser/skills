@@ -242,7 +242,7 @@ If `last-synthesis.md` is >24h old or doesn't exist, AND there are 5+ new patter
 
 The synthesis file is picked up by `propose-work.py` in the morning brief — proposals with 3+ recurrences surface as work items.
 
-**Delta detection:** Check `/tmp/design_review_last_run` for timestamp of last quick run. Only analyze sessions modified after that timestamp.
+**Delta detection:** Check `artifacts/design-review/last-synthesis.md` mtime for timestamp of last run. Only analyze sessions modified after that timestamp.
 
 ## Accrual → Synthesis → Execute Loop
 
@@ -257,7 +257,17 @@ Quick runs (every 4h)
 
 **Recurrence is the quality signal.** A pattern seen once is noise. Seen 3 times across 2 projects = proposal. Seen 5+ times = urgent. The patterns.jsonl file is the institutional memory of what the system wants to become.
 
-**Pruning:** Patterns older than 30 days are archived to `patterns-archive.jsonl`. Implemented proposals (tracked by checking git log for commits referencing the pattern name) are marked `"status": "implemented"`.
+**Pruning:** Patterns older than 30 days are archived to `patterns-archive.jsonl`. Implemented proposals are marked `"status": "implemented"`.
+
+**Implementation tracking:** After writing patterns, check implementation status:
+```bash
+for pattern in $(cat artifacts/design-review/patterns.jsonl | python3 -c "import sys,json; [print(json.loads(l).get('name','')) for l in sys.stdin]"); do
+  if git log --oneline --since="30 days ago" --grep="$pattern" | head -1 | grep -q .; then
+    echo "IMPLEMENTED: $pattern"
+  fi
+done
+```
+Mark implemented patterns in patterns.jsonl with `"status": "implemented"`.
 
 ## Known Limitations
 
