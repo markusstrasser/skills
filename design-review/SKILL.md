@@ -44,15 +44,15 @@ Use the **existing** extractors — don't reinvent:
 
 ```bash
 # Claude Code sessions — strips thinking blocks, base64, compresses tool results
-python3 ~/Projects/skills/session-analyst/scripts/extract_transcript.py {PROJECT} --sessions {N} --output /tmp/design_review_claude.md
+python3 ~/Projects/skills/session-analyst/scripts/extract_transcript.py {PROJECT} --sessions {N} --output ~/Projects/meta/artifacts/design-review/claude.md
 
 # Codex sessions (if any exist)
-python3 ~/Projects/skills/session-analyst/scripts/extract_codex_transcript.py {PROJECT} --sessions {N} --output /tmp/design_review_codex.md 2>/dev/null || true
+python3 ~/Projects/skills/session-analyst/scripts/extract_codex_transcript.py {PROJECT} --sessions {N} --output ~/Projects/meta/artifacts/design-review/codex.md 2>/dev/null || true
 ```
 
 Run per-project. For `--days 3` default, extract from: meta, intel, selve, genomics, arc-agi.
 
-Merge all outputs into `/tmp/design_review_all.md`. Verify size is <500KB (Gemini 3.1 Pro handles this easily within 1M context).
+Merge all outputs into `~/Projects/meta/artifacts/design-review/all.md`. Verify size is <500KB (Gemini 3.1 Pro handles this easily within 1M context).
 
 ## Phase 2: Pattern Extraction (Gemini 3.1 Pro)
 
@@ -61,7 +61,7 @@ Dispatch compressed transcripts to Gemini for **structured pattern extraction**.
 **Critical:** Gemini's output is DATA, not conclusions. It extracts patterns; YOU (Claude) do the creative synthesis in Phase 3. Don't ask Gemini to propose architecture.
 
 ```bash
-llmx -p google -m gemini-3.1-pro-preview --stream -f /tmp/design_review_all.md "$(cat <<'PROMPT'
+llmx -p google -m gemini-3.1-pro-preview --stream -f ~/Projects/meta/artifacts/design-review/all.md "$(cat <<'PROMPT'
 You are extracting STRUCTURAL PATTERNS from agent session transcripts. Output structured findings, not prose.
 
 For each pattern found, output this exact JSON-like format (one per finding):
@@ -99,7 +99,7 @@ PROMPT
 )"
 ```
 
-Save Gemini output to `/tmp/design_review_patterns.md`.
+Save Gemini output to `~/Projects/meta/artifacts/design-review/patterns.md`.
 
 ### 2b. Verify Gemini Claims
 

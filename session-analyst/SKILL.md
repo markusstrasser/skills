@@ -59,10 +59,10 @@ Parse the project argument from $ARGUMENTS. Default: last 5 sessions.
 
 ```bash
 # Claude Code sessions
-python3 ~/Projects/skills/session-analyst/scripts/extract_transcript.py <project> --sessions <N> --output /tmp/session_analysis_input.md
+python3 ~/Projects/skills/session-analyst/scripts/extract_transcript.py <project> --sessions <N> --output ~/Projects/meta/artifacts/session-analyst/input.md
 
 # Codex CLI sessions (GPT-5.4 via OpenAI) — same interface, reads ~/.codex/state_5.sqlite + rollout JSONL
-python3 ~/Projects/skills/session-analyst/scripts/extract_codex_transcript.py <project> --sessions <N> --output /tmp/session_analysis_input.md
+python3 ~/Projects/skills/session-analyst/scripts/extract_codex_transcript.py <project> --sessions <N> --output ~/Projects/meta/artifacts/session-analyst/input.md
 ```
 
 Use whichever extractor matches the sessions you want to analyze. Both produce identical markdown format.
@@ -72,7 +72,7 @@ Verify the output is reasonable (<100KB, readable markdown).
 Use llmx to send compressed transcript to Gemini 3.1 Pro (1M context, cheap) with the analysis prompt:
 
 ```bash
-llmx -p google -m gemini-3.1-pro-preview --stream -f /tmp/session_analysis_input.md "$(cat <<'PROMPT'
+llmx -p google -m gemini-3.1-pro-preview --stream -f ~/Projects/meta/artifacts/session-analyst/input.md "$(cat <<'PROMPT'
 You are analyzing Claude Code session transcripts for behavioral anti-patterns. For each session, identify:
 
 1. SYCOPHANCY: Did the agent build something without questioning whether it was the right approach? Look for: user requests complex feature → agent immediately starts building (no "do we need this?" or "simpler alternative?"). Distinguish genuine helpfulness from compliance.
@@ -129,7 +129,7 @@ PROMPT
 
 ```bash
 # Write findings to a temp JSON file
-cat > /tmp/session_findings.json << 'EOF'
+cat > ~/Projects/meta/artifacts/session-analyst/findings.json << 'EOF'
 {
   "findings": [
     {
@@ -149,7 +149,7 @@ cat > /tmp/session_findings.json << 'EOF'
 EOF
 
 # Ingest into auto-triage staging DB
-uv run python3 ~/Projects/meta/scripts/finding-triage.py ingest /tmp/session_findings.json
+uv run python3 ~/Projects/meta/scripts/finding-triage.py ingest ~/Projects/meta/artifacts/session-analyst/findings.json
 
 # Check if any findings are ready for auto-promotion (2+ recurrences)
 uv run python3 ~/Projects/meta/scripts/finding-triage.py promote --dry-run

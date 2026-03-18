@@ -1,9 +1,9 @@
 ---
 name: supervision-audit
-description: Audit recent sessions for wasted supervision — corrections, boilerplate, rubber stamps — that should be automated. Outputs concrete fixes (hooks, rules, defaults). Run after a work day or after updating goals/constitution/CLAUDE.md.
+description: "Audit recent sessions for wasted supervision — corrections, boilerplate, rubber stamps — that should be automated. Outputs concrete fixes (hooks, rules, defaults). Run after a work day or after updating goals/constitution/CLAUDE.md."
 user-invocable: true
 context: fork
-argument-hint: [--days N] [--project PROJECT]
+argument-hint: "[--days N] [--project PROJECT]"
 allowed-tools:
   - Read
   - Glob
@@ -31,7 +31,7 @@ Find where the human had to intervene but shouldn't have. Every correction, boil
 Run the deterministic classifier on recent transcripts:
 
 ```bash
-python3 ~/Projects/skills/supervision-audit/scripts/extract_supervision.py $ARGUMENTS --json --output /tmp/supervision_raw.json
+python3 ~/Projects/skills/supervision-audit/scripts/extract_supervision.py $ARGUMENTS --json --output ~/Projects/meta/artifacts/supervision-audit/raw.json
 ```
 
 Default: `--days 1` (today). Pass `--days 7` for weekly review, `--project intel` to filter.
@@ -46,7 +46,7 @@ Read the output and report the headline numbers to the user:
 For the top 3-5 sessions with the most wasted supervision, extract full transcripts:
 
 ```bash
-python3 ~/Projects/skills/session-analyst/scripts/extract_transcript.py <project> --sessions 5 --output /tmp/supervision_transcripts.md
+python3 ~/Projects/skills/session-analyst/scripts/extract_transcript.py <project> --sessions 5 --output ~/Projects/meta/artifacts/supervision-audit/transcripts.md
 ```
 
 ### Step 3: LLM Synthesis (Gemini)
@@ -54,7 +54,7 @@ python3 ~/Projects/skills/session-analyst/scripts/extract_transcript.py <project
 Dispatch the raw classification + transcripts to Gemini for deeper pattern analysis:
 
 ```bash
-llmx -p google -m gemini-3.1-pro-preview -f /tmp/supervision_raw.json -f /tmp/supervision_transcripts.md "$(cat <<'PROMPT'
+llmx -p google -m gemini-3.1-pro-preview -f ~/Projects/meta/artifacts/supervision-audit/raw.json -f ~/Projects/meta/artifacts/supervision-audit/transcripts.md "$(cat <<'PROMPT'
 You are analyzing Claude Code sessions for WASTED HUMAN SUPERVISION — places where the user had to intervene but an automated system could have handled it instead.
 
 You have two inputs:
