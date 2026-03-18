@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# pretool-subagent-gate.sh — Advisory gate on Agent tool calls.
-# PreToolUse:Agent command hook. Advisory only (exit 0 + additionalContext).
+# pretool-subagent-gate.sh — Advisory + blocking gate on Agent tool calls.
+# PreToolUse:Agent command hook.
 #
-# Checks:
+# BLOCKING checks (exit 2):
+# 0. Memory pressure — blocks when claude process count exceeds RAM-based limit
+#
+# Advisory checks (exit 0 + additionalContext):
 # 1. Suggestion/brainstorm pattern in description
 # 2. Single-tool pattern (short description matching direct-tool verbs)
 # 3. general-purpose when Explore would work
@@ -10,9 +13,27 @@
 # 5. File-edit intent via subagent (should use Edit/Write directly)
 # 6. Delegation cascade (3+ consecutive Agent calls, with known-limitations prompt)
 
-trap 'exit 0' ERR
-
+# ERR trap only for advisory checks — blocking checks handle their own errors
 INPUT=$(cat)
+
+# === Check 0: Memory pressure gate (BLOCKING) ===
+# Count running claude processes (exclude grep itself)
+CLAUDE_PROCS=$(pgrep -x claude 2>/dev/null | wc -l | tr -d ' ')
+
+# RAM-based limit: 1 claude session per 3GB, minimum 3
+RAM_BYTES=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
+RAM_GB=$((RAM_BYTES / 1073741824))
+MAX_AGENTS=$((RAM_GB / 3))
+[ "$MAX_AGENTS" -lt 3 ] && MAX_AGENTS=3
+
+if [ "$CLAUDE_PROCS" -ge "$MAX_AGENTS" ]; then
+    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "memory-pressure: ${CLAUDE_PROCS}/${MAX_AGENTS} claude procs on ${RAM_GB}GB" 2>/dev/null || true
+    echo '{"decision": "block", "reason": "MEMORY PRESSURE: '"${CLAUDE_PROCS}"' claude processes running (limit: '"${MAX_AGENTS}"' for '"${RAM_GB}"'GB RAM). Spawning another agent risks kernel panic from VM compressor exhaustion. Wait for existing agents to finish, or work directly instead of delegating."}'
+    exit 2
+fi
+
+# Advisory checks below — fail open
+trap 'exit 0' ERR
 
 # Parse description and subagent_type from tool_input
 eval "$(echo "$INPUT" | python3 -c '
