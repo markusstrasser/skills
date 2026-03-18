@@ -57,11 +57,33 @@ all_changes = sorted(set(f for f in all_changes if f.strip()))
 if not all_changes:
     sys.exit(0)
 
-# Build display for the agent
-changes = "\n".join(all_changes)
-n = len(all_changes)
+# Delta-based filtering: exclude files dirty at session start
+session_id_file = os.path.join(cwd, ".claude", "current-session-id")
+baseline_files = set()
+try:
+    with open(session_id_file) as f:
+        session_id = f.read().strip()
+    with open(f"/tmp/session-baseline-{session_id}.txt") as f:
+        for line in f:
+            # git status --short format: "XY filename" — strip 3-char prefix
+            name = line[3:].rstrip("\n")
+            if name:
+                baseline_files.add(name)
+except (OSError, FileNotFoundError):
+    pass  # No baseline = warn about everything (current behavior)
 
-prompt = f"""UNCOMMITTED CHANGES ({n} file{"s" if n != 1 else ""}):
+new_changes = [f for f in all_changes if f not in baseline_files]
+pre_existing = len(all_changes) - len(new_changes)
+
+if not new_changes:
+    sys.exit(0)
+
+# Build display for the agent
+changes = "\n".join(new_changes)
+n = len(new_changes)
+pre_msg = f" ({pre_existing} pre-existing excluded)" if pre_existing else ""
+
+prompt = f"""UNCOMMITTED CHANGES ({n} new file{"s" if n != 1 else ""}{pre_msg}):
 {changes[:500]}
 
 Before stopping, commit these changes with granular semantic commits.
