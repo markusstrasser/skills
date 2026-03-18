@@ -62,7 +62,7 @@ Don't generate prompts for things obvious from reading the code. Target things r
 
 **CAN do:** Read any file, run shell commands (grep/find/wc), write files, cross-reference, count/compare/compute, produce structured output (tables, matrices, categorized lists). With `--search`: web search. With configured MCPs: scite, paper-search, exa, brave, etc.
 
-**CANNOT do:** Database queries, conversation history. **28% factual error rate on external knowledge** — never trust claims about APIs/libraries.
+**CANNOT do:** Database queries, conversation history, `uv`/project-specific CLIs (sandbox lacks project environment — `uv` panics in system-configuration crate). **28% factual error rate on external knowledge** — never trust claims about APIs/libraries. Also hallucinates fix status — may claim "this was already fixed" when it wasn't.
 
 **Turn limits:** `codex exec` has a built-in turn limit (~15-20 tool calls). Agents reading many files exhaust turns before synthesizing. Mitigations:
 - **Max 5 files per agent.** Split larger audits into multiple agents.
@@ -106,6 +106,8 @@ codex exec --model gpt-5.4 --full-auto --ephemeral \
   "You are auditing a codebase. Read files at their full paths. \
    Cite file:line for findings. After reading each file, immediately \
    write your findings for that file — do not wait to synthesize at the end. \
+   IMPORTANT: Write your report to docs/audit/{slug}.md (NOT /tmp). \
+   End with a complete markdown summary of all findings. \
    TASK: [prompt]" &
 
 codex exec --model gpt-5.4 --full-auto --ephemeral \
@@ -119,12 +121,12 @@ wait
 - `exec` — non-interactive mode (not the interactive `codex` command)
 - `--full-auto` — sandboxed auto-approval (replaces old `--approval-mode full-auto`)
 - `--ephemeral` — no session persistence
-- `-o FILE` — captures last agent message to file (critical for extracting synthesis)
+- `-o FILE` — captures last agent *text* message to file. **Caveat:** if the agent spends all turns on tool calls and never produces a final text response, `-o` writes nothing. Always include in prompt: "End with a markdown summary of all findings."
 - `--search` — **only works in interactive mode, NOT in `exec`**. Use MCP tools instead.
 
 **MCP tools:** Codex shares the global MCP config (`~/.codex/config.toml`). All configured MCPs (scite, exa, brave, paper-search, etc.) are available to `exec` agents automatically.
 
-**Fallback:** If Codex isn't installed, write prompts to `.claude/research-dispatch.md` as numbered prompts the user can copy-paste or route to another model.
+**Output location:** Tell agents to write to the **repo** (`docs/audit/`), NOT `/tmp`. macOS cleans up `/tmp` between sessions. Codex session logs (`~/.codex/sessions/`) have encrypted reasoning payloads — findings are NOT recoverable from logs post-hoc.
 
 **Fallback:** If Codex isn't installed, write prompts to `.claude/research-dispatch.md` as numbered prompts the user can copy-paste or route to another model.
 
@@ -150,6 +152,7 @@ For each audit output:
 | Phantom features | "missing error handling in X" when X has try/except | Read the actual code |
 | Inflated severity | "critical security bug" for a missing docstring | Downgrade or drop |
 | Stale references | Citing code that was refactored away | Check git log for the file |
+| False fix claims | "This was already fixed" when git log shows no such commit | Verify with `git log --grep` |
 
 ### Verification output
 
@@ -247,10 +250,13 @@ Reference the audit finding:
 
 ## Model selection
 
-| Target | When |
-|--------|------|
-| `codex --model gpt-5.4` | Default — structured analysis, cross-referencing, counting |
-| `llmx chat --model gemini-3.1-pro-preview` | For prompts needing 1M context (huge file ingestion) |
+| Target | When | Tradeoff |
+|--------|------|----------|
+| `codex exec --model gpt-5.4` | Cross-referencing, counting, structured output | Free, parallel, but output extraction fragile |
+| Claude Code `Agent` subagents | Same tasks + DuckDB/MCP access | Costs tokens, but output is inline — no extraction issues |
+| `llmx chat --model gemini-3.1-pro-preview` | 1M context (huge file ingestion) | Best for monolithic file analysis |
+
+**Codex vs Claude subagents (learned 2026-03-18):** For codebase audits, Claude `Agent` subagents with `subagent_type=Explore` are more reliable than Codex `exec` because: (1) output is returned directly to parent context — no `-o` extraction failures, (2) full MCP/DuckDB access, (3) no sandbox environment mismatch. Use Codex when you need 10+ parallel audits (Claude subagents are limited by parent context cost) or when the task is purely file-grep (no project tooling needed).
 
 Codex CLI only supports OpenAI models. For Claude/Gemini dispatch, use `llmx` or Claude Code subagents. Consult `/model-guide` for task-specific routing if uncertain.
 
