@@ -35,9 +35,11 @@ except Exception:
 [ -z "$DESC" ] && exit 0
 
 WARNINGS=""
+CHECK_IDS=""
 
 # Check 1: Suggestion/brainstorm pattern
 if echo "$DESC" | grep -qiE 'suggest|brainstorm|ideas for|what could be|improvements?$'; then
+    CHECK_IDS="${CHECK_IDS}1,"
     WARNINGS="${WARNINGS}SUBAGENT BRAINSTORM: Description matches suggestion/brainstorm pattern. Subagents produce ungrounded output for open-ended prompts — consider working directly or using cross-model review instead. "
 fi
 
@@ -45,6 +47,7 @@ fi
 DESC_LEN=${#DESC}
 if [ "$DESC_LEN" -lt 80 ]; then
     if echo "$DESC" | grep -qiE '^(search|find|grep|read|check|look up|fetch|get) '; then
+        CHECK_IDS="${CHECK_IDS}2,"
         WARNINGS="${WARNINGS}SUBAGENT OVERHEAD: Short description (${DESC_LEN} chars) matches a single-tool task. A direct Grep/Read/search call would be faster and cheaper than spawning a subagent. "
     fi
 fi
@@ -52,6 +55,7 @@ fi
 # Check 3: general-purpose when Explore would work
 if [ "$STYPE" = "general-purpose" ]; then
     if echo "$DESC" | grep -qiE 'explore|find files|codebase|search for|look through|scan.*files'; then
+        CHECK_IDS="${CHECK_IDS}3,"
         WARNINGS="${WARNINGS}SUBAGENT TYPE: general-purpose agent for what looks like codebase exploration. Use Explore agent instead — it has the right tools and is purpose-built for this. "
     fi
 fi
@@ -59,7 +63,8 @@ fi
 # Check 4: Research task routed to general-purpose instead of researcher
 if [ "$STYPE" = "general-purpose" ]; then
     if echo "$DESC" | grep -qiE 'verify|evidence|literature|systematic review|meta.analysis|primary source|PMID|PubMed|cite|citation|research.*claim|check.*paper'; then
-        WARNINGS="${WARNINGS}SUBAGENT TYPE: Research/verification task using general-purpose agent. Use researcher subagent_type instead — it has maxTurns:20, epistemics+source-grading skills, and source-check stop hook. general-purpose agents have no epistemic guardrails. "
+        CHECK_IDS="${CHECK_IDS}4,"
+        WARNINGS="${WARNINGS}SUBAGENT TYPE: Research/verification task using general-purpose agent. Use researcher subagent_type instead — it has maxTurns:25, epistemics+source-grading skills, and source-check stop hook. general-purpose agents have no epistemic guardrails. "
     fi
 fi
 
@@ -76,6 +81,7 @@ except Exception:
 if echo "$DESC $PROMPT" | grep -qiE 'edit (the |a |this )?file|write (to |the )?file|modify (the |a )?file|update (the |a )?file|fix (the |a |this )?(code|file|bug|issue)|implement (the |a |this )?|create (a |the )?file|add (to|code|a function|the)'; then
     # Exception: worktree isolation is fine for code changes
     if ! echo "$INPUT" | grep -q '"worktree"'; then
+        CHECK_IDS="${CHECK_IDS}5,"
         WARNINGS="${WARNINGS}SUBAGENT FILE EDIT: Description/prompt suggests file modification. Agent() creates isolated context — use Edit/Write directly for file changes. If you need isolated code changes, use isolation: worktree. "
     fi
 fi
@@ -99,14 +105,16 @@ COUNT=$((COUNT + 1))
 echo "$COUNT" > "$CASCADE_FILE"
 
 if [ "$COUNT" -ge 5 ]; then
+    CHECK_IDS="${CHECK_IDS}6,"
     WARNINGS="${WARNINGS}SUBAGENT CASCADE (${COUNT}): 5+ consecutive Agent calls without other tool use. This suggests sequential work being delegated when it should run directly. Consider whether these tasks actually need subagent isolation. Have you surfaced known limitations of this approach before investing further? "
 elif [ "$COUNT" -ge 3 ]; then
+    CHECK_IDS="${CHECK_IDS}6,"
     WARNINGS="${WARNINGS}SUBAGENT CASCADE (${COUNT}): 3+ consecutive Agent calls. Check if these are truly independent — sequential chains should run directly. Have you surfaced known limitations/ceilings of the current approach? "
 fi
 
 # Emit combined warnings
 if [ -n "$WARNINGS" ]; then
-    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "warn" "${WARNINGS:0:100}" 2>/dev/null || true
+    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "warn" "checks=${CHECK_IDS%,} ${WARNINGS:0:80}" 2>/dev/null || true
     # JSON-safe the warnings
     SAFE_WARN=$(echo "$WARNINGS" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))' 2>/dev/null)
     echo "{\"additionalContext\": ${SAFE_WARN}}"

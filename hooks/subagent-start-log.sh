@@ -54,6 +54,10 @@ try:
             if blocks:
                 ctx = "CODEBASE STRUCTURE:\\n" + "\\n\\n".join(blocks)
                 print(json.dumps({"additionalContext": ctx}))
+    # Inject synthesis budget reminder for researcher subagents
+    if agent_type == "researcher":
+        ctx = "RESEARCHER BUDGET: You have 25 turns max. By turn 18, you MUST begin writing your synthesis. A partial synthesis with [UNVERIFIED] tags beats no output. Your stop hook will reject empty output."
+        print(json.dumps({"additionalContext": ctx}))
 except Exception:
     pass
 ' 2>/dev/null)"

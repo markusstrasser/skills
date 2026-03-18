@@ -18,6 +18,7 @@ try:
     agent_type = d.get("agent_type", "")
     agent_id = d.get("agent_id", "")
     session_id = d.get("session_id", "")
+    transcript_path = d.get("agent_transcript_path", "")
     msg = d.get("last_assistant_message", "")
 
     # Compute full length before truncation (R:P4/P12)
@@ -31,7 +32,8 @@ try:
             "agent_type": agent_type,
             "agent_id": agent_id,
             "session_id": session_id,
-            "output_len": msg_len
+            "output_len": msg_len,
+            "transcript_path": transcript_path
         })
         logfile = os.path.expanduser("~/.claude/subagent-log.jsonl")
         with open(logfile, "a") as f:
