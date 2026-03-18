@@ -60,9 +60,15 @@ Don't generate prompts for things obvious from reading the code. Target things r
 
 ### GPT-5.4 via Codex — capabilities
 
-**CAN do:** Read any file, run shell commands (grep/find/wc), write files, cross-reference, count/compare/compute, produce structured output (tables, matrices, categorized lists).
+**CAN do:** Read any file, run shell commands (grep/find/wc), write files, cross-reference, count/compare/compute, produce structured output (tables, matrices, categorized lists). With `--search`: web search. With configured MCPs: scite, paper-search, exa, brave, etc.
 
-**CANNOT do:** Web access, MCP tools, database queries, conversation history. **28% factual error rate on external knowledge** — never trust claims about APIs/libraries.
+**CANNOT do:** Database queries, conversation history. **28% factual error rate on external knowledge** — never trust claims about APIs/libraries.
+
+**Turn limits:** `codex exec` has a built-in turn limit (~15-20 tool calls). Agents reading many files exhaust turns before synthesizing. Mitigations:
+- **Max 5 files per agent.** Split larger audits into multiple agents.
+- **Incremental output.** Tell the agent: "After reading each file, immediately write your findings for that file. Do not wait until the end to synthesize."
+- **Use `-o FILE` flag** to capture the final message even if the agent runs out of turns mid-synthesis.
+- **Prefer grep-first, read-targeted.** Tell agents to grep for specific patterns first, then read only the relevant line ranges — not entire files.
 
 ### Prompt structure
 
@@ -94,21 +100,31 @@ Save to [specific output path].
 ```bash
 mkdir -p docs/audit  # or wherever findings should go
 
-# Parallel dispatch (3-5 concurrent is safe)
-codex --model gpt-5.4 --approval-mode full-auto --quiet \
+# Parallel dispatch (10+ concurrent is fine on macOS)
+codex exec --model gpt-5.4 --full-auto --ephemeral \
+  -o docs/audit/codex-{slug}.md \
   "You are auditing a codebase. Read files at their full paths. \
-   Cite file:line for findings. Write results to the specified output file. \
+   Cite file:line for findings. After reading each file, immediately \
+   write your findings for that file — do not wait to synthesize at the end. \
    TASK: [prompt]" &
 
-codex --model gpt-5.4 --approval-mode full-auto --quiet \
-  "You are auditing a codebase. Read files at their full paths. \
-   Cite file:line for findings. Write results to the specified output file. \
-   TASK: [prompt]" &
+codex exec --model gpt-5.4 --full-auto --ephemeral \
+  -o docs/audit/codex-{slug}.md \
+  "..." &
 
 wait
 ```
 
-Use `--quiet` to suppress interactive output. Use `&` + `wait` for parallelism.
+**Key flags:**
+- `exec` — non-interactive mode (not the interactive `codex` command)
+- `--full-auto` — sandboxed auto-approval (replaces old `--approval-mode full-auto`)
+- `--ephemeral` — no session persistence
+- `-o FILE` — captures last agent message to file (critical for extracting synthesis)
+- `--search` — **only works in interactive mode, NOT in `exec`**. Use MCP tools instead.
+
+**MCP tools:** Codex shares the global MCP config (`~/.codex/config.toml`). All configured MCPs (scite, exa, brave, paper-search, etc.) are available to `exec` agents automatically.
+
+**Fallback:** If Codex isn't installed, write prompts to `.claude/research-dispatch.md` as numbered prompts the user can copy-paste or route to another model.
 
 **Fallback:** If Codex isn't installed, write prompts to `.claude/research-dispatch.md` as numbered prompts the user can copy-paste or route to another model.
 
