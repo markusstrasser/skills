@@ -31,6 +31,29 @@ try:
     logfile = os.path.expanduser("~/.claude/subagent-log.jsonl")
     with open(logfile, "a") as f:
         f.write(entry + "\n")
+
+    # Emit overview INDEX as additionalContext for Explore subagents
+    if agent_type in ("Explore", "general-purpose"):
+        overview_dir = os.path.join(cwd, ".claude", "overviews")
+        if os.path.isdir(overview_dir):
+            import re
+            blocks = []
+            for fname in sorted(os.listdir(overview_dir)):
+                if not fname.endswith("-overview.md"):
+                    continue
+                fpath = os.path.join(overview_dir, fname)
+                text = open(fpath).read()
+                m = re.search(r"<!-- INDEX\b(.*?)-->", text, re.DOTALL)
+                if m:
+                    name = fname.replace("-overview.md", "")
+                    block = m.group(1).strip()
+                    lines = block.split("\n")
+                    if len(lines) > 60:
+                        block = "\n".join(lines[:60]) + "\n... (truncated)"
+                    blocks.append(f"## {name}\n{block}")
+            if blocks:
+                ctx = "CODEBASE STRUCTURE:\\n" + "\\n\\n".join(blocks)
+                print(json.dumps({"additionalContext": ctx}))
 except Exception:
     pass
 ' 2>/dev/null)"

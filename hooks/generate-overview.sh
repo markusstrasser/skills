@@ -177,6 +177,18 @@ generate_one() {
   # Cleanup
   rm -f "$temp_prompt"
 
+  # Step 5: Prepend freshness metadata
+  local git_sha
+  git_sha=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+  local gen_ts
+  gen_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  local meta_line="<!-- Generated: ${gen_ts} | git: ${git_sha} | model: ${OVERVIEW_MODEL} -->"
+  # Prepend metadata to output file
+  local tmp_meta
+  tmp_meta=$(mktemp /tmp/overview-meta-XXXXXX)
+  { echo "$meta_line"; echo ""; cat "$output_file"; } > "$tmp_meta"
+  mv "$tmp_meta" "$output_file"
+
   echo "[$type] Done → $output_file"
 }
 

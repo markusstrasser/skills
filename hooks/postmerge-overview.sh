@@ -11,7 +11,7 @@ GENERATE="$HOME/Projects/skills/hooks/generate-overview.sh"
 [[ -f "$CONF" ]] || exit 0
 [[ -x "$GENERATE" ]] || exit 0
 
-export OVERVIEW_MODEL="gemini-3.1-pro-preview"
+export OVERVIEW_MODEL="gemini-3-flash-preview"
 
 echo "Regenerating overviews after pull (background)..."
 nohup "$GENERATE" --auto --project-root "$PROJECT_ROOT" > /tmp/overview-pull-$(basename "$PROJECT_ROOT").log 2>&1 &
