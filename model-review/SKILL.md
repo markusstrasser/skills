@@ -173,6 +173,11 @@ Append only the specific files under review. Read them with the Read tool and wr
 
 ### Step 3: Dispatch Reviews (Parallel)
 
+**Pre-dispatch checklist:**
+- [ ] `--stream` on BOTH models (Gemini hangs without it, GPT times out)
+- [ ] Output dir: `.model-review/YYYY-MM-DD-{topic-slug}/` (NOT /tmp/)
+- [ ] Context bundle < 15KB per model (summarize if larger)
+
 **CRITICAL: Fire both Bash calls in a SINGLE message (two parallel tool calls).** Do NOT wait for one model before calling the other. Both models run independently — dispatch them simultaneously to halve wall-clock time.
 
 **Select models** (see Dispatch Models above):
@@ -396,6 +401,8 @@ Valid dispositions: `INCLUDE`, `DEFER (reason)`, `REJECT (reason)`, `MERGE WITH 
 
 This file is the checklist. If the user asks "did you include everything?" — point them here, not the prose.
 
+**STOP. Before writing synthesis, verify: did you run extraction through a fast cross-family model (Flash or GPT-5.3)? If not, do it now. Synthesis without extraction = information loss.**
+
 ### Step 6: Synthesize
 
 Build the synthesis from the disposition table. Every INCLUDE item must appear. Reference IDs so coverage is auditable.
@@ -562,30 +569,6 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 
 ## Artifact Handoff
 
-After writing the synthesis, write a JSON artifact for downstream pipeline consumption:
-
-```bash
-mkdir -p ~/.claude/artifacts/$(basename $PWD)
-```
-
-Write to `~/.claude/artifacts/$(basename $PWD)/model-review-$(date +%Y-%m-%d).json`:
-```json
-{
-  "skill": "model-review",
-  "project": "PROJECT",
-  "date": "YYYY-MM-DD",
-  "type": "review-synthesis",
-  "review_dir": ".model-review/YYYY-MM-DD-topic/",
-  "content": {
-    "topic": "...",
-    "include_count": N,
-    "defer_count": M,
-    "reject_count": K,
-    "key_findings": ["finding1", "finding2"]
-  }
-}
-```
-
-This lets subsequent pipeline steps (implementation, project-upgrade) consume review findings without re-reading the full review directory.
+Write summary JSON to `~/.claude/artifacts/$(basename $PWD)/model-review-$(date +%Y-%m-%d).json` with: skill, project, date, topic, include/defer/reject counts, key_findings[]. Used by project-upgrade as a cache gate.
 
 $ARGUMENTS
