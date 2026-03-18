@@ -47,7 +47,22 @@ What are you downloading?
    → STOP. Tell the user what you tried and what failed.
    → Don't build increasingly elaborate workarounds.
    → The blocker might be access-tier (membership, license), not technical.
+
+8. Software artifacts (git repos, model weights, packages)?
+   → git clone for repos. huggingface-cli download for gated models.
+   → Check LICENSE/access gates FIRST — tell user if signup needed.
+   → For pip/uv packages: uv add, not pip install.
 ```
+
+## Operational Guardrails
+
+**Working directory:** Always use absolute paths for download destinations. The Bash tool can reset cwd between calls. Use `curl -o /absolute/path/file.csv` not `curl -o data/file.csv`.
+
+**Large downloads (>100MB):** Use `run_in_background: true` on the Bash tool call. Check progress with `ls -lh /path/` while doing other work.
+
+**Bulk downloads:** 0.5s between requests to same domain (government sites are polite but not infinite). `sleep 0.5` between curl calls.
+
+**FRED shortcut:** Many macro data series are mirrored on FRED. Direct CSV: `curl -sL "https://fred.stlouisfed.org/graph/fredgraph.csv?id=SERIES_ID" -o series.csv`
 
 ## Available Tools
 
@@ -79,73 +94,19 @@ with open(dest, "wb") as f:
 
 ### 2. Scrapfly — Anti-Bot API
 
-**What:** Paid API that handles Cloudflare, renders JS, rotates proxies. Last resort for direct downloads when curl_cffi fails.
-
-**Key:** `SCRAPFLY_KEY` in `.env.local` (same key across projects)
-
-**When:** SSL failures + Cloudflare + bot detection that curl_cffi can't beat. Also good for JS-rendered content.
-
+Paid API for Cloudflare/JS-rendered/bot-detected sites. Key: `SCRAPFLY_KEY` in `.env.local`.
+When: SSL failures + Cloudflare + bot detection that curl_cffi can't beat.
 ```python
 from scrapfly import ScrapflyClient, ScrapeConfig
-import os
-
-key = os.environ.get("SCRAPFLY_KEY", "")
-# Or load from .env.local:
-# for line in open(".env.local"):
-#     if line.startswith("SCRAPFLY_KEY="): key = line.split("=",1)[1].strip()
-
-client = ScrapflyClient(key=key)
-
-# Basic scrape
-result = client.scrape(ScrapeConfig(url=url, asp=True, country="us"))
-
-# With JS rendering
+client = ScrapflyClient(os.environ.get("SCRAPFLY_KEY", ""))
 result = client.scrape(ScrapeConfig(url=url, asp=True, render_js=True, country="us"))
-
-# Content is in result.content (str or bytes)
+# result.content has the HTML
 ```
-
-**Install:** `uv add scrapfly-sdk`
-
-**Cost:** ~$0.001-0.01 per request depending on features. `asp=True` (anti-scraping protection) costs more.
+Install: `uv add scrapfly-sdk`. Cost: ~$0.001-0.01/request, `asp=True` costs more.
 
 ### 3. Browserbase — Cloud Browser
 
-**What:** Full cloud Chromium browser controlled via Playwright CDP. Good for complex JS sites that need real browser behavior.
-
-**Keys:** `BROWSERBASE_API_KEY` and `BROWSERBASE_PROJECT_ID` in `.env.local`
-
-**When:** Complex multi-step flows on non-authenticated sites. NOT for SSO/Google-login sites (Google blocks cloud browsers).
-
-```python
-from playwright.sync_api import sync_playwright
-import os, json, urllib.request
-
-# Create session
-data = json.dumps({"projectId": os.environ["BROWSERBASE_PROJECT_ID"]}).encode()
-req = urllib.request.Request(
-    "https://api.browserbase.com/v1/sessions",
-    data=data,
-    headers={
-        "x-bb-api-key": os.environ["BROWSERBASE_API_KEY"],
-        "Content-Type": "application/json",
-    },
-    method="POST",
-)
-session = json.loads(urllib.request.urlopen(req).read())
-
-# Connect via Playwright
-with sync_playwright() as p:
-    browser = p.chromium.connect_over_cdp(
-        f"wss://connect.browserbase.com?apiKey={os.environ['BROWSERBASE_API_KEY']}&sessionId={session['id']}"
-    )
-    page = browser.contexts[0].pages[0]
-    page.goto("https://example.com")
-    # ... interact ...
-    browser.close()
-```
-
-**Install:** `uv add playwright && playwright install chromium`
+Full cloud Chromium via Playwright CDP. Keys: `BROWSERBASE_API_KEY` + `BROWSERBASE_PROJECT_ID` in `.env.local`. Use for complex multi-step JS flows on non-authenticated sites. NOT for SSO/Google-login (Google blocks cloud browsers). Install: `uv add playwright && playwright install chromium`. See Browserbase docs for connection boilerplate.
 
 ### 4. claude-in-chrome — User's Live Chrome Session
 
@@ -278,7 +239,18 @@ result = fc.extract(
 - Persistent context with Chrome profile copies cookies but NOT server-side sessions
 - Use Playwright's own Chromium, not system Chrome, for automation
 
-### 9. Plain requests/curl — Always Try First
+### 9. Software & Model Artifacts
+
+Not web scraping — but frequently needed during data-acquisition tasks.
+
+**Git repos:** `git clone --depth 1 URL dest/` (shallow clone saves bandwidth)
+**HuggingFace models:** `huggingface-cli download ORG/MODEL --local-dir dest/` (needs `huggingface-hub` installed, some models need `huggingface-cli login` for gated access)
+**Python packages:** `uv add PACKAGE` (never bare `pip install`)
+**Large files from GitHub Releases:** `curl -L -o file "https://github.com/.../releases/download/TAG/FILE"`
+
+If a model/dataset requires license acceptance or signup, STOP and tell the user which ones need manual action.
+
+### 10. Plain requests/curl — Always Try First
 
 ```python
 import requests
