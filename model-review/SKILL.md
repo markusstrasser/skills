@@ -173,6 +173,31 @@ Append only the specific files under review. Read them with the Read tool and wr
 
 ### Step 3: Dispatch Reviews (Parallel)
 
+**Preferred: Script dispatch (3 tool calls instead of 10):**
+```bash
+# Narrow review — you provide the context file
+uv run python3 ~/Projects/meta/scripts/model-review.py \
+  --context "$REVIEW_DIR/context.md" \
+  --topic "$TOPIC" \
+  --project "$(pwd)" \
+  "What's wrong with this [thing being reviewed]"
+
+# Broad review — script picks .context/ views
+uv run python3 ~/Projects/meta/scripts/model-review.py \
+  --broad src \
+  --topic "$TOPIC" \
+  --project "$(pwd)" \
+  "Review the source code architecture"
+```
+
+The script handles: output directory creation, constitutional preamble, context splitting (Gemini gets full view, GPT gets signatures), parallel llmx dispatch, waiting. It prints JSON with output paths and exit codes. You then:
+1. Read `gemini-output.md` and `gpt-output.md` from the reported `review_dir`
+2. Proceed to Step 4 (fact-check) and Step 5 (extraction)
+
+**Important:** Set `timeout: 660000` on the Bash tool call (script waits for both models, up to 10 min). The script never falls back to weaker models — diagnose failures from the JSON output's `stderr` field.
+
+**Manual dispatch (when you need custom context assembly or non-standard prompts):**
+
 **Pre-dispatch checklist:**
 - [ ] `--stream` on BOTH models (Gemini hangs without it, GPT times out)
 - [ ] Output dir: `.model-review/YYYY-MM-DD-{topic-slug}/` (NOT /tmp/)
