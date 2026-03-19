@@ -175,6 +175,8 @@ Before any external search, check what exists locally:
 Output: "What I already know" inventory. Flag contradictions with later findings.
 **Quick tier:** If ground truth answers the question, stop here.
 
+**Turn budget:** Stop searching at 70% of available turns. Reserve remaining turns for synthesis. If you're at turn 15 of 20, stop and write up what you have. A partial synthesis with sources beats an exhaustive search with no output.
+
 ## Phase 2 — Exploratory Divergence
 
 **Mandatory:** Name 2+ independent search axes before searching. Different axes reach different literatures.
