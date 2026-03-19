@@ -41,7 +41,10 @@ Use whichever of these are available in the current project's `.mcp.json`:
 | `mcp__research__save_paper` | Save paper to local corpus | After finding useful paper |
 | `mcp__research__fetch_paper` | Download PDF + extract text | **Before citing any paper** |
 | `mcp__research__read_paper` | Get full extracted text | Reading a fetched paper |
-| `mcp__research__ask_papers` | Query across papers (Gemini 1M) | Synthesizing multiple papers |
+| `mcp__research__prepare_evidence` | Score paper chunks for relevance (RCS) | Before `ask_papers` for focused questions — higher quality synthesis |
+| `mcp__research__ask_papers` | Query across papers (Gemini 1M) | Synthesizing multiple papers. Set `use_rcs=True` for scored evidence path. |
+| `mcp__research__traverse_citations` | Discover related papers via citation graph | After finding seed papers — one-hop references/citations with overlap filtering |
+| `mcp__research__extract_table` | Elicit-style structured extraction | Comparing findings across papers — column-based extraction in parallel |
 | `mcp__research__list_corpus` | List saved papers | Check before searching externally |
 | `mcp__research__verify_claim` | Verify factual claim via Exa /answer | High-stakes claims: numbers, stats, entity properties. Single-call, cached 7d |
 | `mcp__research__export_for_selve` | Export for knowledge embedding | End of session, persist findings (if configured) |
@@ -118,7 +121,7 @@ Combined's citation hallucination happened because it reasoned from training-dat
 |------|-----------|---------------|
 | Canonical papers by topic | `search_papers` (S2) | Largest index (220M+), structured metadata, citation counts |
 | Recent papers (<6mo) | `web_search_advanced_exa` with `category: "research paper"` + date filter | S2 has no date filtering |
-| Citation analysis / related papers | `search_papers` (S2) → `save_paper` → `get_paper` | S2 exposes citation graph; arXiv/PubMed don't |
+| Citation analysis / related papers | `traverse_citations` (S2 graph, one hop) | Overlap filtering for multi-seed; auto-saves to corpus |
 | Citation stance (support/contrast) | `search_literature` (scite) | 1.6B+ classified citations. Unique: tells you if papers *support* or *contrast* a claim |
 | Disconfirmation search | `search_literature` (scite) with contrasting focus | Directly surfaces contradictory evidence — better than "X criticism" keyword hacks |
 | Preprints (arXiv) | `search_arxiv` (paper-search) | Direct arXiv API, download+read built in |
@@ -143,6 +146,18 @@ Scite indexes 1.6B+ citation statements classified as **supporting**, **contrast
 - `mcp__research__verify_claim` (Exa /answer) remains primary for spot-checking.
 - For critical claims: also check via `brave_web_search` (independent index).
 - For citation stance: use `mcp__scite__search_literature` to check if a claim is supported or contrasted in published literature.
+
+### Step-Level Model Routing (advisory)
+
+| Phase | Recommended model | Rationale |
+|-------|------------------|-----------|
+| Phase 1-2 (explore, diverge) | Flash | Speed over depth; scanning many results |
+| Phase 3-4 (hypothesis, disconfirm) | Flash | Query generation is cheap |
+| Phase 5-7 (verify, synthesize) | Most capable available | Accuracy matters for final claims |
+| `ask_papers` during exploration | `model="gemini-3-flash-preview"` | Don't burn Pro tokens on exploratory queries |
+| `ask_papers` for final synthesis | Default (auto-selects) | Let the system pick based on corpus size |
+| `prepare_evidence` | Always Flash (built-in) | Scoring is simple classification |
+| `extract_table` | Always Flash (built-in) | Structured extraction is well-constrained |
 </tool_reference>
 
 ## Effort Classification
@@ -181,7 +196,25 @@ Output: "What I already know" inventory. Flag contradictions with later findings
 
 **Mandatory:** Name 2+ independent search axes before searching. Different axes reach different literatures.
 
-**Divergent expansion (before selecting axes):** Brainstorm 8-10 different angles for this question — adjacent domains, adversarial framings, unconventional entry points, what a critic would investigate, what a practitioner in a different field would search for. Generate 30+ if the question is high-stakes to push past the obvious angles. Push for breadth over plausibility. THEN select the 2-3 most promising as your search axes.
+**Perspective-guided divergence (before selecting axes):**
+
+Step 1: Choose 3-5 perspectives from this table (vary by domain):
+
+| Perspective | Question frame | When essential |
+|-------------|---------------|----------------|
+| **Practitioner** | "What would someone who does this daily search for?" | Always — grounds theory in practice |
+| **Critic** | "What would a skeptic investigate first?" | Always — prevents confirmation bias |
+| **Adjacent-domain** | "What's the equivalent problem in [ecology/logistics/law]?" | When first 2 perspectives feel too similar |
+| **Historian** | "When was this tried before and what happened?" | When the domain has cyclic patterns |
+| **Data analyst** | "What would I need to measure to distinguish hypotheses?" | When claims are empirically testable |
+| **Regulator** | "What safety, compliance, or ethical angle am I missing?" | Bio/medical/financial domains |
+| **End user** | "What does the person affected by this actually care about?" | Product/clinical/policy questions |
+
+Step 2: Generate 3-5 questions from EACH chosen perspective. Questions must be genuinely different across perspectives — if two perspectives produce the same question, one isn't adding value.
+
+Step 3: Merge the 15-25 questions → select 5-8 as search queries, ensuring queries come from 2+ perspective categories.
+
+This defeats the Artificial Hivemind effect structurally. STORM showed +25% organization, +10% breadth from multi-perspective simulation. Generate 30+ if the question is high-stakes.
 
 **Axis diversity rule:** Selected axes must come from different categories — at least one mechanism-based, one adversarial/critical, and one from an adjacent domain or historical precedent. If all axes start from the same intellectual tradition, you have one axis with multiple queries, not genuine diversity. The point: if you name axes directly, you'll pick the same 2 axes every agent would pick (the "Artificial Hivemind" effect — LLMs converge on the same outputs within and across models). The brainstorm-then-select step defeats this.
 
@@ -325,6 +358,32 @@ RIGHT: "Study A found 26% improvement (n=500). Study B found no effect (n=200).
 ```
 
 This is structural, not stylistic. Recitation surfaces contradictions that narrative synthesis buries.
+
+## Phase 6c — Calibrated Refusal (Standard + Deep)
+
+Before writing synthesis, check if evidence meets the minimum bar.
+
+**Refuse and output "Insufficient Evidence" if ALL of:**
+1. No `[SOURCE]` or `[DATABASE]` provenance tags — only `[TRAINING-DATA]` or `[UNVERIFIED]`
+2. No RCS scores > 5 (if `prepare_evidence` was used)
+3. No scite citation data with tally > 0
+
+**Do NOT refuse if:**
+- At least 1 `[SOURCE]`-tagged claim directly addresses the question
+- User explicitly requested a training-data answer (`--training-ok`)
+
+**Refusal output:**
+```markdown
+## Insufficient Evidence
+
+**Question:** [what was asked]
+**What was searched:** [tools used, queries run]
+**What was NOT found:** [specific gaps]
+**Partial findings:** [anything tangentially relevant]
+**Suggested next steps:** [specific queries, databases, or experts to consult]
+```
+
+PaperQA2 achieves 85% precision by refusing 22% of queries. Confident synthesis from noise is worse than an informative refusal.
 
 ## Phase 7 — Source Assessment
 
