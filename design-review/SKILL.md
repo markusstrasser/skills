@@ -61,7 +61,7 @@ Dispatch compressed transcripts to Gemini for **structured pattern extraction**.
 **Critical:** Gemini's output is DATA, not conclusions. It extracts patterns; YOU (Claude) do the creative synthesis in Phase 3. Don't ask Gemini to propose architecture.
 
 ```bash
-llmx -p google -m gemini-3.1-pro-preview --stream -f ~/Projects/meta/artifacts/design-review/all.md "$(cat <<'PROMPT'
+llmx -p google -m gemini-3.1-pro-preview -f ~/Projects/meta/artifacts/design-review/all.md "$(cat <<'PROMPT'
 You are extracting STRUCTURAL PATTERNS from agent session transcripts. Output structured findings, not prose.
 
 For each pattern found, output this exact JSON-like format (one per finding):

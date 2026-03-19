@@ -84,12 +84,12 @@ argument-hint: '[model name or issue description]'
 - Truncation warning: `[llmx:WARN] output may be truncated`
 - Model suggestion: `"gemini-3.1-pro not found; did you mean gemini-3.1-pro-preview?"`
 
-**`--fallback MODEL`** — exists but **not recommended**. Silent model switching masks failures. If you asked for Pro, you should get Pro or an error. Prefer `--stream` (forces API transport, bypasses CLI capacity limits) over `--fallback` (switches to a weaker model).
+**`--fallback MODEL`** — exists but **not recommended**. Silent model switching masks failures. If you asked for Pro, you should get Pro or an error. If CLI rate-limited, use `--stream` (forces API transport) rather than `--fallback` (switches to a weaker model).
 
 **From Python — check exit code and diagnose:**
 ```python
 result = subprocess.run(
-    ['llmx', '-m', 'gemini-3.1-pro-preview', '--stream', '--timeout', '300'],
+    ['llmx', '-m', 'gemini-3.1-pro-preview', '--timeout', '300'],
     input=prompt, capture_output=True, text=True, timeout=360
 )
 if result.returncode == 3:  # rate limit — API transport has separate capacity
@@ -100,26 +100,24 @@ elif result.returncode == 4:  # timeout
 
 ## The Five llmx Footguns
 
-### 1. Gemini CLI Hangs on Context Files with Thinking Models
+### 1. Gemini CLI Transport — Free Tier (Fixed)
 
-Gemini CLI transport (`gemini-cli`) hangs indefinitely when given context files (`-f`) with thinking models (Pro, Flash thinking). The process consumes CPU but never produces output or times out. Observed with files as small as 5KB.
+Gemini CLI transport (`gemini-cli`) previously hung on thinking models with piped input. **Fixed in gemini-cli 0.32.1+** (multiple stdin + non-interactive mode fixes upstream). Verified working with Pro + `-f` context files up to 15KB.
 
-**Root cause:** Unknown — likely Gemini CLI's thinking mode interacts badly with piped file context. Non-thinking Flash works fine on the same files.
-
-**Fix:** Always use `--stream` when dispatching review/analysis prompts with `-f` context files to Gemini thinking models. `--stream` forces API transport, which works reliably.
+**No `--stream` needed for Gemini.** Without `--stream`, llmx routes through CLI (free tier). Add `--stream` only if CLI hits rate limits (forces API fallback).
 
 ```bash
-# HANGS — Gemini CLI transport with context file + thinking model:
+# FREE — routes through Gemini CLI:
 llmx chat -m gemini-3.1-pro-preview -f context.md --timeout 300 "Review this"
 
-# WORKS — --stream forces API transport:
-llmx chat -m gemini-3.1-pro-preview -f context.md --timeout 300 --stream "Review this"
-
-# WORKS — Flash (non-thinking) on CLI transport:
+# ALSO FREE — Flash on CLI:
 llmx chat -m gemini-3-flash-preview -f context.md --timeout 120 "Review this"
+
+# FORCES API (costs money) — only use if CLI rate-limited:
+llmx chat -m gemini-3.1-pro-preview -f context.md --timeout 300 --stream "Review this"
 ```
 
-**Impact on model-review skill:** All Gemini Pro dispatches with `-f` must include `--stream`. This forces API transport (costs money instead of free CLI), but is the only reliable path. Budget ~$0.01-0.05 per review at 5-30KB context.
+**What still forces API:** `--max-tokens` (CLI caps at 8K), `--schema`, `--search`, `--stream`. Brainstorm uses `--max-tokens 65536` so still hits API.
 
 ### 2. GPT-5.x Timeouts and max_completion_tokens
 
@@ -339,7 +337,7 @@ Neither CLI truncates user input (verified from source code). Input goes directl
 
 **Tested:** 80KB code batches via both CLIs work reliably. 200KB causes timeouts on thinking models.
 
-**What forces API transport** (costs money): `--max-tokens`, `--stream`, `--search`. For Gemini, `--stream` is recommended — CLI transport hits capacity limits (429) and hangs on thinking models.
+**What forces API transport** (costs money): `--max-tokens`, `--stream`, `--search`. For Gemini, avoid `--stream` unless CLI rate-limited — without it, calls route through CLI (free). Hang bug on thinking models fixed in gemini-cli 0.32.1+.
 
 ### CLI for Agents (Claude Code / Codex)
 
