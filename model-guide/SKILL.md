@@ -10,7 +10,7 @@ argument-hint: '[task description or model name]'
 Select the right frontier model for a task and prompt it correctly.
 
 **Models covered:** Claude Opus 4.6, Claude Sonnet 4.6, GPT-5.4, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3 Flash, Kimi K2.5.
-**Last updated:** 2026-03-07. See CHANGELOG.md for update history.
+**Last updated:** 2026-03-07. See `references/CHANGELOG.md` for update history.
 
 ## Quick Selection Matrix
 
@@ -35,7 +35,7 @@ Select the right frontier model for a task and prompt it correctly.
 | **Multi-agent swarm tasks** | Kimi K2.5 | Native Agent Swarm (100 sub-agents) | -- |
 | **Video understanding** | Kimi K2.5 | VideoMMMU 86.6%, native multimodal | Gemini 3.1 (native video) |
 
-For full benchmark tables, read `BENCHMARKS.md`.
+For full benchmark tables, read `references/BENCHMARKS.md`.
 
 ## Model Profiles
 
@@ -53,7 +53,7 @@ For full benchmark tables, read `BENCHMARKS.md`.
 - Prefilling is **deprecated** on 4.6 -- use system prompt instructions instead
 - Add `"Avoid over-engineering"` for coding tasks -- Opus tends to over-abstract
 
-For complete guide, read `PROMPTING_CLAUDE.md`.
+For complete guide, read `references/PROMPTING_CLAUDE.md`.
 
 ### Claude Sonnet 4.6 -- "The Workhorse"
 
@@ -68,7 +68,7 @@ For complete guide, read `PROMPTING_CLAUDE.md`.
 - Set `max_tokens` to 64K at medium/high effort to give room for thinking
 - Best at `medium` effort for most applications; `low` for high-volume
 
-For complete guide, read `PROMPTING_CLAUDE.md`.
+For complete guide, read `references/PROMPTING_CLAUDE.md`.
 
 ### GPT-5.4 -- "The Professional"
 
@@ -92,7 +92,7 @@ For complete guide, read `PROMPTING_CLAUDE.md`.
 - **Tool Search** for large tool sets -- avoids dumping all tool definitions into prompt
 - **llmx defaults to `--reasoning-effort high`** for GPT-5 models automatically
 
-For complete guide, read `PROMPTING_GPT.md`.
+For complete guide, read `references/PROMPTING_GPT.md`.
 
 ### GPT-5.3 Instant -- "The Restructurer"
 
@@ -153,7 +153,7 @@ For complete guide, read `PROMPTING_GPT.md`.
 - Add `"Remember it is 2026"` -- Gemini benefits from explicit date anchoring
 - **llmx supports `--reasoning-effort`** for Gemini (maps to thinkingLevel internally)
 
-For complete guide, read `PROMPTING_GEMINI.md`.
+For complete guide, read `references/PROMPTING_GEMINI.md`.
 
 ### Kimi K2.5 -- "The Budget Polymath"
 
@@ -170,7 +170,7 @@ For complete guide, read `PROMPTING_GEMINI.md`.
 - For vision: set `max_tokens=64k`, average over multiple runs
 - **ALWAYS fact-check** -- SimpleQA 37% means 63% factual error rate without tools
 
-For complete guide, read `PROMPTING_KIMI.md`.
+For complete guide, read `references/PROMPTING_KIMI.md`.
 
 ## Validation Checklists
 
@@ -252,7 +252,7 @@ Claude (orchestrator -- best professional judgment)
 ## When to Update This Skill
 
 Update after any frontier model release:
-1. Update `BENCHMARKS.md` with new scores
-2. Update relevant `PROMPTING_*.md` with API/behavior changes
+1. Update `references/BENCHMARKS.md` with new scores
+2. Update relevant `references/PROMPTING_*.md` with API/behavior changes
 3. Update selection matrix if rankings change
-4. Add entry to `CHANGELOG.md`
+4. Add entry to `references/CHANGELOG.md`
