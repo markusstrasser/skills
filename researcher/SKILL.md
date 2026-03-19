@@ -27,138 +27,27 @@ If 3+ sessions active: prefix questions with project name. Keep questions shorte
 
 **Project-specific tool routing and gotchas are in `.claude/rules/research-depth.md`** (if it exists). Check it before starting.
 
-<tool_reference>
-## Available Research Tools
+## Tool Routing (compact)
 
-Use whichever of these are available in the current project's `.mcp.json`:
+For detailed tool descriptions and full routing tables, read `${CLAUDE_SKILL_DIR}/references/tool-routing.md`.
+For Exa search philosophy and strategies, read `${CLAUDE_SKILL_DIR}/references/search-philosophy.md`.
 
-| Tool | What it does | When to use |
-|------|-------------|-------------|
-| `mcp__selve__search` | Personal knowledge search | Prior work, conversations, notes — **always check first** if available |
-| `mcp__duckdb__execute_query` | Query project DuckDB views | Local data — check before going external |
-| `mcp__intelligence__*` | Entity resolution, dossiers, screening | Investigation targets (if configured) |
-| `mcp__research__search_papers` | Semantic Scholar search (220M+ papers) | Canonical papers, citation counts, structured metadata. **No date filtering** — use Exa for recency |
-| `mcp__research__save_paper` | Save paper to local corpus | After finding useful paper |
-| `mcp__research__fetch_paper` | Download PDF + extract text | **Before citing any paper** |
-| `mcp__research__read_paper` | Get full extracted text | Reading a fetched paper |
-| `mcp__research__prepare_evidence` | Score paper chunks for relevance (RCS) | Before `ask_papers` for focused questions — higher quality synthesis |
-| `mcp__research__ask_papers` | Query across papers (Gemini 1M) | Synthesizing multiple papers. Set `use_rcs=True` for scored evidence path. |
-| `mcp__research__traverse_citations` | Discover related papers via citation graph | After finding seed papers — one-hop references/citations with overlap filtering |
-| `mcp__research__extract_table` | Elicit-style structured extraction | Comparing findings across papers — column-based extraction in parallel |
-| `mcp__research__list_corpus` | List saved papers | Check before searching externally |
-| `mcp__research__verify_claim` | Verify factual claim via Exa /answer | High-stakes claims: numbers, stats, entity properties. Single-call, cached 7d |
-| `mcp__research__export_for_selve` | Export for knowledge embedding | End of session, persist findings (if configured) |
-| `mcp__paper-search__search_arxiv` | arXiv search | Preprints — flag as `[PREPRINT]` |
-| `mcp__paper-search__search_pubmed` | PubMed search | Clinical/medical literature |
-| `mcp__paper-search__search_biorxiv` | bioRxiv/medRxiv search | Biology/medical preprints |
-| `mcp__exa__web_search_exa` | Semantic web search | Non-obvious connections, expert blogs, recent work |
-| `mcp__exa__web_search_advanced_exa` | Advanced search (filters, deep, structured) | Entity enrichment (`type: "deep"` + `outputSchema`), date-filtered research, domain-restricted search |
-| `mcp__exa__company_research_exa` | Company intelligence | Business/financial research |
-| `mcp__brave-search__brave_web_search` | Independent index search | Triangulation with Exa (different index). Fallback when Exa rate-limits. |
-| `mcp__brave-search__brave_news_search` | Dedicated news search | Time-sensitive events (default 24h). Better than Exa category filter for breaking news. |
-| `mcp__perplexity__perplexity_ask` | Grounded factual answer | Quick "What is X?" — one call, cited. Saves search→fetch→synthesize. |
-| `mcp__perplexity__perplexity_research` | Deep multi-source report | Comprehensive topic surveys. Alternative to Exa deep_researcher. Slow (~30s+). |
-| `mcp__perplexity__perplexity_reason` | Chain-of-thought + web | "Why did X happen?" — analytical questions needing reasoning + evidence. |
-| `mcp__perplexity__perplexity_search` | Raw web results | Third search source. Use when you want to control synthesis yourself. |
-| `mcp__firecrawl__firecrawl_scrape` | JS-heavy page scraper | Financial dashboards, dynamic sites that WebFetch/Exa crawling can't handle. |
-| `mcp__firecrawl__firecrawl_extract` | Structured data extraction | JSON Schema extraction from web pages. Company filings, earnings data. |
-| `mcp__firecrawl__firecrawl_crawl` | Recursive site crawl | Investor relations sections, filing indexes. |
-| `mcp__firecrawl__firecrawl_map` | URL discovery | "What pages exist on this site?" before crawling. |
-| `mcp__scite__search_literature` | Citation-stance search (1.6B+ citations) | Literature audits, disconfirmation search, checking if a claim is supported/contrasted in the literature. Returns Smart Citation snippets with stance classification (supporting/contrasting/mentioning). |
-| `mcp__context7__*` | Library documentation | API/framework questions |
-| WebFetch | Fetch specific URLs | Known databases, filings, regulatory |
-| WebSearch | General web search | News, grey literature |
+**Quick routing by need:**
+- **Factual lookup:** `verify_claim` (Exa /answer, cached 7d) or Exa search + WebFetch
+- **Academic papers:** `search_papers` (S2, 220M+) for discovery, `fetch_paper` + `read_paper` before citing
+- **Recent papers (<6mo):** `web_search_advanced_exa` with `category: "research paper"` + date filter (S2 has no date filtering)
+- **Citation stance:** `search_literature` (scite) — 1.6B+ citations classified as supporting/contrasting/mentioning
+- **Entity enrichment:** `web_search_advanced_exa` with `type: "deep"` + `outputSchema`
+- **Database lookups (UniProt, gnomAD, ClinVar):** Exa/Brave websearch, NOT S2/PubMed (those return papers *about* databases, not the data)
+- **News/events:** `brave_news_search` (last 24h-7d), Exa with date filter for older
+- **Triangulation:** Exa + Brave (confirmed independent indexes). Perplexity is NOT independent.
+- **Perplexity:** Expensive ($0.14/call avg). Only for decisive "why" analysis (`perplexity_reason`) or deep surveys (`perplexity_research`). Not the default.
+- **Full-text synthesis:** `search_papers` -> `save_paper` -> `fetch_paper` -> `prepare_evidence` -> `ask_papers(use_rcs=True)`
 
-Not all tools exist in every project. User-scope MCPs (scite, paper-search, perplexity, brave-search, exa) are available in all projects. Project `.mcp.json` has project-specific MCPs.
-
-**Critical rule:** `fetch_paper` then `read_paper` BEFORE citing. Abstracts are not primary sources.
-
-**S2 strengths (with API key):** 220M+ papers, structured metadata (citation counts, venues, DOIs), citation graph traversal, OpenAlex fallback. Best for: finding canonical papers, citation analysis, paper-to-paper discovery. Rate limit with key: 1 req/sec (vs 100/5min free). **S2 gotcha:** No date filtering. Use Exa for "recent papers on X." S2 API key set via `S2_API_KEY` env var in `~/.env`.
-
-### Search Routing
-
-- **Factual lookup:** Exa search + WebFetch, or `verify_claim` (Exa /answer, cached 7d).
-- **Semantic discovery:** Exa remains primary (neural search, find_similar, categories).
-- **Entity enrichment:** `web_search_advanced_exa` with `type: "deep"` + `outputSchema`. Offloads extraction to Exa's agents — structured JSON with per-field citations comes back directly. No post-hoc LLM extraction needed.
-- **High-recall queries:** `web_search_advanced_exa` with `type: "deep"` + `additionalQueries`. Generate 2-3 domain-specific query variations from your context. Exa searches all in parallel, merges + ranks.
-- **News/events:** `brave_news_search` for last 24h-7d. Exa with date filter for older.
-- **Triangulation:** For high-stakes claims, use Exa + Brave (confirmed independent indexes). Perplexity is NOT confirmed independent — don't use for triangulation.
-- **Structured extraction from URLs:** `firecrawl_scrape` or `firecrawl_extract` for specific URLs with JSON schema.
-- **Rate-limited:** If Exa returns 429, fall back to `brave_web_search`.
-
-### Perplexity — expensive, use selectively ($0.14/call avg)
-
-Perplexity Sonar is ~5x more expensive per query than Exa+WebFetch. Don't use for breadth-first search or routine lookups. Use only when it's the decisive tool:
-
-- **`perplexity_reason`:** Complex "why" questions where you need reasoning + grounded evidence in one call. Not for simple facts.
-- **`perplexity_research`:** Deep topic surveys where Exa Research isn't available or you need a second opinion on a complex synthesis. Slow (~30s+), expensive.
-- **`perplexity_ask`:** Only when you need a quick synthesized answer AND don't want to spend 3 tool calls on search→fetch→synthesize. Not the default for factual lookups — use Exa/Brave first.
-- **`perplexity_search`:** Don't use. Exa/Brave are better raw search engines with confirmed independent indexes.
-
-### Tool-Class Routing (empirical — EBF3 benchmark, 2026-03-03)
-
-Benchmarked academic-only vs websearch-only vs combined on a real genomics VUS question (N=1, Sonnet, 15 turns each). Three empirical findings that change tool selection:
-
-**1. Websearch first for structured database lookups.**
-Use Exa/Brave to query UniProt, gnomAD, MaveDB, ClinVar, DECIPHER — these are web databases, not literature. Academic tools (S2/PubMed) return papers *about* these databases, not the data itself. In the benchmark, websearch found the exact UniProt domain boundary (Pro263 = IPT/TIG N-terminus) that academic missed entirely because it inferred from EBF1 homology instead of querying EBF3 directly.
-
-**2. Academic tools for citation-verified literature.**
-S2/PubMed produced zero hallucinated citations. Websearch hallucinated a PDB ID (3MUJ doesn't exist), two year errors, and a self-contradiction. Combined hallucinated a journal+page (real author, wrong journal). The failure pattern: websearch tools synthesize from training data + web snippets and confabulate citation details. **Never trust a PMID or PDB ID from websearch without verification via S2 or the actual database.**
-
-**3. Don't run combined without database context.**
-Combined's citation hallucination happened because it reasoned from training-data memory about a less-indexed paper. When database facts (domain boundaries, population frequencies, prior ClinVar entries) are already in context from earlier queries, the model doesn't need to invent. Feed websearch findings into your synthesis step.
-
-**Practical sequence for variant/gene research:**
-1. Websearch: UniProt domain boundaries, gnomAD constraint, MaveDB check, ClinVar entries
-2. Academic: PubMed/S2 for case series, functional data, phenotype literature
-3. Synthesize with both in context — the model has facts to anchor on, not just training memory
-
-**Limitations:** N=1 (genomics VUS query), single model (Sonnet). The routing may differ for other domains. Websearch may outperform academic on fast-moving fields (AI, markets) where S2 indexing lags.
-
-### Academic Tool Selection
-
-| Need | Best tool | Why not others |
-|------|-----------|---------------|
-| Canonical papers by topic | `search_papers` (S2) | Largest index (220M+), structured metadata, citation counts |
-| Recent papers (<6mo) | `web_search_advanced_exa` with `category: "research paper"` + date filter | S2 has no date filtering |
-| Citation analysis / related papers | `traverse_citations` (S2 graph, one hop) | Overlap filtering for multi-seed; auto-saves to corpus |
-| Citation stance (support/contrast) | `search_literature` (scite) | 1.6B+ classified citations. Unique: tells you if papers *support* or *contrast* a claim |
-| Disconfirmation search | `search_literature` (scite) with contrasting focus | Directly surfaces contradictory evidence — better than "X criticism" keyword hacks |
-| Preprints (arXiv) | `search_arxiv` (paper-search) | Direct arXiv API, download+read built in |
-| Clinical/medical literature | `search_pubmed` (paper-search) | MeSH terms, clinical focus |
-| Biology preprints | `search_biorxiv` (paper-search) | Direct bioRxiv API |
-| Full-text synthesis | `search_papers` → `save_paper` → `fetch_paper` → `ask_papers` | Gemini 1M context for multi-paper Q&A |
-| Grey literature / expert blogs | Exa semantic search | Academic APIs don't index blogs/substacks |
-
-### Scite — citation stance search (user-scope, available everywhere)
-
-Scite indexes 1.6B+ citation statements classified as **supporting**, **contrasting**, or **mentioning**. Unique capability — no other tool tells you the *direction* of how papers cite each other.
-
-- **Disconfirmation (Phase 4):** Search for contrasting citations on your hypothesis. Scite surfaces papers that explicitly contradict a claim — more targeted than keyword-based "X criticism" queries.
-- **Literature audits:** Check if a specific claim has been supported or contested across the literature.
-- **Novelty checks:** Before writing a claim, check if it's already in the literature and which direction the evidence points.
-- **Coverage caveat:** Skews biomedical. Thin on psychometrics, measurement invariance, some social sciences.
-- **Not for:** paper discovery (use S2), full-text reading (use fetch_paper), recent preprints (use arXiv/Exa).
-- **Citation format:** Always check `editorialNotices` for retractions before citing. Links: `https://doi.org/{doi}`.
-
-### Verification
-
-- `mcp__research__verify_claim` (Exa /answer) remains primary for spot-checking.
-- For critical claims: also check via `brave_web_search` (independent index).
-- For citation stance: use `mcp__scite__search_literature` to check if a claim is supported or contrasted in published literature.
-
-### Step-Level Model Routing (advisory)
-
-| Phase | Recommended model | Rationale |
-|-------|------------------|-----------|
-| Phase 1-2 (explore, diverge) | Flash | Speed over depth; scanning many results |
-| Phase 3-4 (hypothesis, disconfirm) | Flash | Query generation is cheap |
-| Phase 5-7 (verify, synthesize) | Most capable available | Accuracy matters for final claims |
-| `ask_papers` during exploration | `model="gemini-3-flash-preview"` | Don't burn Pro tokens on exploratory queries |
-| `ask_papers` for final synthesis | Default (auto-selects) | Let the system pick based on corpus size |
-| `prepare_evidence` | Always Flash (built-in) | Scoring is simple classification |
-| `extract_table` | Always Flash (built-in) | Structured extraction is well-constrained |
-</tool_reference>
+**Critical rules:**
+- `fetch_paper` then `read_paper` BEFORE citing. Abstracts are not primary sources.
+- Never trust PMIDs or PDB IDs from websearch without S2/database verification.
+- Sequential exploration, not shotgun. 3 queries -> scan -> 3 more doubling down on signal. Query at position 3 in a burst cannot incorporate what query 1 returned.
 
 ## Effort Classification
 
@@ -212,74 +101,36 @@ Step 1: Choose 3-5 perspectives from this table (vary by domain):
 
 Step 2: Generate 3-5 questions from EACH chosen perspective. Questions must be genuinely different across perspectives — if two perspectives produce the same question, one isn't adding value.
 
-Step 3: Merge the 15-25 questions → select 5-8 as search queries, ensuring queries come from 2+ perspective categories.
+Step 3: Merge the 15-25 questions -> select 5-8 as search queries, ensuring queries come from 2+ perspective categories.
 
 This defeats the Artificial Hivemind effect structurally. STORM showed +25% organization, +10% breadth from multi-perspective simulation. Generate 30+ if the question is high-stakes.
 
-**Axis diversity rule:** Selected axes must come from different categories — at least one mechanism-based, one adversarial/critical, and one from an adjacent domain or historical precedent. If all axes start from the same intellectual tradition, you have one axis with multiple queries, not genuine diversity. The point: if you name axes directly, you'll pick the same 2 axes every agent would pick (the "Artificial Hivemind" effect — LLMs converge on the same outputs within and across models). The brainstorm-then-select step defeats this.
+**Axis diversity rule:** Selected axes must come from different categories — at least one mechanism-based, one adversarial/critical, and one from an adjacent domain or historical precedent. If all axes start from the same intellectual tradition, you have one axis with multiple queries, not genuine diversity.
 
 **Axis categories (select from different categories, not the same one twice):**
 
 | Category | Entry point | Example |
 |----------|------------|---------|
-| **Mechanism** | pathway → modulators → evidence | "How does X work?" |
-| **Adversarial/critical** | failure modes → criticism → limitations | "Why would X NOT work?" |
+| **Mechanism** | pathway -> modulators -> evidence | "How does X work?" |
+| **Adversarial/critical** | failure modes -> criticism -> limitations | "Why would X NOT work?" |
 | **Adjacent domain** | analogous problem in unrelated field | "Who else solved something like X?" |
-| **Historical** | prior attempts → what happened → lessons | "When was X tried before?" |
-| **Practitioner** | implementation → operational reality → gotchas | "What do people who use X daily say?" |
-| **Academic** | concept → literature → state of the art | "What does the research say about X?" |
-| **Population** | comparable cases → outcomes → what differed | "Who else has X and what happened?" |
-| **Application** | use case → implementations → results | "Where has X been deployed?" |
-| **Genotype** | variant → mechanism → intervention | (genomics-specific) |
-| **Guideline** | clinical guidelines → standard of care | (medical-specific) |
+| **Historical** | prior attempts -> what happened -> lessons | "When was X tried before?" |
+| **Practitioner** | implementation -> operational reality -> gotchas | "What do people who use X daily say?" |
+| **Academic** | concept -> literature -> state of the art | "What does the research say about X?" |
+| **Population** | comparable cases -> outcomes -> what differed | "Who else has X and what happened?" |
+| **Application** | use case -> implementations -> results | "Where has X been deployed?" |
+| **Genotype** | variant -> mechanism -> intervention | (genomics-specific) |
+| **Guideline** | clinical guidelines -> standard of care | (medical-specific) |
 
 Pick axes from at least 2 different categories. If all your axes are Academic, you have one axis with multiple queries.
 
-**Analogical forcing (deep tier, optional):** For one axis, reframe the question through an unrelated domain's lens — "How would a supply chain engineer think about this?" or "What's the equivalent problem in ecology?" This makes standard answers syntactically impossible within the metaphor, forcing genuinely different search terms and literatures. Use when your first 2 axes feel too obvious.
+**Analogical forcing (deep tier, optional):** For one axis, reframe the question through an unrelated domain's lens — "How would a supply chain engineer think about this?" This makes standard answers syntactically impossible within the metaphor, forcing genuinely different search terms and literatures.
 
 **Search strategy per axis:**
 - Minimum 3 query formulations (vary semantic vs keyword)
 - Use different tools per axis when possible
 - Scan titles/abstracts from 15+ sources before forming hypotheses
 - **Save papers** with `save_paper`, **fetch full text** before citing
-
-**Exa search philosophy (semantic search, not keyword):**
-- **Use `type: "deep"` on `web_search_advanced_exa` for high-value queries.** Deep search auto-expands your query into parallel sub-searches, ranks + merges results, and generates per-result summaries. 3x cost ($0.015/req vs $0.005 neural) but saves downstream LLM calls. Two power features:
-  - **`outputSchema`** — pass a JSON Schema and get structured extraction with per-field grounding (citations + confidence: low/medium/high). Use for entity enrichment: company details, people profiles, financial data, variant annotations. Eliminates the search→fetch→extract-with-LLM chain.
-  - **`additionalQueries`** — supply 2-3 domain-specific query variations. Your domain knowledge (genomics terminology, financial filing types, specific gene names) produces better variations than Exa's auto-expansion. Always generate these when you have domain context.
-
-  Example: researching a company's financials:
-  ```
-  query: "Acme Corp 2025 annual revenue guidance"
-  type: "deep"
-  additionalQueries: ["Acme Corp 10-K SEC filing 2025", "Acme Corp Q4 earnings call transcript"]
-  outputSchema: {"type": "object", "properties": {"revenue": {"type": "string"}, "guidance": {"type": "string"}, "source": {"type": "string"}}, "required": ["revenue"]}
-  ```
-
-  When NOT to use deep: simple factual lookups (use `type: "auto"`), high-throughput batch queries, when you need >100 results.
-
-- **Use category filters on `web_search_advanced_exa`** when the domain is clear. Categories narrow results to high-signal sources:
-  - `financial report` — SEC filings, earnings, annual reports (investing/finance)
-  - `research paper` — academic papers (supplements S2, better recency filtering)
-  - `news` — press releases, regulatory announcements, current events
-  - `company` — company profiles, about pages
-- **Use `highlights`** to scan results before pulling full text. Set `highlightsQuery` to your claim/topic for relevance-ranked excerpts. Useful for evidence scanning across many results.
-- **Use `summary` with `summaryQuery`** for structured extraction from search results. Example: search "Company X recent earnings" with `enableSummary: true, summaryQuery: "revenue, EPS, guidance"`.
-- **Match recency filter to field velocity.** Before searching, judge how fast the field moves and filter accordingly. Stable fields (physics, law) need no date gate. Fast fields (AI, crypto, geopolitics) go stale in months — if results reference superseded models, outdated benchmarks, or pre-current-generation tools, discard and re-query with tighter dates. Use `web_search_advanced_exa` `startCrawlDate`/`startPublishedDate`:
-  - **Fast (AI, markets):** `startCrawlDate` = 30 days ago
-  - **Medium (biotech, policy):** `startCrawlDate` = 6 months ago
-  - **Stable (physics, law, math):** omit date filter
-- Exa matches by meaning, not keywords. Query by phrase — describe the *concept* you want results from, not the terms you'd grep for. "Gene-diet interaction abolishing cardiovascular genetic risk" finds different (better) results than "9p21 diet interaction."
-- **Seek insight from adjacent domains.** The most useful context often isn't phrased the same way or even from the same field. Ask: "What knowledge space would contain a brilliant critique of this idea?" Then phrase the query *from that domain's perspective*.
-- **Know when to use your own knowledge vs. search.** Your training data is a massive library with a hard expiration date. Use it deliberately:
-  - **Trust pre-training for:** foundational concepts, mathematical relationships, well-established science, historical facts, stable APIs, canonical papers (the *existence* and *core claims* of Shannon 1948 won't change).
-  - **Verify via search for:** numbers that update (market caps, benchmarks, model rankings, statistics), claims about what's "state of the art," anything where the landscape shifted since your cutoff, named entities' current status.
-  - **Assume stale for:** model comparisons, leaderboard positions, library versions, company valuations, anything where "latest" or "best" matters. Your training snapshot is months old — in fast fields that's a different era.
-  - **Always tag it:** use `[TRAINING-DATA]` when relying on pre-training knowledge so the reader knows the provenance. This isn't a formality — it's how you distinguish "I retrieved this" from "I remember this."
-  - **The dangerous zone:** you *feel* confident about a specific number, author name, or benchmark result from training. That feeling is the fabrication trigger. The more specific and numeric a memory feels, the more likely it's reconstructed, not recalled. Verify or hedge.
-- **Sequential exploration, not shotgun.** Don't fire 10 Exa queries in parallel and flood the context window with noise. Instead: 3 targeted queries → scan summaries → identify which direction has signal → 3 more queries doubling down on the most promising vein. This is an affinity tree, not a broadcast. **Measured: 51% of research sessions violate this** by firing 3-8 simultaneous queries (session audit, 2026-02-28). Query at position 3 in a burst cannot incorporate what query 1 returned. The instruction exists because it's a real failure mode, not a style preference.
-- **Use Exa's `summary` and `highlights` fields** to scan results before pulling full text. Set `maxCharacters` on `text` to limit per-result context. The best sources are usually papers, blog posts, essays, and threads — not marketing pages.
-- **First results may be SEO noise.** Don't stop at the top 3 — scan 8-10 results at summary level, then read the 2-3 that actually have signal.
 
 **Quick:** 1 axis, 1-2 queries. **Standard:** 2 axes, 5+ queries. **Deep:** 3+ axes, 10+ queries.
 
@@ -296,7 +147,7 @@ For EACH hypothesis, actively search for contradictory evidence:
 - "no association between X and Y", "X limitations"
 - Check single lab/group vs independent replication
 
-If no contradictory evidence after genuine effort: "no contradictory evidence found" (≠ "none exists").
+If no contradictory evidence after genuine effort: "no contradictory evidence found" (not equal to "none exists").
 **This phase is structurally required.** Output without disconfirmation is incomplete.
 
 ### Phase 4b — Citation Stance Verification (if scite MCP available)
@@ -307,8 +158,8 @@ After your own disconfirmation search, verify the top 3 synthesis claims against
    - Search scite: `search_literature` with the claim's core terms
    - Check `tally.contrasting` — if >0, contrasting citations exist
    - Read the contrasting citation `snippet` text to assess relevance
-2. If contrasting citations exist but your Phase 4 search didn't find them → flag as **missed negative**
-3. If scite has no coverage (0 results) → note `[SCITE: NO COVERAGE]` — don't treat absence as confirmation
+2. If contrasting citations exist but your Phase 4 search didn't find them -> flag as **missed negative**
+3. If scite has no coverage (0 results) -> note `[SCITE: NO COVERAGE]` — don't treat absence as confirmation
 
 **Output:** Add a "Citation Stance Check" row to the claims table with scite tally (S:supporting, C:contrasting, M:mentioning) for each checked claim. Example: `[SCITE: S:12 C:3 M:45]`
 
@@ -318,12 +169,12 @@ After your own disconfirmation search, verify the top 3 synthesis claims against
 
 For every specific claim in your output:
 
-- **Numbers:** From a source, or generated? If generated → `[ESTIMATED]`
-- **Names:** From a source you accessed, or memory? If memory → verify or label `[UNVERIFIED]`
+- **Numbers:** From a source, or generated? If generated -> `[ESTIMATED]`
+- **Names:** From a source you accessed, or memory? If memory -> verify or label `[UNVERIFIED]`
 - **Existence:** Does this paper actually exist? If you cannot confirm, DO NOT cite it
 - **Attribution:** Does the paper actually say what you think? Use `read_paper` to verify
 
-**For high-stakes factual claims** (specific numbers, valuations, statistics, entity properties), use `mcp__research__verify_claim` if available. It calls Exa /answer with structured output — one API call, returns verdict + citations. Use for spot-checking, not every claim (costs ~$0.005/call).
+**For high-stakes factual claims** (specific numbers, valuations, statistics, entity properties), use `verify_claim` if available. One API call, returns verdict + citations (~$0.005/call).
 
 **YOU WILL FABRICATE under pressure to be precise.** The pattern: real concept + invented specifics (author name, fold-change, sample size). Catch yourself. Vague truth > precise fiction.
 
@@ -332,11 +183,11 @@ For every specific claim in your output:
 After each research action, assess marginal yield:
 
 ```
-IF last action added new info that changes conclusions → CONTINUE
-IF two independent sources agree, no contradictions   → CONVERGED: synthesize
-IF last 2+ actions added nothing new                  → DIMINISHING: start writing
-IF expanding laterally instead of resolving question   → SCOPE CREEP: refocus
-IF question is more complex than initially classified  → UPGRADE TIER
+IF last action added new info that changes conclusions -> CONTINUE
+IF two independent sources agree, no contradictions   -> CONVERGED: synthesize
+IF last 2+ actions added nothing new                  -> DIMINISHING: start writing
+IF expanding laterally instead of resolving question   -> SCOPE CREEP: refocus
+IF question is more complex than initially classified  -> UPGRADE TIER
 ```
 
 The goal is sufficient evidence for the stakes level, not exhaustive coverage.
@@ -348,7 +199,7 @@ Before writing any conclusion or synthesis that draws on multiple sources:
 
 **Restate the specific evidence you're drawing from.** List the concrete data points, not summaries. Then derive the conclusion.
 
-This is the "recitation strategy" (Du et al., EMNLP 2025, arXiv:2510.05381): prompting models to repeat relevant evidence before answering improves accuracy by +4% on long-context tasks. Training-free, model-agnostic. Works because it forces the model to retrieve and hold evidence in recent context before reasoning over it.
+This is the "recitation strategy" (Du et al., EMNLP 2025, arXiv:2510.05381): prompting models to repeat relevant evidence before answering improves accuracy by +4% on long-context tasks. Training-free, model-agnostic.
 
 ```
 WRONG: "The evidence suggests X is effective."
@@ -398,7 +249,7 @@ For each source that grounds a claim:
 During and after research:
 - **Papers:** `save_paper` for key finds, `fetch_paper` for papers you cited
 - **Cross-paper synthesis:** `ask_papers` to query across fetched papers
-- **Session end:** `export_for_selve` → run `./selve update` to embed into unified index
+- **Session end:** `export_for_selve` -> run `./selve update` to embed into unified index
 - **Research memos:** Write to project-appropriate location (`docs/research/`, `analysis/`)
 
 <output_contract>
@@ -452,7 +303,7 @@ Tag every claim:
 
 Never present inference as sourced fact. Never present training data as retrieved evidence.
 
-**Precedence:** Admiralty grades (`[A1]`–`[F6]` per `source-grading` skill) are the standard for investigation/OSINT contexts — they grade both source reliability and information credibility. Provenance tags above (`[SOURCE]`, `[DATA]`, etc.) are the standard for general research — they track where a claim came from. When both apply (e.g., `/investigate` triggering `/researcher` for external validation), use Admiralty grades — they're strictly more granular. Don't duplicate by tagging the same claim with both systems.
+**Precedence:** Admiralty grades (`[A1]`-`[F6]` per `source-grading` skill) are the standard for investigation/OSINT contexts — they grade both source reliability and information credibility. Provenance tags above (`[SOURCE]`, `[DATA]`, etc.) are the standard for general research — they track where a claim came from. When both apply, use Admiralty grades — they're strictly more granular. Don't duplicate by tagging the same claim with both systems.
 </output_contract>
 
 ## Parallel Agent Dispatch (Deep tier)
@@ -482,20 +333,9 @@ Never present inference as sourced fact. Never present training data as retrieve
 - **Scope creep without pushback:** User asks 15 things, attempt all, run out of context. Say "this session can handle N of these well; which are priority?"
 - **Training data as research:** Reciting textbook citations from training without `[TRAINING-DATA]` tags
 - **S2 for recency:** Using Semantic Scholar when Exa is better for recent work
-- **Websearch citations as primary:** Trusting PMIDs, PDB IDs, or journal/page citations from websearch tools without S2/database verification. Measured: websearch hallucinated PDB 3MUJ, two year errors, wrong journal attribution in one benchmark run.
-- **Academic tools for database lookups:** Using S2/PubMed to find UniProt annotations, gnomAD frequencies, or ClinVar entries — these return papers *about* databases, not the data. Use websearch to query the databases directly.
+- **Websearch citations as primary:** Trusting PMIDs, PDB IDs, or journal/page citations from websearch tools without S2/database verification.
+- **Academic tools for database lookups:** Using S2/PubMed to find UniProt annotations, gnomAD frequencies, or ClinVar entries — use websearch to query the databases directly.
 - **Redundant documentation:** For tools the model already knows, adding instructions is noise
 </anti_patterns>
-
-<evidence_base>
-## What Research Shows About Agent Reliability
-
-Evidence from 4 papers (Feb 2026), all read in full. Not aspirational — measured.
-
-- **Instructions alone don't produce reliability.** EoG (IBM, arXiv:2601.17915): giving LLM perfect investigation algorithm as prompt = 0% Majority@3 for 2/3 models. Architecture (external state, deterministic control) produces reliability, not instructions. This skill is necessary but NOT sufficient — hooks, healthchecks, and deterministic scaffolding are what make agents reliable.
-- **Consistency is flat.** Princeton (arXiv:2602.16666): 14 models, 18 months, r=0.02 with time. Same task + same model + different run = different outcome. Retry logic and majority-vote are architectural necessities.
-- **Documentation helps for novel knowledge, not for known APIs.** Agent-Diff (arXiv:2602.11224): +19 pts for genuinely novel APIs, +3.4 for APIs in pre-training. Domain-specific constraints (DuckDB types, ClinVar star ratings) are "novel" = worth encoding. Generic tool routing is "known" = low value.
-- **Simpler beats complex under stress.** ReliabilityBench (arXiv:2601.06112): ReAct > Reflexion under perturbations. More complex reasoning architectures compound failure.
-</evidence_base>
 
 $ARGUMENTS
