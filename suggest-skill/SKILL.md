@@ -79,7 +79,7 @@ Send transcripts + tool sequence analysis to Gemini 3.1 Pro for pattern extracti
 ```bash
 mkdir -p ~/Projects/meta/artifacts/suggest-skill
 
-llmx -p google -m gemini-3.1-pro-preview --stream \
+llmx -p google -m gemini-3.1-pro-preview \
   -f ~/Projects/meta/artifacts/suggest-skill/input.md \
   "$(cat <<'PROMPT'
 You are analyzing Claude Code session transcripts to find repeated workflows that should become reusable skills or MCP tools.

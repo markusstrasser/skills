@@ -199,7 +199,7 @@ The script handles: output directory creation, constitutional preamble, context 
 **Manual dispatch (when you need custom context assembly or non-standard prompts):**
 
 **Pre-dispatch checklist:**
-- [ ] `--stream` on BOTH models (Gemini hangs without it, GPT times out)
+- [ ] `--stream` on GPT (needed for streaming output with reasoning)
 - [ ] Output dir: `.model-review/YYYY-MM-DD-{topic-slug}/` (NOT /tmp/)
 - [ ] Context bundle < 15KB per model (summarize if larger)
 
@@ -209,15 +209,13 @@ The script handles: output directory creation, constitutional preamble, context 
 ```bash
 # Gemini — Pro only. No fallback — model should be the model.
 GEMINI_MODEL="gemini-3.1-pro-preview"
-# MUST use --stream for Gemini Pro with -f context files.
-# Gemini CLI transport hangs indefinitely on context files with thinking models.
-# --stream forces API transport (~$0.01-0.05/review) but is the only reliable path.
-# Also bypasses CLI free-tier capacity exhaustion (429 errors).
-GEMINI_STREAM="--stream"
+# No --stream: routes through Gemini CLI (free tier).
+# Hang bug on thinking models + stdin was fixed in gemini-cli 0.32.1.
+# If CLI hits rate limits, add --stream to force API transport.
 
 # GPT — 5.4 with deep reasoning, no fallback
 GPT_MODEL="gpt-5.4"
-GPT_EFFORT="--reasoning-effort high --stream"
+GPT_EFFORT="--reasoning-effort high --stream"  # --stream needed for GPT reasoning output
 GPT_TIMEOUT="--timeout 600"
 # Note: --stream forces API transport (CLI doesn't support streaming).
 # GPT-5.x max_completion_tokens includes reasoning tokens — 16K is fine.
@@ -239,7 +237,7 @@ GPT_TIMEOUT="--timeout 600"
 ```bash
 llmx chat -m $GEMINI_MODEL \
   -f "$REVIEW_DIR/gemini-context.md" \
-  $GEMINI_STREAM --timeout 300 \
+  --timeout 300 \
   -o "$REVIEW_DIR/gemini-output.md" "
 <system>
 You are reviewing a codebase. Be concrete. No platitudes. Reference specific code, configs, and findings. It is $(date +%Y-%m-%d).
@@ -554,13 +552,13 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 
 **Gemini 3.1 Pro (always used for review):**
 - Excels at cross-referencing across large context (finds contradictions between file A and file B)
-- **MUST use `--stream` with `-f` context files.** Gemini CLI transport hangs indefinitely on context files with thinking models. `--stream` forces API transport (~$0.01-0.05/review). This is non-negotiable — without `--stream`, the process hangs forever with no output and no timeout.
+- **CLI transport (free tier):** No `--stream` needed — hang bug on thinking models + stdin fixed in gemini-cli 0.32.1. Without `--stream`, llmx routes through Gemini CLI (free). Add `--stream` only if CLI hits rate limits (forces API fallback).
 - **Bare mode (v0.5.3+):** llmx auto-sets `HOME=~/.gemini-bare` to skip MCP/skills/extensions loading. ~40% faster. Requires `~/.gemini-bare/.gemini/settings.json` with admin overrides + `oauth_creds.json`.
 - Temperature is locked at 1.0 server-side for thinking models
 - Will recommend itself for tasks — always flag self-serving suggestions
 - Tends to over-recommend architectural changes (DuckDB migrations, etc.)
 - llmx default timeout is now 300s; use `--timeout 300` explicitly in dispatch commands
-- **No `--fallback`.** If Gemini Pro fails, surface the error — don't silently switch to Flash. The model IS the model. Diagnose: check exit code, stderr, retry with `--stream` (API transport bypasses CLI capacity limits).
+- **No `--fallback`.** If Gemini Pro fails, surface the error — don't silently switch to Flash. The model IS the model. Diagnose: check exit code, stderr. If CLI rate-limited, retry with `--stream` (forces API transport).
 - **Parallel dispatch caveat:** Multiple gemini-cli processes can contend if bare mode isn't set up (each loads 7+ MCP servers). Bare mode eliminates this.
 
 **GPT-5.4 (`gpt-5.4`) — review GPT:**
