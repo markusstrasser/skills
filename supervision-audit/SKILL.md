@@ -80,13 +80,14 @@ Output format for each finding:
 - **Occurrences:** N (across M sessions)
 - **Fix type:** HOOK | RULE | DEFAULT | SKILL | ARCHITECTURAL
 - **Proposed fix:** [specific implementation — not vague suggestions]
-- **Effort:** LOW (< 30 min) | MEDIUM (1-3 hours) | HIGH (> 3 hours)
+- **Maintenance:** NONE (fire-and-forget) | LOW (occasional tuning) | MEDIUM (ongoing updates)
+- **Composability:** Does this fix benefit other projects/skills?
 - **Expected reduction:** what % of this pattern would this fix eliminate?
 
 IMPORTANT:
 - Do NOT propose fixes for things that are genuinely new agency from the user
 - Do NOT propose rules for things that are already in CLAUDE.md (check the transcripts for system context)
-- Rank findings by (occurrences × effort-adjusted automation potential)
+- Rank findings by (occurrences × maintenance-adjusted automation potential). Dev time is ~free — rank by ongoing cost, not creation effort
 - If nothing is worth fixing, say so — don't fabricate findings
 
 Output ONLY the findings, ranked by priority. No preamble.

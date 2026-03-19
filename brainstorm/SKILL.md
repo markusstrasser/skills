@@ -230,7 +230,7 @@ If no llmx, extract yourself. Then build the disposition table:
 ## Disposition Table
 | ID  | Idea (short) | Source | Disposition | Reason |
 |-----|-------------|--------|-------------|--------|
-| I3  | Event-sourced memory | Initial | EXPLORE | Novel, low effort |
+| I3  | Event-sourced memory | Initial | EXPLORE | Novel, low maintenance |
 | D1  | Append-only log | Denial R1 | MERGE w/ I3 | Same paradigm |
 | D5  | No memory at all | Denial R2 | EXPLORE | Radical simplification |
 | F2  | Immune system model | Domain | PARK | Interesting, no path yet |
@@ -253,7 +253,7 @@ For EXPLORE items, note which technique generated it (initial/denial/domain/cons
 **Extraction:** N items total → E explore, P parked, R rejected
 
 ### Ideas to Explore (ranked by novelty × feasibility)
-| Rank | ID(s) | Idea | Why Non-Obvious | Effort | Risk |
+| Rank | ID(s) | Idea | Why Non-Obvious | Maintenance | Composability |
 |------|-------|------|----------------|--------|------|
 
 ### Parked

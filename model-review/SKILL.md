@@ -265,7 +265,7 @@ RESPOND WITH EXACTLY:
 Formal contradictions, unstated assumptions, invalid inferences. If math is involved, verify it.
 
 ## 2. Cost-Benefit Analysis
-For each proposed change: estimated effort, expected impact, risk. Rank by ROI.
+For each proposed change: expected impact, maintenance burden, composability, risk. Rank by value adjusted for ongoing cost (not creation effort — dev time is ~free).
 
 ## 3. Testable Predictions
 Convert vague claims into falsifiable predictions with success criteria. If a claim can't be made testable, flag it.
