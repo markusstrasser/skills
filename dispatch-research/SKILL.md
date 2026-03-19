@@ -100,8 +100,8 @@ Save to [specific output path].
 ```bash
 mkdir -p docs/audit  # or wherever findings should go
 
-# Parallel dispatch (10+ concurrent is fine on macOS)
-codex exec --model gpt-5.4 --full-auto --ephemeral \
+# Parallel dispatch (max 4 when MCPs are needed)
+codex exec --model gpt-5.4 --full-auto \
   -o docs/audit/codex-{slug}.md \
   "You are auditing a codebase. Read files at their full paths. \
    Cite file:line for findings. After reading each file, immediately \
@@ -110,23 +110,35 @@ codex exec --model gpt-5.4 --full-auto --ephemeral \
    End with a complete markdown summary of all findings. \
    TASK: [prompt]" &
 
-codex exec --model gpt-5.4 --full-auto --ephemeral \
+codex exec --model gpt-5.4 --full-auto \
   -o docs/audit/codex-{slug}.md \
   "..." &
 
 wait
+
+# IMMEDIATELY copy -o output after agents finish (sandbox cleanup can delete them)
+for f in docs/audit/codex-*.md; do
+  [ -f "$f" ] && cp "$f" "$f.bak"
+done
 ```
 
 **Key flags:**
 - `exec` — non-interactive mode (not the interactive `codex` command)
 - `--full-auto` — sandboxed auto-approval (replaces old `--approval-mode full-auto`)
-- `--ephemeral` — no session persistence
-- `-o FILE` — captures last agent *text* message to file. **Caveat:** if the agent spends all turns on tool calls and never produces a final text response, `-o` writes nothing. Always include in prompt: "End with a markdown summary of all findings."
+- **Do NOT use `--ephemeral`** — sandbox cleanup deletes file writes made during execution, including `-o` output. Without `--ephemeral`, session is persisted but files survive. Cost: ~100KB per session in `~/.codex/sessions/`.
+- `-o FILE` — captures last agent *text* message to file. **Caveats:**
+  - If the agent spends all turns on tool calls and never produces a final text response, `-o` writes nothing. Always include in prompt: "End with a markdown summary of all findings."
+  - **Files written by agents inside the sandbox may be cleaned up on agent exit.** The `-o` output file itself can also be deleted by sandbox cleanup if `--ephemeral` is used. Always `git add` or `cp` output files immediately after agents complete.
+  - If `-o` files are empty or missing after agent completion, check `~/.codex/sessions/` for the session — but note that reasoning payloads are encrypted and findings are NOT recoverable from logs.
 - `--search` — **only works in interactive mode, NOT in `exec`**. Use MCP tools instead.
 
 **MCP tools:** Codex shares the global MCP config (`~/.codex/config.toml`). All configured MCPs (scite, exa, brave, paper-search, etc.) are available to `exec` agents automatically.
 
-**Output location:** Tell agents to write to the **repo** (`docs/audit/`), NOT `/tmp`. macOS cleans up `/tmp` between sessions. Codex session logs (`~/.codex/sessions/`) have encrypted reasoning payloads — findings are NOT recoverable from logs post-hoc.
+**MCP contention:** Max 4 parallel Codex agents when MCPs are needed. Each agent starts its own MCP server instances. 5+ concurrent agents with multiple MCPs can overwhelm the system (132+ simultaneous MCP startups observed).
+
+**S2 API outages:** Semantic Scholar returns 403 periodically. Tell agents to fall back to `backend="openalex"` for `search_papers` if S2 fails. Or instruct agents to use `exa` web search as a paper-discovery fallback.
+
+**Output location:** Tell agents to write to the **repo** (`docs/audit/`), NOT `/tmp`. macOS cleans up `/tmp` between sessions. After agents complete, immediately `git add` the output files before they can be cleaned up.
 
 **Fallback:** If Codex isn't installed, write prompts to `.claude/research-dispatch.md` as numbered prompts the user can copy-paste or route to another model.
 
@@ -153,6 +165,9 @@ For each audit output:
 | Inflated severity | "critical security bug" for a missing docstring | Downgrade or drop |
 | Stale references | Citing code that was refactored away | Check git log for the file |
 | False fix claims | "This was already fixed" when git log shows no such commit | Verify with `git log --grep` |
+| Wrong DOIs | Agent "corrects" a DOI to a different paper | Verify DOI resolves to the claimed paper |
+
+**2026-03-18 session note:** In a 13-tool paper audit, GPT-5.4 had **zero hallucinations** in critical findings (bugs, threshold mismatches, config errors). All verified correct. The ~28% error rate is concentrated in counts, severity grading, and external knowledge claims — not in code-reading accuracy. Code-grounded findings (file:line citations) were consistently reliable.
 
 ### Verification output
 
@@ -257,6 +272,40 @@ Reference the audit finding:
 | `llmx chat --model gemini-3.1-pro-preview` | 1M context (huge file ingestion) | Best for monolithic file analysis |
 
 **Codex vs Claude subagents (learned 2026-03-18):** For codebase audits, Claude `Agent` subagents with `subagent_type=Explore` are more reliable than Codex `exec` because: (1) output is returned directly to parent context — no `-o` extraction failures, (2) full MCP/DuckDB access, (3) no sandbox environment mismatch. Use Codex when you need 10+ parallel audits (Claude subagents are limited by parent context cost) or when the task is purely file-grep (no project tooling needed).
+
+## Paper-reading dispatch (research audits)
+
+When auditing tool implementations against source papers:
+
+**DOI handling:**
+- Never hardcode DOIs in prompts — they're often wrong (3/4 were wrong in the 2026-03-18 genomics audit). Tell agents to SEARCH for the paper by title/author, then verify the DOI matches.
+- Tell agents: "Search for the paper first. Do not trust the DOI I provide — verify it resolves to the correct paper."
+
+**S2 fallbacks:**
+- Semantic Scholar (S2) API goes down periodically (403 errors). Tell agents: "If search_papers with S2 fails, retry with `backend='openalex'`. If fetch_paper fails, use exa to find the paper on PMC or the publisher site."
+- All 4 agents in the 2026-03-18 session hit S2 403s but recovered via OpenAlex + PMC full text.
+
+**Paper-reading turn budget:**
+- Fetching a paper + reading a script + comparing + writing a report = ~6-8 tool calls minimum per tool.
+- With Codex's ~15-20 turn limit, each agent can cover 2-3 tools (not 4+).
+- Have agents write findings incrementally after each tool, not in one synthesis at the end.
+
+**Output preservation:**
+- Codex sandbox file writes can be cleaned up on agent exit. The `-o` flag output can also disappear.
+- **Read output files while agents are still running** (poll with `while` loop checking file existence).
+- Immediately `git add` or copy files once found. Don't wait for all agents to complete.
+- If files vanish after agent completion: the content is lost. Recreate from conversation context if you read it during execution.
+
+**What GPT-5.4 does well for paper audits:**
+- Code-grounded comparison (reading scripts, citing file:line) — consistently accurate
+- Identifying threshold mismatches between configs and paper recommendations
+- Finding real bugs (missing imports, config path errors, mode drift)
+- Correcting wrong DOIs and finding the right papers
+
+**What GPT-5.4 does poorly:**
+- Severity grading (tends to inflate)
+- Claiming things are "missing" when they exist in different files
+- External knowledge claims about API behavior, library features (verify these)
 
 Codex CLI only supports OpenAI models. For Claude/Gemini dispatch, use `llmx` or Claude Code subagents. Consult `/model-guide` for task-specific routing if uncertain.
 
