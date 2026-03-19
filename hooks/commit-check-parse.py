@@ -198,6 +198,27 @@ def main():
             except Exception:
                 pass
 
+    # New script gate → suggest Native-First: trailer
+    if staged and "Native-First" not in trailers:
+        try:
+            added = subprocess.run(
+                ["git", "diff", "--cached", "--diff-filter=A", "--name-only"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if added.returncode == 0:
+                new_scripts = [
+                    f for f in added.stdout.strip().split("\n")
+                    if f.startswith("scripts/") and f.endswith(".py")
+                ]
+                if new_scripts:
+                    names = ", ".join(os.path.basename(f) for f in new_scripts)
+                    suggestions.append(
+                        f"New script(s): {names} — add Native-First: trailer"
+                        " explaining what native approach was considered."
+                    )
+        except Exception:
+            pass
+
     # --- Log for correction rate measurement ---
     if warnings or suggestions:
         log_check(subject, warnings, suggestions)
