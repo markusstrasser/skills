@@ -101,6 +101,20 @@ receipt_path = os.path.expanduser("~/.claude/session-receipts.jsonl")
 with open(receipt_path, "a") as f:
     f.write(json.dumps(receipt, separators=(",", ":")) + "\n")
 
+# --- Attach git notes to session commits ---
+if commits and cwd and os.path.isdir(os.path.join(cwd, ".git")):
+    note_body = f"session: {session}\nmodel: {cockpit.get('model', '?')}\ncost_usd: {float(cockpit.get('cost', 0)):.2f}\nduration_min: {mins}\nproject: {project}"
+    for commit_line in commits:
+        sha = commit_line.split()[0] if commit_line.strip() else ""
+        if sha and len(sha) >= 7:
+            try:
+                subprocess.run(
+                    ["git", "-C", cwd, "notes", "--ref=agent", "add", "-f", "-m", note_body, sha],
+                    capture_output=True, text=True, timeout=5,
+                )
+            except Exception:
+                pass
+
 # --- Clean up agent state files ---
 ppid = os.getppid()
 for suffix in ["state", "tool", "prompt", "spinner", "error", "agent", "debrief"]:
