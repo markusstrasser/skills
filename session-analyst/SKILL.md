@@ -4,6 +4,7 @@ description: Analyzes Claude Code session transcripts for behavioral anti-patter
 user-invocable: true
 context: fork
 argument-hint: <project> [session_count]
+effort: medium
 allowed-tools:
   - Read
   - Glob

@@ -2,6 +2,7 @@
 name: trending-scout
 description: Scan for new agent/AI developments across vendors and the ecosystem, filtered against what we already know. Use when the user asks about new developments, trending repos, vendor updates, "what's new in AI agents", "check for updates", "any new tools/frameworks", weekly landscape scans, or anything about recent agent ecosystem changes. Also use proactively when starting research or planning sessions that could benefit from awareness of recent developments.
 argument-hint: '[vendor focus or topic, e.g. "anthropic", "mcp servers", "all"]'
+effort: medium
 user-invocable: true
 ---
 

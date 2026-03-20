@@ -2,6 +2,7 @@
 name: brainstorm
 description: Divergent ideation via systematic perturbation — denial cascades, domain forcing, constraint inversion. Multi-model dispatch optional (volume, not diversity). For convergent critique, use /model-review.
 argument-hint: [design space to explore — e.g., "memory architecture alternatives", "how to structure the feedback loop"]
+effort: high
 allowed-tools:
   - Bash
   - Read
