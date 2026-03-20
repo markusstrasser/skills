@@ -1,6 +1,6 @@
 # Gemini 3.1 Pro Prompting Guide
 
-Specific to Gemini 3.1 Pro (and Gemini 3 Flash where noted). Updated 2026-02-27.
+Specific to Gemini 3.1 Pro (and Gemini 3 Flash where noted). Updated 2026-03-20.
 
 **Sources:** Google AI official docs (ai.google.dev, cloud.google.com/vertex-ai).
 
@@ -58,7 +58,7 @@ Without this, responses **silently truncate** at ~8K tokens. Check `finishReason
 |-------|:-:|:-:|----------|
 | `minimal` | Not supported | Supported | Approximates no thinking (Flash only) |
 | `low` | **Supported** | Supported | Minimize latency/cost for straightforward tasks |
-| `medium` | **Supported** | Supported | Balanced reasoning |
+| `medium` | Not supported | Supported | Balanced reasoning (Flash only) |
 | `high` | **Default** | **Default** | Complex math, multi-step coding, advanced reasoning |
 
 ### API Parameter
@@ -70,8 +70,8 @@ config = types.GenerateContentConfig(
 )
 
 # Via llmx (maps --reasoning-effort to thinkingConfig internally)
-llmx -m gemini-3-pro-preview --reasoning-effort low "simple query"
-llmx -m gemini-3-pro-preview "complex query"  # Defaults to high server-side
+llmx -m gemini-3.1-pro-preview --reasoning-effort low "simple query"
+llmx -m gemini-3.1-pro-preview "complex query"  # Defaults to high server-side
 ```
 
 ### Best Practices
@@ -154,7 +154,7 @@ config = types.GenerateContentConfig(tools=[grounding_tool])
 
 ## 8. Long Context (1M Tokens Native)
 
-Gemini's biggest advantage -- 5x Claude standard. GPT-5.4 now also supports 1M.
+All three frontier families now support 1M natively (Claude GA March 13, GPT-5.4, Gemini).
 
 ### Structure
 - **Query at the END** after all context (critical for Gemini)
@@ -243,7 +243,7 @@ Official Gemini guidance emphasizes few-shot more strongly than other models:
 | Query placement | END (critical) | Bottom (30% better) | End preferred | Flexible |
 | Output default | 8,192 (must raise!) | Higher | Higher | 4,096 (must raise) |
 | Grounding | Native Google Search | Not available | Web search available | Not available |
-| Context | **1M native** | 200K (1M beta) | 400K | 256K |
+| Context | **1M native** | 1M (GA March 13) | 1M | 256K |
 | Instruction following | Weakest (89.2%) | Strong (94%) | Best (95%) | Strong (94%) |
 | Expert preference | Lower (1317) | Highest (1606) | Middle | -- |
 | Constraint placement | END of prompt | Flexible | Both beginning and end | Flexible |

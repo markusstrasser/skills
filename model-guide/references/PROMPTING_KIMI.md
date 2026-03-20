@@ -216,13 +216,13 @@ Understanding the architecture helps with prompting:
 
 | Aspect | Kimi K2.5 | Claude 4.6 | GPT-5.4 | Gemini 3.1 |
 |--------|-----------|-----------|---------|-----------|
-| Price (in/out MTok) | **$0.60/$2.50** | $5/$25 | $1.75/$14 | $2/$12 |
+| Price (in/out MTok) | **$0.60/$2.50** | $5/$25 | $2.50/$15 | $2/$12 |
 | Thinking control | On/off toggle | Adaptive effort | Integrated | thinkingLevel |
 | Code (thinking off) | Often better | N/A | N/A | N/A |
-| Factual accuracy | Worst (37%) | Best tied (72%) | Poor (58%) | Best tied (72%) |
+| Factual accuracy | Worst (37%) | Best tied (72%) | ~72% (tied) | Best tied (72%) |
 | Tool augmentation gain | **+20.1pp** (biggest) | Moderate | Moderate | Moderate |
 | Agent swarm | **Native (100 agents)** | Not native | Not native | Not native |
-| Video | **Native** | Not supported | Not supported | Supported |
+| Video | **Native** | Not supported | Supported | Supported |
 | API format | OpenAI-compatible | Anthropic SDK | OpenAI native | Google SDK |
 | Open weights | **Yes** (modified MIT) | No | No | No |
 | Writing quality | Weakest | Best | Good | Good |
