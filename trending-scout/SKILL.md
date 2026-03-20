@@ -14,6 +14,8 @@ Scan for genuinely new agent/AI developments, filtered against the known landsca
 
 **Knowledge-diff, not news aggregation.** Every finding must answer: "What does this change about what we know or how we build?" Repos with 50K stars that don't affect our architecture are less interesting than a 200-star tool that solves a problem we have.
 
+**Dev sources only.** Prioritize: API docs, dev docs, changelogs, release notes, trending repos (code you can read), "awesome-X" / "best of" lists. Deprioritize: tech journalism, announcement blog posts, hype pieces, product launches without code. The signal is in changelogs and READMEs, not TechCrunch.
+
 ## Input Handling
 
 Accept optional focus:
@@ -42,13 +44,13 @@ Dispatch parallel searches across sources and categories. Use subagents for para
 
 | Category | Exa Query | Brave Query | Extras |
 |----------|-----------|-------------|--------|
-| **Anthropic** | "Anthropic Claude" + date filter | "Claude Code update OR Anthropic announcement" | Check anthropic.com/news via WebFetch |
-| **OpenAI** | "OpenAI GPT agent" + date filter | "OpenAI Codex CLI OR GPT update" | — |
-| **Google** | "Google Gemini AI agent" + date filter | "Gemini CLI OR Google AI Studio update" | — |
-| **Frameworks** | "AI agent framework" + date filter | "agent framework release 2026" | — |
+| **Anthropic** | "Anthropic Claude changelog" + date filter | "Claude Code release notes OR changelog" | Check docs.anthropic.com, github.com/anthropics via WebFetch |
+| **OpenAI** | "OpenAI Codex CLI changelog" + date filter | "OpenAI API changelog OR SDK release" | Check github.com/openai releases |
+| **Google** | "Gemini CLI changelog release" + date filter | "Gemini API update OR google-genai SDK" | Check github.com/google-gemini releases |
+| **Frameworks** | "AI agent framework" + date filter | "agent framework release 2026" | Check github trending |
 | **MCP** | "MCP server model context protocol" + date filter | "new MCP server" | Check github.com/modelcontextprotocol |
-| **Benchmarks** | "AI agent benchmark evaluation" + date filter | — | arxiv via `search_arxiv` |
-| **Tools** | "AI coding agent tool" + date filter | "cursor OR windsurf OR coding agent update" | — |
+| **Repos/Lists** | "awesome AI agents" + date filter | "trending AI repos github" | GitHub trending via Exa site filter |
+| **Tools** | "AI coding tool SDK" + date filter | "cursor OR windsurf OR coding agent SDK changelog" | — |
 
 ### Source-Specific Techniques
 
@@ -110,10 +112,11 @@ For each finding, check:
 ### Quality Filters
 
 Drop findings that are:
-- **Hype without substance** — "revolutionary AI agent" blog posts with no code/paper
+- **Tech news / hype** — journalist write-ups, "revolutionary AI agent" blog posts, product launch PR. If there's no code, changelog, or API doc behind it, skip it.
 - **Pre-alpha / concept only** — README-only repos, no releases
 - **Irrelevant domain** — AI developments that don't touch agent infrastructure (e.g., image generation models, unless they have agent implications)
 - **Duplicates** — same finding from multiple sources (keep the most informative source)
+- **No code to read** — if you can't look at a repo, SDK, or API surface, it's not actionable
 
 ### Relevance Scoring
 
