@@ -53,6 +53,33 @@ Track what changes with each model release so you know what to update.
 - project-upgrade SKILL.md: dispatch model
 - constitution SKILL.md: prompting tip
 
+## 2026-03-20 -- Freshness Sweep (Codex audit + web verification)
+
+### Key changes
+- **Claude 1M context is GA** (announced March 13). All "200K (1M beta)" references updated to "1M". MRCR v2: 78.3% at 1M tokens (highest among frontier models). Media limits: 600 images/PDF pages per request.
+- **GPT-5.4 max output: 128K** (was TBD). Context: 1.1M (922K input + 128K output). Sources: CloudPrice, Galaxy.ai.
+- **GPT-5.4 ARC-AGI-2: 52.9%** synced from BENCHMARKS.md to SKILL.md profile (was TBD in profile).
+- **Sonnet cost description**: "1/5 cost" → "~60% cost" ($3/$15 vs $5/$25 = 60%, not 20%).
+- **Gemini 3 Pro deprecated March 9**: llmx name `gemini-3-pro-preview` → `gemini-3.1-pro-preview` in PROMPTING_GEMINI.md.
+- **Gemini Pro thinking**: `medium` not supported on Pro (low + high only). Corrected in thinking table.
+- **PROMPTING_KIMI comparison table**: GPT-5.4 pricing $1.75/$14 → $2.50/$15, factual accuracy 58% → ~72%, video now supported.
+- **PROMPTING_GEMINI comparison table**: Claude context → 1M, GPT context 400K → 1M.
+- Long context category updated: all three frontier families (Claude, GPT, Gemini) now 1M native.
+
+### Audit methodology
+- 2 Codex (GPT-5.4) agents dispatched for internal consistency and prompting guide audits
+- Web freshness sweep via Brave + Exa for all 4 model families
+- ~28% Codex error rate on counts/severity — all findings verified against actual code
+
+### GPT-5.3 Instant, Gemini 3 Flash, Gemini 3.1 Flash-Lite provenance
+These models were added between 2026-03-06 and 2026-03-07 but not documented in this changelog. They remain in SKILL.md but are absent from BENCHMARKS.md benchmark tables. Backfill noted.
+
+### Not updated (deferred)
+- PROMPTING_GPT.md: `response_format` → `text.format` API drift (Responses API), `strict: true` default, `original` image detail mode, 24h cache retention scope — need API testing to confirm
+- PROMPTING_KIMI.md: kimi-k2-thinking / kimi-k2-thinking-turbo variants, llmx model name — need Moonshot API testing
+- BENCHMARKS.md: GPT-5.3 Instant, Flash, Flash-Lite benchmark rows — data not yet available
+- Gemini context caching: 75% → possibly 90% discount on Vertex AI — conflicting sources
+
 ## 2026-03-06 -- GPT-5.4 Pricing + Full Effort Spectrum
 
 ### Key changes
