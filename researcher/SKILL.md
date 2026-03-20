@@ -130,14 +130,19 @@ If all your axes are from the same category, you have one axis with multiple que
 
 ## Phase 4 — Synthesize
 
-**Diminishing returns gate:**
-```
-Last action added info changing conclusions  → CONTINUE
-Two sources agree, no contradictions         → CONVERGED: write up
-Last 2+ actions added nothing                → DIMINISHING: write up
-Expanding laterally instead of resolving     → SCOPE CREEP: refocus
-Question more complex than classified        → UPGRADE TIER
-```
+**Stop conditions** (VMAO-derived, arxiv:2603.11445 — +35% completeness from formal verification):
+
+| Condition | Threshold | Action |
+|-----------|-----------|--------|
+| Ready for Synthesis | ≥80% of search axes produced results | Write up |
+| Converged | 2+ sources agree, no contradictions | Write up |
+| Diminishing Returns | Last 2 actions added nothing new | Write up |
+| Scope Creep | Expanding laterally, not resolving | Refocus or ask user |
+| Turn Budget | 70% of turns consumed | Force synthesis |
+| Tier Upgrade | Question more complex than classified | Upgrade tier |
+| Info Changed Conclusions | Last action changed direction | Continue |
+
+**Evaluate after every search round, not just at the end.** The single biggest gain from VMAO's verify loop is catching gaps early. After each search round (2-3 queries), assess: "What % of my search axes have I covered? What's missing?"
 
 **Recite evidence before concluding.** List concrete data points from sources, then derive the conclusion. "Study A: 26% improvement (n=500). Study B: no effect (n=200). Weighing by sample size..." This surfaces contradictions that narrative synthesis buries.
 

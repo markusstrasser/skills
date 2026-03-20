@@ -11,8 +11,8 @@
 # Testing: SEARCH_BURST_COUNTER=/tmp/test-burst bash pretool-search-burst.sh
 
 COUNTER_FILE="${SEARCH_BURST_COUNTER:-/tmp/claude-search-burst-${PPID:-0}}"
-WARN_THRESHOLD=4
-BLOCK_THRESHOLD=8
+WARN_THRESHOLD=6
+BLOCK_THRESHOLD=20
 
 INPUT=$(cat)
 
@@ -30,7 +30,7 @@ except:
 case "$TOOL_NAME" in
     mcp__exa__web_search_exa|mcp__exa__web_search_advanced_exa|\
     mcp__exa__company_research_exa|mcp__exa__get_code_context_exa|\
-    mcp__research__search_papers|\
+    mcp__research__search_papers|mcp__research__search_preprints|\
     mcp__paper-search__search_arxiv|mcp__paper-search__search_pubmed|\
     mcp__paper-search__search_biorxiv|mcp__paper-search__search_medrxiv|\
     mcp__paper-search__search_google_scholar|\
@@ -69,7 +69,8 @@ case "$TOOL_NAME" in
         # Consuming search results — reset counter
         echo "0" > "$COUNTER_FILE" 2>/dev/null
         ;;
-    Read|Grep|Glob|mcp__exa__crawling_exa|mcp__exa__deep_researcher_check|\
+    Read|Grep|Glob|Write|Edit|\
+    mcp__exa__crawling_exa|mcp__exa__deep_researcher_check|\
     mcp__research__get_source|mcp__research__list_corpus|\
     mcp__research__save_paper|mcp__research__save_source)
         # Processing results — reset counter
