@@ -10,13 +10,13 @@ argument-hint: '[task description or model name]'
 Select the right frontier model for a task and prompt it correctly.
 
 **Models covered:** Claude Opus 4.6, Claude Sonnet 4.6, GPT-5.4, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3 Flash, Kimi K2.5.
-**Last updated:** 2026-03-07. See `${CLAUDE_SKILL_DIR}/references/CHANGELOG.md` for update history.
+**Last updated:** 2026-03-20. See `${CLAUDE_SKILL_DIR}/references/CHANGELOG.md` for update history.
 
 ## Quick Selection Matrix
 
 | Task | Best Model | Why | Runner-up |
 |------|-----------|-----|-----------|
-| **Agentic coding** | Claude Opus 4.6 | SWE-bench 80.8%, Arena coding #1 | Sonnet 4.6 (79.6%, 1/5 cost) |
+| **Agentic coding** | Claude Opus 4.6 | SWE-bench 80.8%, Arena coding #1 | Sonnet 4.6 (79.6%, ~60% cost) |
 | **Fact-sensitive work** | Claude Opus 4.6 / Gemini 3.1 / GPT-5.4 | SimpleQA ~72% (tied) | NOT Kimi (37%) |
 | **Legal reasoning** | Claude Opus 4.6 | BigLaw 90.2% | -- |
 | **Professional analysis** | Claude Opus 4.6 | GDPval-AA Elo 1606 (expert preference) | Sonnet 4.6 (GDPval 1633) |
@@ -26,8 +26,8 @@ Select the right frontier model for a task and prompt it correctly.
 | **Vision / document OCR** | GPT-5.4 | DocVQA 95%+, native computer use | Kimi K2.5 (MMMU-Pro 78.5%) |
 | **Science reasoning** | Gemini 3.1 Pro | GPQA Diamond 94.3% | GPT-5.4 |
 | **Abstract pattern recognition** | Gemini 3.1 Pro | ARC-AGI-2 77.1% | Claude (68.8%) |
-| **Long document ingestion** (>200K) | Gemini 3.1 Pro / GPT-5.4 | Native 1M context (both) | Claude (200K, 1M beta) |
-| **Subagent coding** | Claude Sonnet 4.6 | 79.6% SWE-bench at $3/$15 | Kimi K2.5 (76.8%, much cheaper) |
+| **Long document ingestion** (>200K) | Gemini 3.1 Pro / GPT-5.4 / Claude | Native 1M context (all three) | Kimi K2.5 (256K) |
+| **Subagent coding** | Claude Sonnet 4.6 | 79.6% SWE-bench at $3/$15, 1M context | Kimi K2.5 (76.8%, much cheaper) |
 | **Doc → schema extraction** | GPT-5.3 Instant | Less preachy, structured output, fast | GPT-5.4 (stronger reasoning) |
 | **Cross-model review** | Pro + GPT-5.4 | Cross-family required (+31pp accuracy, FINCH-ZK). Same-family = no adversarial pressure | -- |
 | **High-volume classification** | Gemini 3 Flash | $0.50/$3/M, 1M ctx | Kimi K2.5 ($0.60/$2.50) |
@@ -41,8 +41,8 @@ For full benchmark tables, read `${CLAUDE_SKILL_DIR}/references/BENCHMARKS.md`.
 
 ### Claude Opus 4.6 -- "The Investigator"
 
-**Strengths:** Agentic coding, professional analysis, legal reasoning, factual accuracy, computer use, long-form expert work.
-**Weaknesses:** Most expensive ($5/$25), 200K context (1M beta), weaker abstract reasoning than Gemini, weaker raw math than GPT.
+**Strengths:** Agentic coding, professional analysis, legal reasoning, factual accuracy, computer use, long-form expert work. 1M native context (GA March 13, 2026). MRCR v2: 78.3% at 1M tokens (highest among frontier).
+**Weaknesses:** Most expensive ($5/$25), weaker abstract reasoning than Gemini, weaker raw math than GPT.
 
 **Quick prompting tips:**
 - Use **XML tags** for structure -- Claude was trained on this: `<instructions>`, `<context>`, `<documents>`
@@ -57,7 +57,7 @@ For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
 
 ### Claude Sonnet 4.6 -- "The Workhorse"
 
-**Strengths:** Near-Opus coding (79.6% SWE-bench) at 1/5 cost, GDPval 1633 (actually *beats* Opus on expert preference), best speed/intelligence ratio.
+**Strengths:** Near-Opus coding (79.6% SWE-bench) at ~60% cost, GDPval 1633 (actually *beats* Opus on expert preference), best speed/intelligence ratio. 1M native context (GA March 13, 2026).
 **Weaknesses:** May guess tool parameters instead of asking, 64K max output (vs Opus 128K).
 
 **Quick prompting tips:**
@@ -73,7 +73,7 @@ For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
 ### GPT-5.4 -- "The Professional"
 
 **Strengths:** 1M context (up from 400K), math (MATH 98%+, AIME 100%), vision + native computer use, 33% fewer claim errors vs 5.2 (SimpleQA ~72% inferred), Tool Search API, structured outputs, 90% prompt cache discount. Consolidates GPT-5.3-Codex coding capabilities. First general-purpose model rated **High capability in Cybersecurity** (Preparedness Framework) — strong at CTF, CVE exploitation, end-to-end cyber operations.
-**Weaknesses:** Abstract reasoning still below Gemini (ARC-AGI-2 TBD). CoT controllability is near-zero (0.3% at 10k chars) — you cannot steer what the model reasons about via prompts. CoT monitorability lower than GPT-5 Thinking overall (but near-100% for agentic misalignment detection).
+**Weaknesses:** Abstract reasoning still below Gemini (ARC-AGI-2 52.9%). CoT controllability is near-zero (0.3% at 10k chars) — you cannot steer what the model reasons about via prompts. CoT monitorability lower than GPT-5 Thinking overall (but near-100% for agentic misalignment detection).
 **Pricing:** $2.50/$15.00 per MTok (<272K context), $5.00/$22.50 (>272K). 90% cache discount. 272K boundary means long-context work costs 2x — prefer Gemini for bulk 1M ingestion.
 
 **Variants:** GPT-5.4 (base), GPT-5.4 Thinking (reasoning, default in ChatGPT), GPT-5.4 Pro (max performance, slow — test manually).
@@ -184,7 +184,7 @@ Run these when using outputs from each model:
 ### After Claude Opus/Sonnet 4.6
 - [ ] Cross-check mathematical derivations (MATH 93% < GPT's 98%)
 - [ ] For novel abstract patterns, consider Gemini second opinion
-- [ ] On documents >200K tokens, check for context-edge information loss
+- [ ] On documents near 1M tokens, check for context-edge information loss (MRCR v2: 78.3% at 1M)
 
 ### After GPT-5.4
 - [ ] **Still fact-check** (SimpleQA ~72% inferred -- improved from 5.2's 58%, but 28% error rate remains)
@@ -208,10 +208,10 @@ Run these when using outputs from each model:
 
 | Model | Input/MTok | Output/MTok | Cache Discount | Context | Max Output |
 |-------|:----------:|:-----------:|:--------------:|:-------:|:----------:|
-| Claude Opus 4.6 | $5 | $25 | -- | 200K (1M beta) | 128K |
-| Claude Sonnet 4.6 | $3 | $15 | -- | 200K (1M beta) | 64K |
-| GPT-5.4 (<272K) | $2.50 | $15.00 | 90% ($0.25) | 1M | TBD |
-| GPT-5.4 (>272K) | $5.00 | $22.50 | 90% ($0.50) | 1M | TBD |
+| Claude Opus 4.6 | $5 | $25 | -- | 1M | 128K |
+| Claude Sonnet 4.6 | $3 | $15 | -- | 1M | 64K |
+| GPT-5.4 (<272K) | $2.50 | $15.00 | 90% ($0.25) | 1M | 128K |
+| GPT-5.4 (>272K) | $5.00 | $22.50 | 90% ($0.50) | 1M | 128K |
 | GPT-5.3 Instant | $1.75 | $14 | 90% input | 128K | 16K |
 | Gemini 3.1 Pro | $2 | $12 | 75% | 1M | 64K |
 | **Gemini 3 Flash** | **$0.50** | **$3** | 75% | 1M | 65K |

@@ -1,6 +1,6 @@
 # Frontier Model Benchmarks
 
-**Last updated:** 2026-03-06
+**Last updated:** 2026-03-20
 **Sources:** Artificial Analysis, LLM Stats, SWE-bench.com, LMSYS Chatbot Arena, official docs (Anthropic, OpenAI, Google DeepMind, Moonshot AI).
 
 ## Head-to-Head: Current Frontier
@@ -33,10 +33,10 @@
 
 | Model | Input/MTok | Output/MTok | Cache Discount | Context | Max Output |
 |-------|:----------:|:-----------:|:--------------:|:-------:|:----------:|
-| Claude Opus 4.6 | $5.00 | $25.00 | -- | 200K (1M beta) | 128K |
-| Claude Sonnet 4.6 | $3.00 | $15.00 | -- | 200K (1M beta) | 64K |
-| GPT-5.4 (<272K) | $2.50 | $15.00 | 90% ($0.25) | 1M | TBD |
-| GPT-5.4 (>272K) | $5.00 | $22.50 | 90% ($0.50) | 1M | TBD |
+| Claude Opus 4.6 | $5.00 | $25.00 | -- | 1M | 128K |
+| Claude Sonnet 4.6 | $3.00 | $15.00 | -- | 1M | 64K |
+| GPT-5.4 (<272K) | $2.50 | $15.00 | 90% ($0.25) | 1M | 128K |
+| GPT-5.4 (>272K) | $5.00 | $22.50 | 90% ($0.50) | 1M | 128K |
 | Gemini 3.1 Pro | $2.00 | $12.00 | 75% | 1M | 64K |
 | Kimi K2.5 | $0.60 | $2.50 | -- | 256K | 96K (thinking) |
 
@@ -55,7 +55,7 @@
 | Instruction following | GPT-5.4 | 95% IFEval | +1pp over Claude/Kimi |
 | Legal reasoning | Claude Opus 4.6 | 90.2% BigLaw | No competition |
 | Computer use | Claude Opus 4.6 | 72.7% OSWorld | No competition |
-| Long context | Gemini 3.1 Pro / GPT-5.4 | 1M native (both) | 5x Claude standard |
+| Long context | Gemini 3.1 Pro / GPT-5.4 / Claude | 1M native (all) | Claude: MRCR v2 78.3% at 1M |
 | Cost efficiency | Kimi K2.5 | $0.60/$2.50 | 8x cheaper than Opus |
 | Code generation | Kimi K2.5 | 99% HumanEval | +4pp over Claude/GPT |
 | Video understanding | Kimi K2.5 | 86.6% VideoMMMU | Unique benchmark |
