@@ -1,6 +1,6 @@
 # Claude Prompting Guide
 
-Specific to Claude Opus 4.6 and Sonnet 4.6. Updated 2026-02-27.
+Specific to Claude Opus 4.6 and Sonnet 4.6. Updated 2026-03-20.
 
 **Sources:** Anthropic official docs (platform.claude.com/docs), Claude Code system prompt analysis.
 
@@ -102,7 +102,7 @@ contradicts your reasoning.
 
 ## 4. Long Context Best Practices
 
-200K standard, 1M beta for Opus/Sonnet 4.6.
+1M context for Opus/Sonnet 4.6 (GA March 13, 2026). MRCR v2: 78.3% at 1M tokens.
 
 **Critical rule:** Put **long documents at the TOP**, query/instructions at the **BOTTOM**. Measured 30% improvement.
 
