@@ -16,6 +16,28 @@ You are helping the human clarify what they actually want from this project. Goa
 - After a significant pivot or new capability
 - When the human says things like "I'm not sure what I'm optimizing for" or "let's refocus"
 
+## Phase 0: Mine Steering Intelligence
+
+Before reading any files, extract what the user has actually been correcting for. Run:
+```bash
+uv run --directory ~/Projects/meta python3 scripts/steering-signals.py --days 30 --project <current_project> --json
+```
+
+If the script is unavailable, fall back to `git log --oneline -30` — but the steering report is far richer.
+
+This report reveals:
+- **Explicit feedback** (`#f` tags) — ground-truth corrections the user made during sessions
+- **Corrections** — "no", "don't", "stop", "wrong" — where the user pushed back on agent behavior
+- **Redirects** — "actually", "instead", "let's not" — softer course corrections
+- **Recurring themes** — what words keep appearing in corrections (these are the real priorities)
+- **Topic distribution** — time and cost allocation across projects (revealed preferences)
+- **Hook signals** — systematic blocks/warnings (architectural steering)
+- **Cost allocation** — where money actually goes vs. where GOALS.md says it should
+
+The corrections ARE the goals — or at least, the delta between stated goals and real ones. Every correction is the user steering the system toward what they actually want.
+
+Works across Claude Code, Codex, Gemini, and Kimi sessions (all stored in runlogs.db).
+
 ## Phase 1: Understand Current State
 
 <exploration>
@@ -27,9 +49,10 @@ Read everything that reveals intent:
 - Any README, docs/, or project description files
 - Recent git log (what has the human actually been working on vs. what they say they want?)
 - ~/Projects/meta/memory/MEMORY.md (cross-project decisions if they exist)
+- **Phase 0 steering report** (corrections, feedback, topic drift, cost allocation)
 </exploration>
 
-Pay attention to the gap between stated goals and revealed preferences. If GOALS.md says "investment research" but the last 20 commits are fraud investigation, that's a tension worth surfacing.
+Pay attention to the gap between stated goals and revealed preferences. If GOALS.md says "investment research" but the last 20 commits are fraud investigation, that's a tension worth surfacing. The steering report makes this gap concrete — corrections show what the user actually cares about, cost allocation shows where resources actually go.
 
 ## Phase 2: Goal Decomposition
 

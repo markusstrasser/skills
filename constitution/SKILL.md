@@ -8,6 +8,25 @@ user-invocable: true
 
 You are conducting a structured constitutional elicitation for a software project that uses autonomous AI agents. Your job is to identify tensions, ask the right questions, and produce two artifacts: a `## Constitution` section inside CLAUDE.md (how agents operate) and GOALS.md (what the human wants). The constitution goes INTO CLAUDE.md — not as a separate file.
 
+## Phase 0: Mine Steering Intelligence
+
+Before reading any files, extract what the user has actually been correcting for. Run:
+```bash
+uv run --directory ~/Projects/meta python3 scripts/steering-signals.py --days 30 --json
+```
+
+If project-scoped: add `--project <name>`. If the script is unavailable, skip to Phase 1.
+
+This report reveals the **live system's contradictions** — not just files disagreeing with files, but the live system disagreeing with the files:
+- **Corrections** — where the user said "no", "don't", "stop" to agent behavior. Each correction is evidence of a principle the constitution should encode but doesn't.
+- **Redirects** — softer course corrections ("actually", "instead") that reveal preference the constitution hasn't captured.
+- **`#f` feedback** — explicit ground-truth corrections the user tagged during sessions.
+- **Hook signals** — blocks and warnings show where architectural enforcement is already steering behavior. The constitution should be consistent with these.
+- **Topic distribution** — time/cost allocation reveals real priorities vs. stated priorities.
+- **Recurring correction themes** — if "cli" and "api" keep appearing in corrections, there's a missing principle about tool selection.
+
+Works across Claude Code, Codex, Gemini, and Kimi sessions (all stored in runlogs.db).
+
 ## Phase 1: Reconnaissance
 
 Before asking any questions, explore the project thoroughly. Read every instruction file, rule, and configuration:
@@ -21,6 +40,7 @@ Before asking any questions, explore the project thoroughly. Read every instruct
 - docs/ (any existing constitution, goals, principles, values)
 - Any file matching: *constitution*, *principles*, *values*, *guidelines*, *goals*
 - MEMORY.md or any persistent memory files
+- **Phase 0 steering report** — corrections, feedback, hook signals
 </exploration_checklist>
 
 Also read ~/Projects/meta/ files for the philosophical framework:
@@ -31,7 +51,13 @@ Also read ~/Projects/meta/ files for the philosophical framework:
 
 ## Phase 2: Contradiction Detection
 
-After reading, identify every tension, contradiction, or ambiguity that would cause an autonomous agent to make inconsistent decisions. Common tensions:
+After reading, identify every tension, contradiction, or ambiguity that would cause an autonomous agent to make inconsistent decisions. Mine three sources of contradiction:
+
+**A. Files vs. files** — existing contradictions within instruction surface (the original approach)
+**B. Files vs. behavior** — steering report corrections that contradict stated principles. If the constitution says "be autonomous" but the user keeps correcting agent behavior, the autonomy boundary is wrong.
+**C. Files vs. allocation** — stated priorities vs. where time/money actually goes. If GOALS.md says "intel is primary" but genomics gets 2x the sessions, there's a drift.
+
+Common tensions:
 
 <tension_categories>
 1. **Identity/Scope** — Is the project trying to be multiple things? Which identity wins when resources are scarce?
