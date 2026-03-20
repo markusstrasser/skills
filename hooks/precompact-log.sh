@@ -12,6 +12,11 @@
 trap 'exit 0' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Reset dup-read counter — post-compaction re-reads are legitimate
+rm -f "/tmp/claude-reads-$PPID"
+rm -f "/tmp/claude-toolcount-$PPID"
+
 cat | python3 "$SCRIPT_DIR/precompact-extract.py"
 
 exit 0
