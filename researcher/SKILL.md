@@ -142,7 +142,7 @@ If all your axes are from the same category, you have one axis with multiple que
 | Tier Upgrade | Question more complex than classified | Upgrade tier |
 | Info Changed Conclusions | Last action changed direction | Continue |
 
-**Evaluate after every search round, not just at the end.** The single biggest gain from VMAO's verify loop is catching gaps early. After each search round (2-3 queries), assess: "What % of my search axes have I covered? What's missing?"
+**Evaluate after every search round, not just at the end.** After each search round (2-3 queries), assess: "How many of my named search axes have produced at least one useful result? What's missing?" A "search axis" = one of the axes you named in Phase 2. "Nothing new" = the last 2 tool calls returned results already covered by existing findings.
 
 **Recite evidence before concluding.** List concrete data points from sources, then derive the conclusion. "Study A: 26% improvement (n=500). Study B: no effect (n=200). Weighing by sample size..." This surfaces contradictions that narrative synthesis buries.
 

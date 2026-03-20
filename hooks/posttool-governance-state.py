@@ -108,6 +108,8 @@ def save_session_state(session_id: str, state: dict):
 
 
 def main():
+    t0 = time.monotonic()
+
     tool_name = os.environ.get("CLAUDE_TOOL_NAME", "")
     if not tool_name:
         return
@@ -138,12 +140,15 @@ def main():
 
     save_session_state(session_id, state)
 
+    elapsed_ms = (time.monotonic() - t0) * 1000
+
     # Append event to global log
     event = {
         "ts": time.time(),
         "session_id": session_id,
         "tool": tool_name,
         "categories": categories,
+        "elapsed_ms": round(elapsed_ms, 1),
         "state_snapshot": {
             "step": state["step_count"],
             "sensitivity": state["data_sensitivity"],
