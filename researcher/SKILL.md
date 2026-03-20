@@ -9,6 +9,7 @@ hooks:
         - type: command
           command: "RESEARCH_PATHS='docs/|analysis/|research/|\\.model-review/' ~/Projects/skills/hooks/postwrite-source-check-semantic.sh"
           statusMessage: "Checking source citations..."
+effort: high
 ---
 
 # Researcher
