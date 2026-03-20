@@ -1,6 +1,7 @@
 ---
 name: competing-hypotheses
 description: "Analysis of Competing Hypotheses (ACH). Use when investigating any entity, anomaly, root cause, or claim that could have multiple explanations -- fraud vs error, bug vs design, correlation vs causation. Based on Richards Heuer's CIA methodology, formalized with Bayesian LLR scoring."
+effort: high
 ---
 
 # Analysis of Competing Hypotheses

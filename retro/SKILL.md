@@ -3,6 +3,7 @@ name: retro
 description: End-of-session retrospective. Extracts failure modes, environment struggles, and tooling proposals. Use after completing a work session, when asked to reflect on what happened, or when the user says "retro" or "retrospective".
 user-invocable: true
 argument-hint: '[project or focus area]'
+effort: medium
 ---
 
 # Session Retrospective

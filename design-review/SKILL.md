@@ -12,6 +12,7 @@ allowed-tools:
   - Write
   - Edit
   - Agent
+effort: high
 ---
 
 # Design Review

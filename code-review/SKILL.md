@@ -11,6 +11,7 @@ allowed-tools:
   - Write
   - Edit
   - Agent
+effort: medium
 ---
 
 # Continuous Code Review

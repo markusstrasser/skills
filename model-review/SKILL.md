@@ -10,6 +10,7 @@ allowed-tools:
   - Write
   - Edit
   - Task
+effort: high
 ---
 
 # Cross-Model Adversarial Review

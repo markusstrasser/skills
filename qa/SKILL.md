@@ -10,6 +10,7 @@ allowed-tools:
   - Glob
   - Grep
   - Agent
+effort: medium
 ---
 
 # QA — Web Application Quality Assurance

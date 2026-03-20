@@ -1,6 +1,7 @@
 ---
 name: dispatch-research
 description: Autonomous research-to-execution pipeline. Dispatches parallel audits to Codex (GPT-5.4), verifies findings, builds execution plan, implements fixes. Triggers on "dispatch research", "codex sweep", "run audits", "audit and fix".
+effort: medium
 ---
 
 # Dispatch Research — Autonomous Audit-to-Execution Pipeline

@@ -1,6 +1,7 @@
 ---
 name: causal-dag
 description: "DAG-first causal analysis. Forces directed acyclic graph construction and back-door criterion validation before any regression specification. Prevents bad-control, collider bias, and M-bias by making causal structure explicit."
+effort: high
 ---
 
 # /causal-dag
