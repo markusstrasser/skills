@@ -22,9 +22,7 @@ Use whichever of these are available in the current project's `.mcp.json`:
 | `mcp__research__list_corpus` | List saved papers | Check before searching externally |
 | `mcp__research__verify_claim` | Verify factual claim via Exa /answer | High-stakes claims: numbers, stats, entity properties. Single-call, cached 7d |
 | `mcp__research__export_for_selve` | Export for knowledge embedding | End of session, persist findings (if configured) |
-| `mcp__paper-search__search_arxiv` | arXiv search | Preprints — flag as `[PREPRINT]` |
-| `mcp__paper-search__search_pubmed` | PubMed search | Clinical/medical literature |
-| `mcp__paper-search__search_biorxiv` | bioRxiv/medRxiv search | Biology/medical preprints |
+| `mcp__research__search_preprints` | bioRxiv/medRxiv date-range + keyword search | Preprint surveillance — weekly scans, recent papers. `server="biorxiv"` or `"medrxiv"`, `days=7`, optional `category` filter. |
 | `mcp__exa__web_search_exa` | Semantic web search | Non-obvious connections, expert blogs, recent work |
 | `mcp__exa__web_search_advanced_exa` | Advanced search (filters, deep, structured) | Entity enrichment (`type: "deep"` + `outputSchema`), date-filtered research, domain-restricted search |
 | `mcp__exa__company_research_exa` | Company intelligence | Business/financial research |
@@ -34,16 +32,13 @@ Use whichever of these are available in the current project's `.mcp.json`:
 | `mcp__perplexity__perplexity_research` | Deep multi-source report | Comprehensive topic surveys. Alternative to Exa deep_researcher. Slow (~30s+). |
 | `mcp__perplexity__perplexity_reason` | Chain-of-thought + web | "Why did X happen?" — analytical questions needing reasoning + evidence. |
 | `mcp__perplexity__perplexity_search` | Raw web results | Third search source. Use when you want to control synthesis yourself. |
-| `mcp__firecrawl__firecrawl_scrape` | JS-heavy page scraper | Financial dashboards, dynamic sites that WebFetch/Exa crawling can't handle. |
-| `mcp__firecrawl__firecrawl_extract` | Structured data extraction | JSON Schema extraction from web pages. Company filings, earnings data. |
-| `mcp__firecrawl__firecrawl_crawl` | Recursive site crawl | Investor relations sections, filing indexes. |
-| `mcp__firecrawl__firecrawl_map` | URL discovery | "What pages exist on this site?" before crawling. |
+| `mcp__firecrawl__firecrawl_scrape` | JS-heavy page scraper | **Only if configured.** Financial dashboards, dynamic sites that WebFetch/Exa can't handle. Not a core research tool. |
 | `mcp__scite__search_literature` | Citation-stance search (1.6B+ citations) | Literature audits, disconfirmation search, checking if a claim is supported/contrasted in the literature. Returns Smart Citation snippets with stance classification (supporting/contrasting/mentioning). |
 | `mcp__context7__*` | Library documentation | API/framework questions |
 | WebFetch | Fetch specific URLs | Known databases, filings, regulatory |
 | WebSearch | General web search | News, grey literature |
 
-Not all tools exist in every project. User-scope MCPs (scite, paper-search, perplexity, brave-search, exa) are available in all projects. Project `.mcp.json` has project-specific MCPs.
+Not all tools exist in every project. User-scope MCPs (scite, perplexity, brave-search, exa) are available in all projects. `research` MCP (papers-mcp) is configured per-project. Firecrawl is project-specific (meta, intel).
 
 **Critical rule:** `fetch_paper` then `read_paper` BEFORE citing. Abstracts are not primary sources.
 
@@ -57,7 +52,7 @@ Not all tools exist in every project. User-scope MCPs (scite, paper-search, perp
 - **High-recall queries:** `web_search_advanced_exa` with `type: "deep"` + `additionalQueries`. Generate 2-3 domain-specific query variations from your context. Exa searches all in parallel, merges + ranks.
 - **News/events:** `brave_news_search` for last 24h-7d. Exa with date filter for older.
 - **Triangulation:** For high-stakes claims, use Exa + Brave (confirmed independent indexes). Perplexity is NOT confirmed independent — don't use for triangulation.
-- **Structured extraction from URLs:** `firecrawl_scrape` or `firecrawl_extract` for specific URLs with JSON schema.
+- **Structured extraction from URLs:** `firecrawl_scrape` or `firecrawl_extract` for specific URLs with JSON schema. Only if firecrawl is configured in the project.
 - **Rate-limited:** If Exa returns 429, fall back to `brave_web_search`.
 
 ## Perplexity — expensive, use selectively ($0.14/call avg)
@@ -95,12 +90,11 @@ Combined's citation hallucination happened because it reasoned from training-dat
 |------|-----------|---------------|
 | Canonical papers by topic | `search_papers` (S2) | Largest index (220M+), structured metadata, citation counts |
 | Recent papers (<6mo) | `web_search_advanced_exa` with `category: "research paper"` + date filter | S2 has no date filtering |
+| Recent preprints (bioRxiv/medRxiv) | `search_preprints` (research MCP) | Free bioRxiv API, date range + keyword filtering. Use `category="genomics"` etc. for focused scans. |
 | Citation analysis / related papers | `traverse_citations` (S2 graph, one hop) | Overlap filtering for multi-seed; auto-saves to corpus |
 | Citation stance (support/contrast) | `search_literature` (scite) | 1.6B+ classified citations. Unique: tells you if papers *support* or *contrast* a claim |
 | Disconfirmation search | `search_literature` (scite) with contrasting focus | Directly surfaces contradictory evidence — better than "X criticism" keyword hacks |
-| Preprints (arXiv) | `search_arxiv` (paper-search) | Direct arXiv API, download+read built in |
-| Clinical/medical literature | `search_pubmed` (paper-search) | MeSH terms, clinical focus |
-| Biology preprints | `search_biorxiv` (paper-search) | Direct bioRxiv API |
+| Clinical/medical literature | `search_papers` (S2) with medical terms | S2 indexes PubMed. For NCBI-specific needs, use Exa to query PubMed directly. |
 | Full-text synthesis | `search_papers` → `save_paper` → `fetch_paper` → `ask_papers` | Gemini 1M context for multi-paper Q&A |
 | Grey literature / expert blogs | Exa semantic search | Academic APIs don't index blogs/substacks |
 
@@ -112,7 +106,7 @@ Scite indexes 1.6B+ citation statements classified as **supporting**, **contrast
 - **Literature audits:** Check if a specific claim has been supported or contested across the literature.
 - **Novelty checks:** Before writing a claim, check if it's already in the literature and which direction the evidence points.
 - **Coverage caveat:** Skews biomedical. Thin on psychometrics, measurement invariance, some social sciences.
-- **Not for:** paper discovery (use S2), full-text reading (use fetch_paper), recent preprints (use arXiv/Exa).
+- **Not for:** paper discovery (use S2), full-text reading (use fetch_paper), recent preprints (use `search_preprints` or Exa).
 - **Citation format:** Always check `editorialNotices` for retractions before citing. Links: `https://doi.org/{doi}`.
 
 ## Verification
