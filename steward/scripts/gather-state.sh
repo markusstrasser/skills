@@ -1,7 +1,27 @@
 #!/usr/bin/env bash
 # Gather live state for steward tick. Target: <5s.
 # Called via !` in SKILL.md — output replaces the placeholder before Claude sees it.
+# Noop detection: hashes key signals and skips full output if unchanged.
 set -e
+
+HASH_FILE=~/.claude/steward-state-hash.txt
+
+# Collect hashable signals (fast — no uv run)
+ORCH_HASH=$(sqlite3 ~/.claude/orchestrator.db "SELECT count(*),group_concat(status) FROM tasks WHERE status IN ('failed','blocked','pending') ORDER BY id" 2>/dev/null || echo "na")
+RECEIPT_HASH=$(tail -3 ~/.claude/session-receipts.jsonl 2>/dev/null | md5 || echo "na")
+FINDING_HASH=$(grep -c 'Status:\*\* \[ \]' ~/Projects/meta/improvement-log.md 2>/dev/null || echo "0")
+GIT_HASH=$(for p in meta intel selve genomics; do cd ~/Projects/$p 2>/dev/null && git log --oneline -1 2>/dev/null; done | md5 || echo "na")
+CURRENT_HASH="${ORCH_HASH}|${RECEIPT_HASH}|${FINDING_HASH}|${GIT_HASH}"
+
+PREV_HASH=$(cat "$HASH_FILE" 2>/dev/null || echo "")
+echo "$CURRENT_HASH" > "$HASH_FILE"
+
+if [[ "$CURRENT_HASH" = "$PREV_HASH" ]]; then
+    echo "NO STATE CHANGE since last tick. Nothing to do."
+    # Log noop
+    echo "{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%S)\",\"action\":\"noop\",\"target\":\"state-unchanged\",\"result\":\"ok\",\"detail\":\"hash match\"}" >> ~/.claude/steward-actions.jsonl 2>/dev/null
+    exit 0
+fi
 
 echo "=== ORCHESTRATOR ==="
 cd ~/Projects/meta
