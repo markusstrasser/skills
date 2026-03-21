@@ -43,6 +43,8 @@ Read whatever gives you the lay of the land:
 
 ## Phase 2: Dispatch (~25%)
 
+**Memory pressure gate:** Before dispatching Codex audits, run `pgrep -c claude`. If >= 4 processes, reduce parallel dispatches to 1 (sequential) or skip delegation and audit directly. 50% of sessions hit memory pressure when dispatching multiple agents.
+
 ### Target selection
 
 Look for these categories of useful work:
