@@ -36,7 +36,7 @@ Use whichever of these are available in the current project's `.mcp.json`:
 | `mcp__context7__*` | Library documentation | API/framework questions |
 | WebFetch | Fetch specific URLs | Known databases, filings, regulatory |
 
-Not all tools exist in every project. User-scope MCPs (scite, perplexity, brave-search, exa) are available everywhere. `research` MCP (papers-mcp) is per-project.
+Not all tools exist in every project. User-scope MCPs (scite, perplexity, brave-search, exa) are available everywhere. `research` MCP (research-mcp) is per-project.
 
 ## EBF3 Benchmark — Tool-Class Routing (empirical, N=1)
 
