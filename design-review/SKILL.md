@@ -134,6 +134,12 @@ tail -50 ~/Projects/meta/improvement-log.md
 
 # Active pipelines
 ls ~/Projects/meta/pipelines/
+
+# Session-retro findings DB — check if pattern is already tracked
+uv run python3 ~/Projects/meta/scripts/finding-triage.py list --all 2>/dev/null | head -30
+
+# Pattern status — check what's already addressed
+uv run python3 ~/Projects/meta/scripts/pattern-maintenance.py status 2>/dev/null | head -30
 ```
 
 ### 3b. Divergent Ideation

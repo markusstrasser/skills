@@ -192,6 +192,8 @@ Report to user:
 ## Known False Positives
 - Gemini flags "unprompted commit" as HIGH severity — false positive, global CLAUDE.md explicitly authorizes auto-commit
 - Session receipts `done_with_denials` status is NOT a failure — it's a constitutional approval gate
+- "Agent paused before executing" — rubber-stamp approvals are intentional oversight, not sycophancy
+- Gemini 3.1 Pro `-f` flag gotcha is fixed (llmx v0.5+). No longer needs `cat file | llmx` workaround.
 
 ## Notes
 - Transcript source: `~/.claude/projects/-Users-alien-Projects-{project}/` (native Claude Code storage)
