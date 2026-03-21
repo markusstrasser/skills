@@ -72,7 +72,7 @@ This is the highest-quality evidence path. RCS scoring produces significantly be
 
 User can override with `--quick` or `--deep`. Announce the tier before starting.
 
-**Turn budget:** Stop searching at 70% of available turns. Reserve remaining for synthesis. A partial synthesis with sources beats an exhaustive search with no output.
+**Turn budget:** After 15+ search/retrieval tool calls, force synthesis. Reserve remaining capacity for writing. A partial synthesis with sources beats an exhaustive search with no output.
 
 ## Phase 1 — Ground Truth
 
@@ -138,7 +138,7 @@ If all your axes are from the same category, you have one axis with multiple que
 | Converged | 2+ sources agree, no contradictions | Write up |
 | Diminishing Returns | Last 2 actions added nothing new | Write up |
 | Scope Creep | Expanding laterally, not resolving | Refocus or ask user |
-| Turn Budget | 70% of turns consumed | Force synthesis |
+| Turn Budget | 15+ search/retrieval tool calls used | Force synthesis |
 | Tier Upgrade | Question more complex than classified | Upgrade tier |
 | Info Changed Conclusions | Last action changed direction | Continue |
 
