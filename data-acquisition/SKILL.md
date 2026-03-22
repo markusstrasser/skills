@@ -358,6 +358,48 @@ def download_resumable(url, dest):
             f.write(chunk)
 ```
 
+## Post-Download QA — Data Profiling
+
+After every download, profile the dataset before wiring it into anything. Don't skip this — HTML traps, truncated files, and wrong schemas are common.
+
+### Quick profile sequence
+
+```bash
+# 1. Type and size
+file downloaded.csv && wc -c downloaded.csv && wc -l downloaded.csv
+
+# 2. Schema (CSV/TSV)
+head -1 downloaded.csv | tr ',' '\n' | cat -n    # column names + count
+
+# 3. Sample rows (check for actual data, not headers repeated)
+head -5 downloaded.csv
+
+# 4. Nulls/empties (sample-based)
+awk -F',' '{for(i=1;i<=NF;i++) if($i=="") c[i]++} END{for(i in c) print "col "i": "c[i]" empty"}' downloaded.csv
+```
+
+### Format-specific checks
+
+| Format | Profile command | Red flags |
+|--------|----------------|-----------|
+| CSV/TSV | `head -1 \| tr ',' '\n'`, `wc -l`, sample rows | HTML in first line, single column (wrong delimiter), row count < 10 |
+| JSON | `python3 -c "import json; d=json.load(open('f.json')); print(type(d).__name__, len(d) if isinstance(d,list) else list(d.keys())[:10])"` | Empty array, single-key wrapper hiding real data, nested too deep |
+| Parquet | `python3 -c "import pyarrow.parquet as pq; s=pq.read_schema('f.parquet'); print(s)"` | Zero row groups, unexpected column types |
+| ZIP | `unzip -l f.zip \| tail -20`, check for data files vs just docs | Only contains PDFs/codebooks, no actual data files |
+| Excel | `python3 -c "import openpyxl; wb=openpyxl.load_workbook('f.xlsx'); print(wb.sheetnames)"` | Single sheet with instructions, merged cells |
+| VCF | `grep -c '^#' f.vcf`, `grep -v '^#' f.vcf \| wc -l`, `grep '^#CHROM' f.vcf` | Zero variants, missing header, wrong genome build |
+
+### What to output
+
+After profiling, state concisely:
+- **Format:** CSV, 14 columns, tab-delimited
+- **Size:** 2.3 MB, 45,218 rows
+- **Schema:** [list key columns and types]
+- **Quality notes:** 3 columns have >10% nulls, dates in MM/DD/YYYY format, IDs look like FIPS codes
+- **Join keys:** `state_fips` matches census data, `ticker` matches entity universe
+
+If the profile reveals the download is garbage (HTML trap, truncated, wrong format), say so immediately and re-download or try a different approach. Don't wire bad data into anything.
+
 ## Anti-Patterns
 
 1. **Don't build Playwright automation for SSO sites.** Use claude-in-chrome.
