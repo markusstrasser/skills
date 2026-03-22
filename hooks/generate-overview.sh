@@ -171,13 +171,32 @@ generate_one() {
 
   echo "[$type] Generating (~${prompt_tokens} tokens, model: $OVERVIEW_MODEL)..."
 
-  # Step 4: Generate via llmx (stderr has info lines — discard)
-  cat "$temp_prompt" | llmx chat -m "$OVERVIEW_MODEL" 2>/dev/null > "$output_file"
+  # Step 4: Check token estimate against model limits
+  if [[ $prompt_tokens -gt 900000 ]]; then
+    echo "[$type] ERROR: prompt (~${prompt_tokens} tokens) exceeds safe limit for $OVERVIEW_MODEL. Tighten OVERVIEW_EXCLUDE or dirs." >&2
+    rm -f "$temp_prompt"
+    return 1
+  fi
 
-  # Cleanup
+  # Step 5: Generate via llmx
+  local llmx_stderr
+  llmx_stderr=$(mktemp /tmp/overview-llmx-stderr-XXXXXX)
+  cat "$temp_prompt" | llmx chat -m "$OVERVIEW_MODEL" 2>"$llmx_stderr" > "$output_file"
+  local llmx_exit=$?
+
+  # Cleanup prompt
   rm -f "$temp_prompt"
 
-  # Step 5: Prepend freshness metadata
+  # Check for failure: non-zero exit or empty output
+  if [[ $llmx_exit -ne 0 ]] || [[ ! -s "$output_file" ]]; then
+    echo "[$type] ERROR: llmx failed (exit=$llmx_exit). stderr:" >&2
+    cat "$llmx_stderr" >&2
+    rm -f "$llmx_stderr" "$output_file"
+    return 1
+  fi
+  rm -f "$llmx_stderr"
+
+  # Step 6: Prepend freshness metadata
   local git_sha
   git_sha=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
   local gen_ts
