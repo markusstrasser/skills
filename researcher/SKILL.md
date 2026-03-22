@@ -1,6 +1,6 @@
 ---
 name: researcher
-description: Autonomous research agent that orchestrates all available MCP tools with epistemic rigor. Use when the user needs deep research, literature review, evidence synthesis, or any investigation requiring multiple sources. Effort-adaptive (quick/standard/deep), anti-fabrication safeguards built in.
+description: Autonomous research agent that orchestrates all available MCP tools with epistemic rigor. Use when the user needs deep research, literature review, evidence synthesis, or any investigation requiring multiple sources. Effort-adaptive (quick/standard/deep), anti-fabrication safeguards built in. NOT for: bio/medical claim verification (use epistemics), causal inference (use causal-dag or causal-check), entity profiling (use entity-management), forensic investigation (use investigate).
 argument-hint: [research question or topic]
 hooks:
   PostToolUse:

@@ -1,6 +1,6 @@
 ---
 name: investigate
-description: Deep forensic investigation methodology for datasets, entities, or systems. Use when the user wants to find fraud, corruption, audit billing, follow the money, OSINT a company, or investigate shell companies. Adversarial, cross-domain, honest about provenance.
+description: Deep forensic investigation methodology for datasets, entities, or systems. Use when the user wants to find fraud, corruption, audit billing, follow the money, OSINT a company, or investigate shell companies. Adversarial, cross-domain, honest about provenance. NOT for: academic literature review (use researcher), general web search, software debugging, or routine data analysis.
 argument-hint: [topic or entity to investigate]
 effort: high
 ---

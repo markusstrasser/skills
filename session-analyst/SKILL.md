@@ -1,6 +1,6 @@
 ---
 name: session-analyst
-description: Analyzes Claude Code session transcripts for behavioral anti-patterns — sycophancy, over-engineering, build-then-undo, token waste. Dispatches compressed transcripts to Gemini for analysis, appends structured findings to meta/improvement-log.md. The "recursive self-improvement" component.
+description: Analyzes Claude Code session transcripts for behavioral anti-patterns — sycophancy, over-engineering, build-then-undo, token waste. Dispatches compressed transcripts to Gemini for analysis, appends structured findings to meta/improvement-log.md. The "recursive self-improvement" component. NOT for: architectural improvements (use design-review), supervision metric audits (use supervision-audit), or end-of-session retrospectives (use retro).
 user-invocable: true
 context: fork
 argument-hint: <project> [session_count]
