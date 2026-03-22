@@ -48,8 +48,8 @@ from collections import Counter
 input_file = Path.home() / 'Projects/meta/artifacts/suggest-skill/input.md'
 text = input_file.read_text()
 
-# Find tool call sequences (look for Tool: or tool_use patterns)
-tools = re.findall(r'(?:Tool|tool_use):\s*(\w+)', text)
+# Find tool call sequences from extract_transcript.py format: **TOOLS:** \`ToolName(args)\`
+tools = re.findall(r'\*\*TOOLS:\*\*.*?\x60([A-Za-z_]+)', text)
 
 # Extract 3-grams of tool sequences
 trigrams = [tuple(tools[i:i+3]) for i in range(len(tools)-2)]
