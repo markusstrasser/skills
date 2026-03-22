@@ -36,7 +36,7 @@ If 3+ sessions active: prefix questions with project name + review topic. Batch 
 | Role | Model | Use |
 |------|-------|-----|
 | **Gemini** (pattern/architecture) | Pro (`gemini-3.1-pro-preview`) | Deep review — cross-referencing, pattern detection |
-| **GPT** (quantitative/formal) | GPT-5.4 (`gpt-5.4 --reasoning-effort high --stream --timeout 600`) | Deep review — logical inconsistencies, cost-benefit |
+| **GPT** (quantitative/formal) | GPT-5.4 (`gpt-5.4 --reasoning-effort high --stream --timeout 600 --max-tokens 32768`) | Deep review — logical inconsistencies, cost-benefit. **Must use --max-tokens 32768** (reasoning tokens count against limit; 16384 causes empty output with high reasoning effort). |
 | **Gemini Fast** (extraction) | Flash (`gemini-3-flash-preview`) | Structured extraction in Step 5, mechanical audits |
 | **GPT Fast** (extraction) | GPT-5.3 Instant (`gpt-5.3-chat-latest --stream`) | Structured extraction in Step 5, fact-checking |
 
@@ -221,7 +221,8 @@ GPT_MODEL="gpt-5.4"
 GPT_EFFORT="--reasoning-effort high --stream"  # --stream needed for GPT reasoning output
 GPT_TIMEOUT="--timeout 600"
 # Note: --stream forces API transport (CLI doesn't support streaming).
-# GPT-5.x max_completion_tokens includes reasoning tokens — 16K is fine.
+# GPT-5.x max_completion_tokens includes reasoning tokens — 32K required for high reasoning effort.
+# 16K causes empty output (all tokens consumed by thinking). Use 16K only for medium reasoning.
 ```
 
 **IMPORTANT — Bash timeout:** When dispatching via the Bash tool, always set `timeout: 660000` (11 minutes — must exceed llmx --timeout value) on the Bash tool call. The default 120s Bash timeout kills the process before llmx finishes. llmx's own `--timeout` handles the real deadline.
@@ -276,7 +277,7 @@ What am I (Gemini) likely getting wrong? Where should you distrust my assessment
 ```bash
 llmx chat -m $GPT_MODEL \
   -f "$REVIEW_DIR/gpt-context.md" \
-  $GPT_EFFORT $GPT_TIMEOUT --max-tokens 16384 \
+  $GPT_EFFORT $GPT_TIMEOUT --max-tokens 32768 \
   -o "$REVIEW_DIR/gpt-output.md" "
 <system>
 You are performing QUANTITATIVE and FORMAL analysis. Gemini is handling qualitative pattern review separately. Focus on what Gemini can't do well. Be precise. Show your reasoning. No hand-waving.
