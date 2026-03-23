@@ -89,4 +89,25 @@ for f in ~/.claude/steward-proposals/*.md; do
 done
 [[ -z "$(ls ~/.claude/steward-proposals/*.md 2>/dev/null)" ]] && echo "(none)"
 
+# --- Improvement signals (for signal-driven gap selection) ---
+echo ""
+echo "=== IMPROVEMENT SIGNALS (top 5) ==="
+PROPOSE_WORK=~/Projects/meta/scripts/propose-work.py
+if [[ -f "$PROPOSE_WORK" ]]; then
+    uv run python3 "$PROPOSE_WORK" --json --project "$PROJECT_NAME" 2>/dev/null | \
+        python3 -c "
+import json,sys
+try:
+    signals = json.load(sys.stdin)
+    for s in signals[:5]:
+        tag = 'STEER' if s.get('steering_impact') else s.get('category','?')[:5].upper()
+        print(f\"  [{tag}] {s.get('severity','?')}: {s.get('description','?')[:80]}\")
+    if len(signals) > 5:
+        print(f'  ... and {len(signals)-5} more')
+except: print('  (no signals)')
+" 2>/dev/null || echo "  (propose-work.py unavailable)"
+else
+    echo "  (propose-work.py not found)"
+fi
+
 exit 0
