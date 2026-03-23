@@ -1,114 +1,97 @@
 ---
 name: research-cycle
-description: Autonomous research cycle — dispatches discover/gap/plan/review/execute/verify/improve phases to the orchestrator and renders CYCLE.md as a human-readable dashboard. Run with /loop 15m. NOT an executor — routes work to orchestrator for fresh context per phase.
+description: Autonomous research cycle — discover/gap/plan/execute/verify/improve loop via subagents. Reads CYCLE.md for human steering, never asks for input. Run with /loop 15m.
 model: claude-sonnet-4-6
 effort: low
 ---
 
 # Research Cycle
 
-You are a lightweight dispatcher for an autonomous research cycle. You run on `/loop` in a persistent session. Your job is to **read state, decide what phase to run next, submit it to the orchestrator, and update CYCLE.md**. You do NOT do the heavy work yourself — the orchestrator runs each phase in a fresh context window.
+You run on `/loop`. Each tick you read state, pick the next phase, and execute it — via subagent (preferred, fresh context) or inline (if memory-constrained). **Never ask for input.** The human steers by editing CYCLE.md between ticks.
 
 ## Live State
 
 !`bash ${CLAUDE_SKILL_DIR}/scripts/gather-cycle-state.sh "$(pwd)" 2>&1 | head -80`
 
-## Each Tick: Route ONE Phase
+## Each Tick
 
-If the state above says "NO STATE CHANGE" — report "noop" in one line and stop.
+If "NO STATE CHANGE" → one-line noop, stop.
 
-Otherwise, determine the current project and decide which phase to dispatch next.
+Otherwise, pick the highest-priority phase and run it. One phase per tick.
 
-### Phase Selection Logic
+### Phase Priority (first match wins)
 
-Read CYCLE.md and orchestrator state. Pick the first applicable:
+1. **Approved items in queue** (`- [x] APPROVE`) → run execute phase
+2. **Active plan not yet reviewed** → run review (dispatch `/model-review` via llmx)
+3. **Gaps exist without plan** → run plan phase (write plan for top gap)
+4. **Discoveries exist without gap analysis** → run gap-analyze
+5. **Recent execution without verification** → run verify
+6. **Verification done without improve** → run improve
+7. **Nothing pending** → run discover
 
-1. **Orchestrator has running task for this project** → Report status. Wait. Don't submit another.
-2. **Orchestrator has failed task** → Retry if transient. Report if structural.
-3. **CYCLE.md has approved items in queue** (`- [x]`) → Submit `execute` phase.
-4. **CYCLE.md has active plan awaiting review** → Submit `review` phase.
-5. **CYCLE.md has gaps without plan** → Submit `plan` phase.
-6. **CYCLE.md has new discoveries without gap analysis** → Submit `gap-analyze` phase.
-7. **Recent execution without verification** → Submit `verify` phase.
-8. **Verification completed without improve** → Submit `improve` phase.
-9. **Nothing pending, executable queue empty** → Submit `discover` phase.
+### Running a Phase
 
-### Submitting to Orchestrator
-
-```bash
-cd ~/Projects/meta && uv run python3 scripts/orchestrator.py run \
-  -p {project_name} \
-  --prompt "{phase_prompt}" \
-  --pipeline domain-research-cycle \
-  --model {model} \
-  --effort {effort} \
-  --max-budget {budget}
+**Preferred: subagent** (fresh context, visible, steerable):
+```
+Agent(
+  prompt="[phase prompt with project context]",
+  subagent_type="general-purpose",
+  description="research-cycle: [phase]",
+  mode="bypassPermissions"
+)
 ```
 
-Or use the pipeline directly:
-```bash
-cd ~/Projects/meta && uv run python3 scripts/orchestrator.py submit domain-research-cycle \
-  --project {project_name} \
-  --vars project={project_name}
-```
+**Fallback: inline** (if `pgrep -c claude` >= 5, do the work directly).
 
-### Rendering CYCLE.md
+Each phase prompt must include:
+- Project root path and name
+- Current CYCLE.md content (relevant sections only)
+- "Write results back to CYCLE.md. Commit if files changed. Do NOT ask for input."
 
-After checking orchestrator state, update the project's `CYCLE.md` with current status. If CYCLE.md doesn't exist, create it from this template:
+### Phase Prompts
 
-```markdown
-# Research Cycle — {project}
-## Last tick: {timestamp}
-## Phase: idle
+**Discover:** Search for new information relevant to this project. Use search_preprints (14 days), Exa for new tools/databases, check vendor changelogs. Compare against git log and research memos. Write findings to CYCLE.md `## Discoveries` as `- [NEW] ...`. Skip anything already known. Commit. Stop searching at 70% of turns and write up.
 
-## Discoveries (new this cycle)
+**Gap-analyze:** Read CYCLE.md discoveries + project state (CLAUDE.md, git log, research index). Identify what's missing or needs updating. Write prioritized gaps to `## Gaps`. Classify each: autonomous (reversible, existing pattern) or needs-approval. Commit.
 
-## Queue (awaiting human)
+**Plan:** Read top gap from `## Gaps`. Write implementation plan to `## Active Plan`: files to change, what changes, verification method, autonomous or needs-approval. If needs-approval, add to `## Queue` as `- [ ] APPROVE: ...`. Commit.
 
-## Autonomous (done without asking)
+**Review:** Read `## Active Plan`. Run `/model-review` on it (or dispatch via llmx if memory-constrained). Apply verified findings to plan. If critical issues, move plan back to gaps. Commit.
 
-## Verification Results
+**Execute:** Read reviewed plan. If autonomous: implement it. If needs-approval: check queue for `[x]` mark. If not approved, skip. After implementation, move to `## Autonomous (done)` with date. Commit.
 
-## Tool Improvements (proposed)
+**Verify:** Check most recent item in `## Autonomous (done)`. Run relevant tests, cross-check with MCP tools, compare with known-good data. Write results to `## Verification Results`. If verification fails, revert and move back to gaps. Commit.
 
-## Gaps
-
-## Active Plan
-```
+**Improve:** Review what happened this cycle — what worked, broke, was slow. Write proposals to `## Tool Improvements (proposed)`. For structural improvements, write to `~/.claude/steward-proposals/`. NEVER implement tool changes directly — propose only. Commit.
 
 ### WIP Caps
 
-- Max 3 open discoveries (undispositioned)
+- Max 3 undispositioned discoveries
 - Max 1 active plan
-- Discovery phase skips if 3+ undispositioned discoveries exist
+- Discovery skips if 3+ undispositioned discoveries exist
 
 ### Autonomy Boundary
 
-**The research cycle itself is a dispatcher — it doesn't execute domain work.** Each phase runs in the orchestrator with its own autonomy rules:
+- **Autonomous:** database refreshes (existing sources), config tweaks, `research_only` additions, adding informational fields (no classification change), test runs, verification
+- **Queue for human:** new data source downloads (>1GB), structural changes, removing/replacing existing logic, tool upgrades with breaking changes
+- **Never:** deleting stages, changing classification thresholds, modifying validated clinical logic, deploying new verification tools (propose only — recursive hallucination trap)
 
-- **Autonomous phases:** discover, gap-analyze, plan, verify, improve (observation only)
-- **Gated phases:** execute (requires `pause_before` in orchestrator), review (Opus, high budget)
-- **Never autonomous:** tool deployment, classification threshold changes, clinical logic changes
+### Human Steering via CYCLE.md
 
-The `improve` phase writes proposals to `~/.claude/steward-proposals/` — it never deploys tools directly. This prevents the recursive hallucination trap where a model hallucinates a domain "correction" and autonomously enforces it.
+The human edits CYCLE.md between ticks:
+- Mark `- [x] APPROVE: ...` to approve queued items
+- Delete discoveries or gaps to dismiss them
+- Add notes under gaps to redirect approach
+- Add `## Priority: ...` to override phase selection
 
-### Shadow Mode (first 2 weeks)
-
-During shadow mode, the skill logs what it WOULD do but does not submit to the orchestrator:
-
-```bash
-# Shadow mode: log intent, don't execute
-echo "{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%S)\",\"project\":\"$PROJECT\",\"phase\":\"$PHASE\",\"would_submit\":true}" >> ~/.claude/research-cycle-shadow.jsonl
-```
-
-Set `RESEARCH_CYCLE_SHADOW=1` to enable. Remove after validating precision >80% against actual human actions.
+The skill reads CYCLE.md fresh each tick. Human edits take effect on the next tick.
 
 ## Operating Rules
 
-1. **One submission per tick.** Check orchestrator first — don't stack tasks.
-2. **Budget awareness.** Track cumulative daily spend. Warn at $15, stop new submissions at $20.
-3. **Report in 1-3 lines.** What phase is running, what's in the queue, what needs human attention.
-4. **Idempotent.** Check orchestrator log before submitting. Don't resubmit what's already running.
-5. **CYCLE.md is a dashboard, not a database.** It's human-readable, gitignored, regenerated each tick from orchestrator state + git log. Don't rely on it for state persistence.
+1. **Never ask for input.** If uncertain, write the question to CYCLE.md and move on.
+2. **One phase per tick.** Don't chain phases — let the loop do the sequencing.
+3. **Report in 1-3 lines.** Phase run, outcome, what's next. No preamble.
+4. **Budget awareness.** Track cumulative cost in CYCLE.md header. Warn at $15/day.
+5. **Idempotent.** Check git log and CYCLE.md before acting. Don't redo completed work.
 
 $ARGUMENTS
