@@ -75,7 +75,9 @@ Read the output files, apply verified findings to plan. If critical issues, move
 
 **Verify:** Check most recent item in `## Autonomous (done)`. Run relevant tests, cross-check with MCP tools, compare with known-good data. Write results to `## Verification Results`. If verification fails, revert and move back to gaps. Commit.
 
-**Improve:** Review what happened this cycle — what worked, broke, was slow. Write proposals to `## Tool Improvements (proposed)`. For structural improvements, write to `~/.claude/steward-proposals/`. NEVER implement tool changes directly — propose only. Commit.
+**Improve:** Two parts — retro + proposals.
+1. **Retro (structured):** Classify this cycle's events using retro categories: WRONG_ASSUMPTION, TOOL_MISUSE, SEARCH_WASTE, TOKEN_WASTE, BUILD_THEN_UNDO. Write structured findings to `## Cycle Retro` in CYCLE.md. Also write JSON to `~/Projects/meta/artifacts/session-retro/{date}-cycle.json` for the improvement pipeline.
+2. **Proposals:** Write tool/process improvement proposals to `## Tool Improvements (proposed)`. For structural improvements, write to `~/.claude/steward-proposals/`. For things needing human input, append to `DECISIONS.md`. NEVER implement tool changes directly — propose only. Commit.
 
 ### WIP Caps
 
@@ -127,8 +129,11 @@ Research-cycle can invoke other skills when appropriate:
 |-----------|--------|-----|
 | Deep audit sweep during discover | `/dispatch-research` | Parallel Codex agents for cross-file auditing |
 | Plan review (non-trivial) | `/model-review` via script | Cross-model adversarial — same-model can't catch own blind spots |
-| Discover returns empty + no gaps | `/brainstorm` on the project domain | Divergent ideation → ideas written to DECISIONS.md |
+| Discover returns empty + no gaps | `/brainstorm` on project domain | Divergent ideation → ideas written to DECISIONS.md |
 | Need literature depth on a paper | `/researcher` | Deep paper analysis with epistemic rigor |
+| Improve phase (every cycle) | retro classification framework | Structured findings → JSON for improvement pipeline |
+| Domain claim verification | `/bio-verify` or biomedical MCP | Tool-backed evidence, not model reasoning |
+| External tool/version check | `/trending-scout` (meta only) | Agent ecosystem scans — not for domain projects |
 
 ## Operating Rules
 
