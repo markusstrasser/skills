@@ -127,11 +127,12 @@ The review target (plan, design doc, code) plus enough surrounding context for m
 
 For whole-repo or multi-file architectural reviews, you need a compressed representation of the codebase.
 
-**Options (pick one):**
-1. **`.context/` views** — if the project has them (`make -C .context all 2>/dev/null`). Available views: `full.xml`, `src.xml`, `docs.xml`, `infra.xml`, `signatures.xml`, `filetree.xml`, `diffs.xml`.
-2. **`repo-summary.py --compact`** — file map with descriptions. Good for "what does this repo do" reviews.
+**Options (check in order):**
+1. **`.claude/rules/codebase-map.md`** — already auto-loaded in your context if it exists. File map with descriptions + import edges. Available in: meta, intel, genomics, research-mcp, selve. If present, you already have it — just include it in the context file.
+2. **`repo-summary.py --compact`** — generate on-demand if no codebase-map exists. Good for "what does this repo do" reviews.
 3. **`repo-outline.py outline`** — function/class signatures. Good for API surface or coupling reviews.
-4. **Manual assembly** — Read key files (entry points, config, core logic), summarize the rest. Most flexible but slowest.
+4. **`.context/` views** — if the project has them (`make -C .context all 2>/dev/null`).
+5. **Manual assembly** — Read key files (entry points, config, core logic), summarize the rest. Most flexible but slowest.
 
 For broad reviews, always include: entry points, the files under question, and the project's stated architecture (CLAUDE.md relevant sections). Omit: tests, generated files, vendored deps.
 
