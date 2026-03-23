@@ -98,17 +98,42 @@ Identify:
 - **What evidence exists** (code, configs, research, benchmarks)
 - **Mode:** Review (convergent)
 
-### Step 2: Write Context File
+### Step 2: Assemble Context File
 
-Write the material being reviewed to a single context file. Keep it compact (<15KB — summarize if larger).
-
-**Narrow reviews (most reviews):** Write just the plan/analysis/code under review + enough surrounding context for models to understand the decision space. Use the Read tool to gather relevant files, then Write to a single `context.md`.
-
-**Broad reviews (codebase/architecture):** Use `.context/` views if the project has them (`make -C .context all 2>/dev/null`). Available views: `full.xml`, `src.xml`, `docs.xml`, `infra.xml`, `signatures.xml`, `filetree.xml`, `diffs.xml`.
-
-**Token budgets:** Gemini Pro sweet spot 80-150K (max ~800K). GPT-5.4 sweet spot 40-100K (max ~400K).
+Write the material being reviewed to a single context file. The dispatch script adds constitutional preamble automatically — you only provide the review target and its surrounding context.
 
 **Do NOT manually create `.model-review/` directories, write constitutional preambles, or assemble per-model context files.** The dispatch script handles all of this.
+
+**Token budgets:** Gemini Pro sweet spot 80-150K (max ~800K). GPT-5.4 sweet spot 40-100K (max ~400K). Compact aggressively — 50K context = 5-10 min API calls; 2K summary = ~1 min. Summarize rather than concatenate full files.
+
+#### Narrow reviews (most reviews)
+
+The review target (plan, design doc, code) plus enough surrounding context for models to understand the decision space. Use Read/Grep to gather, then Write to a single `context.md`.
+
+**Context sources to check** (not all required — pick what's relevant to *this* review):
+
+| Source | When to include | How to get it |
+|--------|----------------|---------------|
+| The artifact itself | Always | Read the file |
+| Code it references | When reviewing a plan or design that names specific files | Read the referenced files, or summarize signatures |
+| Tests for that code | When reviewing implementation correctness | Grep for test files, include relevant cases |
+| Recent git history | When reviewing a change or refactor | `git log --oneline -10 -- <path>` or `git diff` |
+| Related CLAUDE.md sections | When the review involves conventions or architecture | Read the relevant section, not the whole file |
+| Upstream constraints | When the review depends on external APIs, schemas, or specs | Include the relevant spec snippet |
+
+**What NOT to include:** unrelated code, full CLAUDE.md dumps, entire test suites, historical context that doesn't inform the decision. Noise dilutes the review — models spend tokens on irrelevant material instead of finding real problems.
+
+#### Broad reviews (codebase/architecture)
+
+For whole-repo or multi-file architectural reviews, you need a compressed representation of the codebase.
+
+**Options (pick one):**
+1. **`.context/` views** — if the project has them (`make -C .context all 2>/dev/null`). Available views: `full.xml`, `src.xml`, `docs.xml`, `infra.xml`, `signatures.xml`, `filetree.xml`, `diffs.xml`.
+2. **`repo-summary.py --compact`** — file map with descriptions. Good for "what does this repo do" reviews.
+3. **`repo-outline.py outline`** — function/class signatures. Good for API surface or coupling reviews.
+4. **Manual assembly** — Read key files (entry points, config, core logic), summarize the rest. Most flexible but slowest.
+
+For broad reviews, always include: entry points, the files under question, and the project's stated architecture (CLAUDE.md relevant sections). Omit: tests, generated files, vendored deps.
 
 ### Step 2.5: Determine Review Depth
 
