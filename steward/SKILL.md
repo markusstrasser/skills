@@ -39,6 +39,14 @@ Check "UNIMPLEMENTED FINDINGS" and "FINDING TRIAGE" above. For findings with sta
 4. **Autonomous** → ultrathink through the fix. Implement. Verify (run the thing, grep for the change, check it compiles). Commit: `[steward] verb thing — why`
 5. **Propose** → write proposal to `~/.claude/steward-proposals/` with evidence and options. Report.
 
+### P3.5: Implement Steward Proposals
+Check `~/.claude/steward-proposals/` for proposal files. For each file without "IMPLEMENTED" in its text:
+1. Read the proposal
+2. Classify: autonomous or propose-only? (see Autonomy Rules)
+3. If autonomous: implement it, verify, commit with `[steward] verb thing — why`
+4. After implementing: append `\n**Status:** IMPLEMENTED (YYYY-MM-DD)` to the proposal file
+5. If propose-only: skip (waiting for human approval)
+
 ### P4: Health & Maintenance
 If nothing above needs attention:
 - Run `cd ~/Projects/meta && uv run python3 scripts/doctor.py 2>/dev/null | tail -30` and fix autonomous-scope issues

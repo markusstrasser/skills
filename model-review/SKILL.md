@@ -489,6 +489,19 @@ Build the synthesis from the disposition table. Every INCLUDE item must appear. 
 # Both persist in $REVIEW_DIR
 ```
 
+### Step 6.5: Auto-Verify File-Specific Findings
+
+If the synthesis contains INCLUDE items with file:line citations (code claims, not architectural observations), invoke `/verify-findings` on the synthesis file before proceeding to Step 7. This catches hallucinations that survived manual fact-checking in Step 4.
+
+```bash
+# If synthesis has file-specific INCLUDE items:
+/verify-findings $REVIEW_DIR/synthesis.md
+# Only implement findings graded CONFIRMED or CORRECTED by verify-findings
+# Drop anything graded HALLUCINATED — do not proceed to Step 7 with it
+```
+
+**Skip this step if:** all findings are architectural/conceptual (no file:line claims), or fewer than 3 INCLUDE items with code citations.
+
 ### Step 7: Close the Loop (Mandatory if INCLUDE items exist)
 
 **The synthesis is not the deliverable — the updated artifact is.** If you stop after writing the synthesis, the user has to tell you to apply the findings. That's supervision waste.
