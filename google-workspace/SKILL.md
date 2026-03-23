@@ -8,6 +8,7 @@ allowed-tools:
   - Read
   - Write
   - Glob
+effort: low
 ---
 
 # Google Workspace Skill

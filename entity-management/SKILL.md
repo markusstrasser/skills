@@ -3,6 +3,7 @@ name: entity-management
 description: Versioned knowledge management for entities (people, companies, genes, drugs, stocks). Use when the user wants to profile, track, build a dossier on, or save structured notes about a specific entity. One file per entity, git-versioned, every claim sourced.
 user-invocable: true
 argument-hint: [entity name — person, company, gene, drug, stock]
+effort: medium
 ---
 
 # Entity Management

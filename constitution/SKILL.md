@@ -2,6 +2,7 @@
 name: constitution
 description: Elicit project goals and constitutional principles through structured questionnaire. Produces a ## Constitution section in CLAUDE.md (operational principles) and GOALS.md (personal objectives). Use for any new project or to revisit existing constitutional decisions.
 user-invocable: true
+effort: medium
 ---
 
 # Constitutional Elicitation

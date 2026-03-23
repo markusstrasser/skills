@@ -1,6 +1,7 @@
 ---
 name: causal-robustness
 description: "Post-estimation sensitivity analysis. Quantifies how robust a causal estimate is to unmeasured confounding using PySensemakr (Cinelli-Hazlett OVB framework). Use AFTER fitting an OLS model."
+effort: medium
 ---
 
 # /causal-robustness

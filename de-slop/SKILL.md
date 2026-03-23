@@ -3,6 +3,7 @@ name: de-slop
 description: Adversarial editor that hunts AI-generated prose patterns — vocabulary tells, structural padding, false authority, symbolic inflation. Use on your own writing before publishing, or to clean up any text that might have AI artifacts. Triggers on "de-slop", "check for AI writing", "clean up prose", "anti-AI edit".
 argument-hint: '[paste text, file path, or git diff range]'
 user-invocable: true
+effort: low
 ---
 
 # De-Slop: AI Prose Pattern Detection

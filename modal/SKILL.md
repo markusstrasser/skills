@@ -1,6 +1,7 @@
 ---
 name: modal
 description: "Modal serverless Python cloud compute. Use when writing or debugging Modal scripts, deploying to Modal, or choosing GPU/resource configs. Covers v1.0–v1.3.x API (current as of March 2026)."
+effort: low
 ---
 
 # Modal (v1.3.x, March 2026)

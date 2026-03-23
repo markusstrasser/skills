@@ -1,6 +1,7 @@
 ---
 name: causal-check
 description: "Causal inference discipline for 'why' questions. Enforces explanatory specificity: match explanation shape to observation shape, define the null, predict new footprints, commit probabilistically. Prevents factor-listing and narrative-plausible-but-causally-wrong explanations."
+effort: medium
 ---
 
 # Causal Check

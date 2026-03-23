@@ -3,6 +3,7 @@ name: goals
 description: Elicit, clarify, or revise project goals through structured questioning. Produces or updates GOALS.md — the human's personal objectives, strategy, success metrics, and deployment philosophy. Separate from constitution (operational principles). Use when starting a new project, pivoting strategy, or when goals feel unclear.
 user-invocable: true
 disable-model-invocation: true
+effort: medium
 ---
 
 # Goals Elicitation

@@ -3,6 +3,7 @@ name: knowledge-diff
 description: Extract only novel information from text — what's NOT in your training data. Use when reading articles, papers, transcripts, or notes and wanting the delta. Triggers on "what's new here", "knowledge diff", "what don't you know".
 argument-hint: '[paste text, or provide file path / URL]'
 user-invocable: true
+effort: low
 ---
 
 # Knowledge Diff

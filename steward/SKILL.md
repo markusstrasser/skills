@@ -3,6 +3,7 @@ name: steward
 description: Autonomous infrastructure steward — monitors orchestrator, implements promoted findings, reacts to session events. Run with /loop 10m.
 disable-model-invocation: true
 model: claude-opus-4-6
+effort: medium
 ---
 
 # Steward

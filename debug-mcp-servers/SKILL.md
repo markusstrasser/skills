@@ -2,6 +2,7 @@
 name: debug-mcp-servers
 description: Debug why MCP servers aren't loading in Claude Code. Use this when user reports MCPs not appearing in /mcp list despite being configured.
 model: haiku
+effort: low
 ---
 
 # Debug MCP Servers Not Loading

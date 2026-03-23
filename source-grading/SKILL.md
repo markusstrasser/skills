@@ -3,6 +3,7 @@ name: source-grading
 description: NATO Admiralty System for grading source reliability and information credibility. Apply automatically during OSINT, forensic investigations, legal research, entity audits, or fraud analysis — NOT for general software or casual research. Every claim gets a 2-axis grade (A-F for source reliability, 1-6 for information credibility).
 user-invocable: false
 model: haiku
+effort: medium
 ---
 
 # Source Grading: The Admiralty System

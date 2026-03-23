@@ -11,6 +11,7 @@ allowed-tools:
   - Edit
   - Agent
   - Task
+effort: medium
 ---
 
 # Project Upgrade — Autonomous Codebase Improvement

@@ -11,6 +11,7 @@ allowed-tools:
   - Bash
   - Write
   - Edit
+effort: medium
 ---
 
 # Supervision Audit

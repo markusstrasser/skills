@@ -3,6 +3,7 @@ name: data-acquisition
 description: Web scraping and data download toolkit — curl_cffi, Scrapfly, Firecrawl, Browserbase, claude-in-chrome, Exa, Playwright. Covers which tool for which situation, API keys, fallback chains, structured extraction, authenticated session approaches, and what doesn't work on macOS. Use when downloading data, scraping websites, or automating browser interactions.
 user-invocable: true
 argument-hint: '[URL, site name, or scraping problem]'
+effort: low
 ---
 
 # Data Acquisition & Web Scraping Toolkit
