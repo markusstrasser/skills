@@ -98,85 +98,21 @@ Identify:
 - **What evidence exists** (code, configs, research, benchmarks)
 - **Mode:** Review (convergent)
 
-### Step 2: Bundle Context
+### Step 2: Write Context File
 
-Build context files. Constitutional documents go first (if found).
+Write the material being reviewed to a single context file. Keep it compact (<15KB — summarize if larger).
 
-**Output directory setup:**
-```bash
-# Persist outputs — NOT /tmp
-# Slug from topic prevents collisions when multiple reviews run on the same day
-REVIEW_SLUG=$(echo "$TOPIC" | tr '[:upper:]' '[:lower:]' | tr -cs '[:alnum:]' '-' | sed 's/^-//;s/-$//' | cut -c1-40)
-REVIEW_ID=$(openssl rand -hex 3)
-REVIEW_DIR=".model-review/$(date +%Y-%m-%d)-${REVIEW_SLUG}-${REVIEW_ID}"
-mkdir -p "$REVIEW_DIR"
-```
+**Narrow reviews (most reviews):** Write just the plan/analysis/code under review + enough surrounding context for models to understand the decision space. Use the Read tool to gather relevant files, then Write to a single `context.md`.
 
-Where `$TOPIC` is a short label for the review target (e.g., "hook architecture", "search retrieval").
-Use the first 2-3 words of the review subject. Examples:
-- `.model-review/2026-03-01-hook-architecture/`
-- `.model-review/2026-03-01-search-retrieval/`
-- `.model-review/2026-02-28-genomics-split/`
+**Broad reviews (codebase/architecture):** Use `.context/` views if the project has them (`make -C .context all 2>/dev/null`). Available views: `full.xml`, `src.xml`, `docs.xml`, `infra.xml`, `signatures.xml`, `filetree.xml`, `diffs.xml`.
 
-**Choose context scope based on review type:**
+**Token budgets:** Gemini Pro sweet spot 80-150K (max ~800K). GPT-5.4 sweet spot 40-100K (max ~400K).
 
-| Review scope | When | Context method |
-|-------------|------|----------------|
-| **Broad** (whole codebase, architecture) | "Review our hook architecture", "Audit the pipeline" | `.context/` views — pre-built, deterministic |
-| **Narrow** (specific plan, analysis, code) | "Review this data-wiring plan", "Check this scoring formula" | Manual assembly — just the relevant files |
+**Do NOT manually create `.model-review/` directories, write constitutional preambles, or assemble per-model context files.** The dispatch script handles all of this.
 
-Most reviews are narrow. Don't dump `full.xml` into a review of one plan document.
+### Step 3: Dispatch Reviews (Script — Always Use This)
 
-**Both approaches always start with constitutional anchoring:**
-```bash
-# Constitutional prefix — always include
-if [ -f ".context/constitution.xml" ]; then
-  cat .context/constitution.xml > "$REVIEW_DIR/gemini-context.md"
-  cat .context/constitution.xml > "$REVIEW_DIR/gpt-context.md"
-elif [ -n "$CONSTITUTION" ]; then
-  for f in "$REVIEW_DIR/gemini-context.md" "$REVIEW_DIR/gpt-context.md"; do
-    echo -e "# PROJECT CONSTITUTION\nReview against these principles, not your own priors.\n" > "$f"
-    cat "$CONSTITUTION" >> "$f"
-    [ -n "$GOALS" ] && { echo -e "\n# PROJECT GOALS\n" >> "$f"; cat "$GOALS" >> "$f"; }
-  done
-fi
-```
-
-**Broad reviews — use `.context/` views:**
-```bash
-# Rebuild if stale (Make tracks deps)
-make -C .context all 2>/dev/null
-
-# Available views:
-#   full.xml        — everything (Gemini: large context)
-#   src.xml         — source code only
-#   docs.xml        — documentation
-#   infra.xml       — scripts/hooks
-#   signatures.xml  — compressed function outlines (GPT: smaller context)
-#   filetree.xml    — directory structure only
-#   diffs.xml       — uncommitted changes
-```
-
-| Review type | Gemini gets | GPT gets |
-|------------|-------------|----------|
-| Architecture | full.xml | signatures.xml |
-| Code review | src.xml | src.xml |
-| Infra/hooks | infra.xml | infra.xml |
-| Delta review | diffs.xml | diffs.xml |
-
-**Narrow reviews — manual assembly:**
-
-Append only the specific files under review. Read them with the Read tool and write to context files. Include enough surrounding context for the models to understand the decision space (e.g., for a plan review, include the plan + the files it references).
-
-**Token budgets:**
-| Model | Sweet spot | Max useful | Note |
-|-------|-----------|------------|------|
-| Gemini 3.1 Pro | 80K-150K | ~800K | Handles large context well; quality doesn't degrade until ~1M |
-| GPT-5.4 | 40K-100K | ~400K | 1M context now available — can handle larger reviews than 5.2 |
-
-### Step 3: Dispatch Reviews (Parallel)
-
-**Preferred: Script dispatch (3 tool calls instead of 10):**
+The dispatch script handles: output directory creation, constitutional preamble injection, context splitting, parallel llmx dispatch, and waiting.
 ```bash
 # Narrow review — you provide the context file
 uv run python3 ~/Projects/meta/scripts/model-review.py \
