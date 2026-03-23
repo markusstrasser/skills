@@ -59,7 +59,7 @@ Each phase prompt must include:
 
 **Gap-analyze:** Read CYCLE.md discoveries + `## Maintenance Log` (from /maintain) + improvement signals (from Live State `IMPROVEMENT SIGNALS` section) + project state (CLAUDE.md, git log, research index). Three gap sources: (1) discoveries from discover phase, (2) maintenance findings promoted to gaps, (3) improvement signals — prioritize `STEER` signals (human steering load) alongside quality/reliability signals. Write prioritized gaps to `## Gaps`. Classify each: autonomous (reversible, existing pattern) or needs-approval. Commit.
 
-**Plan:** Read top gap from `## Gaps` (skip any marked `FAILED`). Write implementation plan to `## Active Plan`: files to change, what changes, verification method, autonomous or needs-approval. If needs-approval, add to `## Queue` as `- [ ] APPROVE: {gap-id} — {description}`. Commit.
+**Plan:** Read top gap from `## Gaps` (skip any marked `FAILED` within cooldown). **Before planning:** check `artifacts/failed-experiments/` for prior attempts on the same subsystem — if found, include "Previously tried: {plan_summary}. Failed because: {failure_reason}" in the plan context so the LLM avoids repeating the same approach. Write implementation plan to `## Active Plan`: files to change, what changes, verification method, autonomous or needs-approval. If needs-approval, add to `## Queue` as `- [ ] APPROVE: {gap-id} — {description}`. Commit.
 
 **Review:** Two steps — probe first, then cross-model review:
 1. **Probe external claims inline:** If the plan references any URL, API endpoint, or version number, HTTP-probe it directly. This catches 404s and HTML-instead-of-API before wasting a review cycle (caught 2 bugs in 6 cycles).
@@ -77,7 +77,17 @@ Read the output files, apply verified findings to plan. If critical issues, move
 
 **Execute:** Read reviewed plan. If autonomous: implement it. If needs-approval: check `## Queue` for `[x]` mark. If not approved, skip. **Before executing:** note current HEAD SHA. After implementation, commit. Move item from Active Plan to `## Autonomous (done)` with date. Mark corresponding gap entry with `~~done~~` prefix.
 
-**Verify:** Check most recent item in `## Autonomous (done)`. Run relevant tests, cross-check with MCP tools, compare with known-good data. Write results to `## Verification Results`. **If verification fails:** run `git revert HEAD` (preserves history, unlike reset). Mark the gap as `FAILED: {reason}` — skip it for 2 cycles to prevent revert→same-plan→same-fail infinite loops. Write failure to DECISIONS.md for human triage.
+**Verify:** Check most recent item in `## Autonomous (done)`. Run relevant tests, cross-check with MCP tools, compare with known-good data. Write results to `## Verification Results`. **If verification fails:**
+1. **Archive the failed attempt** before reverting (DGM-H variant preservation):
+   ```bash
+   mkdir -p artifacts/failed-experiments
+   git format-patch HEAD~1 -o artifacts/failed-experiments/
+   ```
+   Write a JSON sidecar `artifacts/failed-experiments/{gap-id}-{date}.json` with gap fingerprint schema: `{gap_id, repo, subsystem, failure_mode, mechanism_tags, base_commit, failing_metric, plan_summary, failure_reason, date, patch_file}`. Schema at `~/Projects/meta/schemas/gap-fingerprint.json`.
+2. Run `git revert HEAD` (preserves history, unlike reset).
+3. Mark the gap as `FAILED: {reason}` — skip it for 2 cycles.
+4. Write failure to DECISIONS.md for human triage.
+**TTL:** During improve phase archival, prune `artifacts/failed-experiments/` entries >90 days old that were never retrieved by a plan phase.
 
 **Improve:** Three parts — retro + archival + proposals.
 1. **Retro (structured):** Classify this cycle's events using retro categories: WRONG_ASSUMPTION, TOOL_MISUSE, SEARCH_WASTE, TOKEN_WASTE, BUILD_THEN_UNDO. Write structured findings to `## Cycle Retro` in CYCLE.md. Also write JSON to `~/Projects/meta/artifacts/session-retro/{date}-cycle.json` for the improvement pipeline.
