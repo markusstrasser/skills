@@ -56,7 +56,16 @@ Each phase prompt must include:
 
 **Plan:** Read top gap from `## Gaps`. Write implementation plan to `## Active Plan`: files to change, what changes, verification method, autonomous or needs-approval. If needs-approval, add to `## Queue` as `- [ ] APPROVE: ...`. Commit.
 
-**Review:** Read `## Active Plan`. Run `/model-review` on it (or dispatch via llmx if memory-constrained). Apply verified findings to plan. If critical issues, move plan back to gaps. Commit.
+**Review:** Read `## Active Plan`. Write it to a temp file, then run the model-review script:
+```bash
+uv run python3 ~/Projects/meta/scripts/model-review.py \
+  --context /tmp/cycle-plan.md \
+  --topic "research-cycle-G{N}" \
+  --axes simple \
+  --project "$(pwd)" \
+  "Review this genomics pipeline plan for wrong assumptions, missing steps, and anything that could break existing functionality"
+```
+Use `--axes simple` for autonomous items, `--axes standard` for needs-approval items, `--axes deep` for structural changes. Read the output files, apply verified findings to plan. If critical issues, move plan back to gaps. Commit.
 
 **Execute:** Read reviewed plan. If autonomous: implement it. If needs-approval: check queue for `[x]` mark. If not approved, skip. After implementation, move to `## Autonomous (done)` with date. Commit.
 

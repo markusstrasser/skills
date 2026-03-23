@@ -110,27 +110,78 @@ Write the material being reviewed to a single context file. Keep it compact (<15
 
 **Do NOT manually create `.model-review/` directories, write constitutional preambles, or assemble per-model context files.** The dispatch script handles all of this.
 
+### Step 2.5: Determine Review Depth
+
+Before dispatching, classify the review target by blast radius to determine how many queries to run. This replaces the old fixed 2-query default.
+
+**Classification by blast radius (NOT file count):**
+
+| Signal | Simple | Standard | Deep | Full |
+|--------|--------|----------|------|------|
+| Touches classification/threshold logic | | | | x |
+| Touches shared infra (hooks, skills, settings.json) | | | x | |
+| Cross-project changes | | | x | |
+| Domain-dense (bio claims, financial numbers, legal) | | | x | |
+| New feature, 2-5 files, reversible | | x | | |
+| Config tweak, refresh, single research_only field | x | | | |
+| Safety-relevant (clinical, dosing, trade execution) | | | | x |
+
+**Presets → query count:**
+
+| Preset | Axes | Queries | When |
+|--------|------|---------|------|
+| `simple` | combined Gemini Pro | 1 | Config tweaks, refreshes, research_only additions |
+| `standard` | arch + formal | 2 | Most new features and plans (current default) |
+| `deep` | arch + formal + domain + mechanical | 4 | Structural changes, domain-dense plans |
+| `full` | arch + formal + domain + mechanical + alternatives | 5 | Shared infra, clinical logic, high-stakes |
+
+**Individual axes** (mix and match with `--axes arch,domain`):
+
+| Axis | Model | What it checks |
+|------|-------|---------------|
+| `arch` | Gemini Pro | Patterns, architecture, cross-reference |
+| `formal` | GPT-5.4 (high reasoning) | Math, logic, cost-benefit, testable predictions |
+| `domain` | Gemini Pro | Domain fact correctness, API/URL/version verification |
+| `mechanical` | Gemini Flash | Stale refs, wrong paths, naming inconsistencies |
+| `alternatives` | Kimi K2.5 | 3-5 genuinely different approaches |
+| `simple` | Gemini Pro | Quick combined check (for low-stakes changes) |
+
 ### Step 3: Dispatch Reviews (Script — Always Use This)
 
 The dispatch script handles: output directory creation, constitutional preamble injection, context splitting, parallel llmx dispatch, and waiting.
 ```bash
-# Narrow review — you provide the context file
+# Standard review (2 queries — default)
 uv run python3 ~/Projects/meta/scripts/model-review.py \
-  --context "$REVIEW_DIR/context.md" \
+  --context context.md \
   --topic "$TOPIC" \
   --project "$(pwd)" \
   "What's wrong with this [thing being reviewed]"
 
-# Broad review — script picks .context/ views
+# Simple review (1 query — for low-stakes changes)
 uv run python3 ~/Projects/meta/scripts/model-review.py \
-  --broad src \
+  --context context.md \
   --topic "$TOPIC" \
+  --axes simple \
+  "Review this change"
+
+# Deep review (4 queries — structural/domain-dense)
+uv run python3 ~/Projects/meta/scripts/model-review.py \
+  --context context.md \
+  --topic "$TOPIC" \
+  --axes deep \
   --project "$(pwd)" \
-  "Review the source code architecture"
+  "Review this plan"
+
+# Custom axes (mix and match)
+uv run python3 ~/Projects/meta/scripts/model-review.py \
+  --context context.md \
+  --topic "$TOPIC" \
+  --axes arch,domain,mechanical \
+  "Review this"
 ```
 
-The script handles: output directory creation, constitutional preamble, context splitting (Gemini gets full view, GPT gets signatures), parallel llmx dispatch, waiting. It prints JSON with output paths and exit codes. You then:
-1. Read `gemini-output.md` and `gpt-output.md` from the reported `review_dir`
+The script fires all queries in parallel and prints JSON with output paths per axis. You then:
+1. Read `{axis}-output.md` files from the reported `review_dir`
 2. Proceed to Step 4 (fact-check) and Step 5 (extraction)
 
 **Important:** Set `timeout: 660000` on the Bash tool call (script waits for both models, up to 10 min). The script never falls back to weaker models — diagnose failures from the JSON output's `stderr` field.
