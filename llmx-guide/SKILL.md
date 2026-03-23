@@ -3,6 +3,7 @@ name: llmx-guide
 description: Critical gotchas when calling llmx from Python or Bash. Non-obvious bugs and incompatibilities. Use when writing code that calls llmx, debugging llmx failures, or choosing llmx model/provider options.
 user-invocable: true
 argument-hint: '[model name or issue description]'
+effort: medium
 ---
 
 # llmx Quick Reference
@@ -123,7 +124,7 @@ llmx chat -m gemini-3.1-pro-preview -f context.md --timeout 300 --stream "Review
 
 GPT-5.4 (and 5.2) with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning — proxies and HTTP clients kill idle connections. Default is 300s (since llmx 0.5.2).
 
-**Max timeout: 900s** (validated at CLI level, 1-900 range). For review dispatches use `--timeout 600`.
+**Max timeout: 3600s** (validated at CLI level, 1-3600 range). For review dispatches use `--timeout 600`. For xhigh reasoning on complex prompts, use `--timeout 1800`.
 
 **Wall-clock enforcement:** SDK calls run in a daemon thread with `join(remaining_time)`. If SIGALRM can't interrupt a C-level SSL read, the thread join ensures the main thread regains control.
 

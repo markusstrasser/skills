@@ -2,7 +2,7 @@
 name: epistemics
 description: Bio/medical/scientific evidence hierarchy and anti-hallucination rules. Use when conducting claim-heavy medical research, genomics interpretation, supplement evaluation, pharmacogenomics, or clinical evidence synthesis. NOT for casual health questions, software engineering, or physics. Companion to researcher skill.
 user-invocable: false
-effort: low
+effort: high
 ---
 
 # Bio/Medical Research Epistemics
