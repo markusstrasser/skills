@@ -44,13 +44,29 @@ Dispatch parallel searches across sources and categories. Use subagents for para
 
 | Category | Exa Query | Brave Query | Extras |
 |----------|-----------|-------------|--------|
-| **Anthropic** | "Anthropic Claude changelog" + date filter | "Claude Code release notes OR changelog" | Check docs.anthropic.com, github.com/anthropics via WebFetch |
+| **Anthropic** | "Anthropic Claude changelog" + date filter | "Claude Code release notes OR changelog" | WebFetch changelog + SDK releases (see Anthropic deep-check below) |
 | **OpenAI** | "OpenAI Codex CLI changelog" + date filter | "OpenAI API changelog OR SDK release" | Check github.com/openai releases |
 | **Google** | "Gemini CLI changelog release" + date filter | "Gemini API update OR google-genai SDK" | Check github.com/google-gemini releases |
 | **Frameworks** | "AI agent framework" + date filter | "agent framework release 2026" | Check github trending |
 | **MCP** | "MCP server model context protocol" + date filter | "new MCP server" | Check github.com/modelcontextprotocol |
 | **Repos/Lists** | "awesome AI agents" + date filter | "trending AI repos github" | GitHub trending via Exa site filter |
 | **Tools** | "AI coding tool SDK" + date filter | "cursor OR windsurf OR coding agent SDK changelog" | — |
+
+### Anthropic Deep-Check (when focus is "anthropic" or "all")
+
+This is the highest-signal category for our infrastructure. Don't just keyword-search — hit these sources directly:
+
+1. **Claude Code changelog** — `WebFetch` the official changelog at `code.claude.com/docs/en/changelog`. Compare version numbers against `vendor-versions.py` output. Focus on: new hook events, new frontmatter fields, new CLI flags, SDK changes.
+
+2. **Agent SDK releases** — Check `github.com/anthropics/claude-agent-sdk-typescript/releases` and `github.com/anthropics/claude-agent-sdk-python/releases` via Exa site-filtered search. Note new `query()` options, hook input fields, tool changes.
+
+3. **Cookbook new patterns** — `web_search_advanced_exa` with `includeDomains: ["platform.claude.com"]` and date filter. Look for new notebook patterns (agent architectures, MCP patterns, tool use patterns).
+
+4. **GitHub issues for features we track** — Search `github.com/anthropics/claude-code/issues` for issues we're watching (tool output compression #32105, Agent Teams stabilization). Check if closed/merged.
+
+5. **Compare against deferred items** — Read `research/claude-code-native-features-deferred.md` in meta. Check if any "trigger to revisit" conditions are now met.
+
+**Output for Anthropic category:** Version delta (old → new), new features categorized as (adopt now / evaluate / defer), and update to deferred-items memo if triggers are met.
 
 ### Source-Specific Techniques
 
