@@ -27,6 +27,8 @@ Read `MAINTENANCE.log` to see what was done recently. Pick the highest-priority 
 | **Cross-check outputs** | Daily | Pick a random T1/T2 variant from review packets. Query biomedical MCP. Compare. | `mcp__biomedical__*` |
 | **Research memo staleness** | Weekly | Check if any ACTIVE research memos have related files changed since memo date. | `git log` + grep |
 | **Benchmark drift** | After pipeline changes | Run `noncoding_benchmark.py benchmark` if any scoring script changed in last 7d. | Pipeline scripts |
+| **Calibration canary** | Weekly | Run `uv run python3 ~/Projects/meta/scripts/calibration-canary.py --mode sampling --difficulty hard --runs 10`. Check hard canary accuracy is 30-70% (if >90%, canary isn't hard enough). Compare with prior run in `~/.claude/epistemic-metrics.jsonl`. | Meta scripts |
+| **Genomics canary gate** | After classification changes | Run `just canary` in genomics. Pre-commit hook catches this, but maintenance verifies the hook is working. | Genomics justfile |
 
 ### Running a Task
 
