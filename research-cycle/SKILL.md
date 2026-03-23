@@ -53,7 +53,7 @@ Each phase prompt must include:
 
 **Discover:** Search for new information relevant to this project. Lead with Exa (more reliable for tools/releases), then search_preprints for papers. For deep audit sweeps, invoke `/dispatch-research`. Compare against git log and research memos. Write findings to CYCLE.md `## Discoveries` as `- [NEW] ...`. Skip anything already known. Commit. Stop searching at 70% of turns and write up.
 
-**Gap-analyze:** Read CYCLE.md discoveries + project state (CLAUDE.md, git log, research index). Identify what's missing or needs updating. Write prioritized gaps to `## Gaps`. Classify each: autonomous (reversible, existing pattern) or needs-approval. Commit.
+**Gap-analyze:** Read CYCLE.md discoveries + `## Maintenance Log` (from /maintain) + project state (CLAUDE.md, git log, research index). Promote actionable maintenance findings to gaps (e.g., "ClinVar 45d stale" → gap: refresh ClinVar). Identify what's missing or needs updating. Write prioritized gaps to `## Gaps`. Classify each: autonomous (reversible, existing pattern) or needs-approval. Commit.
 
 **Plan:** Read top gap from `## Gaps`. Write implementation plan to `## Active Plan`: files to change, what changes, verification method, autonomous or needs-approval. If needs-approval, add to `## Queue` as `- [ ] APPROVE: ...`. Commit.
 
