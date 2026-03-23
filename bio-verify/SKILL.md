@@ -213,3 +213,10 @@ If errors were found and fixed, write a decision journal entry:
 | **TOTAL** | **full sweep** | **~454** | **~54** | **~12%** | coordinates, gene lists, disease labels |
 
 **Baseline expectation:** ~10-15% of manually-entered biological constants contain errors detectable by API cross-check. Coordinates/positions are the highest-error category. Config JSON files have higher error rates than scripts. Error rate drops to 0% after one fix-and-recheck cycle.
+
+## Complementary Checks
+
+Bio-verify checks **data correctness** (are biological constants accurate?). Two complementary systems check **logic correctness**:
+
+- **Canary gate** (`just canary` in genomics) — 55 sentinel variants through `auto_classify()`. Catches classification logic regressions. Runs as pre-commit hook on classification file changes.
+- **Calibration canaries** (`meta/scripts/calibration-canary.py`) — 47 boolean questions testing model calibration. Weekly via `/maintain`. Not genomics-specific but measures the trustworthiness of LLM judgments used elsewhere in the pipeline.
