@@ -8,7 +8,7 @@ allowed-tools:
   - Write
   - Glob
   - Grep
-effort: low
+effort: medium
 ---
 
 # Browse — Persistent Browser Daemon

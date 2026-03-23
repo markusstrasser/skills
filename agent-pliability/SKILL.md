@@ -9,7 +9,7 @@ allowed-tools:
   - Grep
   - Write
   - Edit
-effort: low
+effort: medium
 ---
 
 # Agent Pliability — Make Files Self-Discoverable
