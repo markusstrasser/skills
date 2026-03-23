@@ -13,6 +13,23 @@ You run on `/loop`. Each tick you read state, pick the next phase, and execute i
 
 !`bash ${CLAUDE_SKILL_DIR}/scripts/gather-cycle-state.sh "$(pwd)" 2>&1 | head -80`
 
+## Rate Limit Detection
+
+Before each tick, check rate limit status:
+```bash
+# Check if Claude API is rate-limited (statusline exposes this)
+RATE_PCT=$(cat ~/.claude/statusline.json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('rate_limits',{}).get('five_hour',{}).get('used_percentage',0))" 2>/dev/null || echo "0")
+CLAUDE_PROCS=$(pgrep claude 2>/dev/null | wc -l | tr -d ' ')
+```
+
+**If rate-limited (RATE_PCT > 80 OR CLAUDE_PROCS >= 6):** Route LLM-heavy phases (discover, gap-analyze, plan) through llmx instead of Claude subagents:
+- Use `llmx chat -m gemini-3-flash-preview` for discover/gap-analyze (search + synthesis — Flash is free via CLI)
+- Use `model-review.py` for review (already routes through llmx)
+- Execute and verify phases use tools, not LLM reasoning — run inline regardless
+- Write `[rate-limited: used llmx]` tag in CYCLE.md log entries for tracking
+
+**If not rate-limited:** Normal operation (Claude subagents preferred).
+
 ## Each Tick
 
 If "NO STATE CHANGE" → one-line noop, stop.
@@ -36,7 +53,7 @@ Otherwise, pick the highest-priority phase and run it. One phase per tick.
 - Logic changes, even 1-line → **subagent** (fresh context for reasoning about consequences)
 - If subagent returns empty (no edit), retry inline once
 
-**Subagent dispatch:**
+**Subagent dispatch (normal mode):**
 ```
 Agent(
   prompt="[phase prompt with project context]",
@@ -46,7 +63,19 @@ Agent(
 )
 ```
 
-**Fallback: inline** (if `pgrep -c claude` >= 5, do the work directly).
+**llmx dispatch (rate-limited mode):** For discover/gap-analyze/plan phases, write the phase prompt to a temp file and dispatch via llmx:
+```bash
+cat > /tmp/cycle-phase-prompt.md << 'EOF'
+[phase prompt with project context]
+EOF
+llmx chat -m gemini-3-flash-preview -f /tmp/cycle-phase-prompt.md \
+  --timeout 120 -o /tmp/cycle-phase-output.md \
+  "[phase instruction]"
+# Read output, apply to CYCLE.md, commit
+```
+Gemini Flash is free via CLI transport — no rate limit conflict with Claude. For phases needing tool use (discover with Exa/S2), work inline with MCP tools but skip subagent delegation.
+
+**Fallback priority:** subagent (fresh context) → llmx (rate-limited) → inline (memory-constrained + rate-limited).
 
 Each phase prompt must include:
 - Project root path and name

@@ -13,6 +13,14 @@ You run on `/loop 30m`. Each tick you pick ONE maintenance task from the rotatio
 
 !`bash -c 'echo "=== DB FRESHNESS ==="; for db in ClinVar gnomAD PharmCAT CPIC; do f=$(find "$(pwd)/databases/" -iname "*${db}*" -type f 2>/dev/null | head -1); if [ -n "$f" ]; then days=$(( ($(date +%s) - $(stat -f%m "$f" 2>/dev/null || stat -c%Y "$f" 2>/dev/null || echo 0)) / 86400 )); echo "  $db: ${days}d old ($f)"; else echo "  $db: not found"; fi; done; echo "=== LAST MAINTENANCE ==="; tail -5 "$(pwd)/MAINTENANCE.log" 2>/dev/null || echo "(no log yet)"; echo "=== DEFERRED ==="; grep -c "revisit:" "$(pwd)/CYCLE.md" 2>/dev/null || echo "0"; echo " deferred items"; echo "=== SCRIPTS ==="; ls scripts/modal_*.py 2>/dev/null | wc -l | tr -d " "; echo " modal scripts"' 2>&1 | head -30`
 
+## Rate Limit Check
+
+Before each tick:
+```bash
+CLAUDE_PROCS=$(pgrep claude 2>/dev/null | wc -l | tr -d ' ')
+```
+If `CLAUDE_PROCS >= 6`: skip tasks that spawn subagents (bio-verify). For LLM-heavy analysis, route through `llmx chat -m gemini-3-flash-preview` (free via CLI). Most maintain tasks are tool-based (Exa, git, scripts) and work fine rate-limited.
+
 ## Each Tick: Pick ONE Task
 
 Read `MAINTENANCE.log` to see what was done recently. Pick the highest-priority task that hasn't been run within its cadence window. Execute it. Log the result.
@@ -27,7 +35,7 @@ Read `MAINTENANCE.log` to see what was done recently. Pick the highest-priority 
 | **Cross-check outputs** | Daily | Pick a random T1/T2 variant from review packets. Query biomedical MCP. Compare. | `mcp__biomedical__*` |
 | **Research memo staleness** | Weekly | Check if any ACTIVE research memos have related files changed since memo date. | `git log` + grep |
 | **Benchmark drift** | After pipeline changes | Run `noncoding_benchmark.py benchmark` if any scoring script changed in last 7d. | Pipeline scripts |
-| **Calibration canary** | Weekly | Run `uv run python3 ~/Projects/meta/scripts/calibration-canary.py --mode sampling --difficulty hard --runs 10`. Check hard canary accuracy is 30-70% (if >90%, canary isn't hard enough). Compare with prior run in `~/.claude/epistemic-metrics.jsonl`. | Meta scripts |
+| **Calibration canary** | Weekly | Run `uv run python3 ~/Projects/meta/scripts/calibration-canary.py --mode sampling --difficulty hard --runs 10 --backend llmx --model gpt-4o-mini`. Uses llmx backend (no Claude API credits needed). Check hard canary accuracy is 30-70% (if >90%, canary isn't hard enough). Compare with prior run in `~/.claude/epistemic-metrics.jsonl`. | Meta scripts |
 | **Genomics canary gate** | After classification changes | Run `just canary` in genomics. Pre-commit hook catches this, but maintenance verifies the hook is working. | Genomics justfile |
 
 ### Running a Task
