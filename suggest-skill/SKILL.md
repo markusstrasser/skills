@@ -9,7 +9,7 @@ allowed-tools:
   - Grep
   - Bash
   - Write
-effort: medium
+effort: high
 ---
 
 # Suggest Skill

@@ -3,7 +3,7 @@ name: verify-findings
 description: Verify LLM-generated codebase findings against actual code. Use after model-review, dispatch-research, project-upgrade, or any automated audit that produces file-specific claims. Grades each finding as Confirmed/Hallucinated/Corrected before allowing fixes.
 user-invocable: true
 argument-hint: '<report path or paste findings inline>'
-effort: medium
+effort: high
 ---
 
 # Verify Findings
