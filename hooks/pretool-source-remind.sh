@@ -33,6 +33,9 @@ if ! echo "$FPATH" | grep -qE "$RESEARCH_PATHS"; then
     exit 0
 fi
 
+# Decision records document choices, not claims — skip
+echo "$FPATH" | grep -qE '/decisions/' && exit 0
+
 # Check if the content being written already has source tags
 CONTENT=$(echo "$INPUT" | python3 -c "
 import sys, json
@@ -50,5 +53,7 @@ if echo "$CONTENT" | grep -qE '\[SOURCE:|\[DATABASE:|\[DATA\]|\[INFERENCE\]|\[SP
 fi
 
 ~/Projects/skills/hooks/hook-trigger-log.sh "source-remind" "remind" "$FPATH" 2>/dev/null || true
-echo "{\"additionalContext\": \"REMINDER: You are writing to a research path ($FPATH). Tag claims with provenance: [SOURCE: url], [DATA], [INFERENCE], [SPEC], [TRAINING-DATA], or Admiralty [A1]-[F6]. Post-write check will enforce this.\"}"
+cat <<'JSON'
+{"additionalContext": "PROVENANCE REQUIRED for research paths. Tag factual claims inline:\n\n  Bad:  Scrotal cooling raises testosterone by 20%.\n  Good: Scrotal cooling raises testosterone by 20% [SOURCE: https://doi.org/10.xxxx/yyyy]\n  Good: No RCT confirms magnitude beyond 5% [INFERENCE]\n  Good: gnomAD AF 0.03 for EUR [DATABASE: gnomAD v4.1]\n\nTags: [SOURCE: url], [DATABASE: name], [DATA], [INFERENCE], [SPEC], [TRAINING-DATA]. Post-write check flags untagged claims."}
+JSON
 exit 0

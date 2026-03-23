@@ -38,6 +38,9 @@ FPATH=$(echo "$INPUT" | grep -oE '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' |
 RESEARCH_PATHS="${RESEARCH_PATHS:-docs/|analysis/|research/|entities/|briefs/}"
 echo "$FPATH" | grep -qE "$RESEARCH_PATHS" || exit 0
 
+# Decision records document choices, not claims — skip provenance check
+echo "$FPATH" | grep -qE '/decisions/' && exit 0
+
 # Skip non-prose files
 case "$FPATH" in
     *.py|*.sh|*.json|*.yaml|*.yml|*.toml|*.cfg|*.ini|*.sql|*.csv|*.tsv|*.parquet)

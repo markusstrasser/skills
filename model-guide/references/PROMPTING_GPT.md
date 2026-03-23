@@ -55,7 +55,7 @@ llmx -m gpt-5.4 --reasoning-effort low "simple query"               # Override f
 
 | Effort | Use When | llmx auto-timeout |
 |--------|----------|:-:|
-| `xhigh` | Maximum compute — hardest problems, Pro-lite behavior | 600s (10 min) |
+| `xhigh` | Maximum compute — hardest problems, Pro-lite behavior. **Domain-heavy prompts (PGx, clinical) can exceed 15 min and timeout at llmx's 900s cap.** Use ChatGPT Pro for those. Pure math xhigh fits in ~8 min. | 900s (15 min, hard max) |
 | `high` | Complex reasoning, math, analysis, coding -- **use this for serious work** | 600s (10 min) |
 | `medium` | Balanced cost/quality for moderate tasks | 300s (5 min) |
 | `low` | Moderate queries, cost-sensitive | 120s |
@@ -89,6 +89,55 @@ Thinking mode **disables markdown by default**. To re-enable, add as the first l
 
 ```
 Formatting re-enabled
+```
+
+---
+
+## 1b. GPT-5.4 Pro — When and How
+
+`gpt-5.4-pro` is the same model as `gpt-5.4` with more compute allocated to reasoning. It supports `reasoning.effort: xhigh` (exclusive to Pro) and can spend **minutes** per request. Pricing: $30/$180 per MTok — 12x base input, 9x output.
+
+### When to Use Pro
+
+Pro is justified when the problem has **all three** of:
+1. **Multi-step quantitative reasoning** where intermediate errors compound (Bayesian chains, coupled equations, formal proofs)
+2. **Verification matters** — you'll check the answer, and a wrong answer has consequences
+3. **Not solvable by search** — the answer requires derivation, not lookup
+
+Concrete examples from our genomics eval (2026-03-22, 21 claims verified):
+- Bayesian posterior computation with calibrated likelihood ratios (zero errors across 100+ claims)
+- Catching planted numerical traps (coordinate normalization, sign errors)
+- Adversarial self-review of its own classification (found PP2/LR14 overclaim)
+- Multi-step PK fold-change derivations across drug-gene interactions
+
+### When NOT to Use Pro
+
+- **Coding tasks** — base GPT-5.4 (or Claude) is sufficient; Pro's extra reasoning doesn't help linear code generation
+- **Literature search/synthesis** — reasoning depth doesn't help fact retrieval (still ~28% hallucination on SimpleQA)
+- **Simple classification** — diminishing returns; high effort on base model is equivalent
+- **Any task where you won't verify the output** — Pro's value is precision, which only matters if consumed precisely
+
+### Pro Prompting
+
+Same as base GPT-5.4, plus:
+- **Keep prompts simple and direct** — Pro's reasoning handles complexity internally. Over-structured prompts waste the reasoning budget on parsing your instructions instead of solving the problem.
+- **Include real data, not descriptions** — Pro reasons over exact numbers. "AM=0.976, GPN=-9.6" beats "high AlphaMissense, strong conservation."
+- **End with "Show all derivations. I will verify every intermediate step."** — this focuses the reasoning on precision, which is Pro's comparative advantage.
+- **Use Responses API with background mode** — requests can take 2-5 minutes. Set `reasoning.effort: "xhigh"` for maximum depth.
+- **Budget: `max_completion_tokens: 32768+`** — Pro generates long reasoning chains. 4096 + xhigh effort = 0 output tokens.
+
+### Pro vs Opus for Adversarial Review
+
+Our eval showed GPT-5.4 Pro is **better than Opus at adversarial self-review** — it found mathematical overclaims in its own TP53 classification (PP2 removal dropped posterior from 0.90→0.81, uncalibrated LR14→4.33 dropped to 0.74). Opus tends to be more agreeable with its own outputs. Use Pro for auditing quantitative code, scoring functions, and calibration math.
+
+### llmx Usage
+
+```bash
+# Pro via llmx — not yet supported directly (Responses API only)
+# Use ChatGPT Pro mode in web UI, or direct API:
+curl https://api.openai.com/v1/responses \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -d '{"model": "gpt-5.4-pro", "reasoning": {"effort": "xhigh"}, "input": "..."}'
 ```
 
 ---

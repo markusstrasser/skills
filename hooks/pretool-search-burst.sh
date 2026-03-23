@@ -11,8 +11,8 @@
 # Testing: SEARCH_BURST_COUNTER=/tmp/test-burst bash pretool-search-burst.sh
 
 COUNTER_FILE="${SEARCH_BURST_COUNTER:-/tmp/claude-search-burst-${PPID:-0}}"
-WARN_THRESHOLD=6
-BLOCK_THRESHOLD=20
+WARN_THRESHOLD=10
+BLOCK_THRESHOLD=30
 
 INPUT=$(cat)
 
@@ -70,6 +70,7 @@ case "$TOOL_NAME" in
         echo "0" > "$COUNTER_FILE" 2>/dev/null
         ;;
     Read|Grep|Glob|Write|Edit|\
+    mcp__selve__search|mcp__selve__get_entry|mcp__selve__brief|\
     mcp__exa__crawling_exa|mcp__exa__deep_researcher_check|\
     mcp__research__get_source|mcp__research__list_corpus|\
     mcp__research__save_paper|mcp__research__save_source)

@@ -11,7 +11,7 @@ effort: medium
 ## Before You Call llmx — Checklist
 
 1. **Model name correct?** Hyphens not dots (`claude-sonnet-4-6` not `claude-sonnet-4.6`)
-2. **Timeout set?** Reasoning models need `--timeout 600` or `--stream`
+2. **Timeout set?** Reasoning models need `--timeout 600` or `--stream`. Max allowed: **900s**. GPT-5.4 xhigh can exceed this on domain-heavy prompts.
 3. **Using `shell=True`?** Don't — parentheses in prompts break it. Use list args + `input=`
 4. **Using `-o FILE`?** Never use `> file` shell redirects — they buffer until exit
 5. **Model name format?** No provider prefixes needed (`gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`). Old prefixed names still accepted with deprecation warning.
@@ -124,7 +124,7 @@ llmx chat -m gemini-3.1-pro-preview -f context.md --timeout 300 --stream "Review
 
 GPT-5.4 (and 5.2) with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning — proxies and HTTP clients kill idle connections. Default is 300s (since llmx 0.5.2).
 
-**Max timeout: 3600s** (validated at CLI level, 1-3600 range). For review dispatches use `--timeout 600`. For xhigh reasoning on complex prompts, use `--timeout 1800`.
+**Max timeout: 900s** (hard cap enforced at CLI level, 1-900 range — rejects anything higher). For review dispatches use `--timeout 600`. **GPT-5.4 xhigh on domain-heavy prompts (PGx, clinical data) can exceed 900s and will timeout.** Use ChatGPT Pro (no wall-clock limit) for xhigh + domain-knowledge prompts. Pure math/derivation xhigh completes in ~8 min and fits the 900s window.
 
 **Wall-clock enforcement:** SDK calls run in a daemon thread with `join(remaining_time)`. If SIGALRM can't interrupt a C-level SSL read, the thread join ensures the main thread regains control.
 
