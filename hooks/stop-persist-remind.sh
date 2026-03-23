@@ -1,6 +1,6 @@
 #!/bin/bash
 # stop-persist-remind.sh — Stop hook: remind to persist research to DB/substrate
-# Advisory (decision: allow). Fires when session modified research/docs files
+# Advisory (decision: approve). Fires when session modified research/docs files
 # but didn't update sqlite/substrate.
 
 trap 'exit 0' ERR
@@ -78,8 +78,8 @@ files_str = ', '.join(research_touched[:5])
 if n > 5:
     files_str += f' +{n-5} more'
 output = {
-    'decision': 'allow',
-    'additionalContext': f'Session modified {n} research/docs file(s) ({files_str}) but no DB/substrate updates detected. Consider persisting to sqlite/substrate before stopping.'
+    'decision': 'approve',
+    'reason': f'Session modified {n} research/docs file(s) ({files_str}) but no DB/substrate updates detected. Consider persisting to sqlite/substrate before stopping.'
 }
 print(json.dumps(output))
 " 2>/dev/null
