@@ -17,12 +17,10 @@ You run on `/loop`. Each tick you read state, pick the next phase, and execute i
 
 Before each tick, check rate limit status:
 ```bash
-# Check if Claude API is rate-limited (statusline exposes this)
-RATE_PCT=$(cat ~/.claude/statusline.json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('rate_limits',{}).get('five_hour',{}).get('used_percentage',0))" 2>/dev/null || echo "0")
 CLAUDE_PROCS=$(pgrep claude 2>/dev/null | wc -l | tr -d ' ')
 ```
 
-**If rate-limited (RATE_PCT > 80 OR CLAUDE_PROCS >= 6):** Route LLM-heavy phases (discover, gap-analyze, plan) through llmx instead of Claude subagents:
+**If rate-limited (CLAUDE_PROCS >= 6):** Route LLM-heavy phases (discover, gap-analyze, plan) through llmx instead of Claude subagents:
 - Use `llmx chat -m gemini-3-flash-preview` for discover/gap-analyze (search + synthesis — Flash is free via CLI)
 - Use `model-review.py` for review (already routes through llmx)
 - Execute and verify phases use tools, not LLM reasoning — run inline regardless
