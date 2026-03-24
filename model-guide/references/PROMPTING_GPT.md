@@ -93,9 +93,25 @@ Formatting re-enabled
 
 ---
 
-## 1b. GPT-5.4 Pro — When and How
+## 1b. GPT-5.4 Pro vs Thinking vs xhigh — What's Actually Different
 
-`gpt-5.4-pro` is the same model as `gpt-5.4` with more compute allocated to reasoning. It supports `reasoning.effort: xhigh` (exclusive to Pro) and can spend **minutes** per request. Pricing: $30/$180 per MTok — 12x base input, 9x output.
+**Same weights, different compute ceilings.** All three are the same model:
+
+| Variant | Access | Reasoning budget | Pricing (in/out per MTok) | Timeout |
+|---------|--------|-----------------|--------------------------|---------|
+| `gpt-5.4` effort=high | API, llmx | Standard reasoning | $2.50/$15 | ~10 min |
+| `gpt-5.4` effort=xhigh | API, llmx | Extended reasoning | $2.50/$15 | ~15 min (llmx hard cap 900s) |
+| `gpt-5.4-pro` | ChatGPT Pro web UI only | Maximum reasoning — no practical ceiling | Subscription ($200/mo) | Minutes to tens of minutes |
+| GPT-5.4 Thinking | ChatGPT web UI | Same as effort=high (default) | Subscription | N/A |
+
+**The only real difference is how long the model is allowed to think.** `xhigh` on base is "Pro-lite" — same extended reasoning, but capped by API timeout. Pro can think for 10+ minutes on a single request with no ceiling. ChatGPT "Thinking" in the web UI is just `effort=high` as the default mode.
+
+**When does extra thinking time matter?** From our 59 Q&A eval:
+- Pure math (Bayesian derivations, HWE calculations): `xhigh` via llmx is sufficient (~8 min). Zero errors.
+- Domain-heavy prompts (PGx risk models, clinical decision trees): exceeded llmx's 900s cap. Had to use ChatGPT Pro web UI.
+- We did NOT A/B test the same prompt at high vs xhigh vs Pro, so we can't confirm that Pro's extra compute produces measurably better answers vs xhigh. The zero-math-error result was all Pro — it might hold at xhigh too.
+
+**Practical rule:** Start with `effort=high` (default). Escalate to `xhigh` if the answer feels incomplete or the reasoning chain was truncated. Use ChatGPT Pro web UI for prompts that need >15 min reasoning (multi-domain clinical synthesis, architectural audits with >10K lines of context).
 
 ### When to Use Pro
 
@@ -176,11 +192,12 @@ Constraints:
 ### llmx Usage
 
 ```bash
-# Pro via llmx — not yet supported directly (Responses API only)
-# Use ChatGPT Pro mode in web UI, or direct API:
-curl https://api.openai.com/v1/responses \
-  -H "Authorization: Bearer $OPENAI_API_KEY" \
-  -d '{"model": "gpt-5.4-pro", "reasoning": {"effort": "xhigh"}, "input": "..."}'
+# Pro is NOT available via API or llmx — ChatGPT Pro web UI only ($200/mo subscription).
+# For API, xhigh on base model is the closest:
+llmx -m gpt-5.4 --reasoning-effort xhigh --timeout 900 --stream "complex query"
+
+# For domain-heavy prompts that exceed 15 min: use ChatGPT Pro web UI.
+# Copy-paste the prompt; Pro has no practical time ceiling.
 ```
 
 ---

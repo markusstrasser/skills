@@ -77,7 +77,11 @@ For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
 **Weaknesses:** Abstract reasoning still below Gemini (ARC-AGI-2 52.9%). CoT controllability is near-zero (0.3% at 10k chars) — you cannot steer what the model reasons about via prompts. CoT monitorability lower than GPT-5 Thinking overall (but near-100% for agentic misalignment detection).
 **Pricing:** $2.50/$15.00 per MTok (<272K context), $5.00/$22.50 (>272K). 90% cache discount. 272K boundary means long-context work costs 2x — prefer Gemini for bulk 1M ingestion.
 
-**Variants:** GPT-5.4 (base), GPT-5.4 Thinking (reasoning, default in ChatGPT), GPT-5.4 Pro (max performance, slow — test manually).
+**Variants** (same weights, different compute ceiling):
+- GPT-5.4 (base) — API/llmx, effort none→high. Default for programmatic use.
+- GPT-5.4 effort=xhigh — API/llmx, extended reasoning. Pro-lite. Timeouts at ~15 min.
+- GPT-5.4 Pro — **ChatGPT Pro web UI only** ($200/mo). No API access. No time ceiling. Use for domain-heavy derivations that exceed 15 min.
+- "Thinking" in ChatGPT web UI = effort=high (the default mode). Not a separate model.
 
 **Effort levels:** `none` (no reasoning, enables temperature/top_p), `minimal`, `low`, `medium`, `high` (default via llmx), `xhigh` (max compute).
 
