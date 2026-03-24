@@ -143,10 +143,11 @@ PROMPT
 ### Step 3: Stage Findings
 1. Read the Gemini output critically — it may hallucinate session details
 2. Cross-check any specific claims against the transcript
-3. Save validated findings as JSON for the auto-triage pipeline:
+3. For findings that meet promotion criteria (recurs 2+ sessions, not already covered, checkable predicate or architectural), append directly to `~/Projects/meta/improvement-log.md` using the output format below
+4. For novel high-severity findings, also append directly (don't wait for recurrence)
+5. Save raw findings as JSON for the session-retro pipeline artifact trail:
 
 ```bash
-# Write findings to a temp JSON file
 cat > ~/Projects/meta/artifacts/session-analyst/findings.json << 'EOF'
 {
   "findings": [
@@ -165,16 +166,7 @@ cat > ~/Projects/meta/artifacts/session-analyst/findings.json << 'EOF'
   "actionable_count": 3
 }
 EOF
-
-# Ingest into auto-triage staging DB
-uv run python3 ~/Projects/meta/scripts/finding-triage.py ingest ~/Projects/meta/artifacts/session-analyst/findings.json
-
-# Check if any findings are ready for auto-promotion (2+ recurrences)
-uv run python3 ~/Projects/meta/scripts/finding-triage.py promote --dry-run
 ```
-
-4. If `promote --dry-run` shows findings ready for promotion, run without `--dry-run` to auto-append to improvement-log.md.
-5. For novel high-severity findings, also append directly to improvement-log.md (don't wait for recurrence).
 
 ### Step 3b (Optional): Shape Pre-Filter
 Before dispatching to Gemini, check which sessions are structurally anomalous:
