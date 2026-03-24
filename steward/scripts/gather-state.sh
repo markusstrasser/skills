@@ -10,8 +10,9 @@ HASH_FILE=~/.claude/steward-state-hash.txt
 ORCH_HASH=$(sqlite3 ~/.claude/orchestrator.db "SELECT count(*),group_concat(status) FROM tasks WHERE status IN ('failed','blocked','pending') ORDER BY id" 2>/dev/null || echo "na")
 RECEIPT_HASH=$(tail -3 ~/.claude/session-receipts.jsonl 2>/dev/null | md5 || echo "na")
 FINDING_HASH=$(grep -c 'Status:\*\* \[ \]' ~/Projects/meta/improvement-log.md 2>/dev/null || echo "0")
+REVIEW_HASH=$(ls -lt ~/Projects/meta/artifacts/design-review/*.md 2>/dev/null | head -1 | md5 || echo "na")
 GIT_HASH=$(for p in meta intel selve genomics; do cd ~/Projects/$p 2>/dev/null && git log --oneline -1 2>/dev/null; done | md5 || echo "na")
-CURRENT_HASH="${ORCH_HASH}|${RECEIPT_HASH}|${FINDING_HASH}|${GIT_HASH}"
+CURRENT_HASH="${ORCH_HASH}|${RECEIPT_HASH}|${FINDING_HASH}|${REVIEW_HASH}|${GIT_HASH}"
 
 PREV_HASH=$(cat "$HASH_FILE" 2>/dev/null || echo "")
 echo "$CURRENT_HASH" > "$HASH_FILE"
@@ -62,6 +63,19 @@ echo ""
 echo "=== FINDING TRIAGE ==="
 cd ~/Projects/meta
 uv run python3 scripts/finding-triage.py status 2>/dev/null || echo "(unavailable)"
+
+echo ""
+echo "=== DESIGN-REVIEW PROPOSALS ==="
+LATEST_REVIEW=$(ls -t ~/Projects/meta/artifacts/design-review/20*.md 2>/dev/null | head -1)
+if [[ -n "$LATEST_REVIEW" ]]; then
+    echo "  Latest: $(basename "$LATEST_REVIEW")"
+    grep -E '^\### \[' "$LATEST_REVIEW" 2>/dev/null | head -5 || echo "  (no proposals)"
+    # Check steward-proposals for already-routed items
+    ROUTED=$(ls ~/.claude/steward-proposals/ 2>/dev/null | wc -l | tr -d ' ')
+    echo "  Routed to steward-proposals: $ROUTED"
+else
+    echo "  (no reviews)"
+fi
 
 echo ""
 echo "=== GIT (last 2h) ==="

@@ -32,6 +32,16 @@ Compare receipts against what you've seen in previous ticks. For genuinely new s
 - If cost was unusually high (>$5) or session had no commits despite long duration, flag it
 - Track cumulative daily cost — warn if approaching $25 cap
 
+### P2.5: Route Design-Review Proposals
+If "DESIGN-REVIEW PROPOSALS" above shows proposals not yet routed to steward-proposals:
+1. Read the latest design-review artifact (the file shown in state)
+2. For each proposal in the review, check if a matching file exists in `~/.claude/steward-proposals/`
+3. For proposals NOT already routed: extract the proposal (name, pattern, frequency, blast radius, reversibility, implementation sketch) and write it to `~/.claude/steward-proposals/{slug}.md`
+4. Skip proposals already routed (idempotent)
+5. Don't implement here — just route. P3.5 handles implementation.
+
+This bridges design-review (sensor) → steward (actuator). Design-review writes artifacts; this step translates them into steward-proposals that P3.5 can act on.
+
 ### P3: Implement Promoted Findings
 Check "UNIMPLEMENTED FINDINGS" and "FINDING TRIAGE" above. For findings with status `[ ]`:
 1. Read the full finding context in `~/Projects/meta/improvement-log.md`
