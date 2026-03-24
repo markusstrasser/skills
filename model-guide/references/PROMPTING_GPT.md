@@ -130,6 +130,49 @@ Same as base GPT-5.4, plus:
 
 Our eval showed GPT-5.4 Pro is **better than Opus at adversarial self-review** — it found mathematical overclaims in its own TP53 classification (PP2 removal dropped posterior from 0.90→0.81, uncalibrated LR14→4.33 dropped to 0.74). Opus tends to be more agreeable with its own outputs. Use Pro for auditing quantitative code, scoring functions, and calibration math.
 
+### Empirical Prompting Patterns (59 Q&A pairs, 6 rounds, 2026-03-22→24)
+
+Corpus: `config/gpt54_calibration_qa.jsonl` in genomics repo. 49/59 evergreen, 21/59 implemented.
+
+**What worked (Round 3: 69% implementation rate):**
+
+1. **Data-hydrated prompts dominate.** Paste actual pipeline output (JSON, scores, variant data), then ask "what's wrong?" Round 3 pasted 516 LOC of `variant_priority_score.py` → found 5 real bugs. Round 1 asked abstract classification questions → 10% implementation rate. The data IS the prompt.
+
+2. **"Derive from first principles" beats "look up the answer."** Asking GPT to derive EUR DPD deficiency prevalence from allele frequencies + Hardy-Weinberg produced exact, verifiable numbers. Asking it to look up CPIC guidelines produced hallucinated citation details. Zero math errors across 100+ quantitative claims, but ~28% hallucination on fact lookup.
+
+3. **Adversarial framing extracts the most.** "Find bugs in this code" and "what's wrong with this classification" outperform "review this" or "what do you think?" The model responds to adversarial pressure with precision; it responds to open-ended asks with balanced hedging.
+
+4. **One derivation per prompt, not surveys.** Round 5 prompts each asked for a single risk model (DPYD activity scores, G6PD drug risk, HLA SCAR decision tree). Produced dense, actionable output. Round 6 megaprompts (entire architecture dump) produced broad but shallow findings — 2.2 quant claims/prompt vs 3.5 for focused prompts.
+
+5. **"Show all derivations. I will verify every intermediate step."** This sentence at the end consistently forced full working, not just conclusions. Without it, Pro often stated results without showing the chain.
+
+**What failed:**
+
+1. **Prompts without code/data.** Round 3 prompt 09a sent an adversarial audit request without pasting the code. GPT correctly refused — but the lesson is that Pro needs material to reason over. Abstract "audit my approach" prompts get abstract answers.
+
+2. **Citation-dependent prompts.** Any prompt requiring specific paper citations (PMID, author+year+journal) gets fabricated details. The facts are often correct; the citations are invented. Always verify PMIDs. (Confirmed: "correct proof on wrong object" — real finding, fake source.)
+
+3. **Framing sensitivity for classification.** Same TP53 variant got LP in one framing, VUS in another (Round 1). The evidence didn't change — the prompt framing did. Never use GPT for final classification. Use it for derivation, then classify yourself.
+
+4. **Search-enabled prompts for database lookups.** Round 4 enabled web search, which found CPIC coverage gaps — but also returned stale/wrong tool version info. Search helps for "what exists?" but not for "what's the current version of X?"
+
+**Prompt template that maximizes value:**
+
+```
+Formatting re-enabled
+
+Here is [actual data/code/output]:
+[paste 100-500 lines of real pipeline data]
+
+Derive [specific quantitative question]. Show all intermediate steps.
+I will verify every calculation.
+
+Constraints:
+- EUR population only
+- GRCh38 coordinates
+- [domain-specific constraints]
+```
+
 ### llmx Usage
 
 ```bash
