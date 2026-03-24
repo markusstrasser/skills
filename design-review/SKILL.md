@@ -26,7 +26,7 @@ You are an architectural reviewer. Your job: read what agents and users **actual
 
 ## Phase 1: Gather & Compress Transcripts
 
-Parse `$ARGUMENTS` for days (default 3), project filter, focus area, and effort level (--quick = phases 1-2 only).
+Parse `$ARGUMENTS` for days (default 1), project filter, focus area, and effort level (--quick = phases 1-2 only).
 
 ### 1a. Structural Pre-Filter
 
@@ -225,8 +225,8 @@ Include a header:
 
 | Mode | Trigger | Sessions | Phases | Model budget |
 |------|---------|----------|--------|-------------|
-| Quick | `--quick` or `/loop` | ~10 (1-2 days) | 1-2 only, bullet output | ~$0.10 (Gemini only) |
-| Standard | default | ~25 (3 days) | Full 1-5 | ~$0.50 |
+| Quick | `--quick` or `/loop` | ~10 (1 day) | 1-2 only, bullet output | ~$0.10 (Gemini only) |
+| Standard | default | ~15 (1 day) | Full 1-5 | ~$0.50 |
 | Deep | `--days 7+` | ~50+ (7 days) | Full + cross-model review | ~$2.00 |
 
 **Loop mode:** When invoked via `/loop`, use quick mode. Output patterns as JSONL (one per line) to the rolling patterns file:
