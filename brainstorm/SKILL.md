@@ -1,7 +1,7 @@
 ---
 name: brainstorm
 description: Divergent ideation via systematic perturbation — denial cascades, domain forcing, constraint inversion. Multi-model dispatch optional (volume, not diversity). For convergent critique, use /model-review.
-argument-hint: [design space to explore — e.g., "memory architecture alternatives", "how to structure the feedback loop"]
+argument-hint: "[--quick|--deep] [--axes denial,domain,constraint] [--domains 'jazz, geology, ...'] [--n-ideas N] design space to explore"
 effort: high
 allowed-tools:
   - Bash
@@ -21,9 +21,27 @@ You are orchestrating divergent ideation. The goal is ideas that escape the defa
 
 **This skill is DIVERGENT only.** For convergent critique, use `/model-review`.
 
+## Parameters
+
+Parse `$ARGUMENTS` for these optional flags (order doesn't matter, remaining text is the topic):
+
+| Flag | Values | Default | Effect |
+|------|--------|---------|--------|
+| `--quick` | — | off | 1 denial round, 2 domains, skip constraint inversion. ~5 ideas. |
+| `--deep` | — | off | 3 denial rounds, 4 domains, 4 inversions. Maximum divergence. |
+| `--axes` | comma-separated: `denial`, `domain`, `constraint` | all three | Run only specified perturbation axes |
+| `--domains` | quoted comma-separated domain names | auto-select | Override domain forcing domains (e.g., `--domains "jazz, geology, packet switching"`) |
+| `--n-ideas` | integer | 15 | Target idea count per generation round |
+| `--no-llmx` | — | off | Run everything locally, no external model dispatch |
+
+**Effort presets:**
+- **default:** 2 denial rounds, 3 domains, 3 inversions, ~15 ideas/round
+- **`--quick`:** 1 denial round, 2 domains, no inversions, ~5 ideas/round. Good for scoping or when you need fast directional options.
+- **`--deep`:** 3 denial rounds, 4 domains, 4 inversions, ~20 ideas/round. Full exploration.
+
 ## Prerequisites
 
-- `llmx` CLI optional — skill works without it (you run all rounds). With llmx, perturbation rounds run in parallel for speed.
+- `llmx` CLI optional — skill works without it (you run all rounds). With llmx, perturbation rounds run in parallel for speed. Use `--no-llmx` to force local-only.
 
 ## Pre-Flight
 
@@ -64,50 +82,45 @@ Identify:
 - **Constraints** — hard limits vs soft preferences
 - **What "good" looks like** — evaluation criteria
 
-### Step 2: Human Seed
+### Step 2: Initial Generation
 
-Before any generation, ask the user:
+Generate `$N_IDEAS` approaches (default 15, or per `--n-ideas`). Cast wide — no evaluation yet. Optimize for volume and diversity over individual brilliance — research confirms LLMs are competitive with humans on creative volume but not at distribution extremes (Nature Human Behaviour 2025). More seeds = more raw material for perturbation.
 
-> "What's your weirdest or half-baked idea for this, even if it seems wrong? Your tacit knowledge is the only genuinely independent input — models share training data, you don't."
+If the user included seed ideas in their prompt, use those as starting points and diversify from there.
 
-If the user provides seeds, use them as starting points. If they say "just run it," proceed without.
-
-### Step 3: Initial Generation
-
-Generate 15-20 approaches. Cast wide — no evaluation yet. Optimize for volume and diversity over individual brilliance — research confirms LLMs are competitive with humans on creative volume but not at distribution extremes (Nature Human Behaviour 2025). More seeds = more raw material for perturbation.
-
-**With llmx:** Dispatch to an external model for parallel volume while you also generate your own set.
+**With llmx (and not `--no-llmx`):** Dispatch to an external model for parallel volume while you also generate your own set.
 
 ```bash
-# Model choice is pragmatic, not for "diversity" — any deep model works
 llmx chat -m gemini-3.1-pro-preview \
   ${CONSTITUTION:+-f "$BRAINSTORM_DIR/context.md"} \
   --max-tokens 65536 --timeout 300 \
   -o "$BRAINSTORM_DIR/external-generation.md" "
 <system>
-Generate approaches to the design space below. Maximize breadth — 15-20 genuinely different approaches, not variations on a theme. No feasibility filtering yet. It is $(date +%Y-%m-%d).
+Generate approaches to the design space below. Maximize breadth — $N_IDEAS genuinely different approaches, not variations on a theme. No feasibility filtering yet. It is $(date +%Y-%m-%d).
 </system>
 
-[Design space + constraints + human seeds if any]
+[Design space + constraints + user-provided seeds if any]
 
 For each approach: one paragraph on the mechanism and why it differs from the others."
 ```
 
-Simultaneously, generate your own 15-20 approaches. Write to `$BRAINSTORM_DIR/claude-generation.md`.
+Simultaneously, generate your own `$N_IDEAS` approaches. Write to `$BRAINSTORM_DIR/claude-generation.md`.
 
-**Without llmx:** Generate 15-20 approaches yourself. Write to `$BRAINSTORM_DIR/initial-generation.md`.
+**Without llmx (or `--no-llmx`):** Generate `$N_IDEAS` approaches yourself. Write to `$BRAINSTORM_DIR/initial-generation.md`.
 
-### Step 4: Perturbation Rounds (The Core Mechanism)
+### Step 3: Perturbation Rounds (The Core Mechanism)
 
-Three independent perturbation axes. **With llmx, dispatch all three in parallel** (three Bash calls in one message, `timeout: 360000`). Without llmx, run them sequentially yourself.
+Run the perturbation axes specified by `--axes` (default: all three). **With llmx, dispatch active axes in parallel** (multiple Bash calls in one message, `timeout: 360000`). Without llmx, run them sequentially yourself.
+
+**Skip an axis entirely if excluded by `--axes`.** With `--quick`, reduce each axis (see preset table above).
 
 **Knowledge injection (before perturbation):** Query 2-3 tangential domain examples via Exa (if available) to expand the solution space before running perturbation rounds. E.g., if brainstorming about memory architectures, search for how biology, common law, or supply chain logistics handles memory/persistence. Feed retrieved examples as context into the perturbation rounds. This primes the search space with real-world mechanisms that denial alone might not surface.
 
 First: identify the 3-5 dominant paradigms from Step 3. These are what we're escaping.
 
-#### 4a: Denial Cascade (2 rounds)
+#### 3a: Denial Cascade
 
-Round 1 forbids the dominant paradigms. Round 2 forbids Round 1's output too. Novelty rises continuously with denial depth (NEOGAUGE, NAACL 2025). This is the primary divergence mechanism.
+Default: 2 rounds. `--quick`: 1 round. `--deep`: 3 rounds. Novelty rises continuously with denial depth (NEOGAUGE, NAACL 2025). This is the primary divergence mechanism.
 
 ```bash
 # Round 1
@@ -143,9 +156,9 @@ DENIAL ROUND 2. Everything above is now ALSO forbidden. Go deeper — what parad
 3+ approaches sharing no paradigm with anything above."
 ```
 
-#### 4b: Domain Forcing
+#### 3b: Domain Forcing
 
-Pick 3 domains **unrelated** to the problem. Distant domains, not adjacent ones — the discomfort is the mechanism.
+If `--domains` specified, use those. Otherwise pick 3 domains **unrelated** to the problem (`--quick`: 2, `--deep`: 4). Distant domains, not adjacent ones — the discomfort is the mechanism.
 
 **Domain pools** (pick one from each row):
 - **Natural systems:** evolutionary biology, immunology, ecology, neuroscience, geology, mycorrhizal networks
@@ -173,9 +186,11 @@ Same.
 Same."
 ```
 
-#### 4c: Constraint Inversion
+#### 3c: Constraint Inversion
 
-Identify 2-3 key assumptions of the current approach. Flip them. This forces the model into a different feasibility landscape where different solutions are optimal — and those solutions often transfer back.
+**Skipped in `--quick` mode.** Default: 3 inversions. `--deep`: 4 inversions.
+
+Identify key assumptions of the current approach. Flip them. This forces the model into a different feasibility landscape where different solutions are optimal — and those solutions often transfer back.
 
 ```bash
 llmx chat -m gpt-5.4 \
@@ -198,7 +213,7 @@ Best design. What transfers?
 Best design. What transfers?"
 ```
 
-### Step 5: Extract & Enumerate (Anti-Loss Protocol)
+### Step 4: Extract & Enumerate (Anti-Loss Protocol)
 
 **Do this BEFORE synthesis.** Single-pass synthesis drops ideas.
 
@@ -244,7 +259,7 @@ For EXPLORE items, note which technique generated it (initial/denial/domain/cons
 
 **Coverage check:** Every extracted item must have a disposition. Count totals.
 
-### Step 6: Synthesize
+### Step 5: Synthesize
 
 ```markdown
 ## Brainstorm: [topic]
@@ -272,7 +287,7 @@ Which 1-2 ideas to prototype first? Cheapest validation?
 
 Save to `$BRAINSTORM_DIR/synthesis.md`.
 
-### Step 7: Bridge to Action
+### Step 6: Bridge to Action
 
 If EXPLORE items suggest implementation:
 
@@ -282,7 +297,7 @@ Don't auto-implement — divergent ideas need convergent validation first.
 
 ## Anti-Patterns
 
-- **Evaluating during generation.** Steps 3-4 generate. Steps 5-6 evaluate. Don't mix.
+- **Evaluating during generation.** Steps 2-3 generate. Steps 4-5 evaluate. Don't mix.
 - **Skipping denial rounds.** Initial generation IS the attractor basin. Denial is how you escape it.
 - **"Related" domains for domain forcing.** Adjacent fields converge to the same basin. Pick distant domains.
 - **Implementing brainstorm output directly.** Prototype cheaply or stress-test with `/model-review` first.
