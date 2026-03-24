@@ -211,7 +211,6 @@ Include a header:
 ```
 
 **Do NOT:**
-- Implement anything — this is a review, not execution
 - Write to improvement-log.md (that's session-analyst's job)
 - Modify the constitution or GOALS.md
 - Propose things already in the meta backlog without marking KNOWN
@@ -220,6 +219,29 @@ Include a header:
 - Include at least one wild card that challenges a current architectural assumption
 - Name the system's trajectory — what design is trying to emerge?
 - Flag the single highest-leverage abstraction (the 80/20)
+
+## Phase 6: Self-Implementation (Meta-Only)
+
+After writing the review output, evaluate each proposal against two criteria:
+
+| Criterion | Threshold |
+|-----------|-----------|
+| Blast radius | meta only (no cross-project files, no shared hooks/skills unless single-project) |
+| Reversibility | easy (single script, hook parameter, rule addition — revertable with one `git revert`) |
+
+**For proposals that pass BOTH criteria:** implement them directly in this session. Commit with `[design-review]` scope and a body explaining which review proposed it. Mark as "IMPLEMENTED" in the review output.
+
+**For proposals that fail either criterion:** submit to orchestrator with `pause_before: true`:
+```bash
+uv run python3 ~/Projects/meta/scripts/orchestrator.py run -p meta --prompt "Implement design-review proposal: {proposal_name}. Details: {proposal_summary}" --pause
+```
+
+**Guardrails:**
+- Max 3 implementations per review (don't turn a review into a multi-hour build session)
+- Each implementation must be independently committable (no half-finished chains)
+- If implementation takes >15 minutes or hits unexpected complexity, stop and submit to orchestrator instead
+- Run `just preflight` or equivalent validation after each implementation
+- Never self-implement: constitution changes, GOALS.md changes, cross-project hooks, skill modifications to skills used by 3+ projects
 
 ## Effort Scaling
 
