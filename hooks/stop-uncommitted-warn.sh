@@ -124,8 +124,7 @@ Use [scope] format."""
 
 output = {
     "decision": "block",
-    "reason": f"Uncommitted changes: {n} files (auto-commit failed).",
-    "additionalContext": prompt,
+    "reason": prompt,
 }
 print(json.dumps(output))
 ' 2>/dev/null)

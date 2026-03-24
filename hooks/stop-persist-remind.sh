@@ -78,7 +78,7 @@ files_str = ', '.join(research_touched[:5])
 if n > 5:
     files_str += f' +{n-5} more'
 output = {
-    'decision': 'approve',
+    'decision': 'block',
     'reason': f'Session modified {n} research/docs file(s) ({files_str}) but no DB/substrate updates detected. Consider persisting to sqlite/substrate before stopping.'
 }
 print(json.dumps(output))

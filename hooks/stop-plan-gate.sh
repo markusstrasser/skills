@@ -123,13 +123,16 @@ if cmds:
 if not issues:
     sys.exit(0)
 
-# Decide severity: verify failures block, status warnings are advisory
+# Decide severity: verify failures block, status warnings also block (so agent sees feedback)
 has_verify_failure = any("ACCEPTANCE CRITERIA" in i for i in issues)
 
+reason_text = "\n\n".join(issues)
+if has_verify_failure:
+    reason_text += "\n\nFix failing criteria before stopping."
+
 output = {
-    "decision": "block" if has_verify_failure else "allow",
-    "reason": f"Plan gate: {plan_name}",
-    "additionalContext": "\n\n".join(issues) + ("\n\nFix failing criteria before stopping." if has_verify_failure else ""),
+    "decision": "block",
+    "reason": reason_text,
 }
 print(json.dumps(output))
 ' 2>/dev/null)
