@@ -3,7 +3,7 @@
 # PreToolUse:Agent command hook.
 #
 # BLOCKING checks (exit 2):
-# 0. Memory pressure — blocks when claude process count exceeds RAM-based limit
+# 0. Memory pressure — blocks on actual system memory (vm_stat) + hard process ceiling
 #
 # Advisory checks (exit 0 + additionalContext):
 # 1. Suggestion/brainstorm pattern in description
@@ -17,19 +17,44 @@
 INPUT=$(cat)
 
 # === Check 0: Memory pressure gate (BLOCKING) ===
-# Count running claude processes (exclude grep itself)
+# Two-tier: actual memory availability via vm_stat (primary) + hard process ceiling (backstop)
+
 CLAUDE_PROCS=$(pgrep -x claude 2>/dev/null | wc -l | tr -d ' ')
 
-# RAM-based limit: 1 claude session per 3GB, minimum 3
-RAM_BYTES=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
-RAM_GB=$((RAM_BYTES / 1073741824))
-MAX_AGENTS=$((RAM_GB / 3))
-[ "$MAX_AGENTS" -lt 3 ] && MAX_AGENTS=3
-
-if [ "$CLAUDE_PROCS" -ge "$MAX_AGENTS" ]; then
-    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "memory-pressure: ${CLAUDE_PROCS}/${MAX_AGENTS} claude procs on ${RAM_GB}GB" 2>/dev/null || true
-    echo '{"decision": "block", "reason": "MEMORY PRESSURE: '"${CLAUDE_PROCS}"' claude processes running (limit: '"${MAX_AGENTS}"' for '"${RAM_GB}"'GB RAM). Spawning another agent risks kernel panic from VM compressor exhaustion. Wait for existing agents to finish, or work directly instead of delegating."}'
+# Tier 1: Hard process ceiling — catch runaway spawning regardless of memory
+if [ "$CLAUDE_PROCS" -ge 15 ]; then
+    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "process-ceiling: ${CLAUDE_PROCS}/15" 2>/dev/null || true
+    echo '{"decision": "block", "reason": "PROCESS CEILING: '"$CLAUDE_PROCS"' claude processes (hard limit: 15). Likely runaway spawning — wait for agents to finish."}'
     exit 2
+fi
+
+# Tier 2: Actual memory pressure via vm_stat (free + inactive + purgeable = reclaimable)
+AVAIL_MB=$(vm_stat 2>/dev/null | awk '
+  /page size of/ { ps = $(NF-1)+0 }
+  /Pages free/      { free = $NF+0 }
+  /Pages inactive/  { inactive = $NF+0 }
+  /Pages purgeable/ { purgeable = $NF+0 }
+  END {
+    if (ps > 0) printf "%d", (free + inactive + purgeable) * ps / 1048576
+    else print "-1"
+  }
+')
+
+# Sanitize — if awk produced garbage, skip memory check (fail open)
+case "$AVAIL_MB" in
+    ''|*[!0-9-]*) AVAIL_MB=-1 ;;
+esac
+
+if [ "$AVAIL_MB" -gt 0 ] && [ "$AVAIL_MB" -lt 1500 ]; then
+    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "memory-pressure: ${AVAIL_MB}MB avail, ${CLAUDE_PROCS} procs" 2>/dev/null || true
+    echo '{"decision": "block", "reason": "MEMORY PRESSURE: '"$AVAIL_MB"'MB available (free+inactive+purgeable), '"$CLAUDE_PROCS"' claude processes. Wait for work to finish or close other apps."}'
+    exit 2
+fi
+
+# Low-memory advisory (passed to warnings section, doesn't block)
+MEM_ADVISORY=""
+if [ "$AVAIL_MB" -gt 0 ] && [ "$AVAIL_MB" -lt 3000 ]; then
+    MEM_ADVISORY="LOW MEMORY: ${AVAIL_MB}MB available, ${CLAUDE_PROCS} claude procs. Spawning allowed but monitor responsiveness. "
 fi
 
 # Advisory checks below — fail open
@@ -55,7 +80,7 @@ except Exception:
 
 [ -z "$DESC" ] && exit 0
 
-WARNINGS=""
+WARNINGS="${MEM_ADVISORY:-}"
 CHECK_IDS=""
 
 # Check 1: Suggestion/brainstorm pattern
