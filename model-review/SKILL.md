@@ -258,6 +258,7 @@ llmx chat -m $GEMINI_MODEL \
   -o "$REVIEW_DIR/gemini-output.md" "
 <system>
 You are reviewing a codebase. Be concrete. No platitudes. Reference specific code, configs, and findings. It is $(date +%Y-%m-%d).
+All code and features are developed by AI agents, not humans. Dev creation time is zero. Never recommend trading stability, composability, or robustness for implementation speed. Filter recommendations by maintenance burden, supervision cost, and complexity — not creation effort.
 Budget: ~2000 words. Dense tables and lists over prose.
 </system>
 
@@ -294,6 +295,7 @@ llmx chat -m $GPT_MODEL \
   -o "$REVIEW_DIR/gpt-output.md" "
 <system>
 You are performing QUANTITATIVE and FORMAL analysis. Gemini is handling qualitative pattern review separately. Focus on what Gemini can't do well. Be precise. Show your reasoning. No hand-waving.
+All code and features are developed by AI agents, not humans. Dev creation time is zero. Never recommend trading stability, composability, or robustness for implementation speed. Filter recommendations by maintenance burden, supervision cost, and complexity — not creation effort.
 Budget: ~2000 words. Tables over prose. Source-grade claims.
 </system>
 
@@ -305,7 +307,7 @@ RESPOND WITH EXACTLY:
 Formal contradictions, unstated assumptions, invalid inferences. If math is involved, verify it.
 
 ## 2. Cost-Benefit Analysis
-For each proposed change: expected impact, maintenance burden, composability, risk. Rank by value adjusted for ongoing cost (not creation effort — dev time is ~free).
+For each proposed change: expected impact, maintenance burden, composability, risk. Rank by value adjusted for ongoing cost. Creation effort is irrelevant (agents build everything). Only ongoing drag matters: maintenance, supervision, complexity budget.
 
 ## 3. Testable Predictions
 Convert vague claims into falsifiable predictions with success criteria. If a claim can't be made testable, flag it.
