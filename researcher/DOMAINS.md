@@ -20,6 +20,7 @@ Omit `category` when the query spans domains or when you want diverse source typ
 
 ## Scientific / Biomedical
 - **Invoke `epistemics` skill** if available — it has the evidence hierarchy and grading rules.
+- **For precise numbers** (gene coordinates, protein sizes, odds ratios, allele counts): use `perplexity_ask` first. Empirical benchmark (8 genomics questions, Mar 2026): Perplexity returned exact values with CIs and assembly versions; Exa `/answer` confirmed/denied but omitted precision (couldn't extract BRCA1 amino acid count, gave "~3.1B" instead of 3,298,912,062 for GRCh38). Use `verify_claim` only when you already have the number and need a yes/no check.
 - ClinVar single-submitter entries get reclassified often — don't treat as settled. ≥2 stars only.
 - gnomAD frequency alone is not clinical evidence. PRS percentiles are population-relative, not absolute risk.
 - You WILL fabricate supplement dosages and effect sizes under pressure to be precise. Don't.

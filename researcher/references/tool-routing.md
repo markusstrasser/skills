@@ -28,10 +28,10 @@ Use whichever of these are available in the current project's `.mcp.json`:
 | `mcp__exa__company_research_exa` | Company intelligence | Business/financial research |
 | `mcp__brave-search__brave_web_search` | Independent index search | Triangulation with Exa (different index) |
 | `mcp__brave-search__brave_news_search` | Dedicated news search | Time-sensitive events (default 24h) |
-| `mcp__perplexity__perplexity_search` | Raw web search results | URL discovery, fact-checking (~$0.005/call). No AI synthesis — just ranked results with snippets. |
-| `mcp__perplexity__perplexity_ask` | Grounded factual answer (Sonar Pro) | Quick cited answer (~$0.01-0.05/call). Saves search→fetch→synthesize chain. |
-| `mcp__perplexity__perplexity_reason` | Chain-of-thought + web (Sonar Reasoning Pro) | Analytical "why" questions needing reasoning + evidence (~$0.05-0.15/call). |
-| `mcp__perplexity__perplexity_research` | Deep multi-source report (Sonar Deep Research) | Comprehensive surveys. Slow (~30s+), expensive (~$0.15-0.50/call). |
+| `mcp__perplexity__perplexity_search` | Raw web search results (Search API) | URL discovery, cheap fact-checking (~$0.005/call). No AI synthesis — ranked results with snippets. |
+| `mcp__perplexity__perplexity_ask` | Grounded factual answer (Sonar Pro) | **Best for precise numbers** — exact figures, CIs, study-level data (~$0.01-0.05/call). Empirically 5-0 vs Exa `/answer` on genomics precision (Mar 2026). Use when you need the value, not just confirmation. |
+| `mcp__perplexity__perplexity_reason` | Chain-of-thought + web (Sonar Reasoning Pro) | Analytical "why" questions needing multi-step reasoning + evidence (~$0.05-0.15/call). |
+| `mcp__perplexity__perplexity_research` | Deep multi-source report (Sonar Deep Research) | Literature-survey-scale questions. Slow (~30s+), expensive (~$0.15-0.50/call). |
 | `mcp__scite__search_literature` | Citation-stance search (1.6B+ citations) | Disconfirmation, literature audits, checking if a claim is supported/contrasted. Returns Smart Citation snippets with stance. |
 | `mcp__firecrawl__firecrawl_scrape` | JS-heavy page scraper | Financial dashboards, dynamic sites. Only if configured. |
 | `mcp__context7__*` | Library documentation | API/framework questions |

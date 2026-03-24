@@ -32,7 +32,8 @@ If 3+ sessions active: keep questions shorter, batch ambiguous items.
 ## Tool Routing
 
 **Quick routing by need:**
-- **Factual lookup:** `verify_claim` (Exa /answer, cached 7d) or Exa search + WebFetch
+- **Factual lookup (need the number):** `perplexity_ask` (~$0.01-0.05/call) — returns exact figures with CIs, assembly versions, study-level breakdowns. Best when you need precise values, not just confirmation. Empirically outperformed Exa `/answer` 5-0 on genomics factual questions (exact bp counts, odds ratios, gene counts, protein sizes).
+- **Factual verification (have the number, need to check it):** `verify_claim` (Exa /answer, ~$0.005/call, cached 7d) — confirms or denies a specific claim. Cheaper but less precise — says "supported" without giving the exact value. Best for checking numbers you already have.
 - **Academic papers:** `search_papers` (S2, 220M+) for discovery → `fetch_paper` + `read_paper` before citing
 - **Recent papers (<6mo):** `web_search_advanced_exa` with `category: "research paper"` + date filter (S2 has no date filtering)
 - **Recent preprints:** `search_preprints` (bioRxiv/medRxiv, free, date-range filtering)
@@ -40,9 +41,10 @@ If 3+ sessions active: keep questions shorter, batch ambiguous items.
 - **Entity enrichment:** `web_search_advanced_exa` with `type: "deep"` + `outputSchema` — structured JSON with per-field citations, eliminates search→fetch→extract chains
 - **Database lookups (UniProt, gnomAD, ClinVar):** Exa/Brave websearch, NOT S2 (returns papers *about* databases, not the data). This is an empirical finding (EBF3 benchmark) — websearch found exact domain boundaries that academic tools missed.
 - **News/events:** `brave_news_search` (24h-7d), Exa with date filter for older
+- **URL discovery / cheap search:** `perplexity_search` (~$0.005/call) — raw ranked results without AI synthesis. Comparable to Brave.
 - **Triangulation:** Exa + Brave (confirmed independent indexes). Perplexity is NOT independent (uses same underlying indexes).
-- **Cheap web search:** `perplexity_search` — raw ranked results without AI synthesis (~$0.005/call). Comparable to Brave. Good for URL discovery and fact-checking when you don't need synthesis.
-- **Perplexity synthesis:** Expensive ($0.01-0.15/call depending on tier). Only for decisive "why" analysis (`perplexity_reason`) or deep surveys (`perplexity_research`). `perplexity_ask` (~$0.01-0.05) saves a search→fetch→synthesize chain but costs more than Exa+WebFetch.
+- **Deep "why" analysis:** `perplexity_reason` (~$0.05-0.15/call) — chain-of-thought with web grounding. Only for analytical questions needing reasoning + evidence.
+- **Comprehensive surveys:** `perplexity_research` (~$0.15-0.50/call, slow 30s+) — multi-source deep research. Reserve for literature-survey-scale questions.
 
 **Paper pipeline (Standard+ academic queries) — run this, not just Exa snippets:**
 `search_papers` → `save_paper` (seed papers) → `fetch_paper` → `prepare_evidence` → `ask_papers(use_rcs=True)`
