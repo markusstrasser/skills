@@ -653,6 +653,21 @@ containers × expected_hours × $/hr = $expected
            saved_snapshots.add(fname)
    vol.commit()
    ```
+9. **Never download large data to `/tmp/` in long-running jobs.** Ephemeral disk is wiped when the container dies. If a job downloads 50 GB over 2 hours to `/tmp/` then crashes at the encode step, all downloads are lost and the retry starts from zero. **Write downloads directly to the Modal volume** (`/data/...`) and `vol.commit()` after each file. On restart, check file existence + size to skip already-downloaded files. The volume costs storage but saves hours of re-download on any failure. Only use `/tmp/` for true scratch (temp files consumed and deleted within minutes).
+   ```python
+   # BAD: downloads lost on crash
+   WORK_DIR = "/tmp/big_download"
+
+   # GOOD: downloads persist, job is resumable
+   WORK_DIR = f"{DATA_DIR}/databases/my_dataset/work"
+   for file in files_to_download:
+       dest = f"{WORK_DIR}/{file}"
+       if Path(dest).exists() and Path(dest).stat().st_size > MIN_SIZE:
+           print(f"Already downloaded: {file}")
+           continue
+       download(url, dest)
+       vol.commit()  # Persist immediately
+   ```
 
 ## MANDATORY: Test Before Deploying
 
