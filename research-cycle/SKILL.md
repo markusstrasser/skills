@@ -32,12 +32,12 @@ CLAUDE_PROCS=$(pgrep claude 2>/dev/null | wc -l | tr -d ' ')
 
 If "NO STATE CHANGE" → one-line noop, stop.
 
-Otherwise, pick the highest-priority phase and run it. One phase per tick.
+Otherwise, pick the highest-priority phase and run it. **Chain phases** if confident — don't wait for the next tick when the next phase has no blockers. Stop chaining when: rate-limited, context is heavy (>60% used), or the next phase needs external data you don't have yet.
 
 ### Phase Priority (first match wins)
 
 1. **Recent execution without verification** → run verify (always verify before executing more)
-2. **Approved items in queue** (`- [x] APPROVE` in CYCLE.md `## Queue`) → run execute
+2. **Items in queue** (CYCLE.md `## Queue`) → run execute. The queue IS the approval — items land there via human steering or gap-analyze. No `[x] APPROVE` gate needed.
 3. **Active plan not yet reviewed** → run review (probe claims + cross-model via `model-review.py`)
 4. **Gaps exist without plan** → run plan phase (write plan for top gap)
 5. **Discoveries exist without gap analysis** → run gap-analyze
@@ -102,7 +102,7 @@ uv run python3 ~/Projects/meta/scripts/model-review.py \
 Route `--axes` by stakes: `simple` for autonomous/low-risk, `standard` for needs-approval, `deep` for structural changes. Skip cross-model entirely for trivial changes (docstring fixes, config tweaks).
 Read the output files, apply verified findings to plan. If critical issues, move plan back to gaps. Commit.
 
-**Execute:** Read reviewed plan. If autonomous: implement it. If needs-approval: check `## Queue` for `[x]` mark. If not approved, skip. **Before executing:** note current HEAD SHA. After implementation, commit. Move item from Active Plan to `## Autonomous (done)` with date. Mark corresponding gap entry with `~~done~~` prefix.
+**Execute:** Read reviewed plan. Implement it — the queue is the approval, no `[x]` gate. **Before executing:** note current HEAD SHA. After implementation, commit. Move item from Active Plan to `## Autonomous (done)` with date. Mark corresponding gap entry with `~~done~~` prefix.
 
 **Verify:** Check most recent item in `## Autonomous (done)`. Run relevant tests, cross-check with MCP tools, compare with known-good data. Write results to `## Verification Results`. **If verification fails:**
 1. **Archive the failed attempt** before reverting (DGM-H variant preservation):
@@ -123,9 +123,9 @@ Read the output files, apply verified findings to plan. If critical issues, move
 
 ### Queue Management
 
-- **Approvals live ONLY in CYCLE.md `## Queue`.** DECISIONS.md is informational — no `[x]` approval mechanism.
-- Human marks `- [x] APPROVE: G5 — description` to approve. Research-cycle reads `[x]` marks from Queue only.
-- **Auto-defer:** Queue items not approved within 3 cycles auto-move to `## Deferred` with note "no human response — revisit on request."
+- **The queue IS the approval.** Items in `## Queue` are ready to execute. No `[x] APPROVE` mechanism — the human steers by adding/removing/reordering items in the queue between ticks.
+- Human removes items from queue to block them. Human adds items to queue to request them.
+- **Auto-defer:** Queue items that fail execution twice auto-move to `## Deferred` with failure reason.
 
 ### WIP Caps
 
@@ -136,14 +136,15 @@ Read the output files, apply verified findings to plan. If critical issues, move
 
 ### Autonomy Boundary
 
-- **Autonomous:** database refreshes (existing sources), config tweaks, `research_only` additions, adding informational fields (no classification change), test runs, verification
-- **Queue for human:** new data source downloads (>1GB), structural changes, removing/replacing existing logic, tool upgrades with breaking changes
-- **Never:** deleting stages, changing classification thresholds, modifying validated clinical logic, deploying new verification tools (propose only — recursive hallucination trap)
+- **Autonomous (most things):** refactoring, architecture, integration, infrastructure, database refreshes, config tweaks, `research_only` additions, new scripts, test runs, verification, removing dead code, consolidating duplicates, wiring new stages. Given enough context, the model outperforms the human on how-to-build decisions.
+- **Human steers what-to-build:** which analyses matter personally, which clinical decisions to encode, GOALS.md direction. The human expresses this by editing CYCLE.md queue between ticks.
+- **Never autonomous:** changing classification thresholds with clinical implications, modifying validated clinical logic, deploying new verification tools (propose only — recursive hallucination trap)
 
 ### Human Steering via CYCLE.md
 
 The human edits CYCLE.md between ticks:
-- Mark `- [x] APPROVE: ...` in `## Queue` to approve queued items
+- Add items to `## Queue` to request work
+- Remove items from `## Queue` to block them
 - Delete discoveries or gaps to dismiss them
 - Add notes under gaps to redirect approach
 - Add `## Priority: ...` to override phase selection
@@ -200,7 +201,7 @@ Log these counters for measurement:
 ## Operating Rules
 
 1. **Never ask for input.** Write questions to DECISIONS.md (informational) and move on.
-2. **One phase per tick.** Don't chain phases — let the loop do the sequencing.
+2. **Chain confidently, stop when blocked.** Run multiple phases in one tick if the next phase has no external blockers. Stop when: rate-limited, context heavy (>60%), waiting on external data/downloads, or hit a "never autonomous" boundary.
 3. **Report in 1-3 lines.** Phase run, outcome, what's next. No preamble.
 4. **Budget awareness.** Track cumulative cost in CYCLE.md header. Warn at $15/day.
 5. **Idempotent.** Check git log and CYCLE.md before acting. Don't redo completed work.
