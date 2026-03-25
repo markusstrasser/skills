@@ -1,7 +1,6 @@
 ---
 name: research-cycle
 description: Autonomous research cycle — discover/gap/plan/review/execute/verify/improve loop via subagents. Reads CYCLE.md for human steering, never asks for input. Run with /loop 15m.
-model: claude-sonnet-4-6
 effort: low
 ---
 
