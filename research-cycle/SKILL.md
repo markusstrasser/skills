@@ -79,6 +79,8 @@ Each phase prompt must include:
 - Project root path and name
 - Current CYCLE.md content (relevant sections only)
 - "Write results back to CYCLE.md. Commit if files changed. Do NOT ask for input."
+- **Turn budget:** "Stop searching at 70% of your turns and synthesize. Do NOT exhaust all turns on searching."
+- **Recitation:** "Before drawing conclusions, recite the key evidence you're working with."
 
 ### Phase Prompts
 
@@ -86,11 +88,12 @@ Each phase prompt must include:
 
 **Gap-analyze:** Read CYCLE.md discoveries + `## Maintenance Log` (from /maintain) + improvement signals (from Live State `IMPROVEMENT SIGNALS` section) + project state (CLAUDE.md, git log, research index). Three gap sources: (1) discoveries from discover phase, (2) maintenance findings promoted to gaps, (3) improvement signals — prioritize `STEER` signals (human steering load) alongside quality/reliability signals. Write prioritized gaps to `## Gaps`. Classify each: autonomous (reversible, existing pattern) or needs-approval. Commit.
 
-**Plan:** Read top gap from `## Gaps` (skip any marked `FAILED` within cooldown). **Before planning:** check `artifacts/failed-experiments/` for prior attempts on the same subsystem — if found, include "Previously tried: {plan_summary}. Failed because: {failure_reason}" in the plan context so the LLM avoids repeating the same approach. Write implementation plan to `## Active Plan`: files to change, what changes, verification method, autonomous or needs-approval. If needs-approval, add to `## Queue` as `- [ ] APPROVE: {gap-id} — {description}`. Commit.
+**Plan:** Read top gap from `## Gaps` (skip any marked `FAILED` within cooldown). **Before planning:** check `artifacts/failed-experiments/` for prior attempts on the same subsystem — if found, include "Previously tried: {plan_summary}. Failed because: {failure_reason}" in the plan context so the LLM avoids repeating the same approach. Write implementation plan to `## Active Plan`: files to change, what changes, verification method. Add to `## Queue` for execution. Commit.
 
-**Review:** Two steps — probe first, then cross-model review:
-1. **Probe external claims inline:** If the plan references any URL, API endpoint, or version number, HTTP-probe it directly. This catches 404s and HTML-instead-of-API before wasting a review cycle (caught 2 bugs in 6 cycles).
-2. **Cross-model review via script:** Write the plan to a temp file, then dispatch:
+**Review:** Three steps — blind assessment, probe, then cross-model review:
+1. **Blind first-pass:** Read the plan WITHOUT re-reading the gap-analyze output. Form an independent assessment of whether the plan addresses the right problem and has the right approach. Write your assessment. THEN compare to the gap-analyze output and note divergences. This breaks confirmation bias (SycEval baseline: 58% fold rate without structural mitigation).
+2. **Probe external claims inline:** If the plan references any URL, API endpoint, or version number, HTTP-probe it directly. This catches 404s and HTML-instead-of-API before wasting a review cycle (caught 2 bugs in 6 cycles).
+3. **Cross-model review via script:** Write the plan to a temp file, then dispatch:
 ```bash
 uv run python3 ~/Projects/meta/scripts/model-review.py \
   --context /tmp/cycle-plan.md \
@@ -100,9 +103,9 @@ uv run python3 ~/Projects/meta/scripts/model-review.py \
   "Review this plan for wrong assumptions, missing steps, and anything that could break existing functionality"
 ```
 Route `--axes` by stakes: `simple` for autonomous/low-risk, `standard` for needs-approval, `deep` for structural changes. Skip cross-model entirely for trivial changes (docstring fixes, config tweaks).
-Read the output files, apply verified findings to plan. If critical issues, move plan back to gaps. Commit.
+Read the output files, apply verified findings to plan. If critical issues, move plan back to gaps. **On model-review failure:** check exit code + stderr before retrying. Classify: auth (retry), rate-limit (fall back to other model), timeout (reduce context), schema error (fix input). Do NOT blindly retry the same model (FM24). Commit.
 
-**Execute:** Read reviewed plan. Implement it — the queue is the approval, no `[x]` gate. **Before executing:** note current HEAD SHA. After implementation, commit. Move item from Active Plan to `## Autonomous (done)` with date. Mark corresponding gap entry with `~~done~~` prefix.
+**Execute:** Read reviewed plan. Implement it — the queue is the approval, no `[x]` gate. **Before executing:** note current HEAD SHA. After implementation, commit. **Reflect inline** (1-3 lines under the done entry): what was easier/harder than planned, did plan assumptions hold, anything to carry forward. Move item from Active Plan to `## Autonomous (done)` with date + reflection. Mark corresponding gap entry with `~~done~~` prefix.
 
 **Verify:** Check most recent item in `## Autonomous (done)`. Run relevant tests, cross-check with MCP tools, compare with known-good data. Write results to `## Verification Results`. **If verification fails:**
 1. **Archive the failed attempt** before reverting (DGM-H variant preservation):
