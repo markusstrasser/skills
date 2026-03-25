@@ -206,11 +206,28 @@ uv run python3 ~/Projects/meta/scripts/model-review.py \
   "Review this"
 ```
 
-The script fires all queries in parallel and prints JSON with output paths per axis. You then:
-1. Read `{axis}-output.md` files from the reported `review_dir`
-2. Proceed to Step 4 (fact-check) and Step 5 (extraction)
+The script fires all queries in parallel and prints JSON with output paths per axis.
 
-**Important:** Set `timeout: 660000` on the Bash tool call (script waits for both models, up to 10 min). The script never falls back to weaker models — diagnose failures from the JSON output's `stderr` field.
+**With `--extract` (recommended):** The script auto-extracts claims from each output using cross-family models (Flash extracts GPT output, GPT-Instant extracts Gemini output) and merges them into `disposition.md`. The JSON output includes a `"disposition"` key with the path. You then:
+1. Read `disposition.md` — merged numbered claims from all reviewers
+2. Proceed to Step 4 (fact-check the extracted claims)
+3. Skip Step 5 (already done by the script)
+
+**Without `--extract`:** You must manually extract claims (Step 5 below).
+
+**Add `--extract` to all standard and deep reviews.** Only skip it for simple reviews where you'll read the output directly.
+
+```bash
+# Standard review WITH auto-extraction (preferred)
+uv run python3 ~/Projects/meta/scripts/model-review.py \
+  --context context.md \
+  --topic "$TOPIC" \
+  --project "$(pwd)" \
+  --extract \
+  "What's wrong with this [thing being reviewed]"
+```
+
+**Important:** Set `timeout: 660000` on the Bash tool call (script waits for both models + extraction, up to 11 min). The script never falls back to weaker models — diagnose failures from the JSON output's `stderr` field.
 
 **Manual dispatch (when you need custom context assembly or non-standard prompts):**
 
