@@ -158,6 +158,19 @@ elif [ "$COUNT" -ge 3 ]; then
     WARNINGS="${WARNINGS}SUBAGENT CASCADE (${COUNT}): 3+ consecutive Agent calls. Check if these are truly independent — sequential chains should run directly. Have you surfaced known limitations/ceilings of the current approach? "
 fi
 
+# Check 7: Turn-budget / file-output instruction missing in dispatch prompt
+if [ -n "$PROMPT" ]; then
+    HAS_TURN_BUDGET=$(echo "$PROMPT" | grep -ciE '(stop|halt|synthesize|write).*(70%|turn|budget|before running out)' || true)
+    HAS_FILE_OUTPUT=$(echo "$PROMPT" | grep -ciE '(write|save|output).*(file|path|memo|artifact)' || true)
+    if [ "$HAS_TURN_BUDGET" -eq 0 ] || [ "$HAS_FILE_OUTPUT" -eq 0 ]; then
+        CHECK_IDS="${CHECK_IDS}7,"
+        MISSING=""
+        [ "$HAS_TURN_BUDGET" -eq 0 ] && MISSING="turn-budget instruction (stop at 70% and synthesize)"
+        [ "$HAS_FILE_OUTPUT" -eq 0 ] && MISSING="${MISSING:+$MISSING + }file-output instruction (write results to a file)"
+        WARNINGS="${WARNINGS}SUBAGENT OUTPUT: Dispatch prompt missing ${MISSING}. Add to prompt: 'Stop searching at 70% of turns and write your synthesis to a file. Return the file path.' "
+    fi
+fi
+
 # Emit combined warnings
 if [ -n "$WARNINGS" ]; then
     ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "warn" "checks=${CHECK_IDS%,} ${WARNINGS:0:80}" 2>/dev/null || true
