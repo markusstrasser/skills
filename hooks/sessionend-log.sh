@@ -103,7 +103,7 @@ with open(receipt_path, "a") as f:
 
 # --- Attach git notes to session commits ---
 if commits and cwd and os.path.isdir(os.path.join(cwd, ".git")):
-    note_body = f"session: {session}\nmodel: {cockpit.get('model', '?')}\ncost_usd: {float(cockpit.get('cost', 0)):.2f}\nduration_min: {mins}\nproject: {project}"
+    note_body = "session: {}\nmodel: {}\ncost_usd: {:.2f}\nduration_min: {}\nproject: {}".format(session, cockpit.get("model", "?"), float(cockpit.get("cost", 0)), mins, project)
     for commit_line in commits:
         sha = commit_line.split()[0] if commit_line.strip() else ""
         if sha and len(sha) >= 7:
