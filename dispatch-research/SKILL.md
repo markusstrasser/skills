@@ -63,9 +63,13 @@ Don't generate prompts for things obvious from reading the code. Target things r
 
 ### GPT-5.4 via Codex — capabilities
 
-**CAN do:** Read any file, run shell commands (grep/find/wc), write files, cross-reference, count/compare/compute, produce structured output (tables, matrices, categorized lists). With `--search`: web search. With configured MCPs: scite, paper-search, exa, brave, etc.
+**CAN do:** Read any file, run shell commands (grep/find/wc), write files, cross-reference, count/compare/compute, produce structured output (tables, matrices, categorized lists). With configured MCPs: scite, paper-search, exa, brave, perplexity, research, meta-knowledge, context7 (9 servers total).
 
-**CANNOT do:** Database queries, conversation history, `uv`/project-specific CLIs (sandbox lacks project environment — `uv` panics in system-configuration crate). **28% factual error rate on external knowledge** — never trust claims about APIs/libraries. Also hallucinates fix status — may claim "this was already fixed" when it wasn't.
+**CANNOT do:** Database queries, conversation history, `uv`/project-specific CLIs (sandbox lacks project environment — `uv` panics in system-configuration crate). **28% factual error rate on external knowledge** — never trust claims about APIs/libraries. Also hallucinates fix status — may claim "this was already fixed" when it wasn't. `--search` only works in interactive mode, NOT in `exec`.
+
+**Auth & model restrictions:** Codex uses ChatGPT account auth. Only subscription-tier models work — `gpt-5.4` (default), `gpt-5.3-codex`. Models like `o3` and `gpt-4.1` are rejected ("not supported with ChatGPT account"). Don't specify `--model` unless overriding the default in `~/.codex/config.toml`.
+
+**Token overhead:** Each `codex exec` call loads all configured MCP servers (~37K tokens of tool descriptions, 9 servers as of 2026-03-26). No flag to disable MCP loading — the overhead is structural. This means codex is cost-effective for substantial tasks but wasteful for trivial queries. Budget ~37K baseline + actual task tokens per call.
 
 **Turn limits:** `codex exec` has a built-in turn limit (~15-20 tool calls). Agents reading many files exhaust turns before synthesizing. Mitigations:
 - **Max 5 files per agent.** Split larger audits into multiple agents.
@@ -135,9 +139,9 @@ done
   - If `-o` files are empty or missing after agent completion, check `~/.codex/sessions/` for the session — but note that reasoning payloads are encrypted and findings are NOT recoverable from logs.
 - `--search` — **only works in interactive mode, NOT in `exec`**. Use MCP tools instead.
 
-**MCP tools:** Codex shares the global MCP config (`~/.codex/config.toml`). All configured MCPs (scite, exa, brave, paper-search, etc.) are available to `exec` agents automatically.
+**MCP tools:** Codex shares the global MCP config (`~/.codex/config.toml`). 9 configured MCPs (context7, exa, research, meta-knowledge, brave-search, paper-search, perplexity, scite, codex_apps) are available to `exec` agents automatically. Each contributes to the ~37K token overhead.
 
-**MCP contention:** Max 4 parallel Codex agents when MCPs are needed. Each agent starts its own MCP server instances. 5+ concurrent agents with multiple MCPs can overwhelm the system (132+ simultaneous MCP startups observed).
+**MCP contention:** Max 4 parallel Codex agents when MCPs are needed. Each agent starts its own MCP server instances (9 servers × N agents). 5+ concurrent agents can overwhelm the system (132+ simultaneous MCP startups observed).
 
 **S2 API outages:** Semantic Scholar returns 403 periodically. Tell agents to fall back to `backend="openalex"` for `search_papers` if S2 fails. Or instruct agents to use `exa` web search as a paper-discovery fallback.
 

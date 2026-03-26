@@ -275,6 +275,35 @@ EOF
 
 Note: in both cases, `<system>...</system>` is prompt text, not a transport-level system role. The model treats it as advisory text rather than a hard system channel. The behavior is identical whether you use `-s` or inline tags.
 
+### Direct Codex CLI Usage (without llmx)
+
+For subagent dispatch and non-interactive tasks, call `codex exec` directly:
+
+```bash
+# Simple task
+codex exec --full-auto "Review the error handling in scripts/*.py"
+
+# With output capture
+codex exec --full-auto -o findings.md "Audit this codebase for dead code"
+
+# Specific working directory
+codex exec --full-auto -C /path/to/project "List all API endpoints"
+
+# Structured output
+codex exec --full-auto --output-schema schema.json "Extract function signatures"
+```
+
+**Key facts (v0.116.0, 2026-03-26):**
+- **Auth:** ChatGPT account (browser login). Only subscription-tier models work: `gpt-5.4` (default), `gpt-5.3-codex`. `o3`, `gpt-4.1`, etc. are rejected.
+- **Token overhead:** ~37K tokens per call from MCP server tool descriptions (9 servers). No flag to disable. Structural cost — fine for substantial tasks, wasteful for trivial queries.
+- **MCP servers loaded:** context7, exa, research, meta-knowledge, brave-search, paper-search, perplexity, scite, codex_apps. Configured in `~/.codex/config.toml`.
+- **`--ephemeral`:** Avoid — sandbox cleanup deletes file writes including `-o` output.
+- **`--full-auto`:** Sandboxed auto-approval (workspace-write). Required for non-interactive use.
+- **`--search`:** Only works in interactive mode, NOT in `exec`. Use MCP tools instead.
+- **Default model:** Set in `~/.codex/config.toml` (`model = "gpt-5.4"`). Don't pass `--model` unless overriding.
+
+**As Claude Code subagent:** Call via Bash tool. Set `timeout: 120000` or higher. Output is on stdout (last message repeated at end). Use `-o FILE` for file capture, but read/copy immediately — sandbox cleanup can delete.
+
 ### Codex CLI Reasoning Default
 
 `llmx -p openai` inherits Codex CLI's own reasoning default. llmx does **not** pass a reasoning-effort flag to `codex exec`.
