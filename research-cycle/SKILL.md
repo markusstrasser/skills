@@ -106,7 +106,25 @@ Read the output files, apply verified findings to plan. If critical issues, move
 
 **Execute:** Read reviewed plan. Implement it — the queue is the approval, no `[x]` gate. **Before executing:** note current HEAD SHA. After implementation, commit. **Reflect inline** (1-3 lines under the done entry): what was easier/harder than planned, did plan assumptions hold, anything to carry forward. Move item from Active Plan to `## Autonomous (done)` with date + reflection. Mark corresponding gap entry with `~~done~~` prefix.
 
-**Verify:** Check most recent item in `## Autonomous (done)`. Run relevant tests, cross-check with MCP tools, compare with known-good data. Write results to `## Verification Results`. **If verification fails:**
+**Verify:** Check most recent item in `## Autonomous (done)`. Two verification tracks depending on output type:
+
+**Track A — Infrastructure changes** (code, config, hooks, scripts): Run relevant tests, check file existence, compare with known-good data. Same as before.
+
+**Track B — Research output** (executed item produced or modified `research/*.md`): Run factual claim verification:
+1. Extract 3-5 key factual claims from the output (specific numbers, dates, named entities, causal assertions — not opinions or interpretations)
+2. For each claim, call `verify_claim` MCP tool
+3. Record verdicts in `## Verification Results`:
+   ```
+   [DATE] **[item]:** claim verification (N claims checked)
+   - "Claim text" → supported (0.85) PASS
+   - "Claim text" → insufficient (0.4) WARN
+   - "Claim text" → contradicted (0.9) FAIL
+   ```
+4. **FAIL threshold:** Any claim "contradicted" with confidence >0.7 → trigger revert flow below
+5. **WARN threshold:** "insufficient" verdicts → append to DECISIONS.md for human review, don't block
+6. If all claims supported or insufficient with low confidence → PASS
+
+For both tracks, write results to `## Verification Results`. **If verification fails:**
 1. **Archive the failed attempt** before reverting (DGM-H variant preservation):
    ```bash
    mkdir -p artifacts/failed-experiments
