@@ -3,10 +3,18 @@
 # SessionEnd hook. Side-effect only (no decision control). Fails open.
 # Logs: timestamp, session, reason, cwd, transcript size, cost (from cockpit state).
 
-trap 'exit 0' ERR
+HOOK_ERROR_LOG="$HOME/.claude/hook-errors.log"
+log_hook_error() {
+  local msg="$1"
+  local ts
+  ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  printf '{"ts":"%s","hook":"sessionend-log","error":"%s"}\n' "$ts" "$msg" >> "$HOOK_ERROR_LOG" 2>/dev/null
+}
+trap 'log_hook_error "bash ERR on line $LINENO"; exit 0' ERR
 
 INPUT=$(cat)
 
+PYTHON_STDERR=$(mktemp)
 echo "$INPUT" | python3 -c '
 import sys, json, os
 from datetime import datetime
@@ -133,6 +141,13 @@ for p in (f"/tmp/claude-last-notify-{ppid}", f"/tmp/claude-cost-over-{ppid}"):
         os.unlink(p)
     except FileNotFoundError:
         pass
-'
+' 2>"$PYTHON_STDERR"
+PYTHON_EXIT=$?
+
+if [ "$PYTHON_EXIT" -ne 0 ]; then
+  STDERR_CONTENT=$(cat "$PYTHON_STDERR" | tr '\n' ' ' | tr '"' "'" | head -c 500)
+  log_hook_error "python exit=$PYTHON_EXIT: $STDERR_CONTENT"
+fi
+rm -f "$PYTHON_STDERR"
 
 exit 0
