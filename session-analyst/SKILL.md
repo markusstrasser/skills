@@ -1,6 +1,6 @@
 ---
 name: session-analyst
-description: Analyzes Claude Code session transcripts for behavioral anti-patterns — sycophancy, over-engineering, build-then-undo, token waste. Dispatches compressed transcripts to Gemini for analysis, appends structured findings to meta/improvement-log.md. The "recursive self-improvement" component. NOT for: architectural improvements (use design-review), supervision metric audits (use supervision-audit), or end-of-session retrospectives (use retro).
+description: "Analyzes Claude Code session transcripts for behavioral anti-patterns — sycophancy, over-engineering, build-then-undo, token waste. Dispatches compressed transcripts to Gemini for analysis, appends structured findings to meta/improvement-log.md. The \"recursive self-improvement\" component. NOT for: architectural improvements (use design-review), supervision metric audits (use supervision-audit), or end-of-session retrospectives (use retro)."
 user-invocable: true
 context: fork
 argument-hint: <project> [session_count]
@@ -48,6 +48,7 @@ Self-evolution erodes alignment through positive feedback loops. These modes det
 16. **Metric gaming** — Agent optimizes for measurable proxy rather than actual goal. Signals: committing trivial changes to pad git history, adding provenance tags without actually sourcing claims, restructuring output format to satisfy linting without improving substance.
 17. **Wrong-tool drift** — Agent consistently uses a less appropriate tool when a better one is available. Distinct from capability abandonment (not using any tool). Signals: using Bash for file operations instead of Read/Edit, using WebSearch when a specialized MCP exists, using training data when a search tool would give current results.
 18. **Vendor confound** — Agent behavior changes based on which vendor/model is executing, not task requirements. Signals: different tool selection patterns when running under Gemini vs Claude for equivalent tasks, systematic avoidance of tools that failed once on a different vendor.
+19. **Performative triage** — Agent produces a findings list, then self-selects a subset to fix via "top N" or "most critical" framing, implicitly dropping confirmed items without explicit per-item deferral reasons. Signals: "let me fix the top 3", "I'll address the most critical", numbered findings list followed by implementation of only a subset, no DEFER disposition for unfixed confirmed items. Root cause: RLHF bias toward appearing to prioritize rather than completing work.
 19. **Latency-induced avoidance** — Agent avoids slow-but-correct tools in favor of fast-but-inferior alternatives. Signals: skipping fetch_paper in favor of abstract summaries, not using deep search when shallow returned insufficient results, avoiding MCP tools with known latency in favor of training data.
 
 ## What This Does NOT Detect
@@ -238,7 +239,7 @@ Output: {category, pattern_summary, suggested_action}
 
 ### Step C3: Stage Candidates
 
-Append classified corrections to `~/Projects/meta/artifacts/rule-candidates.jsonl`:
+Append classified corrections to `$HOME/Projects/meta/artifacts/rule-candidates.jsonl`:
 
 ```json
 {"date": "2026-03-21", "project": "meta", "session": "abc123", "category": "hook-candidate", "trigger": "...", "correction": "...", "pattern_summary": "...", "suggested_action": "...", "recurrence": 1, "promoted": false}
@@ -247,7 +248,7 @@ Append classified corrections to `~/Projects/meta/artifacts/rule-candidates.json
 ### Step C4: Check Promotion Gates
 
 Before promoting any candidate to improvement-log.md, ALL three constitutional gates must pass:
-1. **Recurs 2+ sessions** — check recurrence count in rule-candidates.jsonl
+1. **Recurs 2+ sessions** — check recurrence count in `rule-candidates.jsonl`
 2. **Not already covered** — grep existing rules/ and hooks for the pattern
 3. **Checkable predicate OR architectural change** — is this enforceable?
 

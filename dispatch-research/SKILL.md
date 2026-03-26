@@ -73,7 +73,7 @@ Don't generate prompts for things obvious from reading the code. Target things r
 
 **Turn limits:** `codex exec` has a built-in turn limit (~15-20 tool calls). Agents reading many files exhaust turns before synthesizing. Mitigations:
 - **Max 5 files per agent.** Split larger audits into multiple agents.
-- **Incremental output.** Tell the agent: "After reading each file, immediately write your findings for that file. Do not wait until the end to synthesize."
+- **Don't tell agents to write files.** Agents that create template files waste a write turn and still exhaust turns before filling them in (failed 3/4 sessions). Instead, rely on `-o FILE` to capture the final text response.
 - **Use `-o FILE` flag** to capture the final message even if the agent runs out of turns mid-synthesis.
 - **Prefer grep-first, read-targeted.** Tell agents to grep for specific patterns first, then read only the relevant line ranges — not entire files.
 
@@ -104,6 +104,8 @@ Save to [specific output path].
 
 ### Dispatch execution
 
+**Anti-pattern: template-first.** Codex agents that create a skeleton markdown file first ("## Section 1\nPending.\n## Section 2\nPending.") spend a write turn on zero content, then exhaust remaining turns reading code and never fill it in. This has failed in 3/4 sessions. **Do NOT tell agents to write a template.** Instead, rely on `-o` to capture the final text response.
+
 ```bash
 mkdir -p docs/audit  # or wherever findings should go
 
@@ -111,10 +113,10 @@ mkdir -p docs/audit  # or wherever findings should go
 codex exec --model gpt-5.4 --full-auto \
   -o docs/audit/codex-{slug}.md \
   "You are auditing a codebase. Read files at their full paths. \
-   Cite file:line for findings. After reading each file, immediately \
-   write your findings for that file — do not wait to synthesize at the end. \
-   IMPORTANT: Write your report to docs/audit/{slug}.md (NOT /tmp). \
-   End with a complete markdown summary of all findings. \
+   Cite file:line for findings. \
+   Do NOT create any files or write any templates. Just read code and analyze. \
+   Your final text message will be captured automatically. \
+   End with a COMPLETE markdown report of all findings. \
    TASK: [prompt]" &
 
 codex exec --model gpt-5.4 --full-auto \
@@ -224,8 +226,9 @@ Synthesize verified findings into an execution plan. This is a plan-mode documen
 2. **Cite the verified finding** for each fix — traceability from audit → plan → commit
 3. **Include verification commands** — how to confirm each fix worked
 4. **Estimate scope honestly** — "~10 min" not "trivial"
-5. **Flag deferred items** — things found but not worth fixing now (with reason)
+5. **Flag deferred items** — things found but not worth fixing now (with reason per item, not a batch cutoff)
 6. **Phase boundaries** — commit after each phase, not one giant commit
+7. **Fix ALL verified findings** — don't self-select "top N" and implicitly drop the rest. Every confirmed finding gets a plan entry. If something must be deferred, give it an explicit disposition with a reason.
 
 ### Plan approval
 
@@ -234,6 +237,13 @@ Present the plan to the user. Wait for approval before executing. If the plan ha
 ## Phase 5: Execute (~25%)
 
 After user approves the plan, implement it.
+
+### Multi-agent commit safety
+
+If `OTHER ACTIVE AGENTS` was reported at session start, other agents may `git add` your uncommitted edits under wrong commit messages. Mitigations:
+- **Commit after each fix**, not batched at the end of a phase
+- Or use `isolation: worktree` for the entire dispatch-research session
+- Never leave edited files uncommitted while background agents are running
 
 ### Execution principles
 
@@ -244,6 +254,8 @@ After user approves the plan, implement it.
 5. **Verify each fix** against the plan's verification commands
 6. **Don't over-engineer** — fix what was found, don't refactor the neighborhood
 7. **Parallel where possible** — use Agent tool for independent file edits
+8. **Verify paths before fixing paths** — when fixing a wrong file path, run `find` for actual location + `head -5` to check structure before editing. Don't guess from directory names (3-iteration failure observed)
+9. **Run the script after each fix** — don't batch all fixes then test. Optional fields with explicit `None` values, wrong JSON structures, etc. only surface at runtime
 
 ### Commit message format
 
@@ -278,7 +290,9 @@ Reference the audit finding:
 | Claude Code `Agent` subagents | Same tasks + DuckDB/MCP access | Costs tokens, but output is inline — no extraction issues |
 | `llmx chat --model gemini-3.1-pro-preview` | 1M context (huge file ingestion) | Best for monolithic file analysis |
 
-**Codex vs Claude subagents (learned 2026-03-18):** For codebase audits, Claude `Agent` subagents with `subagent_type=Explore` are more reliable than Codex `exec` because: (1) output is returned directly to parent context — no `-o` extraction failures, (2) full MCP/DuckDB access, (3) no sandbox environment mismatch. Use Codex when you need 10+ parallel audits (Claude subagents are limited by parent context cost) or when the task is purely file-grep (no project tooling needed).
+**Codex vs Claude subagents:** Claude `Agent` subagents with `subagent_type=Explore` have more reliable output (returned inline, no extraction failures) and full MCP/DuckDB access. But Codex excels at cross-file logic tracing, architectural analysis, config-vs-code drift detection, and counting/comparing — not just math. Use Codex for: (a) 5+ parallel audits where Claude subagent context cost is prohibitive, (b) tasks requiring cross-referencing many files with grep+read patterns, (c) structured wiring/drift/completeness checks. Use Claude subagents for: (a) <3 file audits, (b) tasks needing project-specific tooling (uv, DuckDB, MCP).
+
+**2026-03-26 session note:** 4 Codex agents audited 8 synthesis scripts. Code-grounded findings (clinvar field name bug, dead config rules, wrong file paths, unused inputs) were 100% accurate. 3/4 agents produced substantive findings — the failure was output extraction (template-first pattern), not analysis quality. `-o` capture of final text message was the reliable channel.
 
 ## Paper-reading dispatch (research audits)
 

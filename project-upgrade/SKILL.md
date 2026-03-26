@@ -562,6 +562,7 @@ echo "Saved baseline SHA for next diff-aware run: $(cat $PROJECT_ROOT/.project-u
 
 ## Anti-Patterns
 
+- **"Top N" triage of confirmed findings.** If a finding is dispositioned APPLY, it gets implemented — all of them. Don't self-select "the top 5 most impactful" and silently drop the rest. If you need to defer something, change its disposition to DEFER with a per-item reason, not a ranking cutoff.
 - **Applying all findings without verification.** Each change MUST be verified independently. A "batch apply" that breaks something has no rollback granularity.
 - **Trusting Gemini's file paths.** Verify every file path before editing. Gemini hallucinates paths ~15% of the time.
 - **Trusting Gemini's "this function is never called."** Grep the codebase. Dynamic dispatch, string-based imports, and CLI entry points are invisible to static analysis.

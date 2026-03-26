@@ -101,7 +101,7 @@ Verdict categories:
 
 ## Phase 4: Action
 
-- **Fix only CONFIRMED and CORRECTED findings.** Never fix HALLUCINATED claims.
+- **Fix ALL CONFIRMED and CORRECTED findings.** Never fix HALLUCINATED claims, but never skip confirmed ones either. Don't self-select "top N" from the confirmed list — every confirmed finding gets fixed. If a specific finding must be deferred (blocked, needs human input, out of scope), state the reason per item.
 - Commit each fix separately with the finding number in the commit message.
 - If hallucination rate exceeds 40%, warn the user that the audit source is unreliable and suggest re-running with a different model or approach.
 - Write the synthesis table to `docs/audit/verification-YYYY-MM-DD.md` (or the project's audit directory) for the record.
