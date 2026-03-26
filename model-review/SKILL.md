@@ -123,6 +123,18 @@ The review target (plan, design doc, code) plus enough surrounding context for m
 
 **What NOT to include:** unrelated code, full CLAUDE.md dumps, entire test suites, historical context that doesn't inform the decision. Noise dilutes the review — models spend tokens on irrelevant material instead of finding real problems.
 
+**Context assembly anti-patterns (shared context → shared wrong answers):**
+
+When both models converge on the same wrong recommendation, the cause is almost always shared context bias — the context pre-determined the answer. Cross-model review only works when the context doesn't do this. Check for these before dispatching:
+
+| Anti-pattern | How it biases reviews | Fix |
+|-------------|----------------------|-----|
+| **Scale ambiguity** — mentioning a large number (e.g., "4.7M variants") without clarifying which operations actually touch that volume | Models optimize for the large number even when the proposed change only affects a small boundary (e.g., 365 output records) | Include concrete volumes at the decision boundary: "Output writes: 365 objects. The 4.7M variant processing stays in VCF/TSV and never touches these schemas." |
+| **Priming alternatives** — listing specific tools/packages in the prompt ("consider msgspec, cattrs, ...") | Models evaluate the named alternatives favorably instead of finding what's wrong with the plan. Turns convergent review into divergent brainstorm. | For convergent review: "find what's wrong" only. For alternative-seeking: use /brainstorm, or add a separate `alternatives` axis. Don't mix critique and ideation in one prompt. |
+| **Framing incumbents as limited** — describing existing tools by their current narrow use ("Pydantic only for config validation") | Models treat the incumbent as constrained rather than as the natural extension point | Frame incumbents by capability: "Pydantic v2 is the established pattern (13 models, 100% typed). Question: should this extend to output schemas?" |
+| **Missing boundary volumes** — not stating how many objects the proposed schemas will process | Models default to optimizing for the largest number in context | Always include: "Largest output: N entries. Most stages write 1 summary JSON." |
+| **"Rethink entirely" in convergent review** — asking models to propose alternatives alongside finding problems | Models dodge critique by proposing alternatives instead. Reduces adversarial pressure. | Keep convergent and divergent separate. "Find what's wrong" is convergent. "Propose alternatives" is divergent (/brainstorm). The `alternatives` axis exists for this — don't blend it into arch/formal prompts. |
+
 #### Broad reviews (codebase/architecture)
 
 For whole-repo or multi-file architectural reviews, you need a compressed representation of the codebase.
@@ -639,6 +651,8 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 - **Using bare date directories.** `.model-review/2026-03-01/` will collide when two reviews run the same day. Always append a topic slug.
 - **Skipping constitutional check.** Reviews without project-specific anchoring drift into generic advice. Always check for constitution (in CLAUDE.md or standalone) and GOALS.md first.
 - **Mixing review and brainstorming.** This skill is convergent only. For divergent ideation, use `/brainstorm`.
+- **Priming tool recommendations in the review prompt.** Naming specific alternatives ("consider msgspec, cattrs") in the context turns critique into evaluation of the named tools. Models evaluate favorably rather than finding flaws. If you want alternative proposals, use the `alternatives` axis or `/brainstorm` separately. Evidence: typing plan review — both models recommended msgspec over Pydantic v2 because the prompt named it and included an ambiguous scale number (4.7M). Pydantic v2 was already in the project and sufficient at actual boundary volumes (365 objects).
+- **Scale-ambiguous context.** Mentioning a large number without clarifying what operations touch it causes both models to optimize for the wrong bottleneck. Both models will converge on the same wrong answer because they share the same misleading context — not because they independently reached the same conclusion. Include concrete volumes at decision boundaries.
 
 ## Artifact Handoff
 
