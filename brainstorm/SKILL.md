@@ -45,6 +45,20 @@ Parse `$ARGUMENTS` for these optional flags (order doesn't matter, remaining tex
 
 ## Pre-Flight
 
+### Dedup Check
+
+Before starting, check for recent brainstorms on overlapping topics:
+
+```bash
+RECENT=$(find .brainstorm/ -name "synthesis.md" -mtime -1 2>/dev/null)
+if [ -n "$RECENT" ]; then
+  echo "Recent brainstorm(s) found:"
+  for f in $RECENT; do echo "  $f"; head -5 "$f"; echo "---"; done
+fi
+```
+
+If a brainstorm from the last 24h covers the same domain, read the existing synthesis first and brainstorm only for gaps. Do not re-run the full perturbation pipeline on an already-explored topic.
+
 ### Constitutional Check
 
 ```bash
