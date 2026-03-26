@@ -217,22 +217,30 @@ if ! $DRY_RUN; then
 fi
 
 if $AUTO; then
-  # Generate all configured types in parallel
+  # Generate types with capped concurrency (avoid Gemini CLI rate limits)
+  # For cross-project refresh, prefer generate-overview-batch.sh (Batch API, 50% discount)
+  MAX_CONCURRENT=2
   IFS=',' read -ra TYPES <<< "$OVERVIEW_TYPES"
   pids=()
   type_names=()
+  running=0
 
   for t in "${TYPES[@]}"; do
     t=$(echo "$t" | xargs)
     generate_one "$t" &
     pids+=($!)
     type_names+=("$t")
+    ((running++))
+    if [ "$running" -ge "$MAX_CONCURRENT" ]; then
+      wait "${pids[-$MAX_CONCURRENT]}" 2>/dev/null || true
+      ((running--))
+    fi
   done
 
-  # Wait and report
+  # Wait for remaining
   failures=0
   for i in "${!pids[@]}"; do
-    if ! wait "${pids[$i]}"; then
+    if ! wait "${pids[$i]}" 2>/dev/null; then
       echo "FAILED: ${type_names[$i]}" >&2
       ((failures++))
     fi
