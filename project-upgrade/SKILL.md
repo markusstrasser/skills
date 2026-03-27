@@ -553,6 +553,15 @@ Generate before/after comparison:
 
 Save to `$UPGRADE_DIR/report.md`.
 
+### MAINTAIN.md Integration
+
+If `MAINTAIN.md` exists in the project root (project uses `/maintain`), **you must** also:
+- Append to `## Log`: `YYYY-MM-DD | project-upgrade | N findings, M applied, D deferred | [commit range]`
+- Append deferred findings (DEFER disposition) to `## Queue` with IDs continuing the M00N sequence
+- Append applied fixes to `## Fixed`
+
+This feeds results into the SWE quality lane so `/maintain` can track them.
+
 ### Save Baseline SHA (for diff-aware next run)
 
 ```bash

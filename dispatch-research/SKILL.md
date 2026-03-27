@@ -270,6 +270,15 @@ Reference the audit finding:
 - Run full test suite
 - Summarize: N findings addressed, M commits, any deferred items
 
+### MAINTAIN.md Integration
+
+If `MAINTAIN.md` exists in the project root (project uses `/maintain`), **you must** also:
+- Append to `## Log`: `YYYY-MM-DD | dispatch-research | N findings, M applied, D deferred | [commit range]`
+- Append deferred findings to `## Queue` with IDs continuing the M00N sequence
+- Append applied fixes to `## Fixed`
+
+This feeds results into the SWE quality lane so `/maintain` can track them.
+
 ---
 
 ## Tuning knobs

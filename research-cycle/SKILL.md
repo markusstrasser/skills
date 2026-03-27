@@ -85,7 +85,7 @@ Each phase prompt must include:
 
 **Discover:** Search for new information relevant to this project. Lead with Exa (more reliable for tools/releases), then search_preprints for papers. For deep audit sweeps, invoke `/dispatch-research`. Compare against git log and research memos. Write findings to CYCLE.md `## Discoveries` as `- [NEW] ...`. Skip anything already known. Commit. Stop searching at 70% of turns and write up. **If nothing found:** invoke `/brainstorm` on the project domain inline. Write ideas to DECISIONS.md as informational context (not approval items). One phase total — brainstorm is part of discover.
 
-**Gap-analyze:** Read CYCLE.md discoveries + `## Maintenance Log` (from /maintain) + improvement signals (from Live State `IMPROVEMENT SIGNALS` section) + project state (CLAUDE.md, git log, research index). Three gap sources: (1) discoveries from discover phase, (2) maintenance findings promoted to gaps, (3) improvement signals — prioritize `STEER` signals (human steering load) alongside quality/reliability signals. Write prioritized gaps to `## Gaps`. Classify each: autonomous (reversible, existing pattern) or needs-approval. Commit.
+**Gap-analyze:** Read CYCLE.md discoveries + improvement signals (from Live State `IMPROVEMENT SIGNALS` section) + project state (CLAUDE.md, git log, research index). Two gap sources: (1) discoveries from discover phase, (2) improvement signals — prioritize `STEER` signals (human steering load) alongside quality/reliability signals. SWE quality gaps (code bugs, freshness, refactoring) are handled by `/maintain` in the separate SWE quality lane — don't duplicate that work here. Write prioritized gaps to `## Gaps`. Classify each: autonomous (reversible, existing pattern) or needs-approval. Commit.
 
 **Plan:** Read top gap from `## Gaps` (skip any marked `FAILED` within cooldown). **Before planning:** check `artifacts/failed-experiments/` for prior attempts on the same subsystem — if found, include "Previously tried: {plan_summary}. Failed because: {failure_reason}" in the plan context so the LLM avoids repeating the same approach. Write implementation plan to `## Active Plan`: files to change, what changes, verification method. Add to `## Queue` for execution. Commit.
 
@@ -151,7 +151,6 @@ For both tracks, write results to `## Verification Results`. **If verification f
 
 - Max 3 undispositioned discoveries
 - Max 1 active plan
-- Max 3 unprocessed maintenance findings (from /maintain)
 - Discovery skips if 3+ undispositioned discoveries exist
 
 ### Autonomy Boundary
@@ -171,14 +170,15 @@ The human edits CYCLE.md between ticks:
 
 The skill reads CYCLE.md fresh each tick. Human edits take effect on the next tick.
 
-## Shared Files (coordination with /maintain and human)
+## Shared Files (coordination with human)
 
 | File | Owner | Others | Purpose |
 |------|-------|--------|---------|
-| `CYCLE.md` | research-cycle | maintain reads + appends `## Maintenance Log` | Research state + approval queue |
+| `CYCLE.md` | research-cycle | human steers | Growth state + approval queue |
 | `CYCLE-archive.md` | research-cycle (improve phase) | human reads | Completed items, old retros |
 | `DECISIONS.md` | any skill appends | human reads | Informational: questions, ideas, proposals. NO approval checkboxes. |
-| `MAINTENANCE.log` | maintain | research-cycle reads | Maintenance audit trail |
+
+Note: `/maintain` owns the separate SWE quality lane (`MAINTAIN.md`). research-cycle does not read or write maintenance state.
 
 **DECISIONS.md convention** (append-only, informational — no approvals here):
 ```markdown
@@ -191,7 +191,7 @@ No [x] checkboxes — approvals go to CYCLE.md ## Queue only.
 
 | Situation | Invoke | Why |
 |-----------|--------|-----|
-| Deep audit sweep during discover | `/dispatch-research` | Parallel Codex agents for cross-file auditing |
+| Deep audit sweep (SWE quality) | `/maintain` owns this lane | Use `/dispatch-research` directly for growth-adjacent audits only |
 | Plan review (non-trivial) | `/model-review` via script | Cross-model adversarial — same-model can't catch own blind spots |
 | Discover returns empty | `/brainstorm` inline | Divergent ideation → ideas to DECISIONS.md (informational) |
 | Need literature depth on a paper | `/researcher` | Deep paper analysis with epistemic rigor |
@@ -213,7 +213,7 @@ If any phase fails with an error (script crash, tool denied, MCP timeout):
 Log these counters for measurement:
 - `orphan_rate`: approved items not acted on within 2 ticks
 - `duplicate_rate`: same discovery/gap appearing twice
-- `handoff_success`: maintenance finding → gap promotion
+- `swe_lane_items`: items in MAINTAIN.md (tracked by /maintain, not research-cycle)
 - `review_catch_rate`: issues caught in review
 - `verify_fail_rate`: execute → verify failures
 - `cycle_latency`: ticks from discovery to shipped item
