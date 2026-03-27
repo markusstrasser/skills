@@ -124,6 +124,10 @@ For each finding, also classify the ROOT CAUSE as one of:
 - **system-design** — fixable by hooks, architecture, tooling (MAST: 44% of failures)
 - **agent-capability** — fixable by instructions, model choice, prompting
 - **task-specification** — fixable by better task decomposition or prompts
+- **skill-router** — wrong skill triggered (selection/routing problem)
+- **skill-weakness** — skill has bad/incomplete instructions
+- **skill-execution** — model couldn't execute skill instructions correctly
+- **skill-coverage** — no skill exists for this task type
 
 For each finding, output this exact format:
 
@@ -133,7 +137,7 @@ For each finding, output this exact format:
 - **Failure mode:** [category name from agent-failure-modes.md, or "NEW: description"]
 - **Proposed fix:** [hook | skill | rule | CLAUDE.md change | architectural]
 - **Severity:** [low | medium | high] based on wasted effort or risk
-- **Root cause:** [system-design | agent-capability | task-specification]
+- **Root cause:** [system-design | agent-capability | task-specification | skill-router | skill-weakness | skill-execution | skill-coverage]
 
 If a session has no notable anti-patterns, say so explicitly — do not fabricate findings.
 Output ONLY the findings, no preamble.
@@ -195,7 +199,7 @@ Report to user:
 - **Evidence:** [what happened, with message excerpts]
 - **Failure mode:** [link to agent-failure-modes.md category, or "NEW"]
 - **Proposed fix:** [hook | skill | rule | CLAUDE.md change | architectural]
-- **Root cause:** [system-design | agent-capability | task-specification]
+- **Root cause:** [system-design | agent-capability | task-specification | skill-router | skill-weakness | skill-execution | skill-coverage]
 - **Status:** [ ] proposed
 ```
 
