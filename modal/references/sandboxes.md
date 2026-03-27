@@ -115,10 +115,33 @@ token = sandbox.create_connect_token()
 # Use for HTTP/WebSocket authentication to sandbox
 ```
 
+## Filesystem API (v1.4.0 beta — replaces Sandbox.open)
+
+```python
+sb = modal.Sandbox.create(app=app, image=image)
+
+# Transfer files between local and sandbox
+sb.filesystem.copy_from_local("local_input.csv", "/work/input.csv")
+sb.filesystem.copy_to_local("/work/results.json", "local_results.json")
+
+# Direct text/bytes read/write
+sb.filesystem.write_text("/work/config.ini", "[section]\nkey=value")
+content = sb.filesystem.read_text("/work/output.txt")
+sb.filesystem.write_bytes("/work/model.bin", model_data)
+raw = sb.filesystem.read_bytes("/work/model.bin")
+```
+
+**Deprecation:** `modal.Sandbox.open()` and `modal.file_io.FileIO` are deprecated. Use `sb.filesystem.*` instead.
+
 ## Container Logs
 
 ```bash
+# v1.4+: defaults to last 100 entries (NOT streaming)
 modal container logs <sandbox-id>
+modal container logs <sandbox-id> --follow     # stream (old default)
+modal container logs <sandbox-id> --all        # complete history
+modal container logs <sandbox-id> --search "error"
+modal container logs <sandbox-id> --source stderr
 ```
 
 ## Tags

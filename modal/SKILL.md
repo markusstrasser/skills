@@ -1,10 +1,10 @@
 ---
 name: modal
-description: "Modal serverless Python cloud compute. Use when writing or debugging Modal scripts, deploying to Modal, or choosing GPU/resource configs. Covers v1.0–v1.3.x API (current as of March 2026)."
+description: "Modal serverless Python cloud compute. Use when writing or debugging Modal scripts, deploying to Modal, or choosing GPU/resource configs. Covers v1.0–v1.4.x API (current as of March 2026)."
 effort: low
 ---
 
-# Modal (v1.3.x, March 2026)
+# Modal (v1.4.x, March 2026)
 
 ## Critical API Changes (v1.0+)
 
@@ -63,6 +63,147 @@ class Model:
 
     @modal.method()
     def predict(self, x): ...
+```
+
+## New Features (v1.4)
+
+### CLI Log Overhaul (v1.4.0 — BREAKING DEFAULT CHANGE)
+
+**`modal app logs` and `modal container logs` no longer follow (stream) by default.** They now show the most recent 100 entries and exit. You MUST pass `--follow` for the old streaming behavior.
+
+```bash
+# Historical logs (new default — shows last 100)
+modal app logs my-app
+modal container logs ct-abc123
+
+# Stream logs (old default — now requires --follow)
+modal app logs my-app --follow
+modal container logs ct-abc123 --follow
+
+# Count-based history
+modal app logs my-app --tail 1000
+
+# Time-based history
+modal app logs my-app --since 4h
+modal app logs my-app --since 2026-03-15 --until 2026-03-20
+
+# Filter by source (stdout/stderr/system)
+modal app logs my-app --source stderr
+modal container logs ct-abc123 --source stdout
+
+# Search within logs
+modal app logs my-app --search "error"
+modal container logs ct-abc123 --search "OOM"
+
+# App-specific filters (app logs only)
+modal app logs my-app --function my_function
+modal app logs my-app --function-call fc-abc123
+modal app logs my-app --container ct-abc123
+
+# Show origin IDs in each line
+modal app logs my-app --show-function-id
+
+# Combine filters
+modal app logs my-app --function train --source stderr --search "loss" --tail 500
+
+# Filter container list by app
+modal container list --app-id ap-abc123
+```
+
+**Note:** Historical log access is subject to plan-level retention limits.
+
+### Sandbox Filesystem API (v1.4.0 beta — replaces Sandbox.open)
+
+New, more reliable file I/O for Sandboxes:
+
+```python
+sb = modal.Sandbox.create(app=app, image=image)
+
+# Transfer files between local and sandbox filesystem
+sb.filesystem.copy_from_local("local_data.csv", "/work/data.csv")
+sb.filesystem.copy_to_local("/work/results.json", "local_results.json")
+
+# Read/write text directly
+sb.filesystem.write_text("/work/config.yaml", "key: value\n")
+content = sb.filesystem.read_text("/work/output.txt")
+
+# Read/write bytes
+sb.filesystem.write_bytes("/work/model.bin", model_bytes)
+data = sb.filesystem.read_bytes("/work/model.bin")
+```
+
+**Deprecation:** `modal.Sandbox.open()` and `modal.file_io.FileIO` are deprecated. Migrate to `sb.filesystem.*`.
+
+### Deployment Strategies (v1.4.0)
+
+Control what happens during redeploy:
+
+```bash
+# Rolling (default) — prioritizes uptime, old containers continue briefly
+modal deploy script.py
+
+# Recreate — immediately terminates old containers on deploy
+modal deploy --strategy recreate script.py
+```
+
+```python
+# Programmatic
+app.deploy(strategy="recreate")
+```
+
+**When to use `recreate`:**
+- Development workflows where you need certainty the new version is active
+- Apps running at `max_containers` limit (no room for replacement capacity)
+- `modal serve` now uses recreate by default during code updates
+
+### Image.from_scratch() (v1.4.0)
+
+Empty image for lightweight Sandbox filesystem mounts:
+
+```python
+# Equivalent to Docker's FROM scratch
+empty = modal.Image.from_scratch()
+
+# Primarily useful as a lightweight mount
+sb = modal.Sandbox.create(app=app)
+sb.mount_image(empty)
+```
+
+### OIDC Identity Token for Sandboxes (v1.4.0)
+
+```python
+sb = modal.Sandbox.create(
+    app=app,
+    include_oidc_identity_token=True,  # Injects MODAL_IDENTITY_TOKEN env var
+)
+# Enables OIDC-based auth (e.g., AWS federation) inside sandbox
+```
+
+### v1.4.0 Breaking Changes
+
+```python
+# .map() exceptions no longer wrapped in UserCodeException
+# wrap_returned_exceptions= parameter is deprecated
+results = list(fn.map(inputs, return_exceptions=True))
+# Exceptions come through as-is, no unwrapping needed
+
+# modal.enable_output() no longer yields a value
+with modal.enable_output():  # NOT: with modal.enable_output() as output:
+    with app.run():
+        fn.remote()
+
+# -m flag now REQUIRED for module path Function references
+# modal deploy -m project.app        ← CORRECT
+# modal deploy project.app           ← ERROR in v1.4+
+
+# Old autoscaler config removed (keep_warm, concurrency_limit, etc.)
+# Use: max_containers, min_containers, scaledown_window
+
+# Function.from_name can't look up Cls methods anymore
+# OLD: modal.Function.from_name("app", "MyClass.method")
+# NEW: modal.Cls.from_name("app", "MyClass")
+
+# Removed unused namespace parameters from various APIs
 ```
 
 ## New Features (v1.1–v1.3)
@@ -440,6 +581,21 @@ print(process.stdout.read())
 sandbox.terminate(wait=True)  # v1.3.4+: wait param
 ```
 
+**Filesystem API (v1.4.0 beta — preferred over Sandbox.open):**
+```python
+sb = modal.Sandbox.create(app=app, image=image)
+
+# File transfer between local and sandbox
+sb.filesystem.copy_from_local("input.csv", "/work/input.csv")
+sb.filesystem.copy_to_local("/work/output.json", "output.json")
+
+# Direct text/bytes read/write
+sb.filesystem.write_text("/work/config.ini", "[section]\nkey=value")
+content = sb.filesystem.read_text("/work/results.txt")
+sb.filesystem.write_bytes("/work/model.bin", model_data)
+raw = sb.filesystem.read_bytes("/work/model.bin")
+```
+
 **Directory Snapshots (v1.3.4 beta):**
 ```python
 snapshot = sandbox.snapshot_directory("/work")
@@ -456,13 +612,33 @@ modal shell scripts/script.py
 # Shell into a RUNNING sandbox
 modal shell sb-12345abcdef
 
-# Container logs
-modal container logs <container-id>
-modal app logs <app-name> --timestamps
+# Container logs (v1.4+: defaults to last 100 entries, NOT streaming)
+modal container logs <container-id>                    # last 100 entries
+modal container logs <container-id> --follow           # stream (old default)
+modal container logs <container-id> --all              # complete log history
+modal container logs <container-id> --search "error"   # filter by text
+modal container logs <container-id> --source stderr    # stdout/stderr/system
+
+# App logs (v1.4+: rich filtering, defaults to last 100 entries)
+modal app logs <app-name>                              # last 100 entries
+modal app logs <app-name> --follow                     # stream (old default)
+modal app logs <app-name> --tail 1000                  # last N entries
+modal app logs <app-name> --since 4h                   # time-based
+modal app logs <app-name> --since 2026-03-15 --until 2026-03-20
+modal app logs <app-name> --search "OOM"               # text search
+modal app logs <app-name> --source stderr              # stdout/stderr/system
+modal app logs <app-name> --function my_fn             # filter by function
+modal app logs <app-name> --function-call fc-abc123    # filter by call
+modal app logs <app-name> --container ct-abc123        # filter by container
+modal app logs <app-name> --show-function-id           # prefix lines with origin
 
 # Volume inspection
 modal volume ls my-volume
 modal volume get my-volume remote.txt local.txt
+
+# Container listing
+modal container list                                   # all containers
+modal container list --app-id ap-abc123                # filter by app (v1.4+)
 
 # Dashboard
 modal dashboard
@@ -620,9 +796,63 @@ _done.set()
 vol.commit()  # final
 ```
 
-22. **`.starmap()` cost trap** — `.starmap(args)` with N args on a function with `max_containers` unset will spin up one container per input. Each container stays alive for the full starmap duration even if idle between sequential tasks. **Always set `max_containers` explicitly** and estimate: `cost = max_containers × wall_time × gpu_price`. For 100 tasks at 1h each with 10 containers = 10h × 10 × $1.10 = $110.
+22. **`.map()` default kills all on first failure** — `.map()` and `.starmap()` default to `return_exceptions=False`. One failed input cancels ALL other running containers. For jobs where partial success is useful (e.g., downloading 24 chromosomes — 23/24 succeeding is better than 0/24), always use `return_exceptions=True`. Then check results for exceptions before proceeding:
+   ```python
+   results = list(fn.map(inputs, return_exceptions=True))
+   failures = [r for r in results if isinstance(r, Exception)]
+   if failures:
+       raise RuntimeError(f"{len(failures)}/{len(inputs)} failed: {failures[:3]}")
+   ```
 
-23. **Cost guard: always set `timeout` conservatively** — if your script should finish in 2h, set `timeout=10800` (3h), not `timeout=43200` (12h). A hung process with a 12h timeout burns 12h of GPU. The timeout is your cost circuit breaker.
+23. **Validate downloaded files by integrity, not size** — a file that's 9 GB (vs expected 30 GB) passes a `> 100MB` size check. **WARNING:** none of the cheap checks are fully reliable for VCFs: `bcftools index` succeeds on some truncated files, `bcftools quickcheck` doesn't exist on Debian slim's old bcftools (v1.13), and `wget` returns exit 0 on incomplete downloads. The only reliable check is an end-to-end read: `bcftools view file.vcf.bgz | tail -1` (reads every record, fails on corruption). For general files: verify against HTTP `Content-Length`, or use checksums. **Debian slim gotcha:** `apt_install("bcftools")` gives v1.13 — missing `quickcheck`, `+fixploidy`, and other modern subcommands. Pin a newer version via conda or build from source if you need them.
+
+24. **Avoid intermediate files that double disk usage** — before writing a concat/merge step, check if the downstream tool accepts multiple inputs natively. `echtvar encode` accepts `<VCFS>...` ("can be split by chrom") — no concat needed. `bcftools merge` accepts multiple VCFs. Concatenating 500 GB of per-chromosome VCFs into a single file before encoding doubles the disk requirement to 1 TB and hits volume/disk limits. **Rule:** `tool --help` before designing the pipeline.
+
+25. **`.starmap()` cost trap** — `.starmap(args)` with N args on a function with `max_containers` unset will spin up one container per input. Each container stays alive for the full starmap duration even if idle between sequential tasks. **Always set `max_containers` explicitly** and estimate: `cost = max_containers × wall_time × gpu_price`. For 100 tasks at 1h each with 10 containers = 10h × 10 × $1.10 = $110.
+
+26. **Cost guard: always set `timeout` conservatively** — if your script should finish in 2h, set `timeout=10800` (3h), not `timeout=43200` (12h). A hung process with a 12h timeout burns 12h of GPU. The timeout is your cost circuit breaker.
+
+27. **Micromamba/bioconda Python downgrade breaks pip** — installing bioconda packages (e.g., `mmseqs2`, `samtools`) via `micromamba_install` can silently downgrade Python (e.g., 3.11.15 → 3.11.0), which removes pip. Subsequent `.pip_install()` calls fail. **Fix:** use `.uv_pip_install()` instead — it bootstraps its own installer and doesn't depend on system pip:
+   ```python
+   # BAD: pip may not exist after micromamba downgrades Python
+   image = (
+       modal.Image.micromamba()
+       .micromamba_install("mmseqs2", channels=["bioconda", "conda-forge"])
+       .pip_install("torch", "transformers")  # FAILS: pip not found
+   )
+
+   # GOOD: uv bootstraps independently
+   image = (
+       modal.Image.micromamba()
+       .micromamba_install("mmseqs2", channels=["bioconda", "conda-forge"])
+       .uv_pip_install("torch", "transformers")  # Works regardless of pip state
+   )
+   ```
+
+28. **`git` binary required for `git+https://` pip installs** — PEP 508 URL specifiers like `"pkg @ git+https://github.com/org/repo.git"` require git in the container. Neither `debian_slim` nor `micromamba` base images include it by default.
+   ```python
+   # BAD: git not available
+   image = modal.Image.debian_slim().uv_pip_install(
+       "mylib @ git+https://github.com/org/mylib.git"
+   )
+
+   # GOOD: install git first
+   image = (
+       modal.Image.debian_slim()
+       .apt_install("git")
+       .uv_pip_install("mylib @ git+https://github.com/org/mylib.git")
+   )
+   # Or via micromamba:
+   image = (
+       modal.Image.micromamba()
+       .micromamba_install("git", "mmseqs2", channels=["bioconda", "conda-forge"])
+       .uv_pip_install("mylib @ git+https://github.com/org/mylib.git")
+   )
+   ```
+
+29. **`modal deploy` now defaults to rolling strategy** — old containers may still serve requests for minutes after deploy. If you need immediate cutover (e.g., dev iteration, max_containers-limited apps), use `modal deploy --strategy recreate`. `modal serve` already uses recreate by default in v1.4.0.
+
+30. **`modal app logs` no longer streams by default** — if your agent workflow depends on tailing logs (e.g., monitoring a running job), you MUST add `--follow`. Without it, you get the last 100 entries and the command exits. This is the #1 v1.4.0 behavior change that will silently break existing workflows.
 
 ## MANDATORY: Cost Awareness
 

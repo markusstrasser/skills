@@ -52,10 +52,10 @@ def may_fail(a):
 
 @app.local_entrypoint()
 def main():
+    # v1.4+: exceptions come through as-is (wrap_returned_exceptions removed)
     results = list(may_fail.map(
         range(3),
         return_exceptions=True,
-        wrap_returned_exceptions=False
     ))
     # [0, 1, Exception('error')]
 ```

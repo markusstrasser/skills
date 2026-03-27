@@ -184,10 +184,10 @@ def main():
 ### Exception Handling
 
 ```python
+# v1.4+: exceptions come through as-is (wrap_returned_exceptions removed)
 results = my_func.map(
     range(3),
     return_exceptions=True,
-    wrap_returned_exceptions=False
 )
 # [0, 1, Exception('error')]
 ```
