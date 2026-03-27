@@ -51,6 +51,7 @@ Dispatch parallel searches across sources and categories. Use subagents for para
 | **MCP** | "MCP server model context protocol" + date filter | "new MCP server" | Check github.com/modelcontextprotocol |
 | **Repos/Lists** | "awesome AI agents" + date filter | "trending AI repos github" | GitHub trending via Exa site filter |
 | **Tools** | "AI coding tool SDK" + date filter | "cursor OR windsurf OR coding agent SDK changelog" | — |
+| **Research** | arxiv "LLM agent" + date filter | — | alphaXiv trending (`WebFetch alphaxiv.org/explore`), S2 search |
 
 ### Anthropic Deep-Check (when focus is "anthropic" or "all")
 
@@ -94,6 +95,14 @@ search_arxiv:
   max_results: 5
 ```
 
+**alphaXiv** (trending research — community-curated signal, higher SNR than raw arxiv):
+```
+WebFetch:
+  url: "https://www.alphaxiv.org/explore"
+  prompt: "Extract all trending papers: title, arxiv ID, view count, summary"
+```
+Weekly digest also arrives via email — check for alphaXiv newsletter content if user provides it. View counts indicate community attention; papers with 1K+ views in agent/LLM categories are high-signal.
+
 **GitHub trending** (for repos — use Exa with site filter):
 ```
 web_search_advanced_exa:
@@ -110,7 +119,7 @@ When subagents are available, dispatch one per vendor category:
 - Agent 2: OpenAI (Exa + Brave)
 - Agent 3: Google (Exa + Brave)
 - Agent 4: Ecosystem (frameworks + MCP + tools via Exa + Brave + GitHub)
-- Agent 5: Research papers (arxiv + S2)
+- Agent 5: Research papers (alphaXiv trending + arxiv + S2)
 
 Each agent returns: `[{title, url, date, one_line_summary, why_relevant}]`
 
