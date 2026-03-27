@@ -54,8 +54,8 @@ if db_touched:
 
 # Advisory: research touched but no DB update
 output = {
-    'decision': 'allow',
-    'additionalContext': f'Session modified {len(research_touched)} research/docs file(s) ({research_touched[0]}...) but did not update sqlite/substrate. Consider persisting before stopping.'
+    'decision': 'approve',
+    'reason': f'Session modified {len(research_touched)} research/docs file(s) ({research_touched[0]}...) but did not update sqlite/substrate. Consider persisting before stopping.'
 }
 print(json.dumps(output))
 " 2>/dev/null
