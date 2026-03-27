@@ -201,17 +201,43 @@ if [ "$TOKEN_EST" -gt 500000 ]; then
 fi
 ```
 
-## Phase 2: Gemini Analysis
+## Phase 2: Multi-Model Analysis
 
-Send the codebase to Gemini 3.1 Pro with a highly structured prompt. The prompt is the core IP — it must produce machine-parseable, specific, verifiable findings.
+Send codebase to BOTH Gemini 3.1 Pro AND GPT-5.4 in parallel. Cross-family review catches 31pp more errors than single-model (FINCH-ZK). Same-model review is a martingale.
 
-**Temperature 0.3** — we want analytical precision, not creativity.
+**llmx provider names:** Google is `-p google` (NOT `-p gemini`). OpenAI is `-p openai`. Run `llmx --list-providers` if unsure.
+
+**Temperature:** Gemini 3.1 Pro locks to 1.0 server-side (thinking model) — do NOT pass `-t`.
 
 **IMPORTANT:** Always pass `--max-tokens 65536` on Gemini dispatches — the server default is 8K which silently truncates large JSON output.
 
+**Coordination with other agents:** If `pgrep -c claude >= 2`, check what the other agent is working on BEFORE planning. Run `git log --oneline -10` and `cat MAINTAIN.md CYCLE.md 2>/dev/null | head -40`. Plan only your DELTA — items the other agent is NOT already handling. Don't re-plan owned work.
+
+### Dispatch both models in parallel
+
 ```bash
-cat "$UPGRADE_DIR/codebase.md" | llmx chat -m gemini-3.1-pro-preview \
-  -t 0.3 --timeout 600 --max-tokens 65536 "
+# Gemini (pattern detection, architecture, 1M context)
+cat "$UPGRADE_DIR/codebase.md" | llmx chat -p google -m gemini-3.1-pro-preview \
+  --stream --timeout 600 --max-tokens 65536 \
+  -o "$UPGRADE_DIR/gemini-raw.txt" \
+  "$(cat "$UPGRADE_DIR/gemini-prompt.md")" 2>"$UPGRADE_DIR/gemini-stderr.txt" &
+
+# GPT-5.4 (formal reasoning, quantitative analysis)
+cat "$UPGRADE_DIR/codebase.md" | llmx chat -p openai -m gpt-5.4 \
+  --reasoning-effort high --stream --timeout 600 --max-tokens 32768 \
+  -o "$UPGRADE_DIR/gpt-raw.txt" \
+  "$(cat "$UPGRADE_DIR/gpt-prompt.md")" 2>"$UPGRADE_DIR/gpt-stderr.txt" &
+
+wait
+echo "Both models complete"
+```
+
+### Gemini prompt (pattern/architecture focus)
+
+Write to `$UPGRADE_DIR/gemini-prompt.md`:
+
+```bash
+cat > "$UPGRADE_DIR/gemini-prompt.md" << 'PROMPT_EOF'
 You are analyzing an entire codebase for CONCRETE, VERIFIABLE improvements. Not vague suggestions — specific issues with specific fixes.
 
 PROJECT: $PROJECT_NAME
@@ -254,20 +280,42 @@ CATEGORIES (only these):
 PRIORITY ORDER: BROKEN_REFERENCE > ERROR_SWALLOWED > IMPORT_ISSUE > DUPLICATION > PATTERN_INCONSISTENCY > MISSING_SHARED_UTIL > the rest.
 
 CRITICAL: Output valid JSON only. Start with [ and end with ]. No text before or after.
-" > "$UPGRADE_DIR/gemini-raw.txt" 2>&1
+PROMPT_EOF
 ```
 
-### Parse the output
+### GPT prompt (harness/type-safety/agent-DX focus)
 
-Extract the JSON from Gemini's response (it sometimes wraps in markdown):
+Write to `$UPGRADE_DIR/gpt-prompt.md`. Give GPT a DIFFERENT angle than Gemini — harness improvements, type safety architecture, agent-friendly patterns:
 
 ```bash
-# Strip any markdown code fences and extract JSON array
-# Uses non-greedy matching and trailing-comma sanitizer (LLMs produce both issues)
-python3 << 'PYEOF'
+cat > "$UPGRADE_DIR/gpt-prompt.md" << 'PROMPT_EOF'
+You are a senior software architect specializing in developer tooling, type systems, and AI-assisted development. Analyze this codebase for improvements to its SWE harness, abstractions, and developer experience.
+
+Focus areas:
+1. **Harness improvements** — decorators, base classes, protocols that prevent incorrect code
+2. **Programmatic enforcement** — what can be enforced at import/test/commit time?
+3. **Unification opportunities** — repeated patterns that should be centralized
+4. **Type safety architecture** — what type checking investment gives the best ROI?
+5. **Agent DX patterns** — patterns that prevent common AI agent mistakes
+6. **Scalability patterns** — what will break as the codebase grows?
+
+Be specific. Reference exact files, function names, line counts. Don't propose things that already exist.
+
+Return findings as JSON array:
+[{"id": "G001", "title": "...", "category": "harness|hooks|unification|type_safety|agent_dx|scalability", "priority": "HIGH|MEDIUM|LOW", "scripts_affected": "N scripts", "approach": "...", "code_sketch": "..."}]
+PROMPT_EOF
+```
+
+### Parse both outputs
+
+Extract JSON from both model responses (they sometimes wrap in markdown):
+
+```bash
+for MODEL in gemini gpt; do
+python3 << PYEOF
 import json, re, sys
 
-text = open('$UPGRADE_DIR/gemini-raw.txt').read()
+text = open('$UPGRADE_DIR/${MODEL}-raw.txt').read()
 
 # Strip markdown code fences if present
 text = re.sub(r'```json\s*', '', text)
@@ -277,7 +325,7 @@ text = re.sub(r'```\s*$', '', text, flags=re.MULTILINE)
 # Instead, find first [ and use bracket counting
 start = text.find('[')
 if start == -1:
-    print('ERROR: No JSON array found in Gemini output', file=sys.stderr)
+    print(f'ERROR: No JSON array found in ${MODEL} output', file=sys.stderr)
     sys.exit(1)
 
 depth = 0
@@ -296,18 +344,26 @@ json_str = re.sub(r',\s*([\]}])', r'\1', json_str)
 
 try:
     data = json.loads(json_str)
-    with open('$UPGRADE_DIR/findings.json', 'w') as f:
+    with open('$UPGRADE_DIR/${MODEL}-findings.json', 'w') as f:
         json.dump(data, f, indent=2)
-    print(f'Parsed {len(data)} findings')
+    print(f'${MODEL}: Parsed {len(data)} findings')
 except json.JSONDecodeError as e:
-    print(f'ERROR: Invalid JSON: {e}', file=sys.stderr)
-    # Save raw for debugging
-    with open('$UPGRADE_DIR/findings-raw-extract.txt', 'w') as f:
+    print(f'ERROR: Invalid JSON from ${MODEL}: {e}', file=sys.stderr)
+    with open('$UPGRADE_DIR/${MODEL}-raw-extract.txt', 'w') as f:
         f.write(json_str)
-    print(f'Raw extract saved to $UPGRADE_DIR/findings-raw-extract.txt', file=sys.stderr)
     sys.exit(1)
 PYEOF
+done
 ```
+
+### Synthesize: Convergence Analysis
+
+After both models return, the orchestrating agent (Claude) reads both `gemini-findings.json` and `gpt-findings.json` and produces a convergence table:
+- **Convergent findings** (both models flagged) → highest confidence
+- **Model-unique findings** → verify against code before accepting
+- **Contradictions** → investigate, don't auto-resolve
+
+Write synthesis to `$UPGRADE_DIR/synthesis.md`.
 
 ## Phase 3: Cross-Validate (Optional)
 
@@ -421,6 +477,10 @@ For each finding:
 ```
 
 Valid dispositions: `APPLY`, `DEFER (reason)`, `REJECT (reason)`, `MERGE WITH [ID]`
+
+**Evidence requirements for dispositions:**
+- **DEFER with "no incidents"**: Must `grep -i KEYWORD CLAUDE.md` and show zero matches. Unverified "no incidents" claims miss documented pitfalls. (Retro 2026-03-27: G008 deferred citing "no incidents" when CLAUDE.md pitfall #18 was the exact incident.)
+- **REJECT with "already exists"**: Must cite the specific file:line or test name that provides the existing coverage. "Already enforced by X" without a citation is an unverified factual claim.
 
 ### 4c. Coverage check
 
