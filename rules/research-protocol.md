@@ -32,7 +32,7 @@ per-project (see companion file in each project's `.claude/rules/`).
 
 ## Stage Order
 
-1. **Local knowledge audit** — what do we already know? Check existing docs, git history, substrate.
+1. **Local knowledge audit** — what do we already know? Check existing docs, git history, meta-knowledge MCP.
 2. **Exploratory divergence** — multiple search axes, not just the first query that comes to mind.
 3. **Hypothesis formation** — state falsifiable claims explicitly.
 4. **Disconfirmation** (mandatory at HIGH/MEDIUM): actively search for contradictions.
