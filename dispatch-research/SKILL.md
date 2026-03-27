@@ -373,3 +373,7 @@ Stop points: User may say "just audit" (→ stop after Phase 3), "plan only"
 (→ stop after Phase 4), or "full auto" (→ all 5 phases without pause).
 Default: pause for approval between Phase 4 and Phase 5.
 ```
+
+## Known Issues
+<!-- Append-only. Session-analyst may suggest additions. -->
+- **[2026-03-27] Commit contamination — when dispatch-research agents don't use worktree isolation, their uncommitted changes get swept into the parent session's next commit.**

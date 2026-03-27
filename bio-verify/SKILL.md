@@ -177,7 +177,25 @@ If errors were found and fixed, write a decision journal entry:
 **Fix:** Corrected in commit [hash]
 ```
 
-## Known Gotchas
+### Step 9: Update tracking state
+
+After verification (whether errors were found or not), update the bio-verify state file:
+
+```bash
+uv run python scripts/bio_verify_status.py --update <filepath> <YYYY-MM-DD> [errors_found] [audit_path]
+```
+
+For each file verified in this session:
+```bash
+uv run python scripts/bio_verify_status.py --update scripts/generate_pgx_card.py 2026-03-24 0 docs/audit/biomedical-fact-check-2026-03-24/pgx-card-verification.md
+```
+
+This feeds the `/maintain` rotation queue. Run `just bio-verify-queue` to see what's next.
+
+When using `--sweep`, also run `just bio-verify-status` at the end to show overall coverage.
+
+## Known Issues
+<!-- Append-only. Session-analyst may suggest additions. -->
 
 1. **`variants_lookup` returns hg19 in the dbSNP field** — Never compare hg19 positions to GRCh38 claims. Use `population_variant_frequency` (gnomAD r4) for definitive GRCh38 coordinates.
 2. **gnomAD doesn't index every variant** — Some valid variants (especially non-coding regulatory) are absent from gnomAD. Use `verify_claim` (Exa) as fallback, but note it's lower confidence.
@@ -189,6 +207,10 @@ If errors were found and fixed, write a decision journal entry:
 8. **Assembly confusion clusters** — hg19 coordinates in a GRCh38 pipeline are the #1 error type. The ABO locus had non-standard offsets (neither clean hg19 nor hg38). Check for centromere/assembly-specific coordinate shifts.
 9. **Citation content swaps** — Sensitivity and PPV/specificity get swapped when transcribing from papers. Verify the claim matches the paper's actual numbers, not just that the PMID exists.
 10. **Paralog coordinate confusion** — RHD/RHCE (>95% homology) had RHCE coordinates used for RHD exon 7. Common in segmental duplication regions.
+11. **CPIC API is authoritative for PGx Level A pairs** — `api.cpicpgx.org/v1/pair?cpiclevel=eq.A` joined with `/v1/drug` returns the canonical list (100 pairs as of 2026-03-24). Perplexity is unreliable here — scraped incomplete HTML tables and contradicted itself across queries. For PGx completeness checks, always use the API, not web search.
+12. **GenCC classifications hallucination-prone via web search** — Perplexity fabricated "Definitive" GenCC classifications with fake dates for NOTCH3 and KRIT1. Only corrected after being shown contradicting ClinGen API data. For GenCC lookups, use `thegencc.org` directly or cross-check against `curation_gene_validity` results. Never trust a single web search answer for database classification lookups.
+13. **Imprinted region DMRs span large domains** — Don't flag ICR/DMR coordinates as wrong based on distance from gene body alone. The DLK1-DIO3 domain spans ~1 Mb on chr14q32.2; the IG-DMR at chr14:101,290,000 is 430 kb from DLK1 but confirmed correct by ClinGen (ISCA-46745). Use ClinGen region lookups or `verify_claim` for ICR position verification, not gene body proximity.
+14. **Effect/archaic allele AF convention** — Some scripts track the AF of the effect/archaic allele, not the gnomAD alt allele. When `archaic_allele == ref`, the AF field = 1 - gnomAD_alt_AF. Before flagging an AF as wrong, check whether the script's convention matches the comparison. (rs5743618 false positive: script correctly reported ref allele C AF=0.726 = 1-0.274.)
 
 ## Prior Audit Results (calibration)
 
@@ -210,7 +232,15 @@ If errors were found and fixed, write a decision journal entry:
 | 2026-03-21 | PGx pathways | ~30 | 1 | 3.3% | wrong PMID |
 | 2026-03-21 | imprinted regions | 7 | 2 | 28.6% | wrong UPD disease (GNAS) |
 | 2026-03-21 | penetrance estimates | 5 | 0 | 0% | — |
-| **TOTAL** | **full sweep** | **~454** | **~54** | **~12%** | coordinates, gene lists, disease labels |
+| 2026-03-25 | archaic functional map | 11 | 3 | 27% | gnomAD AF values |
+| 2026-03-25 | nutrient absorption | 9 | 0 | 0% | — |
+| 2026-03-25 | anesthesia risk card | 7 | 0 | 0% | — |
+| 2026-03-25 | pathogen susceptibility | 8 | 0 | 0% | — |
+| 2026-03-25 | predicted proteins | 10 | 11 | 110% | positions (hg19) + effect alleles |
+| 2026-03-25 | imprinting ICRs | 6 | 0 | 0% | — |
+| 2026-03-25 | connective tissue genes | 14 | 0 | 0% | — |
+| 2026-03-25 | digenic pairs | 10 | 1 | 10% | PMID mismatch |
+| **TOTAL** | **all sweeps** | **~529** | **~69** | **~13%** | coordinates, AFs, gene lists |
 
 **Baseline expectation:** ~10-15% of manually-entered biological constants contain errors detectable by API cross-check. Coordinates/positions are the highest-error category. Config JSON files have higher error rates than scripts. Error rate drops to 0% after one fix-and-recheck cycle.
 

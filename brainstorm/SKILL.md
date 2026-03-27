@@ -301,11 +301,22 @@ Which 1-2 ideas to prototype first? Cheapest validation?
 
 Save to `$BRAINSTORM_DIR/synthesis.md`.
 
+### Step 5.5: Pain-Point Gate (MANDATORY before implementation)
+
+Before offering to plan or implement ANY explore item, verify it solves a real problem:
+
+1. `git log --oneline --all | grep -i "<topic keywords>"` — actual incidents
+2. `grep -r "<topic>" ~/.claude/projects/*/memory/` — session pain moments
+3. For each EXPLORE item: "This would have prevented [specific incident] on [date]"
+4. If no incident: mark `SPECULATIVE` in disposition. Default to PARK, not EXPLORE.
+
+**Why this exists:** Brainstorm session (2026-03-26) generated 47 ideas → 12 explored → 7 planned → 1 built. 6/7 layers defended against hypothetical problems with zero incident history. The brainstorm correctly generated ideas; the failure was bridging to implementation without checking if the problems were real. Absence of a feature ≠ presence of a problem.
+
 ### Step 6: Bridge to Action
 
-If EXPLORE items suggest implementation:
+If EXPLORE items survive the pain-point gate:
 
-> "Brainstorm identified N ideas worth exploring. Want a plan for the top 1-2, or `/model-review` to stress-test a specific idea?"
+> "Brainstorm identified N ideas worth exploring (M survived pain-point gate). Want a plan for the top 1-2, or `/model-review` to stress-test a specific idea?"
 
 Don't auto-implement — divergent ideas need convergent validation first.
 
@@ -319,3 +330,7 @@ Don't auto-implement — divergent ideas need convergent validation first.
 - **Treating model choice as the diversity mechanism.** The prompting structure (denial, domains, inversions) produces divergence. Model choice is for volume and availability.
 
 $ARGUMENTS
+
+## Known Issues
+<!-- Append-only. Session-analyst may suggest additions. -->
+- **[2026-03-27] Duplicate runs — brainstorm dispatched 3x to same model when parallel subagent calls failed silently. Check subagent output before re-dispatching.**

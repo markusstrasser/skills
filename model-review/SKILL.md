@@ -134,6 +134,7 @@ When both models converge on the same wrong recommendation, the cause is almost 
 | **Framing incumbents as limited** — describing existing tools by their current narrow use ("Pydantic only for config validation") | Models treat the incumbent as constrained rather than as the natural extension point | Frame incumbents by capability: "Pydantic v2 is the established pattern (13 models, 100% typed). Question: should this extend to output schemas?" |
 | **Missing boundary volumes** — not stating how many objects the proposed schemas will process | Models default to optimizing for the largest number in context | Always include: "Largest output: N entries. Most stages write 1 summary JSON." |
 | **"Rethink entirely" in convergent review** — asking models to propose alternatives alongside finding problems | Models dodge critique by proposing alternatives instead. Reduces adversarial pressure. | Keep convergent and divergent separate. "Find what's wrong" is convergent. "Propose alternatives" is divergent (/brainstorm). The `alternatives` axis exists for this — don't blend it into arch/formal prompts. |
+| **Presupposing new infrastructure should exist** — reviewing a NEW architecture/system without incident history ("what's wrong with this design?" not "should this exist?") | Models critique within the frame instead of questioning it. Both will find real design flaws while never asking "does this solve a real problem?" Produces 100 claims that refine something that shouldn't be built. | For reviews of NEW infrastructure (not existing code): include incident history in context. Add to prompt: "For each proposed component, cite the specific past incident it would have prevented. If none, say SPECULATIVE." Evidence: provenance session — same model said BUILD with design-only prompt, DROP with incident-grounded prompt. |
 
 #### Broad reviews (codebase/architecture)
 
@@ -659,3 +660,7 @@ Flag these when they appear in outputs. Don't adopt recommendations that match a
 Write summary JSON to `~/.claude/artifacts/$(basename $PWD)/model-review-$(date +%Y-%m-%d).json` with: skill, project, date, topic, include/defer/reject counts, key_findings[]. Used by project-upgrade as a cache gate.
 
 $ARGUMENTS
+
+## Known Issues
+<!-- Append-only. Session-analyst may suggest additions. -->
+- **[2026-03-27] llmx output flag — never use shell redirects (> file) with llmx; use --output/-o flag instead. Shell redirects buffer until process exit, producing 0-byte files. Fixed in llmx v0.5.0 (2026-03-06).**
