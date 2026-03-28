@@ -216,14 +216,17 @@ Send codebase to BOTH Gemini 3.1 Pro AND GPT-5.4 in parallel. Cross-family revie
 ### Dispatch both models in parallel
 
 ```bash
+# IMPORTANT: Use -f for context file, NOT cat | pipe (stdin dropped when prompt arg provided)
 # Gemini (pattern detection, architecture, 1M context)
-cat "$UPGRADE_DIR/codebase.md" | llmx chat -p google -m gemini-3.1-pro-preview \
+llmx chat -p google -m gemini-3.1-pro-preview \
+  -f "$UPGRADE_DIR/codebase.md" \
   --stream --timeout 600 --max-tokens 65536 \
   -o "$UPGRADE_DIR/gemini-raw.txt" \
   "$(cat "$UPGRADE_DIR/gemini-prompt.md")" 2>"$UPGRADE_DIR/gemini-stderr.txt" &
 
 # GPT-5.4 (formal reasoning, quantitative analysis)
-cat "$UPGRADE_DIR/codebase.md" | llmx chat -p openai -m gpt-5.4 \
+llmx chat -p openai -m gpt-5.4 \
+  -f "$UPGRADE_DIR/codebase.md" \
   --reasoning-effort high --stream --timeout 600 --max-tokens 32768 \
   -o "$UPGRADE_DIR/gpt-raw.txt" \
   "$(cat "$UPGRADE_DIR/gpt-prompt.md")" 2>"$UPGRADE_DIR/gpt-stderr.txt" &

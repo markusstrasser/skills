@@ -130,9 +130,12 @@ if echo "$CMD" | grep -qE 'llmx.*(-m|--model)\s+(gemini/|openai/|xai/|moonshot/)
   WARNINGS="${WARNINGS}[llmx-guard] LiteLLM-style model prefix detected. Prefixes are deprecated in v0.6.0 — use bare model names.\n"
 fi
 
-# 6. -f with Gemini models (known to hang — use stdin pipe or -o)
-if echo "$CMD" | grep -qE 'gemini' && echo "$CMD" | grep -qE 'llmx.*\s-f\s' && ! echo "$CMD" | grep -qE -- '--output|-o\s'; then
-  WARNINGS="${WARNINGS}[llmx-guard] Using -f with Gemini without --output. Consider using stdin pipe (echo | llmx) or add -o for reliable output capture.\n"
+# 6. Stdin pipe + prompt arg (stdin silently dropped — use -f instead)
+if echo "$CMD" | grep -qE '(\||cat\s).*llmx' && echo "$CMD" | grep -qE 'llmx\s+chat\s' && echo "$CMD" | grep -vqE '\s-f\s'; then
+  # Only warn if there's a trailing prompt argument (not just piped input)
+  if echo "$CMD" | grep -qE 'llmx\s+chat\s.*"'; then
+    WARNINGS="${WARNINGS}[llmx-guard] Piping stdin + prompt argument — stdin is silently dropped. Use -f FILE instead of cat FILE | llmx. (Fixed in gemini-cli 0.32.1: -f works now.)\n"
+  fi
 fi
 
 # 7. Background dispatch without -o (output lost)
