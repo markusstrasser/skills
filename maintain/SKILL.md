@@ -41,7 +41,7 @@ Read `MAINTENANCE.log` to see what was done recently. Pick the highest-priority 
 | **Benchmark drift** | After pipeline changes | Run `noncoding_benchmark.py benchmark` if any scoring script changed in last 7d. | Pipeline scripts |
 | **Calibration canary** | Weekly | Run `uv run python3 ~/Projects/meta/scripts/calibration-canary.py --mode sampling --difficulty hard --runs 10 --backend llmx --model gpt-4o-mini`. Uses llmx backend (no Claude API credits needed). Check hard canary accuracy is 30-70% (if >90%, canary isn't hard enough). Compare with prior run in `~/.claude/epistemic-metrics.jsonl`. | Meta scripts |
 | **Genomics canary gate** | After classification changes | Run `just canary` in genomics. Pre-commit hook catches this, but maintenance verifies the hook is working. | Genomics justfile |
-| **Doc currency** | Weekly | Run `just check-codebase-map && just check-claude-md` in genomics. If stale, run `just regen-codebase-map`, update CLAUDE.md counts via `validate_claude_md.py --fix`, commit. Post-commit hook auto-regenerates codebase-map on significant drift, but this catches CLAUDE.md count staleness and minor map drift. | Justfile recipes |
+| **Doc currency** | Fallback only | Post-commit hook auto-fixes both codebase-map and CLAUDE.md counts on every commit (>5 drift). This task is a safety net: run `just check-codebase-map && just check-claude-md` in genomics only if hook might have been bypassed (--no-verify, external commits). | Justfile recipes |
 
 ### Running a Task
 
