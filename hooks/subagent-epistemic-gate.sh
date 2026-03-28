@@ -60,8 +60,15 @@ case "$AGENT_TYPE" in
         ;;
 esac
 
-# Skip short outputs (likely not research-heavy)
-if [ ${#MSG} -lt 200 ]; then
+# Short/empty output warning — subagent may have exhausted turns without synthesizing
+if [ "$MSG_LEN" -lt 200 ] && [ "$MSG_LEN" -gt 0 ]; then
+    ~/Projects/skills/hooks/hook-trigger-log.sh "epistemic-gate" "warn" "$AGENT_TYPE: short output (${MSG_LEN} chars)" 2>/dev/null || true
+    echo "{\"additionalContext\": \"SUBAGENT EMPTY: ${AGENT_TYPE} returned only ${MSG_LEN} chars. This agent likely exhausted turns without synthesizing. Check if it wrote to a file (the data may still be useful). If not, dispatch a recovery agent to read the transcript and extract findings. Do NOT ignore this — empty agents waste tokens AND lose discovered information.\"}"
+    exit 0
+fi
+if [ "$MSG_LEN" -eq 0 ]; then
+    ~/Projects/skills/hooks/hook-trigger-log.sh "epistemic-gate" "warn" "$AGENT_TYPE: zero output" 2>/dev/null || true
+    echo "{\"additionalContext\": \"SUBAGENT ZERO OUTPUT: ${AGENT_TYPE} returned nothing. The agent may have crashed or exhausted all turns on tool calls. Check the transcript for recoverable findings.\"}"
     exit 0
 fi
 

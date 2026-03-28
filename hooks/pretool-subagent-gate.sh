@@ -171,6 +171,20 @@ if [ -n "$PROMPT" ]; then
     fi
 fi
 
+# Check 8: Disjoint file paths — detect 2+ agents dispatched to same output file
+if [ -n "$PROMPT" ]; then
+    # Extract file paths from Write/output instructions in the prompt
+    OUT_PATH=$(echo "$PROMPT" | grep -oE '(Write|write|save|output).*(to|path)[^"'\'']*["'\''"]?([~/a-zA-Z0-9_./-]+\.(md|json|txt|py))' | grep -oE '[~/a-zA-Z0-9_./-]+\.(md|json|txt|py)' | head -1 || true)
+    if [ -n "$OUT_PATH" ]; then
+        DISPATCH_LOG="/tmp/claude-agent-paths-$PPID"
+        if [ -f "$DISPATCH_LOG" ] && grep -qF "$OUT_PATH" "$DISPATCH_LOG" 2>/dev/null; then
+            CHECK_IDS="${CHECK_IDS}8,"
+            WARNINGS="${WARNINGS}SUBAGENT PATH COLLISION: Output path '$OUT_PATH' was already dispatched to another agent in this session. Each agent MUST write to its own file — concurrent writes silently overwrite each other. Use unique filenames per agent. "
+        fi
+        echo "$OUT_PATH" >> "$DISPATCH_LOG"
+    fi
+fi
+
 # Emit combined warnings
 if [ -n "$WARNINGS" ]; then
     ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "warn" "checks=${CHECK_IDS%,} ${WARNINGS:0:80}" 2>/dev/null || true
