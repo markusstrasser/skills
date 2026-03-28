@@ -59,6 +59,14 @@ fi
 
 If a brainstorm from the last 24h covers the same domain, read the existing synthesis first and brainstorm only for gaps. Do not re-run the full perturbation pipeline on an already-explored topic.
 
+Also check git for cross-session brainstorms (parallel sessions won't see each other's uncommitted directories):
+
+```bash
+git log --oneline -10 --all | grep -i "brainstorm"
+```
+
+If recent commits mention brainstorm on the same topic, read those results before starting a new run.
+
 ### Constitutional Check
 
 ```bash
