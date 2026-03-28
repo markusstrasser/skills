@@ -42,6 +42,7 @@ Read `MAINTENANCE.log` to see what was done recently. Pick the highest-priority 
 | **Calibration canary** | Weekly | Run `uv run python3 ~/Projects/meta/scripts/calibration-canary.py --mode sampling --difficulty hard --runs 10 --backend llmx --model gpt-4o-mini`. Uses llmx backend (no Claude API credits needed). Check hard canary accuracy is 30-70% (if >90%, canary isn't hard enough). Compare with prior run in `~/.claude/epistemic-metrics.jsonl`. | Meta scripts |
 | **Genomics canary gate** | After classification changes | Run `just canary` in genomics. Pre-commit hook catches this, but maintenance verifies the hook is working. | Genomics justfile |
 | **Doc currency** | Fallback only | Post-commit hook auto-fixes both codebase-map and CLAUDE.md counts on every commit (>5 drift). This task is a safety net: run `just check-codebase-map && just check-claude-md` in genomics only if hook might have been bypassed (--no-verify, external commits). | Justfile recipes |
+| **Infra coverage** | Monthly | In genomics: `git log --oneline --since="30 days ago"` → grep for fix/correct/error/wrong/repair → categorize by detection source (hook, bio-verify, model-review, manual). Compute catch rate (fixes caught by automated hooks / total fixes). Compare to prior month. Log to `~/Projects/meta/research/infra-gap-analysis-*.md` revision section. Target: >65% catch rate. | `git log` + manual categorization |
 
 ### Running a Task
 
