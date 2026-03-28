@@ -174,6 +174,9 @@ Before dispatching, classify the review target by blast radius to determine how 
 | `deep` | arch + formal + domain + mechanical | 4 | Structural changes, domain-dense plans |
 | `full` | arch + formal + domain + mechanical + alternatives | 5 | Shared infra, clinical logic, high-stakes |
 
+**Genomics classification review** (recommended monthly or after >10 commits to LR-engine/scoring):
+Use `--axes formal,domain` with context from `generate_review_packets.py`, `lr_combiner.py`, `config/canary_variants.json`, and the relevant scoring modules. GPT-5.4 Pro R5 found 11 conceptual/mathematical bugs for $6.54 in a single session — the only detector for incoherent Bayes, wrong concordance calibration, excluded FDR families, and surrogate endpoint fallacy. No automated hook can catch these.
+
 **Individual axes** (mix and match with `--axes arch,domain`):
 
 | Axis | Model | What it checks |

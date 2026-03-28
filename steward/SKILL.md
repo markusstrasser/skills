@@ -1,7 +1,7 @@
 ---
 name: steward
 description: Autonomous infrastructure steward — monitors orchestrator, implements promoted findings, reacts to session events. Run with /loop 10m.
-disable-model-invocation: true
+disable-model-invocation: false
 model: claude-opus-4-6
 effort: medium
 ---
@@ -58,11 +58,42 @@ Check `~/.claude/steward-proposals/` for proposal files. For each file without "
 4. After implementing: append `\n**Status:** IMPLEMENTED (YYYY-MM-DD)` to the proposal file
 5. If propose-only: skip (waiting for human approval)
 
+### P3.7: Auto-Escalate Stale Advisory Hooks
+Check if any advisory hooks should be promoted to blocking:
+
+```bash
+# Run hook-roi for recent data
+cd ~/Projects/meta && uv run python3 scripts/hook-roi.py --days 3 2>/dev/null | head -30
+```
+
+**Escalation criteria** (all must be true):
+1. Hook has >100 warn triggers/day for 3+ consecutive days
+2. Session-analyst improvement-log shows 3+ recurrences of the behavior the hook targets
+3. Hook's false-positive rate <20% (check shadow logs or sample recent triggers)
+
+If criteria met: write a proposal to `~/.claude/steward-proposals/promote-{hook-name}.md` with evidence (trigger counts, recurrence dates, false-positive estimate). Blocking hooks affecting 3+ projects need human approval.
+
+**Measured latency this closes:** Rule→advisory takes 5-10 days, advisory→block takes 10-18 days with 3+ recurrences. This step cuts advisory→block to ~3 days by automating the data check.
+
+### P3.8: Batch-Triage Proposed Findings Backlog
+If improvement-log has >20 `[ ] proposed` findings:
+
+```bash
+grep -c '\[ \] proposed' ~/Projects/meta/improvement-log.md
+```
+
+For each proposed finding:
+- If covered by a rule/hook deployed since the finding date → mark `[x] covered — {rule/hook reference}`
+- If 1st occurrence with no recurrence in 14+ days → mark `[ ] monitoring — no recurrence`
+- If clearly superseded by newer finding → mark `[SUPERSEDED] — {pointer}`
+- If recurred 2+ times → escalate via P3
+
+Run this check when proposed count exceeds 20. Target: keep proposed backlog under 15.
+
 ### P4: Health & Maintenance
 If nothing above needs attention:
 - Run `cd ~/Projects/meta && uv run python3 scripts/doctor.py 2>/dev/null | tail -30` and fix autonomous-scope issues
 - Check if scheduled pipelines are firing on schedule (compare orchestrator log vs expected cadence)
-- Check for stale findings: `cd ~/Projects/meta && uv run python3 scripts/finding-triage.py decay 2>/dev/null`
 
 ### P5: All Clear
 Nothing actionable? Say so in one line. Don't invent work.

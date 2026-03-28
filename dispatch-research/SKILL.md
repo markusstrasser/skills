@@ -76,6 +76,7 @@ Don't generate prompts for things obvious from reading the code. Target things r
 - **Don't tell agents to write files.** Agents that create template files waste a write turn and still exhaust turns before filling them in (failed 3/4 sessions). Instead, rely on `-o FILE` to capture the final text response.
 - **Use `-o FILE` flag** to capture the final message even if the agent runs out of turns mid-synthesis.
 - **Prefer grep-first, read-targeted.** Tell agents to grep for specific patterns first, then read only the relevant line ranges — not entire files.
+- **Synthesis deadline in every prompt.** Include: `"After reading at most 5 files, STOP searching and write your findings. Spend 70% of effort on reading, 30% on synthesis. A partial report is better than no report."` Without this, agents exhaust all turns on reading and produce empty output (6th+ recurrence, 2026-03-28). This is the same turn-budget rule as Agent() dispatch but Codex doesn't see CLAUDE.md — the instruction must be in the prompt.
 
 ### Prompt structure
 
@@ -115,6 +116,9 @@ codex exec --model gpt-5.4 --full-auto \
   "You are auditing a codebase. Read files at their full paths. \
    Cite file:line for findings. \
    Do NOT create any files or write any templates. Just read code and analyze. \
+   BUDGET: Read at most 5 files. After that, STOP and synthesize. \
+   Spend 70% of effort reading, 30% writing your report. \
+   A partial report is infinitely better than no report. \
    Your final text message will be captured automatically. \
    End with a COMPLETE markdown report of all findings. \
    TASK: [prompt]" &
