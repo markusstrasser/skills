@@ -11,7 +11,10 @@ TRACKER="/tmp/claude-read-tracker-${PPID}"
 echo "$FILE" >> "$TRACKER"
 
 COUNT=$(grep -cF "$FILE" "$TRACKER" 2>/dev/null || echo 0)
-if [ "$COUNT" -ge 3 ]; then
-  echo "{\"additionalContext\": \"Read ${FILE} ${COUNT}x this session. Use Grep to find specific content, or Read with offset/limit.\"}"
+if [ "$COUNT" -ge 4 ]; then
+  echo "BLOCKED: Read ${FILE} ${COUNT}x this session. Use Grep to find specific content, or Read with offset/limit to target the section you need." >&2
+  exit 2
+elif [ "$COUNT" -ge 3 ]; then
+  echo "{\"additionalContext\": \"Read ${FILE} ${COUNT}x this session. Use Grep to find specific content, or Read with offset/limit. Next read of this file will be BLOCKED.\"}"
 fi
 exit 0
