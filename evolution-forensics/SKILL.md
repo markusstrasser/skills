@@ -1,6 +1,6 @@
 ---
 name: evolution-forensics
-description: "Longitudinal codebase forensics — scans N days of git history across projects, builds an evolution index (commit patterns, churn hotspots, fix chains), cross-references with improvement-log and hook telemetry, extracts failure classes, and predicts tooling to prevent recurrence. The time-series complement to session-analyst (snapshot) and design-review (architecture)."
+description: "Longitudinal codebase forensics — tracks concept lifecycles (not just commits), joins sessions to outcomes, measures rule decay and self-improvement velocity, predicts tooling from survival analysis and failure diffusion. The time-series complement to session-analyst (snapshot) and design-review (architecture)."
 user-invocable: true
 context: fork
 argument-hint: "[--days N] [--project PROJECT] [--phase 1|2|3|4] [--quick]"
@@ -17,9 +17,9 @@ allowed-tools:
 
 # Evolution Forensics
 
-Longitudinal analysis of how the codebase *actually evolves* — not what one session did, but what patterns emerge across days and weeks of commits, corrections, and failures.
+Longitudinal analysis of how the codebase *actually evolves*. Tracks concepts through lifecycle states, joins AI sessions to their downstream outcomes, measures which rules decay and which fixes stick, and predicts what tooling to build next.
 
-**session-analyst** sees one session. **design-review** sees workflow patterns. **This skill** sees the *time series* — which fixes stuck, which regressed, which failure classes resist mitigation, and what tooling would bend the curve.
+**session-analyst** sees one session. **design-review** sees workflow patterns. **This skill** sees the trajectory — which corrections stuck, which regressed, which failure classes resist mitigation across weeks.
 
 ## Current Environment
 `!echo "Date: $(date +%Y-%m-%d) | CWD: $(basename $PWD) | Projects: $(ls ~/Projects/ | wc -l | tr -d ' ') | Improvement-log entries: $(grep -c '^### ' ~/Projects/meta/improvement-log.md 2>/dev/null) | Hook count: $(grep -c '"command"' ~/.claude/settings.json 2>/dev/null)"`
@@ -36,11 +36,11 @@ Parse `$ARGUMENTS`:
 
 ## Phase 1: Evolution Index
 
-Build a structured index of what happened. This is the prep step — data collection, no analysis.
+Data collection. Three layers: commits, session→commit joins, and concept inference.
 
-### 1a. Git History Extraction
+### 1a. Git History + Session Attribution
 
-For each project in scope, extract structured commit data:
+Extract commits with Session-ID trailers for session→commit joining:
 
 ```bash
 DAYS=${DAYS:-14}
@@ -54,7 +54,7 @@ for PROJECT in meta intel selve genomics skills; do
   echo "=== $PROJECT ===" >> "$ARTIFACT_DIR/git-history.md"
   git -C "$PROJECT_DIR" log \
     --since="$DAYS days ago" \
-    --format="COMMIT|%H|%ai|%an|%s" \
+    --format="COMMIT|%H|%ai|%an|%s|%(trailers:key=Session-ID,valueonly)" \
     --numstat \
     >> "$ARTIFACT_DIR/git-history.md"
   echo "" >> "$ARTIFACT_DIR/git-history.md"
@@ -63,269 +63,313 @@ done
 
 ### 1b. Commit Classification
 
-Read the raw git history and classify each commit into one of:
+Classify each commit:
 
 | Type | Signal | Example |
 |------|--------|---------|
-| **FIX** | Subject contains: fix, repair, correct, patch, resolve, handle | `[hooks] Fix trap swallowing exit 2` |
-| **FIX-OF-FIX** | Fixes something touched by a FIX commit within 3 days | Commit fixes the same file a prior fix touched |
-| **REVERT** | Subject contains: revert, undo, drop, remove, retire | `[infra] Drop finding-triage DB` |
+| **FIX** | fix, repair, correct, patch, resolve | `[hooks] Fix trap swallowing exit 2` |
+| **FIX-OF-FIX** | Fixes a file touched by a FIX within 3 days | Same file, two fixes, short gap |
+| **REVERT** | revert, undo, drop, remove, retire | `[infra] Drop finding-triage DB` |
 | **FEATURE** | New capability, wiring, integration | `[api] Wire rate-limit refresh` |
-| **RULE** | CLAUDE.md, rules/, hooks, improvement-log changes | `[rules] Extend probe-before-build` |
-| **RESEARCH** | research/, decisions/ changes | `[research] Agent scaffolding landscape` |
-| **CHORE** | Docs, formatting, deps, CI | `[docs] Regenerate codebase map` |
+| **RULE** | CLAUDE.md, rules/, hooks, improvement-log | `[rules] Extend probe-before-build` |
+| **RESEARCH** | research/, decisions/ | `[research] Agent scaffolding landscape` |
+| **CHORE** | Docs, formatting, deps | `[docs] Regenerate codebase map` |
 
-For each commit, extract:
-- **scope** (from `[scope]` prefix)
-- **type** (from classification above)
-- **files_changed** (from numstat)
-- **churn** (lines added + deleted)
-- **trailers** (Evidence:, Rejected:, Session-ID:, etc.)
+Extract per commit: scope, type, files_changed, churn (lines +/-), Session-ID (if present).
 
-Write structured output to `$ARTIFACT_DIR/evolution-index.md`:
+### 1c. Session→Commit→Outcome Join
+
+Build the causal chain. For commits with Session-ID trailers:
+
+1. Group commits by Session-ID → "what did this session produce?"
+2. For each session's commits, check: were any files subsequently touched by a FIX or FIX-OF-FIX? → "did this session's work need correction?"
+3. For fix-of-fix chains, trace back: which session introduced the original code?
+
+Output a session outcome table:
 
 ```markdown
-# Evolution Index — YYYY-MM-DD (N days)
-
-## Summary
-- Total commits: N across M projects
-- Types: N fix, N fix-of-fix, N revert, N feature, N rule, N research, N chore
-- Hotspot files: (top 10 by commit count)
-- Fix-of-fix chains: N (list)
-
-## Per-Project
-
-### [project]
-| Date | Scope | Type | Subject | Files | Churn |
-|------|-------|------|---------|-------|-------|
-| ... | ... | ... | ... | ... | ... |
-
-## Churn Hotspots
-Files touched by 5+ commits in the window, ranked by churn:
-| File | Commits | Lines changed | Types |
-|------|---------|--------------|-------|
-
-## Fix Chains
-Sequences where a file was fixed, then fixed again within 3 days:
-| File | Fix 1 | Fix 2 | Gap (days) | Same scope? |
-|------|-------|-------|-----------|-------------|
-
-## Revert/Retire Log
-Things that were built then removed:
-| What | Built | Removed | Lifespan | Why removed (from commit body) |
-|------|-------|---------|----------|-------------------------------|
+## Session Outcomes
+| Session-ID | Project | Commits | Files | Fix-of-fix within 3d? | Subsequent corrections |
+|-----------|---------|---------|-------|----------------------|----------------------|
 ```
 
-### 1c. Cross-Reference Sources
+Sessions with high correction rates are producing fragile code. Sessions with zero corrections are producing durable code. The *difference* between them is the learning signal.
 
-Enrich the index with data from other systems:
+### 1d. Concept Lifecycle Inference
+
+Concepts are tracked entities that persist across file renames, merges, and deletions. Derive them from git history — don't maintain a manual registry.
+
+**How to identify concepts:** A concept is a cluster of related commits sharing a scope tag, touching overlapping files, or referencing the same improvement-log finding. Examples:
+- `dup-read-detection` — research memo → session-analyst detection rule → hook → promoted to block
+- `finding-triage-db` — script → DB → retired (full lifecycle, short-lived)
+- `knowledge-substrate` — MCP server → retired, replaced by hook + propagate-correction.py
+
+For each concept in the window, infer its current lifecycle state:
+
+| State | Signal |
+|-------|--------|
+| **RESEARCH** | Exists only in research/, decisions/, or brainstorm artifacts |
+| **PROTOTYPE** | Script or tool exists but isn't wired into any workflow |
+| **INTEGRATED** | Wired in: called by a skill, hook, pipeline, or justfile recipe |
+| **PROMOTED** | Graduated: advisory→blocking, optional→default, project→cross-project |
+| **NARROWED** | Scope reduced: exceptions added, conditions tightened |
+| **SUPERSEDED** | Replaced by something else (check vetoed-decisions.md, commit bodies) |
+| **RETIRED** | Deleted or archived |
+
+Track **typed relationships** between concepts using this vocabulary:
+- **implements** — concept X implements idea from memo Y
+- **replaces** — concept X supersedes concept Y
+- **narrows** — concept X restricts scope of concept Y
+- **extends** — concept X broadens concept Y
+- **deprecates** — concept X makes concept Y obsolete
+
+Write concept lifecycle to `$ARTIFACT_DIR/concept-lifecycle.md`:
+
+```markdown
+## Concept: [name]
+**State:** INTEGRATED
+**First seen:** 2026-03-10 (research/agent-memory-architectures.md)
+**Current manifestation:** scripts/propagate-correction.py + hook
+**Relationships:** replaces knowledge-substrate, implements correction-propagation
+**Trajectory:** RESEARCH → PROTOTYPE → INTEGRATED (12 days)
+**Evidence:** [commit hashes]
+```
+
+### 1e. Cross-Reference Sources
 
 ```bash
-# Improvement log — extract findings with status
+# Improvement log findings with status
 grep -E '^### \[|^\- \*\*Status' ~/Projects/meta/improvement-log.md > "$ARTIFACT_DIR/findings-status.txt"
 
-# Hook trigger data (if available)
+# Hook trigger data
 uv run python3 ~/Projects/meta/scripts/hook-roi.py --days $DAYS 2>/dev/null > "$ARTIFACT_DIR/hook-triggers.txt" || echo "hook-roi unavailable"
 
 # Agent failure modes reference
 cp ~/Projects/meta/agent-failure-modes.md "$ARTIFACT_DIR/failure-modes-ref.md" 2>/dev/null || true
 
-# Session shape anomalies (zero-cost structural flags)
-uv run python3 ~/Projects/meta/scripts/session-shape.py --days $DAYS 2>/dev/null > "$ARTIFACT_DIR/session-shapes.txt" || echo "session-shape unavailable"
-
-# Vetoed decisions (things NOT to re-propose)
+# Vetoed decisions
 cat ~/Projects/meta/.claude/rules/vetoed-decisions.md > "$ARTIFACT_DIR/vetoed.txt" 2>/dev/null || true
 ```
 
-**Output:** `$ARTIFACT_DIR/evolution-index.md` — the full structured index. Verify it exists and is >1KB before proceeding.
+**Phase 1 output:** `evolution-index.md` (commits + classifications), `session-outcomes.md` (session→outcome joins), `concept-lifecycle.md` (concept states + relationships).
 
 ---
 
-## Phase 2: Failure Pattern Extraction
+## Phase 2: Pattern Extraction + Decay Metrics
 
-Now analyze the index for recurring failure patterns. This is where instances become classes.
+Analysis. Instances become classes. Quantitative decay signals surface what's working and what isn't.
 
-### 2a. Pattern Detection
+### 2a. Failure Pattern Detection
 
-Read the evolution index and cross-reference sources. Look for these specific pattern types:
+Read the evolution index and cross-reference sources. Look for:
 
-**Fix-of-fix chains** — A file or scope that gets fixed, then fixed again within days. This means the first fix was incomplete or introduced a new bug. Each chain is a potential failure class.
+**Fix-of-fix chains** — file/scope fixed then fixed again within days. First fix was incomplete.
 
-**Churn-without-convergence** — Files with high churn (many commits) but no net improvement (same issues reappear). The system is thrashing, not learning.
+**Session-correlated fragility** — sessions from 1c with high correction rates. What do fragile sessions have in common? (scope, time of day, model, project)
 
-**Rule-then-violation** — A rule was added (CLAUDE.md, rules/, hook) but subsequent sessions still violate it. The rule isn't working. Cross-reference: improvement-log entries marked "implemented" but with later recurrence entries.
+**Build-then-retire** — things built and removed within the window. Each is a misjudgment.
 
-**Build-then-retire** — Features or infrastructure built and then removed within the window. The revert/retire log from Phase 1 feeds this. Each instance is a misjudgment — either premature building or bad requirements.
+**Cross-project contagion** — same failure pattern in 2+ projects. Systemic, not local.
 
-**Hook blindspot** — Failure modes documented in `agent-failure-modes.md` that have NO corresponding hook, rule, or skill. The gap between what's known and what's enforced.
+**Concept stalls** — concepts stuck at PROTOTYPE for >7 days. Not progressing, not retired. Dead weight.
 
-**Cross-project contagion** — Same failure pattern appearing in 2+ projects. Indicates a systemic issue, not a project-specific one.
+### 2b. Rule Compliance Decay
 
-### 2b. Class Taxonomy
+For each rule added to CLAUDE.md or rules/ within the window:
 
-Group individual patterns into failure *classes*. A class is defined by:
+1. Identify the rule and its add-date from git log
+2. Check subsequent sessions: does the agent comply?
+3. Compute compliance rate at day 1, 7, 14
+
+```markdown
+## Rule Decay
+| Rule | Added | Day-1 compliance | Day-7 | Day-14 | Half-life estimate | Action |
+|------|-------|-----------------|-------|--------|-------------------|--------|
+| probe-before-build | 03-15 | 100% | 80% | 40% | ~10d | → PROMOTE to hook |
+| no-git-add-A | 03-10 | 100% | 90% | 85% | ~60d | Rule is working |
+```
+
+Rules with half-life <14 days need hook promotion. Rules with half-life >30 days are fine as instructions. This directly validates the constitution's "architecture over instructions" principle.
+
+### 2c. Improvement-Log Cycle Time
+
+Parse improvement-log.md to measure self-improvement pipeline velocity:
+
+```markdown
+## Self-Improvement Velocity
+| Finding | Observed | Proposed | Implemented | Measured | Total cycle | Bottleneck |
+|---------|----------|----------|-------------|----------|-------------|-----------|
+| dup-read | 03-20 | 03-20 | 03-28 | — | 8d+ (unmeasured) | measurement |
+| schema-probe | 03-15 | 03-15 | 03-26 | 03-27 | 12d | implementation |
+```
+
+Key metrics:
+- **Median cycle time** (finding→implemented): the self-improvement speed
+- **Measurement rate**: what % of "implemented" findings have been verified?
+- **Stuck findings**: proposed but not implemented for >14 days
+- **Zombie findings**: implemented but never measured — the system builds mitigations but doesn't check if they work
+
+### 2d. Reinvention Detection
+
+Check whether the system keeps rebuilding things that already exist:
+
+1. From the concept lifecycle (1d), identify concepts that reached RETIRED or SUPERSEDED
+2. Search recent sessions/commits for similar patterns being re-introduced
+3. From session transcripts (if accessible): grep for similar function signatures or tool patterns across sessions
+
+```markdown
+## Reinvention Events
+| What | Original | Reinvented in | Gap | Memory failure? |
+|------|----------|--------------|-----|----------------|
+| coverage-digest.sh | session X | session Y, Z | 3d | Yes — not shared |
+```
+
+High reinvention rate = retrieval/memory system is failing. The fix isn't "build more things" but "make existing things findable."
+
+### 2e. Failure Class Taxonomy
+
+Group patterns into classes:
 
 ```markdown
 ## Failure Class: [NAME]
-
-**Definition:** One sentence — what goes wrong and why
-**Mechanism:** How the failure propagates (agent behavior → bad outcome)
-**Instances in window:**
-- [date] [project] [commit/finding ref] — [specific instance]
-- ...
-**Frequency:** N instances / M days = rate
-**Projects affected:** [list]
-**Current mitigations:**
-- Hook: [name] — [effectiveness: blocks N%, misses N%]
-- Rule: [CLAUDE.md section] — [compliance: observed in N/M sessions]
-- Skill: [name] — [coverage: addresses N% of instances]
-**Mitigation gap:** What the current mitigations DON'T catch
-**Blast radius:** [low/medium/high] — what happens when this failure occurs unmitigated
+**Definition:** What goes wrong and why
+**Mechanism:** Agent behavior → bad outcome
+**Instances:** [date] [project] [commit/finding ref] — [specifics]
+**Frequency:** N instances / M days
+**Projects:** [list]
+**Related concepts:** [concept names from lifecycle, with relationship types]
+**Current mitigations:** Hook/Rule/Skill — effectiveness
+**Mitigation gap:** What isn't caught
+**Blast radius:** low/medium/high
 ```
 
-Write taxonomy to `$ARTIFACT_DIR/failure-taxonomy.md`.
+Write to `$ARTIFACT_DIR/failure-taxonomy.md`.
 
-### 2c. Verify Against Known Patterns
-
-Cross-check your taxonomy against `agent-failure-modes.md`:
-- Are any of your classes already documented there? → Note as "KNOWN, mitigation status: X"
-- Are any documented modes NOT appearing in recent history? → Note as "DORMANT or MITIGATED"
-- Are any of your classes genuinely NEW? → Flag for Phase 4
-
-Cross-check against vetoed decisions:
-- Would any recommendation you're forming re-propose a vetoed approach? → Drop it now.
+Cross-check against `agent-failure-modes.md` (known vs novel) and `vetoed-decisions.md` (don't re-propose).
 
 ---
 
-## Phase 3: Causal Analysis
+## Phase 3: Causal Analysis + Survival
 
-For each failure class, determine *why* existing mitigations aren't sufficient.
+Why do mitigations fail? How long do artifacts survive? What predicts durability?
 
 ### 3a. Mitigation Failure Modes
 
 For each class with mitigation gap > 0:
 
-| Class | Mitigation exists? | Why it fails | Category |
-|-------|-------------------|-------------|----------|
-| ... | Hook X | Too narrow — catches pattern A but not variant B | COVERAGE_GAP |
-| ... | Rule Y | Instruction-only, no enforcement — compliance ~60% | UNHOOKABLE |
-| ... | None | Not recognized as a pattern until now | NOVEL |
-| ... | Skill Z | Skill exists but isn't invoked when needed | ROUTING_GAP |
+| Category | Meaning | Example |
+|----------|---------|---------|
+| **COVERAGE_GAP** | Mitigation exists but misses variants | Hook catches pattern A, not variant B |
+| **DECAY** | Rule existed, compliance dropped below threshold | Rule half-life <14d from 2b |
+| **NOVEL** | Not recognized as a pattern until now | New failure class |
+| **ROUTING_GAP** | Tool exists but isn't reached | Skill not invoked when needed |
+| **SEMANTIC** | Requires judgment, not pattern matching | Unhookable |
 
-Categories:
-- **COVERAGE_GAP** — Mitigation exists but doesn't cover all variants
-- **UNHOOKABLE** — Rule exists but can't be enforced deterministically
-- **NOVEL** — Pattern wasn't recognized before this analysis
-- **ROUTING_GAP** — Tool exists but isn't reached (wrong trigger, not in workflow)
-- **SEMANTIC** — Failure requires judgment to detect, not pattern matching
+### 3b. Artifact Survival Analysis
 
-### 3b. Root Cause Clustering
+From the revert/retire log and concept lifecycle, compute survival statistics:
+
+```markdown
+## Survival by Artifact Type
+| Type | N created | N surviving | Median survival (days) | Shortest | Longest |
+|------|-----------|-------------|----------------------|----------|---------|
+| Hook | 8 | 7 | 30+ | 14 | 30+ |
+| Script | 12 | 8 | 18 | 3 | 30+ |
+| Rule | 15 | 13 | 25+ | 7 | 30+ |
+| Research memo | 20 | 20 | — | — | — |
+```
+
+Predictive signal: artifacts created without prior research (no RESEARCH-state concept) should have shorter survival. Artifacts created after /brainstorm or /model-review should survive longer. Verify this.
+
+### 3c. Root Cause Clustering
 
 Cluster failure classes by root cause:
 
 | Root Cause | Classes | Addressable by |
 |-----------|---------|---------------|
-| Agent doesn't read available docs before probing | schema-probe-loop, CLI-flag-guessing | Hook (detect repeated failures before doc reads) |
-| Same-model review is a martingale | missed-bugs-in-review, sycophantic-compliance | Cross-model (architectural) |
-| Async coordination is manual | file-poll-loops, background-task-waste | Better async primitives |
-| ... | ... | ... |
+| Doesn't read docs before probing | schema-probe, CLI-flag-guess | Hook (detect failures before doc reads) |
+| Rule decay without hook promotion | repeated-read, polling-loops | Decay curve → auto-promote |
+| Memory/retrieval failure | reinvention events | Better concept surfacing |
 
 Write to `$ARTIFACT_DIR/causal-analysis.md`.
 
 ---
 
-## Phase 4: Tooling Predictions
+## Phase 4: Predictions
 
-The payoff. For each unmitigated or under-mitigated failure class, propose concrete tooling.
+Ranked proposals for what to build next.
 
 ### 4a. Generate Proposals
 
-For each failure class ranked by `frequency x blast_radius x (1 - mitigation_coverage)`:
+Rank failure classes by `frequency × blast_radius × (1 - mitigation_coverage)`. For each:
 
 ```markdown
 ## Proposal: [NAME]
-
-**Addresses class:** [failure class name]
+**Addresses:** [failure class]
 **Type:** hook | skill | rule | architecture | native-feature-adoption
-**Mechanism:** [How it prevents the failure — be specific]
-**Implementation sketch:** [10-20 lines of what the hook/skill/rule would look like]
-**Maintenance burden:** [low/medium/high] — what breaks when the codebase evolves?
-**False positive risk:** [low/medium/high] — how often would this fire incorrectly?
-**Validation:** [How to verify it works — specific test or metric]
-**Rejected alternatives:**
-- [Alternative 1] — why not: [reason]
-- [Alternative 2] — why not: [reason]
+**Mechanism:** How it prevents the failure
+**Maintenance:** low/medium/high
+**False positive risk:** low/medium/high
+**Validation:** How to verify it works
+**Rejected alternatives:** What else was considered and why not
 ```
 
-### 4b. Priority Matrix
+### 4b. Vetoed + Native Feature Checks
 
-Rank proposals by actionability:
-
-| Proposal | Frequency | Blast radius | Maintenance | False positives | Score |
-|----------|-----------|-------------|-------------|----------------|-------|
-| ... | ... | ... | ... | ... | ... |
-
-Score = `frequency * blast_radius_weight / (maintenance + false_positive_risk)` where blast_radius_weight is 1/2/3 for low/medium/high.
-
-### 4c. Vetoed Check
-
-Before finalizing: re-read `vetoed-decisions.md`. Drop any proposal that matches a vetoed approach. Note: "Dropped proposal X — matches veto: [entry]".
-
-### 4d. Native Feature Check
-
-For each proposal of type "hook" or "skill": check if Claude Code, the SDK, or a vendor tool already provides this natively. Run:
+Before finalizing:
+1. Re-read `vetoed-decisions.md` — drop any matching proposal
+2. Check Claude Code changelog and deferred-features for native coverage:
 
 ```bash
-# Check Claude Code changelog for relevant features
-grep -i "KEYWORD" ~/Projects/meta/research/anthropic-claude-weekly-*.md 2>/dev/null | head -5
 grep -i "KEYWORD" ~/Projects/meta/research/claude-code-native-features-deferred.md 2>/dev/null | head -5
 ```
 
-If a native feature covers 80%+ of the proposal, recommend adoption over building.
-
-### 4e. Final Output
+### 4c. Final Output
 
 Write to `$ARTIFACT_DIR/predictions.md`:
 
 ```markdown
-# Evolution Forensics — Tooling Predictions
-**Date:** YYYY-MM-DD
-**Window:** N days across M projects
-**Commits analyzed:** N
-**Failure classes found:** N (M novel, K known, J dormant)
+# Evolution Forensics — YYYY-MM-DD (N days, M projects)
+
+## System Health
+- Self-improvement cycle time: Nd median
+- Measurement rate: N% of implemented findings verified
+- Rule decay: N rules below half-life threshold
+- Reinvention rate: N events (memory failure indicator)
+- Artifact survival: scripts Nd median, hooks Nd median
 
 ## Priority Actions
-1. [Proposal] — [one-line rationale]
-2. ...
+1. [Proposal] — [rationale]
 
-## Deferred (low priority or blocked)
-- [Proposal] — deferred because: [reason]
+## Deferred
+- [Proposal] — [why]
 
-## Already Mitigated (no action)
-- [Class] — covered by: [mitigation]
+## Already Mitigated
+- [Class] — [by what]
+
+## Concept Lifecycle Summary
+| Concept | State | Trajectory | Days in state |
 ```
 
 ---
 
-## Output Convention
-
-All artifacts go to `~/Projects/meta/artifacts/evolution-forensics/`. The key outputs:
+## Output Files
 
 | File | Phase | Contains |
 |------|-------|----------|
-| `git-history.md` | 1a | Raw git log data |
-| `evolution-index.md` | 1b | Structured commit index with classifications |
-| `failure-taxonomy.md` | 2b | Failure classes with instances and mitigations |
-| `causal-analysis.md` | 3b | Root cause clusters and mitigation failure modes |
-| `predictions.md` | 4e | Ranked tooling proposals |
-
-The evolution-index is the prep artifact. The predictions file is the actionable output.
+| `evolution-index.md` | 1b | Classified commits |
+| `session-outcomes.md` | 1c | Session→commit→correction chains |
+| `concept-lifecycle.md` | 1d | Concept states + typed relationships |
+| `failure-taxonomy.md` | 2e | Failure classes with evidence |
+| `causal-analysis.md` | 3c | Root causes + survival stats |
+| `predictions.md` | 4c | Ranked proposals + system health metrics |
 
 ## Anti-Patterns
 
-- **Don't re-propose vetoed decisions.** Check `vetoed-decisions.md` before every recommendation.
-- **Don't count dev effort as cost.** Filter by maintenance burden, not implementation effort.
-- **Don't fabricate instances.** Every failure class entry must cite a specific commit hash or improvement-log entry.
-- **Don't propose without checking native features.** Step 4d exists for a reason.
-- **Don't conflate frequency with severity.** A rare catastrophic failure outranks a frequent trivial one.
+- **Don't maintain a manual concept registry.** Infer concepts from git history and improvement-log. If it needs manual upkeep, it'll rot.
+- **Don't re-propose vetoed decisions.**
+- **Don't count dev effort as cost.** Filter by maintenance burden.
+- **Don't fabricate instances.** Every failure class cites a commit hash or improvement-log entry.
+- **Don't conflate frequency with severity.** Rare catastrophic > frequent trivial.
 - **Don't skip Phase 1.** The index IS the skill. Analysis without evidence is speculation.
+- **Don't treat reinvention as failure to build.** It's failure to retrieve. The fix is surfacing, not building more.
