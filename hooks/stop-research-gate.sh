@@ -31,10 +31,21 @@ if not cwd or not os.path.isdir(os.path.join(cwd, '.git')):
 research_pattern = os.environ.get('RESEARCH_PATHS', 'docs/research/|analysis/|docs/entities/')
 exclude_pattern = os.environ.get('EXCLUDE_PATTERN', r'MEMORY\.md|CLAUDE\.md|maintenance-checklist\.md|improvement-log\.md|README\.md')
 
-# Find files changed in working tree
+# Session-scoped diff: only check files modified THIS session, not pre-existing dirty files.
+# Read session ID from .claude/current-session-id, then load base SHA from /tmp/.
+base_sha = 'HEAD'
+try:
+    sid_path = os.path.join(cwd, '.claude', 'current-session-id')
+    with open(sid_path) as f:
+        session_id = f.read().strip()
+    with open(f'/tmp/session-base-sha-{session_id}.txt') as f:
+        base_sha = f.read().strip()
+except (OSError, FileNotFoundError):
+    pass  # No baseline = fall back to HEAD (pre-fix behavior)
+
 changed = []
 try:
-    r1 = subprocess.run(['git', 'diff', '--name-only', 'HEAD'], cwd=cwd, capture_output=True, text=True, timeout=5)
+    r1 = subprocess.run(['git', 'diff', '--name-only', base_sha], cwd=cwd, capture_output=True, text=True, timeout=5)
     changed += [l for l in r1.stdout.strip().split('\n') if l]
     r2 = subprocess.run(['git', 'ls-files', '--others', '--exclude-standard'], cwd=cwd, capture_output=True, text=True, timeout=5)
     changed += [l for l in r2.stdout.strip().split('\n') if l]
