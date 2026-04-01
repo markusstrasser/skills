@@ -43,7 +43,7 @@ Read whatever gives you the lay of the land:
 
 ## Phase 2: Dispatch (~25%)
 
-**Memory pressure gate:** Before dispatching Codex audits, run `pgrep -c claude`. If >= 4 processes, reduce parallel dispatches to 1 (sequential) or skip delegation and audit directly. 50% of sessions hit memory pressure when dispatching multiple agents.
+**Memory pressure gate:** Before dispatching Codex audits, count active Claude/Codex processes with a command that works on the current host. On macOS/BSD, `pgrep` does **not** support `-c`; use `pgrep -lf claude | wc -l` (or equivalent) instead of `pgrep -c claude`. If the command prints a usage banner, stop and fix the probe instead of retrying variants of the same broken flag. If the count is >= 4, reduce parallel dispatches to 1 (sequential) or skip delegation and audit directly. 50% of sessions hit memory pressure when dispatching multiple agents.
 
 ### Target selection
 
@@ -280,6 +280,7 @@ If `MAINTAIN.md` exists in the project root (project uses `/maintain`), **you mu
 - Append to `## Log`: `YYYY-MM-DD | dispatch-research | N findings, M applied, D deferred | [commit range]`
 - Append deferred findings to `## Queue` with IDs continuing the M00N sequence
 - Append applied fixes to `## Fixed`
+- Never write placeholder commit refs such as `uncommitted`. If code commits are likely in the same session, defer the `MAINTAIN.md` update until the real commit hash or range exists, then write the final entries in one pass.
 
 This feeds results into the SWE quality lane so `/maintain` can track them.
 
