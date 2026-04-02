@@ -211,7 +211,7 @@ Send codebase to BOTH Gemini 3.1 Pro AND GPT-5.4 in parallel. Cross-family revie
 
 **IMPORTANT:** Always pass `--max-tokens 65536` on Gemini dispatches — the server default is 8K which silently truncates large JSON output.
 
-**Coordination with other agents:** If `pgrep -c claude >= 2`, check what the other agent is working on BEFORE planning. Run `git log --oneline -10` and `cat MAINTAIN.md CYCLE.md 2>/dev/null | head -40`. Plan only your DELTA — items the other agent is NOT already handling. Don't re-plan owned work.
+**Coordination with other agents:** If the active Claude/Codex session count is >= 2, check what the other agent is working on BEFORE planning. On macOS/BSD, do **not** use `pgrep -c`; use `pgrep -lf claude | wc -l` or the existing `~/.claude/active-agents.json` probe. Then run `git log --oneline -10` and `cat MAINTAIN.md CYCLE.md 2>/dev/null | head -40`. Plan only your DELTA — items the other agent is NOT already handling. Don't re-plan owned work.
 
 ### Dispatch both models in parallel
 
