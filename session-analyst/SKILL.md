@@ -153,7 +153,8 @@ PROMPT
 5. Save raw findings as JSON for the session-retro pipeline artifact trail:
 
 ```bash
-cat > ~/Projects/meta/artifacts/session-analyst/findings.json << 'EOF'
+SID=$(cat ~/.claude/current-session-id 2>/dev/null | head -c8 || date +%s | tail -c 8)
+cat > ~/Projects/meta/artifacts/session-analyst/$(date +%Y-%m-%d)-${SID}-findings.json << 'EOF'
 {
   "findings": [
     {

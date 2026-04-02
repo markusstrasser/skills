@@ -77,7 +77,13 @@ Write findings as JSON to `~/Projects/meta/artifacts/session-retro/`:
 mkdir -p ~/Projects/meta/artifacts/session-retro
 ```
 
-Write `{date}-manual.json` with schema:
+Compute a session-scoped filename to avoid overwrites from concurrent agents:
+
+```bash
+SID=$(cat ~/.claude/current-session-id 2>/dev/null | head -c8 || date +%s | tail -c 8)
+```
+
+Write `{date}-{SID}-manual.json` with schema:
 ```json
 {"findings": [{"category": "...", "summary": "...", "severity": "high|medium|low", "evidence": "...", "project": "...", "proposed_fix": "..."}], "source": "manual-retro"}
 ```

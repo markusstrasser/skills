@@ -30,7 +30,9 @@ Detect repeated multi-tool workflows in recent sessions and propose concrete ski
 Parse project from $ARGUMENTS. Default: current project, last 10 sessions (wider window than session-analyst to catch cross-session patterns).
 
 ```bash
-python3 ~/Projects/skills/session-analyst/scripts/extract_transcript.py <project> --sessions 10 --output ~/Projects/meta/artifacts/suggest-skill/input.md
+ARTIFACT_DIR="$HOME/Projects/meta/artifacts/suggest-skill"
+mkdir -p "$ARTIFACT_DIR"
+python3 ~/Projects/skills/session-analyst/scripts/extract_transcript.py <project> --sessions 10 --output "$ARTIFACT_DIR/input.md"
 ```
 
 If the extractor isn't available, fall back to reading the 10 most recent JSONL files from `~/.claude/projects/-Users-alien-Projects-<project>/` directly. Strip thinking blocks and base64.
@@ -78,10 +80,11 @@ for n in [4, 5]:
 Send transcripts + tool sequence analysis to Gemini 3.1 Pro for pattern extraction:
 
 ```bash
-mkdir -p ~/Projects/meta/artifacts/suggest-skill
+ARTIFACT_DIR="$HOME/Projects/meta/artifacts/suggest-skill"
+mkdir -p "$ARTIFACT_DIR"
 
 llmx -p google -m gemini-3.1-pro-preview \
-  -f ~/Projects/meta/artifacts/suggest-skill/input.md \
+  -f "$ARTIFACT_DIR/input.md" \
   "$(cat <<'PROMPT'
 You are analyzing Claude Code session transcripts to find repeated workflows that should become reusable skills or MCP tools.
 
@@ -151,7 +154,7 @@ Present candidates ranked by ROI (frequency x complexity):
 
 ### Step 6: Persist
 
-Save output to `~/Projects/meta/artifacts/suggest-skill/YYYY-MM-DD.md` for reference.
+Save output to `YYYY-MM-DD-{SID}.md` in `$ARTIFACT_DIR` for reference (where `SID=$(cat ~/.claude/current-session-id 2>/dev/null | head -c8 || date +%s | tail -c 8)`).
 
 If the user approves a candidate, offer to scaffold it:
 - For SKILL: create directory in `~/Projects/skills/` with SKILL.md
