@@ -23,7 +23,7 @@ You are orchestrating a cross-model review. Same-model peer review is a martinga
 
 If 3+ sessions active: prefix questions with project name + review topic. Batch decisions.
 
-**Memory pressure gate:** Before dispatching subagents, run `pgrep -c claude`. If >= 4, skip subagent delegation — work directly with llmx CLI calls instead. 50% of sessions hit memory pressure on dispatch.
+**Memory pressure gate:** Before dispatching subagents, count active Claude/Codex processes with a command that works on the current host. On macOS/BSD, `pgrep` does **not** support `-c`; use `pgrep -lf claude | wc -l` or the existing `~/.claude/active-agents.json` probe instead of `pgrep -c claude`. If the count is >= 4, skip subagent delegation and work directly with llmx CLI calls instead. 50% of sessions hit memory pressure on dispatch.
 
 ## Prerequisites
 
