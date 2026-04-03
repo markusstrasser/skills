@@ -27,7 +27,10 @@ Scripts and configs embed these claim types, ordered by verification priority:
 | **UPD / imprinting** | `"maternal_upd": "MODY"` | GeneReviews, literature | Wrong parent-of-origin → disease mapping |
 | **Risk ratio / effect size** | `"3x risk"`, `"OR ~4.5"` | `gwas_variant_associations`, `verify_claim` (Exa) | Inflated/outdated/wrong-population estimate |
 | **Inheritance mode** | `inheritance="AR"` | `rare_disease_gene_rare_diseases`, `curation_gene_validity` | XL misclassified as AR, etc |
-| **Drug-gene interaction** | `"poor metabolizer"` | `targets_pharmacogenetics`, `drugs_star_alleles` | Wrong phenotype, outdated CPIC guideline |
+| **Drug-gene interaction** | `"poor metabolizer"` | `targets_pharmacogenetics`, `drugs_star_alleles`, BioMCP `get pgx` (CPIC/PharmGKB) | Wrong phenotype, outdated CPIC guideline |
+| **Oncology variant** | `"oncogenic"`, `"V600E tier 1"` | BioMCP `get variant BRAF V600E` (OncoKB/CIViC/CGI) | Wrong evidence level, missing therapy implications |
+| **CGI drug association** | `"level A association"` | `composite_variant_context` (CGI field from MyVariant) | Wrong evidence level or tumor type |
+| **COSMIC context** | `"high frequency in melanoma"` | `composite_variant_context` (COSMIC field from MyVariant) | Wrong tumor site or frequency |
 | **Literature citation** | `PMID 28940476` | `verify_claim`, web search | Wrong PMID for claimed finding, sensitivity/specificity swapped |
 | **Blood group antigen** | `Kell: K/k` | `bloodgroups_alleles`, `bloodgroups_search_alleles` | Wrong antigen assignment, missing alleles |
 
@@ -91,7 +94,8 @@ Group extracted claims by verification method:
 | **risk** | effect sizes, odds ratios, prevalence, sensitivity/PPV | `gwas_variant_associations`, `verify_claim` |
 | **clinical** | ClinVar classifications, severity tiers | `variants_clinvar`, `composite_variant_context` |
 | **inheritance** | AR/AD/XL mode claims | `rare_disease_gene_rare_diseases`, `curation_gene_validity` |
-| **pgx** | drug-gene interactions, metabolizer status, CYP pathways | `targets_pharmacogenetics`, `drugs_star_alleles`, FDA DDI tables |
+| **pgx** | drug-gene interactions, metabolizer status, CYP pathways | `targets_pharmacogenetics`, `drugs_star_alleles`, BioMCP `get pgx <gene> recommendations` (CPIC/PharmGKB), FDA DDI tables |
+| **oncology** | oncogenic classifications, therapy levels, somatic evidence | BioMCP `get variant <variant>` (OncoKB/CIViC/cBioPortal), `composite_variant_context` (CGI/COSMIC from MyVariant) |
 | **citations** | PMIDs, DOIs, author-year claims | `verify_claim`, web search |
 | **blood** | blood group antigens, HDFN risk | `bloodgroups_alleles`, `bloodgroups_search_alleles`, `bloodgroups_systems` |
 
@@ -210,7 +214,10 @@ When using `--sweep`, also run `just bio-verify-status` at the end to show overa
 11. **CPIC API is authoritative for PGx Level A pairs** — `api.cpicpgx.org/v1/pair?cpiclevel=eq.A` joined with `/v1/drug` returns the canonical list (100 pairs as of 2026-03-24). Perplexity is unreliable here — scraped incomplete HTML tables and contradicted itself across queries. For PGx completeness checks, always use the API, not web search.
 12. **GenCC classifications hallucination-prone via web search** — Perplexity fabricated "Definitive" GenCC classifications with fake dates for NOTCH3 and KRIT1. Only corrected after being shown contradicting ClinGen API data. For GenCC lookups, use `thegencc.org` directly or cross-check against `curation_gene_validity` results. Never trust a single web search answer for database classification lookups.
 13. **Imprinted region DMRs span large domains** — Don't flag ICR/DMR coordinates as wrong based on distance from gene body alone. The DLK1-DIO3 domain spans ~1 Mb on chr14q32.2; the IG-DMR at chr14:101,290,000 is 430 kb from DLK1 but confirmed correct by ClinGen (ISCA-46745). Use ClinGen region lookups or `verify_claim` for ICR position verification, not gene body proximity.
-14. **Effect/archaic allele AF convention** — Some scripts track the AF of the effect/archaic allele, not the gnomAD alt allele. When `archaic_allele == ref`, the AF field = 1 - gnomAD_alt_AF. Before flagging an AF as wrong, check whether the script's convention matches the comparison. (rs5743618 false positive: script correctly reported ref allele C AF=0.726 = 1-0.274.)
+14. **BioMCP available for PGx/oncology verification** — `biomcp` MCP server is configured alongside biomedical-mcp in genomics/selve. Use `biomcp get pgx <gene> recommendations` for CPIC verification and `biomcp get variant <gene> <change>` for OncoKB/CIViC evidence levels. BioMCP output is Markdown, not JSON — parse accordingly.
+15. **Variant normalization supports gene+protein format** — `composite_variant_context` now accepts "BRAF V600E", "EGFR L858R", "BRAF p.Val600Glu" in addition to rsIDs and HGVS. Use this for protein-change claims in scripts.
+16. **CGI/COSMIC now in variant_context output** — `composite_variant_context` extracts CGI drug associations and COSMIC somatic context from MyVariant responses. Check `cgi_drug_associations` and `cosmic` fields.
+17. **Effect/archaic allele AF convention** — Some scripts track the AF of the effect/archaic allele, not the gnomAD alt allele. When `archaic_allele == ref`, the AF field = 1 - gnomAD_alt_AF. Before flagging an AF as wrong, check whether the script's convention matches the comparison. (rs5743618 false positive: script correctly reported ref allele C AF=0.726 = 1-0.274.)
 
 ## Prior Audit Results (calibration)
 
