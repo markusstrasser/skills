@@ -40,14 +40,14 @@ literature.
 Search across all three projects for the concept:
 
 ```bash
-# Use meta-knowledge MCP for section-level matches
-search_meta("{concept}", scope="all", max_tokens=500)
+# Step 1: Header-grep FIRST — finds files where concept is a primary topic
+# (has its own section heading), not just mentioned in passing. This is the
+# key noise filter: CYP2D6 appears in 134 files but has a heading in ~25.
+grep -r "^#.*{concept}" ~/Projects/selve/docs/ ~/Projects/genomics/docs/ ~/Projects/meta/research/ --include="*.md" -l
 
-# Grep for the concept across research directories
-grep -r "{concept}" ~/Projects/meta/research/ --include="*.md" -l
-grep -r "{concept}" ~/Projects/selve/docs/research/ --include="*.md" -l
-grep -r "{concept}" ~/Projects/selve/docs/entities/ --include="*.md" -l
-grep -r "{concept}" ~/Projects/genomics/docs/research/ --include="*.md" -l
+# Step 2: MCP search for section-level matches (if server has been restarted
+# since any recent meta_mcp.py edits — new scopes require restart)
+search_meta("{concept}", scope="all", max_tokens=500)
 ```
 
 List all matching files with a one-line relevance snippet. Discard files that
