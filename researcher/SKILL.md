@@ -1,6 +1,6 @@
 ---
 name: researcher
-description: Autonomous research agent that orchestrates all available MCP tools with epistemic rigor. Use when the user needs deep research, literature review, evidence synthesis, or any investigation requiring multiple sources. Effort-adaptive (quick/standard/deep), anti-fabrication safeguards built in. NOT for: bio/medical claim verification (use epistemics), causal inference (use causal-dag or causal-check), entity profiling (use entity-management), forensic investigation (use investigate).
+description: "Autonomous research agent that orchestrates all available MCP tools with epistemic rigor. Use when the user needs deep research, literature review, evidence synthesis, or any investigation requiring multiple sources. Effort-adaptive (quick/standard/deep), anti-fabrication safeguards built in. NOT for: bio/medical claim verification (use epistemics), causal inference (use causal-dag or causal-check), entity profiling (use entity-management), forensic investigation (use investigate)."
 argument-hint: [research question or topic]
 hooks:
   PostToolUse:
@@ -45,6 +45,7 @@ If 3+ sessions active: keep questions shorter, batch ambiguous items.
 - **Triangulation:** Exa + Brave (confirmed independent indexes). Perplexity is NOT independent (uses same underlying indexes).
 - **Deep "why" analysis:** `perplexity_reason` (~$0.05-0.15/call) — chain-of-thought with web grounding. Only for analytical questions needing reasoning + evidence.
 - **Comprehensive surveys:** `perplexity_research` (~$0.15-0.50/call, slow 30s+) — multi-source deep research. Reserve for literature-survey-scale questions.
+- **Autonomous deep research:** `deep_research` (~$2-5/call, 2-10min async) — Gemini Deep Research agent conducts 80-160 web searches autonomously. Use when the question is broad/unknown-scope, needs multi-source synthesis, and you have time. Returns a full report with inline citations. Overkill for focused questions — use the paper pipeline or perplexity_research instead.
 
 **Paper pipeline (Standard+ academic queries) — run this, not just Exa snippets:**
 `search_papers` → `save_paper` (seed papers) → `fetch_paper` → `prepare_evidence` → `ask_papers(use_rcs=True)`
@@ -76,6 +77,15 @@ This is the highest-quality evidence path. RCS scoring produces significantly be
 User can override with `--quick` or `--deep`. Announce the tier before starting.
 
 **Turn budget:** After 15+ search/retrieval tool calls, force synthesis. Reserve remaining capacity for writing. A partial synthesis with sources beats an exhaustive search with no output.
+
+## Phase 0 — Dedup Check
+
+Before starting a full research pass, check if this question was already researched recently:
+`!git log --since=24h --name-only --diff-filter=A -- 'research/*.md' 'docs/research/*.md' 'artifacts/*.md' 2>/dev/null | grep -v '^$' | head -20`
+
+If a memo on the same topic was written in the last 24 hours, read it first. If it answers the question, skip to Phase 4 (synthesize with any delta). If it partially answers, narrow your scope to the gap.
+
+This prevents the dominant waste pattern: re-running full inventory + external search for a question that was answered hours ago.
 
 ## Phase 1 — Ground Truth
 

@@ -23,7 +23,7 @@ Use whichever of these are available in the current project's `.mcp.json`:
 | `mcp__research__verify_claim` | Verify factual claim via Exa /answer | High-stakes claims: numbers, stats, entity properties (~$0.005/call, cached 7d) |
 | `mcp__research__export_for_selve` | Export for knowledge embedding | End of session, persist findings |
 | `mcp__research__search_preprints` | bioRxiv/medRxiv date-range + keyword search | Preprint surveillance. `server="biorxiv"` or `"medrxiv"`, `days=7`, optional `category`. |
-| `mcp__exa__web_search_exa` | Semantic web search | Non-obvious connections, expert blogs, recent work |
+| `mcp__exa__web_search_exa` | Semantic web search | Non-obvious connections, expert blogs, recent work. **Recency enum: `24h`, `week`, `month`, `year`, `any` only — NOT `365d`/`90d`/`180d`.** |
 | `mcp__exa__web_search_advanced_exa` | Advanced search (filters, deep, structured) | Entity enrichment, date-filtered research, domain-restricted search |
 | `mcp__exa__company_research_exa` | Company intelligence | Business/financial research |
 | `mcp__brave-search__brave_web_search` | Independent index search | Triangulation with Exa (different index) |
