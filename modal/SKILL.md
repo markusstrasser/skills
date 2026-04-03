@@ -854,6 +854,22 @@ vol.commit()  # final
 
 30. **`modal app logs` no longer streams by default** — if your agent workflow depends on tailing logs (e.g., monitoring a running job), you MUST add `--follow`. Without it, you get the last 100 entries and the command exits. This is the #1 v1.4.0 behavior change that will silently break existing workflows.
 
+31. **`uv_pip_install` breaks CUDA base images with compiled C extensions** — `uv_pip_install("torch")` resolves to the latest torch (e.g., 2.11.0 with CUDA 13.0) regardless of the base image's CUDA version. On a `nvidia/cuda:12.4` base image, this causes: (a) CUDA version mismatch when compiling flash-attn/transformer-engine, (b) ABI mismatch if `uv_pip_install` later overwrites a compiled wheel with a pre-built one. **Use `pip_install` for the entire dependency chain when the image has `run_commands` that compile C extensions against torch.** `uv_pip_install` is safe for `debian_slim` images where torch bundles its own CUDA runtime.
+   ```python
+   # BROKEN: uv grabs torch 2.11 (CUDA 13.0) on CUDA 12.4 base
+   modal.Image.from_registry("nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04")
+       .uv_pip_install("torch")  # CUDA 13.0 wheel
+       .run_commands("pip install flash-attn --no-build-isolation")  # CUDA 12.4/13.0 mismatch
+
+   # CORRECT: pip resolves CUDA-compatible torch; chain stays consistent
+   modal.Image.from_registry("nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04")
+       .pip_install("torch")  # resolves CUDA 12.4-compat version
+       .run_commands("pip install flash-attn --no-build-isolation")  # matches
+
+   # ALSO CORRECT: debian_slim — torch bundles its own CUDA runtime, no base image conflict
+   modal.Image.debian_slim().uv_pip_install("torch", "transformers")  # always safe
+   ```
+
 ## MANDATORY: Cost Awareness
 
 **Real-world lesson: $400 spent in 2 days, 60% wasted.** #1 cause: unbounded `.starmap()` auto-scaling ($227 when $82 would have sufficed).
