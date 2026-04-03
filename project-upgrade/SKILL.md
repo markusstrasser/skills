@@ -1,7 +1,7 @@
 ---
 name: project-upgrade
-description: Autonomous codebase improvement. Dumps entire project to Gemini for structured analysis, triages findings, then executes fixes with per-change verification and git rollback. Reduces future bug time by unifying patterns and adding scaffolding.
-argument-hint: [path to project root — e.g., "~/Projects/genomics", ".", or leave blank for cwd]
+description: Autonomous codebase improvement. Standard mode finds bugs via Gemini+GPT. --harness finds architectural leverage (typed guarantees, enforcement, unification for agent-developed codebases). --deferred re-triages prior deferrals.
+argument-hint: [path or --harness or --deferred or --quick or --thorough]
 allowed-tools:
   - Bash
   - Read
@@ -55,6 +55,28 @@ if [ -n "$(git status --porcelain)" ]; then
   exit 1
 fi
 ```
+
+### Backlog Gate
+
+Before generating new findings, check if there's already a large unfixed backlog:
+
+```bash
+# Check existing finding volume
+FINDING_COUNT=0
+if [ -f "$PROJECT_ROOT/scripts/fix_backlog.py" ]; then
+  FINDING_COUNT=$(cd "$PROJECT_ROOT" && uv run python3 scripts/fix_backlog.py count 2>/dev/null || echo 0)
+elif [ -d "$PROJECT_ROOT/.project-upgrade" ]; then
+  FINDING_COUNT=$(find "$PROJECT_ROOT/.project-upgrade" -name "*.json" -exec cat {} + 2>/dev/null | python3 -c "import sys,json; data=sys.stdin.read(); print(sum(len(json.loads(x)) if isinstance(json.loads(x),list) else 0 for x in data.split('}][{')))" 2>/dev/null || echo 0)
+fi
+```
+
+If more than 50 unfixed findings exist, **do not generate more.** Instead:
+1. Print: "⚠ Backlog has $FINDING_COUNT unfixed findings. Fix before auditing."
+2. Show the top 10 by severity: `uv run python3 scripts/fix_backlog.py next 10` (if available)
+3. Offer to switch to fix mode: pick the top finding and implement the fix
+4. Only proceed with new audit if user explicitly overrides with `--force`
+
+This gate prevents the audit-accumulation pattern where findings pile up faster than they're fixed.
 
 ### Detect project language and tooling
 
@@ -647,6 +669,249 @@ echo "Saved baseline SHA for next diff-aware run: $(cat $PROJECT_ROOT/.project-u
 - **Quick scan** (`--quick`): Phase 0-2 only. Produces findings list, no execution. ~2 minutes.
 - **Standard** (default): Full pipeline. Triage + execute + report. ~15-30 minutes.
 - **Thorough** (`--thorough`): Adds GPT cross-validation (Phase 3). ~30-60 minutes.
+- **Harness hardening** (`--harness`): Replaces standard prompts with architecture-focused deep queries. See Phase 2H below.
+- **Deferred re-triage** (`--deferred`): Phase 6 only. See below.
+
+## Phase 2H: Harness Hardening Mode (`--harness`)
+
+### The agent-vs-human tradeoff
+
+Standard project-upgrade assumes a human-developed codebase: conventions are readable, patterns are intentional, and large refactors are expensive because human time is the bottleneck. Findings are point fixes — "this specific thing is wrong."
+
+Agent-developed codebases have different failure modes and different economics:
+
+| Dimension | Human-developed | Agent-developed |
+|-----------|----------------|-----------------|
+| **Why bugs happen** | Logic errors, edge cases | Hallucinated field names, copy-pasted definitions, wrong dict keys, open string vocabularies |
+| **What prevents bugs** | Code review, conventions, institutional knowledge | Types, import-time checks, AST linters, StrEnums — things that produce errors, not warnings |
+| **Cost of large refactors** | High (human hours) | Near-zero (agent tokens). Scope is never a valid deferral reason. |
+| **Convention adherence** | Reasonable — humans read READMEs | Unreliable — agents read types and get import errors. A convention without enforcement is a suggestion. |
+| **Duplication pattern** | Intentional variation, DRY applied naturally | Accidental — agents copy-paste definitions across files because they sample partial context |
+| **Value of cleanup** | Moderate (readability) | High (prevents compounding drift across future agent sessions) |
+| **What to optimize for** | Fewer current bugs | Fewer categories of future bugs |
+
+This means: **in agent codebases, the highest-ROI investment is enforcement infrastructure that makes incorrect code fail at import/construction time, not documentation or convention that agents may not read.** A StrEnum that rejects invalid values prevents more bugs than a comment explaining valid values.
+
+It also means: **never defer based on scope.** "96 scripts to touch" is a parallelizable task, not a blocker. The only valid deferrals are concrete blockers (missing data, needs human semantics decision, dependency chain). This is the opposite of human-project triage where effort is the primary filter.
+
+### What it does
+
+Replaces the standard Phase 2 model prompts with architecture-focused deep queries that find **structural leverage points** — typed guarantees, programmatic enforcement, and unification that prevents entire classes of agent errors. Not "what's broken" but "where can we add guarantees that prevent breakage."
+
+### When to use
+
+- Codebase is primarily agent-developed (enforcement > convention)
+- After a standard run has already cleaned obvious bugs
+- When the goal is "fewer categories of future bugs" not "fewer current bugs"
+- When the codebase has grown to 50+ files with shared modules
+
+### What it finds that standard mode misses
+
+Standard mode finds: dead code, broken references, swallowed errors, duplicated logic.
+
+Harness mode finds:
+- **Pydantic roundtrips** — models immediately `.model_dump()`'d back to dicts, losing type safety
+- **Open vocabularies** — string fields that should be StrEnum (agents will hallucinate invalid values)
+- **Missing Protocols** — duck-typed interfaces with no structural typing contract
+- **Duplicate definitions** — constants/sets defined in N files instead of imported from one (agents copy-paste)
+- **dict[str, Any] returns** — high-traffic functions returning untyped dicts (agents will index with wrong keys)
+- **Missing import-time checks** — registries that should fail loudly when a new subclass has no handler
+- **Missing runtime invariants** — cross-field consistency checks that should fire at construction time
+- **AST-lintable agent failure modes** — hardcoded threshold literals, hallucinated field names, unsafe key patterns
+
+### Context preparation
+
+Instead of dumping the full codebase, split into two targeted chunks:
+
+**Core modules** (~80-120K tokens): Shared infrastructure that everything imports — config loaders, utility modules, data models, decorators, core abstractions. These are the files where architectural changes have the widest blast radius.
+
+```bash
+# Identify core modules (imported by 5+ files)
+python3 -c "
+import re, collections
+from pathlib import Path
+imports = collections.Counter()
+for f in Path('scripts').glob('*.py'):
+    for m in re.findall(r'^from (\w+) import|^import (\w+)', f.read_text(), re.M):
+        mod = m[0] or m[1]
+        imports[mod] += 1
+for mod, count in imports.most_common():
+    if count >= 5:
+        print(f'{count:3d}  {mod}')
+" > "$UPGRADE_DIR/core-module-list.txt"
+```
+
+Bundle core modules into `core-modules.md`. Bundle a sample of 10-15 leaf scripts (diverse categories) into `leaf-samples.md`. The leaf samples show how core modules are consumed — without them, the model proposes changes that break callers.
+
+**Leaf samples** (~50-80K tokens): 10-15 representative consumer scripts. Pick diversity: one Modal stage, one local analysis, one lint script, one report generator, one panel script, etc.
+
+### GPT deep queries (3 parallel, targeted angles)
+
+Dispatch 3 GPT-5.4 queries in parallel, each with the same context but a different architectural angle. Use `--reasoning-effort high` and `--max-tokens 32768`.
+
+**Prompt 1 — Enforcement** (`prompt-enforcement.md`):
+
+```
+You are auditing this codebase for places where correctness is convention-dependent
+but could be made structurally enforced. The codebase is entirely agent-developed —
+agents don't read conventions, they read types and get import errors.
+
+Find opportunities for:
+1. Import-time checks (fail at import if a contract is violated)
+2. Runtime assertions at construction boundaries (dataclass __post_init__, Pydantic validators)
+3. AST-based lint rules for patterns agents get wrong (hardcoded values, wrong field names)
+4. Type narrowing that eliminates categories of runtime errors (@overload, StrEnum, TypedDict)
+
+For each finding: file path, current code, proposed enforcement, what class of bugs it prevents.
+Return as JSON array with: id, category (import_check|runtime_assert|ast_lint|type_narrow),
+files, description, code_sketch, bug_class_prevented.
+```
+
+**Prompt 2 — Contracts** (`prompt-contracts.md`):
+
+```
+You are a type system architect reviewing this codebase. Find the highest-ROI type
+safety investments — places where adding types prevents the most downstream errors
+per line of type annotation added.
+
+Focus on:
+1. Functions returning dict[str, Any] that have a stable shape → TypedDict
+2. Pydantic models that are .model_dump()'d immediately → keep as model, use attribute access
+3. String parameters that accept a closed set of values → StrEnum or Literal
+4. Protocols for duck-typed interfaces (multiple implementations, no shared base)
+5. @overload for functions that return different types based on arguments
+
+For each: file, function, current return type, proposed type, number of callers affected.
+Return as JSON array with: id, category (typed_return|keep_model|str_enum|protocol|overload),
+files, function_name, callers_affected, description, code_sketch.
+```
+
+**Prompt 3 — Unification** (`prompt-unification.md`):
+
+```
+You are looking for duplication and fragmentation in this codebase — places where
+the same concept is defined in multiple files, or where N scripts each implement
+their own version of a pattern that should be shared.
+
+Find:
+1. Constants/sets defined in 3+ files (e.g., consequence categories, threshold values)
+2. Utility functions reimplemented across scripts (e.g., AF parsing, path construction)
+3. Configuration patterns that drift between files (some use typed config, some use raw dicts)
+4. Data loading patterns duplicated across consumers
+
+For each: list ALL files that have the duplicate, the canonical location (if one exists),
+and the migration path. Do NOT propose centralizing things that genuinely vary per-script.
+Return as JSON array with: id, category (constant_dup|util_dup|config_drift|loader_dup),
+all_files, canonical_location, migration_path, description.
+```
+
+### Gemini role in harness mode
+
+Gemini gets the FULL codebase (its 1M context advantage) but with a modified prompt focused on cross-file pattern detection:
+
+```
+Analyze this entire codebase. Do NOT look for bugs. Instead, find STRUCTURAL PATTERNS:
+
+1. Which constants, sets, or type definitions appear in 3+ files? List EVERY file.
+2. Which functions return dict[str, Any] but always return the same shape?
+3. Which string parameters accept only 2-5 distinct values across the codebase?
+4. Which pairs of files define the same class/function independently?
+
+This is a DUPLICATION and FRAGMENTATION scan, not a bug scan.
+Return JSON array with: id, pattern_type, all_files (complete list), description.
+```
+
+Gemini's strength here is completeness — it sees ALL files and can count N accurately. GPT's strength is depth — it reasons about type system architecture. They cover different axes.
+
+### Triage differences
+
+Standard triage asks "is this a real bug?" Harness triage asks:
+
+1. **Does the enforcement already exist?** (Models hallucinate missing features at ~40% rate)
+2. **How many callers does this affect?** (Grep the function/type, count importers)
+3. **Is the "duplicate" actually intentional variation?** (Some scripts legitimately extend a base set)
+4. **What's the injection point?** (Can we change one function/decorator, or do we need N file edits?)
+
+Apply threshold: items that affect <3 files or prevent <1 known bug class → DEFER.
+
+### Expected yield vs standard
+
+| Metric | Standard | Harness |
+|--------|----------|---------|
+| Findings per model | 10-30 | 5-15 (fewer, higher leverage) |
+| Hallucination rate | 40-55% | 40-55% (same — models still hallucinate) |
+| Lines changed per finding | 5-20 | 20-200 (structural, not point fixes) |
+| Bug classes prevented | 0 (fixes existing bugs) | 1-3 per finding (prevents future classes) |
+| AST linters produced | 0 | 2-4 new lint scripts |
+| Best paired with | Nothing (standalone) | `--deferred` follow-up after 1 week |
+
+## Phase 6: Deferred Re-Triage (`--deferred`)
+
+Second pass on deferred items from a prior project-upgrade run. No model scan — starts from the existing deferred list in CYCLE.md (or equivalent task queue). Skips Phases 1-3 entirely.
+
+### Why this exists
+
+Deferred items from model reviews have a ~40-50% noise rate because:
+- Models hallucinate missing features (the feature was already implemented)
+- Models propose registries/abstractions for 3-item collections (overengineering)
+- Models flag "drift" in code with no incident history
+- Scope estimates assume per-file changes when a single injection point exists
+- Deferrals made under context pressure use vague triggers ("when X causes a bug")
+
+Fresh exploration against actual code state resolves these.
+
+### Workflow
+
+**6a. Load deferred items.** Read the deferred section from CYCLE.md or the prior run's triage file. Each item has an ID, description, category, and trigger condition.
+
+**6b. Explore each item.** For each deferred item, dispatch Explore agents to check:
+- Does the problem actually exist in the current codebase?
+- Has it already been fixed since the deferral?
+- Is the trigger condition met?
+- What is the real scope? (Find the injection point — often smaller than the description implies.)
+
+Parallelize exploration across items. This is read-only — no code changes yet.
+
+**6c. Re-triage with three dispositions:**
+
+| Disposition | Criteria | Action |
+|-------------|----------|--------|
+| **KILL** | Problem doesn't exist, feature already implemented, overengineering for current scale, blocked on another killed item | Remove from queue. Document why — prevents re-proposal. |
+| **EXECUTE** | Problem is real, trigger is met, scope is tractable | Plan and execute in this session. |
+| **KEEP-DEFERRED** | Problem is real but has a concrete blocker (missing data, architectural dependency, needs human decision) | Leave in queue with updated trigger. "Large scope" alone is NOT a valid blocker — agents handle scope. |
+
+**Evidence requirements:**
+- **KILL** must cite what was checked (grep output, file read, feature location)
+- **EXECUTE** must have verified the problem exists in current code
+- **KEEP-DEFERRED** must name a specific blocker, not "needs more design"
+
+**6d. Present disposition table to user.** Same approval gate as Phase 4.
+
+**6e. Execute all EXECUTE items.** Same per-finding loop as Phase 5: read → fix → verify → commit. Order by impact (bugs before cleanup).
+
+**6f. Update queue.** Remove KILL and EXECUTE items from deferred section. Update KEEP-DEFERRED items with refined triggers. Log the session.
+
+### Key practices
+
+1. **Explore before disposition.** Never re-triage from the description alone. Read the actual code. Descriptions from model reviews are hypotheses, not facts.
+
+2. **Kill is the most valuable disposition.** Every killed item is a future agent session not wasted on a phantom problem. The anti-entropy value of removing noise from a task queue is high.
+
+3. **Find the injection point.** "Metadata envelope for 96 scripts" is a 3-line change if there's a shared `finalize()` function. "Consolidate definitions across 15 files" is a mechanical migration. Scope estimates from model reviews assume per-file surgery — check for centralized injection points first.
+
+4. **Bug-first ordering.** If exploration reveals an actual bug among the deferred items (not just cleanup), execute it first. It's the highest-impact item regardless of its original priority label.
+
+5. **No scope-based deferrals when agents execute.** In agent-developed codebases, the only valid KEEP-DEFERRED reasons are: (a) missing external data, (b) needs human decision on semantics, (c) blocked by another item that isn't ready. "Too many files to touch" is not a blocker — it's a parallelizable task.
+
+6. **Mechanical migrations → worktree agents.** When an EXECUTE item is "replace X with Y in N files" (e.g., consequence set consolidation), dispatch a worktree agent. The parent focuses on items requiring judgment.
+
+### Expected yield
+
+From observed runs:
+- ~40% of deferred items are KILL (noise)
+- ~50% are EXECUTE (trigger met, scope tractable)
+- ~10% are genuine KEEP-DEFERRED (real blocker)
+- Bug discovery rate: ~1 real bug per 10 deferred items (hidden among cleanup)
 
 ## Known Limitations
 
