@@ -318,6 +318,13 @@ Modal supports Python 3.14 (including free-threaded 3.14t). Python 3.9 dropped.
 
 Multi-GPU: `gpu="H100:8"`. Fallback list: `gpu=["H100", "A100-80GB"]`.
 
+**Right-sizing decision tree:**
+- Model fits in <16GB VRAM → T4 ($0.59)
+- Model fits in <24GB VRAM → L4 ($0.73). **Never A10G** — same VRAM, 50% more expensive. Use `gpu=["L4", "A10G"]` for availability fallback only.
+- Model needs 24-48GB → L40S ($1.65). **Not A100** unless you need SM80 for flash-attn compilation or >48GB.
+- Model needs >48GB → A100-80GB ($3.73) or H100 ($3.95)
+- For inference-only (no training): prefer L4/L40S over A10G/A100 at every tier.
+
 ## CPU, Memory & Disk Resources
 
 **`cpu` = physical cores, NOT vCPUs.** 1 physical core = 2 vCPUs. So `cpu=8` = 16 vCPUs.
