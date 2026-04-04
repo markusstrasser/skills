@@ -26,6 +26,13 @@ case "$TOOL" in
     Read|Glob|Grep|WebSearch|WebFetch)
         allow_tool "$TOOL"
         ;;
+    Write|Edit)
+        # Auto-allow writes to .claude/checkpoint.md (context-save before compaction)
+        FPATH=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_input',{}).get('file_path',''))" 2>/dev/null) || true
+        case "$FPATH" in
+            */.claude/checkpoint.md) allow_tool "$TOOL:checkpoint" ;;
+        esac
+        ;;
     mcp__context7__*|mcp__research__search_papers|mcp__research__list_*|mcp__research__get_*)
         allow_tool "$TOOL"
         ;;
