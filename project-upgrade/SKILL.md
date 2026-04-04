@@ -257,6 +257,31 @@ wait
 echo "Both models complete"
 ```
 
+### Extract project context
+
+Before writing prompts, extract a project brief from CLAUDE.md or README that gives models operating context. This prevents false positives from missing domain knowledge (e.g., flagging N=1 assumptions in a project that IS N=1, or flagging "unused" parameters that are reserved for imminent features).
+
+```bash
+# Extract project context for model prompts
+PROJECT_CONTEXT=""
+if [ -f "CLAUDE.md" ]; then
+  # Get the Project Purpose section (first 10 non-empty lines after "## Project Purpose")
+  PROJECT_CONTEXT=$(awk '/^## Project Purpose/,/^## [^P]/{print}' CLAUDE.md | head -15)
+fi
+if [ -z "$PROJECT_CONTEXT" ] && [ -f "README.md" ]; then
+  PROJECT_CONTEXT=$(head -20 README.md)
+fi
+# Also include recent git activity for "what was recently fixed" context
+RECENT_COMMITS=$(git log --oneline -10)
+# And ruff pre-scan results (what's already clean)
+RUFF_PRESCAN=""
+if [ "$LANG" = "python" ] && command -v ruff &>/dev/null; then
+  RUFF_PRESCAN=$(ruff check . --select F821,F601,E741,F811,F841 --statistics 2>&1 | tail -5)
+fi
+```
+
+Include `PROJECT_CONTEXT`, `RECENT_COMMITS`, and `RUFF_PRESCAN` in both model prompts. This grounds the models in the project's actual operating context and prevents re-finding recently fixed issues.
+
 ### Gemini prompt (pattern/architecture focus)
 
 Write to `$UPGRADE_DIR/gemini-prompt.md`:
@@ -267,6 +292,15 @@ You are analyzing an entire codebase for CONCRETE, VERIFIABLE improvements. Not 
 
 PROJECT: $PROJECT_NAME
 LANGUAGE: $LANG
+
+## Project Context (read this before analyzing)
+$PROJECT_CONTEXT
+
+## Recently Fixed (do not re-report)
+$RECENT_COMMITS
+
+## Pre-scan (already clean on these categories)
+$RUFF_PRESCAN
 
 RULES:
 1. Only report issues you are CERTAIN about. If unsure, skip it.
@@ -315,6 +349,12 @@ Write to `$UPGRADE_DIR/gpt-prompt.md`. Give GPT a DIFFERENT angle than Gemini �
 ```bash
 cat > "$UPGRADE_DIR/gpt-prompt.md" << 'PROMPT_EOF'
 You are a senior software architect specializing in developer tooling, type systems, and AI-assisted development. Analyze this codebase for improvements to its SWE harness, abstractions, and developer experience.
+
+## Project Context (read this before analyzing)
+$PROJECT_CONTEXT
+
+## Recently Fixed (do not re-report)
+$RECENT_COMMITS
 
 Focus areas:
 1. **Harness improvements** — decorators, base classes, protocols that prevent incorrect code
@@ -663,6 +703,8 @@ echo "Saved baseline SHA for next diff-aware run: $(cat $PROJECT_ROOT/.project-u
 - **Applying low-severity findings that touch many files.** NAMING_INCONSISTENCY affecting 20 files is high risk for low reward. Defer unless automated (find-and-replace with verification).
 - **Skipping the triage step.** The user MUST see and approve the disposition table before execution. This is the kill switch.
 - **Over-scaffolding.** Don't add monitoring, CI/CD, auth, or other enterprise patterns to personal projects. Match scaffolding to project scale.
+- **Deferring without grepping.** Before dispositing a finding as DEFER, grep for callers/usage. "Needs canary validation" for dead code (zero callers) is overcautious. "Needs design work" for a fix that takes 20 minutes with a curated lookup table is lazy. A 5-second grep prevents findings from rotting in the deferred queue. (Evidence: 2026-04-03 — F004 deferred as "needs canary" was pure dead code; G007 deferred as "needs design" was a 20-minute curated gene set.)
+- **Omitting project context from model prompts.** Models don't know your project's operating model, sample count, assay types, or what's in production. Without context, they flag theoretical bugs that can't happen in practice. Include CLAUDE.md project purpose and recent git history in every model prompt.
 
 ## Effort Tiers
 
