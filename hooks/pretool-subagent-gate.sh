@@ -29,16 +29,27 @@ if [ "$CLAUDE_PROCS" -ge 15 ]; then
 fi
 
 # Tier 2: Actual memory pressure via vm_stat (free + inactive + purgeable = reclaimable)
-AVAIL_MB=$(vm_stat 2>/dev/null | awk '
-  /page size of/ { ps = $(NF-1)+0 }
-  /Pages free/      { free = $NF+0 }
-  /Pages inactive/  { inactive = $NF+0 }
-  /Pages purgeable/ { purgeable = $NF+0 }
-  END {
-    if (ps > 0) printf "%d", (free + inactive + purgeable) * ps / 1048576
-    else print "-1"
-  }
-')
+# Cache vm_stat for 5s — same result, avoids 150ms parse on every Agent call
+VMSTAT_CACHE="/tmp/claude-vmstat-${PPID}"
+CACHE_AGE=999
+if [ -f "$VMSTAT_CACHE" ]; then
+    CACHE_AGE=$(( $(date +%s) - $(stat -f %m "$VMSTAT_CACHE" 2>/dev/null || echo 0) ))
+fi
+if [ "$CACHE_AGE" -gt 5 ]; then
+    AVAIL_MB=$(vm_stat 2>/dev/null | awk '
+      /page size of/ { ps = $(NF-1)+0 }
+      /Pages free/      { free = $NF+0 }
+      /Pages inactive/  { inactive = $NF+0 }
+      /Pages purgeable/ { purgeable = $NF+0 }
+      END {
+        if (ps > 0) printf "%d", (free + inactive + purgeable) * ps / 1048576
+        else print "-1"
+      }
+    ')
+    echo "$AVAIL_MB" > "$VMSTAT_CACHE" 2>/dev/null
+else
+    AVAIL_MB=$(cat "$VMSTAT_CACHE" 2>/dev/null || echo -1)
+fi
 
 # Sanitize — if awk produced garbage, skip memory check (fail open)
 case "$AVAIL_MB" in

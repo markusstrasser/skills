@@ -56,7 +56,7 @@ if candidates: print(', '.join(sorted(candidates)[:5]))
 
 [ -z "$DRIFTED" ] && exit 0
 
-~/Projects/skills/hooks/hook-trigger-log.sh "goal-drift" "warn" "$DRIFTED" 2>/dev/null || true
+~/Projects/skills/hooks/hook-trigger-log.sh "goal-drift" "warn" "${DRIFTED:0:80}" 2>/dev/null || true
 KW_DISPLAY=$(echo "$KEYWORDS" | tr '\n' ', ' | sed 's/,$//')
 printf '{"additionalContext": "GOAL-DRIFT WARNING: Content references [%s] which may be outside project scope. GOALS.md keywords: [%s]. Verify this is intentional."}\n' "$DRIFTED" "$KW_DISPLAY"
 exit 0

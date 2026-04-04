@@ -4,17 +4,28 @@
 # Evidence: 8-10 occurrences across meta, genomics, selve (2026-03-20 → 2026-03-26)
 
 INPUT=$(cat)
-FILE=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_input',{}).get('file_path',''))" 2>/dev/null)
+eval "$(echo "$INPUT" | python3 -c "
+import sys,json
+ti = json.load(sys.stdin).get('tool_input',{})
+fp = ti.get('file_path','')
+off = ti.get('offset','')
+lim = ti.get('limit','')
+print(f\"FILE='{fp}'\")
+print(f\"KEY='{fp}:{off}:{lim}'\")
+" 2>/dev/null)"
 [ -z "$FILE" ] && exit 0
 
 TRACKER="/tmp/claude-read-tracker-${PPID}"
-echo "$FILE" >> "$TRACKER"
 
-COUNT=$(grep -cF "$FILE" "$TRACKER" 2>/dev/null || echo 0)
-if [ "$COUNT" -ge 4 ]; then
-  echo "BLOCKED: Read ${FILE} ${COUNT}x this session. Use Grep to find specific content, or Read with offset/limit to target the section you need." >&2
+# Track unique read signatures (file:offset:limit)
+echo "$KEY" >> "$TRACKER"
+
+# Count reads of same file with same offset+limit (true duplicates)
+COUNT=$(grep -cF "$KEY" "$TRACKER" 2>/dev/null || echo 0)
+if [ "$COUNT" -ge 6 ]; then
+  echo "BLOCKED: Read ${FILE} (same region) ${COUNT}x this session. Use Grep to find specific content, or Read with offset/limit to target a different section." >&2
   exit 2
-elif [ "$COUNT" -ge 3 ]; then
-  echo "{\"additionalContext\": \"Read ${FILE} ${COUNT}x this session. Use Grep to find specific content, or Read with offset/limit. Next read of this file will be BLOCKED.\"}"
+elif [ "$COUNT" -ge 4 ]; then
+  echo "{\"additionalContext\": \"Read ${FILE} (same region) ${COUNT}x this session. Use Grep to find specific content, or Read with offset/limit. Continued duplicate reads will be BLOCKED.\"}"
 fi
 exit 0
