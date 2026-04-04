@@ -8,8 +8,19 @@ effort: medium
 
 # Knowledge Compile
 
-Synthesize scattered research memos into a unified concept article. Reads across
-projects, extracts claims with provenance, surfaces contradictions, identifies gaps.
+Synthesize scattered research memos into a unified concept article for **human
+consumption**. Reads across projects, extracts claims with provenance, surfaces
+contradictions, identifies gaps.
+
+**This is a human UX tool, not an agent navigation tool.** Evidence shows agents
+navigate better with flat source files + grep than with pre-synthesized articles
+(Cao et al. 2026: retrieval hurts by 40.5%; Gloaguen et al. 2026: broad context
+files reduce agent success by 0.5-3% and inflate cost by >20%). Compiled articles
+are for the human to read when they want a consolidated view of cross-project
+knowledge. Do NOT build a systematic "wiki layer" of compiled articles — agents
+should grep the source memos directly.
+
+See: `meta/research/wiki-vs-flat-for-agents.md` for full evidence.
 
 **Not an entity page.** Entity pages (via /entity-management) track facts about a
 single entity with versioned provenance. Compiled articles synthesize *understanding*
@@ -20,11 +31,11 @@ literature.
 
 ## When to Use
 
-- User asks "what do we know about X across projects?"
+- **Human** asks "what do we know about X across projects?" and wants a readable overview
+- Before a **human decision** that depends on cross-project domain knowledge
+- After a research cycle, to help the **human** consolidate understanding
 - Multiple research memos (3+) touch the same concept but were written in different
   sessions/projects and haven't been synthesized
-- Before starting a new implementation that depends on cross-project domain knowledge
-- After a research cycle produces findings that should be consolidated
 
 ## When NOT to Use
 
@@ -32,6 +43,10 @@ literature.
 - Literature review from external sources -> use /researcher
 - Single-project implementation notes -> just read the memos
 - Concept with <3 touching memos -> not enough to synthesize
+- **Systematic wiki-building for agent navigation** -> agents navigate flat files
+  better (evidence: retrieval paradox, AGENTS.md distraction effect)
+- **Pre-loading agent context** -> thin indexes (research-index.md) outperform
+  thick synthesized articles for agent routing
 
 ## Phases
 
@@ -165,3 +180,7 @@ Commit with message: `[research] Compile {concept} — {N} sources across {proje
   is not a source about CYP2D6. Filter to substantive coverage.
 - **Don't skip the gaps section.** The gaps are what make the next research
   session productive.
+- **Don't build a wiki layer.** Evidence shows pre-synthesized articles hurt
+  agent navigation (Cao et al., Gloaguen et al.). Compile for human understanding,
+  not for agent consumption. The flat memo + thin index pattern is empirically
+  superior for agents.
