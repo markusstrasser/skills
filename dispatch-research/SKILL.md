@@ -151,7 +151,7 @@ done
 
 **S2 API outages:** Semantic Scholar returns 403 periodically. Tell agents to fall back to `backend="openalex"` for `search_papers` if S2 fails. Or instruct agents to use `exa` web search as a paper-discovery fallback.
 
-**Output location:** Tell agents to write to the **repo** (`docs/audit/`), NOT `/tmp`. macOS cleans up `/tmp` between sessions. After agents complete, immediately `git add` the output files before they can be cleaned up.
+**Output location:** Tell agents to write markdown findings to the **repo** (`docs/audit/`), NOT `/tmp`. macOS cleans up `/tmp` between sessions. If you dispatch through `meta/scripts/codex_dispatch.py`, raw stdout/stderr now default to `docs/archive/audit-logs/<run>/` whenever `--output-dir` is under `docs/audit/`. If you keep extra sweep logs yourself, put them there too, not active `docs/audit/`. After agents complete, immediately `git add` the markdown outputs before they can be cleaned up.
 
 **Fallback:** If Codex isn't installed, write prompts to `.claude/research-dispatch.md` as numbered prompts the user can copy-paste or route to another model.
 
@@ -294,7 +294,7 @@ This feeds results into the SWE quality lane so `/maintain` can track them.
 
 **Stop point:** User can say "just audit" (stop after Phase 3), "plan only" (stop after Phase 4), or "full auto" (all 5 phases).
 
-**Output location:** Default `docs/audit/`. User can override.
+**Output location:** Default markdown output is `docs/audit/`. `codex_dispatch.py` routes raw stdout/stderr to `docs/archive/audit-logs/<run>/` by default. User can override.
 
 ## Model selection
 
@@ -368,7 +368,8 @@ findings. This phase is mandatory — never skip verification.
 
 PHASE 4 — PLAN (~15%): Synthesize verified findings into phased execution plan.
 Group by impact (bugs → drift → structural → cleanup). Include: files to change,
-what and why, verification commands. Present to user for approval.
+what and why, verification commands. Write plan to a file (.claude/plans/ or docs/audit/)
+— in-context update_plan() is lost on compaction. Present to user for approval.
 
 PHASE 5 — EXECUTE (~25%): After approval, implement. Read before editing. One
 commit per logical change. Run tests after code changes. Verify each fix. Don't

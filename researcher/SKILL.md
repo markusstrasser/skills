@@ -21,6 +21,8 @@ Research with the rigor of an investigative journalist, not a search engine. Eve
 
 **This skill produces a research memo, not code.** If findings imply something should be built, write the memo with your findings, then offer a plan. Do not pivot to implementation within a researcher session.
 
+**Plan persistence:** If research produces an actionable plan, write it to `.claude/plans/` or `docs/` — not just in-context. In-context plans are lost on compaction (285 lost `update_plan` calls observed in Codex sessions).
+
 **Session awareness:** `!cat ~/.claude/active-agents.json 2>/dev/null | python3 -c "import sys,json,time; entries=json.load(sys.stdin); active=[e for e in entries if time.time()-e.get('started_at',0)<7200]; print(f'{len(active)} active sessions') if len(active)>=3 else None" 2>/dev/null`
 If 3+ sessions active: keep questions shorter, batch ambiguous items.
 
