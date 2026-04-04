@@ -6,7 +6,7 @@ effort: high
 
 # Novel Expansion — Discovery-to-Implementation Pipeline
 
-Systematically discover what's missing from a codebase, validate feasibility, and implement. Six phases, each with explicit gates to prevent the three failure modes observed in the inaugural run.
+Systematically discover what's missing from a codebase, validate feasibility, and implement. Six phases, each with explicit gates to prevent known failure modes observed in the inaugural run.
 
 ## When to use
 
@@ -14,13 +14,18 @@ Systematically discover what's missing from a codebase, validate feasibility, an
 
 **Not for:** Adding a specific known feature (just build it), fixing bugs (use dispatch-research), or pure ideation without implementation (use /brainstorm directly).
 
-## The Three Failure Modes (hard-won)
+## Failure Modes (hard-won)
 
 | # | Failure | Cost | Prevention Gate |
 |---|---------|------|-----------------|
 | **F1** | Researching already-built features | ~200K+ tokens, 2 wasted agents | **Inventory gate**: grep `scripts/*.py` for concept keywords before dispatching ANY research agent |
 | **F2** | Codex CLI as file-output tool | ~500K tokens, 4 zero-output agents | **Tool gate**: use `llmx -p openai -m gpt-5.4 -o file.md` for research file output, never `codex -q --full-auto "write to X"` |
 | **F3** | Gemini Pro timeout on large context | ~50K tokens, 0-byte output | **Context gate**: summarize to <15KB for Gemini Pro; GPT-5.4 handles up to 100K but prefers <50K |
+| **F4** | Duplicate frontier candidates re-entering as “new” | Repeated passes with no value gain | **Idempotency gate**: keep and enforce an existing-ID ban list before every brainstorm/research batch |
+| **F5** | MCP tool-call schema mismatch | Silent evidence-call failures (e.g., wrong parameter shape) | **Schema gate**: validate each MCP request payload shape before dispatch |
+| **F6** | Fixed survivor quota ("3 survivors" pattern) | Artificially smooth frontier yield; padded weak ideas | **Calibration gate**: default to 0-2 survivors; explicit no-survivor passes are healthy |
+| **F7** | Concept duplicates without ID duplicates | Same idea re-enters under new phrasing | **Semantic dedup gate**: check concept overlap against memo/master plan, not just IDs |
+| **F8** | Long memo append corruption | Misordered or overwritten running memo sections | **Append-at-tail gate**: inspect actual file tail before every append; never trust pass-number order alone |
 
 These gates are **mandatory checkpoints**, not advisory. Each phase below marks where they apply.
 
@@ -58,9 +63,28 @@ grep -l "peptide\|MHC\|neoantigen\|immune" scripts/*.py
 grep -l "telomere\|TVR\|hexamer" scripts/*.py
 grep -l "G4\|quadruplex\|palindrome\|mechanome" scripts/*.py
 grep -l "STR\|repeat\|expansion\|interruption" scripts/*.py
+
+# Track existing frontier IDs already claimed in this stream
+{
+  [[ -f .claude/plans/novel-expansion-master-2026-03-26.md ]] && rg -o "(BR|NB|NC|ND|NE)-[0-9]+" .claude/plans/novel-expansion-master-2026-03-26.md
+  [[ -f docs/research/novel_expansion_running_2026-04-03.md ]] && rg -o "(BR|NB|NC|ND|NE)-[0-9]+" docs/research/novel_expansion_running_2026-04-03.md
+} | sort -V | uniq > /tmp/novel_expansion_existing_ids.txt
+
+wc -l /tmp/novel_expansion_existing_ids.txt
 ```
 
-Save as `$BRAINSTORM_DIR/existing_concepts.txt`. This file is **mandatory context** for Phase 2.
+Save as `$BRAINSTORM_DIR/existing_concepts.txt`. Keep the ID list at `/tmp/novel_expansion_existing_ids.txt`.
+Both are **mandatory context** for Phase 2.
+
+### 1d. Semantic overlap check (**F7 gate**)
+
+Before promoting any candidate, ask:
+
+- Is this actually new, or a sharper restatement of an existing row?
+- Is it a new primitive, or just a limiter on an existing operator?
+- Does it have a likely caller in this repo?
+
+If it fails those checks, reject or merge it. Do not assign a new frontier ID just because the wording is different.
 
 ### 1c. Stage registry check
 
@@ -84,6 +108,8 @@ Invoke `/brainstorm` with the full inventory as context.
 ```
 "The following features ALREADY EXIST — do not propose them:
 [paste existing_concepts.txt or inventory summary]
+Existing frontier IDs already used (do not reuse):
+/tmp/novel_expansion_existing_ids.txt
 
 What's genuinely MISSING that would add new biological/analytical insight?"
 ```
@@ -99,7 +125,7 @@ Use the brainstorm skill's perturbation axes:
 
 ## Phase 3: Research (~25% of effort)
 
-Dispatch parallel research agents on EXPLORE ideas. This is where F1, F2, and F3 hit hardest.
+Dispatch parallel research agents on EXPLORE ideas. This is where F1, F2, and F3 hit hardest, with F4/F5 as common secondary failures.
 
 ### Pre-dispatch checklist (MANDATORY)
 
@@ -107,9 +133,20 @@ For EACH idea being researched:
 
 - [ ] **F1 gate:** `grep -l "keyword1\|keyword2" scripts/*.py` returns 0 matches for this concept
 - [ ] **F1 gate:** Checked `existing_concepts.txt` — concept not listed
+- [ ] **F4 gate:** Checked `/tmp/novel_expansion_existing_ids.txt` for duplicate IDs
 - [ ] Agent prompt includes specific output file path
 - [ ] Agent prompt includes: "Write findings to {file} INCREMENTALLY. After every 3 searches, append."
 - [ ] Scope is narrow enough for 8 search calls per agent (per subagent-output-discipline rule)
+
+### Tool schema guardrails (**F5 gate**)
+
+- `mcp__scite__search_literature`:
+  - `title` is a scalar string per call.
+  - Pass multiple titles as repeated calls, not one array payload.
+- `mcp__brave_search__brave_news_search`, `mcp__brave_search__brave_web_search`:
+  - Keep query focused; open/crawl on selected URLs for source details.
+- `perplexity` calls:
+  - Set `search_context_size` explicitly and use recent `search_recency_filter` only when needed.
 
 ### Research dispatch patterns
 
@@ -154,6 +191,17 @@ After agents complete:
 2. Any file < 200 bytes → transcript recovery (read agent task output)
 3. Cross-check: did any agent "discover" something from existing_concepts.txt? → discard
 
+### Survivor calibration (**F6 gate**)
+
+Do **not** target a fixed survivor count.
+
+- Default expectation for mature frontiers: **0-2 survivors**
+- **1 strong survivor** is a good pass
+- **0 survivors** is acceptable and should be logged explicitly
+- A pass with 3+ survivors should be treated as unusual and justified, not assumed
+
+If the search is producing reframings, caveats with no caller, or operator duplicates, stop and log a no-survivor pass instead of padding.
+
 ---
 
 ## Phase 4: Plan (~15% of effort)
@@ -190,6 +238,12 @@ Write a structured implementation plan. Use `/plan` or write directly to `.claud
 - [ ] No analysis overlaps with existing_concepts.txt entries
 - [ ] LOC estimates are realistic (not just "~50 LOC" for everything)
 - [ ] Dependencies are explicit (databases to download, libraries to install)
+- [ ] Each proposed object has a caller; "dead code with a plan" does not pass
+- [ ] Each proposed object is classified as one of:
+  - new primitive
+  - limiter on an existing primitive
+  - follow-up qualifier
+  - reject/merge
 
 ---
 
@@ -214,6 +268,17 @@ wc -c context.md
 # If > 50KB: summarize before sending to GPT-5.4
 # The model-review.py script handles this automatically with --extract
 ```
+
+## Running Memo Discipline
+
+For long-running novelty sweeps:
+
+1. Read the actual tail of the running memo before appending.
+2. Append at the tail even if prior pass numbers are out of order.
+3. Never rewrite old passes just to normalize numbering or survivor counts.
+4. Commit the memo periodically; it is the mission-critical artifact.
+
+If the memo gets numerically messy, preserve append-only history and fix the process forward rather than rewriting the past.
 
 **Why 15KB for Gemini:** model-review.py dispatches Gemini via CLI transport (free tier,
 `--timeout 300`, no `--stream`, no `--max-tokens`). CLI transport can handle 1M context
@@ -283,6 +348,17 @@ After agents complete:
 
 One commit per script. Final commit for stage registration + codebase map update.
 
+### Execution status truthfulness
+
+Do not collapse build state into a single word.
+
+- `implemented`: files, wiring, and registrations exist locally
+- `locally verified`: imports/tests/CLI checks passed on the local machine
+- `runtime-pending`: detached Modal jobs, benchmarks, or full reruns have not completed
+
+If any runtime-critical remote step is still pending, do not write `executed` or `completed`
+in `CYCLE.md`, plans, or status summaries. Spell out what ran and what did not run yet.
+
 ### CYCLE.md Write-Back
 
 If `CYCLE.md` exists in the project root, append completed items to `## Completed This Session` so `/research-cycle` doesn't re-discover them:
@@ -290,6 +366,7 @@ If `CYCLE.md` exists in the project root, append completed items to `## Complete
 - **{name}** ({commit}) — {one-line description}
 ```
 One line per implemented analysis. This coordinates the growth lane — novel-expansion is a deep batch run, research-cycle is incremental. Without write-back, research-cycle's discover phase may re-propose work that was just built.
+If work is only implementation-complete, log it as implemented plus runtime-pending detail rather than as fully executed.
 
 ---
 
@@ -320,6 +397,8 @@ One line per implemented analysis. This coordinates the growth lane — novel-ex
 | Implement before model review | Build wrong things | Review catches 30-50% of issues |
 | Commit all scripts in one commit | Hard to revert individual changes | One commit per script |
 | Skip ruff after agent writes code | F821 undefined names ship | Always ruff check new files |
+| Reuse an old frontier ID prefix/number | Memos collide, review loses lineage | Keep `/tmp/novel_expansion_existing_ids.txt` and allocate a fresh series ID |
+| Pass a scite title array or other schema-mismatched payload | Failed evidence calls with no obvious error | Validate parameter types per tool before dispatch |
 
 ## Customization Points
 

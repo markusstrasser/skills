@@ -21,6 +21,8 @@ You are orchestrating divergent ideation. The goal is ideas that escape the defa
 
 **This skill is DIVERGENT only.** For convergent critique, use `/model-review`.
 
+**Late-stage warning:** When a frontier is mature, this skill should produce fewer, sharper ideas, not preserve the same idea count with weaker variants. One strong perturbation survivor is enough. If forced-domain rounds only yield reframings, stop and hand back to convergent filtering.
+
 ## Parameters
 
 Parse `$ARGUMENTS` for these optional flags (order doesn't matter, remaining text is the topic):
@@ -66,6 +68,8 @@ git log --oneline -10 --all | grep -i "brainstorm"
 ```
 
 If recent commits mention brainstorm on the same topic, read those results before starting a new run.
+
+If the space has already been explored heavily, switch your target from "volume" to "one non-duplicate survivor or clean exhaustion proof."
 
 ### Constitutional Check
 
@@ -137,6 +141,13 @@ Run the perturbation axes specified by `--axes` (default: all three). **With llm
 **Skip an axis entirely if excluded by `--axes`.** With `--quick`, reduce each axis (see preset table above).
 
 **Knowledge injection (before perturbation):** Query 2-3 tangential domain examples via Exa (if available) to expand the solution space before running perturbation rounds. E.g., if brainstorming about memory architectures, search for how biology, common law, or supply chain logistics handles memory/persistence. Feed retrieved examples as context into the perturbation rounds. This primes the search space with real-world mechanisms that denial alone might not surface.
+
+After one forced-domain pass on a mature frontier, hand off to a convergent step:
+- discard duplicates
+- discard ideas with no caller
+- discard ideas that are just tighter phrasing for an existing operator
+
+Do not keep forcing more domains just because the first forced pass returned something interesting.
 
 First: identify the 3-5 dominant paradigms from Step 3. These are what we're escaping.
 

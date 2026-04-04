@@ -57,6 +57,9 @@ This is the highest-quality evidence path. RCS scoring produces significantly be
 - `fetch_paper` then `read_paper` BEFORE citing. Abstracts are not primary sources.
 - Never trust PMIDs or PDB IDs from websearch without S2/database verification. Websearch confabulates citation details.
 - Sequential exploration: 3 queries → scan results → 3 more doubling down on signal. Don't shotgun — query at position 3 in a burst cannot incorporate what query 1 returned.
+- Search/discovery tools are **map tools**. Primary documents, official databases, and fetched full text are **evidence tools**. Do not blur them.
+- For "newest", "latest", or date-sensitive queries, state the date anchor explicitly and bias toward the last 12-18 months unless the field is known to move slowly.
+- If one backend is repeatedly failing (`403`, auth block, junk results), switch early. Do not spend multiple rounds proving the same backend is unreliable.
 
 **Full tool table:** `${CLAUDE_SKILL_DIR}/references/tool-routing.md` (optional depth).
 
@@ -65,6 +68,7 @@ This is the highest-quality evidence path. RCS scoring produces significantly be
 - Exa is semantic, not keyword. Describe the *concept* — "gene-diet interaction abolishing cardiovascular risk" beats "9p21 diet interaction."
 - Use `type: "deep"` + `additionalQueries` (2-3 domain-specific variations) for high-value queries.
 - **Recency by field velocity:** Fast fields (AI, markets) = 30-day filter. Medium (biotech, policy) = 6 months. Stable (physics, law) = no filter. If results reference superseded tools or outdated benchmarks, tighten the date.
+- **Newest-seam research:** run one broad recency pass, then narrow immediately to one seam. Repeated broad recency searches mostly generate overlap, not new evidence.
 - **Training data:** Trust for foundations, verify for numbers. Tag `[TRAINING-DATA]`. **The dangerous zone:** the more specific and numeric a memory feels, the more likely it's reconstructed. Verify or hedge.
 - Scan 8-10 results at summary level, then read the 2-3 with signal. First results are often SEO noise.
 
@@ -158,6 +162,8 @@ If all your axes are from the same category, you have one axis with multiple que
 | Info Changed Conclusions | Last action changed direction | Continue |
 
 **Evaluate after every search round, not just at the end.** After each search round (2-3 queries), assess: "How many of my named search axes have produced at least one useful result? What's missing?" A "search axis" = one of the axes you named in Phase 2. "Nothing new" = the last 2 tool calls returned results already covered by existing findings.
+
+**When to stop searching:** if the new material is collapsing into existing local concepts, the last two rounds only produce narrower restatements, or the best surviving idea is just one bounded caveat, synthesize and stop. Do not keep searching to make the output look richer.
 
 **Recite evidence before concluding.** List concrete data points from sources, then derive the conclusion. "Study A: 26% improvement (n=500). Study B: no effect (n=200). Weighing by sample size..." This surfaces contradictions that narrative synthesis buries.
 

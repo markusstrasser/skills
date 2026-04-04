@@ -13,6 +13,20 @@ Select the right frontier model for a task and prompt it correctly.
 **Models covered:** Claude Opus 4.6, Claude Sonnet 4.6, GPT-5.4, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3 Flash, Kimi K2.5.
 **Last updated:** 2026-03-20. See `${CLAUDE_SKILL_DIR}/references/CHANGELOG.md` for update history.
 
+## Long-Horizon Research Routing
+
+For long novelty sweeps and frontier-mapping work:
+
+- Use cheaper/faster models or plain search for **search perturbation** and seam discovery.
+- Use stronger models for **compression, synthesis, and adversarial filtering**.
+- Watch for template artifacts such as repeated survivor counts or repeated memo shapes; these can be model-structure effects, not evidence about the search space.
+
+Practical split:
+
+- `Gemini 3.1 Pro` or `GPT-5.4`: compress overlapping ideas, detect hidden operator structure, write synthesis memos
+- `Gemini 3 Flash` or broad search tools: generate cheap perturbation passes and map candidate seams
+- `Claude` or the main orchestrator: decide what survives and what gets rejected
+
 ## Quick Selection Matrix
 
 | Task | Best Model | Why | Runner-up |

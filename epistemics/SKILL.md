@@ -64,6 +64,18 @@ Three buckets in every output:
 2. **INFERENCE** — derived from evidence + assumptions, labeled
 3. **PRACTICAL** — availability, cost, formulation; never upgraded to efficacy claims
 
+## Interpretation Compression Rules
+
+Before promoting any new concept into a system, ask:
+
+1. Is this a genuinely new primitive, or just a limiter on an existing one?
+2. Does it have a caller?
+3. Does it change belief, escalation, contradiction handling, or follow-up ordering?
+
+If the answer is "no" or "mostly wording", do not promote it as a new runtime object. Keep it as memo-level guidance or merge it into an existing operator.
+
+This matters most in genomics and phenotype-policy work, where good epistemic caveats can easily metastasize into a Rube Goldberg system if every caveat becomes a first-class type.
+
 ## Bio-Specific Failure Modes
 
 Check yourself against each before outputting:
@@ -112,6 +124,9 @@ After any bio research output:
 - [ ] Genotype→dosing claims have CPIC/DPWG level or labeled INFERENCE
 - [ ] Confidence ratings are honest
 - [ ] Counterarguments section exists and is substantive
+- [ ] New interpretation ideas passed the caller test
+- [ ] New interpretation ideas are not just renamed duplicates of earlier operators
+- [ ] Cautions/limiters were not promoted into runtime objects without decision impact
 
 ## PGx Quick Reference
 
