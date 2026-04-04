@@ -10,8 +10,17 @@ INPUT=$(cat)
 # Extract command from tool_input
 CMD=$(echo "$INPUT" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("tool_input",{}).get("command",""))' 2>/dev/null)
 
-# Only check git commit/add commands
-echo "$CMD" | grep -qE '^\s*git\s+(commit|add)\b' || exit 0
+# Only check dangerous git commands:
+# - git add . / git add -A / git add --all (sweeps in all changes)
+# - git commit (safe if index is clean, but warn)
+# Allow: git add <specific-files> (the safe multi-agent pattern)
+if echo "$CMD" | grep -qE '^\s*git\s+add\s+(-A|--all|\.\s*$|\.\s*&&)'; then
+    : # dangerous add — continue to check
+elif echo "$CMD" | grep -qE '^\s*git\s+add\b'; then
+    exit 0  # specific-file add is safe
+elif ! echo "$CMD" | grep -qE '^\s*git\s+commit\b'; then
+    exit 0  # not a git commit/add command
+fi
 
 # Count claude processes
 CLAUDE_PROCS=$(pgrep -x claude 2>/dev/null | wc -l | tr -d ' ')
@@ -30,5 +39,5 @@ fi
 ~/Projects/skills/hooks/hook-trigger-log.sh "multiagent-commit" "block" \
     "procs=$CLAUDE_PROCS cmd=$(echo "$CMD" | head -c 60)" 2>/dev/null || true
 
-echo '{"decision": "block", "reason": "MULTI-AGENT SAFETY: '"$CLAUDE_PROCS"' claude processes active in main repo (not a worktree). Risk: uncommitted changes from other agents get swept into your commit. Either: (1) use git add <specific-files> && git commit immediately after each edit, or (2) work in a worktree (isolation: worktree for subagents)."}'
+echo '{"decision": "block", "reason": "MULTI-AGENT SAFETY: '"$CLAUDE_PROCS"' claude processes active in main repo (not a worktree). Use git add <specific-files> instead of git add . / -A to avoid sweeping other agents changes."}'
 exit 2
