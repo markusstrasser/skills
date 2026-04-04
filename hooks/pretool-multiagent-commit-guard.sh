@@ -10,16 +10,13 @@ INPUT=$(cat)
 # Extract command from tool_input
 CMD=$(echo "$INPUT" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("tool_input",{}).get("command",""))' 2>/dev/null)
 
-# Only check dangerous git commands:
-# - git add . / git add -A / git add --all (sweeps in all changes)
-# - git commit (safe if index is clean, but warn)
-# Allow: git add <specific-files> (the safe multi-agent pattern)
+# Only block dangerous git add patterns that sweep in all changes.
+# git commit is safe — the index was already determined by prior git add calls.
+# git add <specific-files> is safe — the agent chose what to stage.
 if echo "$CMD" | grep -qE '^\s*git\s+add\s+(-A|--all|\.\s*$|\.\s*&&)'; then
     : # dangerous add — continue to check
-elif echo "$CMD" | grep -qE '^\s*git\s+add\b'; then
-    exit 0  # specific-file add is safe
-elif ! echo "$CMD" | grep -qE '^\s*git\s+commit\b'; then
-    exit 0  # not a git commit/add command
+else
+    exit 0  # git commit, specific-file add, or non-git command — all safe
 fi
 
 # Count claude processes
