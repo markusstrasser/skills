@@ -1,3 +1,5 @@
+<!-- Reference file for modal skill. Loaded on demand. -->
+
 # Scaling Out on Modal
 
 ## Automatic Autoscaling

@@ -1,3 +1,5 @@
+<!-- Reference file for modal skill. Loaded on demand. -->
+
 # Common Patterns for Scientific Computing
 
 ## Machine Learning Model Inference

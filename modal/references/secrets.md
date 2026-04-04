@@ -1,3 +1,5 @@
+<!-- Reference file for modal skill. Loaded on demand. -->
+
 # Secrets and Environment Variables
 
 ## Creating Secrets

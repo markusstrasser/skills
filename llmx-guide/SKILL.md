@@ -8,174 +8,65 @@ effort: medium
 
 # llmx Quick Reference
 
+> Detail files in `references/`: [models.md](references/models.md) | [error-codes.md](references/error-codes.md) | [transport-routing.md](references/transport-routing.md) | [codex-dispatch.md](references/codex-dispatch.md) | [subcommands.md](references/subcommands.md)
+
 ## Before You Call llmx — Checklist
 
 1. **Model name correct?** Hyphens not dots (`claude-sonnet-4-6` not `claude-sonnet-4.6`)
 2. **Timeout set?** Reasoning models need `--timeout 600` or `--stream`. Max allowed: **900s**. GPT-5.4 xhigh can exceed this on domain-heavy prompts.
 3. **Using `shell=True`?** Don't — parentheses in prompts break it. Use list args + `input=`
 4. **Using `-o FILE`?** Never use `> file` shell redirects — they buffer until exit
-5. **Model name format?** No provider prefixes needed (`gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`). Old prefixed names still accepted with deprecation warning.
-6. **Know the transport triggers:** `google` prefers `gemini` CLI (free). Falls back to API for: `--schema`, `--search`, `--stream`, `--max-tokens`. GPT goes direct to API (codex-cli disabled).
-7. **Hangs in agent context?** Claude Code's Bash tool pipes stdin without EOF. If llmx hangs via Bash but works via `python3 -c "from llmx.providers import chat; ..."`, it's a stdin issue. Fixed in current llmx (skips stdin when prompt provided).
+5. **No provider prefixes needed.** `gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`.
+6. **Know the transport triggers:** `google` prefers `gemini` CLI (free). Falls back to API for: `--schema`, `--search`, `--stream`, `--max-tokens`. GPT goes direct to API.
+7. **Hangs in agent context?** Claude Code's Bash tool pipes stdin without EOF. Fixed in current llmx (skips stdin when prompt provided).
 
 ## When llmx Fails — Diagnose, Don't Downgrade
 
-**Never swap to a weaker model as a "fix."** If GPT-5.4 or Gemini Pro fails, the problem is the dispatch — not the model. Switching to Flash or GPT-5.2 loses the capability you needed.
+**Never swap to a weaker model as a "fix."** The problem is the dispatch, not the model.
 
-**Diagnostic steps (in order):**
-1. Check exit code: `echo $?` — tells you rate limit (3), timeout (4), or model error (5)
-2. Check stderr: llmx prints JSON diagnostics to stderr (v0.6.0+): `{"error": "rate_limit", "provider": "google", "model": "...", "exit_code": 3, "action": "wait and retry"}`
-3. Check for transport switch warnings: `[llmx:TRANSPORT] gemini-cli → google-api (max_tokens not supported by CLI)`
-4. Check for truncation warnings: `[llmx:WARN] output may be truncated`
-5. Re-run with `--debug` on a small prompt to isolate
-6. Common fixes: increase `--timeout`, add `--stream`, reduce context size, check API key
+1. Check exit code: 3=rate-limit, 4=timeout, 5=model-error, 6=billing-exhausted (permanent, don't retry)
+2. Check stderr JSON diagnostics
+3. Check for transport switch / truncation warnings
+4. Re-run with `--debug` on a small prompt
+5. Common fixes: increase `--timeout`, add `--stream`, reduce context, check API key
 
-## Model Names & Defaults
+See [error-codes.md](references/error-codes.md) for full exit code table and Python patterns.
 
-| Model | llmx name | Notes |
-|-------|-----------|-------|
-| Gemini 3.1 Pro | `gemini-3.1-pro-preview` | **Default Google model.** `google` prefers Gemini CLI when installed |
-| Gemini 3 Flash | `gemini-3-flash-preview` | Cheap. `-preview` required |
-| Gemini 3.1 Flash Image | `gemini-3.1-flash-image-preview` | No text-only 3.1 Flash yet |
-| GPT-5.3 Instant | `gpt-5.3-chat-latest` | Reasoning max: **medium only**. Auto-defaults |
-| GPT-5.4 | `gpt-5.4` | **Default OpenAI model.** `openai` prefers Codex CLI when installed. API fallback defaults reasoning to `high`; `xhigh` is also supported. |
-| GPT-5.2 (legacy) | `gpt-5.2` | Legacy OpenAI default. |
-| GPT-5-Codex | `gpt-5-codex` | No `minimal` reasoning-effort |
-| Kimi K2.5 | `kimi-k2.5` | No `--reasoning-effort`. Use `--no-thinking` |
-| Kimi K2 (legacy) | `kimi-k2-thinking` | Use `--use-old` flag |
-| Claude Sonnet 4.6 | `claude-sonnet-4-6` | Hyphens, not dots |
+## The Five Footguns
 
-**Model name format (v0.6.0+):** No provider prefixes needed. Use `gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`. Old LiteLLM-style prefixed names (`gemini/`, `openai/`, `xai/`, `moonshot/`) still accepted with deprecation warning. Will be removed in a future version.
+### 1. Gemini CLI Transport — Free Tier
 
-**Model name suggestions:** If you typo a model name, llmx suggests the closest match: `"gemini-3.1-pro not found; did you mean gemini-3.1-pro-preview?"`
-
-**404 traps:** `gemini-3-flash` (missing `-preview`), `gemini-flash-3` (wrong order), `gpt-5.3` (needs `-chat-latest` suffix).
-
-## Token Limits
-
-| Model | Max Input | Max Output | Notes |
-|-------|----------|-----------|-------|
-| GPT-5.4 | 1,050,000 | 128,000 | |
-| GPT-5.2 | 272,000 | 128,000 | |
-| GPT-5.3 Chat | 128,000 | 16,384 | Smallest output cap — watch for truncation |
-| o4-mini | 200,000 | 100,000 | |
-| Gemini 3.1 Pro | 1,048,576 | 65,536 | Server default is 8K — always pass `--max-tokens 65536` |
-| Gemini 3 Flash | 1,048,576 | 65,535 | |
-
-## Error Handling (v0.6.0+)
-
-**Exit codes** — branch on these, don't parse stderr:
-| Code | Meaning | Action |
-|------|---------|--------|
-| 0 | Success | — |
-| 1 | General error | Read stderr for details |
-| 2 | API key missing/invalid | Check env vars |
-| 3 | Rate limit (429/503, transient) | Wait, or add `--stream` (API transport has separate capacity from CLI) |
-| 4 | Timeout | Increase `--timeout`, or add `--stream` for API transport |
-| 5 | Model error (context too large, bad params) | Fix request |
-| 6 | **Quota/billing exhausted** (permanent) | Top up billing. NOT transient — retries won't help |
-
-**Structured diagnostics** on stderr (JSON, v0.6.0+):
-```json
-{"error": "rate_limit", "provider": "google", "model": "gemini-3.1-pro-preview", "exit_code": 3, "action": "wait or use --stream (API transport)"}
-```
-
-**Additional stderr signals (v0.6.0+):**
-- Transport switch: `[llmx:TRANSPORT] gemini-cli → google-api (max_tokens not supported by CLI)`
-- Truncation warning: `[llmx:WARN] output may be truncated`
-- Model suggestion: `"gemini-3.1-pro not found; did you mean gemini-3.1-pro-preview?"`
-
-**`--fallback MODEL`** — exists but **not recommended**. Silent model switching masks failures. If you asked for Pro, you should get Pro or an error. If CLI rate-limited, use `--stream` (forces API transport) rather than `--fallback` (switches to a weaker model).
-
-**From Python — check exit code and diagnose:**
-```python
-result = subprocess.run(
-    ['llmx', '-m', 'gemini-3.1-pro-preview', '--timeout', '300'],
-    input=prompt, capture_output=True, text=True, timeout=360
-)
-if result.returncode == 3:  # rate limit — API transport has separate capacity
-    print(f"Rate limited: {result.stderr}")
-elif result.returncode == 4:  # timeout
-    print(f"Timeout: {result.stderr}")
-```
-
-## The Five llmx Footguns
-
-### 1. Gemini CLI Transport — Free Tier (Fixed)
-
-Gemini CLI transport (`gemini-cli`) previously hung on thinking models with piped input. **Fixed in gemini-cli 0.32.1+** (multiple stdin + non-interactive mode fixes upstream). Verified working with Pro + `-f` context files up to 15KB.
-
-**No `--stream` needed for Gemini.** Without `--stream`, llmx routes through CLI (free tier). Add `--stream` only if CLI hits rate limits (forces API fallback).
+No `--stream` needed for Gemini. Without it, llmx routes through CLI (free tier). Add `--stream` only if CLI hits rate limits (forces paid API fallback).
 
 ```bash
 # FREE — routes through Gemini CLI:
 llmx chat -m gemini-3.1-pro-preview -f context.md --timeout 300 "Review this"
 
-# ALSO FREE — Flash on CLI:
-llmx chat -m gemini-3-flash-preview -f context.md --timeout 120 "Review this"
-
 # FORCES API (costs money) — only use if CLI rate-limited:
 llmx chat -m gemini-3.1-pro-preview -f context.md --timeout 300 --stream "Review this"
 ```
 
-**What still forces API:** `--max-tokens` (CLI caps at 8K), `--schema`, `--search`, `--stream`. Brainstorm uses `--max-tokens 65536` so still hits API.
+**What still forces API:** `--max-tokens` (CLI caps at 8K), `--schema`, `--search`, `--stream`.
 
-### 2. GPT-5.x Timeouts and max_completion_tokens
+### 2. GPT-5.x Timeouts
 
-GPT-5.4 (and 5.2) with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning — proxies and HTTP clients kill idle connections. Default is 300s (since llmx 0.5.2).
+GPT-5.4 with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning. Default timeout: 300s. Max: **900s** (hard cap). GPT-5.4 xhigh on domain-heavy prompts can exceed 900s — use ChatGPT Pro for those.
 
-**Max timeout: 900s** (hard cap enforced at CLI level, 1-900 range — rejects anything higher). For review dispatches use `--timeout 600`. **GPT-5.4 xhigh on domain-heavy prompts (PGx, clinical data) can exceed 900s and will timeout.** Use ChatGPT Pro (no wall-clock limit) for xhigh + domain-knowledge prompts. Pure math/derivation xhigh completes in ~8 min and fits the 900s window.
+**`max_completion_tokens` includes reasoning tokens.** If you set `--max-tokens 4096` on GPT-5.4 with reasoning, the model may exhaust the budget on thinking. Use 16K+ for reasoning models.
 
-**Wall-clock enforcement:** SDK calls run in a daemon thread with `join(remaining_time)`. If SIGALRM can't interrupt a C-level SSL read, the thread join ensures the main thread regains control.
-
-**`max_completion_tokens` vs `max_tokens` (v0.6.0+):** GPT-5.x uses `max_completion_tokens` not `max_tokens` at the API level. llmx handles this automatically — `--max-tokens` maps to the correct parameter per provider. **Important:** for reasoning models, `max_completion_tokens` includes reasoning tokens. If you set `--max-tokens 4096` on GPT-5.4 with reasoning, the model may exhaust the budget on thinking and produce truncated output. Use 16K+ for reasoning models.
-
-**Google server-side deadline (v0.6.0+):** Google models now use a server-side deadline timeout (via `google-genai` SDK) instead of SIGALRM. Minimum 10s. This eliminates the old SIGALRM hang problem where streaming keepalives could prevent timeout enforcement.
+### 3. Output Capture — Use `-o FILE`, Never `> file`
 
 ```bash
-# WILL timeout:
-llmx -m gpt-5.4 --reasoning-effort high --no-stream "complex query"
-
-# Fix — stream (best) or explicit timeout:
-llmx -m gpt-5.4 --reasoning-effort high --stream "complex query"
-llmx -m gpt-5.4 --reasoning-effort high --timeout 600 "complex query"
-
-# For very long tasks — deep research runs in background (no timeout):
-llmx research "complex multi-source analysis"
-```
-
-From Python:
-```python
-subprocess.run(
-    ['llmx', '-m', 'gpt-5.4', '--reasoning-effort', 'high', '--stream'],
-    input=prompt, capture_output=True, text=True,
-    timeout=600  # max allowed by llmx CLI
-)
-```
-
-### 2. Output Capture
-
-**Use `--output FILE` (or `-o FILE`).** Writes via Python (unbuffered), not shell redirect.
-
-```bash
-# CORRECT — output goes to both stdout and file:
+# CORRECT:
 llmx -m gpt-5.4 -f context.md --timeout 600 -o output.md "query"
 
-# BROKEN — never use shell redirects with llmx:
-llmx -m gpt-5.4 "query" > output.md    # 0 bytes until process exits
-llmx -m gpt-5.4 "query" > output.md &  # 0 bytes if killed
-
-# BROKEN — these don't help either:
-stdbuf -oL llmx "query" > output.md    # buffering is in shell >, not Python
-PYTHONUNBUFFERED=1 llmx "query" > out  # same — shell > is the problem
+# BROKEN — 0 bytes until exit:
+llmx -m gpt-5.4 "query" > output.md
 ```
 
-**When dispatching from Claude Code:**
-1. Use `-o FILE` for file output — never `> file`
-2. Set Bash tool `timeout: 660000` (11 min) — must exceed llmx's `--timeout` value
-3. Compact context before dispatch — 2K context → 52s, 50K → may hang
+From Claude Code: set Bash tool `timeout: 660000` (11 min) — must exceed llmx's `--timeout`.
 
-### 3. shell=True + Parentheses
+### 4. shell=True + Parentheses
 
 ```python
 # BREAKS if prompt has ():
@@ -185,253 +76,33 @@ subprocess.run(f'echo {repr(prompt)} | llmx ...', shell=True)
 subprocess.run(['llmx', '--provider', 'google'], input=prompt, capture_output=True, text=True)
 ```
 
-### 4. Reasoning Effort Values
+### 5. Model Name 404 Traps
 
-| Model | Valid values | Default |
-|-------|------------|---------|
-| GPT-5.3 Instant | **medium only** | medium (auto) |
-| GPT-5.4 | none, minimal, low, medium, high, xhigh | high |
-| GPT-5.2 | minimal, low, medium, high | high |
-| GPT-5-Codex | low, medium, high | high |
-| Gemini 3 Flash | low, medium, high | high (server-side, via `thinking_config`) |
-| Gemini 3.x (Pro/Flash) | low, medium, high | high (server-side, via `thinking_config`) |
-| Kimi K2.5 | N/A — use `--no-thinking` | thinking on |
+- `gemini-3-flash` -- missing `-preview`
+- `gemini-flash-3` -- wrong order
+- `gpt-5.3` -- needs `-chat-latest` suffix
+- `claude-sonnet-4.6` -- dots, needs hyphens
 
-Temperature locked to 1.0 for GPT-5 and Gemini 3.x thinking models.
+See [models.md](references/models.md) for full model table, token limits, and reasoning effort values.
 
-**Google API note:** Google uses `thinking_config` with `thinking_level` (not `reasoning_effort`) under the hood. llmx translates `--reasoning-effort` to the correct parameter per provider — you don't need to know this unless debugging raw API calls.
+## Transport Routing Summary
 
-**OpenRouter streaming guard (v0.6.0+):** OpenRouter occasionally sends empty `choices` arrays in streaming chunks. llmx now guards against this — if you see `IndexError` on `choices[0]` in older versions, upgrade.
+| Provider | Default transport | Forces API fallback |
+|----------|------------------|---------------------|
+| `google` | Gemini CLI (free) | `--schema`, `--search`, `--stream`, `--max-tokens` |
+| `openai` | Codex CLI (free) | `--search`, `--stream` |
+| `claude` | Claude CLI | v0.6.0+, non-nested contexts only |
 
-## Convenience Flags
+Both CLIs ignore explicit `--reasoning-effort` — they use their own defaults. See [transport-routing.md](references/transport-routing.md) for CLI vs API decision table, context budget, piping patterns.
 
-| Flag | What it does |
-|------|-------------|
-| `--fast` | Gemini Flash + low reasoning (quick queries) |
-| `--use-old` | Previous model version (e.g., Kimi K2 instead of K2.5) |
-| `--no-thinking` | Disable reasoning (Kimi switches to instruct model) |
+## Codex `-o` Gotcha (Parallel Dispatch)
+
+`-o FILE` captures the agent's **last text message only**. If the agent spends all turns on tool calls with no final text response, `-o` writes 0 bytes. Prompt **must** include: `"End with a COMPLETE markdown report as your final message."` Without this, ~50% produce empty output.
+
+See [codex-dispatch.md](references/codex-dispatch.md) for full parallel dispatch pattern, Brave contention, Perplexity quota.
 
 ## Subcommands
 
-### Deep Research
-```bash
-llmx research "topic"           # o3, background mode, 2-10 min
-llmx research --mini "topic"    # o4-mini, faster/cheaper
-llmx research "topic" -o out.md # save output
-```
-
-### Image Generation
-```bash
-llmx image "prompt" -o out.png       # Gemini 3 Pro Image
-llmx image "prompt" -r 2K -a 16:9    # resolution + aspect
-llmx svg "prompt" -o out.svg         # SVG output
-```
-
-### Vision Analysis
-```bash
-llmx vision file.png -p "describe"          # single image
-llmx vision "frames/*.png" -p "summarize"   # multiple
-llmx vision video.mp4 -p "list UI elements" # video
-```
-
-### CLI Backends (subscription pricing)
-```bash
-llmx -p google "question"       # prefers Gemini CLI, falls back to API
-llmx -p openai "question"       # prefers Codex CLI, falls back to API
-llmx -p claude "question"       # Claude CLI backend (v0.6.0+, non-nested contexts only)
-llmx -p gemini-cli "question"   # force Gemini CLI transport
-llmx -p codex-cli "question"    # force Codex CLI transport
-```
-
-Falls back to API for:
-
-- Gemini CLI: `--schema`, `--search`, `--stream`, `--max-tokens`
-- Codex CLI: `--search`, `--stream`
-- Both CLIs ignore explicit `--reasoning-effort`; they use their own default thinking behavior
-- Codex CLI now handles `--schema` via `codex exec --output-schema`
-- `--max-tokens` forces API because Gemini CLI defaults to 8K with no override
-- `--output` works with both CLI and API transport (Python-level, not shell)
-
-### System Prompts with CLIs
-
-`-s` / `--system` now works with CLI transport. System messages are folded into the prompt as `<system>...</system>` XML tags, so `-s` no longer forces API fallback.
-
-Both approaches work:
-
-```bash
-# Using -s flag (now stays on CLI — system text folded into prompt as <system> XML)
-llmx -p openai -m gpt-5.4 --timeout 600 -s "You are reviewing code. Be concrete." "Review this design"
-
-# Inline system tags (equivalent, also stays on CLI)
-cat <<'EOF' | llmx chat -p openai -m gpt-5.4 --timeout 600
-<system>
-You are reviewing code. Be concrete. Reference specific files and tradeoffs.
-</system>
-
-Review this design:
-- ...
-EOF
-```
-
-Note: in both cases, `<system>...</system>` is prompt text, not a transport-level system role. The model treats it as advisory text rather than a hard system channel. The behavior is identical whether you use `-s` or inline tags.
-
-### Direct Codex CLI Usage (without llmx)
-
-For subagent dispatch and non-interactive tasks, call `codex exec` directly:
-
-```bash
-# Simple task
-codex exec --full-auto "Review the error handling in scripts/*.py"
-
-# With output capture
-codex exec --full-auto -o findings.md "Audit this codebase for dead code"
-
-# Specific working directory
-codex exec --full-auto -C /path/to/project "List all API endpoints"
-
-# Structured output
-codex exec --full-auto --output-schema schema.json "Extract function signatures"
-```
-
-**Key facts (v0.116.0, 2026-03-26):**
-- **Auth:** ChatGPT account (browser login). Only subscription-tier models work: `gpt-5.4` (default), `gpt-5.3-codex`. `o3`, `gpt-4.1`, etc. are rejected.
-- **Token overhead:** ~37K tokens per call from MCP server tool descriptions (9 servers). No flag to disable. Structural cost — fine for substantial tasks, wasteful for trivial queries.
-- **MCP servers loaded:** context7, exa, research, meta-knowledge, brave-search, paper-search, perplexity, scite, codex_apps. Configured in `~/.codex/config.toml`.
-- **`--ephemeral`:** Avoid — sandbox cleanup deletes file writes including `-o` output.
-- **`--full-auto`:** Sandboxed auto-approval (workspace-write). Required for non-interactive use.
-- **`--search`:** Only works in interactive mode, NOT in `exec`. Use MCP tools instead.
-- **Default model:** Set in `~/.codex/config.toml` (`model = "gpt-5.4"`). Don't pass `--model` unless overriding.
-
-**As Claude Code subagent:** Call via Bash tool. Set `timeout: 120000` or higher. Output is on stdout (last message repeated at end). Use `-o FILE` for file capture, but read/copy immediately — sandbox cleanup can delete.
-
-### Codex Parallel Research Dispatch (from agent context)
-
-Dispatch pattern for firing multiple Codex agents from Claude Code Bash tool:
-
-```bash
-# Parallel dispatch — background each, wait for all
-codex exec --full-auto -o docs/audit/codex-topic-a.md \
-  "Use exa and perplexity MCP tools for web search. [TASK]. \
-   End with a COMPLETE markdown report as your final message. \
-   Do NOT create any files." &
-
-codex exec --full-auto -o docs/audit/codex-topic-b.md \
-  "Use exa and perplexity MCP tools for web search. [TASK]. \
-   End with a COMPLETE markdown report as your final message. \
-   Do NOT create any files." &
-
-wait
-# Immediately git add — sandbox cleanup can delete files
-git add docs/audit/codex-*.md
-```
-
-**Critical `-o` gotcha:** `-o FILE` captures the agent's **last text message only**. If the agent spends all turns on MCP tool calls and never produces a final text response, `-o` writes 0 bytes. The prompt **must** include: `"End with a COMPLETE markdown report as your final message. Do NOT create any files."` Without this, ~50% of agents produce empty output files.
-
-**Brave contention:** When dispatching 4+ parallel agents, they all share Brave's 1 req/sec rate limit (Free plan). This causes cascading 429s. Fix: tell agents to `"Use exa for web search (NOT brave-search)"` when running 4+ in parallel. 1-2 parallel agents can use Brave fine.
-
-**Perplexity quota:** Perplexity MCP can hit `401 insufficient_quota`. Tell agents: `"Use exa as primary search tool. Try perplexity as secondary — if it returns 401, continue with exa only."` Exa-only agents still produce good results (7-14KB reports observed).
-
-**Practical limits (2026-03-26 tested):**
-- 4 parallel agents: all MCP servers start successfully (36 server instances)
-- 6 parallel agents: works but Perplexity quota depletes fast
-- Output success rate: ~70% with the "COMPLETE report as final message" prompt instruction, ~30% without it
-- Bash tool timeout: set `timeout: 600000` (10 min) — agents need 3-5 min each with MCP startup
-
-### Codex CLI Reasoning Default
-
-`llmx -p openai` inherits Codex CLI's own reasoning default. llmx does **not** pass a reasoning-effort flag to `codex exec`.
-
-Set the Codex CLI default in `~/.codex/config.toml`:
-
-```toml
-model = "gpt-5.4"
-model_reasoning_effort = "xhigh"
-```
-
-One-off override:
-
-```bash
-codex exec -c 'model_reasoning_effort="xhigh"' "question"
-```
-
-Practical implication:
-
-- `llmx -p openai ...` on a machine with `model_reasoning_effort = "xhigh"` uses Codex CLI at `xhigh`
-- If llmx falls back to the OpenAI API, llmx's own default is `high` unless you pass `--reasoning-effort`
-
-## CLI-First Usage (Subscription Pricing)
-
-Gemini CLI and Codex CLI use flat subscription pricing — zero marginal cost per query. Prefer them for routine tasks.
-
-### When to Use CLIs vs API
-
-| Use CLI when | Use API when |
-|-------------|-------------|
-| Simple Q&A, summaries, reviews | Need `--max-tokens` (Gemini CLI caps at 8K) |
-| Output fits in 8K tokens | Need structured output (`--schema`) |
-| Don't need streaming | Need `--stream` for progressive output |
-| Cost matters (subscription = free) | Need search grounding (`--search`) |
-
-### Piping Context Files
-
-CLIs accept `-f FILE` for context. Use `.claude/overviews/` (5-10KB compressed project summaries) for codebase-aware queries at zero cost:
-
-```bash
-# Code review with project context (Gemini CLI, free)
-llmx -p google -f .claude/overviews/source-overview.md "Review the error handling in the orchestrator pipeline"
-
-# Architecture question (Codex CLI, free)
-llmx -p openai -f .claude/overviews/source-overview.md -f .claude/overviews/tooling-overview.md "How does the telemetry pipeline flow?"
-
-# Specific file review (pipe file as context)
-llmx -p google -f src/providers.py "Find bugs in this code"
-```
-
-### Context Budget
-
-Neither CLI truncates user input (verified from source code). Input goes directly to API.
-
-| Backend | Model context | Practical limit | Input truncation? |
-|---------|--------------|-----------------|-------------------|
-| Gemini CLI | 1M tokens (~4MB) | ~200KB before slowdown | No — 400 error if exceeded |
-| Codex CLI | 272K-848K tokens | ~200KB+ | No — auto-compacts history |
-| API (Gemini) | 1M tokens | Full window | No |
-| API (GPT-5.4) | 1M tokens | Full window | No |
-
-**Tested:** 80KB code batches via both CLIs work reliably. 200KB causes timeouts on thinking models.
-
-**What forces API transport** (costs money): `--max-tokens`, `--stream`, `--search`. For Gemini, avoid `--stream` unless CLI rate-limited — without it, calls route through CLI (free). Hang bug on thinking models fixed in gemini-cli 0.32.1+.
-
-### CLI for Agents (Claude Code / Codex)
-
-When dispatching from an agent context:
-
-```bash
-# Quick codebase question (zero cost, ~5-15s)
-llmx -p google -f .claude/overviews/source-overview.md "What files handle authentication?"
-
-# Code review with inline system prompt (stays on CLI)
-cat <<'EOF' | llmx -p openai -m gpt-5.4 -o review.md
-<system>You are reviewing code. Be concrete. Reference specific files.</system>
-
-$(cat src/main.py)
-
-Review this for bugs and security issues.
-EOF
-
-# Batch review — loop over files (each call is free)
-for f in src/*.py; do
-  llmx -p google -f "$f" -o "reviews/$(basename "$f").md" "Review this file for bugs"
-done
-```
-
-`-s` works with CLIs — system messages are folded into the prompt as `<system>` XML tags, staying on CLI transport.
-
-## Judge Names ≠ Model Names
-
-| Context | Name |
-|---------|------|
-| llmx CLI | `gemini-3.1-pro-preview` |
-| tournament MCP judges | `gemini25-pro` |
+`llmx research`, `llmx image`, `llmx vision`, `llmx svg`. Flags: `--fast` (Flash+low), `--use-old`, `--no-thinking`. See [subcommands.md](references/subcommands.md).
 
 $ARGUMENTS

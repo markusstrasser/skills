@@ -25,7 +25,7 @@ effort: high
 
 ## Phase 1: Variable Classification
 
-For every variable in the analysis, classify it. Do not skip this step. Do not classify by gut — state the temporal ordering and the causal mechanism for each.
+For every variable, classify it. State the temporal ordering and causal mechanism for each.
 
 | Variable | Classification | Temporal Order | Justification |
 |----------|---------------|----------------|---------------|
@@ -38,168 +38,49 @@ For every variable in the analysis, classify it. Do not skip this step. Do not c
 | ... | Instrument (Z) | Before X | Causes X but not Y directly |
 | ... | Collider | Varies | Caused by two+ variables — conditioning opens spurious path |
 
-Classifications:
-- **Treatment (X):** The exposure/cause of interest.
-- **Outcome (Y):** What you're measuring the effect on.
-- **Pre-treatment confounder (C):** Causes both X and Y. Temporally before X. These are the variables you SHOULD control for.
-- **Mediator (M):** On the causal path X -> M -> Y. Do NOT control for unless you are explicitly decomposing direct vs indirect effects.
-- **Descendant of treatment (D):** Caused by X. Do NOT control for total-effect estimation. Two failure modes: (1) **over-control** — blocks part of the causal path, attenuating the effect; (2) **collider bias** — if D also has other parents affecting Y, conditioning on D opens a spurious path. Many descendants trigger both.
-- **Descendant of outcome:** Caused by Y. Do NOT control for.
-- **Instrument (Z):** Causes X but has no direct effect on Y. Useful for IV estimation, not for OLS controls.
-- **Collider:** Caused by two or more variables. Conditioning on it opens a spurious path between its parents.
-
-### Verification Gate 1
-
-Before proceeding to DAG construction, verify:
-
-1. **Completeness:** Is every variable classified into exactly one role? No unclassified variables.
-2. **Plausible alternatives:** Are there variables that could defensibly be classified differently? List them with the alternative classification and what evidence would resolve it.
-3. **Confounder check:** For each pre-treatment confounder, confirm it causes BOTH treatment and outcome (not just correlates with them). State the mechanism for each direction.
-
-If verification fails, revise Phase 1 before proceeding. Do not push classification errors forward — they corrupt the entire DAG.
+**Verification Gate 1:** (1) Every variable classified into exactly one role. (2) Plausible alternative classifications listed with resolving evidence. (3) Each confounder causes BOTH treatment and outcome — state mechanism for each direction.
 
 ---
 
 ## Phase 2: Construct the DAG (4-stage decomposition)
 
-Build the DAG in four explicit stages. Research (arXiv:2507.23488) shows this decomposition achieves 3x F1 improvement over single-shot DAG construction. Do NOT skip stages or merge them.
+Build in four stages: skeleton, V-structures, Meek rules, flag undirected. See `references/dag-construction.md` for detailed procedure and Meek rules.
 
-### Stage 2a: Undirected Skeleton
-
-Connect variables that have ANY causal relationship (direction unknown). Every edge is a substantive claim — omitting an edge claims no causal relationship. State the mechanism for each connection.
-
-```
-Sex --- Test_Score          [mechanism: biological + social factors affect cognitive performance]
-Sex --- Items_Complete      [mechanism: engagement/stamina differences]
-Items_Complete --- Test_Score [mechanism: completion is prerequisite for scoring]
-Education --- Test_Score    [mechanism: knowledge/skills affect performance]
-```
-
-**Gate:** Is every pair of variables either connected (with mechanism) or deliberately disconnected (with justification for no relationship)?
-
-### Stage 2b: Orient V-Structures (Colliders)
-
-Identify immoralities: triples A --- B --- C where A and C are NOT connected. Orient as A → B ← C (B is a collider). These are the ONLY edges you can orient from data alone without temporal knowledge.
-
-For each V-structure found:
-- State the triple
-- Confirm A and C have no direct connection
-- Explain why B is caused by both A and C
-
-### Stage 2c: Apply Meek Rules (Propagate Orientations)
-
-Using temporal ordering + V-structure orientations, propagate directions:
-1. **Temporal rule:** If A happens before B, orient A → B
-2. **Meek R1:** If A → B --- C and A is NOT adjacent to C, orient B → C
-3. **Meek R2:** If A → B → C and A --- C, orient A → C
-4. **Meek R3:** If A --- B, A --- C, B → D ← C, and A --- D, orient A → D
-
-For each edge, provide temporal justification:
-```
-Sex -> Test_Score          [temporal: sex is fixed at birth, precedes test]
-Education -> Test_Score    [temporal: education acquired before test session]
-```
-
-When providing edges to `dag_check.py`, use the structured format:
-```json
-{"edges": [
-  {"from": "Sex", "to": "Test_Score", "temporal_justification": "Sex fixed at birth, precedes test"},
-  {"from": "C", "to": "X", "temporal_justification": "C measured before treatment?"}
-]}
-```
-Edges with `?` in the justification are flagged as uncertain in the output.
-
-### Stage 2d: Flag Remaining Undirected Edges
-
-Any edge still undirected after Meek rules is genuinely ambiguous. List these explicitly — they represent the limits of your causal knowledge. State what data or experiment would resolve each.
-
-Rules (apply throughout all stages):
-- If you're unsure about an edge, mark it with `[?]` and state what evidence would resolve it
-- Do NOT add edges "just in case" — each edge is a claim
-- If there might be an unobserved common cause (U), draw it: `U -> X, U -> Y [unobserved]`
-
-### Verification Gate 2
-
-Before proceeding to adjustment sets, verify the DAG structure:
-
-1. **Temporal defensibility:** For each directed edge, is the temporal ordering defensible? Flag any edge where the direction is assumed rather than known.
-2. **Missing edges:** Are there pairs of variables with no path that could plausibly have a direct connection? Omitted edges are claims of no causal relationship — make them deliberately.
-3. **Collider identification:** Identify all colliders (nodes with two+ incoming edges) and verify each is intentional — not an artifact of missing edges.
-4. **Cycle check:** Temporal ordering should prevent cycles, but verify no circular dependencies exist.
-5. **V-structure audit:** Are all V-structures from Stage 2b still valid after propagation?
-
-If verification fails at any point, revise the DAG before proceeding. Structural errors here propagate to incorrect adjustment sets.
+**Gate:** Temporal defensibility of every edge. Missing edges are claims of no relationship. All colliders intentional. No cycles. V-structures valid after propagation.
 
 ---
 
 ## Phase 3: Identify Adjustment Set
 
-Using the DAG from Phase 2, identify the valid adjustment set for estimating the causal effect of X on Y.
+Find set S satisfying the back-door criterion. See `references/adjustment-algorithms.md` for procedure.
 
-**Back-door criterion:** Find a set of variables S such that:
-1. No variable in S is a descendant of X
-2. S blocks every back-door path from X to Y (paths with an arrow into X)
-
-**Procedure:**
-1. List all paths from X to Y
-2. Mark which are causal (follow arrow direction from X to Y) — leave these OPEN
-3. Mark which are back-door (have an arrow into X) — these must be BLOCKED
-4. Find the minimal set S that blocks all back-door paths without opening collider paths
-
-**Do NOT include in S:**
-- Mediators — blocks the causal path, gives you the direct effect instead of the total effect
-- Descendants of treatment — collider bias
-- Descendants of outcome — biases the estimate
-- Colliders on non-causal paths — conditioning opens the path (M-bias)
-
-**Output:**
-- **Valid adjustment set:** {C1, C2, ...}
-- **Excluded and why:** M (mediator — blocks causal path), D (descendant of X — collider bias), ...
-- **Remaining open back-door paths:** [any unblocked non-causal paths, or "none"]
-- **Unobserved threats:** [any U variables that would invalidate the adjustment set if they exist]
+**Do NOT include:** mediators, descendants of treatment, descendants of outcome, colliders on non-causal paths.
 
 ---
 
 ## Phase 4: Bad-Control Audit
 
-For EACH variable in the proposed (or planned) regression, audit against the DAG:
+For EACH variable in the proposed regression, audit against the DAG:
 
 | Variable | In DAG? | Classification | In valid adjustment set? | Problem? |
-|----------|---------|---------------|------------------------|----------|
-| ... | Yes/No | ... | Yes/No | ... |
 
-Flag anything that matches:
+**Trap catalog — if any fires, STOP:**
 
 | Pattern | Flag | What goes wrong |
 |---------|------|-----------------|
-| Descendant of X used as control | **OVER-CONTROL / COLLIDER BIAS** | Over-control: blocks part of the causal effect (attenuates estimate). Collider bias: if the descendant has other parents affecting Y, conditioning opens a spurious path. Can reverse the sign of the true effect. |
-| Mediator used as control | **OVER-CONTROL** | Blocks the causal path X -> M -> Y. You get the direct effect minus the mediated effect, not the total causal effect. |
-| Variable not in DAG | **UNJUSTIFIED** | What is the causal story? If you can't place it in the DAG, you can't justify including it. |
-| Collider being conditioned on | **SPURIOUS PATH OPENED** | Conditioning on a collider opens a non-causal path between its parents. |
-| Post-treatment variable | **POST-TREATMENT BIAS** | Even if not a descendant of X, post-treatment variables can be affected by X through unmeasured paths. |
+| Descendant of X used as control | **OVER-CONTROL / COLLIDER BIAS** | Blocks causal effect (attenuates) or opens spurious path if descendant has other parents affecting Y. Can reverse the sign. |
+| Mediator used as control | **OVER-CONTROL** | Blocks X -> M -> Y. You get direct minus mediated, not total effect. |
+| Variable not in DAG | **UNJUSTIFIED** | No causal story = no justification for inclusion. |
+| Collider being conditioned on | **SPURIOUS PATH OPENED** | Opens non-causal path between its parents. |
+| Post-treatment variable | **POST-TREATMENT BIAS** | Even if not a descendant of X, can be affected through unmeasured paths. |
 
-If any flag fires, STOP. Do not proceed to Phase 5. Fix the specification first.
+If any flag fires, fix the specification before proceeding.
 
 ---
 
 ## Phase 5: Specification Output
 
-Only after Phases 1-4 pass clean.
-
-```
-Model:      Y ~ X + C1 + C2
-Treatment:  X
-Controls:   C1 (pre-treatment confounder: causes both X and Y via ...),
-            C2 (pre-treatment confounder: causes both X and Y via ...)
-Excluded:   M (mediator — on causal path X -> M -> Y),
-            D (descendant of X — collider bias)
-Estimand:   Average causal effect of X on Y, conditional on {C1, C2}
-Assumptions:
-  1. No unmeasured confounding given {C1, C2}
-  2. DAG is correctly specified (edges and directions)
-  3. [any functional form assumptions — linearity, additivity]
-Threats:    [what unmeasured variables could invalidate this]
-```
+Only after Phases 1-4 pass clean. See `references/output-templates.md` for template and consensus mode.
 
 ---
 
@@ -212,82 +93,43 @@ Every `/causal-dag` invocation MUST produce all of these:
 3. Valid adjustment set with exclusions and reasons (Phase 3)
 4. Bad-control audit table (Phase 4)
 5. Clean regression specification (Phase 5) — or a STOP with what needs fixing
-6. Remaining assumptions and threats — what could still be wrong
+6. Remaining assumptions and threats
 
 Do not skip phases. Do not compress phases into prose. The tables are the point.
 
 ---
 
-## Worked Example: The Bad-Control Trap
-
-Research question: "What is the causal effect of sex on cognitive test scores?"
-
-A naive agent might specify: `Test_Score ~ Sex + Education + Items_Complete + Room_ID`
-
-**Phase 1 catches it:**
-
-| Variable | Classification | Temporal Order | Justification |
-|----------|---------------|----------------|---------------|
-| Sex | Treatment (X) | Fixed at birth | Exposure of interest |
-| Test_Score | Outcome (Y) | At test time | What we're measuring |
-| Education | Pre-treatment confounder (C) | Before test | Affects both opportunity and score |
-| Items_Complete | Descendant of treatment (D) | During test | Sex -> engagement -> items completed |
-| Room_ID | Nuisance | At test time | Affects score, not caused by sex |
-
-**Phase 4 catches it:**
-
-| Variable | In DAG? | Classification | In adjustment set? | Problem? |
-|----------|---------|---------------|-------------------|----------|
-| Sex | Yes | Treatment | N/A | - |
-| Education | Yes | Confounder | Yes | OK |
-| Items_Complete | Yes | Descendant of X | NO | **COLLIDER BIAS** |
-| Room_ID | Yes | Nuisance | Yes | OK (not on causal path, not a descendant) |
-
-**STOP.** Remove `Items_Complete`. It is caused by Sex (via engagement, stamina, strategy differences). Conditioning on it opens a spurious path: `Sex -> Items_Complete <- Other_Causes_of_Completion -> Test_Score`.
-
-**Correct specification:** `Test_Score ~ Sex + Education + Room_ID`
-
----
-
 ## Common Traps
 
-1. **"Just control for everything available."** No. Each control variable is a causal claim. Adding a descendant of treatment as a control can reverse or attenuate the true effect. More controls != less bias.
+1. **"Just control for everything available."** Each control is a causal claim. Adding a descendant of treatment can reverse or attenuate the true effect.
 
-2. **"More controls = less bias."** False for descendants and colliders. The bias from a bad control can exceed the bias from omitting a confounder.
+2. **"More controls = less bias."** False for descendants and colliders. Bad-control bias can exceed omitted-confounder bias.
 
-3. **"The reviewer/supervisor asked us to control for X."** Check the DAG first. Reviewers can be wrong. If X is a descendant of treatment, controlling for it is wrong regardless of who requested it.
+3. **"The reviewer asked us to control for X."** Check the DAG. Reviewers can be wrong. If X is a descendant of treatment, controlling for it is wrong regardless of who requested it.
 
-4. **"It's a covariate, not a control."** Semantics. If it's in the conditioning set of the regression, it's a control. It adjusts the estimate. The DAG doesn't care what you call it.
+4. **"It's a covariate, not a control."** If it's in the conditioning set, it adjusts the estimate. The DAG doesn't care what you call it.
 
-5. **"We're just being conservative."** Including a collider is not conservative — it introduces bias that wasn't there before. Conservative means fewer assumptions, not more variables.
+5. **"We're just being conservative."** Including a collider is not conservative — it introduces bias that wasn't there before.
 
-6. **"The coefficient on X changed when we added Z, so Z must be a confounder."** Not necessarily. If Z is a collider or descendant, the change reflects bias being introduced, not removed.
+6. **"The coefficient changed when we added Z, so Z must be a confounder."** If Z is a collider or descendant, the change reflects bias being introduced, not removed.
 
 ---
 
-## Consensus Mode (--consensus)
+## References
 
-When multiple agents or analysts independently specify DAGs for the same treatment/outcome, use consensus mode to vote on edge structure:
-
-```bash
-echo '[spec1, spec2, spec3, ...]' | uv run python3 dag_check.py --consensus
-```
-
-Consensus votes on **edge agreement** (what fraction of specs include each edge), NOT on adjustment-set validity. This avoids rewarding under-specified DAGs that omit real confounders.
-
-- Edges with ≥60% agreement form the consensus DAG
-- Contested edges (<60%) are flagged for review
-- The consensus DAG is then validated for adjustment-set correctness
-- Adjustment variables are classified: must-adjust / optional / forbidden
+- `references/dag-construction.md` — 4-stage DAG decomposition, Meek rules, edge format for dag_check.py
+- `references/adjustment-algorithms.md` — Back-door criterion procedure, exclusion rules
+- `references/output-templates.md` — Specification template, consensus mode (--consensus)
+- `references/worked-example.md` — Bad-control trap worked example (sex -> test scores)
 
 ---
 
 ## Relationship to Other Skills
 
-- **`/causal-check`** — Lightweight "why did X happen" analysis for observations. Use `/causal-dag` when you need to SPECIFY a regression model. Use `/causal-check` when you need to EXPLAIN an observed outcome.
-- **`/causal-robustness`** — Post-estimation sensitivity analysis (PySensemakr). Use AFTER fitting an OLS model specified via `/causal-dag`. Quantifies how robust the estimate is to unmeasured confounding.
-- **`/competing-hypotheses`** — Structured hypothesis comparison. Use AFTER `/causal-dag` has established the causal structure. The DAG tells you which hypotheses are testable and what the confounding structure looks like.
-- **`/researcher`** — May invoke `/causal-dag` when the research involves regression or causal analysis. The researcher skill should not specify regressions without running this first.
+- **`/causal-check`** — Lightweight "why did X happen" for observations. Use `/causal-dag` to SPECIFY a regression model.
+- **`/causal-robustness`** — Post-estimation sensitivity analysis (PySensemakr). Use AFTER fitting an OLS model specified via `/causal-dag`.
+- **`/competing-hypotheses`** — Structured hypothesis comparison. Use AFTER `/causal-dag` has established causal structure.
+- **`/researcher`** — May invoke `/causal-dag` when research involves regression or causal analysis.
 
 ---
 
@@ -295,6 +137,6 @@ Consensus votes on **edge agreement** (what fraction of specs include each edge)
 
 - Pearl, J. — *The Book of Why*, Ch. 4 (back-door criterion)
 - Cinelli, C., Forney, A. & Pearl, J. (2022) — "A Crash Course in Good and Bad Controls"
-- Elwert, F. & Winship, C. (2014) — The bad-control problem: conditioning on a descendant of treatment creates collider bias
-- T3 benchmark — LLMs default to CONDITIONAL interpretation 92% of the time on ambiguous counterfactuals. They need structural scaffolding to get causal reasoning right.
-- CauGym (Chen et al. 2026) — Causal post-training helps but is not available for general use yet. This skill is the manual substitute.
+- Elwert, F. & Winship, C. (2014) — The bad-control problem
+- T3 benchmark — LLMs default to CONDITIONAL interpretation 92% of the time on ambiguous counterfactuals
+- CauGym (Chen et al. 2026) — Causal post-training helps but is not available for general use yet
