@@ -106,7 +106,20 @@ Write the material being reviewed to a single context file. The dispatch script 
 
 **Token budgets:** Gemini Pro sweet spot 80-150K (max ~800K). GPT-5.4 sweet spot 40-100K (max ~400K). Compact aggressively — 50K context = 5-10 min API calls; 2K summary = ~1 min. Summarize rather than concatenate full files.
 
-#### Narrow reviews (most reviews)
+#### Auto-assembled context (preferred for code reviews)
+
+Use `--context-files` to skip manual assembly. The script reads each file spec and concatenates with headers:
+
+```bash
+uv run python3 ~/Projects/meta/scripts/model-review.py \
+  --context-files docs/plan.md scripts/finding_ir.py:86-110 scripts/hard_locus_report.py:93-185 \
+  --topic "expansion-plan" --project "$(pwd)" --extract \
+  "Review this plan against the code it references"
+```
+
+File spec formats: `path/file.py` (entire file), `path/file.py:100-150` (line range), `path/file.py:100` (single line). Each file gets a header showing its path and range.
+
+#### Narrow reviews (manual assembly)
 
 The review target (plan, design doc, code) plus enough surrounding context for models to understand the decision space. Use Read/Grep to gather, then Write to a single `context.md`.
 
@@ -186,8 +199,8 @@ Use `--axes formal,domain` with context from `generate_review_packets.py`, `lr_c
 |------|-------|---------------|
 | `arch` | Gemini Pro | Patterns, architecture, cross-reference |
 | `formal` | GPT-5.4 (high reasoning) | Math, logic, cost-benefit, testable predictions |
-| `domain` | Gemini Pro | Domain fact correctness, API/URL/version verification |
-| `mechanical` | Gemini Flash | Stale refs, wrong paths, naming inconsistencies |
+| `domain` | Gemini Pro | Domain fact correctness, API/URL/version verification. Skip for pure code reviews — adds noise when no domain claims are at stake. |
+| `mechanical` | Gemini Flash | Stale refs, wrong paths, naming inconsistencies. Include current grep verification results in context — Flash hallucinates about already-fixed state (~13% rate). |
 | `alternatives` | Kimi K2.5 | 3-5 genuinely different approaches |
 | `simple` | Gemini Pro | Quick combined check (for low-stakes changes) |
 
@@ -433,6 +446,8 @@ Extract every discrete recommendation, finding, or claim as a numbered list. One
 
 Extract all discrete ideas from this review."
 ```
+
+**Uncalibrated threshold flagging (automatic with `--extract`):** The script post-processes extracted claims and tags lines containing numeric thresholds (e.g., `≥20% AUPRC`, `PPV >=0.8`) that lack a cited source (paper, benchmark, table reference) with `[UNCALIBRATED]`. This catches a common GPT failure mode: fabricating plausible-sounding numeric thresholds with no calibration data. During synthesis, treat `[UNCALIBRATED]` claims as requiring your own threshold derivation — don't adopt the number.
 
 **Why cross-family extraction:** Self-preference bias (Wataoka NeurIPS 2024) means a model's own family preferentially surfaces claims written in its style. Using GPT-fast to extract Gemini's claims, and Gemini-fast to extract GPT's claims, avoids this.
 
