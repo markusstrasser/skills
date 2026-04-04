@@ -280,6 +280,18 @@ For long-running novelty sweeps:
 
 If the memo gets numerically messy, preserve append-only history and fix the process forward rather than rewriting the past.
 
+## Cross-Repo Git Safety
+
+Novelty sessions often touch sibling repos (shared skills, meta docs, related projects).
+
+Before any `git diff`, `git status`, or `git commit` on edited files:
+
+1. detect the owning git root for those files
+2. switch to that repo before running git commands
+3. treat "outside repository" as a routing failure, not a git problem
+
+Do not stage or commit cross-repo edits from the wrong cwd just because the absolute path is visible.
+
 **Why 15KB for Gemini:** model-review.py dispatches Gemini via CLI transport (free tier,
 `--timeout 300`, no `--stream`, no `--max-tokens`). CLI transport can handle 1M context
 in theory but thinking models timeout at ~15KB within the 300s window. The script falls
