@@ -83,7 +83,7 @@ Compute a session-scoped filename to avoid overwrites from concurrent agents:
 SID=$(cat ~/.claude/current-session-id 2>/dev/null | head -c8 || date +%s | tail -c 8)
 ```
 
-Write `{date}-{SID}-manual.json` with schema:
+Write `{date}-{SID}-manual.json` using `Bash` + `cat << 'EOF'` (the Write tool requires a prior Read, but retro JSONs are always new files):
 ```json
 {"findings": [{"category": "...", "summary": "...", "severity": "high|medium|low", "evidence": "...", "project": "...", "proposed_fix": "..."}], "source": "manual-retro"}
 ```
