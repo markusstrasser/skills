@@ -56,7 +56,7 @@ This is the highest-quality evidence path. RCS scoring produces significantly be
 **Critical rules:**
 - `fetch_paper` then `read_paper` BEFORE citing. Abstracts are not primary sources.
 - Never trust PMIDs or PDB IDs from websearch without S2/database verification. Websearch confabulates citation details.
-- Sequential exploration: 3 queries → scan results → 3 more doubling down on signal. Don't shotgun — query at position 3 in a burst cannot incorporate what query 1 returned.
+- Sequential exploration: 3 broad queries → scan results → 3 narrower queries refining signal. Don't shotgun — query at position 3 in a burst cannot incorporate what query 1 returned.
 - Search/discovery tools are **map tools**. Primary documents, official databases, and fetched full text are **evidence tools**. Do not blur them.
 - For "newest", "latest", or date-sensitive queries, state the date anchor explicitly and bias toward the last 12-18 months unless the field is known to move slowly.
 - If one backend is repeatedly failing (`403`, auth block, junk results), switch early. Do not spend multiple rounds proving the same backend is unreliable.
@@ -65,6 +65,7 @@ This is the highest-quality evidence path. RCS scoring produces significantly be
 
 ## Search Heuristics
 
+- **Start broad, narrow later.** First 1-2 queries per axis should be short and general (3-5 words). Agents default to overly-specific initial queries that miss relevant results. "protein folding disease" before "alpha-synuclein aggregation Lewy body mechanism." Narrow progressively based on what the broad pass surfaces.
 - Exa is semantic, not keyword. Describe the *concept* — "gene-diet interaction abolishing cardiovascular risk" beats "9p21 diet interaction."
 - Use `type: "deep"` + `additionalQueries` (2-3 domain-specific variations) for high-value queries.
 - **Recency by field velocity:** Fast fields (AI, markets) = 30-day filter. Medium (biotech, policy) = 6 months. Stable (physics, law) = no filter. If results reference superseded tools or outdated benchmarks, tighten the date.
@@ -74,11 +75,11 @@ This is the highest-quality evidence path. RCS scoring produces significantly be
 
 ## Effort Classification
 
-| Tier | Signals | Axes | Output |
-|------|---------|------|--------|
-| **Quick** | Factual lookup, single claim | 1 | Inline answer with source |
-| **Standard** | Topic review, comparison, "what do we know?" | 2 | Research memo with claims table |
-| **Deep** | Literature review, novel question, "investigate X" | 3+ | Full report with disconfirmation + search log |
+| Tier | Signals | Axes | Queries | Tool calls | Output |
+|------|---------|------|---------|------------|--------|
+| **Quick** | Factual lookup, single claim | 1 | 1-2 | 3-8 | Inline answer with source |
+| **Standard** | Topic review, comparison, "what do we know?" | 2 | 5-8 | 10-20 | Research memo with claims table |
+| **Deep** | Literature review, novel question, "investigate X" | 3+ | 10-15 | 20-40 | Full report + disconfirmation + search log |
 
 User can override with `--quick` or `--deep`. Announce the tier before starting.
 
@@ -126,7 +127,7 @@ Activated by `--adversarial` flag OR when the question asks to challenge, debunk
 [Full provenance per standard Deep tier]
 ```
 
-**Turn budget:** After 15+ search/retrieval tool calls, force synthesis. Reserve remaining capacity for writing. A partial synthesis with sources beats an exhaustive search with no output.
+**Turn budget:** After exceeding your tier's tool call budget, force synthesis. Hard ceiling: 40 tool calls (Deep) or 20 (Standard). Reserve remaining capacity for writing. A partial synthesis with sources beats an exhaustive search with no output.
 
 ## Phase 0 — Dedup Check
 
@@ -167,7 +168,7 @@ If all your axes are from the same category, you have one axis with multiple que
 
 **Analogical forcing (Deep, optional):** For one axis, reframe through an unrelated domain's lens — "How would a supply chain engineer think about this?" Forces different search terms and literatures.
 
-**Search budgets:** Quick: 1 axis, 1-2 queries. Standard: 2 axes, 5+ queries. Deep: 3+ axes, 10+ queries.
+**Search budgets:** See effort table above — queries and tool call ceilings are per-tier.
 
 **Standard+ academic queries — run the paper pipeline:**
 `search_papers` → `save_paper` → `fetch_paper` → `prepare_evidence` → `ask_papers(use_rcs=True)`
