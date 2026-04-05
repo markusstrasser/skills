@@ -1,6 +1,6 @@
 #!/bin/bash
-# PostToolUse hook (Write|Edit) — advise model-review after new plan files
-# Advisory only (exit 0). Fires when a plan file is created or substantially edited.
+# PostToolUse hook (Write|Edit) — advise model-review on substantial new plan files
+# Advisory only (exit 0). Only fires on plans large enough to warrant cross-model review.
 
 INPUT=$(cat)
 FPATH=$(echo "$INPUT" | grep -oE '"file_path"\s*:\s*"[^"]*"' | head -1 | sed 's/.*"file_path"\s*:\s*"//;s/"$//')
@@ -8,16 +8,21 @@ FPATH=$(echo "$INPUT" | grep -oE '"file_path"\s*:\s*"[^"]*"' | head -1 | sed 's/
 # Only trigger on .claude/plans/ files
 echo "$FPATH" | grep -q '\.claude/plans/' || exit 0
 
-# Skip if this is a minor edit (model-review applying its own fixes)
-# Heuristic: if the commit message mentions "model-review" or "review findings", skip
-RECENT_MSG=$(git log --oneline -1 -- "$FPATH" 2>/dev/null)
-echo "$RECENT_MSG" | grep -qi 'review\|model-review\|revision\|v[0-9]' && exit 0
+# Must be a real file
+[ -f "$FPATH" ] || exit 0
 
-# Check if a model-review already exists for this plan (same day)
+# Skip small plans (<30 lines) — not worth reviewing
+LINES=$(wc -l < "$FPATH" 2>/dev/null)
+[ "$LINES" -lt 30 ] && exit 0
+
+# Skip if plan mentions "v2" or "revised" — it's an update, not new
+head -5 "$FPATH" | grep -qi 'v[2-9]\|revised\|review findings' && exit 0
+
+# Skip if already reviewed today
 PLAN_SLUG=$(basename "$FPATH" .md)
 TODAY=$(date +%Y-%m-%d)
 if ls .model-review/${TODAY}-*${PLAN_SLUG}* 2>/dev/null | grep -q .; then
-  exit 0  # already reviewed today
+  exit 0
 fi
 
-echo "Plan file written: $(basename "$FPATH"). Run /model-review before executing — cross-model review is required for non-trivial plans (Constitution §12)."
+echo "Substantial plan written (${LINES} lines). Consider /model-review before executing — then check: do the models' findings hold given your project context? Revise cosigned/deferred/rejected as needed."
