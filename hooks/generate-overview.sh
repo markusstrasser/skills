@@ -247,7 +247,7 @@ if $AUTO; then
   for t in "${TYPES[@]}"; do
     t=$(echo "$t" | xargs)
     # Skip types whose per-type marker already matches target commit
-    local marker_file="$PROJECT_ROOT/.claude/overview-marker-${t}"
+    marker_file="$PROJECT_ROOT/.claude/overview-marker-${t}"
     if [[ -f "$marker_file" ]] && [[ "$(cat "$marker_file" 2>/dev/null)" == "$COMMIT_HASH" ]]; then
       echo "[$t] Already current (marker matches ${COMMIT_HASH:0:7}), skipping"
       continue
