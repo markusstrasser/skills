@@ -81,6 +81,9 @@ Multi-GPU: `gpu="H100:8"`. Fallback: `gpu=["H100", "A100-80GB"]`.
 31. **`cpu` = physical cores, NOT vCPUs.** `cpu=8` = 16 vCPUs. Soft limit = request + 16 cores.
 33. **Detached apps crash-loop on import errors** -- `modal run --detach` with a function that crashes on import (ModuleNotFoundError) keeps the app alive in "ephemeral" state retrying indefinitely. The input stays in the queue. Auto-stop or use the orchestrator's `_detect_crash_loop()` logic. (Evidence: 5 crash-looping apps on 2026-04-05.)
 34. **Dedup before launching** -- orchestrator restarts re-launch stages already running on Modal. Always check `modal app list --json` for live apps matching the stage description before launching. (Evidence: $85 excess on 2026-04-04, 113 unique apps for 65 stages.)
+35. **Container crashes retry differently from code exceptions** -- `retries=N` only controls user-code exceptions. Container crashes (import errors, OOM) are retried automatically by Modal: ephemeral apps retry until a failure threshold; deployed apps retry **indefinitely** with crash-loop backoff. `retries=0` does NOT prevent container crash retries.
+36. **`modal app list --json`** -- reliable machine-readable output. Table format truncates descriptions. Use `--json` for orchestrator tooling.
+37. **App tags for cost attribution** -- `modal.App(tags={"run_id": "...", "stage": "..."})` + `modal billing report --tag-names stage`. Free organizational metadata for billing reports.
 32. **Never `subprocess.run(timeout=N)` on `modal run --detach`** -- image builds take 2-5 min on first deploy. Timeout kills the local process but Modal continues building server-side, creating orphan apps with no tracked app ID. `modal run --detach` always returns after image build. No timeout needed. (Evidence: 63 orphan apps, 4 "fix" attempts increasing timeout before finding root cause.)
 
 ## MANDATORY: Cost Awareness
