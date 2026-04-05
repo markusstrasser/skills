@@ -26,6 +26,7 @@ TYPE=""
 AUTO=false
 DRY_RUN=false
 PROJECT_ROOT=""
+COMMIT_HASH=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -37,12 +38,15 @@ while [[ $# -gt 0 ]]; do
       DRY_RUN=true; shift ;;
     --project-root)
       PROJECT_ROOT="$2"; shift 2 ;;
+    --commit-hash)
+      COMMIT_HASH="$2"; shift 2 ;;
     -h|--help)
-      echo "Usage: generate-overview.sh [--type TYPE|--auto] [--dry-run] [--project-root DIR]"
+      echo "Usage: generate-overview.sh [--type TYPE|--auto] [--dry-run] [--project-root DIR] [--commit-hash SHA]"
       echo "  --type TYPE        Generate single overview (source, tooling, structure, etc.)"
       echo "  --auto             Generate all types from OVERVIEW_TYPES config"
       echo "  --dry-run          Log what would happen without generating"
       echo "  --project-root DIR Project root (default: git root or cwd)"
+      echo "  --commit-hash SHA  Commit hash for marker (default: HEAD at execution time)"
       exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
@@ -53,6 +57,11 @@ if [[ -z "$PROJECT_ROOT" ]]; then
   PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 fi
 cd "$PROJECT_ROOT"
+
+# --- Resolve commit hash (for marker writes) ---
+if [[ -z "$COMMIT_HASH" ]]; then
+  COMMIT_HASH=$(git -C "$PROJECT_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")
+fi
 
 # --- Load config ---
 CONF_FILE="$PROJECT_ROOT/.claude/overview.conf"
@@ -178,37 +187,47 @@ generate_one() {
     return 1
   fi
 
-  # Step 5: Generate via llmx
-  local llmx_stderr
+  # Step 5: Generate via llmx (atomic write — temp file, mv on success)
+  local llmx_stderr llmx_output
   llmx_stderr=$(mktemp /tmp/overview-llmx-stderr-XXXXXX)
-  cat "$temp_prompt" | llmx chat -m "$OVERVIEW_MODEL" 2>"$llmx_stderr" > "$output_file"
-  local llmx_exit=$?
+  llmx_output=$(mktemp "${output_dir}/.overview-tmp-${type}-XXXXXX")
 
-  # Cleanup prompt
+  # Disable errexit to capture exit code (set -e would skip cleanup on failure)
+  set +e
+  cat "$temp_prompt" | timeout 300 llmx chat -m "$OVERVIEW_MODEL" 2>"$llmx_stderr" > "$llmx_output"
+  local llmx_exit=$?
+  set -e
+
+  # Cleanup prompt (no longer needed)
   rm -f "$temp_prompt"
 
   # Check for failure: non-zero exit or empty output
-  if [[ $llmx_exit -ne 0 ]] || [[ ! -s "$output_file" ]]; then
+  if [[ $llmx_exit -ne 0 ]] || [[ ! -s "$llmx_output" ]]; then
     echo "[$type] ERROR: llmx failed (exit=$llmx_exit). stderr:" >&2
     cat "$llmx_stderr" >&2
-    rm -f "$llmx_stderr" "$output_file"
+    rm -f "$llmx_stderr" "$llmx_output"
     return 1
   fi
   rm -f "$llmx_stderr"
 
-  # Step 6: Prepend freshness metadata
-  local git_sha
-  git_sha=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-  local gen_ts
+  # Step 6: Prepend freshness metadata to temp output, then atomic mv
+  local git_sha gen_ts meta_line
+  git_sha=$(echo "$COMMIT_HASH" | head -c 7)
   gen_ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  local meta_line="<!-- Generated: ${gen_ts} | git: ${git_sha} | model: ${OVERVIEW_MODEL} -->"
-  # Prepend metadata to output file
-  local tmp_meta
-  tmp_meta=$(mktemp /tmp/overview-meta-XXXXXX)
-  { echo "$meta_line"; echo ""; cat "$output_file"; } > "$tmp_meta"
-  mv "$tmp_meta" "$output_file"
+  meta_line="<!-- Generated: ${gen_ts} | git: ${git_sha} | model: ${OVERVIEW_MODEL} -->"
 
-  echo "[$type] Done → $output_file"
+  local tmp_final
+  tmp_final=$(mktemp "${output_dir}/.overview-final-${type}-XXXXXX")
+  { echo "$meta_line"; echo ""; cat "$llmx_output"; } > "$tmp_final"
+  rm -f "$llmx_output"
+
+  # Atomic move — old overview preserved until this succeeds
+  mv "$tmp_final" "$output_file"
+
+  # Step 7: Write per-type success marker
+  echo "$COMMIT_HASH" > "$PROJECT_ROOT/.claude/overview-marker-${type}"
+
+  echo "[$type] Done → $output_file (marker: ${COMMIT_HASH:0:7})"
 }
 
 # --- Main ---
@@ -227,6 +246,12 @@ if $AUTO; then
 
   for t in "${TYPES[@]}"; do
     t=$(echo "$t" | xargs)
+    # Skip types whose per-type marker already matches target commit
+    local marker_file="$PROJECT_ROOT/.claude/overview-marker-${t}"
+    if [[ -f "$marker_file" ]] && [[ "$(cat "$marker_file" 2>/dev/null)" == "$COMMIT_HASH" ]]; then
+      echo "[$t] Already current (marker matches ${COMMIT_HASH:0:7}), skipping"
+      continue
+    fi
     generate_one "$t" &
     pids+=($!)
     type_names+=("$t")
