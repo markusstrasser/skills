@@ -4,12 +4,15 @@
 ## Step 3: Stage Findings
 
 1. Read the Gemini output critically -- it may hallucinate session details
-2. **Validate session UUIDs (mandatory, automated):**
-   - The input.md starts with a "VALID SESSION IDS" table. Extract the prefix column.
-   - Grep the Gemini output for any 8-char hex patterns (`[0-9a-f]{8}`).
-   - **Reject** any finding whose session ID does not match a prefix from the table.
-   - If Gemini returns IDs like `019d4xxx` that aren't in the table, they are fabricated (2 confirmed incidents: 2026-04-03, 2026-04-05).
-   - Include the real UUIDs as `"session_uuids"` in the JSON output (see template below).
+2. **Validate session UUIDs (mandatory — run the script):**
+   ```bash
+   python3 scripts/validate_session_ids.py --strip
+   ```
+   This reads `input.md` and `gemini-output.md` from the artifact dir, checks all session ID
+   references against the manifest, and exits non-zero if fabrications are found. `--strip`
+   replaces fabricated IDs with `[FABRICATED_ID]` in-place. If it flags fabrications, re-examine
+   affected findings — the analysis may be valid but misattributed, or entirely hallucinated.
+   Include the real UUIDs as `"session_uuids"` in the JSON output (see template below).
 3. Cross-check any specific claims against the transcript
 4. For findings that meet promotion criteria (recurs 2+ sessions, not already covered, checkable predicate or architectural), append directly to `~/Projects/meta/improvement-log.md` using the improvement-log output format
 5. For novel high-severity findings, also append directly (don't wait for recurrence)
