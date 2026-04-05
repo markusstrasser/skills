@@ -17,6 +17,7 @@ The review target (plan, design doc, code) plus enough surrounding context for m
 | Tests for that code | When reviewing implementation correctness | Grep for test files, include relevant cases |
 | Recent git history | When reviewing a change or refactor | `git log --oneline -10 -- <path>` or `git diff` |
 | Related CLAUDE.md sections | When the review involves conventions or architecture | Read the relevant section, not the whole file |
+| Project operational context | When the review touches code with deliberate constraints | `.claude/rules/vetoed-decisions.md`, key rules files, data-sources docs. Models that don't know about vetoes and deliberate exclusions will propose re-enabling them. Include as context, not binding constraints — the model may correctly argue a prior decision is outdated. |
 | Upstream constraints | When the review depends on external APIs, schemas, or specs | Include the relevant spec snippet |
 
 **What NOT to include:** unrelated code, full CLAUDE.md dumps, entire test suites, historical context that doesn't inform the decision. Noise dilutes the review -- models spend tokens on irrelevant material instead of finding real problems.
