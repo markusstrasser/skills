@@ -88,7 +88,7 @@ Activated by `--adversarial` flag OR when the question asks to challenge, debunk
 
 **What it does differently:** Inverts the default stance. Standard research asks "what does the evidence say?" Adversarial research asks "what's the strongest case that this is wrong, noise, or built on sand?" — then evaluates whether that case holds.
 
-**Reference:** `meta/research/adversarial-case-library.md` — curated exemplars of strong adversarial thinking. Consult for query inspiration and quality criteria. The six markers of strong adversarial work: (1) evidence not rhetoric, (2) target genuinely believed by serious people, (3) structural not anecdotal critique, (4) often from insiders, (5) unanswered, (6) constructive null (explains what the data actually show).
+**Reference:** `~/Projects/meta/research/adversarial-case-library.md` — 45+ curated exemplars of strong adversarial thinking across 9 domains. Read it before starting adversarial research — it has query patterns, URL sources, and quality criteria. The six markers of strong adversarial work: (1) evidence not rhetoric, (2) target genuinely believed by serious people, (3) structural not anecdotal critique, (4) often from insiders, (5) unanswered, (6) constructive null (explains what the data actually show).
 
 **Phase modifications:**
 - **Phase 1 (Ground Truth):** Inventory what the field claims and WHY people believe it. Steel-man the target before attacking.
