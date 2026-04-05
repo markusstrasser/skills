@@ -7,6 +7,12 @@ Full prompt sent to Gemini 3.1 Pro via llmx in Step 2.
 llmx -p google -m gemini-3.1-pro-preview -f ~/Projects/meta/artifacts/session-analyst/input.md -f ~/Projects/meta/artifacts/session-analyst/coverage-digest.txt "$(cat <<'PROMPT'
 You are analyzing Claude Code session transcripts for behavioral anti-patterns.
 
+SESSION ID ANCHORING: The input transcript starts with a "VALID SESSION IDS" table listing
+every session prefix and full UUID. These are the ONLY session identifiers that exist in this
+input. When referencing sessions in your findings, use ONLY the 8-character prefixes from that
+table. Do NOT invent, guess, or fabricate session IDs. If you cannot attribute a finding to a
+specific session, say "unattributed" rather than guessing an ID.
+
 IMPORTANT: The attached coverage-digest.txt lists findings, hooks, and rules that ALREADY EXIST.
 Do NOT re-report patterns that match existing findings or are already enforced by active hooks.
 If you see a pattern that matches an existing finding, note it ONLY as a one-line recurrence

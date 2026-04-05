@@ -16,7 +16,6 @@ Examples:
 
 import argparse
 import json
-import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -208,6 +207,15 @@ def format_markdown(sessions: list[dict], project: str) -> str:
     lines.append(f"# Session Transcripts: {project}")
     lines.append(f"Extracted: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
     lines.append(f"Sessions: {len(sessions)}")
+    lines.append("")
+
+    # UUID manifest — anchoring block for downstream LLM analysis.
+    # Gemini 3.1 Pro fabricates session IDs without this (2 confirmed incidents).
+    lines.append("## VALID SESSION IDS — Use ONLY these. Never fabricate IDs.")
+    lines.append("| Prefix | Full UUID |")
+    lines.append("|--------|-----------|")
+    for sess in sessions:
+        lines.append(f"| {sess['session_id'][:8]} | {sess['session_id']} |")
     lines.append("")
 
     for sess in sessions:
