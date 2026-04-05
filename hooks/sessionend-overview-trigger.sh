@@ -47,14 +47,7 @@ if not configured_types:
 
 loc_threshold = int(config.get("OVERVIEW_LOC_THRESHOLD", "50"))
 
-# --- Find marker ---
-marker_path = os.path.join(cwd, ".claude", "overview-marker")
-marker_hash = None
-if os.path.isfile(marker_path):
-    with open(marker_path) as f:
-        marker_hash = f.read().strip()
-
-# Get HEAD
+# --- Get HEAD ---
 try:
     head = subprocess.run(
         ["git", "-C", cwd, "rev-parse", "HEAD"],
@@ -66,12 +59,42 @@ except Exception:
 if not head:
     sys.exit(0)
 
-if marker_hash == head:
-    sys.exit(0)  # No new commits since last generation
+# --- Check per-type markers (skip types already at HEAD) ---
+# Legacy migration: if old single marker exists but no per-type markers, use it as fallback
+legacy_marker_path = os.path.join(cwd, ".claude", "overview-marker")
+legacy_hash = None
+if os.path.isfile(legacy_marker_path):
+    with open(legacy_marker_path) as f:
+        legacy_hash = f.read().strip()
+
+types_needing_update = []
+for t in configured_types:
+    type_marker = os.path.join(cwd, ".claude", f"overview-marker-{t}")
+    if os.path.isfile(type_marker):
+        with open(type_marker) as f:
+            if f.read().strip() == head:
+                continue  # This type is current
+    elif legacy_hash == head:
+        continue  # Legacy marker says current
+    types_needing_update.append(t)
+
+if not types_needing_update:
+    sys.exit(0)  # All types are current
 
 # --- Get changed files ---
-if marker_hash:
-    diff_range = f"{marker_hash}..HEAD"
+# Use the oldest per-type marker as diff baseline
+oldest_marker = None
+for t in types_needing_update:
+    type_marker = os.path.join(cwd, ".claude", f"overview-marker-{t}")
+    if os.path.isfile(type_marker):
+        with open(type_marker) as f:
+            oldest_marker = f.read().strip()  # any marker is better than none
+            break
+if not oldest_marker and legacy_hash:
+    oldest_marker = legacy_hash
+
+if oldest_marker:
+    diff_range = f"{oldest_marker}..HEAD"
 else:
     # First run: use last 20 commits as baseline
     diff_range = "HEAD~20..HEAD"
@@ -198,10 +221,8 @@ for scope, sd in scope_data.items():
         triggered_scopes.append(scope)
 
 if not triggered_scopes:
-    # No scope triggered — still update marker to avoid re-checking
-    os.makedirs(os.path.dirname(marker_path), exist_ok=True)
-    with open(marker_path, "w") as f:
-        f.write(head)
+    # No scope triggered — generator will write per-type markers on success.
+    # No marker advance here; let accumulated changes build until threshold.
     sys.exit(0)
 
 # --- Log decision ---
@@ -227,22 +248,17 @@ with open(log_path, "a") as f:
     f.write(json.dumps(log_entry, separators=(",", ":")) + "\n")
 
 # --- Execute or skip ---
+# Generator writes per-type markers on success. No marker write here.
 if mode == "live":
     gen_script = os.path.expanduser("~/Projects/skills/hooks/generate-overview.sh")
     if os.path.isfile(gen_script):
-        for scope in triggered_scopes:
-            # Fire and forget (nohup)
-            subprocess.Popen(
-                [gen_script, "--type", scope, "--project-root", cwd],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
-
-# Update marker
-os.makedirs(os.path.dirname(marker_path), exist_ok=True)
-with open(marker_path, "w") as f:
-    f.write(head)
+        # Single --auto call; generator skips types already at commit-hash
+        subprocess.Popen(
+            [gen_script, "--auto", "--commit-hash", head, "--project-root", cwd],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
 '
 
 exit 0
