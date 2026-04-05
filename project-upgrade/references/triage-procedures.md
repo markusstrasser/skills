@@ -49,6 +49,12 @@ For each finding:
 2. **Verify against actual code** — Read the file, check if the issue exists. Models hallucinate file paths and function names.
 3. **Check if already fixed** — `git log --oneline -5 -- <file>` to see recent changes
 4. **Assess risk** — Will this change break other things?
+5. **Cross-check against project context** — You have more context than the models. Before presenting the disposition table, verify each finding against:
+   - **Vetoed decisions** (e.g., `.claude/rules/vetoed-decisions.md`) — is the finding trying to re-enable something deliberately disabled?
+   - **Deliberate design choices** — is the "bug" actually intentional? Check comments in code, CLAUDE.md, data-sources.md for documented exclusions.
+   - **Runtime environment** — does your knowledge of how the project actually runs (uv, editable installs, symlinks) change the finding's validity?
+   - **Dead code** — is the affected code actually used? Check git recency + grep for callers before investing.
+   This step is critical. Models lack project history and operational context. Presenting model output without this filter is rubber-stamping, not triage.
 
 ## 4b. Disposition Table Template
 

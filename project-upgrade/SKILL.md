@@ -94,6 +94,7 @@ BROKEN_REFERENCE > ERROR_SWALLOWED > IMPORT_ISSUE > DUPLICATION > PATTERN_INCONS
 - **Low-severity, high-blast-radius.** NAMING_INCONSISTENCY affecting 20 files is high risk for low reward. Defer unless automated.
 - **Over-scaffolding.** Don't add monitoring, CI/CD, auth, or enterprise patterns to personal projects.
 - **Omitting project context from model prompts.** Without CLAUDE.md purpose + recent git history, models flag theoretical bugs that can't happen in practice.
+- **Rubber-stamping model findings as triage.** You have project context the models don't: vetoed decisions, deliberate exclusions, runtime environment, dead code status. Cross-check EVERY finding against this context BEFORE presenting the disposition table. If you present and the user asks "do you agree?" and you immediately discover issues — you skipped triage. (Evidence: 2026-04-05 harness run — H1 flagged "missing" sources that were deliberately excluded; H6 proposed deduplicating code for a vetoed feature; D1's deferral rationale was factually wrong about the runtime.)
 
 ## Harness Mode (`--harness`)
 

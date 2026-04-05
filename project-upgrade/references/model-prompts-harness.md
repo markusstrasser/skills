@@ -4,6 +4,29 @@
 
 ## Context Preparation
 
+### Project context preamble (REQUIRED)
+
+Include CLAUDE.md, vetoed-decisions.md, and data-sources.md (or equivalent) in the context sent to models. Without this, models flag "missing" sources that are deliberately excluded, propose re-enabling vetoed features, and misunderstand runtime conventions. Prepend these to the codebase dump:
+
+```bash
+{
+  echo "# PROJECT CONTEXT — read this before analyzing code"
+  echo ""
+  for f in CLAUDE.md .claude/rules/vetoed-decisions.md .claude/rules/data-sources.md; do
+    [ -f "$f" ] && echo -e "\n## $f\n\`\`\`\n$(cat "$f")\n\`\`\`"
+  done
+  echo ""
+  echo "# Recent git history (last 20 commits)"
+  echo '```'
+  git log --oneline -20
+  echo '```'
+} > "$UPGRADE_DIR/project-context.md"
+```
+
+(Evidence: 2026-04-05 harness run — models without this context flagged 8 deliberately excluded sources as "missing", proposed deduplicating a vetoed Twitter feature, and assumed scripts couldn't import from the package.)
+
+### Codebase chunks
+
 Instead of dumping the full codebase, split into two targeted chunks:
 
 **Core modules** (~80-120K tokens): Shared infrastructure that everything imports.
