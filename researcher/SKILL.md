@@ -224,6 +224,35 @@ Confident synthesis from noise is worse than an informative refusal.
 <output_contract>
 ## Output Contract
 
+### Claim-Level Source Gating (Mandatory)
+
+**Every empirical quantitative claim** (effect sizes, trial results, epidemiological numbers, "X reduces Y by Z%") in the output MUST have:
+- A resolved DOI or PMID
+- The specific finding from that source that supports the claim
+
+This does NOT apply to:
+- **Deductive claims** — math, inference from known quantities, logical derivation → tag `[INFERENCE]`, valid without DOI
+- **Computed values** — dose/kg from body weight, unit conversions → tag `[DATA]`, valid
+- **Established facts** — well-known biology (e.g. "CYP2D6 metabolizes codeine") → no source needed
+
+Empirical claims without source provenance are tagged `[UNSOURCED]`. Unsourced empirical claims should not drive protocol decisions or dosage recommendations without explicit acknowledgment of the gap.
+
+**Paper quality assessment** (auto-runs on `fetch_paper`, returns quality card):
+
+Hard vetoes (block citation):
+- `RETRACTED` — never cite retracted papers (Crossref + PubMed fallback)
+- `CANDIDATE_GENE` — pre-GWAS single-gene association studies (~98% non-replication). Exempts PGx (CYP*, HLA, UGT) and mechanism studies.
+
+Informational flags (surface to reader, don't auto-block):
+- `NON_HUMAN_ONLY` — animal/in-vitro biological study. Transfer depends on context: conserved pathways (energy metabolism, DNA repair) transfer; PK, behavior, immune do not. State the organism.
+- `CASE_REPORT_ONLY` — case reports establish existence, not magnitude.
+- Blinding (open-label inflates effects), control type (waitlist inflates), single-center, industry-funded, no pre-registration, data "on request" — all informational.
+
+When citing papers with quality metadata, include component display:
+"Paper X: RCT, n=200, human, double-blind, placebo, gov-funded" or "Paper Y: VETOED — candidate gene study"
+
+Don't build composite scores or traffic lights from these components. Display them as a list. The citing agent (you) makes the judgment call based on context.
+
 ### Quick Tier
 Answer inline with source citation. No formal report.
 
@@ -240,9 +269,10 @@ Answer inline with source citation. No formal report.
 |---|-------|----------|------------|--------|--------|
 | 1 | ... | RCT / dataset | HIGH | [DOI/URL] | VERIFIED |
 | 2 | ... | Inference | LOW | [URL] | INFERENCE |
+| 3 | ... | None found | — | — | UNSOURCED |
 
 ### Key Findings
-[With source quality assessment]
+[With source quality assessment and paper quality metadata where available]
 
 ### What's Uncertain
 [Unresolved questions]
