@@ -19,6 +19,7 @@ effort: medium
 5. **No provider prefixes needed.** `gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`.
 6. **Know the transport triggers:** `google` prefers `gemini` CLI (free). Falls back to API for: `--schema`, `--search`, `--stream`, `--max-tokens`. GPT goes direct to API.
 7. **Hangs in agent context?** Claude Code's Bash tool pipes stdin without EOF. Fixed in current llmx (skips stdin when prompt provided).
+8. **Prompt is positional, context is `-f`.** `llmx "analyze this" -f context.md` — prompt as first positional arg, context files as `-f`. Two `-f` flags with no positional = no prompt = model invents a task from the context. (Evidence: 2026-04-05 — Gemini received two `-f` files, hallucinated a script implementation instead of analysis.)
 
 ## When llmx Fails — Diagnose, Don't Downgrade
 
