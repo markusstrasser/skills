@@ -1,6 +1,6 @@
 ---
 name: researcher
-description: "Autonomous research agent that orchestrates all available MCP tools with epistemic rigor. Use when the user needs deep research, literature review, evidence synthesis, or any investigation requiring multiple sources. Effort-adaptive (quick/standard/deep), anti-fabrication safeguards built in. NOT for: bio/medical claim verification (use epistemics), causal inference (use causal-dag or causal-check), entity profiling (use entity-management), forensic investigation (use investigate)."
+description: "Autonomous research agent that orchestrates all available MCP tools with epistemic rigor. Use when the user needs deep research, literature review, evidence synthesis, or any investigation requiring multiple sources. Effort-adaptive (quick/standard/deep), with --adversarial mode for field-level critiques and debunking. NOT for: bio/medical claim verification (use epistemics), causal inference (use causal-dag or causal-check), entity profiling (use entity-management), forensic investigation (use investigate)."
 argument-hint: [research question or topic]
 hooks:
   PostToolUse:
@@ -81,6 +81,50 @@ This is the highest-quality evidence path. RCS scoring produces significantly be
 | **Deep** | Literature review, novel question, "investigate X" | 3+ | Full report with disconfirmation + search log |
 
 User can override with `--quick` or `--deep`. Announce the tier before starting.
+
+### Adversarial Mode (`--adversarial`)
+
+Activated by `--adversarial` flag OR when the question asks to challenge, debunk, stress-test, or "call BS on" a field, hypothesis, intervention, or result. Always Deep tier.
+
+**What it does differently:** Inverts the default stance. Standard research asks "what does the evidence say?" Adversarial research asks "what's the strongest case that this is wrong, noise, or built on sand?" — then evaluates whether that case holds.
+
+**Reference:** `meta/research/adversarial-case-library.md` — curated exemplars of strong adversarial thinking. Consult for query inspiration and quality criteria. The six markers of strong adversarial work: (1) evidence not rhetoric, (2) target genuinely believed by serious people, (3) structural not anecdotal critique, (4) often from insiders, (5) unanswered, (6) constructive null (explains what the data actually show).
+
+**Phase modifications:**
+- **Phase 1 (Ground Truth):** Inventory what the field claims and WHY people believe it. Steel-man the target before attacking.
+- **Phase 2 (Search):** Mandatory axes: *replication status*, *strongest critic*, *alternative explanation*, *meta-analysis of the meta-analyses*. Creative Exa queries modeled on case library patterns — describe the concept adversarially ("the strongest case that X is noise," "someone who proved X was wrong with data," "celebrated Y finding that failed to replicate"). Use `additionalQueries` with 2-3 diverse framings per search.
+- **Phase 3 (Verify):** Flip direction — verify the CRITIQUE, not the original claim. Is the debunking itself solid? Check for: overclaiming by critics, selective counter-evidence, contrarian bias.
+- **Phase 4 (Synthesize):** Output is a **case brief**, not a balanced review. Structure: Target Claim → Why It Was Believed → The Evidence Against → Strength of the Case Against → What Survives → Verdict.
+
+**Output template (replaces standard memo):**
+```markdown
+## Adversarial Review: [Target]
+
+**Target claim:** [what's being challenged]
+**Prior belief:** [why serious people believed this, steel-manned]
+**Date:** YYYY-MM-DD
+
+### The Case Against
+[Evidence marshaled against the target, with sources and effect sizes]
+
+### Strength Assessment
+| Criterion | Rating | Notes |
+|-----------|--------|-------|
+| Evidence quality | HIGH/MED/LOW | [specific] |
+| Target was genuinely believed | YES/NO | [by whom] |
+| Structural, not anecdotal | YES/NO | [mechanism identified?] |
+| Critique is unanswered | YES/NO | [rebuttals exist?] |
+| Constructive null | YES/NO | [alternative explanation?] |
+
+### What Survives
+[Parts of the original claim that withstand scrutiny]
+
+### Verdict
+[DEMOLISHED / MORTALLY WOUNDED / WEAKENED / SURVIVES WITH CAVEATS / CRITIQUE FAILS]
+
+### Sources & Search Log
+[Full provenance per standard Deep tier]
+```
 
 **Turn budget:** After 15+ search/retrieval tool calls, force synthesis. Reserve remaining capacity for writing. A partial synthesis with sources beats an exhaustive search with no output.
 
