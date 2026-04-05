@@ -170,15 +170,37 @@ elif [ "$COUNT" -ge 3 ]; then
 fi
 
 # Check 7: Turn-budget / file-output instruction missing in dispatch prompt
+# BLOCKING for research-heavy agents (researcher, general-purpose, Plan, unset)
+# Advisory for Explore, session-analyst, design-review (read-only or self-managed)
 if [ -n "$PROMPT" ]; then
     HAS_TURN_BUDGET=$(echo "$PROMPT" | grep -ciE '(stop|halt|synthesize|write).*(70%|turn|budget|before running out)' || true)
     HAS_FILE_OUTPUT=$(echo "$PROMPT" | grep -ciE '(write|save|output).*(file|path|memo|artifact)' || true)
     if [ "$HAS_TURN_BUDGET" -eq 0 ] || [ "$HAS_FILE_OUTPUT" -eq 0 ]; then
-        CHECK_IDS="${CHECK_IDS}7,"
         MISSING=""
         [ "$HAS_TURN_BUDGET" -eq 0 ] && MISSING="turn-budget instruction (stop at 70% and synthesize)"
         [ "$HAS_FILE_OUTPUT" -eq 0 ] && MISSING="${MISSING:+$MISSING + }file-output instruction (write results to a file)"
-        WARNINGS="${WARNINGS}SUBAGENT OUTPUT: Dispatch prompt missing ${MISSING}. Add to prompt: 'Stop searching at 70% of turns and write your synthesis to a file. Return the file path.' "
+
+        # Block research-heavy agents; advise read-only ones
+        PROMPT_LEN=${#PROMPT}
+        case "$STYPE" in
+            Explore|session-analyst|design-review|supervision-audit|claude-code-guide|statusline-setup)
+                # Advisory only — these are read-only or self-managed
+                CHECK_IDS="${CHECK_IDS}7,"
+                WARNINGS="${WARNINGS}SUBAGENT OUTPUT: Dispatch prompt missing ${MISSING}. "
+                ;;
+            *)
+                # Block if prompt is substantial (>200 chars = real research task)
+                if [ "$PROMPT_LEN" -gt 200 ]; then
+                    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "check=7 missing=${MISSING}" 2>/dev/null || true
+                    SAFE_MISSING=$(echo "$MISSING" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))' 2>/dev/null)
+                    echo "{\"decision\": \"block\", \"reason\": \"SYNTHESIS BUDGET REQUIRED: Dispatch prompt missing ${MISSING}. Add to your prompt: 'Stop searching at 70% of turns and write synthesis to a file. Return the file path.' This prevents subagent turn exhaustion (6+ confirmed incidents, 30 min recovery each).\"}"
+                    exit 2
+                else
+                    CHECK_IDS="${CHECK_IDS}7,"
+                    WARNINGS="${WARNINGS}SUBAGENT OUTPUT: Dispatch prompt missing ${MISSING}. "
+                fi
+                ;;
+        esac
     fi
 fi
 
