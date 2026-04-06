@@ -182,6 +182,9 @@ if [ -n "$PROMPT" ]; then
 
         # Block research-heavy agents; advise read-only ones
         PROMPT_LEN=${#PROMPT}
+        # Check if worktree isolation is set (implementation agent, not research)
+        HAS_WORKTREE=$(echo "$INPUT" | grep -c '"worktree"' || true)
+
         case "$STYPE" in
             Explore|session-analyst|design-review|supervision-audit|claude-code-guide|statusline-setup)
                 # Advisory only — these are read-only or self-managed
@@ -189,8 +192,12 @@ if [ -n "$PROMPT" ]; then
                 WARNINGS="${WARNINGS}SUBAGENT OUTPUT: Dispatch prompt missing ${MISSING}. "
                 ;;
             *)
+                # Skip blocking for worktree agents (implementation, not research)
+                if [ "$HAS_WORKTREE" -gt 0 ]; then
+                    CHECK_IDS="${CHECK_IDS}7,"
+                    WARNINGS="${WARNINGS}SUBAGENT OUTPUT: Dispatch prompt missing ${MISSING}. (Advisory — worktree agent, likely implementation.) "
                 # Block if prompt is substantial (>200 chars = real research task)
-                if [ "$PROMPT_LEN" -gt 200 ]; then
+                elif [ "$PROMPT_LEN" -gt 200 ]; then
                     ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "check=7 missing=${MISSING}" 2>/dev/null || true
                     SAFE_MISSING=$(echo "$MISSING" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))' 2>/dev/null)
                     echo "{\"decision\": \"block\", \"reason\": \"SYNTHESIS BUDGET REQUIRED: Dispatch prompt missing ${MISSING}. Add to your prompt: 'Stop searching at 70% of turns and write synthesis to a file. Return the file path.' This prevents subagent turn exhaustion (6+ confirmed incidents, 30 min recovery each).\"}"
