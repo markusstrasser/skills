@@ -299,15 +299,32 @@ Without this, the null path requires generating a novel structure — lower prob
 
 **5. Normalize the null.** State that no findings is expected and valid: "Many sessions will have no findings — report that." Counterbalances the 14 "look for X" items that follow.
 
-### When To Apply
+### Convergent vs Divergent Evaluation
 
-Apply to any prompt or skill that:
-- Asks a model to "find", "identify", "detect", or "analyze for" something
-- Has a structured output template with slots to fill
-- Dispatches to external models (they lack your project context — fabrication risk is higher)
-- Produces findings that drive downstream actions (hooks, rules, code changes)
+Not all evaluative prompts need the same fix. The distinction:
 
-NOT needed for: prescriptive/reference prompts, code generation, direct question-answering.
+| Mode | Question shape | Example skills | Mitigation |
+|------|---------------|----------------|------------|
+| **Convergent** | "Is there a problem?" (yes/no) | session-analyst, verify-findings, bio-verify, retro | **Triage gate** — force YES/NO classification before elaboration |
+| **Divergent** | "What could be better?" (always has answers) | design-review, project-upgrade, suggest-skill, brainstorm | **Downstream filtering** — let generation run, filter quality after |
+| **Exploratory** | "What's missing?" (absence is the finding) | negative-space-sweep, novel-expansion | **Neither** — divergent by design, pertinent negatives are the output |
+
+**Why different fixes:** Next-token prediction is convergent by nature (research/divergent-convergent-thinking-llms.md). For convergent evaluation, the model defaults to "yes, problem found" because elaboration has higher token probability than refusal — a triage gate fixes this by making refusal a first-class completion. For divergent evaluation, gating would *suppress useful output* — the model should generate freely, and quality filtering happens downstream (disposition tables, verify-findings, dedup).
+
+**The structural insight:** Compliance pressure is a convergent-mode failure. In divergent mode, the same pressure is actually productive — you *want* the model to generate aggressively. The problem is when a prompt is convergent (should I report this?) but the template forces divergent output (fill in these 14 finding slots).
+
+### When To Apply Triage Gates
+
+Apply to prompts where:
+- The honest answer might be "nothing to report" (convergent evaluation)
+- Structured output templates have slots that create fill-pressure
+- External model dispatch increases fabrication risk (less project context)
+- Findings drive downstream actions (hooks, rules, code changes)
+
+Do NOT gate:
+- Divergent/creative prompts (brainstorm, design-review, suggest-skill) — use downstream filtering instead
+- Exploratory prompts (negative-space-sweep) — absence is the output
+- Prescriptive/reference prompts, code generation, direct Q&A
 
 ## When to Update This Skill
 
