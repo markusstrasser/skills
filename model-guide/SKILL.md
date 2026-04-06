@@ -268,6 +268,47 @@ Claude (orchestrator -- best professional judgment)
 
 **Key insight:** GPT-5.4 closed most of the hallucination gap vs Claude/Gemini (33% fewer errors vs 5.2). But ~28% error rate remains — always query data sources for dollar amounts, dates, entity names, and legal claims. Kimi is especially dangerous for unsourced factual claims.
 
+## Compliance Pressure & Null Paths
+
+All frontier models share a structural failure: when a prompt asks "find X" or "analyze Y for Z," the most probable completion is findings, not "nothing found." The prompt shape determines the answer shape before reasoning begins. Extended thinking makes this worse — more token space = more room to construct elaborate justifications for findings that aren't there (arXiv:2602.07796, "Thinking Makes LLM Agents Introverted").
+
+**This is not sycophancy toward the user — it's sycophancy toward the prompt itself.**
+
+### Patterns That Reduce Compliance Pressure
+
+**1. Triage gate before elaboration.** Force a classification step before detailed analysis:
+```
+Phase 1: Does this [thing] have problems worth reporting? (YES / NO / MINOR ONLY)
+  If NO → output one-line justification and stop.
+  If MINOR → one-line notes only.
+  If YES → proceed to detailed analysis.
+```
+The gate makes refusal a first-class output with lower token cost than fabrication.
+
+**2. Explicit null output format.** Give the model a formatted, easy-to-complete "nothing here" option:
+```
+If no significant findings exist, output EXACTLY:
+## Result: No actionable findings
+Reason: [one line]
+```
+Without this, the null path requires generating a novel structure — lower probability than filling the expected template.
+
+**3. Contrastive framing.** "What's wrong with X?" primes for findings. Better: "Does X have problems, or is it fine as-is?" gives both completions similar probability. Numeric scales ("Rate 1-5") avoid elaboration priming entirely.
+
+**4. Third-person perspective.** "A reviewer examining this would say..." reduces sycophancy by up to 63.8% (SYCON Bench, arXiv:2505.23840). The perspective shift breaks the helpfulness frame.
+
+**5. Normalize the null.** State that no findings is expected and valid: "Many sessions will have no findings — report that." Counterbalances the 14 "look for X" items that follow.
+
+### When To Apply
+
+Apply to any prompt or skill that:
+- Asks a model to "find", "identify", "detect", or "analyze for" something
+- Has a structured output template with slots to fill
+- Dispatches to external models (they lack your project context — fabrication risk is higher)
+- Produces findings that drive downstream actions (hooks, rules, code changes)
+
+NOT needed for: prescriptive/reference prompts, code generation, direct question-answering.
+
 ## When to Update This Skill
 
 Update after any frontier model release:
