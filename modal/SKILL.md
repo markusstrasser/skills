@@ -85,6 +85,9 @@ Multi-GPU: `gpu="H100:8"`. Fallback: `gpu=["H100", "A100-80GB"]`.
 36. **`modal app list --json`** -- reliable machine-readable output. Table format truncates descriptions. Use `--json` for orchestrator tooling.
 37. **App tags for cost attribution** -- `modal.App(tags={"run_id": "...", "stage": "..."})` + `modal billing report --tag-names stage`. Free organizational metadata for billing reports.
 32. **Never `subprocess.run(timeout=N)` on `modal run --detach`** -- image builds take 2-5 min on first deploy. Timeout kills the local process but Modal continues building server-side, creating orphan apps with no tracked app ID. `modal run --detach` always returns after image build. No timeout needed. (Evidence: 63 orphan apps, 4 "fix" attempts increasing timeout before finding root cause.)
+38. **`modal volume ls/get` subprocess calls leak ~300MB each** -- Modal SDK loads fully per subprocess.run() call. Iterating 100 files = 29GB resident → jetsam kill. Always check local file existence BEFORE calling `modal volume ls`. Skip the subprocess if the file is already present locally. (Evidence: JetsamEvent 2026-04-05, 4x python3.12 at 29GB total.)
+39. **`modal volume get` has no progress output with `capture_output=True`** -- downloads are completely silent. For large files, monitor the local file size growth in a background thread. Scale timeout by file size (120s + 1s/MB) instead of flat 900s.
+40. **`modal volume ls --json` can timeout on slow API** -- set 120s timeout and catch `TimeoutExpired` gracefully. A timeout on `ls` should skip the file (will re-download), not crash the entire sync.
 
 ## MANDATORY: Cost Awareness
 
