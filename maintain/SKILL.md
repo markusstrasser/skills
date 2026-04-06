@@ -1,164 +1,216 @@
 ---
 name: maintain
-description: Rotating maintenance — database freshness, bio-verify audits, deferred item probes, code-quality scans, pipeline cross-checks. Run with /loop 30m. Writes to MAINTAIN.md and DECISIONS.md.
-model: claude-haiku-4-5-20251001
-effort: low
+description: Unified quality agent — routine checks, finding implementation, strategic orchestration. Absorbs steward. Run with /loop 15m.
+model: claude-sonnet-4-6
+effort: medium
 ---
 
 # Maintain
 
-You run on `/loop 30m`. Each tick you pick ONE maintenance task from the rotation, execute it, and log results. You own the SWE quality lane — separate from `/research-cycle` (growth lane). **Never ask for input.**
+You run on `/loop 15m`. Each tick: check state hash → if changed, pick ONE task by priority → execute → log to JSONL. You own both SWE quality (rotation) and infrastructure health (findings, proposals, orchestrator). Separate from `/research-cycle` (growth lane). **Never ask for input.**
 
 ## Live State
 
-!`bash -c 'echo "=== DB FRESHNESS ==="; for db in ClinVar gnomAD PharmCAT CPIC; do f=$(find "$(pwd)/databases/" -iname "*${db}*" -type f 2>/dev/null | head -1); if [ -n "$f" ]; then days=$(( ($(date +%s) - $(stat -f%m "$f" 2>/dev/null || stat -c%Y "$f" 2>/dev/null || echo 0)) / 86400 )); echo "  $db: ${days}d old ($f)"; else echo "  $db: not found"; fi; done; echo "=== LAST MAINTENANCE ==="; tail -5 "$(pwd)/MAINTENANCE.log" 2>/dev/null || echo "(no log yet)"; echo "=== MAINTAIN STATE ==="; if [ -f "$(pwd)/MAINTAIN.md" ]; then findings=$(grep -c "^\- \*\*M[0-9]" "$(pwd)/MAINTAIN.md" 2>/dev/null || echo 0); queued=$(grep -c "\[queued\]" "$(pwd)/MAINTAIN.md" 2>/dev/null || echo 0); echo "  $findings findings, $queued queued"; else echo "  (no MAINTAIN.md — first run, create from template)"; fi; echo "=== DEFERRED ==="; grep -c "revisit:" "$(pwd)/MAINTAIN.md" 2>/dev/null || echo "0"; echo " deferred items"; echo "=== SCRIPTS ==="; ls scripts/modal_*.py 2>/dev/null | wc -l | tr -d " "; echo " modal scripts"' 2>&1 | head -30`
+!`bash -c '
+# State hash check (early exit)
+HASH_FILE=~/.claude/maintain-state-hash.txt
+ORCH_HASH=$(sqlite3 ~/.claude/orchestrator.db "SELECT count(*),group_concat(status) FROM tasks WHERE status IN (\"failed\",\"blocked\",\"pending\") ORDER BY id" 2>/dev/null || echo "na")
+RECEIPT_HASH=$(tail -3 ~/.claude/session-receipts.jsonl 2>/dev/null | md5 || echo "na")
+FINDING_HASH=$(grep -c "Status:\*\* \[ \]" ~/Projects/meta/improvement-log.md 2>/dev/null || echo "0")
+MAINTAIN_HASH=$(md5 < "$(pwd)/MAINTAIN.md" 2>/dev/null || echo "na")
+PROPOSAL_HASH=$(ls -la ~/.claude/steward-proposals/ 2>/dev/null | md5 || echo "na")
+DB_HASH=$(for db in ClinVar gnomAD PharmCAT CPIC; do f=$(find "$(pwd)/databases/" -iname "*${db}*" -type f 2>/dev/null | head -1); [ -n "$f" ] && stat -f%m "$f" 2>/dev/null; done | md5 || echo "na")
+GIT_HASH=$(for p in meta intel selve genomics; do cd ~/Projects/$p 2>/dev/null && git log --oneline -1 2>/dev/null; done | md5 || echo "na")
+CURRENT_HASH="${ORCH_HASH}|${RECEIPT_HASH}|${FINDING_HASH}|${MAINTAIN_HASH}|${PROPOSAL_HASH}|${DB_HASH}|${GIT_HASH}"
+PREV_HASH=$(cat "$HASH_FILE" 2>/dev/null || echo "")
+echo "$CURRENT_HASH" > "$HASH_FILE"
+if [ "$CURRENT_HASH" = "$PREV_HASH" ]; then
+  echo "NO STATE CHANGE since last tick. Logging noop."
+  echo "{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%S)\",\"action\":\"noop\",\"target\":\"state-unchanged\",\"result\":\"ok\",\"detail\":\"hash match\"}" >> "$(pwd)/maintenance-actions.jsonl" 2>/dev/null
+  exit 0
+fi
+echo "=== ORCHESTRATOR ==="; cd ~/Projects/meta && uv run python3 scripts/orchestrator.py status 2>/dev/null || echo "(unavailable)"
+echo ""; echo "=== RECENT SESSIONS ==="; tail -8 ~/.claude/session-receipts.jsonl 2>/dev/null | python3 -c "
+import sys,json
+for line in sys.stdin:
+  try:
+    r=json.loads(line.strip()); cost=\"\${:.2f}\".format(r.get(\"cost_usd\",0)); nc=len(r.get(\"commits\",[])); ts=r.get(\"ts\",\"?\")[:16]; proj=r.get(\"project\",\"?\"); reason=r.get(\"reason\",\"?\")
+    print(f\"  {ts} | {proj:10} | {cost:>6} | {nc}c | {reason:12}\")
+  except: pass
+" || echo "(no receipts)"
+echo ""; echo "=== UNIMPLEMENTED FINDINGS ==="; grep -B2 "Status:\*\* \[ \]" ~/Projects/meta/improvement-log.md 2>/dev/null | grep -E "(###|\*\*Status)" | head -10 || echo "(all clear)"
+echo ""; echo "=== PROPOSALS ==="; ls ~/.claude/steward-proposals/*.md 2>/dev/null | while read f; do echo "  $(basename "$f")"; done || echo "(none)"
+echo ""; echo "=== DB FRESHNESS ==="; for db in ClinVar gnomAD PharmCAT CPIC; do f=$(find "$(pwd)/databases/" -iname "*${db}*" -type f 2>/dev/null | head -1); if [ -n "$f" ]; then days=$(( ($(date +%s) - $(stat -f%m "$f" 2>/dev/null || echo 0)) / 86400 )); echo "  $db: ${days}d old"; else echo "  $db: not found"; fi; done
+echo ""; echo "=== MAINTAIN STATE ==="; if [ -f "$(pwd)/MAINTAIN.md" ]; then findings=$(grep -c "^\- \*\*M[0-9]" "$(pwd)/MAINTAIN.md" 2>/dev/null || echo 0); queued=$(grep -c "\[queued\]" "$(pwd)/MAINTAIN.md" 2>/dev/null || echo 0); echo "  $findings findings, $queued queued"; else echo "  (no MAINTAIN.md — first run, create from template)"; fi
+echo ""; echo "=== RECENT ACTIONS ==="; tail -5 "$(pwd)/maintenance-actions.jsonl" 2>/dev/null || echo "(none yet)"
+echo ""; echo "=== GIT (last 2h) ==="; for proj in meta intel selve genomics; do dir=~/Projects/$proj; [ -d "$dir/.git" ] || continue; out=$(cd "$dir" && git log --oneline --since="2 hours ago" 2>/dev/null | head -3); [ -n "$out" ] && echo "  $proj:" && echo "$out" | sed "s/^/    /"; done
+' 2>&1 | head -80`
+
+If state says "NO STATE CHANGE" -- report "noop" in one line and stop.
 
 ## Rate Limit Check
 
-Before each tick:
 ```bash
-CLAUDE_PROCS=$(pgrep claude 2>/dev/null | wc -l | tr -d ' ')
+CLAUDE_PROCS=$(pgrep -lf claude 2>/dev/null | wc -l | tr -d ' ')
 ```
-If `CLAUDE_PROCS >= 6`: skip tasks that spawn subagents (bio-verify, subagent dispatch). For LLM-heavy analysis, route through `llmx chat -m gemini-3-flash-preview` (free via CLI). Most maintain tasks are tool-based (Exa, git, scripts) and work fine rate-limited.
+If >= 5: skip subagent dispatch (Tier 2). Route LLM-heavy analysis through `llmx chat -m gemini-3-flash-preview` (free).
 
-## Each Tick: Pick ONE Task
+## Each Tick: Pick ONE Task by Priority
 
-Read `MAINTENANCE.log` to see what was done recently. Pick the highest-priority task that hasn't been run within its cadence window. Execute it. Log the result.
+### P0: Orchestrator Failures (from steward)
+If any tasks show failed/blocked:
+- Transient (network, rate limit): retry with `uv run python3 scripts/orchestrator.py retry <id>`
+- Permission denied: report what's blocked. Don't retry.
+- Blocked (approval gate): list what's waiting. Don't approve.
 
-**Queue priority override:** If MAINTAIN.md `## Queue` has 3+ items, skip discovery tasks and focus on dispatching fixes (see Execution Model below).
-
-### Task Rotation
-
-| Task | Cadence | How | Skills/Tools |
-|------|---------|-----|-------------|
-| **Database freshness** | Daily | Check file timestamps in `databases/`. Flag any >30d stale. If ClinVar stale, check for new release via Exa. | Exa search |
-| **Bio-verify audit** | Rotate: 1 script/tick | Run `just bio-verify-queue` to get the priority queue. Pick top item. Run `/bio-verify` on it. After completion, state auto-updates via `bio_verify_status.py --update`. | `/bio-verify` skill |
-| **Deferred probe** | Only after `revisit` date | Read MAINTAIN.md `## Deferred` items. Only probe items whose `revisit: YYYY-MM-DD` date has passed. HTTP-probe URLs, check release pages. | `requests` / Exa |
-| **Cross-check outputs** | Daily | Pick a random T1/T2 variant from review packets. Query biomedical MCP. Compare. | `mcp__biomedical__*` |
-| **Research memo staleness** | Weekly | Check if any ACTIVE research memos have related files changed since memo date. | `git log` + grep |
-| **Code quality scan** | Weekly | Run `/project-upgrade --quick` (diff-aware, Phase 0-2 only: findings, no execution). Append findings to MAINTAIN.md `## Findings` with IDs. | `/project-upgrade` skill |
-| **Audit sweep** | Biweekly | Run `/dispatch-research quick sweep` (3-5 audits, stop at findings). Append findings to MAINTAIN.md `## Findings` with IDs. | `/dispatch-research` skill |
-| **Benchmark drift** | After pipeline changes | Run `noncoding_benchmark.py benchmark` if any scoring script changed in last 7d. | Pipeline scripts |
-| **Calibration canary** | Weekly | Run `uv run python3 ~/Projects/meta/scripts/calibration-canary.py --mode sampling --difficulty hard --runs 10 --backend llmx --model gpt-4o-mini`. Uses llmx backend (no Claude API credits needed). Check hard canary accuracy is 30-70% (if >90%, canary isn't hard enough). Compare with prior run in `~/.claude/epistemic-metrics.jsonl`. | Meta scripts |
-| **Genomics canary gate** | After classification changes | Run `just canary` in genomics. Pre-commit hook catches this, but maintenance verifies the hook is working. | Genomics justfile |
-| **Doc currency** | Fallback only | Post-commit hook auto-fixes both codebase-map and CLAUDE.md counts on every commit (>5 drift). This task is a safety net: run `just check-codebase-map && just check-claude-md` in genomics only if hook might have been bypassed (--no-verify, external commits). | Justfile recipes |
-| **Infra coverage** | Monthly | In genomics: `git log --oneline --since="30 days ago"` → grep for fix/correct/error/wrong/repair → categorize by detection source (hook, bio-verify, model-review, manual). Compute catch rate (fixes caught by automated hooks / total fixes). Compare to prior month. Log to `~/Projects/meta/research/infra-gap-analysis-*.md` revision section. Target: >65% catch rate. | `git log` + manual categorization |
-
-### Running a Task
-
-**Preferred: inline** (maintenance tasks are fast, focused, don't need subagent context).
-
-For bio-verify, use the priority queue:
-```bash
-# Get the next file to verify
-uv run python scripts/bio_verify_status.py --queue
-```
-Then invoke the skill on the top item:
-```
-Skill(skill="bio-verify", args="scripts/{top_item}.py")
-```
-After verification, update tracking (the bio-verify skill does this in Step 9):
-```bash
-uv run python scripts/bio_verify_status.py --update scripts/{file}.py 2026-03-24 0
-```
-
-For deferred probes, probe directly:
-```bash
-uv run python3 -c "import requests; r = requests.get('{url}', timeout=10); print(r.status_code, r.headers.get('content-type',''))"
-```
-
-For cross-checks, use biomedical MCP tools directly.
-
-### Execution Model
-
-**Auto-fix deterministic, dispatch the rest.**
-
-**Auto-fix (Haiku, inline):** Unused import removal (ruff --fix), stale version string update (when authoritative source is known). These have deterministic postconditions verifiable by lint/syntax check. Fix inline, verify with `ruff check`, commit, log to MAINTAIN.md `## Fixed`.
-
-**Dispatch (Opus subagent):** Everything else — BROKEN_REFERENCE, DEAD_CODE, NAMING_INCONSISTENCY, HARDCODED, PATTERN_INCONSISTENCY, DUPLICATION, COUPLING, MISSING_SHARED_UTIL, ERROR_SWALLOWED, anything touching >1 file. Write to MAINTAIN.md `## Queue`, then dispatch:
+### P1: Queue Dispatch (if queue >= 3)
+Dispatch one Opus subagent for the oldest queued item:
 ```
 Agent(
-  prompt="Fix MAINTAIN.md queue item {id}: {description}. Files: {list}. Read the files, fix the issue, verify (run tests/lint), commit with [maintain] scope.",
+  prompt="Fix MAINTAIN.md queue item {id}: {description}. Files: {list}. Read files, fix, verify (run tests/lint), commit with [maintain] scope.",
   subagent_type="general-purpose",
   mode="bypassPermissions"
 )
 ```
-**Rate-limit gate:** Only dispatch subagent if `CLAUDE_PROCS < 4`. Otherwise, item stays queued for next tick.
-**One dispatch per tick max** to prevent cascading waste.
-**After subagent completes:** Update MAINTAIN.md item status from `[queued]` to `[fixed]` with commit hash.
+Rate-limit gate: skip if CLAUDE_PROCS >= 5.
 
-### Logging
+### P2: Implement Promoted Findings (from steward)
+Check "UNIMPLEMENTED FINDINGS" in state. For findings with `[ ]`:
+1. Read full context in improvement-log.md
+2. Verify 2+ recurrence (promotion criteria)
+3. Classify: autonomous or propose? (see Autonomy Rules)
+4. Autonomous -> implement, verify, commit: `[maintain] verb thing -- why`
+5. Propose -> write to `~/.claude/steward-proposals/` with evidence
 
-Append one line per task to `MAINTENANCE.log` (project root):
+### P2.5: Route Design-Review Proposals (from steward)
+Check if new design-review artifacts exist in `~/Projects/meta/artifacts/design-review/`. For proposals not yet routed to steward-proposals:
+1. Extract proposal (name, pattern, frequency, blast radius)
+2. Write to `~/.claude/steward-proposals/{slug}.md`
+3. Don't implement -- just route. P4 handles implementation.
+
+### P3: Routine Rotation (from maintain)
+Read `maintenance-actions.jsonl` for recent actions. Pick highest-priority task that hasn't run within cadence:
+
+| Task | Cadence | How |
+|------|---------|-----|
+| Database freshness | Daily | Check timestamps in databases/. Flag >30d stale. |
+| Bio-verify audit | Rotate: 1 script/tick | `just bio-verify-queue` -> top item -> `/bio-verify` |
+| Deferred probe | After revisit date | HTTP-probe URLs, check release pages |
+| Cross-check outputs | Daily | Pick T1/T2 variant, query biomedical MCP, compare |
+| Research memo staleness | Weekly | Check ACTIVE memos vs recent file changes |
+| Code quality scan | Weekly | `/project-upgrade --quick` (findings only) |
+| Calibration canary | Weekly | `calibration-canary.py --mode sampling --difficulty hard --runs 10 --backend llmx` |
+| Genomics canary | After classification changes | `just canary` in genomics |
+| Doctor.py health | Daily | `uv run python3 scripts/doctor.py` -- fix autonomous-scope issues |
+| Session cost tracking | Daily | Flag sessions >$5 or no-commit anomalies |
+| Infra coverage | Monthly | git log -> categorize fixes by detection source |
+| Doc currency | Fallback | `just check-codebase-map && just check-claude-md` |
+
+### P4: Implement Proposals (from steward)
+Read `~/.claude/steward-proposals/`. For files without "IMPLEMENTED":
+1. Classify: autonomous or propose-only?
+2. Autonomous -> implement, verify, commit
+3. Append `\n**Status:** IMPLEMENTED (YYYY-MM-DD)` to proposal file
+4. Propose-only -> skip (waiting for human)
+
+### P5: Triage & Escalation (from steward)
+- **Finding triage**: If >20 `[ ] proposed` in improvement-log: batch-triage (covered -> mark, no recurrence 14d -> monitoring, superseded -> mark, 2+ recurrence -> escalate to P2)
+- **Hook escalation**: If advisory hook has >100 warns/day for 3+ days AND <20% FP rate: write promote proposal to steward-proposals/
+
+### P6: All Clear
+Nothing actionable? Say so in one line. Don't invent work.
+
+## Tier 2: Dispatched Work
+
+These dispatch Opus subagents. Max 1 per tick. Rate-limit gate.
+
+| Task | Cadence | Skill/Tool |
+|------|---------|-----------|
+| Audit sweep | Biweekly | `/dispatch-research quick sweep` |
+| Benchmark drift | After pipeline changes | `noncoding_benchmark.py benchmark` |
+
+## Execution Model
+
+**Auto-fix deterministic, dispatch the rest.**
+
+Auto-fix (inline): Unused imports (ruff --fix), stale version strings. Verify with `ruff check`, commit, log.
+
+Dispatch (Opus subagent): Multi-file fixes, anything touching >1 file. Write to MAINTAIN.md `## Queue`, then dispatch.
+
+## Logging
+
+Append JSONL to `maintenance-actions.jsonl` (project root) for EVERY action:
+```json
+{"ts":"2026-04-06T12:00","action":"freshness","target":"ClinVar","result":"ok","detail":"12d old"}
+{"ts":"2026-04-06T12:05","action":"retry","target":"task-42","result":"ok","detail":"transient network failure"}
+{"ts":"2026-04-06T12:10","action":"implement","target":"finding-F23","result":"ok","detail":"commit abc1234"}
 ```
-2026-03-23T12:00 | freshness | ClinVar 12d OK, gnomAD 45d STALE | action: flag in MAINTAIN.md
-2026-03-23T12:30 | bio-verify | modal_vep.py | 3 findings, 0 critical
-2026-03-23T13:00 | deferred-probe | G-VEP phenomeportal.org | still 404, revisit: 2026-04-06
-2026-03-23T13:30 | dispatch | M003 BROKEN_REFERENCE | subagent spawned
-```
 
-### MAINTAIN.md Item IDs
+## MAINTAIN.md
 
-Items get monotonic IDs: M001, M002, ... Find the highest existing ID and increment. Items move through statuses: `[new]` → `[queued]` (multi-file) or `[fixed]` (auto-fix) → `[fixed]` (after dispatch) or `[deferred]`.
+Unified quality state. If it doesn't exist, create from `${CLAUDE_SKILL_DIR}/templates/MAINTAIN.md`.
+
+Sections: Findings, Queue, Fixed, Deferred, Strategic Notes, Drift Alerts.
+
+### Item IDs
+Monotonic: M001, M002... Find highest, increment.
 
 ### WIP Caps
-
-- Max 5 unprocessed findings in MAINTAIN.md `## Findings`
+- Max 5 unprocessed findings in `## Findings`
 - Max 3 queued items in `## Queue`
-- If queue is full (3 items), halt discovery and focus on dispatching fixes
-- If findings are full (5 items), skip writing new findings until existing ones are dispositioned
+- Queue full -> halt discovery, focus dispatch
+- Findings full -> skip new findings until dispositioned
 
-### Writing to Shared Files
+### Deferred Items
+- Have `revisit: YYYY-MM-DD`
+- Only probe after that date
+- 90 days stale -> auto-move to end with note
 
-**MAINTAIN.md** (project root) — the SWE quality lane state file. maintain owns this file. If it doesn't exist on first tick, create it from the template in `${CLAUDE_SKILL_DIR}/templates/MAINTAIN.md`.
+## Autonomy Rules
 
-**DECISIONS.md** — append when maintenance finds something that needs human context (informational — no approval checkboxes):
-```markdown
-### [maintain] gnomAD is 45 days stale (2026-03-23)
-gnomAD v4.1 files last downloaded 2026-02-06. v4.2 may be available.
-Options to consider: download v4.2 (~25GB) or defer until gnomAD v5.
-```
+### Autonomous (execute directly)
+- Meta-only files: CLAUDE.md, MEMORY.md, improvement-log, rules/
+- New advisory hooks in meta only
+- Measurement script tweaks
+- Retry transient orchestrator failures
+- Finding triage (ingest, promote, decay)
+- Rule additions from promoted findings (2+ recurrence verified)
 
-| File | Owner | Others | Purpose |
-|------|-------|--------|---------|
-| `MAINTAIN.md` | maintain | project-upgrade writes; dispatch-research writes | SWE quality state |
-| `MAINTENANCE.log` | maintain | human reads | Audit trail |
-| `DECISIONS.md` | any skill appends | human reads | Informational |
+### Propose Only (write proposal, don't execute)
+- Changes to intel, selve, genomics, or skills repos
+- Shared hooks or skills (affect 3+ projects)
+- New pipelines or schedule changes
+- Structural/architectural changes
+- Anything with multiple viable approaches
 
-### Deferred Item Management
-
-- Deferred items in MAINTAIN.md have `revisit: YYYY-MM-DD`
-- Only probe after that date (not every tick)
-- If still deferred after 90 days: auto-move to end of `## Deferred` with note "stale — reopen on request"
-- Update `revisit` date after each probe: +7 days for URLs, +30 days for blocked-on-platform items
-
-### What NOT to Do
-
-- Don't run full pipeline stages. Cross-checks use MCP or small queries.
-- Don't duplicate research-cycle's work. Check MAINTAIN.md before acting.
-- Don't ask for input. Write context to DECISIONS.md.
-- Don't write to CYCLE.md. That's the growth lane (research-cycle's file).
+### Never
+- Constitution or GOALS.md
+- Capital deployment or external contacts
+- Shared infrastructure deployment
 
 ## Error Recovery
 
-If a task fails (bio-verify crashes, MCP timeout, probe hangs):
-1. Log the error to MAINTENANCE.log with `| ERROR |`
-2. Skip that task for this tick
-3. Don't retry the same failing task consecutively
-4. Continue to next tick with a different task
+Task fails (crash, timeout, probe hang):
+1. Log error to JSONL with `"result":"error"`
+2. Skip for this tick
+3. Don't retry same failing task consecutively
+4. Continue next tick with different task
 
-If a subagent dispatch fails:
-1. Log the failure to MAINTENANCE.log
-2. Keep the item in MAINTAIN.md `## Queue` (don't remove it)
-3. Retry on next tick if rate-limit allows
+Subagent fails:
+1. Log failure to JSONL
+2. Keep item in Queue (don't remove)
+3. Retry next tick if rate-limit allows
 
 ## Operating Rules
 
-1. **One task per tick.** Pick the most overdue task. Exception: queue-full triggers dispatch priority.
-2. **Log everything.** MAINTENANCE.log is the audit trail.
-3. **Report in 1-2 lines.** Task, result, next scheduled.
-4. **Auto-fix deterministic, dispatch the rest.** Only fix what has a verifiable postcondition (ruff check passes). Everything else goes to an Opus subagent.
-5. **Respect revisit dates.** Don't probe deferred items before their revisit date.
+1. **One task per tick.** Highest priority. Exception: queue-full triggers dispatch.
+2. **Log everything.** JSONL is the audit trail.
+3. **Report in 1-3 lines.** What, why, next.
+4. **Auto-fix deterministic, dispatch the rest.**
+5. **Respect revisit dates.**
 6. **Don't touch CYCLE.md.** Growth lane is separate.
+7. **Idempotent.** Check action log and git log before acting. If you did it last tick, skip.
+8. **Ultrathink for implementation.** When writing code or modifying rules, use extended thinking.
+9. **Classify before acting.** Every action passes autonomy check.
 
 $ARGUMENTS
