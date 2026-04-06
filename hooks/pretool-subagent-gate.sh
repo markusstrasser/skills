@@ -218,6 +218,23 @@ if [ -n "$PROMPT" ]; then
     fi
 fi
 
+# Check 9: Inject write_json_atomic guidance for genomics project agents
+# Agents consistently use json.dump(…, fh) which fails the ratchet test.
+# 3/3 measurement agents in 2026-04-05 session needed post-hoc fixes.
+if [ -n "$PROMPT" ]; then
+    CWD_CHECK=$(pwd)
+    if echo "$CWD_CHECK" | grep -q "genomics"; then
+        HAS_JSON_GUIDANCE=$(echo "$PROMPT" | grep -c "write_json_atomic" || true)
+        if [ "$HAS_JSON_GUIDANCE" -eq 0 ]; then
+            PROMPT_WRITES=$(echo "$PROMPT" | grep -ciE '(write|save|output).*(json|file)' || true)
+            if [ "$PROMPT_WRITES" -gt 0 ]; then
+                CHECK_IDS="${CHECK_IDS}9,"
+                WARNINGS="${WARNINGS}GENOMICS JSON: Use write_json_atomic from variant_evidence_core, not json.dump(…, fh). Ratchet test blocks new json.dump-to-file. "
+            fi
+        fi
+    fi
+fi
+
 # Emit combined warnings
 if [ -n "$WARNINGS" ]; then
     ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "warn" "checks=${CHECK_IDS%,} ${WARNINGS:0:80}" 2>/dev/null || true
