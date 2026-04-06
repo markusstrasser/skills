@@ -157,17 +157,18 @@ Sections: Verified Findings | Deferred | Rejected | Where I Was Wrong | Gemini E
 
 If synthesis has INCLUDE items with file:line citations, invoke `/verify-findings` on the synthesis before Step 7. Only implement CONFIRMED or CORRECTED findings. Drop HALLUCINATED. Skip if all findings are architectural or fewer than 3 code citations.
 
-### Step 6.8: Over-Adoption Check (Mandatory before rewriting any artifact)
+### Step 6.8: Over-Adoption Check
 
-Before applying review findings to the original artifact, answer out loud:
+The review models had less context than you. Before rewriting the artifact, answer:
 
-1. **Do you fully agree with the disposition?** The review models had less project context than you. State where you disagree and why — don't just adopt wholesale.
-2. **Did the models have the right context, or did you have more?** If you assembled the context file, you shaped what they reviewed. Name any context you had that they didn't.
-3. **For each INCLUDE finding that would change the plan's direction:** Does the premise matter for this system? Enterprise-grade concerns (SLAs, shadow experiments, 95% recall thresholds) may not apply to personal infrastructure.
+1. **Where do you disagree with the disposition, if anywhere?** "Nowhere — I agree with all of it" is a valid answer. Don't invent disagreements.
+2. **Did you have context the models didn't?** If yes, name it. If the context file was comprehensive, say so and move on.
 
-If this check changes any dispositions, update the synthesis before proceeding. Noop is fine — but make the check explicit.
+Valid outcomes:
+- **"No changes."** Proceed to Step 7 with disposition as-is.
+- **"Revising N items."** State which and why, update synthesis, then Step 7.
 
-**Why:** Session 2026-04-06 — GPT-5.4's "62.5% scheduler reduction" math was correct but irrelevant (personal system, most ticks are noops). The synthesizer rewrote the entire plan around it without questioning whether the premise mattered. Cost: extra revision cycle + user had to prompt the sanity check manually.
+**Why this exists:** Models produce rigorous-looking analysis that can override your judgment through sheer detail. The check is a pause, not a filter — most times you'll agree and continue.
 
 ### Step 7: Close the Loop (Mandatory if INCLUDE items exist)
 
