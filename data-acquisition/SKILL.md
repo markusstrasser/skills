@@ -21,7 +21,12 @@ What are you downloading?
    → curl/requests first. If SSL fails → fallback chain below
    → If Cloudflare/bot detection → curl_cffi or Scrapfly
 
-2. Page behind login/SSO?
+2. Page behind cookie-based login (Twitter, Instagram, Pinterest)?
+   → chrome-cookies — extract session cookies from Chrome's DB, use with requests
+   → Zero setup, no browser automation needed, works while Chrome is running
+   → Falls back gracefully: if cookies expired, tells you to re-login
+
+2b. Page behind SSO/Keycloak/Google login?
    → claude-in-chrome (user's live Chrome session) — ONLY reliable approach
    → STOP if you hit CAPTCHA, MFA, or login wall — ask the human
 
@@ -71,6 +76,7 @@ Per-tool details, code examples, and setup in `references/`.
 
 | Tool | When | Free? | Reference |
 |------|------|-------|-----------|
+| chrome-cookies | Cookie-based auth (Twitter, IG, Pinterest) — extract from Chrome DB | Yes | [chrome-cookies.md](references/chrome-cookies.md) |
 | plain requests/curl | Default first attempt, works ~80% | Yes | [plain-requests.md](references/plain-requests.md) |
 | curl_cffi | Cloudflare/TLS fingerprint blocks | Yes | [curl-cffi.md](references/curl-cffi.md) |
 | Scrapfly | Anti-bot + JS rendering curl_cffi can't beat | Paid | [scrapfly.md](references/scrapfly.md) |
@@ -112,7 +118,7 @@ Each strategy checks for **HTML traps** (got a landing page instead of data) and
 
 | Approach | Failure mode |
 |----------|-------------|
-| **browser_cookie3 for SSO sites** | Extracts cookies from Chrome's cookie DB, but server-side sessions don't transfer. Site sees empty session. |
+| **browser_cookie3 for SSO sites** | Extracts cookies from Chrome's cookie DB, but server-side sessions don't transfer. Site sees empty session. For cookie-auth sites (Twitter, IG, Pinterest), use chrome-cookies module instead — same technique but maintained, tested, with auto-profile detection. |
 | **Chrome `--remote-debugging-port` on macOS** | App Sandbox prevents port from opening. `lsof` shows nothing. |
 | **Playwright persistent context + Chrome profile** | Copies cookies/local storage but SSO session state lives server-side. Doesn't work for ICPSR, Google, etc. |
 | **Browserbase + Google SSO** | Google fingerprints cloud browser environments and blocks login. |
@@ -131,5 +137,5 @@ Always verify downloads — HTML traps, truncated files, wrong schemas are commo
 1. **Don't build Playwright automation for SSO sites.** Use claude-in-chrome.
 2. **Don't retry a wall with fancier code.** If the blocker is access-tier (not technical), stop coding.
 3. **Don't accumulate probe/download scripts.** Document the lesson, delete the script.
-4. **Don't use `browser_cookie3` for anything beyond simple cookie-auth sites.** SSO breaks it.
+4. **Don't use `browser_cookie3`.** Use `chrome_cookies` module instead (selve/scripts/tools/chrome_cookies.py). Same Keychain+AES approach but maintained, with auto-profile detection. Neither works for SSO.
 5. **Don't pay for Scrapfly/Browserbase before trying curl_cffi.** Free first, paid last.
