@@ -25,4 +25,4 @@ if ls .model-review/${TODAY}-*${PLAN_SLUG}* 2>/dev/null | grep -q .; then
   exit 0
 fi
 
-echo "Substantial plan written (${LINES} lines). Consider /model-review before executing — then check: do the models' findings hold given your project context? Revise cosigned/deferred/rejected as needed."
+echo "Substantial plan written (${LINES} lines). Run /model-review now BEFORE asking for plan approval or execution. Do not prompt the user to approve the plan until after the review completes and findings are incorporated."
