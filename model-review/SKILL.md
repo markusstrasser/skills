@@ -60,6 +60,13 @@ Write material to a single context file. The dispatch script adds constitutional
 
 **Pre-flight — constitutional check:** Before building context, check for constitution (standalone CONSTITUTION.md or `## Constitution` section in CLAUDE.md) and GOALS.md. If found, inject as preamble. If neither exists, warn user: *"No constitution or GOALS.md found. Reviews will lack project-specific anchoring."* Proceed anyway.
 
+**Pre-flight — scope declaration (mandatory):** Include a `## Scope` block near the top of the context file with:
+- **Target users:** personal / team / multi-tenant / public
+- **Scale:** current entity counts AND designed-for scale (e.g., "currently 40 compounds, designed for thousands of subjects")
+- **Rate of change:** how often does new data arrive?
+
+This prevents the #1 review failure mode: models optimizing for the wrong scale. Evidence: selve UMLS review (2026-04-06) — GPT scored a plan 27/100 as "over-engineered for 105 personal entities" when the actual scope was multi-user scalable. Required full re-dispatch after scope correction.
+
 See `references/context-assembly.md` for detailed context gathering (narrow, broad, auto-assembled).
 
 #### Context Assembly Anti-Patterns (Critical — Shared Context = Shared Wrong Answers)
@@ -77,6 +84,7 @@ When both models converge on the same wrong recommendation, the cause is almost 
 | **Ambiguous domain terminology** — terms that mean different things in different contexts | Models share the same misread | Define terms precisely. Disambiguate similar-named systems on first use. |
 | **Missing project identity** in cross-project reviews | Models apply principles too literally to unfamiliar projects | Include 2-3 line identity per project |
 | **Constitutional principles without exception clauses** | Models apply principles rigidly without carve-outs | Co-locate exceptions with principles |
+| **Missing scope declaration** — not stating target users and designed-for scale | Models assume personal/small when reviewing shared infra, or assume production when reviewing prototypes | Always include scope block: target users, designed-for scale, current scale, rate of change |
 
 ### Step 2.5: Review Depth
 
