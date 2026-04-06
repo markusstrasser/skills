@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # PostToolUse hook — matcher: Skill
-# Logs skill completion with duration and exit status.
+# Logs skill invocation with project, duration, exit status.
+# Data feeds skill-usage-report.py (30-day analysis, SKILL0 pattern).
 
 set -euo pipefail
 
@@ -19,21 +20,24 @@ except:
 
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 SESSION="${CLAUDE_SESSION_ID:-unknown}"
+PROJECT=$(basename "${CLAUDE_CWD:-$(pwd)}")
 
-# Calculate duration
+# Calculate duration (macOS date lacks %N — fallback gracefully)
 DURATION_MS=0
 if [ -f "$STARTFILE" ]; then
     START_NS=$(cat "$STARTFILE")
-    NOW_NS=$(date +%s%N)
-    DURATION_MS=$(( (NOW_NS - START_NS) / 1000000 ))
+    NOW_NS=$(python3 -c "import time; print(int(time.time_ns()))" 2>/dev/null || echo 0)
+    if [ "$NOW_NS" -gt 0 ] && [ "$START_NS" -gt 0 ] 2>/dev/null; then
+        DURATION_MS=$(( (NOW_NS - START_NS) / 1000000 ))
+    fi
     rm -f "$STARTFILE"
 fi
 
-# Check if tool result indicates error (exit_code from CLAUDE_TOOL_RESULT)
+# Check if tool result indicates error
 EXIT_CODE=0
 if echo "${CLAUDE_TOOL_RESULT:-}" | grep -qi "error\|failed\|exception"; then
     EXIT_CODE=1
 fi
 
-printf '{"ts":"%s","event":"skill_complete","skill":"%s","session":"%s","duration_ms":%d,"exit_code":%d}\n' \
-    "$TS" "$SKILL" "$SESSION" "$DURATION_MS" "$EXIT_CODE" >> "$LOGFILE"
+printf '{"ts":"%s","event":"skill_complete","skill":"%s","session":"%s","project":"%s","duration_ms":%d,"exit_code":%d}\n' \
+    "$TS" "$SKILL" "$SESSION" "$PROJECT" "$DURATION_MS" "$EXIT_CODE" >> "$LOGFILE"
