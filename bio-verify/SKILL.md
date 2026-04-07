@@ -54,6 +54,8 @@ No arguments = `--sweep` (scan all `scripts/*.py` AND `config/*.json` for files 
 
 ### Step 1: Identify target files
 
+**selve CWD:** If CWD is selve (has `docs/entities/genes/` and `src/selve/pgx.py`), see `references/selve-claim-patterns.md` for claim extraction patterns. Run `uv run python3 scripts/verify_pgx_consistency.py` first (12 local checks, no API calls).
+
 If `--sweep`, find files containing hardcoded biological claims. **Scan both scripts and config JSON:**
 
 ```bash
