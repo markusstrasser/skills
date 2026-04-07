@@ -72,6 +72,23 @@ Neither CLI truncates user input (verified from source code). Input goes directl
 
 **What forces API transport** (costs money): `--max-tokens`, `--stream`, `--search`. For Gemini, avoid `--stream` unless CLI rate-limited — without it, calls route through CLI (free). Hang bug on thinking models fixed in gemini-cli 0.32.1+.
 
+### Gemini API Service Tiers
+
+When API transport is needed (or CLI free tier is restricted), select the tier via `service_tier`:
+
+| Tier | Discount | Latency | Use case |
+|------|----------|---------|----------|
+| Standard | 0% | seconds | Interactive, default |
+| Flex | 50% | 1-15 min target | Cron jobs, background reviews, session-analyst, non-interactive dispatch |
+| Priority | +75-100% | sub-second | Not needed for our workloads |
+| Batch | 50% (async) | up to 24h | Bulk embedding/eval jobs — requires async rewrite |
+
+**Default for scheduled/background work: Flex.** Same discount as Batch, synchronous (no code rewrite). Flex is "sheddable" (preempted under load), acceptable for non-user-facing dispatch.
+
+**Implicit caching** auto-enabled on Gemini 2.5+. Repeated system prompts get cache hits automatically — no explicit cache setup needed for our pattern of skill preambles + varying user content.
+
+**Note:** llmx does not yet support `service_tier` — would need implementation when/if CLI free tier is restricted.
+
 ### Piping Context Files
 
 CLIs accept `-f FILE` for context. Use `.claude/overviews/` (5-10KB compressed project summaries) for codebase-aware queries at zero cost:

@@ -191,6 +191,19 @@ All three frontier families now support 1M natively (Claude GA March 13, GPT-5.4
 
 ---
 
+## 9b. Inference Service Tiers
+
+| Tier | Discount | Latency | When to use |
+|------|----------|---------|-------------|
+| Standard | 0% | seconds | Interactive, default |
+| Flex | 50% | 1-15 min | Background/cron dispatch, non-interactive chains |
+| Priority | +75-100% | sub-second | User-facing production apps |
+| Batch (async) | 50% | up to 24h | Bulk eval/embedding jobs |
+
+Pass `service_tier` parameter in generation calls. Flex is synchronous (no async rewrite) and "sheddable" (preempted under load). For scheduled agent dispatch (reviews, analysis), Flex is the default choice when API is needed.
+
+---
+
 ## 10. Structured Output / JSON
 
 ```python
