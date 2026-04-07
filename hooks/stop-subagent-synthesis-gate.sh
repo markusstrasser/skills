@@ -111,7 +111,7 @@ for f in glob.glob("/tmp/claude-agent-paths-*"):
 if not candidates and not promised_paths:
     sys.exit(0)
 
-# If we have promised paths that don't exist, block stop
+# If we have promised paths that do not exist, block stop
 if promised_paths and not candidates:
     missing = ", ".join(os.path.basename(p) for p in list(promised_paths)[:3])
     state_file_p = f"/tmp/synthesis-gate-{state_key}"
