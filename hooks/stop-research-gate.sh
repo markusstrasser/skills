@@ -75,8 +75,11 @@ for f in research_files:
     if not os.path.isfile(fpath):
         continue
     with open(fpath) as fh:
-        if not SOURCE_TAG.search(fh.read()):
-            missing.append(f)
+        content = fh.read()
+    if not content.strip():
+        continue  # Skip empty files (e.g., llmx -o placeholder before model finishes)
+    if not SOURCE_TAG.search(content):
+        missing.append(f)
 
 if missing:
     import subprocess as _sp
