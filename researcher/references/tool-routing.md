@@ -35,9 +35,11 @@ Use whichever of these are available in the current project's `.mcp.json`:
 | `mcp__scite__search_literature` | Citation-stance search (1.6B+ citations) | Disconfirmation, literature audits, checking if a claim is supported/contrasted. Returns Smart Citation snippets with stance. |
 | `mcp__firecrawl__firecrawl_scrape` | JS-heavy page scraper | Financial dashboards, dynamic sites. Only if configured. |
 | `mcp__context7__*` | Library documentation | API/framework questions |
+| `mcp__parallel__parallel_task` | Deep web research with code-execution sandbox | Complex multi-step questions needing cross-referencing. Processor tiers: lite/core/ultra/ultra8x. 70-82% on DeepSearchQA. |
+| `mcp__parallel__parallel_search` | Quick web-grounded lookup (lite tier) | Simple factual questions with citations (~$0.005/call). Alternative to verify_claim. |
 | WebFetch | Fetch specific URLs | Known databases, filings, regulatory |
 
-Not all tools exist in every project. User-scope MCPs (scite, perplexity, brave-search, exa) are available everywhere. `research` MCP (research-mcp) is per-project.
+Not all tools exist in every project. User-scope MCPs (scite, perplexity, brave-search, exa, parallel) are available everywhere. `research` MCP (research-mcp) is per-project.
 
 ## EBF3 Benchmark — Tool-Class Routing (empirical, N=1)
 
