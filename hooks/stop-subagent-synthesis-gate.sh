@@ -86,7 +86,52 @@ for d in search_dirs:
     except OSError:
         pass
 
-if not candidates:
+# --- Check for promised-but-missing output files ---
+# If dispatch prompt mentioned a specific output path and that file
+# does not exist, the agent exhausted turns without writing. Block stop.
+# This catches the dominant failure mode: search momentum → no synthesis.
+#
+# Strategy: scan ALL claude-agent-paths-* temp files (from pretool gate
+# Check 8) for paths that do not exist. PPID chain is unreliable across
+# agent spawning, so we check all recent dispatch logs within 30 min.
+promised_paths = set()
+for f in glob.glob("/tmp/claude-agent-paths-*"):
+    try:
+        if time.time() - os.path.getmtime(f) > 1800:  # 30 min
+            continue
+        for line in open(f):
+            p = line.strip()
+            if p and not os.path.isfile(p):
+                # Only count paths in research/docs directories (not scratch)
+                if any(d in p for d in ["research", "docs", "artifacts"]):
+                    promised_paths.add(p)
+    except Exception:
+        pass
+
+if not candidates and not promised_paths:
+    sys.exit(0)
+
+# If we have promised paths that don't exist, block stop
+if promised_paths and not candidates:
+    missing = ", ".join(os.path.basename(p) for p in list(promised_paths)[:3])
+    state_file_p = f"/tmp/synthesis-gate-{state_key}"
+    if os.path.exists(state_file_p):
+        # Already fired once — let the agent go (avoid infinite block)
+        sys.exit(0)
+    try:
+        open(state_file_p, "w").write(str(time.time()))
+    except Exception:
+        pass
+    output = {
+        "decision": "block",
+        "reason": (
+            f"OUTPUT FILE MISSING: {missing} was promised in your dispatch "
+            "prompt but was never created. You exhausted your turns searching "
+            "without writing findings. Write your synthesis NOW — even partial "
+            "results are valuable. Use the Write tool to create the file."
+        ),
+    }
+    print(json.dumps(output))
     sys.exit(0)
 
 # --- Check each candidate for substance ---
