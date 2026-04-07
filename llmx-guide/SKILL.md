@@ -58,12 +58,14 @@ GPT-5.4 with reasoning burns time BEFORE producing output. Non-streaming holds t
 ### 3. Output Capture — Use `-o FILE`, Never `> file`
 
 ```bash
-# CORRECT:
+# CORRECT — -o auto-enables streaming for incremental file writes:
 llmx -m gpt-5.4 -f context.md --timeout 600 -o output.md "query"
 
 # BROKEN — 0 bytes until exit:
 llmx -m gpt-5.4 "query" > output.md
 ```
+
+**`-o` now auto-enables streaming** (as of 2026-04-07). Non-streaming held all output until full response, so timeouts or API errors produced 0-byte files silently. With auto-streaming, chunks write incrementally — partial output survives timeouts. If the file is still 0 bytes, llmx emits `[llmx:WARN]` to stderr.
 
 From Claude Code: set Bash tool `timeout: 660000` (11 min) — must exceed llmx's `--timeout`.
 
@@ -90,8 +92,8 @@ See [models.md](references/models.md) for full model table, token limits, and re
 
 | Provider | Default transport | Forces API fallback |
 |----------|------------------|---------------------|
-| `google` | Gemini CLI (free) | `--schema`, `--search`, `--stream`, `--max-tokens` |
-| `openai` | Codex CLI (free) | `--search`, `--stream` |
+| `google` | Gemini CLI (free) | `--schema`, `--search`, `--stream`, `--max-tokens`, `-o` |
+| `openai` | Codex CLI (free) | `--search`, `--stream`, `-o` |
 | `claude` | Claude CLI | v0.6.0+, non-nested contexts only |
 
 Both CLIs ignore explicit `--reasoning-effort` — they use their own defaults. See [transport-routing.md](references/transport-routing.md) for CLI vs API decision table, context budget, piping patterns.
