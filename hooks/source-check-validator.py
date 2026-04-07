@@ -154,10 +154,13 @@ def main():
 
         if claim_count > 0 and tag_count > 0:
             ratio = claim_count / tag_count
-            if ratio > 5:
+            # README/index files are link inventories — relax density to 10:1
+            is_index = os.environ.get("IS_INDEX", "false").lower() == "true"
+            max_ratio = 10 if is_index else 5
+            if ratio > max_ratio:
                 issues = [
                     f"Tag density in new content: {claim_count} claims / {tag_count} tags "
-                    f"(ratio {ratio:.0f}:1, max 5:1)."
+                    f"(ratio {ratio:.0f}:1, max {max_ratio}:1)."
                 ]
                 _emit(mode, fpath, issues)
                 sys.exit(2 if mode == "block" else 0)

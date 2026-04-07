@@ -41,6 +41,10 @@ echo "$FPATH" | grep -qE "$RESEARCH_PATHS" || exit 0
 # Decision records document choices, not claims — skip provenance check
 echo "$FPATH" | grep -qE '/decisions/' && exit 0
 
+# README/index files are link inventories, not novel claims — relax density to 10:1
+IS_INDEX=false
+basename "$FPATH" | grep -qiE '^README|^INDEX|^SYNTHESIS' && IS_INDEX=true
+
 # Skip non-prose files
 case "$FPATH" in
     *.py|*.sh|*.json|*.yaml|*.yml|*.toml|*.cfg|*.ini|*.sql|*.csv|*.tsv|*.parquet)
@@ -52,4 +56,5 @@ esac
 
 # Delegate to Python validator — disable trap so exit 2 propagates
 trap - ERR
+export IS_INDEX
 echo "$INPUT" | python3 "$(dirname "$0")/source-check-validator.py"
