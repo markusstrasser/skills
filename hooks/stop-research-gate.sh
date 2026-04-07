@@ -65,8 +65,8 @@ if not research_files:
 
 # Check each research file for source tags
 SOURCE_TAG = re.compile(
-    r'\[SOURCE:|\[DATABASE:|\[DATA\]|\[INFERENCE\]|\[TRAINING-DATA\]|'
-    r'\[PREPRINT\]|\[FRONTIER\]|\[UNVERIFIED\]|\[[A-F][1-6]\]'
+    r'\[SOURCE:|\[DATABASE:|\[DATA[\]:]|\[INFERENCE[\]:]|\[TRAINING-DATA[\]:]|'
+    r'\[PREPRINT[\]:]|\[FRONTIER[\]:]|\[UNVERIFIED[\]:]|\[[A-F][1-6]\]'
 )
 
 missing = []
