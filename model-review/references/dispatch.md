@@ -60,6 +60,20 @@ uv run python3 ~/Projects/meta/scripts/model-review.py \
   "What's wrong with this [thing being reviewed]"
 ```
 
+### `--questions` Flag (Per-Axis Questions)
+
+Use `--questions` to customize the review question per axis. Pass a JSON file mapping axis names to questions:
+
+```bash
+echo '{"arch": "Focus on the DAG wiring", "formal": "Verify the cost model assumptions"}' > questions.json
+uv run python3 ~/Projects/meta/scripts/model-review.py \
+  --context context.md --topic "$TOPIC" --project "$(pwd)" --extract \
+  --questions questions.json \
+  "Default question for axes not in the JSON"
+```
+
+Axes not present in the JSON file fall back to the positional `question` argument.
+
 ### `--context-files` Flag (Auto-Assembly)
 
 Use `--context-files` to skip manual assembly. The script reads each file spec and concatenates with headers:

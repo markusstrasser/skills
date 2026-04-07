@@ -75,6 +75,15 @@ uv run python3 ~/Projects/meta/scripts/model-review.py \
 
 Set `timeout: 660000` on the Bash tool call. Add `--extract` to all standard/deep reviews.
 
+For per-axis question customization, write a JSON file and pass `--questions`:
+```bash
+echo '{"arch": "Focus on cross-cutting concerns", "formal": "Verify the cost model math"}' > questions.json
+uv run python3 ~/Projects/meta/scripts/model-review.py \
+  --context context.md --topic "$TOPIC" --project "$(pwd)" --extract \
+  --questions questions.json
+```
+Axes not in the JSON fall back to the positional question.
+
 ### Depth Presets
 
 Classify by blast radius, not file count:
@@ -145,16 +154,14 @@ If synthesis has INCLUDE items with file:line citations, invoke `/verify-finding
 
 ### Over-Adoption Check
 
-The review models had less context than you. Before rewriting the artifact, answer:
+The disposition file includes an **Agent Response** template at the bottom (added by `--extract`). Fill it in before implementing any findings — the two questions are:
 
-1. **Where do you disagree with the disposition, if anywhere?** "Nowhere — I agree with all of it" is a valid answer. Don't invent disagreements.
-2. **Did you have context the models didn't?** If yes, name it. If the context file was comprehensive, say so and move on.
+1. **Where do you disagree with the disposition?** "Nowhere" is valid. Don't invent disagreements.
+2. **Context you had that the models didn't?** If the context file was comprehensive, say so.
 
-Valid outcomes:
-- **"No changes."** Proceed to Step 6 with disposition as-is.
-- **"Revising N items."** State which and why, update synthesis, then Step 6.
+Write your answers directly in `disposition.md`. Valid outcomes: "No changes" (proceed) or "Revising N items" (state which, why, update synthesis).
 
-**Why this exists:** Models produce rigorous-looking analysis that can override your judgment through sheer detail. The check is a pause, not a filter — most times you'll agree and continue.
+**Why this exists:** Models produce rigorous-looking analysis that can override your judgment through sheer detail. The template is in the artifact so it's visible every time you read the disposition — architecture over instructions.
 
 ## 6. Close the Loop (Mandatory if INCLUDE items exist)
 
