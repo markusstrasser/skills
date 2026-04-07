@@ -27,49 +27,24 @@ If 3+ sessions active: prefix questions with project name + review topic. Batch 
 
 **Memory pressure gate:** Before dispatching subagents, count active Claude/Codex processes. On macOS/BSD, `pgrep` does NOT support `-c`; use `pgrep -lf claude | wc -l` or `~/.claude/active-agents.json`. If count >= 4, skip subagent delegation and work directly with llmx CLI calls. 50% of sessions hit memory pressure on dispatch.
 
-## Dispatch Models
+## 1. Assemble Context
 
-| Role | Model | Use |
-|------|-------|-----|
-| **Gemini** (pattern/arch) | `gemini-3.1-pro-preview` | Deep review — cross-referencing, pattern detection |
-| **GPT** (quantitative) | `gpt-5.4 --reasoning-effort high --stream --timeout 600 --max-tokens 32768` | Deep review — logical inconsistencies, cost-benefit. **Must use --max-tokens 32768** (reasoning tokens count against limit; 16384 = empty output). |
-| **Gemini Fast** | `gemini-3-flash-preview` | Extraction in Step 5, mechanical audits |
-| **GPT Fast** | `gpt-5.3-chat-latest --stream` | Extraction in Step 5, fact-checking |
+Write review material to a single context file. **Do NOT manually create `.model-review/` directories, write constitutional preambles, or assemble per-model files.** The script handles all of this.
 
-**Why these:** Adversarial needs deep reasoning from both sides. Pro for large-context cross-referencing; GPT-5.4 high-reasoning for formal fault-finding. **Fast models for extraction only** — Step 5 is mechanical, fast models do it equally well at 10x lower cost.
+**Pre-flight — constitutional check:** Before building context, check for constitution (standalone CONSTITUTION.md or `## Constitution` section in CLAUDE.md) and GOALS.md. If found, the script injects as preamble. If neither exists, warn user: *"No constitution or GOALS.md found. Reviews will lack project-specific anchoring."* Proceed anyway.
 
-**Reasoning model caveat:** Research on LLM-as-judge biases (position, self-preference, sycophancy) was measured on pre-reasoning models. Reasoning models show measurably lower sycophancy (SYCON Bench, arXiv:2505.23840). Correlated error rates (60% shared wrong answers, Kim et al. ICML 2025) were on pre-reasoning Helm models — actual for current reasoning models is likely lower but unmeasured. Treat as upper bounds.
-
-## CLI-First Prompting
-
-`llmx -p google` and `llmx -p openai` fall back to API transport with `-s`. To keep CLI transport, inline system instructions with `<system>...</system>` and omit `-s`. That `<system>` block is prompt text (not a true system role) — it preserves CLI transport, which is cheaper and more reliable. Use `-s` only when you need true system channel or structured API features.
-
-## The Process
-
-### Step 1: Define Review Target
-
-State clearly: `$ARGUMENTS`. Identify the decision/recommendation/code under review, who made it, what evidence exists.
-
-### Step 2: Assemble Context
-
-Write material to a single context file. The dispatch script adds constitutional preamble automatically.
-
-**Do NOT manually create `.model-review/` directories, write constitutional preambles, or assemble per-model files.** The script handles all of this.
-
-**Token budgets:** Gemini Pro sweet spot 80-150K (max ~800K). GPT-5.4 sweet spot 40-100K (max ~400K). Compact aggressively — 50K context = 5-10 min; 2K summary = ~1 min. Summarize rather than concatenate full files.
-
-**Pre-flight — constitutional check:** Before building context, check for constitution (standalone CONSTITUTION.md or `## Constitution` section in CLAUDE.md) and GOALS.md. If found, inject as preamble. If neither exists, warn user: *"No constitution or GOALS.md found. Reviews will lack project-specific anchoring."* Proceed anyway.
-
-**Pre-flight — scope declaration (mandatory):** Include a `## Scope` block near the top of the context file with:
+**Pre-flight — scope declaration (mandatory):** Include a `## Scope` block near the top:
 - **Target users:** personal / team / multi-tenant / public
 - **Scale:** current entity counts AND designed-for scale (e.g., "currently 40 compounds, designed for thousands of subjects")
 - **Rate of change:** how often does new data arrive?
 
 This prevents the #1 review failure mode: models optimizing for the wrong scale. Evidence: selve UMLS review (2026-04-06) — GPT scored a plan 27/100 as "over-engineered for 105 personal entities" when the actual scope was multi-user scalable. Required full re-dispatch after scope correction.
 
+**Token budgets:** Gemini Pro sweet spot 80-150K (max ~800K). GPT-5.4 sweet spot 40-100K (max ~400K). Compact aggressively — 50K context = 5-10 min; 2K summary = ~1 min. Summarize rather than concatenate full files.
+
 See `references/context-assembly.md` for detailed context gathering (narrow, broad, auto-assembled).
 
-#### Context Assembly Anti-Patterns (Critical — Shared Context = Shared Wrong Answers)
+### Context Anti-Patterns (Shared Context = Shared Wrong Answers)
 
 When both models converge on the same wrong recommendation, the cause is almost always shared context bias. Check for these before dispatching:
 
@@ -83,46 +58,49 @@ When both models converge on the same wrong recommendation, the cause is almost 
 | **Presupposing new infra should exist** — reviewing NEW system without incident history | Models critique within frame instead of questioning it | Include incident history. Prompt: "cite the specific past incident each component prevents. If none, say SPECULATIVE." |
 | **Ambiguous domain terminology** — terms that mean different things in different contexts | Models share the same misread | Define terms precisely. Disambiguate similar-named systems on first use. |
 | **Missing project identity** in cross-project reviews | Models apply principles too literally to unfamiliar projects | Include 2-3 line identity per project |
-| **Constitutional principles without exception clauses** | Models apply principles rigidly without carve-outs | Co-locate exceptions with principles |
-| **Missing scope declaration** — not stating target users and designed-for scale | Models assume personal/small when reviewing shared infra, or assume production when reviewing prototypes | Always include scope block: target users, designed-for scale, current scale, rate of change |
+| **Missing scope declaration** — not stating target users and designed-for scale | Models assume personal/small when reviewing shared infra, or assume production when reviewing prototypes | Always include scope block (see above) |
 
-### Step 2.5: Review Depth
+## 2. Dispatch
 
-Classify by blast radius, not file count:
+**Always use the script.** It handles: output directory creation, constitutional preamble injection, context splitting, parallel llmx dispatch, extraction, and disposition generation.
 
-| Preset | Axes | Queries | When |
-|--------|------|---------|------|
-| `simple` | combined Gemini Pro | 1 | Config tweaks, refreshes |
-| `standard` | arch + formal | 2 | Most new features (default) |
-| `deep` | arch + formal + domain + mechanical | 4 | Structural changes, domain-dense |
-| `full` | all 5 | 5 | Shared infra, clinical, high-stakes |
-
-| Axis | Model | What it checks |
-|------|-------|---------------|
-| `arch` | Gemini Pro | Patterns, architecture, cross-reference |
-| `formal` | GPT-5.4 (high reasoning) | Math, logic, cost-benefit, testable predictions |
-| `domain` | Gemini Pro | Domain fact correctness. Skip for pure code reviews. |
-| `mechanical` | Gemini Flash | Stale refs, wrong paths, naming. Include grep results — Flash hallucinates about fixed state (~13%). |
-| `alternatives` | Kimi K2.5 | 3-5 genuinely different approaches |
-
-**Genomics classification review** (monthly or after >10 commits to LR-engine/scoring): Use `--axes formal,domain`. GPT-5.4 found 11 conceptual/mathematical bugs for $6.54 — the only detector for incoherent Bayes, wrong concordance, excluded FDR families, surrogate endpoint fallacy.
-
-### Step 3: Dispatch
-
-Always use the script. See `references/dispatch.md` for full dispatch mechanics, CLI flags, timeout values, and manual dispatch instructions.
-
-**Quick reference:**
 ```bash
 uv run python3 ~/Projects/meta/scripts/model-review.py \
-  --context context.md --topic "$TOPIC" --project "$(pwd)" --extract \
-  "What's wrong with this [thing being reviewed]"
+  --context context.md \
+  --topic "$TOPIC" \
+  --project "$(pwd)" \
+  --extract \
+  "$ARGUMENTS"
 ```
 
 Set `timeout: 660000` on the Bash tool call. Add `--extract` to all standard/deep reviews.
 
-**NEVER downgrade models on failure.** If Pro or GPT-5.4 fails, the problem is dispatch (timeout, redirect, context size, rate limit) — not the model. Diagnose via stderr/exit code/`llmx --debug`. Never swap to Flash or GPT-5.3 as a "fix."
+### Depth Presets
 
-### Step 4: Fact-Check (Mandatory)
+Classify by blast radius, not file count:
+
+| Preset | Axes | When |
+|--------|------|------|
+| `standard` (default) | arch + formal | Most new features |
+| `--axes simple` | combined Gemini Pro | Config tweaks, refreshes |
+| `--axes deep` | arch + formal + domain + mechanical | Structural changes, domain-dense |
+| `--axes full` | all 5 | Shared infra, clinical, high-stakes |
+
+| Axis | What it checks |
+|------|---------------|
+| `arch` | Patterns, architecture, cross-reference (Gemini Pro) |
+| `formal` | Math, logic, cost-benefit, testable predictions (GPT-5.4 high reasoning) |
+| `domain` | Domain fact correctness. Skip for pure code reviews. (Gemini Pro) |
+| `mechanical` | Stale refs, wrong paths, naming. Include grep results — Flash hallucinates about fixed state (~13%). |
+| `alternatives` | 3-5 genuinely different approaches (Kimi K2.5) |
+
+**Genomics classification review** (monthly or after >10 commits to LR-engine/scoring): Use `--axes formal,domain`. GPT-5.4 found 11 conceptual/mathematical bugs for $6.54 — the only detector for incoherent Bayes, wrong concordance, excluded FDR families, surrogate endpoint fallacy.
+
+Use `--context-files file1.py file2.py:100-150` to skip manual context assembly.
+
+**NEVER downgrade models on failure.** If Pro or GPT-5.4 fails, the problem is dispatch (timeout, redirect, context size, rate limit) — not the model. Diagnose via stderr/exit code/`llmx --debug`. See `references/dispatch.md` for manual dispatch and troubleshooting.
+
+## 3. Fact-Check (Mandatory)
 
 **Both models hallucinate. Never adopt without verification.**
 
@@ -132,13 +110,13 @@ Set `timeout: 660000` on the Bash tool call. Add `--extract` to all standard/dee
 
 Use a **different model family** than the claim's author. Cross-family verification: +31pp accuracy vs same-family (FINCH-ZK, Amazon 2025). For code claims, always verify by reading the actual file first.
 
-### Step 5: Extract & Enumerate
+## 4. Extract & Disposition
 
-**STOP — did the script run with `--extract`?** If yes, read `disposition.md` and skip to Step 6. If not, see `references/extraction.md` for manual extraction workflow.
+**STOP — did the script run with `--extract`?** If yes, read `disposition.md` and skip to Step 5. If not, see `references/extraction.md` for manual extraction workflow.
 
 The core rule: **never go from raw model outputs directly to synthesis.** Extract mechanically first (cross-family fast models), then disposition every item, then synthesize. Extraction before synthesis: +24% recall, +29% precision (EVE, arXiv:2602.06103).
 
-### Step 6: Synthesize
+## 5. Synthesize
 
 Build synthesis from the disposition table. Every INCLUDE item must appear. Reference IDs for auditability.
 
@@ -161,11 +139,11 @@ Extraction: N items, M included, D deferred, R rejected
 
 Sections: Verified Findings | Deferred | Rejected | Where I Was Wrong | Gemini Errors | GPT Errors | Revised Priority List
 
-### Step 6.5: Auto-Verify File-Specific Findings
+### Auto-Verify File-Specific Findings
 
-If synthesis has INCLUDE items with file:line citations, invoke `/verify-findings` on the synthesis before Step 7. Only implement CONFIRMED or CORRECTED findings. Drop HALLUCINATED. Skip if all findings are architectural or fewer than 3 code citations.
+If synthesis has INCLUDE items with file:line citations, invoke `/verify-findings` on the synthesis before Step 6. Only implement CONFIRMED or CORRECTED findings. Drop HALLUCINATED. Skip if all findings are architectural or fewer than 3 code citations.
 
-### Step 6.8: Over-Adoption Check
+### Over-Adoption Check
 
 The review models had less context than you. Before rewriting the artifact, answer:
 
@@ -173,12 +151,12 @@ The review models had less context than you. Before rewriting the artifact, answ
 2. **Did you have context the models didn't?** If yes, name it. If the context file was comprehensive, say so and move on.
 
 Valid outcomes:
-- **"No changes."** Proceed to Step 7 with disposition as-is.
-- **"Revising N items."** State which and why, update synthesis, then Step 7.
+- **"No changes."** Proceed to Step 6 with disposition as-is.
+- **"Revising N items."** State which and why, update synthesis, then Step 6.
 
 **Why this exists:** Models produce rigorous-looking analysis that can override your judgment through sheer detail. The check is a pause, not a filter — most times you'll agree and continue.
 
-### Step 7: Close the Loop (Mandatory if INCLUDE items exist)
+## 6. Close the Loop (Mandatory if INCLUDE items exist)
 
 **The synthesis is not the deliverable — the updated artifact is.**
 
@@ -186,43 +164,17 @@ Valid outcomes:
 - **Case B (decision/code, no plan):** Offer plan-mode handoff if context is depleted.
 - **Case C (all DEFER/REJECT):** Synthesis is the deliverable.
 
-## Known Model Biases
-
-| Bias | Effect | Countermeasure |
-|------|--------|----------------|
-| **Correlated errors** | ~60% shared wrong answers when both err (Kim ICML 2025, pre-reasoning) | Never same-family reviewer + synthesizer |
-| **Self-preference** | 74.9% demographic parity bias (Wataoka NeurIPS 2024) | Different-family synthesis; weight cross-family disagreements |
-| **Judge inflation** | Same-provider accuracy inflation (Kim ICML 2025) | Cross-family only (this skill already does this) |
-| **Debate = martingale** | Sequential discussion: no correctness improvement (Choi 2025, formal proof) | Independent parallel reviews, never let models respond to each other |
-
-**Per-model:**
-- **Gemini Pro:** Production-pattern bias (enterprise for personal projects), self-recommendation (Google services), instruction dropping in long context
-- **GPT-5.4:** Confident fabrication (invents numbers/paths), overcautious scope, production-grade creep
-- **Flash/GPT-5.3:** Shallow analysis (extraction only), recency bias. Never use for architectural judgment.
-
-**Gemini Pro specifics:** CLI transport (free), temp locked 1.0, bare mode ~40% faster, no `--fallback`. **GPT-5.4 specifics:** `--reasoning-effort high` essential, `--stream` required, `--timeout 600` minimum, `--max-tokens 32768`. See `references/prompts.md` for full templates.
-
-## Anti-Patterns
-
-- **Synthesizing without extracting.** #1 information loss. Always extract + disposition before prose.
-- **Synthesizing a synthesis.** Each compression drops ideas. Merge raw extractions, not prior syntheses.
-- **Adopting without code verification.** Both models hallucinated "missing" features that already existed.
-- **Model agreement = proof.** Agreement is evidence, not proof — verify against source code.
-- **Debate workflow.** Martingale. Independent parallel + voting beats sequential discussion.
-- **Same-family reviewers.** Same-model correction: 59.1%. Cross-family: 90.4% (FINCH-ZK).
-- **"Top N" triage.** If INCLUDE, implement. DEFER needs explicit reason per item.
-- **Skipping self-doubt section.** Most valuable part of each review.
-- **Same prompt to both models.** Gemini = patterns, GPT = quantitative/formal. Different strengths need different prompts.
-- **Writing to /tmp.** Persist to `.model-review/YYYY-MM-DD-topic/`.
-- **Bare date directories.** Always append topic slug to avoid same-day collisions.
-- **Skipping constitutional check.** Unanchored reviews drift into generic advice.
-- **Mixing review and brainstorming.** Convergent only. Use `/brainstorm` for divergent.
-- **Priming tool names in review prompt.** Turns critique into evaluation. Use `alternatives` axis separately.
-- **Scale-ambiguous context.** Both models converge on the same wrong answer from shared misleading context.
-
 ## Artifact Handoff
 
 Write summary JSON to `~/.claude/artifacts/$(basename $PWD)/model-review-$(date +%Y-%m-%d).json` with: skill, project, date, topic, include/defer/reject counts, key_findings[]. Used by project-upgrade as a cache gate.
+
+## References
+
+- `references/context-assembly.md` — detailed context gathering patterns
+- `references/dispatch.md` — full dispatch mechanics, manual dispatch, timeouts, model flags
+- `references/extraction.md` — manual extraction workflow
+- `references/prompts.md` — full prompt templates per model
+- `references/biases-and-antipatterns.md` — known model biases, per-model failure modes, common mistakes
 
 $ARGUMENTS
 
