@@ -103,6 +103,20 @@ receipt = {
     "lines_removed": int(cockpit.get("lines_removed", 0)),
     "transcript_lines": t_lines,
 }
+# Harness provenance — pickup from startup phase 10
+harness_path = f"/tmp/session-harness-{session}.txt"
+if os.path.isfile(harness_path):
+    try:
+        receipt["harness_hash"] = open(harness_path).read().strip()
+        os.unlink(harness_path)
+    except Exception:
+        pass
+harness_files_path = f"/tmp/session-harness-files-{session}.txt"
+if os.path.isfile(harness_files_path):
+    try:
+        os.unlink(harness_files_path)
+    except Exception:
+        pass
 if commits:
     receipt["commits"] = commits
 receipt_path = os.path.expanduser("~/.claude/session-receipts.jsonl")
