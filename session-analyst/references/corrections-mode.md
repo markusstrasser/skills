@@ -8,7 +8,7 @@ When invoked with `--corrections`, extract user correction patterns instead of b
 Scan transcripts structurally for correction signals:
 
 1. **User negation after assistant action:** User messages containing "no", "don't", "wrong", "not that", "stop", "instead" immediately following an assistant tool call or response
-2. **#f feedback tags:** Run `uv run python3 ~/Projects/meta/scripts/extract_user_tags.py --project <project> --days 7` to get tagged feedback
+2. **#f feedback tags:** Run `uv run python3 ~/Projects/skills/harvest/scripts/extract_user_tags.py --project <project> --days 7` to get tagged feedback
 3. **Tool retry patterns:** Same tool called 3+ times with different parameters (trial-and-error)
 4. **Failure->correction->success:** Tool failure, followed by user message, followed by successful tool call with different approach
 

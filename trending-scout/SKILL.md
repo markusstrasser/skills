@@ -32,7 +32,7 @@ Before searching, load the known landscape so you can filter against it.
 
 2. **Check the most recent trending-scout memo** — `research/trending-scout-*.md` in meta. This is the "last known state." Note dates and what was already evaluated.
 
-3. **Check vendor-versions baseline** — run `uv run python3 scripts/vendor-versions.py` in meta for current SDK/CLI versions. This catches version bumps that searches might miss.
+3. **Check vendor-versions baseline** — run `uv run python3 ${CLAUDE_SKILL_DIR}/scripts/vendor-versions.py` for current SDK/CLI versions. This catches version bumps that searches might miss.
 
 4. **Note the time window** — default is "since last scout memo date" or "past 7 days" if no prior memo exists.
 

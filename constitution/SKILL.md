@@ -13,7 +13,7 @@ You are conducting a structured constitutional elicitation for a software projec
 
 Before reading any files, extract what the user has actually been correcting for. Run:
 ```bash
-uv run --directory ~/Projects/meta python3 scripts/steering-signals.py --days 30 --json
+uv run python3 ~/Projects/skills/goals/scripts/steering-signals.py --days 30 --json
 ```
 
 If project-scoped: add `--project <name>`. If the script is unavailable, skip to Phase 1.

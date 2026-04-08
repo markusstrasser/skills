@@ -31,7 +31,7 @@ This produces ~2000 tokens of existing finding titles, active hook descriptions,
 Before dispatching to Gemini, check which sessions are structurally anomalous:
 
 ```bash
-uv run python3 ~/Projects/meta/scripts/session-shape.py --days 1 --project <project>
+uv run python3 ~/Projects/skills/design-review/scripts/session-shape.py --days 1 --project <project>
 ```
 
 Focus deep analysis on flagged sessions. Skip sessions with normal structural profiles unless you have specific concerns.

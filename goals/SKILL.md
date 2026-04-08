@@ -21,7 +21,7 @@ You are helping the human clarify what they actually want from this project. Goa
 
 Before reading any files, extract what the user has actually been correcting for. Run:
 ```bash
-uv run --directory ~/Projects/meta python3 scripts/steering-signals.py --days 30 --project <current_project> --json
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/steering-signals.py --days 30 --project <current_project> --json
 ```
 
 If the script is unavailable, fall back to `git log --oneline -30` — but the steering report is far richer.
@@ -49,7 +49,7 @@ Read everything that reveals intent:
 - MEMORY.md or persistent memory (prior decisions, constitutional questionnaire results)
 - Any README, docs/, or project description files
 - Recent git log (what has the human actually been working on vs. what they say they want?)
-- ~/Projects/meta/memory/MEMORY.md (cross-project decisions if they exist)
+- `$HOME/Projects/meta/memory/MEMORY.md` (cross-project decisions if it exists)
 - **Phase 0 steering report** (corrections, feedback, topic drift, cost allocation)
 </exploration>
 
@@ -101,7 +101,7 @@ When GOALS.md already exists:
 
 ## Cross-Project Awareness
 
-If ~/Projects/meta/memory/MEMORY.md exists, read it for cross-project decisions. Goals in one project may constrain goals in another:
+If `$HOME/Projects/meta/memory/MEMORY.md` exists, read it for cross-project decisions. Goals in one project may constrain goals in another:
 - Shared entity graph means shared data investments
 - Shared epistemics means compatible evidence standards
 - Time/attention is zero-sum across projects
