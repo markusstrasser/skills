@@ -32,7 +32,45 @@ from pathlib import Path
 
 from llmx.api import chat as llmx_chat
 
-# --- Axis definitions: model + prompt + llmx flags ---
+# --- Structured output schema (both models return this) ---
+
+FINDING_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "findings": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer", "description": "Sequential finding number"},
+                    "category": {
+                        "type": "string",
+                        "enum": ["bug", "logic", "architecture", "missing", "performance", "security", "style", "constitutional"],
+                    },
+                    "severity": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
+                    "title": {"type": "string", "description": "One-line summary"},
+                    "description": {"type": "string", "description": "Detailed explanation with evidence"},
+                    "file": {"type": "string", "description": "File path if applicable, empty string if architectural"},
+                    "line": {"type": "integer", "description": "Line number if applicable, 0 if N/A"},
+                    "fix": {"type": "string", "description": "Specific proposed fix"},
+                    "confidence": {"type": "number", "description": "0.0-1.0 confidence in this finding"},
+                },
+                "required": ["id", "category", "severity", "title", "description", "file", "fix", "confidence"],
+                "additionalProperties": False,
+            },
+        },
+        "summary": {"type": "string", "description": "2-3 sentence overall assessment"},
+        "blind_spots": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Where this model is likely wrong",
+        },
+    },
+    "required": ["findings", "summary", "blind_spots"],
+    "additionalProperties": False,
+}
+
+# --- Axis definitions: model + prompt + api kwargs ---
 
 AXES = {
     "arch": {
@@ -214,6 +252,7 @@ def _call_llmx(
     context_path: Path,
     prompt: str,
     output_path: Path,
+    schema: dict | None = None,
     **kwargs,
 ) -> dict:
     """Call llmx Python API, write output to file, return result dict."""
@@ -225,6 +264,7 @@ def _call_llmx(
             provider=provider,
             model=model,
             temperature=0.7,
+            response_format=schema,
             **kwargs,
         )
         output_path.write_text(response.content)
@@ -541,10 +581,11 @@ def dispatch(
 
 
 EXTRACTION_PROMPT = (
-    "Extract every discrete recommendation, finding, or claimed bug as a numbered list. "
-    "One item per line. Include the specific file/code/concept referenced. "
-    "SKIP confirmatory observations that merely describe existing correct behavior "
-    "(e.g. 'X correctly groups Y', 'Z is well-designed'). "
+    "Extract every discrete recommendation, finding, or claimed bug from the review. "
+    "Return JSON matching the schema. For each finding: category, severity, a one-line title, "
+    "description with the reviewer's evidence, file path if cited, proposed fix, "
+    "and confidence 0.0-1.0 based on specificity of evidence. "
+    "SKIP confirmatory observations that merely describe correct behavior. "
     "Only extract items that propose a change, flag a problem, or claim something is wrong/missing."
 )
 
@@ -622,32 +663,93 @@ def extract_claims(
         file=sys.stderr,
     )
 
-    def _extract_one(task: tuple[str, Path, str, str]) -> tuple[str, str | None]:
+    def _extract_one(task: tuple[str, Path, str, str]) -> tuple[str, list[dict] | None]:
         axis, output_path, model, provider = task
-        extraction_path = review_dir / f"{axis}-extraction.md"
+        extraction_path = review_dir / f"{axis}-extraction.json"
         result = _call_llmx(
             provider=provider,
             model=model,
             context_path=output_path,
             prompt=EXTRACTION_PROMPT,
             output_path=extraction_path,
+            schema=FINDING_SCHEMA,
             timeout=120,
         )
-        label = dispatch_result[axis].get("label", axis)
         if result["exit_code"] != 0:
             print(f"warning: extraction for {axis} failed: {result.get('error', 'unknown')}", file=sys.stderr)
             return axis, None
         if result["size"] > 0:
-            return axis, f"## {label}\n\n{extraction_path.read_text().strip()}"
+            try:
+                data = json.loads(extraction_path.read_text())
+                return axis, data.get("findings", [])
+            except (json.JSONDecodeError, KeyError) as e:
+                print(f"warning: extraction for {axis} returned invalid JSON: {e}", file=sys.stderr)
+                # Fall back to raw text
+                return axis, None
         print(f"warning: extraction for {axis} produced empty output", file=sys.stderr)
         return axis, None
 
     # Parallel extraction
-    extractions: list[str] = []
+    axis_findings: dict[str, list[dict]] = {}
     with ThreadPoolExecutor(max_workers=len(extraction_tasks)) as pool:
-        for _, content in pool.map(_extract_one, extraction_tasks):
-            if content:
-                extractions.append(content)
+        for axis, findings in pool.map(_extract_one, extraction_tasks):
+            if findings:
+                axis_findings[axis] = findings
+
+    if not axis_findings:
+        return None
+
+    # Merge findings across axes — tag source model, cross-reference overlaps
+    merged_findings: list[dict] = []
+    seen_titles: dict[str, dict] = {}  # title_lower -> finding
+    for axis, findings in axis_findings.items():
+        source_label = dispatch_result[axis].get("label", axis)
+        source_model = dispatch_result[axis].get("model", "unknown")
+        for f in findings:
+            f["source_axis"] = axis
+            f["source_model"] = source_model
+            f["source_label"] = source_label
+            title_key = f.get("title", "").lower().strip()
+            if title_key in seen_titles:
+                # Cross-model agreement — boost confidence, tag both sources
+                existing = seen_titles[title_key]
+                existing.setdefault("also_found_by", []).append(source_label)
+                existing["cross_model"] = True
+                existing["confidence"] = min(1.0, existing.get("confidence", 0.5) + 0.2)
+            else:
+                seen_titles[title_key] = f
+                merged_findings.append(f)
+
+    # Sort: cross-model agreements first, then by severity, then confidence
+    severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    merged_findings.sort(key=lambda f: (
+        0 if f.get("cross_model") else 1,
+        severity_order.get(f.get("severity", "low"), 3),
+        -(f.get("confidence", 0)),
+    ))
+
+    # Renumber
+    for i, f in enumerate(merged_findings, 1):
+        f["id"] = i
+
+    # Write structured JSON
+    structured_path = review_dir / "findings.json"
+    structured_path.write_text(json.dumps({"findings": merged_findings}, indent=2) + "\n")
+
+    # Write human-readable disposition
+    extractions: list[str] = []
+    for f in merged_findings:
+        source = f.get("source_label", "unknown")
+        also = f.get("also_found_by", [])
+        agreement = f" **[CROSS-MODEL: also {', '.join(also)}]**" if also else ""
+        conf = f.get("confidence", 0)
+        extractions.append(
+            f"{f['id']}. **[{f.get('severity', '?').upper()}]** {f.get('title', '?')}{agreement}\n"
+            f"   Category: {f.get('category', '?')} | Confidence: {conf:.1f} | Source: {source}\n"
+            f"   {f.get('description', '')}\n"
+            f"   File: {f.get('file', 'N/A')}\n"
+            f"   Fix: {f.get('fix', 'N/A')}"
+        )
 
     if not extractions:
         return None
@@ -666,9 +768,14 @@ def extract_claims(
         "### Context I had that the models didn't:\n"
         "<!-- If context file was comprehensive, say so. -->\n\n"
     )
-    disposition.write_text(
-        f"# Extracted Claims — {date.today().isoformat()}\n\n" + merged + response_template
+    cross_model_count = sum(1 for f in merged_findings if f.get("cross_model"))
+    header = (
+        f"# Review Findings — {date.today().isoformat()}\n\n"
+        f"**{len(merged_findings)} findings** from {len(axis_findings)} axes"
+        f" ({cross_model_count} cross-model agreements)\n"
+        f"Structured data: `findings.json`\n\n"
     )
+    disposition.write_text(header + merged + response_template)
     return str(disposition)
 
 
