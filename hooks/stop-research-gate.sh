@@ -32,8 +32,10 @@ research_pattern = os.environ.get('RESEARCH_PATHS', 'docs/research/|analysis/|do
 exclude_pattern = os.environ.get('EXCLUDE_PATTERN', r'MEMORY\.md|CLAUDE\.md|maintenance-checklist\.md|improvement-log\.md|README\.md')
 
 # Session-scoped diff: only check files modified THIS session, not pre-existing dirty files.
-# Read session ID from .claude/current-session-id, then load base SHA from /tmp/.
+# Read session ID from .claude/current-session-id, then load base SHA and dirty baseline from /tmp/.
 base_sha = 'HEAD'
+session_id = ''
+baseline_dirty = set()
 try:
     sid_path = os.path.join(cwd, '.claude', 'current-session-id')
     with open(sid_path) as f:
@@ -43,6 +45,19 @@ try:
 except (OSError, FileNotFoundError):
     pass  # No baseline = fall back to HEAD (pre-fix behavior)
 
+# Load dirty-file baseline from session start (written by 02-git-baseline.sh).
+# Files dirty at session start belong to another agent or pre-existing state — exclude them.
+try:
+    with open(f'/tmp/session-baseline-{session_id}.txt') as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                # git status --short format: 'XY filename' or 'XY filename -> newname'
+                path = line[3:].split(' -> ')[-1]
+                baseline_dirty.add(path)
+except (OSError, FileNotFoundError):
+    pass  # No baseline = check everything (first-run safety)
+
 changed = []
 try:
     r1 = subprocess.run(['git', 'diff', '--name-only', base_sha], cwd=cwd, capture_output=True, text=True, timeout=5)
@@ -51,6 +66,10 @@ try:
     changed += [l for l in r2.stdout.strip().split('\n') if l]
 except Exception:
     sys.exit(0)
+
+# Exclude files that were already dirty at session start (other agents' work)
+if baseline_dirty:
+    changed = [f for f in changed if f not in baseline_dirty]
 
 # Filter to research-path markdown files, excluding known non-research files
 research_files = [
