@@ -132,6 +132,116 @@ class ModelReviewDispatchTest(unittest.TestCase):
         self.assertGreater(jaccard, 0.3, f"Expected Jaccard > 0.3, got {jaccard:.2f}")
 
 
+class SchemaTransformTest(unittest.TestCase):
+    def test_add_additional_properties_to_nested_objects(self) -> None:
+        schema = {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {"type": "object", "properties": {"name": {"type": "string"}}},
+                }
+            },
+        }
+        result = model_review._add_additional_properties(schema)
+        self.assertFalse(result["additionalProperties"])
+        self.assertFalse(result["properties"]["items"]["items"]["additionalProperties"])
+        # Original not mutated
+        self.assertNotIn("additionalProperties", schema)
+
+    def test_strip_additional_properties_from_nested_objects(self) -> None:
+        schema = {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {"type": "object", "additionalProperties": False, "properties": {}},
+                }
+            },
+        }
+        result = model_review._strip_additional_properties(schema)
+        self.assertNotIn("additionalProperties", result)
+        self.assertNotIn("additionalProperties", result["properties"]["items"]["items"])
+        # Original not mutated
+        self.assertIn("additionalProperties", schema)
+
+    def test_finding_schema_roundtrips_both_providers(self) -> None:
+        """The canonical FINDING_SCHEMA should be valid after both transforms."""
+        oai = model_review._add_additional_properties(model_review.FINDING_SCHEMA)
+        self.assertFalse(oai["additionalProperties"])
+        self.assertFalse(oai["properties"]["findings"]["items"]["additionalProperties"])
+
+        google = model_review._strip_additional_properties(model_review.FINDING_SCHEMA)
+        self.assertNotIn("additionalProperties", google)
+
+
+class CallLlmxTest(unittest.TestCase):
+    def test_call_llmx_returns_error_dict_on_exception(self) -> None:
+        def exploding_chat(**kwargs):
+            raise ConnectionError("network down")
+
+        with tempfile.TemporaryDirectory() as td:
+            ctx = Path(td) / "ctx.md"
+            ctx.write_text("context")
+            out = Path(td) / "out.md"
+            with patch.object(model_review, "llmx_chat", exploding_chat):
+                result = model_review._call_llmx(
+                    provider="google", model="gemini-3.1-pro-preview",
+                    context_path=ctx, prompt="test", output_path=out,
+                    timeout=10,
+                )
+        self.assertEqual(result["exit_code"], 1)
+        self.assertEqual(result["size"], 0)
+        self.assertIn("network down", result["error"])
+
+    def test_call_llmx_passes_schema_for_openai(self) -> None:
+        captured = {}
+        def capture_chat(**kwargs):
+            captured.update(kwargs)
+            resp = MagicMock()
+            resp.content = "ok"
+            resp.latency = 0.1
+            return resp
+
+        with tempfile.TemporaryDirectory() as td:
+            ctx = Path(td) / "ctx.md"
+            ctx.write_text("context")
+            out = Path(td) / "out.md"
+            with patch.object(model_review, "llmx_chat", capture_chat):
+                model_review._call_llmx(
+                    provider="openai", model="gpt-5.4",
+                    context_path=ctx, prompt="test", output_path=out,
+                    schema=model_review.FINDING_SCHEMA, timeout=10,
+                )
+        # Should have additionalProperties added for OpenAI
+        fmt = captured.get("response_format", {})
+        self.assertIn("additionalProperties", str(fmt))
+
+    def test_call_llmx_strips_schema_for_google(self) -> None:
+        captured = {}
+        def capture_chat(**kwargs):
+            captured.update(kwargs)
+            resp = MagicMock()
+            resp.content = "ok"
+            resp.latency = 0.1
+            return resp
+
+        with tempfile.TemporaryDirectory() as td:
+            ctx = Path(td) / "ctx.md"
+            ctx.write_text("context")
+            out = Path(td) / "out.md"
+            with patch.object(model_review, "llmx_chat", capture_chat):
+                model_review._call_llmx(
+                    provider="google", model="gemini-3.1-pro-preview",
+                    context_path=ctx, prompt="test", output_path=out,
+                    schema={"type": "object", "additionalProperties": False, "properties": {}},
+                    timeout=10,
+                )
+        fmt = captured.get("response_format", {})
+        self.assertNotIn("additionalProperties", str(fmt))
+
+
 class ModelReviewMainTest(unittest.TestCase):
     def test_main_returns_nonzero_when_axis_output_is_empty(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
