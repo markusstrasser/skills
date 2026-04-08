@@ -5,13 +5,18 @@ Reads JSONL transcript files from ~/.claude/projects/, strips thinking blocks
 and base64/binary content, outputs compressed markdown summaries suitable for
 LLM analysis (~10-50KB per session instead of 5-50MB raw).
 
+--full mode: Higher-fidelity extraction for session-analyst dispatch to Gemini.
+Raises truncation limits, preserves tool call args for key tools, keeps tool
+results for failures, and preserves user correction sequences verbatim.
+Paper evidence: raw traces >> summaries (+15pp, Lee et al. 2026 arXiv:2603.28052).
+
 Usage:
-    python extract_transcript.py <project> [--sessions N] [--output FILE]
+    python extract_transcript.py <project> [--sessions N] [--output FILE] [--full]
 
 Examples:
     python extract_transcript.py intel                    # Last 5 sessions
     python extract_transcript.py selve --sessions 3       # Last 3 sessions
-    python extract_transcript.py meta --output /tmp/out.md
+    python extract_transcript.py meta --full -o /tmp/out.md  # Full fidelity
 """
 
 import argparse
@@ -29,11 +34,20 @@ PROJECT_MAP = {
     "intel": "-Users-alien-Projects-intel",
     "selve": "-Users-alien-Projects-selve",
     "meta": "-Users-alien-Projects-meta",
+    "genomics": "-Users-alien-Projects-genomics",
 }
 
 # Content patterns to strip
 BASE64_PATTERN = re.compile(r"[A-Za-z0-9+/]{100,}={0,2}")
-LONG_JSON_PATTERN = re.compile(r"\{[^}]{2000,}\}")
+
+# Module-level fidelity flag (set by --full)
+FULL_MODE = False
+
+# Truncation limits by mode
+def _user_limit():    return 8000 if FULL_MODE else 1000
+def _asst_limit():    return 4000 if FULL_MODE else 800
+def _tool_cmd_limit(): return 500 if FULL_MODE else 120
+def _tool_arg_limit(): return 800 if FULL_MODE else 150
 
 
 def find_transcripts(project: str, limit: int = 5) -> list[Path]:
@@ -56,9 +70,6 @@ def find_transcripts(project: str, limit: int = 5) -> list[Path]:
             sys.exit(1)
 
     jsonl_files = sorted(project_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
-
-    # Filter to session directories (exclude files that are just IDs)
-    # Actually they're all flat JSONL files
     return jsonl_files[:limit]
 
 
@@ -79,23 +90,40 @@ def truncate_large_content(text: str, max_chars: int = 500) -> str:
 
 
 def extract_tool_summary(content_block: dict) -> str:
-    """Summarize a tool_use block concisely."""
+    """Summarize a tool_use block. In --full mode, preserves more args."""
     name = content_block.get("name", "unknown_tool")
     inp = content_block.get("input", {})
 
     if name in ("Read", "Glob", "Grep"):
         path = inp.get("file_path") or inp.get("path") or inp.get("pattern", "")
-        return f"`{name}({path})`"
+        extra = ""
+        if FULL_MODE and name == "Grep":
+            extra = f", pattern={inp.get('pattern', '')}"
+        return f"`{name}({path}{extra})`"
     elif name in ("Write", "Edit"):
         path = inp.get("file_path", "")
+        if FULL_MODE:
+            # In full mode, include old/new strings for Edit (diagnostic for corrections)
+            if name == "Edit":
+                old = inp.get("old_string", "")[:200]
+                new = inp.get("new_string", "")[:200]
+                return f"`Edit({path})`\n  old: `{old}`\n  new: `{new}`"
+            elif name == "Write":
+                content = inp.get("content", "")
+                preview = content[:300] if content else ""
+                return f"`Write({path})` [{len(content)} chars]\n  preview: `{preview}`"
         return f"`{name}({path})`"
     elif name == "Bash":
         cmd = inp.get("command", "")
-        if len(cmd) > 120:
-            cmd = cmd[:120] + "..."
+        limit = _tool_cmd_limit()
+        if len(cmd) > limit:
+            cmd = cmd[:limit] + "..."
         return f"`Bash: {cmd}`"
     elif name == "Agent":
         desc = inp.get("description", "")
+        if FULL_MODE:
+            prompt = inp.get("prompt", "")[:300]
+            return f"`Agent({desc})`\n  prompt: `{prompt}`"
         return f"`Agent({desc})`"
     elif name == "WebSearch":
         query = inp.get("query", "")
@@ -106,9 +134,35 @@ def extract_tool_summary(content_block: dict) -> str:
     else:
         # MCP tools, etc
         summary = json.dumps(inp, default=str)
-        if len(summary) > 150:
-            summary = summary[:150] + "..."
+        limit = _tool_arg_limit()
+        if len(summary) > limit:
+            summary = summary[:limit] + "..."
         return f"`{name}({summary})`"
+
+
+def extract_tool_result(obj: dict) -> str | None:
+    """Extract tool result text from a user message containing tool_result blocks.
+    In --full mode, preserves error results for diagnostic value."""
+    if not FULL_MODE:
+        return None
+    content = obj.get("message", {}).get("content", [])
+    if not isinstance(content, list):
+        return None
+    results = []
+    for block in content:
+        if not isinstance(block, dict) or block.get("type") != "tool_result":
+            continue
+        is_error = block.get("is_error", False)
+        result_content = block.get("content", "")
+        if isinstance(result_content, list):
+            texts = [b.get("text", "") for b in result_content if isinstance(b, dict) and b.get("type") == "text"]
+            result_content = "\n".join(texts)
+        if is_error and result_content:
+            results.append(f"[TOOL ERROR] {truncate_large_content(result_content, 2000)}")
+        elif result_content and len(result_content) > 50:
+            # In full mode, keep substantial results (truncated)
+            results.append(f"[TOOL RESULT] {truncate_large_content(result_content, 1000)}")
+    return "\n".join(results) if results else None
 
 
 def process_transcript(path: Path) -> dict:
@@ -120,6 +174,7 @@ def process_transcript(path: Path) -> dict:
     model = None
     start_time = None
     end_time = None
+    last_role = None  # Track for correction detection
 
     with open(path) as f:
         for line in f:
@@ -141,20 +196,36 @@ def process_transcript(path: Path) -> dict:
 
             if msg_type == "user":
                 content = obj.get("message", {}).get("content", "")
+                ulimit = _user_limit()
                 if isinstance(content, str):
-                    text = truncate_large_content(content, 1000)
+                    text = truncate_large_content(content, ulimit)
                 elif isinstance(content, list):
                     parts = []
                     for block in content:
                         if isinstance(block, dict) and block.get("type") == "text":
-                            parts.append(truncate_large_content(block.get("text", ""), 1000))
+                            parts.append(truncate_large_content(block.get("text", ""), ulimit))
                         elif isinstance(block, dict) and block.get("type") == "tool_result":
                             parts.append("[tool_result]")
                     text = "\n".join(parts)
                 else:
                     text = str(content)[:500]
 
-                messages.append({"role": "user", "text": text})
+                entry = {"role": "user", "text": text}
+
+                # In full mode, flag likely corrections (user message after assistant tool use)
+                if FULL_MODE and last_role == "assistant":
+                    # Check if this looks like a correction (short, directive)
+                    stripped = text.strip()
+                    if stripped and len(stripped) < 500 and not stripped.startswith("<system-reminder>"):
+                        entry["likely_correction"] = True
+
+                # In full mode, extract tool error results
+                tool_result = extract_tool_result(obj)
+                if tool_result:
+                    entry["tool_results"] = tool_result
+
+                messages.append(entry)
+                last_role = "user"
 
             elif msg_type == "assistant":
                 msg = obj.get("message", {})
@@ -180,7 +251,7 @@ def process_transcript(path: Path) -> dict:
                     if block.get("type") == "text":
                         text = block.get("text", "")
                         if text.strip():
-                            parts.append(truncate_large_content(text, 800))
+                            parts.append(truncate_large_content(text, _asst_limit()))
                     elif block.get("type") == "tool_use":
                         tools_used.append(extract_tool_summary(block))
 
@@ -188,6 +259,7 @@ def process_transcript(path: Path) -> dict:
                 if tools_used:
                     entry["tools"] = tools_used
                 messages.append(entry)
+                last_role = "assistant"
 
     return {
         "session_id": session_id,
@@ -207,6 +279,8 @@ def format_markdown(sessions: list[dict], project: str) -> str:
     lines.append(f"# Session Transcripts: {project}")
     lines.append(f"Extracted: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
     lines.append(f"Sessions: {len(sessions)}")
+    if FULL_MODE:
+        lines.append("Mode: FULL FIDELITY (--full)")
     lines.append("")
 
     # UUID manifest — anchoring block for downstream LLM analysis.
@@ -230,11 +304,20 @@ def format_markdown(sessions: list[dict], project: str) -> str:
             role = msg["role"].upper()
             text = msg.get("text", "").strip()
             tools = msg.get("tools", [])
+            tool_results = msg.get("tool_results", "")
+            is_correction = msg.get("likely_correction", False)
+
+            prefix = f"**{role}"
+            if is_correction:
+                prefix += " [CORRECTION]"
+            prefix += ":**"
 
             if text:
-                lines.append(f"**{role}:** {text}")
+                lines.append(f"{prefix} {text}")
             if tools:
                 lines.append(f"**TOOLS:** {' → '.join(tools)}")
+            if tool_results:
+                lines.append(tool_results)
             if text or tools:
                 lines.append("")
 
@@ -245,18 +328,24 @@ def format_markdown(sessions: list[dict], project: str) -> str:
 
 
 def main():
+    global FULL_MODE
     parser = argparse.ArgumentParser(description="Extract Claude Code session transcripts")
     parser.add_argument("project", help="Project name (intel, selve, meta) or directory prefix")
     parser.add_argument("--sessions", "-n", type=int, default=5, help="Number of recent sessions (default: 5)")
     parser.add_argument("--output", "-o", help="Output file (default: stdout)")
+    parser.add_argument("--full", action="store_true",
+                        help="Full fidelity mode: higher truncation limits, preserve tool args and corrections")
     args = parser.parse_args()
+
+    FULL_MODE = args.full
 
     transcripts = find_transcripts(args.project, args.sessions)
     if not transcripts:
         print(f"No transcripts found for '{args.project}'", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Processing {len(transcripts)} transcripts for '{args.project}'...", file=sys.stderr)
+    mode_label = " (FULL)" if FULL_MODE else ""
+    print(f"Processing {len(transcripts)} transcripts for '{args.project}'{mode_label}...", file=sys.stderr)
 
     sessions = []
     for t in transcripts:
