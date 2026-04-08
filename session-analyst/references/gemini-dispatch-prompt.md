@@ -53,7 +53,7 @@ For sessions that passed the triage gate with YES, identify:
 
 2. OVER-ENGINEERING [W:4, MANDATORY]: Did the agent build something more complex than needed? Look for: abstractions with one caller, config systems for hardcoded values, frameworks for single-use scripts. Example: Built a full SQLite finding-triage database for a problem solvable by appending to a markdown file.
 
-3. BUILD-THEN-UNDO [W:4, MANDATORY]: Was code written then deleted or substantially rewritten in the same session? Calculate approximate wasted tokens. Example: Agent wrote ~47 lines of auth middleware, user pointed out shared auth existed, agent deleted all 47 lines.
+3. BUILD-THEN-UNDO [W:4, MANDATORY]: Was code written then deleted or substantially rewritten in the same session? Calculate approximate wasted tokens. Example: Agent wrote ~47 lines of auth middleware, user pointed out shared auth existed, agent deleted all 47 lines. **Confound check:** If the undo involves harness files (CLAUDE.md, rules/, hooks, settings.json), check whether multiple harness changes were bundled in the same commit or session. Identify which specific change caused the regression — bundled harness changes are the #1 source of diagnostic ambiguity.
 
 4. TOKEN WASTE [W:3]: Excessive tool calls — reading the same file twice, searching for something already in context, redundant web searches, reading entire files when a grep would suffice. Example: Read setup-friend.sh 6 consecutive times in same session with no edits between reads.
 
