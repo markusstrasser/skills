@@ -32,34 +32,24 @@ Same-model peer review is a martingale — no expected correctness improvement (
 
 See `lenses/adversarial-review.md` for full dispatch methodology, axis descriptions, depth presets, per-model prompts, and known issues.
 
-### Session Awareness
-
-`!cat ~/.claude/active-agents.json 2>/dev/null | python3 -c "import sys,json,time; entries=json.load(sys.stdin); active=[e for e in entries if time.time()-e.get('started_at',0)<7200]; print(f'{len(active)} active sessions') if len(active)>=3 else None" 2>/dev/null`
-
-If 3+ sessions active: prefix questions with project name + review topic. Batch decisions.
-
-**Memory pressure gate:** Before dispatching subagents, count active Claude/Codex processes. On macOS/BSD, `pgrep` does NOT support `-c`; use `pgrep -lf claude | wc -l` or `~/.claude/active-agents.json`. If count >= 4, skip subagent delegation and work directly with llmx CLI calls. 50% of sessions hit memory pressure on dispatch.
-
 ### 1. Assemble Context
 
-Write review material to a single context file. **Do NOT manually create `.model-review/` directories, write constitutional preambles, or assemble per-model files.** The script handles all of this.
-
-**Pre-flight — constitutional check:** Before building context, check for constitution (standalone CONSTITUTION.md or `## Constitution` section in CLAUDE.md) and GOALS.md. If found, the script injects as preamble. If neither exists, warn user: *"No constitution or GOALS.md found. Reviews will lack project-specific anchoring."* Proceed anyway.
+Write review material to a single context file.
 
 **Pre-flight — scope declaration (mandatory):** Include a `## Scope` block near the top:
 - **Target users:** personal / team / multi-tenant / public
 - **Scale:** current entity counts AND designed-for scale (e.g., "currently 40 compounds, designed for thousands of subjects")
 - **Rate of change:** how often does new data arrive?
 
-This prevents the #1 review failure mode: models optimizing for the wrong scale. Evidence: selve UMLS review (2026-04-06) — GPT scored a plan 27/100 as "over-engineered for 105 personal entities" when the actual scope was multi-user scalable. Required full re-dispatch after scope correction.
+This prevents the #1 review failure mode: models optimizing for the wrong scale. Evidence: selve UMLS review (2026-04-06) — GPT scored a plan 27/100 as "over-engineered for 105 personal entities" when the actual scope was multi-user scalable.
 
-**Token budgets:** Gemini Pro sweet spot 80-150K (max ~800K). GPT-5.4 sweet spot 40-100K (max ~400K). Compact aggressively — 50K context = 5-10 min; 2K summary = ~1 min. Summarize rather than concatenate full files.
+**Constitutional anchoring:** Check for constitution (`## Constitution` in CLAUDE.md) and GOALS.md. Include as preamble if found.
 
 See `references/context-assembly.md` for detailed context gathering (narrow, broad, auto-assembled).
 
-#### Context Anti-Patterns (Shared Context = Shared Wrong Answers)
+#### Context Anti-Patterns
 
-When both models converge on the same wrong recommendation, the cause is almost always shared context bias. Check for these before dispatching:
+Common review biases — check your context for these before analysis:
 
 | Anti-pattern | How it biases | Fix |
 |-------------|--------------|-----|
@@ -73,9 +63,19 @@ When both models converge on the same wrong recommendation, the cause is almost 
 | **Missing project identity** in cross-project reviews | Models apply principles too literally to unfamiliar projects | Include 2-3 line identity per project |
 | **Missing scope declaration** — not stating target users and designed-for scale | Models assume personal/small when reviewing shared infra, or assume production when reviewing prototypes | Always include scope block (see above) |
 
-### 2. Dispatch
+### 2. Review
 
-**Always use the script.** It handles: output directory creation, constitutional preamble injection, context splitting, parallel llmx dispatch, extraction, and disposition generation.
+Two paths — choose based on stakes:
+
+**Path A: Direct analysis (default).** You have the context in conversation. Analyze it directly using the prompts from `references/prompts.md` as your frame. Apply each relevant lens yourself:
+- **Architecture**: patterns, cross-references, structural gaps
+- **Formal**: math, logic, cost-benefit, testable predictions
+- **Domain**: fact correctness (skip for pure code reviews)
+- **Mechanical**: stale refs, wrong paths, naming inconsistencies
+
+This is faster, more reliable, and sufficient for most reviews.
+
+**Path B: Cross-model dispatch (optional, user-initiated).** For high-stakes reviews where cross-family adversarial pressure matters (shared infra, clinical, multi-project). The dispatch script handles parallel llmx calls:
 
 ```bash
 uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
@@ -86,41 +86,11 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   "$ARGUMENTS"
 ```
 
-Set `timeout: 660000` on the Bash tool call. Add `--extract` to all standard/deep reviews.
+Set `timeout: 660000` on the Bash tool call. See `references/dispatch.md` for flags, presets, and troubleshooting.
 
-For per-axis question customization, write a JSON file and pass `--questions`:
-```bash
-echo '{"arch": "Focus on cross-cutting concerns", "formal": "Verify the cost model math"}' > questions.json
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
-  --context context.md --topic "$TOPIC" --project "$(pwd)" --extract \
-  --questions questions.json
-```
-Axes not in the JSON fall back to the positional question.
+**Only use Path B when the user explicitly requests cross-model review.** The script has known reliability issues with llmx CLI transport (multi-file drops, 0-byte outputs, Gemini rate limits). If dispatch fails, fall back to Path A — don't retry the same command.
 
-#### Depth Presets
-
-Classify by blast radius, not file count:
-
-| Preset | Axes | When |
-|--------|------|------|
-| `standard` (default) | arch + formal | Most new features |
-| `--axes simple` | combined Gemini Pro | Config tweaks, refreshes |
-| `--axes deep` | arch + formal + domain + mechanical | Structural changes, domain-dense |
-| `--axes full` | all 5 | Shared infra, clinical, high-stakes |
-
-| Axis | What it checks |
-|------|---------------|
-| `arch` | Patterns, architecture, cross-reference (Gemini Pro) |
-| `formal` | Math, logic, cost-benefit, testable predictions (GPT-5.4 high reasoning) |
-| `domain` | Domain fact correctness. Skip for pure code reviews. (Gemini Pro) |
-| `mechanical` | Stale refs, wrong paths, naming. Include grep results — Flash hallucinates about fixed state (~13%). |
-| `alternatives` | 3-5 genuinely different approaches (Gemini 3.1 Pro) |
-
-**Genomics classification review** (monthly or after >10 commits to LR-engine/scoring): Use `--axes formal,domain`. GPT-5.4 found 11 conceptual/mathematical bugs for $6.54 — the only detector for incoherent Bayes, wrong concordance, excluded FDR families, surrogate endpoint fallacy.
-
-Use `--context-files file1.py file2.py:100-150` to skip manual context assembly.
-
-**NEVER downgrade models on failure.** If Pro or GPT-5.4 fails, the problem is dispatch (timeout, redirect, context size, rate limit) — not the model. Diagnose via stderr/exit code/`llmx --debug`. See `references/dispatch.md` for manual dispatch and troubleshooting.
+**Genomics classification review** (monthly or after >10 commits to LR-engine/scoring): Use Path B with `--axes formal,domain`. GPT-5.4 found 11 conceptual/mathematical bugs for $6.54 — the only detector for incoherent Bayes.
 
 ### 3. Fact-Check (Mandatory)
 
@@ -134,9 +104,9 @@ Use a **different model family** than the claim's author. Cross-family verificat
 
 ### 4. Extract & Disposition
 
-**STOP — did the script run with `--extract`?** If yes, read `disposition.md` and skip to Step 5. If not, see `references/extraction.md` for manual extraction workflow.
+**If Path B with `--extract`:** Read `disposition.md` and skip to Step 5.
 
-The core rule: **never go from raw model outputs directly to synthesis.** Extract mechanically first (cross-family fast models), then disposition every item, then synthesize. Extraction before synthesis: +24% recall, +29% precision (EVE, arXiv:2602.06103).
+**If Path A (direct analysis) or Path B without `--extract`:** Extract your own findings as a numbered list. For each: what's wrong, where (file/line), severity, proposed fix. See `references/extraction.md` for format.
 
 ### 5. Synthesize
 
