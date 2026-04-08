@@ -86,27 +86,37 @@ Run shared transcript extraction above. Build operational context per `reference
 
 Send full-fidelity transcript + coverage digest + operational context to Gemini 3.1 Pro. Full prompt in `references/gemini-dispatch-prompt.md`.
 
-Dispatch via llmx Python API (not CLI subprocess):
+Dispatch via llmx Python API (not CLI subprocess). Write the dispatch as a short inline script:
 
-```python
+```bash
+uv run python3 << 'PYEOF'
+import sys, glob
+from pathlib import Path
+
+# Bootstrap llmx from uv tool venv
+_site = glob.glob(str(Path.home() / ".local/share/uv/tools/llmx/lib/python*/site-packages"))
+if _site: sys.path.insert(0, _site[0])
+sys.path.insert(0, str(Path.home() / "Projects/llmx"))
 from llmx.api import chat as llmx_chat
 
-# Concatenate all context into one string
-context = Path("$ARTIFACT_DIR/input.md").read_text()
-coverage = Path("$ARTIFACT_DIR/coverage-digest.txt").read_text()
-ops_ctx = Path("$ARTIFACT_DIR/operational-context.txt").read_text()
-prompt = Path("${CLAUDE_SKILL_DIR}/references/gemini-dispatch-prompt.md").read_text()
+artifact_dir = Path("$HOME/Projects/meta/artifacts/observe").expanduser()
+context = (artifact_dir / "input.md").read_text()
+coverage = (artifact_dir / "coverage-digest.txt").read_text()
+prompt = Path("$CLAUDE_SKILL_DIR/references/gemini-dispatch-prompt.md").read_text()
 
 response = llmx_chat(
-    prompt=context + "\n\n" + coverage + "\n\n" + ops_ctx + "\n\n" + prompt,
+    prompt=context + "\n\n" + coverage + "\n\n" + prompt,
     provider="google",
     model="gemini-3.1-pro-preview",
+    temperature=1.0,
     timeout=300,
 )
-Path("$ARTIFACT_DIR/gemini-output.md").write_text(response.content)
+(artifact_dir / "gemini-output.md").write_text(response.content)
+print(f"✓ Gemini output: {len(response.content)} chars, {response.latency:.1f}s")
+PYEOF
 ```
 
-Or write this as a short script and run with `uv run python3`. The key: use `llmx.api.chat()`, never shell out to `llmx` CLI.
+Substitute `$HOME` and `$CLAUDE_SKILL_DIR` with actual paths before running.
 
 ### Step 3: Stage Findings
 
@@ -246,23 +256,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/extract_transcript.py <project> --sessions 5
 
 ### Step 3: LLM Synthesis (Gemini)
 
-Dispatch raw classification + transcripts to Gemini 3.1 Pro via `llmx.api.chat()`:
-
-```python
-from llmx.api import chat as llmx_chat
-
-raw = Path("$ARTIFACT_DIR/supervision-raw.json").read_text()
-transcripts = Path("$ARTIFACT_DIR/supervision-transcripts.md").read_text()
-
-response = llmx_chat(
-    prompt=raw + "\n\n" + transcripts + "\n\n" + SUPERVISION_PROMPT,
-    provider="google",
-    model="gemini-3.1-pro-preview",
-    timeout=300,
-)
-```
-
-The supervision prompt asks Gemini to classify each non-NEW_AGENCY pattern by:
+Dispatch raw classification + transcripts to Gemini 3.1 Pro via `llmx.api.chat()`. Read both files, concatenate with the prompt below, call the API (same pattern as sessions mode dispatch). For each non-NEW_AGENCY pattern, Gemini should determine:
 1. Is it genuinely automatable? (Filter out actual new information)
 2. Fix type: HOOK | RULE | DEFAULT | SKILL | ARCHITECTURAL
 3. Recurrence count (3+ is signal, 1 is noise)
