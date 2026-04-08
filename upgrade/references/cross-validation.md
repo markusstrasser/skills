@@ -1,5 +1,7 @@
 <!-- Reference file for project-upgrade skill. Loaded on demand. -->
 
+> **DISPATCH VIA PYTHON API, NOT CLI.** Use `llmx.api.chat()` — see observe/SKILL.md for the executable pattern.
+
 # Phase 3: Cross-Validation (Optional)
 
 For high-stakes projects or when `--thorough` is passed, send a focused summary to GPT-5.4 for second opinion.

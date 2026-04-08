@@ -1,5 +1,9 @@
 <!-- Reference file for project-upgrade skill. Loaded on demand. -->
 
+> **DISPATCH VIA PYTHON API, NOT CLI.** Use `llmx.api.chat()` instead of shelling out to `llmx`.
+> Read context with `Path(...).read_text()`, write output with `Path(...).write_text(response.content)`.
+> The CLI commands below show prompt content — adapt to Python API calls.
+
 # Phase 2: Standard Model Prompts
 
 ## Extract Project Context

@@ -1,5 +1,7 @@
 <!-- Reference file for novel-expansion skill. Loaded on demand. -->
 
+> **DISPATCH VIA PYTHON API, NOT CLI.** Use `llmx.api.chat()` — see observe/SKILL.md for the executable pattern.
+
 # Phase 3: Research (~25% of effort)
 
 Dispatch parallel research agents on EXPLORE ideas. This is where F1, F2, and F3 hit hardest, with F4/F5 as common secondary failures.
