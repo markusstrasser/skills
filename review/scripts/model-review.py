@@ -24,11 +24,13 @@ import argparse
 import json
 import os
 import re
-import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
+
+from llmx.api import chat as llmx_chat
 
 # --- Axis definitions: model + prompt + llmx flags ---
 
@@ -36,7 +38,8 @@ AXES = {
     "arch": {
         "label": "Gemini (architecture/patterns)",
         "model": "gemini-3.1-pro-preview",
-        "flags": ["--timeout", "300"],
+        "provider": "google",
+        "api_kwargs": {"timeout": 300},
         "prompt": """\
 <system>
 You are reviewing a codebase. Be concrete. No platitudes. Reference specific code, configs, and findings. It is {date}.
@@ -68,7 +71,8 @@ What am I (Gemini) likely getting wrong? Where should you distrust my assessment
     "formal": {
         "label": "GPT-5.4 (quantitative/formal)",
         "model": "gpt-5.4",
-        "flags": ["--stream", "--reasoning-effort", "high", "--timeout", "600", "--max-tokens", "32768"],
+        "provider": "openai",
+        "api_kwargs": {"timeout": 600, "reasoning_effort": "high", "max_tokens": 32768},
         "prompt": """\
 <system>
 You are performing QUANTITATIVE and FORMAL analysis. Other reviewers handle qualitative pattern review. Focus on what they can't do well. Be precise. Show your reasoning. No hand-waving.
@@ -100,7 +104,8 @@ What am I (GPT-5.4) probably getting wrong? Known biases to flag: overconfidence
     "domain": {
         "label": "Gemini Pro (domain correctness)",
         "model": "gemini-3.1-pro-preview",
-        "flags": ["--timeout", "300"],
+        "provider": "google",
+        "api_kwargs": {"timeout": 300},
         "prompt": """\
 <system>
 You are verifying DOMAIN-SPECIFIC CLAIMS in this plan. Other reviewers handle architecture and formal logic.
@@ -122,7 +127,8 @@ Flag any URLs, API endpoints, or version numbers that should be probed before im
     "mechanical": {
         "label": "Gemini Flash (mechanical audit)",
         "model": "gemini-3-flash-preview",
-        "flags": ["--timeout", "120"],
+        "provider": "google",
+        "api_kwargs": {"timeout": 120},
         "prompt": """\
 <system>
 Mechanical audit only. No analysis, no recommendations. Fast and precise.
@@ -139,7 +145,8 @@ Output as a flat numbered list. One issue per line.""",
     "alternatives": {
         "label": "Gemini Pro (alternative approaches)",
         "model": "gemini-3.1-pro-preview",
-        "flags": ["--timeout", "300"],
+        "provider": "google",
+        "api_kwargs": {"timeout": 300},
         "prompt": """\
 <system>
 You are generating ALTERNATIVE APPROACHES to the proposed plan. Other reviewers check correctness.
@@ -160,7 +167,8 @@ Do NOT critique the existing plan — generate alternatives. Different mechanism
     "simple": {
         "label": "Gemini Pro (combined review)",
         "model": "gemini-3.1-pro-preview",
-        "flags": ["--timeout", "300"],
+        "provider": "google",
+        "api_kwargs": {"timeout": 300},
         "prompt": """\
 <system>
 Quick combined review. Be concrete. It is {date}. Budget: ~1000 words.
@@ -200,33 +208,41 @@ def slugify(text: str, max_len: int = 40) -> str:
     return s[:max_len]
 
 
-def build_llmx_cmd(
+def _call_llmx(
+    provider: str,
     model: str,
-    flags: list[str],
     context_path: Path,
-    output_path: Path,
     prompt: str,
-    *,
-    provider: str | None = None,
-) -> list[str]:
-    cmd = [
-        "llmx", "chat",
-    ]
-    if provider:
-        cmd.extend(["-p", provider])
-    cmd.extend([
-        "-m", model,
-        *flags,
-        "-f", str(context_path),
-        "-o", str(output_path),
-        prompt,
-    ])
-    return cmd
-
-
-def read_process_stderr(proc: subprocess.Popen) -> str:
-    _, stderr = proc.communicate()
-    return stderr.decode(errors="replace").strip() if stderr else ""
+    output_path: Path,
+    **kwargs,
+) -> dict:
+    """Call llmx Python API, write output to file, return result dict."""
+    context = context_path.read_text()
+    full_prompt = context + "\n\n---\n\n" + prompt
+    try:
+        response = llmx_chat(
+            prompt=full_prompt,
+            provider=provider,
+            model=model,
+            temperature=0.7,
+            **kwargs,
+        )
+        output_path.write_text(response.content)
+        return {
+            "exit_code": 0,
+            "size": output_path.stat().st_size,
+            "latency": response.latency,
+            "error": None,
+        }
+    except Exception as e:
+        error_msg = str(e)[:500]
+        print(f"warning: llmx call failed ({model}): {error_msg}", file=sys.stderr)
+        return {
+            "exit_code": 1,
+            "size": 0,
+            "latency": 0,
+            "error": error_msg,
+        }
 
 
 def axis_output_failed(info: object) -> bool:
@@ -271,23 +287,22 @@ def rerun_axis_with_flash(
     review_dir: Path,
     ctx_file: Path,
     prompt: str,
-    env: dict[str, str],
-) -> tuple[int, str, Path]:
+) -> dict:
+    """Retry a failed Gemini Pro axis with Gemini Flash."""
     out_path = review_dir / f"{axis}-output.md"
-    cmd = build_llmx_cmd(
-        GEMINI_FLASH_MODEL,
-        list(axis_def["flags"]),
-        ctx_file,
-        out_path,
-        prompt,
-    )
     print(
         f"warning: {axis} hit Gemini Pro rate limits; retrying once with Gemini Flash",
         file=sys.stderr,
     )
-    proc = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stderr = read_process_stderr(proc)
-    return proc.returncode, stderr, out_path
+    api_kwargs = dict(axis_def.get("api_kwargs") or {})  # type: ignore[arg-type]
+    return _call_llmx(
+        provider="google",
+        model=GEMINI_FLASH_MODEL,
+        context_path=ctx_file,
+        prompt=prompt,
+        output_path=out_path,
+        **api_kwargs,
+    )
 
 
 def find_constitution(project_dir: Path) -> tuple[str, str | None]:
@@ -439,13 +454,7 @@ def dispatch(
     has_constitution: bool,
     question_overrides: dict[str, str] | None = None,
 ) -> dict:
-    """Fire N llmx processes in parallel (one per axis), wait, return results."""
-    env = {
-        k: v
-        for k, v in os.environ.items()
-        if k not in ("CLAUDECODE", "CLAUDE_SESSION_ID")
-    }
-
+    """Fire N llmx API calls in parallel (one per axis), wait, return results."""
     today = date.today().isoformat()
 
     const_instruction = {
@@ -461,112 +470,71 @@ def dispatch(
         ),
     }
 
-    procs = {}
-    outputs = {}
-    prompts = {}
+    prompts: dict[str, str] = {}
     t0 = time.time()
 
     for axis in axis_names:
         axis_def = AXES[axis]
-        out_path = review_dir / f"{axis}-output.md"
-        outputs[axis] = out_path
-
         axis_question = (question_overrides or {}).get(axis, question)
-        prompt = axis_def["prompt"].format(
+        prompts[axis] = axis_def["prompt"].format(
             date=today,
             question=axis_question,
             constitution_instruction=const_instruction.get(axis, ""),
         )
-        prompts[axis] = prompt
 
-        # Auto-escalate Gemini Pro to API transport for large context.
-        # CLI transport (free) times out on thinking models above ~15KB context
-        # within the 300s window. --stream forces API transport (paid but reliable).
-        axis_flags = list(axis_def["flags"])
-        ctx_size = ctx_files[axis].stat().st_size if ctx_files[axis].exists() else 0
-        model_name = str(axis_def["model"])
-        provider_name: str | None = None
-        if model_name == GEMINI_PRO_MODEL and ctx_size > 15_000 and "--stream" not in axis_flags:
-            axis_flags.append("--stream")
-        if model_name.startswith("gpt-"):
-            # model-review always writes outputs with -o. In current llmx, -o
-            # auto-enables streaming, which forces GPT onto API transport.
-            # Choose reliability-first API transport explicitly instead of
-            # pretending Codex CLI is preserved.
-            provider_name = "openai"
-
-        cmd = build_llmx_cmd(
-            model_name,
-            axis_flags,
-            ctx_files[axis],
-            out_path,
-            prompt,
-            provider=provider_name,
+    def _run_axis(axis: str) -> tuple[str, dict]:
+        axis_def = AXES[axis]
+        out_path = review_dir / f"{axis}-output.md"
+        result = _call_llmx(
+            provider=str(axis_def["provider"]),
+            model=str(axis_def["model"]),
+            context_path=ctx_files[axis],
+            prompt=prompts[axis],
+            output_path=out_path,
+            **dict(axis_def.get("api_kwargs") or {}),  # type: ignore[arg-type]
         )
-
-        procs[axis] = subprocess.Popen(
-            cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-
-    # Wait for all
-    results = {"review_dir": str(review_dir), "axes": axis_names, "queries": len(axis_names)}
-    gemini_rate_limited = False
-    for axis in axis_names:
-        proc = procs[axis]
-        stderr = read_process_stderr(proc)
-        rc = proc.returncode
-        out_path = outputs[axis]
-        requested_model = str(AXES[axis]["model"])
-        output_size = out_path.stat().st_size if out_path.exists() else 0
-        transient_gemini_failure = is_gemini_rate_limit_failure(
-            requested_model,
-            rc,
-            stderr,
-            output_size,
-        )
-        should_fallback = requested_model == GEMINI_PRO_MODEL and (
-            transient_gemini_failure
-            or (gemini_rate_limited and (rc != 0 or output_size == 0))
-        )
-        if transient_gemini_failure:
-            gemini_rate_limited = True
-
         entry = {
-            "label": AXES[axis]["label"],
-            "requested_model": requested_model,
-            "model": requested_model,
-            "exit_code": rc,
+            "label": axis_def["label"],
+            "requested_model": str(axis_def["model"]),
+            "model": str(axis_def["model"]),
+            "exit_code": result["exit_code"],
             "output": str(out_path),
-            "size": output_size,
+            "size": result["size"],
         }
-        if should_fallback:
-            entry["fallback_from"] = requested_model
-            entry["fallback_reason"] = (
-                "gemini_rate_limit" if transient_gemini_failure else "gemini_session_rate_limit"
-            )
-            entry["initial_exit_code"] = rc
-            entry["initial_size"] = output_size
-            if stderr:
-                entry["initial_stderr"] = stderr[-500:]
+        if result.get("latency"):
+            entry["latency"] = result["latency"]
+        if result.get("error"):
+            entry["stderr"] = result["error"]
 
-            rc, stderr, out_path = rerun_axis_with_flash(
-                axis,
-                AXES[axis],
-                review_dir,
-                ctx_files[axis],
-                prompts[axis],
-                env,
+        # Gemini Pro fallback to Flash on rate limit
+        if (
+            str(axis_def["model"]) == GEMINI_PRO_MODEL
+            and result["exit_code"] != 0
+            and result.get("error")
+            and any(m in result["error"].lower() for m in GEMINI_RATE_LIMIT_MARKERS)
+        ):
+            entry["fallback_from"] = str(axis_def["model"])
+            entry["fallback_reason"] = "gemini_rate_limit"
+            entry["initial_exit_code"] = result["exit_code"]
+            flash_result = rerun_axis_with_flash(
+                axis, axis_def, review_dir, ctx_files[axis], prompts[axis],
             )
-            output_size = out_path.stat().st_size if out_path.exists() else 0
             entry["model"] = GEMINI_FLASH_MODEL
-            entry["exit_code"] = rc
-            entry["size"] = output_size
-        if stderr:
-            entry["stderr"] = stderr[-500:] if stderr else ""
-        if output_size == 0:
+            entry["exit_code"] = flash_result["exit_code"]
+            entry["size"] = flash_result["size"]
+
+        if entry["size"] == 0:
             entry["failure_reason"] = "empty_output"
 
-        results[axis] = entry
+        return axis, entry
+
+    # Parallel dispatch via threads
+    results: dict = {"review_dir": str(review_dir), "axes": axis_names, "queries": len(axis_names)}
+    with ThreadPoolExecutor(max_workers=len(axis_names)) as pool:
+        futures = {pool.submit(_run_axis, axis): axis for axis in axis_names}
+        for future in as_completed(futures):
+            axis, entry = future.result()
+            results[axis] = entry
 
     results["elapsed_seconds"] = round(time.time() - t0, 1)
     return results
@@ -625,13 +593,7 @@ def extract_claims(
 
     Returns path to disposition.md, or None if no outputs to extract.
     """
-    env = {
-        k: v
-        for k, v in os.environ.items()
-        if k not in ("CLAUDECODE", "CLAUDE_SESSION_ID")
-    }
-
-    extraction_procs: dict[str, tuple[subprocess.Popen, Path]] = {}
+    extraction_tasks: list[tuple[str, Path, str, str]] = []  # (axis, output_path, model, provider)
     skip_keys = {"review_dir", "axes", "queries", "elapsed_seconds"}
 
     for axis, info in dispatch_result.items():
@@ -644,45 +606,48 @@ def extract_claims(
         if not output_path.exists():
             continue
 
-        extraction_path = review_dir / f"{axis}-extraction.md"
         model = info.get("model", "")
 
         # Cross-family: Gemini outputs → GPT extraction, GPT outputs → Gemini Flash extraction
         if "gemini" in model.lower():
-            extract_model = "gpt-5.3-chat-latest"
-            extract_flags = ["--stream", "--timeout", "120"]
+            extraction_tasks.append((axis, output_path, "gpt-5.3-chat-latest", "openai"))
         else:
-            extract_model = "gemini-3-flash-preview"
-            extract_flags = ["--timeout", "120"]
+            extraction_tasks.append((axis, output_path, "gemini-3-flash-preview", "google"))
 
-        cmd = build_llmx_cmd(
-            extract_model, extract_flags, output_path, extraction_path, EXTRACTION_PROMPT,
-        )
-        proc = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        extraction_procs[axis] = (proc, extraction_path)
-
-    if not extraction_procs:
+    if not extraction_tasks:
         return None
 
     print(
-        f"Extracting claims from {len(extraction_procs)} outputs...",
+        f"Extracting claims from {len(extraction_tasks)} outputs...",
         file=sys.stderr,
     )
 
-    # Wait for all extractions and merge
-    extractions: list[str] = []
-    for axis, (proc, path) in extraction_procs.items():
-        stderr = read_process_stderr(proc)
+    def _extract_one(task: tuple[str, Path, str, str]) -> tuple[str, str | None]:
+        axis, output_path, model, provider = task
+        extraction_path = review_dir / f"{axis}-extraction.md"
+        result = _call_llmx(
+            provider=provider,
+            model=model,
+            context_path=output_path,
+            prompt=EXTRACTION_PROMPT,
+            output_path=extraction_path,
+            timeout=120,
+        )
         label = dispatch_result[axis].get("label", axis)
-        if proc.returncode != 0:
-            print(f"warning: extraction for {axis} failed (exit {proc.returncode})", file=sys.stderr)
-            if stderr:
-                print(f"  stderr: {stderr[:200]}", file=sys.stderr)
-            continue
-        if path.exists() and path.stat().st_size > 0:
-            extractions.append(f"## {label}\n\n{path.read_text().strip()}")
-        elif path.exists() and path.stat().st_size == 0:
-            print(f"warning: extraction for {axis} produced 0-byte file (model errored before output)", file=sys.stderr)
+        if result["exit_code"] != 0:
+            print(f"warning: extraction for {axis} failed: {result.get('error', 'unknown')}", file=sys.stderr)
+            return axis, None
+        if result["size"] > 0:
+            return axis, f"## {label}\n\n{extraction_path.read_text().strip()}"
+        print(f"warning: extraction for {axis} produced empty output", file=sys.stderr)
+        return axis, None
+
+    # Parallel extraction
+    extractions: list[str] = []
+    with ThreadPoolExecutor(max_workers=len(extraction_tasks)) as pool:
+        for _, content in pool.map(_extract_one, extraction_tasks):
+            if content:
+                extractions.append(content)
 
     if not extractions:
         return None
