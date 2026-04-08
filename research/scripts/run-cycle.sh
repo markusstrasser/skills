@@ -80,6 +80,6 @@ PROMPT_EOF
     fi
 else
     echo "Normal mode: running via Claude skill"
-    echo "Use /research-cycle in your Claude session instead."
+    echo "Use /research cycle in your Claude session instead."
     echo "(This script is for rate-limited fallback only)"
 fi
