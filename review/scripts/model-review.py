@@ -356,15 +356,6 @@ def collect_dispatch_failures(
     return failures
 
 
-def is_gemini_rate_limit_failure(model: str, exit_code: int, stderr: str, output_size: int) -> bool:
-    if model != GEMINI_PRO_MODEL:
-        return False
-    if exit_code == 0 and output_size > 0:
-        return False
-    stderr_lower = stderr.lower()
-    return exit_code == 3 or any(marker in stderr_lower for marker in GEMINI_RATE_LIMIT_MARKERS)
-
-
 def rerun_axis_with_flash(
     axis: str,
     axis_def: dict[str, object],
@@ -606,31 +597,38 @@ def dispatch(
             entry["model"] = GEMINI_FLASH_MODEL
             entry["exit_code"] = flash_result["exit_code"]
             entry["size"] = flash_result["size"]
+            if flash_result.get("latency"):
+                entry["latency"] = flash_result["latency"]
+            entry.pop("stderr", None)
+            if flash_result.get("error"):
+                entry["stderr"] = flash_result["error"]
 
         if entry["size"] == 0:
             entry["failure_reason"] = "empty_output"
 
         return axis, entry
 
-    # Parallel dispatch via threads (720s timeout = max model timeout + 2min buffer)
+    # Parallel dispatch via threads
     results: dict = {"review_dir": str(review_dir), "axes": axis_names, "queries": len(axis_names)}
     with ThreadPoolExecutor(max_workers=len(axis_names)) as pool:
         futures = {pool.submit(_run_axis, axis): axis for axis in axis_names}
-        for future in as_completed(futures, timeout=720):
-            try:
-                axis, entry = future.result(timeout=720)
-            except TimeoutError:
-                axis = futures[future]
-                entry = {
-                    "label": AXES[axis]["label"],
-                    "requested_model": str(AXES[axis]["model"]),
-                    "model": str(AXES[axis]["model"]),
-                    "exit_code": 1,
-                    "output": str(review_dir / f"{axis}-output.md"),
-                    "size": 0,
-                    "failure_reason": "thread_timeout",
-                }
-            results[axis] = entry
+        try:
+            for future in as_completed(futures, timeout=720):
+                axis, entry = future.result()
+                results[axis] = entry
+        except TimeoutError:
+            # as_completed raises at iterator level when global timeout expires
+            for future, axis in futures.items():
+                if axis not in results:
+                    results[axis] = {
+                        "label": AXES[axis]["label"],
+                        "requested_model": str(AXES[axis]["model"]),
+                        "model": str(AXES[axis]["model"]),
+                        "exit_code": 1,
+                        "output": str(review_dir / f"{axis}-output.md"),
+                        "size": 0,
+                        "failure_reason": "thread_timeout",
+                    }
 
     results["elapsed_seconds"] = round(time.time() - t0, 1)
     return results
@@ -736,7 +734,12 @@ def extract_claims(
             return axis, None
         if result["size"] > 0:
             try:
-                data = json.loads(extraction_path.read_text())
+                raw = extraction_path.read_text().strip()
+                # Strip markdown fences (```json ... ```) that models sometimes add
+                if raw.startswith("```"):
+                    raw = re.sub(r"^```(?:json)?\s*\n?", "", raw)
+                    raw = re.sub(r"\n?```\s*$", "", raw)
+                data = json.loads(raw)
                 return axis, data.get("findings", [])
             except (json.JSONDecodeError, KeyError) as e:
                 print(f"warning: extraction for {axis} returned invalid JSON: {e}", file=sys.stderr)
