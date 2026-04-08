@@ -308,6 +308,7 @@ def _call_llmx(
             provider=provider,
             model=model,
             temperature=temperature,
+            api_only=True,
             **api_kwargs,
         )
         output_path.write_text(response.content)
