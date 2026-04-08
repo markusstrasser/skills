@@ -1,6 +1,6 @@
 ---
 name: model-guide
-description: Frontier model selection and prompting guide. Which model for which task, how to prompt each one, known pitfalls, validation checklists. Use when choosing between Claude/GPT/Gemini/Kimi, routing tasks to models, writing prompts for non-Claude models, debugging model-specific issues, or optimizing multi-model workflows. Triggers on "which model", "how to prompt", "model comparison", "model selection", "prompting guide", "GPT tips", "Gemini tips", "Kimi tips".
+description: Frontier model selection and prompting guide. Which model for which task, how to prompt each one, known pitfalls, validation checklists. Use when choosing between Claude/GPT/Gemini, routing tasks to models, writing prompts for non-Claude models, debugging model-specific issues, or optimizing multi-model workflows. Triggers on "which model", "how to prompt", "model comparison", "model selection", "prompting guide", "GPT tips", "Gemini tips".
 user-invocable: true
 argument-hint: '[task description or model name]'
 effort: low
@@ -10,8 +10,8 @@ effort: low
 
 Select the right frontier model for a task and prompt it correctly.
 
-**Models covered:** Claude Opus 4.6, Claude Sonnet 4.6, GPT-5.4, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3 Flash, Kimi K2.5.
-**Last updated:** 2026-03-20. See `${CLAUDE_SKILL_DIR}/references/CHANGELOG.md` for update history.
+**Models covered:** Claude Opus 4.6, Claude Sonnet 4.6, GPT-5.4, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3 Flash, Gemini 3.1 Flash-Lite.
+**Last updated:** 2026-04-08. See `${CLAUDE_SKILL_DIR}/references/CHANGELOG.md` for update history.
 
 ## Long-Horizon Research Routing
 
@@ -32,23 +32,21 @@ Practical split:
 | Task | Best Model | Why | Runner-up |
 |------|-----------|-----|-----------|
 | **Agentic coding** | Claude Opus 4.6 | SWE-bench 80.8%, Arena coding #1 | Sonnet 4.6 (79.6%, ~60% cost) |
-| **Fact-sensitive work** | Claude Opus 4.6 / Gemini 3.1 / GPT-5.4 | SimpleQA ~72% (tied) | NOT Kimi (37%) |
+| **Fact-sensitive work** | Claude Opus 4.6 / Gemini 3.1 / GPT-5.4 | SimpleQA ~72% (tied) | -- |
 | **Legal reasoning** | Claude Opus 4.6 | BigLaw 90.2% | -- |
 | **Professional analysis** | Claude Opus 4.6 | GDPval-AA Elo 1606 (expert preference) | Sonnet 4.6 (GDPval 1633) |
 | **Computer use / browsing** | Claude Opus 4.6 | OSWorld 72.7% | -- |
-| **Hard math** | GPT-5.4 | MATH 98%+, AIME 100% | Kimi K2.5 (MATH 98%, AIME 96%) |
-| **Precise structured output** | GPT-5.4 | IFEval 95%+, native Structured Outputs + Tool Search | Claude (94%), Kimi (94%) |
-| **Vision / document OCR** | GPT-5.4 | DocVQA 95%+, native computer use | Kimi K2.5 (MMMU-Pro 78.5%) |
+| **Hard math** | GPT-5.4 | MATH 98%+, AIME 100% | Gemini 3.1 Pro (GPQA 94.3%) |
+| **Precise structured output** | GPT-5.4 | IFEval 95%+, native Structured Outputs + Tool Search | Claude (94%) |
+| **Vision / document OCR** | GPT-5.4 | DocVQA 95%+, native computer use | Gemini 3.1 Pro |
 | **Science reasoning** | Gemini 3.1 Pro | GPQA Diamond 94.3% | GPT-5.4 |
 | **Abstract pattern recognition** | Gemini 3.1 Pro | ARC-AGI-2 77.1% | Claude (68.8%) |
-| **Long document ingestion** (>200K) | Gemini 3.1 Pro / GPT-5.4 / Claude | Native 1M context (all three) | Kimi K2.5 (256K) |
-| **Subagent coding** | Claude Sonnet 4.6 | 79.6% SWE-bench at $3/$15, 1M context | Kimi K2.5 (76.8%, much cheaper) |
+| **Long document ingestion** (>200K) | Gemini 3.1 Pro / GPT-5.4 / Claude | Native 1M context (all three) | -- |
+| **Subagent coding** | Claude Sonnet 4.6 | 79.6% SWE-bench at $3/$15, 1M context | Gemini 3 Flash (cheap) |
 | **Doc → schema extraction** | GPT-5.3 Instant | Less preachy, structured output, fast | GPT-5.4 (stronger reasoning) |
 | **Cross-model review** | Pro + GPT-5.4 | Cross-family required (+31pp accuracy, FINCH-ZK). Same-family = no adversarial pressure | -- |
-| **High-volume classification** | Gemini 3 Flash | $0.50/$3/M, 1M ctx | Kimi K2.5 ($0.60/$2.50) |
-| **Bulk cheap analysis** | Kimi K2.5 | $0.60/$2.50, strong reasoning | Gemini 3.1 ($2/$12) |
-| **Multi-agent swarm tasks** | Kimi K2.5 | Native Agent Swarm (100 sub-agents) | -- |
-| **Video understanding** | Kimi K2.5 | VideoMMMU 86.6%, native multimodal | Gemini 3.1 (native video) |
+| **High-volume classification** | Gemini 3 Flash | $0.50/$3/M, 1M ctx | Gemini 3.1 Flash-Lite ($0.25/$1.50) |
+| **Video understanding** | Gemini 3.1 Pro | Native video support | GPT-5.4 |
 
 For full benchmark tables, read `${CLAUDE_SKILL_DIR}/references/BENCHMARKS.md`.
 
@@ -174,23 +172,6 @@ For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_GPT.md`.
 
 For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_GEMINI.md`.
 
-### Kimi K2.5 -- "The Budget Polymath"
-
-**Strengths:** Exceptional cost efficiency ($0.60/$2.50), strong math (MATH 98%, AIME 96.1%), native multimodal (vision + video), Agent Swarm (100 parallel sub-agents), open weights (modified MIT), LiveCodeBench 85%.
-**Weaknesses:** Worst factual accuracy (SimpleQA 37%), verbose outputs inflate real costs, slower (~42 tok/s), weaker writing quality, limited production track record.
-
-**Quick prompting tips:**
-- **Thinking mode** (default): use `temperature=1.0`, `top_p=0.95` -- budget 2-4x tokens for reasoning
-- **Instant mode** (for speed): `temperature=0.6`, disable thinking with `extra_body={'thinking': {'type': 'disabled'}}`
-- **Non-thinking mode is often better for code** -- Moonshot's own guidance says this
-- Reasoning traces appear in `response.choices[0].message.reasoning_content`
-- OpenAI-compatible API format (`chat.completions`)
-- **Agent Swarm** for long-horizon tasks: up to 1,500 tool calls per session
-- For vision: set `max_tokens=64k`, average over multiple runs
-- **ALWAYS fact-check** -- SimpleQA 37% means 63% factual error rate without tools
-
-For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_KIMI.md`.
-
 ## Validation Checklists
 
 Run these when using outputs from each model:
@@ -217,12 +198,6 @@ Run these when using outputs from each model:
 - [ ] Expert-quality writing may need editing (GDPval 1317 vs Claude 1606)
 - [ ] Check output wasn't silently truncated (64K max, 8K default)
 
-### After Kimi K2.5
-- [ ] **ALWAYS fact-check** (SimpleQA 37% -- hallucinates 63% of factual questions)
-- [ ] Check output length vs. value -- verbose outputs inflate costs 2-4x
-- [ ] Writing quality may need significant editing for professional use
-- [ ] Verify tool-augmented results independently -- limited production track record
-
 ## Cost Comparison
 
 | Model | Input/MTok | Output/MTok | Cache Discount | Context | Max Output |
@@ -234,9 +209,9 @@ Run these when using outputs from each model:
 | GPT-5.3 Instant | $1.75 | $14 | 90% input | 128K | 16K |
 | Gemini 3.1 Pro | $2 | $12 | 75% | 1M | 64K |
 | **Gemini 3 Flash** | **$0.50** | **$3** | 75% | 1M | 65K |
-| Kimi K2.5 | $0.60 | $2.50 | -- | 256K | 96K (thinking) |
+| **Gemini 3.1 Flash-Lite** | **$0.25** | **$1.50** | 75% | 1M | 1000K |
 
-**Cost optimization:** Default to Sonnet 4.6 for subagents. Reserve Opus for synthesis, narratives, and orchestration. Use Kimi for bulk work that doesn't need factual precision. GPT-5.4 with cache hits ($0.25/M input) is the cheapest frontier reasoning — but only for cache-friendly workloads with static prefixes. For long-context (>272K), Gemini Pro ($2/$12) is cheaper than GPT-5.4 ($5/$22.50).
+**Cost optimization:** Default to Sonnet 4.6 for subagents. Reserve Opus for synthesis, narratives, and orchestration. Use Gemini Flash/Flash-Lite for bulk work. GPT-5.4 with cache hits ($0.25/M input) is the cheapest frontier reasoning — but only for cache-friendly workloads with static prefixes. For long-context (>272K), Gemini Pro ($2/$12) is cheaper than GPT-5.4 ($5/$22.50).
 
 ## Multi-Model Architecture Pattern
 
@@ -250,7 +225,6 @@ Claude (orchestrator -- best professional judgment)
         ├── extract   → GPT-5.3              [doc→schema, less preachy]
         ├── math      → GPT-5.4              [MATH 98%+, AIME 100%]
         ├── classify  → Gemini 3 Flash        [$0.50/M, high-volume]
-        ├── bulk      → Kimi K2.5            [$0.60/$2.50, strong reasoning]
         └── compare   → Multiple             [side-by-side for high-stakes]
 ```
 
@@ -264,9 +238,8 @@ Claude (orchestrator -- best professional judgment)
 | Gemini 3.1 Pro | 72.1% | 28% wrong |
 | GPT-5.4 | ~72% | ~28% wrong (33% fewer errors vs 5.2) |
 | GPT-5.4 + web search | ~95%+ | ~5% wrong |
-| Kimi K2.5 | 37% | **63% wrong** |
 
-**Key insight:** GPT-5.4 closed most of the hallucination gap vs Claude/Gemini (33% fewer errors vs 5.2). But ~28% error rate remains — always query data sources for dollar amounts, dates, entity names, and legal claims. Kimi is especially dangerous for unsourced factual claims.
+**Key insight:** GPT-5.4 closed most of the hallucination gap vs Claude/Gemini (33% fewer errors vs 5.2). But ~28% error rate remains — always query data sources for dollar amounts, dates, entity names, and legal claims.
 
 ## Compliance Pressure & Null Paths
 

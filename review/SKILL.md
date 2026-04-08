@@ -114,7 +114,7 @@ Classify by blast radius, not file count:
 | `formal` | Math, logic, cost-benefit, testable predictions (GPT-5.4 high reasoning) |
 | `domain` | Domain fact correctness. Skip for pure code reviews. (Gemini Pro) |
 | `mechanical` | Stale refs, wrong paths, naming. Include grep results — Flash hallucinates about fixed state (~13%). |
-| `alternatives` | 3-5 genuinely different approaches (Kimi K2.5) |
+| `alternatives` | 3-5 genuinely different approaches (Gemini 3.1 Pro) |
 
 **Genomics classification review** (monthly or after >10 commits to LR-engine/scoring): Use `--axes formal,domain`. GPT-5.4 found 11 conceptual/mathematical bugs for $6.54 — the only detector for incoherent Bayes, wrong concordance, excluded FDR families, surrogate endpoint fallacy.
 
