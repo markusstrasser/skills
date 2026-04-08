@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -110,6 +111,86 @@ class ModelReviewDispatchTest(unittest.TestCase):
                 (None, model_review.GEMINI_FLASH_MODEL, "domain-output.md"),
             ],
         )
+
+    def test_collect_dispatch_failures_flags_zero_byte_outputs(self) -> None:
+        dispatch_result = {
+            "review_dir": str(self.review_dir),
+            "axes": ["formal"],
+            "queries": 1,
+            "elapsed_seconds": 1.0,
+            "formal": {
+                "label": "Formal",
+                "model": "gpt-5.4",
+                "requested_model": "gpt-5.4",
+                "exit_code": 0,
+                "size": 0,
+                "output": str(self.review_dir / "formal-output.md"),
+                "stderr": "[llmx:WARN] 0-byte output",
+            },
+        }
+
+        failures = model_review.collect_dispatch_failures(dispatch_result, self.ctx_files)
+
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0]["axis"], "formal")
+        self.assertEqual(failures[0]["failure_reason"], "empty_output")
+        self.assertEqual(failures[0]["context"], str(self.ctx_files["formal"]))
+
+
+class ModelReviewMainTest(unittest.TestCase):
+    def test_main_returns_nonzero_when_axis_output_is_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = Path(temp_dir)
+            context_path = project_dir / "context.md"
+            context_path.write_text("context")
+            review_dir = project_dir / ".model-review" / "2026-04-07-empty-axis-abcd12"
+            review_dir.mkdir(parents=True)
+            ctx_files = {"formal": review_dir / "formal-context.md"}
+            ctx_files["formal"].write_text("context")
+            dispatch_result = {
+                "review_dir": str(review_dir),
+                "axes": ["formal"],
+                "queries": 1,
+                "elapsed_seconds": 1.0,
+                "formal": {
+                    "label": "Formal",
+                    "model": "gpt-5.4",
+                    "requested_model": "gpt-5.4",
+                    "exit_code": 0,
+                    "size": 0,
+                    "output": str(review_dir / "formal-output.md"),
+                    "stderr": "[llmx:WARN] 0-byte output",
+                },
+            }
+
+            old_cwd = Path.cwd()
+            os.chdir(project_dir)
+            try:
+                with patch.object(model_review, "build_context", return_value=ctx_files), patch.object(
+                    model_review, "dispatch", return_value=dispatch_result
+                ), patch.object(model_review, "find_constitution", return_value=("", None)), patch.object(
+                    model_review.os, "urandom", return_value=b"\xab\xcd\x12"
+                ), patch.object(
+                    model_review.sys,
+                    "argv",
+                    [
+                        "model-review.py",
+                        "--context",
+                        str(context_path),
+                        "--topic",
+                        "empty-axis",
+                        "--project",
+                        str(project_dir),
+                    ],
+                ):
+                    rc = model_review.main()
+            finally:
+                os.chdir(old_cwd)
+
+            failure_path = project_dir / ".model-review" / "2026-04-07-empty-axis-abcd12" / "dispatch-failures.json"
+            self.assertEqual(rc, 2)
+            self.assertTrue(failure_path.exists())
+            self.assertIn('"failure_reason": "empty_output"', failure_path.read_text())
 
 
 if __name__ == "__main__":

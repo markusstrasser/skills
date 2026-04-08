@@ -229,6 +229,33 @@ def read_process_stderr(proc: subprocess.Popen) -> str:
     return stderr.decode(errors="replace").strip() if stderr else ""
 
 
+def axis_output_failed(info: object) -> bool:
+    """Return True when an axis failed to produce a usable review artifact."""
+    if not isinstance(info, dict):
+        return False
+    return int(info.get("exit_code", 0)) != 0 or int(info.get("size", 0)) == 0
+
+
+def collect_dispatch_failures(
+    dispatch_result: dict,
+    ctx_files: dict[str, Path],
+) -> list[dict[str, object]]:
+    """Summarize failed axes for machine-readable failure artifacts."""
+    failures: list[dict[str, object]] = []
+    skip_keys = {"review_dir", "axes", "queries", "elapsed_seconds"}
+    for axis, info in dispatch_result.items():
+        if axis in skip_keys or not axis_output_failed(info):
+            continue
+        entry = dict(info)
+        entry["axis"] = axis
+        entry["context"] = str(ctx_files.get(axis, ""))
+        entry["failure_reason"] = (
+            "nonzero_exit" if int(entry.get("exit_code", 0)) != 0 else "empty_output"
+        )
+        failures.append(entry)
+    return failures
+
+
 def is_gemini_rate_limit_failure(model: str, exit_code: int, stderr: str, output_size: int) -> bool:
     if model != GEMINI_PRO_MODEL:
         return False
@@ -534,8 +561,10 @@ def dispatch(
             entry["model"] = GEMINI_FLASH_MODEL
             entry["exit_code"] = rc
             entry["size"] = output_size
-        if rc != 0:
+        if stderr:
             entry["stderr"] = stderr[-500:] if stderr else ""
+        if output_size == 0:
+            entry["failure_reason"] = "empty_output"
 
         results[axis] = entry
 
@@ -873,6 +902,19 @@ def main() -> int:
 
     # Dispatch and wait
     result = dispatch(review_dir, ctx_files, axis_names, args.question, bool(constitution), question_overrides)
+    failures = collect_dispatch_failures(result, ctx_files)
+    if failures:
+        failure_path = review_dir / "dispatch-failures.json"
+        failure_path.write_text(json.dumps({"failures": failures}, indent=2) + "\n")
+        result["dispatch_failures"] = str(failure_path)
+        result["failed_axes"] = [failure["axis"] for failure in failures]
+        print(
+            f"error: model-review dispatch produced unusable outputs for "
+            f"{', '.join(result['failed_axes'])}; see {failure_path}",
+            file=sys.stderr,
+        )
+        print(json.dumps(result, indent=2))
+        return 2
 
     # --verify implies --extract
     do_extract = args.extract or args.verify
