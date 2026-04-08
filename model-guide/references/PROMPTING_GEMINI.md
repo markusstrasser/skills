@@ -115,7 +115,7 @@ You are a specialized assistant for [Domain].
 
 ## 6. Grounding with Google Search
 
-Unique Gemini capability -- no equivalent in Claude, GPT, or Kimi APIs.
+Unique Gemini capability -- no equivalent in Claude or GPT APIs.
 
 ```python
 grounding_tool = types.Tool(google_search=types.GoogleSearch())
@@ -248,16 +248,16 @@ Official Gemini guidance emphasizes few-shot more strongly than other models:
 
 ---
 
-## 13. Key Differences from Claude/GPT/Kimi
+## 13. Key Differences from Claude/GPT
 
-| Aspect | Gemini 3.1 | Claude 4.6 | GPT-5.4 | Kimi K2.5 |
-|--------|-----------|-----------|---------|-----------|
-| Temperature | Keep at 1.0 (lowering degrades) | Lower OK | Lower OK | 1.0 thinking, 0.6 instant |
-| Query placement | END (critical) | Bottom (30% better) | End preferred | Flexible |
-| Output default | 8,192 (must raise!) | Higher | Higher | 4,096 (must raise) |
-| Grounding | Native Google Search | Not available | Web search available | Not available |
-| Context | **1M native** | 1M (GA March 13) | 1M | 256K |
-| Instruction following | Weakest (89.2%) | Strong (94%) | Best (95%) | Strong (94%) |
-| Expert preference | Lower (1317) | Highest (1606) | Middle | -- |
-| Constraint placement | END of prompt | Flexible | Both beginning and end | Flexible |
-| Few-shot importance | Strongly recommended | Helpful | Helpful | Helpful |
+| Aspect | Gemini 3.1 | Claude 4.6 | GPT-5.4 |
+|--------|-----------|-----------|---------|
+| Temperature | Keep at 1.0 (lowering degrades) | Lower OK | Lower OK |
+| Query placement | END (critical) | Bottom (30% better) | End preferred |
+| Output default | 8,192 (must raise!) | Higher | Higher |
+| Grounding | Native Google Search | Not available | Web search available |
+| Context | **1M native** | 1M (GA March 13) | 1M |
+| Instruction following | Weakest (89.2%) | Strong (94%) | Best (95%) |
+| Expert preference | Lower (1317) | Highest (1606) | Middle |
+| Constraint placement | END of prompt | Flexible | Both beginning and end |
+| Few-shot importance | Strongly recommended | Helpful | Helpful |

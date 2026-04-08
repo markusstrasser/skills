@@ -358,18 +358,18 @@ GPT-5.4 with thinking is **best-in-class for document understanding**:
 
 ---
 
-## 9. Key Differences from Claude/Gemini/Kimi
+## 9. Key Differences from Claude/Gemini
 
-| Aspect | GPT-5.4 (thinking) | Claude 4.6 | Gemini 3.1 | Kimi K2.5 |
-|--------|---------|-----------|-----------|-----------|
-| Structured Outputs | Native, guaranteed | Tool_use workaround | Via function calling | OpenAI-compatible |
-| Prompt caching | Automatic, 90% off | Manual markers | Automatic, 75% off | None |
-| Thinking control | `reasoning.effort` (none/low/med/high/xhigh) | `output_config.effort` (low-max) | `thinkingLevel` (minimal-high) | On/off toggle |
-| CoT prompting | **Hurts** when thinking on | Helps (`<thinking>` tags) | Replace with thinkingLevel | Use thinking mode |
-| Reasoning persistence | `previous_response_id` | Adaptive interleaved | Thought signatures | Not available |
-| Hallucination | ~72% SimpleQA (tied) | Best tied (72%) | Best tied (72.1%) | Worst (37%) |
-| Refusal rate | Almost never refuses (2%) | More selective | More selective | Moderate |
-| Math | **Best** (MATH 98%, AIME 100%) | 93% | 91.1% | 98%, AIME 96% |
-| Vision/OCR | **Best** (DocVQA 95%) | Good (93%) | Good | Good (MMMU-Pro 78.5%) |
-| Medical reasoning | **Best** (1.6% HealthBench error) | Good | Good | -- |
-| Web search grounding | Available (SimpleQA -> 95.1%) | Not available | Google Search native | Not available |
+| Aspect | GPT-5.4 (thinking) | Claude 4.6 | Gemini 3.1 |
+|--------|---------|-----------|-----------|
+| Structured Outputs | Native, guaranteed | Tool_use workaround | Via function calling |
+| Prompt caching | Automatic, 90% off | Manual markers | Automatic, 75% off |
+| Thinking control | `reasoning.effort` (none/low/med/high/xhigh) | `output_config.effort` (low-max) | `thinkingLevel` (minimal-high) |
+| CoT prompting | **Hurts** when thinking on | Helps (`<thinking>` tags) | Replace with thinkingLevel |
+| Reasoning persistence | `previous_response_id` | Adaptive interleaved | Thought signatures |
+| Hallucination | ~72% SimpleQA (tied) | Best tied (72%) | Best tied (72.1%) |
+| Refusal rate | Almost never refuses (2%) | More selective | More selective |
+| Math | **Best** (MATH 98%, AIME 100%) | 93% | 91.1% |
+| Vision/OCR | **Best** (DocVQA 95%) | Good (93%) | Good |
+| Medical reasoning | **Best** (1.6% HealthBench error) | Good | Good |
+| Web search grounding | Available (SimpleQA -> 95.1%) | Not available | Google Search native |
