@@ -33,7 +33,7 @@ Need diagram?
 ## Typst + CeTZ (Default)
 
 ```typst
-#import "@preview/cetz:0.2.2": canvas, draw, plot
+#import "@preview/cetz:0.3.4": canvas, draw, plot
 
 #canvas({
   import draw: *
@@ -61,7 +61,7 @@ Useful packages (auto-download on first use):
 | `alchemist` | Molecular formulas |
 | `inknertia` | Feynman, spacetime diagrams |
 
-Gotchas: Math uses `$ ... $` not `\( ... \)`. Import version matters (`@preview/cetz:0.2.2`).
+Gotchas: Math uses `$ ... $` not `\( ... \)`. **Use CeTZ 0.3.4+** — 0.2.2 panics on negative coordinates.
 
 ## Compile & Convert
 
