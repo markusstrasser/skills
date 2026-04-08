@@ -88,6 +88,7 @@ Multi-GPU: `gpu="H100:8"`. Fallback: `gpu=["H100", "A100-80GB"]`.
 38. **`modal volume ls/get` subprocess calls leak ~300MB each** -- Modal SDK loads fully per subprocess.run() call. Iterating 100 files = 29GB resident → jetsam kill. Always check local file existence BEFORE calling `modal volume ls`. Skip the subprocess if the file is already present locally. (Evidence: JetsamEvent 2026-04-05, 4x python3.12 at 29GB total.)
 39. **`modal volume get` has no progress output with `capture_output=True`** -- downloads are completely silent. For large files, monitor the local file size growth in a background thread. Scale timeout by file size (120s + 1s/MB) instead of flat 900s.
 40. **`modal volume ls --json` can timeout on slow API** -- set 120s timeout and catch `TimeoutExpired` gracefully. A timeout on `ls` should skip the file (will re-download), not crash the entire sync.
+41. **Use Modal Python SDK for volume reads, not subprocess** -- `vol = modal.Volume.from_name("name"); data = b"".join(vol.read_file(path))` is ~100ms. `subprocess.run(["modal", "volume", "get", ...])` loads the full SDK per call (~300MB, 5-15s), needs PATH resolution, `--force` for existing files, and times out under concurrent load. Use SDK for probes/reads. Subprocess only for CLI-specific features (app logs, app list). `vol.listdir(path)` replaces `modal volume ls`. (Evidence: 4 successive bugs in orchestrator probe, 2026-04-07.)
 
 ## MANDATORY: Cost Awareness
 

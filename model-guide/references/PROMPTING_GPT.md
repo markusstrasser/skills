@@ -146,9 +146,9 @@ Same as base GPT-5.4, plus:
 
 Our eval showed GPT-5.4 Pro is **better than Opus at adversarial self-review** — it found mathematical overclaims in its own TP53 classification (PP2 removal dropped posterior from 0.90→0.81, uncalibrated LR14→4.33 dropped to 0.74). Opus tends to be more agreeable with its own outputs. Use Pro for auditing quantitative code, scoring functions, and calibration math.
 
-### Empirical Prompting Patterns (59 Q&A pairs, 6 rounds, 2026-03-22→24)
+### Empirical Prompting Patterns (75 Q&A pairs, 6 rounds, 2026-03-22→28)
 
-Corpus: `config/gpt54_calibration_qa.jsonl` in genomics repo. 49/59 evergreen, 21/59 implemented.
+Corpus: `.scratch/gpt54pro-r{1..6}-qa-*.md` in genomics repo.
 
 **What worked (Round 3: 69% implementation rate):**
 
@@ -158,9 +158,17 @@ Corpus: `config/gpt54_calibration_qa.jsonl` in genomics repo. 49/59 evergreen, 2
 
 3. **Adversarial framing extracts the most.** "Find bugs in this code" and "what's wrong with this classification" outperform "review this" or "what do you think?" The model responds to adversarial pressure with precision; it responds to open-ended asks with balanced hedging.
 
-4. **One derivation per prompt, not surveys.** Round 5 prompts each asked for a single risk model (DPYD activity scores, G6PD drug risk, HLA SCAR decision tree). Produced dense, actionable output. Round 6 megaprompts (entire architecture dump) produced broad but shallow findings — 2.2 quant claims/prompt vs 3.5 for focused prompts.
+4. **One derivation per prompt, not surveys.** Focused prompts asking for a single risk model produced 3.5 quant claims/prompt. Architecture-dump megaprompts produced 2.2. Dense > broad.
 
 5. **"Show all derivations. I will verify every intermediate step."** This sentence at the end consistently forced full working, not just conclusions. Without it, Pro often stated results without showing the chain.
+
+6. **"Design X from scratch" > "what's wrong with X."** (R6 finding, 2026-03-28.) Rounds 1-5 asked Pro to audit existing pipeline math — found 14 bugs total (good). Round 6 asked Pro to *design* replacement methods from first principles — found 3 bugs, 7 theoretical bounds, AND produced implementable formulas (concordance-only discount, coalescent ROH estimator, VOI-based triage, stratified FDR null). The design prompts produced higher-impact findings because Pro's extended reasoning explores solution spaces, not just verifies existing ones. Use audit prompts when you suspect specific bugs; use design prompts when you need the correct method and don't trust the current one.
+
+7. **Include the current data distribution.** (R6 finding.) "244 variants → 122 NEEDS_REVIEW, 55 LIKELY_BENIGN, 54 ARTIFACT, 13 BENIGN" let Pro derive that the condition FDR was at null level (z=-0.14) and that 35 T1 variants exceed any 30-variant review budget. Without real counts, Pro gives parametric answers that need separate calibration.
+
+8. **Include boundary conditions from the actual code.** (R6 finding.) "T_max = 5.86 + 2.77 = 8.63 from listed AM/SpliceAI ranges" let Pro derive the exact minimum discount factor for monotonicity (d ≥ 0.7335). Without T_max, Pro gives d ≥ 1 - c_min/T_max as a formula — correct but not actionable until you plug in your own ranges.
+
+9. **Pro corrects prompt assumptions.** (R6 finding.) Pro corrected 5 errors in our prompt setup: n_eff for "10-50%" range (19.17 not 8.6), stroke 10yr risk (3.2% not 5.2% under our stated logistic model), AM=0.95 is in the 1.46 bin not 5.86, minimax regret is degenerate (need expected regret instead), raw tool correlations don't determine I(Y;T_1,...,T_8). These corrections are often more valuable than the answers to the questions asked.
 
 **What failed:**
 
@@ -172,22 +180,33 @@ Corpus: `config/gpt54_calibration_qa.jsonl` in genomics repo. 49/59 evergreen, 2
 
 4. **Search-enabled prompts for database lookups.** Round 4 enabled web search, which found CPIC coverage gaps — but also returned stale/wrong tool version info. Search helps for "what exists?" but not for "what's the current version of X?"
 
-**Prompt template that maximizes value:**
+**Prompt templates:**
 
+*Audit prompt (find bugs in existing math):*
 ```
-Formatting re-enabled
+Here is [actual code + config, 100-500 lines]:
+[paste]
 
-Here is [actual data/code/output]:
-[paste 100-500 lines of real pipeline data]
+Current data distribution: [paste real counts, e.g. "244 variants → 122 NEEDS_REVIEW"]
 
-Derive [specific quantitative question]. Show all intermediate steps.
-I will verify every calculation.
-
-Constraints:
-- EUR population only
-- GRCh38 coordinates
-- [domain-specific constraints]
+Questions (show all working):
+1. [Specific quantitative question with boundary conditions from the code]
+2. [Ask for the proof/derivation, not just the answer]
 ```
+
+*Design prompt (derive correct method from scratch):*
+```
+A pipeline does [X]. Here is the exact architecture:
+[paste code + config + real numbers]
+
+Current distribution: [paste real counts]
+Known parameter ranges: [paste from code, e.g. "T_max = 5.86 + 2.77 = 8.63"]
+
+Design [replacement method] from first principles. Show all working.
+Constraints: [monotonicity, calibration, backward compatibility, etc.]
+```
+
+Design prompts produce higher-impact findings than audit prompts (R6 vs R1-R5). Use audit when you suspect specific bugs; use design when you need the correct method.
 
 ### llmx Usage
 

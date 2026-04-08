@@ -1,0 +1,16 @@
+{
+  "failures": [
+    {
+      "label": "Formal",
+      "model": "gpt-5.4",
+      "requested_model": "gpt-5.4",
+      "exit_code": 0,
+      "size": 0,
+      "output": "/var/folders/td/k9yd1c8n5478my_42k9tb89h0000gn/T/tmp0qi975ad/.model-review/2026-04-07-empty-axis-abcd12/formal-output.md",
+      "stderr": "[llmx:WARN] 0-byte output",
+      "axis": "formal",
+      "context": "/var/folders/td/k9yd1c8n5478my_42k9tb89h0000gn/T/tmp0qi975ad/.model-review/2026-04-07-empty-axis-abcd12/formal-context.md",
+      "failure_reason": "empty_output"
+    }
+  ]
+}
