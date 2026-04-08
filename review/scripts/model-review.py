@@ -246,6 +246,41 @@ def slugify(text: str, max_len: int = 40) -> str:
     return s[:max_len]
 
 
+def _add_additional_properties(schema: dict) -> dict:
+    """Recursively add additionalProperties:false to all objects (OpenAI strict mode)."""
+    import copy
+    s = copy.deepcopy(schema)
+    def _walk(obj: dict) -> None:
+        if obj.get("type") == "object":
+            obj["additionalProperties"] = False
+        for v in obj.values():
+            if isinstance(v, dict):
+                _walk(v)
+            elif isinstance(v, list):
+                for item in v:
+                    if isinstance(item, dict):
+                        _walk(item)
+    _walk(s)
+    return s
+
+
+def _strip_additional_properties(schema: dict) -> dict:
+    """Recursively remove additionalProperties from all objects (Google API)."""
+    import copy
+    s = copy.deepcopy(schema)
+    def _walk(obj: dict) -> None:
+        obj.pop("additionalProperties", None)
+        for v in obj.values():
+            if isinstance(v, dict):
+                _walk(v)
+            elif isinstance(v, list):
+                for item in v:
+                    if isinstance(item, dict):
+                        _walk(item)
+    _walk(s)
+    return s
+
+
 def _call_llmx(
     provider: str,
     model: str,
@@ -262,7 +297,11 @@ def _call_llmx(
     temperature = 1.0 if any(m in model for m in ("gpt-5", "gemini-3")) else 0.7
     api_kwargs: dict = {**kwargs}
     if schema:
-        api_kwargs["response_format"] = schema
+        # OpenAI strict mode requires additionalProperties:false; Google rejects it
+        if provider == "openai":
+            api_kwargs["response_format"] = _add_additional_properties(schema)
+        else:
+            api_kwargs["response_format"] = _strip_additional_properties(schema)
     try:
         response = llmx_chat(
             prompt=full_prompt,
