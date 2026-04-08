@@ -1,6 +1,12 @@
 <!-- Reference file for brainstorm skill. Loaded on demand. -->
 # llmx Dispatch Templates
 
+> **DISPATCH VIA PYTHON API, NOT CLI.** Use `from llmx.api import chat as llmx_chat` and call
+> `llmx_chat(prompt=..., provider=..., model=..., timeout=...)`. Read context files with
+> `Path(...).read_text()` and write outputs with `Path(...).write_text(response.content)`.
+> The CLI commands below are template references for the prompt content — adapt them to Python API calls.
+> Bootstrap: `sys.path.insert(0, glob.glob(str(Path.home() / ".local/share/uv/tools/llmx/lib/python*/site-packages"))[0])`
+
 All templates assume `$BRAINSTORM_DIR`, `$N_IDEAS`, `$CONSTITUTION`, and `$TOPIC` are set.
 Date injection: `$(date +%Y-%m-%d)` in every system prompt.
 

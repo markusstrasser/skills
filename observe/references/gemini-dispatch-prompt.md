@@ -1,10 +1,15 @@
 <!-- Reference file for observe skill (sessions mode). Loaded on demand. -->
 # Gemini Dispatch Prompt
 
-Full prompt sent to Gemini 3.1 Pro via llmx in Step 2.
+Full prompt sent to Gemini 3.1 Pro in Step 2 via `llmx.api.chat()` (Python API).
 
-```bash
-llmx -p google -m gemini-3.1-pro-preview -f ~/Projects/meta/artifacts/observe/input.md -f ~/Projects/meta/artifacts/observe/coverage-digest.txt -f ~/Projects/meta/artifacts/observe/operational-context.txt "$(cat <<'PROMPT'
+> **DO NOT use the CLI command below.** It has a multi-file `-f` bug that silently drops files (4 confirmed occurrences).
+> Instead: read all files with `Path.read_text()`, concatenate, and pass as a single string to `llmx_chat()`.
+> See observe/SKILL.md sessions mode Step 2 for the executable dispatch pattern.
+
+The prompt content to send (after the concatenated context):
+
+```text
 You are analyzing Claude Code session transcripts for behavioral anti-patterns.
 
 SESSION ID ANCHORING: The input transcript starts with a "VALID SESSION IDS" table listing
