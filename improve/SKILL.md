@@ -1,6 +1,6 @@
 ---
 name: improve
-description: "Synthesis and implementation — harvest findings, suggest skills, maintain infrastructure, orchestrator ticks. The action arm of the diagnostic loop."
+description: "Use when: 'what should I fix next', 'suggest improvements', 'run maintenance'. Modes: harvest (gather+rank findings), suggest (repeated workflows → skills), maintain (quality checks + implement), tick (one orchestrator cycle)."
 user-invocable: true
 argument-hint: <mode> [options...]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit]

@@ -1,6 +1,6 @@
 ---
 name: research
-description: "Discovery and synthesis — one-shot research, CORAL-epoch loops, knowledge compilation, training-data diff, parallel Codex dispatch. MCP-orchestrated with source grading."
+description: "Use when: 'find papers about', 'what does the latest guidance say', 'research X', 'what's known about'. Modes: /research <question> (one-shot with sources), /research cycle (autonomous loop), /research compile (synthesize memos), /research diff (what's NOT in training data)."
 user-invocable: true
 argument-hint: <mode> [query or topic]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent, WebSearch, WebFetch]
@@ -895,8 +895,8 @@ Phase 5: EXECUTE   Implement the plan (with user approval)         (~25%)
 $ARGUMENTS
 
 <!-- knowledge-index
-generated: 2026-04-08T07:17:27Z
-hash: 90a4ed294c3c
+generated: 2026-04-08T19:53:23Z
+hash: c1a85546e438
 
 cross_refs: docs/compiled/{concept-slug}.md, docs/research/*.md, research/*.md, research/adversarial-case-library.md, research/compiled/{concept-slug}.md
 sources: 1
