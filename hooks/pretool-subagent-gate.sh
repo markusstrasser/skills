@@ -171,7 +171,7 @@ fi
 
 # Check 7: Turn-budget / file-output instruction missing in dispatch prompt
 # BLOCKING for research-heavy agents (researcher, general-purpose, Plan, unset)
-# Advisory for Explore, session-analyst, design-review (read-only or self-managed)
+# Advisory for Explore, observe (read-only or self-managed)
 if [ -n "$PROMPT" ]; then
     HAS_TURN_BUDGET=$(echo "$PROMPT" | grep -ciE '(stop|halt|synthesize|write).*(70%|turn|budget|before running out)|max.*(turn|epoch)|epoch.*boundar' || true)
     HAS_FILE_OUTPUT=$(echo "$PROMPT" | grep -ciE '(write|save|output).*(file|path|memo|artifact)' || true)

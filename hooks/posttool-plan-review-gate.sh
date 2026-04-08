@@ -1,5 +1,5 @@
 #!/bin/bash
-# PostToolUse hook (Write|Edit) — advise model-review on substantial new plan files
+# PostToolUse hook (Write|Edit) — advise /review model on substantial new plan files
 # Advisory only (exit 0). Only fires on plans large enough to warrant cross-model review.
 
 INPUT=$(cat)
@@ -25,4 +25,4 @@ if ls .model-review/${TODAY}-*${PLAN_SLUG}* 2>/dev/null | grep -q .; then
   exit 0
 fi
 
-echo "Substantial plan written (${LINES} lines). Run /model-review now BEFORE asking for plan approval or execution. Do not prompt the user to approve the plan until after the review completes and findings are incorporated."
+echo "Substantial plan written (${LINES} lines). Run /review model now BEFORE asking for plan approval or execution. Do not prompt the user to approve the plan until after the review completes and findings are incorporated."
