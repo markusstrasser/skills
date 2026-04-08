@@ -355,11 +355,22 @@ Write `{date}-{SID}-manual.json` with:
 
 ---
 
+## Model Selection for Dispatch
+
+Default: Gemini 3.1 Pro (cheapest 1M context, good at pattern extraction). Use GPT-5.4 at medium effort for formal/quantitative analysis or when Gemini rate-limits. Both via `llmx.api.chat()` — never CLI subprocess. See `/model-guide` for detailed routing.
+
+```python
+from llmx.api import chat as llmx_chat
+# Gemini (default — pattern extraction, large context)
+r = llmx_chat(prompt=..., provider="google", model="gemini-3.1-pro-preview", timeout=300)
+# GPT-5.4 medium effort (formal analysis, fact verification)
+r = llmx_chat(prompt=..., provider="openai", model="gpt-5.4", reasoning_effort="medium", timeout=300)
+```
+
 ## Notes
 
 - Transcript source: `~/.claude/projects/-Users-alien-Projects-{project}/` (native Claude Code storage)
 - Preprocessor strips thinking blocks and base64 content
-- **Use `llmx.api.chat()` for Gemini dispatch, never CLI subprocess.** The Python API bypasses all CLI transport bugs (multi-file drops, 0-byte outputs, rate limit masking).
 - Gemini 3.1 Pro at ~$0.001/query cached -- cheap enough to run frequently
 - Codex transcript extraction requires `~/.codex/state_5.sqlite`
 
