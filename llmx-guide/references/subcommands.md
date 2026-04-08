@@ -7,8 +7,8 @@
 | Flag | What it does |
 |------|-------------|
 | `--fast` | Gemini Flash + low reasoning (quick queries) |
-| `--use-old` | Previous model version (e.g., Kimi K2 instead of K2.5) |
-| `--no-thinking` | Disable reasoning (Kimi switches to instruct model) |
+| `--use-old` | Previous model version |
+| `--no-thinking` | Disable reasoning |
 
 ## Deep Research
 

@@ -13,11 +13,9 @@
 | GPT-5.4 | `gpt-5.4` | **Default OpenAI model.** `openai` prefers Codex CLI when installed. API fallback defaults reasoning to `high`; `xhigh` is also supported. |
 | GPT-5.2 (legacy) | `gpt-5.2` | Legacy OpenAI default. |
 | GPT-5-Codex | `gpt-5-codex` | No `minimal` reasoning-effort |
-| Kimi K2.5 | `kimi-k2.5` | No `--reasoning-effort`. Use `--no-thinking` |
-| Kimi K2 (legacy) | `kimi-k2-thinking` | Use `--use-old` flag |
 | Claude Sonnet 4.6 | `claude-sonnet-4-6` | Hyphens, not dots |
 
-**Model name format (v0.6.0+):** No provider prefixes needed. Use `gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`. Old LiteLLM-style prefixed names (`gemini/`, `openai/`, `xai/`, `moonshot/`) still accepted with deprecation warning. Will be removed in a future version.
+**Model name format (v0.6.0+):** No provider prefixes needed. Use `gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`. Old LiteLLM-style prefixed names (`gemini/`, `openai/`) still accepted with deprecation warning. Will be removed in a future version.
 
 **Model name suggestions:** If you typo a model name, llmx suggests the closest match: `"gemini-3.1-pro not found; did you mean gemini-3.1-pro-preview?"`
 
@@ -44,7 +42,6 @@
 | GPT-5-Codex | low, medium, high | high |
 | Gemini 3 Flash | low, medium, high | high (server-side, via `thinking_config`) |
 | Gemini 3.x (Pro/Flash) | low, medium, high | high (server-side, via `thinking_config`) |
-| Kimi K2.5 | N/A — use `--no-thinking` | thinking on |
 
 Temperature locked to 1.0 for GPT-5 and Gemini 3.x thinking models.
 
