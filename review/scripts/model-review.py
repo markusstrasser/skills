@@ -30,7 +30,16 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
 
-from llmx.api import chat as llmx_chat
+# llmx is editable-installed as a uv tool; bootstrap from its venv if not importable
+try:
+    from llmx.api import chat as llmx_chat
+except ImportError:
+    import glob
+    _tool_site = glob.glob(str(Path.home() / ".local/share/uv/tools/llmx/lib/python*/site-packages"))
+    if _tool_site:
+        sys.path.insert(0, _tool_site[0])
+    sys.path.insert(0, str(Path.home() / "Projects" / "llmx"))
+    from llmx.api import chat as llmx_chat
 
 # --- Structured output schema (both models return this) ---
 
@@ -258,14 +267,18 @@ def _call_llmx(
     """Call llmx Python API, write output to file, return result dict."""
     context = context_path.read_text()
     full_prompt = context + "\n\n---\n\n" + prompt
+    # Reasoning models (GPT-5.x, Gemini 3.x) require temperature=1.0
+    temperature = 1.0 if any(m in model for m in ("gpt-5", "gemini-3")) else 0.7
+    api_kwargs: dict = {**kwargs}
+    if schema:
+        api_kwargs["response_format"] = schema
     try:
         response = llmx_chat(
             prompt=full_prompt,
             provider=provider,
             model=model,
-            temperature=0.7,
-            response_format=schema,
-            **kwargs,
+            temperature=temperature,
+            **api_kwargs,
         )
         output_path.write_text(response.content)
         return {
