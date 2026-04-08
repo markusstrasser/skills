@@ -71,7 +71,7 @@ if [ -n "$MODEL" ]; then
   case "$MODEL" in
     gemini-3.1-pro-preview|gemini-3-flash-preview|gemini-3.1-flash-image-preview) ;;
     gpt-5.4|gpt-5.2|gpt-5.3-chat-latest|gpt-5-codex|o4-mini) ;;
-    kimi-k2.5|kimi-k2-thinking) ;;
+    gemini-3.1-flash-lite-preview) ;;
     claude-sonnet-4-6|claude-opus-4-6|claude-haiku-4-5) ;;
     *gemini-3.1-pro*|*gemini-3-flash*) ;; # close enough variants
     *)
@@ -94,7 +94,14 @@ fi
 
 # --- ADVISORY checks (warnings only) ---
 
-# 0. Gemini Pro without --stream — CLI transport hangs on thinking models + piped input, hits capacity limits
+# 0. Python API preferred over CLI for programmatic dispatch
+# The CLI has 5 known failure modes (multi-file drops, 0-byte -o, rate limit loops, stdin EOF, pipe masking).
+# The Python API (llmx.api.chat) bypasses all of them.
+if echo "$CMD" | grep -qE 'llmx\s+chat'; then
+  WARNINGS="${WARNINGS}[llmx-guard] Consider using llmx Python API instead of CLI: from llmx.api import chat; chat(prompt=..., provider=..., model=..., api_only=True). Avoids 5 known CLI transport failures. See llmx-guide skill.\n"
+fi
+
+# 0a. Gemini Pro without --stream — CLI transport hangs on thinking models + piped input, hits capacity limits
 #    Flash/Lite on CLI is fine (non-thinking, better capacity) — no warning needed
 if echo "$CMD" | grep -qiE 'gemini-3\.1-pro|gemini-3-pro' && ! echo "$CMD" | grep -qE -- '--stream'; then
   WARNINGS="${WARNINGS}[llmx-guard] Gemini Pro without --stream. CLI transport hangs on thinking models and hits capacity limits. Add --stream for API transport. (Flash on CLI is fine.)\n"
