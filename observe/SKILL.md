@@ -82,16 +82,23 @@ Parse the project argument from $ARGUMENTS. Default: last 5 sessions.
 
 Run shared transcript extraction above. Build operational context per `references/transcript-extraction.md` Step 1.3.
 
-### Step 2: Dispatch to Gemini
+### Step 2: Analyze Transcripts
 
-Send full-fidelity transcript + coverage digest + operational context to Gemini 3.1 Pro via llmx. Full prompt in `references/gemini-dispatch-prompt.md`.
+Analyze directly using the taxonomy in `lenses/behavioral-antipatterns.md` and grounding examples in `references/grounding-examples.md`. Read the coverage digest to avoid re-reporting known patterns.
+
+For each session transcript:
+1. Read the transcript
+2. Score against the 20-item taxonomy
+3. Flag any patterns that score above threshold
+
+If transcripts exceed context, use the shape pre-filter output to prioritize flagged sessions and skip normal-profile ones.
 
 ### Step 3: Stage Findings
 
-Validate Gemini output against transcript, check session UUIDs, save as JSON artifact. Full procedure and JSON template in `references/findings-staging.md`.
+Validate findings against transcript evidence, check session UUIDs, save as JSON artifact. Full procedure and JSON template in `references/findings-staging.md`.
 
 **Judgment calls when staging:**
-- Gemini flags "unprompted commit" as HIGH -- false positive, global CLAUDE.md authorizes auto-commit
+- "Unprompted commit" is NOT an anti-pattern -- global CLAUDE.md authorizes auto-commit
 - `done_with_denials` status is NOT a failure -- it's a constitutional approval gate
 - "Agent paused before executing" -- rubber-stamp approvals are intentional oversight, not sycophancy
 - Promotion criteria: recurs 2+ sessions, not already covered, checkable predicate or architectural change
@@ -141,18 +148,15 @@ Run shared transcript extraction. Extract from all active projects (meta, intel,
 
 Run shape pre-filter. Note anomalous sessions for priority analysis.
 
-### Phase 2: Pattern Extraction (Gemini)
+### Phase 2: Pattern Extraction
 
-Dispatch to Gemini 3.1 Pro for structured pattern extraction. Full prompt in `references/gemini-prompt.md`.
-
-**Gemini's output is DATA, not conclusions.** It extracts patterns; you do the creative synthesis in Phase 3.
+Extract patterns directly from the transcripts using the pattern types in `lenses/architectural-patterns.md`. The prompt frame in `references/gemini-prompt.md` describes what to look for — use it as your analysis guide.
 
 **Operational limits:**
-- **Session batching:** Pattern extraction degrades past ~80 sessions in one Gemini call. For `--days 7+`, batch by project.
-- **Hallucination rate on session details:** ~20-30%. Phase 2 verification below is mandatory, not optional.
-- Cross-project patterns are harder to detect when sessions are batched by project — note this gap.
+- For `--days 7+` (>80 sessions): batch by project and analyze each batch separately.
+- Cross-project patterns are harder to detect when batched by project — note this gap.
 
-**Verify Gemini claims (mandatory):**
+**Self-verify (mandatory):**
 1. Check cited session IDs actually exist
 2. Verify quoted user messages appear in the transcript
 3. Confirm tool sequences match reality
@@ -222,50 +226,32 @@ For the top 3-5 sessions with most wasted supervision:
 python3 ${CLAUDE_SKILL_DIR}/scripts/extract_transcript.py <project> --sessions 5 --output "$ARTIFACT_DIR/supervision-transcripts.md"
 ```
 
-### Step 3: LLM Synthesis (Gemini)
+### Step 3: Synthesize
 
-Dispatch raw classification + transcripts to Gemini 3.1 Pro:
-
-```bash
-llmx -p google -m gemini-3.1-pro-preview -f "$ARTIFACT_DIR/supervision-raw.json" -f "$ARTIFACT_DIR/supervision-transcripts.md" "$(cat <<'PROMPT'
-You are analyzing Claude Code sessions for WASTED HUMAN SUPERVISION -- places where the user had to intervene but an automated system could have handled it instead.
-
-You have two inputs:
-1. A JSON classification of every user message into categories (NEW_AGENCY, CORRECTION, BOILERPLATE, RUBBER_STAMP, RE_ORIENT)
-2. Full conversation transcripts for context
-
-For each non-NEW_AGENCY pattern, determine:
-1. Is it genuinely automatable? Some "corrections" are actually new information. Filter those out.
+Read the raw classification JSON and transcripts directly. For each non-NEW_AGENCY pattern, determine:
+1. Is it genuinely automatable? Some "corrections" are actually new information — filter those out.
 2. What's the right fix type? (HOOK, RULE, DEFAULT, SKILL, ARCHITECTURAL)
 3. How many times did it recur? Single occurrences are noise. 3+ is signal.
-4. What would the fix look like? Be specific -- hook pseudocode, rule text, or architectural sketch.
+4. What would the fix look like? Be specific — hook pseudocode, rule text, or architectural sketch.
 
-Output format for each finding:
+Output format per finding:
 
+```
 ### [PATTERN_NAME]: [one-line description]
 - **Category:** CORRECTION | BOILERPLATE | RUBBER_STAMP | RE_ORIENT
 - **Occurrences:** N (across M sessions)
 - **Fix type:** HOOK | RULE | DEFAULT | SKILL | ARCHITECTURAL
 - **Proposed fix:** [specific implementation]
 - **Maintenance:** NONE | LOW | MEDIUM
-- **Composability:** Does this fix benefit other projects/skills?
 - **Expected reduction:** what % of this pattern would this fix eliminate?
-
-IMPORTANT:
-- Do NOT propose fixes for things that are genuinely new agency
-- Do NOT propose rules for things already in CLAUDE.md
-- Rank by (occurrences x maintenance-adjusted automation potential)
-- If nothing is worth fixing, say so
-Output ONLY the findings, ranked by priority. No preamble.
-PROMPT
-)"
 ```
+
+Don't propose fixes for things that are genuinely new agency. Don't propose rules for things already in CLAUDE.md. Rank by (occurrences x automation potential). If nothing is worth fixing, say so.
 
 ### Step 4: Review and Act
 
-1. Read Gemini output critically -- it may hallucinate session details
-2. Cross-check specific claims against raw JSON and transcripts
-3. For HIGH/MEDIUM priority findings:
+1. Cross-check findings against raw JSON and transcripts
+2. For HIGH/MEDIUM priority findings:
    - Hook fix: implement now (cheap, deterministic, reversible)
    - Rule fix: check not already covered, then add
    - Architectural fix: add to maintenance-checklist.md with evidence
@@ -340,8 +326,7 @@ Write `{date}-{SID}-manual.json` with:
 
 - Transcript source: `~/.claude/projects/-Users-alien-Projects-{project}/` (native Claude Code storage)
 - Preprocessor strips thinking blocks and base64 content
-- Gemini 3.1 Pro at ~$0.001/query cached -- cheap enough to run frequently
-- If llmx is unavailable, extract transcripts and analyze directly (less context but still useful)
+- All analysis is direct (Claude 1M context). No external LLM dispatch needed.
 - Codex transcript extraction requires `~/.codex/state_5.sqlite`
 
 $ARGUMENTS
