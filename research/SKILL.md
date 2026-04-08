@@ -527,8 +527,8 @@ No [x] checkboxes — approvals go to CYCLE.md ## Queue only.
 
 | Situation | Invoke | Why |
 |-----------|--------|-----|
-| Deep audit sweep (SWE quality) | `/maintain` owns this lane | Use `/research dispatch` directly for growth-adjacent audits only |
-| Plan review (non-trivial) | `/model-review` via script | Cross-model adversarial — same-model can't catch own blind spots |
+| Deep audit sweep (SWE quality) | `/improve maintain` owns this lane | Use `/research dispatch` directly for growth-adjacent audits only |
+| Plan review (non-trivial) | `/review model` via script | Cross-model adversarial — same-model can't catch own blind spots |
 | Discover returns empty | `/brainstorm` inline | Divergent ideation -> ideas to DECISIONS.md (informational) |
 | Need literature depth on a paper | `/research query` | Deep paper analysis with epistemic rigor |
 | Improve phase (every cycle) | retro classification framework | Structured findings -> JSON for improvement pipeline |
@@ -895,8 +895,8 @@ Phase 5: EXECUTE   Implement the plan (with user approval)         (~25%)
 $ARGUMENTS
 
 <!-- knowledge-index
-generated: 2026-04-08T07:07:42Z
-hash: 249074f0086e
+generated: 2026-04-08T07:17:27Z
+hash: 90a4ed294c3c
 
 cross_refs: docs/compiled/{concept-slug}.md, docs/research/*.md, research/*.md, research/adversarial-case-library.md, research/compiled/{concept-slug}.md
 sources: 1

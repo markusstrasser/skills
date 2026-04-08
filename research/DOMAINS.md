@@ -31,7 +31,7 @@ Omit `category` when the query spans domains or when you want diverse source typ
 - **Invoke `source-grading` skill** if available — Admiralty grades, not provenance tags.
 - **Detrend before claiming correlation.** Spurious correlations are the norm — control for market, seasonality, and shared trends before reporting any r value.
 - Consensus = zero information. If every analyst says it, the price already reflects it.
-- For high-conviction leads, use `/competing-hypotheses` to prevent single-hypothesis confirmation bias.
+- For high-conviction leads, use `/analyze hypotheses` to prevent single-hypothesis confirmation bias.
 - **Predict the data footprint BEFORE querying.** Write what you expect to find, then query. Prevents confirmation bias.
 - Check PIT (point-in-time) safety — disclosure lags vary by dataset (e.g., insider trades: 2-45 days, government spending: up to 365 days).
 - Survivorship bias in backtests. Look-ahead bias in feature construction. Both invisible until you check.
@@ -117,3 +117,10 @@ When running `--adversarial`, tailor Exa queries to the domain. Generic "X criti
 - "[framework] replication conceptual crisis"
 - "[field] Sokal affair grievance studies hoax"
 - Check: Different failure mode — not false precision but unfalsifiability. The critique here is structural: does the framework make predictions that could be wrong? If not, it's theology, not scholarship.
+
+<!-- knowledge-index
+generated: 2026-04-08T07:17:14Z
+hash: 29617442d2e4
+
+
+end-knowledge-index -->
