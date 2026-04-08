@@ -55,7 +55,7 @@ except Exception:
 
 # Skip code-focused subagents where provenance tags are irrelevant
 case "$AGENT_TYPE" in
-    Explore|Plan|statusline-setup|claude-code-guide|session-analyst)
+    Explore|Plan|statusline-setup|claude-code-guide|observe)
         exit 0
         ;;
 esac

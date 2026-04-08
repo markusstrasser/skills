@@ -50,11 +50,11 @@ increment_counter() {
   echo "$count"
 }
 
-# Track search API calls for researcher skill reminder
+# Track search API calls for research skill reminder
 if $IS_SEARCH_TOOL; then
   SEARCH_COUNT=$(increment_counter "search-api")
   if [ "$SEARCH_COUNT" -eq 3 ]; then
-    remind "researcher" "3+ search API calls this session. Load the researcher skill (/researcher) for routing guidance: S2 for literature (free, structured), Exa for semantic discovery, Brave for triangulation, verify_claim for spot-checks. Axis diversity and phase separation prevent shallow convergence."
+    remind "research" "3+ search API calls this session. Load the research skill (/research) for routing guidance: S2 for literature (free, structured), Exa for semantic discovery, Brave for triangulation, verify_claim for spot-checks. Axis diversity and phase separation prevent shallow convergence."
   fi
 fi
 
@@ -74,7 +74,7 @@ fi
 
 # --- epistemics: search with bio/medical terms ---
 if [ -n "$QUERY" ] && echo "$QUERY" | grep -qiE 'biotech|antiaging|anti-aging|neuroscience|genomic|pharmacogen|supplement|longevity|clinical.trial|drug.target|gene.therapy|CRISPR|mRNA|peptide|nootropic|senolytic|rapamycin|metformin|NAD\+?|telomere|mitochondri|epigenetic|proteom|metabolom|microbiome|statin|GLP.?1|semaglutide|autophagy|senescen|oxidative.stress|inflammation.*marker|blood.brain.barrier'; then
-  remind "epistemics" "Bio/medical research detected. Load the epistemics skill — it enforces evidence hierarchy and anti-hallucination rules for health claims."
+  remind "epistemics" "Bio/medical research detected. Read ~/Projects/skills/references/epistemics/SKILL.md for evidence hierarchy and anti-hallucination rules for health claims."
 fi
 
 # --- entity-management: search/write involving entity patterns ---
@@ -103,7 +103,7 @@ fi
 
 # --- source-grading: intel-context DuckDB/SQL queries ---
 if [ -n "$CMD" ] && echo "$CMD" | grep -qiE 'duckdb|\.sql|SELECT.*FROM.*WHERE' && echo "$CLAUDE_PROJECT_DIR" | grep -qiE 'intel'; then
-  remind "source-grading" "SQL query in intel context. Consider source-grading for data provenance — NATO Admiralty grades on source reliability."
+  remind "source-grading" "SQL query in intel context. Read ~/Projects/skills/references/source-grading/SKILL.md for data provenance — NATO Admiralty grades on source reliability."
 fi
 
 # --- perplexity demotion: nudge away from demoted endpoints ---
@@ -129,35 +129,35 @@ fi
 # MEDIUM-VALUE companions (noisier signal, still useful)
 # =============================================================
 
-# --- causal-check: "why" analysis in research/analysis contexts ---
+# --- analyze causal: "why" analysis in research/analysis contexts ---
 if [ -n "$QUERY" ] && echo "$QUERY" | grep -qiE 'why (does|did|do|is|are|was|were|has|have|would|could)\b.*\b(cause|effect|impact|lead|result|driven|because|correlation|associate)'; then
-  remind "causal-check" "Causal 'why' question detected in search. Consider loading causal-check to enforce explanatory specificity and prevent factor-listing."
+  remind "analyze-causal" "Causal 'why' question detected in search. Consider /analyze causal to enforce explanatory specificity and prevent factor-listing."
 fi
 
-# --- causal-dag + causal-robustness: regression/OLS in code ---
+# --- analyze dag + analyze robustness: regression/OLS in code ---
 if [ -n "$CONTENT" ] && echo "$CONTENT" | grep -qE 'statsmodels.*OLS|LinearRegression|sm\.OLS|lm\(.*~|regression_results|\.fit\(\).*summary|causal_effect|treatment_effect|ATE\b|ATT\b'; then
-  remind "causal-dag" "Regression/causal estimation in code. Load causal-dag to validate DAG structure and adjustment sets before fitting. Follow with causal-robustness for sensitivity analysis."
+  remind "analyze-dag" "Regression/causal estimation in code. Use /analyze dag to validate DAG structure and adjustment sets before fitting. Follow with /analyze robustness for sensitivity analysis."
 fi
 if [ -n "$CMD" ] && echo "$CMD" | grep -qE 'statsmodels|causal|regression.*ols|dowhy'; then
-  remind "causal-dag" "Causal/regression analysis detected. Load causal-dag for DAG validation and causal-robustness for sensitivity (PySensemakr)."
+  remind "analyze-dag" "Causal/regression analysis detected. Use /analyze dag for DAG validation and /analyze robustness for sensitivity (PySensemakr)."
 fi
 
-# --- competing-hypotheses: multiple explanations being compared ---
+# --- analyze hypotheses: multiple explanations being compared ---
 if [ -n "$QUERY" ] && echo "$QUERY" | grep -qiE '(fraud.*(error|mistake|legitimate)|bug.*(design|feature|intentional)|alternative.*(explanation|hypothesis|theor)|competing.*(hypothesis|explanation)|root.cause.*(analysis|investigation)|differential.diagnosis)'; then
-  remind "competing-hypotheses" "Multiple competing explanations detected. Load competing-hypotheses (ACH) for structured Bayesian analysis instead of narrative comparison."
+  remind "analyze-hypotheses" "Multiple competing explanations detected. Use /analyze hypotheses (ACH) for structured Bayesian analysis instead of narrative comparison."
 fi
 
 # --- data-acquisition: web scraping/download patterns ---
 if [ -n "$CMD" ] && echo "$CMD" | grep -qE 'curl_cffi|scrapfly|playwright|browserbase|selenium|requests\.get.*html|beautifulsoup|scrapy'; then
-  remind "data-acquisition" "Web scraping code detected. Load data-acquisition for tool selection matrix, fallback chains, and macOS-specific gotchas."
+  remind "data-acquisition" "Web scraping code detected. Read ~/Projects/skills/references/data-acquisition/SKILL.md for tool selection matrix, fallback chains, and macOS-specific gotchas."
 fi
 if [ -n "$CONTENT" ] && echo "$CONTENT" | grep -qE 'from curl_cffi|from scrapfly|from playwright|from browserbase|import scrapy|BeautifulSoup|httpx.*scrape'; then
-  remind "data-acquisition" "Web scraping imports detected. Load data-acquisition for tool selection, API keys, and authenticated session approaches."
+  remind "data-acquisition" "Web scraping imports detected. Read ~/Projects/skills/references/data-acquisition/SKILL.md for tool selection, API keys, and authenticated session approaches."
 fi
 
-# --- investigate: forensic/OSINT patterns ---
+# --- analyze investigate: forensic/OSINT patterns ---
 if [ -n "$QUERY" ] && echo "$QUERY" | grep -qiE 'shell.company|beneficial.owner|money.laundering|audit.trail|follow.the.money|OSINT|due.diligence|corporate.registry|UBO|sanctions.screen|related.party|insider.trading|SEC.filing.*fraud|whistleblow'; then
-  remind "investigate" "Forensic/OSINT investigation pattern detected. Load the investigate skill for adversarial methodology and cross-domain techniques."
+  remind "analyze-investigate" "Forensic/OSINT investigation pattern detected. Use /analyze investigate for adversarial methodology and cross-domain techniques."
 fi
 
 exit 0

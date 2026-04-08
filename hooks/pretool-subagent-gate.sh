@@ -121,7 +121,7 @@ fi
 if [ "$STYPE" = "general-purpose" ]; then
     if echo "$DESC" | grep -qiE 'verify|evidence|literature|systematic review|meta.analysis|primary source|PMID|PubMed|cite|citation|research.*claim|check.*paper'; then
         CHECK_IDS="${CHECK_IDS}4,"
-        WARNINGS="${WARNINGS}SUBAGENT TYPE: Research/verification task using general-purpose agent. Use researcher subagent_type instead — it has maxTurns:25, epistemics+source-grading skills, and source-check stop hook. general-purpose agents have no epistemic guardrails. "
+        WARNINGS="${WARNINGS}SUBAGENT TYPE: Research/verification task using general-purpose agent. Use researcher subagent_type instead — it has maxTurns:25, epistemic guardrails, and source-check stop hook. general-purpose agents have no epistemic guardrails. "
     fi
 fi
 
@@ -186,7 +186,7 @@ if [ -n "$PROMPT" ]; then
         HAS_WORKTREE=$(echo "$INPUT" | grep -c '"worktree"' || true)
 
         case "$STYPE" in
-            Explore|session-analyst|design-review|supervision-audit|claude-code-guide|statusline-setup)
+            Explore|observe|claude-code-guide|statusline-setup)
                 # Advisory only — these are read-only or self-managed
                 CHECK_IDS="${CHECK_IDS}7,"
                 WARNINGS="${WARNINGS}SUBAGENT OUTPUT: Dispatch prompt missing ${MISSING}. "

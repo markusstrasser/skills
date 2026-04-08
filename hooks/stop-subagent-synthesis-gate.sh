@@ -31,7 +31,7 @@ if not agent_type:
 # Skip code-focused types where thin output files are normal
 SKIP = {
     "Explore", "Plan", "statusline-setup", "claude-code-guide",
-    "session-analyst", "design-review", "supervision-audit",
+    "observe",
 }
 if agent_type in SKIP:
     sys.exit(0)
