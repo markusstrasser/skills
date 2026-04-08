@@ -137,9 +137,9 @@ Find in the reviewed material:
 Output as a flat numbered list. One issue per line.""",
     },
     "alternatives": {
-        "label": "Kimi K2.5 (alternative approaches)",
-        "model": "kimi-k2.5",
-        "flags": ["--stream", "--timeout", "300"],
+        "label": "Gemini Pro (alternative approaches)",
+        "model": "gemini-3.1-pro-preview",
+        "flags": ["--timeout", "300"],
         "prompt": """\
 <system>
 You are generating ALTERNATIVE APPROACHES to the proposed plan. Other reviewers check correctness.
