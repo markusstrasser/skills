@@ -67,8 +67,8 @@ See `references/transcript-extraction.md` for extraction commands (Claude Code +
 
 Parse the project argument from $ARGUMENTS. Default: last 5 sessions.
 
-### Step 2: Dispatch to Gemini
-Send compressed transcript + coverage digest to Gemini 3.1 Pro (1M context, cheap) via llmx. Full prompt in `references/gemini-dispatch-prompt.md`.
+### Step 2: Build Context & Dispatch to Gemini
+Build operational context (hook triggers, receipts, git commits for the session window) per `references/transcript-extraction.md` Step 1.3. Then send full-fidelity transcript + coverage digest + operational context to Gemini 3.1 Pro (1M context, cheap) via llmx. Full prompt in `references/gemini-dispatch-prompt.md`.
 
 ### Step 3: Stage Findings
 Validate Gemini output against transcript, check session UUIDs, save as JSON artifact. Full procedure and JSON template in `references/findings-staging.md`.

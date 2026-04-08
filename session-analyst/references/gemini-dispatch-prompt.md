@@ -4,7 +4,7 @@
 Full prompt sent to Gemini 3.1 Pro via llmx in Step 2.
 
 ```bash
-llmx -p google -m gemini-3.1-pro-preview -f ~/Projects/meta/artifacts/session-analyst/input.md -f ~/Projects/meta/artifacts/session-analyst/coverage-digest.txt "$(cat <<'PROMPT'
+llmx -p google -m gemini-3.1-pro-preview -f ~/Projects/meta/artifacts/session-analyst/input.md -f ~/Projects/meta/artifacts/session-analyst/coverage-digest.txt -f ~/Projects/meta/artifacts/session-analyst/operational-context.txt "$(cat <<'PROMPT'
 You are analyzing Claude Code session transcripts for behavioral anti-patterns.
 
 SESSION ID ANCHORING: The input transcript starts with a "VALID SESSION IDS" table listing
