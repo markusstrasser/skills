@@ -26,7 +26,7 @@ This report reveals the **live system's contradictions** — not just files disa
 - **Topic distribution** — time/cost allocation reveals real priorities vs. stated priorities.
 - **Recurring correction themes** — if "cli" and "api" keep appearing in corrections, there's a missing principle about tool selection.
 
-Works across Claude Code, Codex, Gemini, and Kimi sessions (all stored in runlogs.db).
+Works across Claude Code, Codex, and Gemini sessions (all stored in runlogs.db).
 
 ## Phase 1: Reconnaissance
 

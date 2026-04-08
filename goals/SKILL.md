@@ -37,7 +37,7 @@ This report reveals:
 
 The corrections ARE the goals — or at least, the delta between stated goals and real ones. Every correction is the user steering the system toward what they actually want.
 
-Works across Claude Code, Codex, Gemini, and Kimi sessions (all stored in runlogs.db).
+Works across Claude Code, Codex, and Gemini sessions (all stored in runlogs.db).
 
 ## Phase 1: Understand Current State
 
