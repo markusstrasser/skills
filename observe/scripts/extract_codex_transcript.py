@@ -184,8 +184,8 @@ def process_rollout(thread: dict) -> dict:
                 etype = payload.get("type", "")
                 if etype == "token_count":
                     # total_token_usage is cumulative — take the last one
-                    info = payload.get("info", {})
-                    usage = info.get("total_token_usage", info)
+                    info = payload.get("info") or {}
+                    usage = info.get("total_token_usage") or info
                     total_input_tokens = usage.get("input_tokens", total_input_tokens)
                     total_output_tokens = usage.get("output_tokens", total_output_tokens)
 
