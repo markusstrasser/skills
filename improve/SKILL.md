@@ -330,7 +330,10 @@ Append JSONL to `maintenance-actions.jsonl` for EVERY action:
 Unified quality state. If it doesn't exist, create from `${CLAUDE_SKILL_DIR}/references/MAINTAIN.md`.
 
 Sections: Findings, Queue, Fixed, Deferred, Strategic Notes, Drift Alerts.
-Item IDs: monotonic M001, M002... WIP caps: max 5 findings, max 3 queued.
+Item IDs: monotonic M001, M002... WIP caps enforce flow:
+- Max 5 findings — when full, skip new findings until dispositioned
+- Max 3 queued — when full, halt discovery, focus dispatch
+- Items >90 days stale — auto-move to end with `[STALE]` note
 
 ### Autonomy Rules
 

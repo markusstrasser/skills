@@ -147,6 +147,11 @@ Dispatch to Gemini 3.1 Pro for structured pattern extraction. Full prompt in `re
 
 **Gemini's output is DATA, not conclusions.** It extracts patterns; you do the creative synthesis in Phase 3.
 
+**Operational limits:**
+- **Session batching:** Pattern extraction degrades past ~80 sessions in one Gemini call. For `--days 7+`, batch by project.
+- **Hallucination rate on session details:** ~20-30%. Phase 2 verification below is mandatory, not optional.
+- Cross-project patterns are harder to detect when sessions are batched by project — note this gap.
+
 **Verify Gemini claims (mandatory):**
 1. Check cited session IDs actually exist
 2. Verify quoted user messages appear in the transcript
