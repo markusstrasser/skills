@@ -82,23 +82,38 @@ Parse the project argument from $ARGUMENTS. Default: last 5 sessions.
 
 Run shared transcript extraction above. Build operational context per `references/transcript-extraction.md` Step 1.3.
 
-### Step 2: Analyze Transcripts
+### Step 2: Dispatch to Gemini
 
-Analyze directly using the taxonomy in `lenses/behavioral-antipatterns.md` and grounding examples in `references/grounding-examples.md`. Read the coverage digest to avoid re-reporting known patterns.
+Send full-fidelity transcript + coverage digest + operational context to Gemini 3.1 Pro. Full prompt in `references/gemini-dispatch-prompt.md`.
 
-For each session transcript:
-1. Read the transcript
-2. Score against the 20-item taxonomy
-3. Flag any patterns that score above threshold
+Dispatch via llmx Python API (not CLI subprocess):
 
-If transcripts exceed context, use the shape pre-filter output to prioritize flagged sessions and skip normal-profile ones.
+```python
+from llmx.api import chat as llmx_chat
+
+# Concatenate all context into one string
+context = Path("$ARTIFACT_DIR/input.md").read_text()
+coverage = Path("$ARTIFACT_DIR/coverage-digest.txt").read_text()
+ops_ctx = Path("$ARTIFACT_DIR/operational-context.txt").read_text()
+prompt = Path("${CLAUDE_SKILL_DIR}/references/gemini-dispatch-prompt.md").read_text()
+
+response = llmx_chat(
+    prompt=context + "\n\n" + coverage + "\n\n" + ops_ctx + "\n\n" + prompt,
+    provider="google",
+    model="gemini-3.1-pro-preview",
+    timeout=300,
+)
+Path("$ARTIFACT_DIR/gemini-output.md").write_text(response.content)
+```
+
+Or write this as a short script and run with `uv run python3`. The key: use `llmx.api.chat()`, never shell out to `llmx` CLI.
 
 ### Step 3: Stage Findings
 
-Validate findings against transcript evidence, check session UUIDs, save as JSON artifact. Full procedure and JSON template in `references/findings-staging.md`.
+Validate Gemini output against transcript, check session UUIDs, save as JSON artifact. Full procedure and JSON template in `references/findings-staging.md`.
 
 **Judgment calls when staging:**
-- "Unprompted commit" is NOT an anti-pattern -- global CLAUDE.md authorizes auto-commit
+- Gemini flags "unprompted commit" as HIGH -- false positive, global CLAUDE.md authorizes auto-commit
 - `done_with_denials` status is NOT a failure -- it's a constitutional approval gate
 - "Agent paused before executing" -- rubber-stamp approvals are intentional oversight, not sycophancy
 - Promotion criteria: recurs 2+ sessions, not already covered, checkable predicate or architectural change
@@ -148,15 +163,18 @@ Run shared transcript extraction. Extract from all active projects (meta, intel,
 
 Run shape pre-filter. Note anomalous sessions for priority analysis.
 
-### Phase 2: Pattern Extraction
+### Phase 2: Pattern Extraction (Gemini)
 
-Extract patterns directly from the transcripts using the pattern types in `lenses/architectural-patterns.md`. The prompt frame in `references/gemini-prompt.md` describes what to look for — use it as your analysis guide.
+Dispatch to Gemini 3.1 Pro for structured pattern extraction. Full prompt in `references/gemini-prompt.md`. Use `llmx.api.chat()` (Python API), not CLI subprocess.
+
+**Gemini's output is DATA, not conclusions.** It extracts patterns; you do the creative synthesis in Phase 3.
 
 **Operational limits:**
-- For `--days 7+` (>80 sessions): batch by project and analyze each batch separately.
+- Pattern extraction degrades past ~80 sessions in one Gemini call. For `--days 7+`, batch by project.
+- Gemini hallucination rate on session details: ~20-30%. Verification below is mandatory.
 - Cross-project patterns are harder to detect when batched by project — note this gap.
 
-**Self-verify (mandatory):**
+**Verify Gemini claims (mandatory):**
 1. Check cited session IDs actually exist
 2. Verify quoted user messages appear in the transcript
 3. Confirm tool sequences match reality
@@ -226,13 +244,29 @@ For the top 3-5 sessions with most wasted supervision:
 python3 ${CLAUDE_SKILL_DIR}/scripts/extract_transcript.py <project> --sessions 5 --output "$ARTIFACT_DIR/supervision-transcripts.md"
 ```
 
-### Step 3: Synthesize
+### Step 3: LLM Synthesis (Gemini)
 
-Read the raw classification JSON and transcripts directly. For each non-NEW_AGENCY pattern, determine:
-1. Is it genuinely automatable? Some "corrections" are actually new information — filter those out.
-2. What's the right fix type? (HOOK, RULE, DEFAULT, SKILL, ARCHITECTURAL)
-3. How many times did it recur? Single occurrences are noise. 3+ is signal.
-4. What would the fix look like? Be specific — hook pseudocode, rule text, or architectural sketch.
+Dispatch raw classification + transcripts to Gemini 3.1 Pro via `llmx.api.chat()`:
+
+```python
+from llmx.api import chat as llmx_chat
+
+raw = Path("$ARTIFACT_DIR/supervision-raw.json").read_text()
+transcripts = Path("$ARTIFACT_DIR/supervision-transcripts.md").read_text()
+
+response = llmx_chat(
+    prompt=raw + "\n\n" + transcripts + "\n\n" + SUPERVISION_PROMPT,
+    provider="google",
+    model="gemini-3.1-pro-preview",
+    timeout=300,
+)
+```
+
+The supervision prompt asks Gemini to classify each non-NEW_AGENCY pattern by:
+1. Is it genuinely automatable? (Filter out actual new information)
+2. Fix type: HOOK | RULE | DEFAULT | SKILL | ARCHITECTURAL
+3. Recurrence count (3+ is signal, 1 is noise)
+4. Specific fix implementation
 
 Output format per finding:
 
@@ -246,12 +280,11 @@ Output format per finding:
 - **Expected reduction:** what % of this pattern would this fix eliminate?
 ```
 
-Don't propose fixes for things that are genuinely new agency. Don't propose rules for things already in CLAUDE.md. Rank by (occurrences x automation potential). If nothing is worth fixing, say so.
-
 ### Step 4: Review and Act
 
-1. Cross-check findings against raw JSON and transcripts
-2. For HIGH/MEDIUM priority findings:
+1. Read Gemini output critically -- it may hallucinate session details
+2. Cross-check specific claims against raw JSON and transcripts
+3. For HIGH/MEDIUM priority findings:
    - Hook fix: implement now (cheap, deterministic, reversible)
    - Rule fix: check not already covered, then add
    - Architectural fix: add to maintenance-checklist.md with evidence
@@ -326,7 +359,8 @@ Write `{date}-{SID}-manual.json` with:
 
 - Transcript source: `~/.claude/projects/-Users-alien-Projects-{project}/` (native Claude Code storage)
 - Preprocessor strips thinking blocks and base64 content
-- All analysis is direct (Claude 1M context). No external LLM dispatch needed.
+- **Use `llmx.api.chat()` for Gemini dispatch, never CLI subprocess.** The Python API bypasses all CLI transport bugs (multi-file drops, 0-byte outputs, rate limit masking).
+- Gemini 3.1 Pro at ~$0.001/query cached -- cheap enough to run frequently
 - Codex transcript extraction requires `~/.codex/state_5.sqlite`
 
 $ARGUMENTS
