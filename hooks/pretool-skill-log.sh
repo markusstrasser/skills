@@ -27,6 +27,9 @@ except:
     print('')
 " 2>/dev/null)
 
+# Extract first word of args as mode (empty for skills without modes)
+MODE=$(echo "$ARGS" | awk '{print $1}')
+
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 SESSION="${CLAUDE_SESSION_ID:-unknown}"
 PROJECT=$(basename "${CLAUDE_PROJECT_DIR:-$(pwd)}")
@@ -35,5 +38,5 @@ PROJECT=$(basename "${CLAUDE_PROJECT_DIR:-$(pwd)}")
 date +%s%N > "$STARTFILE"
 
 # Log invocation
-printf '{"ts":"%s","event":"skill_invoke","skill":"%s","args":"%s","session":"%s","project":"%s"}\n' \
-    "$TS" "$SKILL" "$ARGS" "$SESSION" "$PROJECT" >> "$LOGFILE"
+printf '{"ts":"%s","event":"skill_invoke","skill":"%s","mode":"%s","args":"%s","session":"%s","project":"%s"}\n' \
+    "$TS" "$SKILL" "$MODE" "$ARGS" "$SESSION" "$PROJECT" >> "$LOGFILE"

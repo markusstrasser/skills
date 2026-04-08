@@ -18,6 +18,18 @@ except:
     print('unknown')
 " 2>/dev/null)
 
+ARGS=$(echo "$CLAUDE_TOOL_INPUT" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print(d.get('args', ''))
+except:
+    print('')
+" 2>/dev/null)
+
+# Extract first word of args as mode (empty for skills without modes)
+MODE=$(echo "$ARGS" | awk '{print $1}')
+
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 SESSION="${CLAUDE_SESSION_ID:-unknown}"
 PROJECT=$(basename "${CLAUDE_CWD:-$(pwd)}")
@@ -39,5 +51,5 @@ if echo "${CLAUDE_TOOL_RESULT:-}" | grep -qi "error\|failed\|exception"; then
     EXIT_CODE=1
 fi
 
-printf '{"ts":"%s","event":"skill_complete","skill":"%s","session":"%s","project":"%s","duration_ms":%d,"exit_code":%d}\n' \
-    "$TS" "$SKILL" "$SESSION" "$PROJECT" "$DURATION_MS" "$EXIT_CODE" >> "$LOGFILE"
+printf '{"ts":"%s","event":"skill_complete","skill":"%s","mode":"%s","session":"%s","project":"%s","duration_ms":%d,"exit_code":%d}\n' \
+    "$TS" "$SKILL" "$MODE" "$SESSION" "$PROJECT" "$DURATION_MS" "$EXIT_CODE" >> "$LOGFILE"
