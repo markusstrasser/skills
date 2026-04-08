@@ -51,7 +51,6 @@ FINDING_SCHEMA = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "id": {"type": "integer", "description": "Sequential finding number"},
                     "category": {
                         "type": "string",
                         "enum": ["bug", "logic", "architecture", "missing", "performance", "security", "style", "constitutional"],
@@ -59,24 +58,16 @@ FINDING_SCHEMA = {
                     "severity": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
                     "title": {"type": "string", "description": "One-line summary"},
                     "description": {"type": "string", "description": "Detailed explanation with evidence"},
-                    "file": {"type": "string", "description": "File path if applicable, empty string if architectural"},
-                    "line": {"type": "integer", "description": "Line number if applicable, 0 if N/A"},
-                    "fix": {"type": "string", "description": "Specific proposed fix"},
+                    "file": {"type": "string", "description": "File path if cited, empty if architectural"},
+                    "line": {"type": "integer", "description": "Line number if cited, 0 if N/A"},
+                    "fix": {"type": "string", "description": "Proposed fix, empty if unclear"},
                     "confidence": {"type": "number", "description": "0.0-1.0 confidence in this finding"},
                 },
-                "required": ["id", "category", "severity", "title", "description", "file", "fix", "confidence"],
-                "additionalProperties": False,
+                "required": ["category", "severity", "title", "description", "file", "line", "fix", "confidence"],
             },
         },
-        "summary": {"type": "string", "description": "2-3 sentence overall assessment"},
-        "blind_spots": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "Where this model is likely wrong",
-        },
     },
-    "required": ["findings", "summary", "blind_spots"],
-    "additionalProperties": False,
+    "required": ["findings"],
 }
 
 # --- Axis definitions: model + prompt + api kwargs ---
@@ -581,12 +572,24 @@ def dispatch(
 
         return axis, entry
 
-    # Parallel dispatch via threads
+    # Parallel dispatch via threads (720s timeout = max model timeout + 2min buffer)
     results: dict = {"review_dir": str(review_dir), "axes": axis_names, "queries": len(axis_names)}
     with ThreadPoolExecutor(max_workers=len(axis_names)) as pool:
         futures = {pool.submit(_run_axis, axis): axis for axis in axis_names}
-        for future in as_completed(futures):
-            axis, entry = future.result()
+        for future in as_completed(futures, timeout=720):
+            try:
+                axis, entry = future.result(timeout=720)
+            except TimeoutError:
+                axis = futures[future]
+                entry = {
+                    "label": AXES[axis]["label"],
+                    "requested_model": str(AXES[axis]["model"]),
+                    "model": str(AXES[axis]["model"]),
+                    "exit_code": 1,
+                    "output": str(review_dir / f"{axis}-output.md"),
+                    "size": 0,
+                    "failure_reason": "thread_timeout",
+                }
             results[axis] = entry
 
     results["elapsed_seconds"] = round(time.time() - t0, 1)
@@ -712,9 +715,17 @@ def extract_claims(
     if not axis_findings:
         return None
 
-    # Merge findings across axes — tag source model, cross-reference overlaps
+    # Merge findings across axes — keyword overlap for cross-model dedup
+    def _fingerprint(f: dict) -> set[str]:
+        """Extract significant keywords for fuzzy matching."""
+        text = f"{f.get('title', '')} {f.get('file', '')} {f.get('description', '')[:200]}"
+        words = set(re.findall(r"[a-z_]{4,}", text.lower()))
+        # Remove common stop-words that inflate false matches
+        words -= {"this", "that", "with", "from", "should", "could", "would", "does", "have", "will", "also", "been"}
+        return words
+
     merged_findings: list[dict] = []
-    seen_titles: dict[str, dict] = {}  # title_lower -> finding
+    seen: list[tuple[set[str], dict]] = []  # (keywords, finding)
     for axis, findings in axis_findings.items():
         source_label = dispatch_result[axis].get("label", axis)
         source_model = dispatch_result[axis].get("model", "unknown")
@@ -722,15 +733,18 @@ def extract_claims(
             f["source_axis"] = axis
             f["source_model"] = source_model
             f["source_label"] = source_label
-            title_key = f.get("title", "").lower().strip()
-            if title_key in seen_titles:
-                # Cross-model agreement — boost confidence, tag both sources
-                existing = seen_titles[title_key]
-                existing.setdefault("also_found_by", []).append(source_label)
-                existing["cross_model"] = True
-                existing["confidence"] = min(1.0, existing.get("confidence", 0.5) + 0.2)
-            else:
-                seen_titles[title_key] = f
+            fp = _fingerprint(f)
+            # Check for overlap with existing findings (Jaccard > 0.3)
+            matched = False
+            for existing_fp, existing in seen:
+                if len(fp & existing_fp) > 0 and len(fp & existing_fp) / len(fp | existing_fp) > 0.3:
+                    existing.setdefault("also_found_by", []).append(source_label)
+                    existing["cross_model"] = True
+                    existing["confidence"] = min(1.0, existing.get("confidence", 0.5) + 0.2)
+                    matched = True
+                    break
+            if not matched:
+                seen.append((fp, f))
                 merged_findings.append(f)
 
     # Sort: cross-model agreements first, then by severity, then confidence
