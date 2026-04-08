@@ -72,13 +72,10 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --context context.md \
   --topic "$TOPIC" \
   --project "$(pwd)" \
-  --extract \
   "$ARGUMENTS"
 ```
 
-Set `timeout: 660000` on the Bash tool call. Add `--extract` to all standard/deep reviews.
-
-See `references/dispatch.md` for `--questions`, `--context-files`, depth presets, and troubleshooting.
+Set `timeout: 660000` on the Bash tool call. See `references/dispatch.md` for `--questions`, `--context-files`, depth presets, and troubleshooting.
 
 #### Depth Presets
 
@@ -91,67 +88,38 @@ See `references/dispatch.md` for `--questions`, `--context-files`, depth presets
 
 **Genomics classification review** (monthly or after >10 commits to LR-engine/scoring): Use `--axes formal,domain`. GPT-5.4 found 11 conceptual/mathematical bugs for $6.54 — the only detector for incoherent Bayes.
 
-### 3. Fact-Check (Mandatory)
+### 3. Read Both Outputs and Synthesize
 
-**Both models hallucinate. Never adopt without verification.**
+Read both review outputs. You are the merger — you have both in context and can cross-reference directly.
 
-1. **Code claims** — Read the actual file. Models frequently cite wrong line numbers, invent function names.
-2. **Research claims** — Check if the cited finding actually says what the model claims.
-3. **"Missing feature" claims** — Grep the codebase. The feature may already exist.
-
-Use a **different model family** than the claim's author. Cross-family verification: +31pp accuracy vs same-family (FINCH-ZK, Amazon 2025). For code claims, always verify by reading the actual file first.
-
-### 4. Extract & Disposition
-
-**If `--extract` was used:** Read `disposition.md` and skip to Step 5. The script does cross-family extraction automatically (Flash extracts GPT output, GPT-Instant extracts Gemini output).
-
-**If no `--extract`:** See `references/extraction.md` for manual extraction workflow. The core rule: **never go from raw model outputs directly to synthesis.** Extract mechanically first, then disposition every item, then synthesize. Extraction before synthesis: +24% recall, +29% precision (EVE, arXiv:2602.06103).
-
-### 5. Synthesize
-
-Build synthesis from the disposition table. Every INCLUDE item must appear. Reference IDs for auditability.
+**For each finding from either model:**
+1. **Verify code claims** — read the actual file. Models frequently cite wrong line numbers, invent function names.
+2. **Check if both models found it** — cross-model agreement is the strongest signal.
+3. **Grep "missing feature" claims** — the feature may already exist.
 
 **Trust ranking:**
 
-| Level | Criterion | Action |
-|-------|-----------|--------|
-| Very high | Both agree + code-verified | Adopt |
-| High | One found + code-verified | Adopt |
-| Medium | Both agree, unverified | Verify first |
-| Low | Single model, unverified | Flag for investigation |
-| Reject | Self-recommendation or contradicts verified code | Discard |
+| Signal | Action |
+|--------|--------|
+| Both models found it + you verified in code | Fix it |
+| One model found it + you verified in code | Fix it |
+| Both agree but unverified | Verify first |
+| Single model, unverified | Investigate before acting |
+| Contradicts what you see in the code | Discard |
 
-**Output header:**
-```
-## Cross-Model Review: [topic]
-Models: [actual], Date: YYYY-MM-DD, Constitutional anchoring: Yes/No
-Extraction: N items, M included, D deferred, R rejected
-```
+**Before implementing:** Ask yourself two questions:
+1. Where do you disagree with the models? ("Nowhere" is valid.)
+2. What context did you have that they didn't?
 
-Sections: Verified Findings | Deferred | Rejected | Where I Was Wrong | Gemini Errors | GPT Errors | Revised Priority List
+Don't let rigorous-looking analysis override what you can see in the code.
 
-#### Auto-Verify File-Specific Findings
-
-If synthesis has INCLUDE items with file:line citations, run `verify` mode on the synthesis before Step 6. Only implement CONFIRMED or CORRECTED findings. Drop HALLUCINATED. Skip if all findings are architectural or fewer than 3 code citations.
-
-#### Over-Adoption Check
-
-The disposition file includes an **Agent Response** template at the bottom (added by `--extract`). Fill it in before implementing any findings — the two questions are:
-
-1. **Where do you disagree with the disposition?** "Nowhere" is valid. Don't invent disagreements.
-2. **Context you had that the models didn't?** If the context file was comprehensive, say so.
-
-Write your answers directly in `disposition.md`. Valid outcomes: "No changes" (proceed) or "Revising N items" (state which, why, update synthesis).
-
-**Why this exists:** Models produce rigorous-looking analysis that can override your judgment through sheer detail. The template is in the artifact so it's visible every time you read the disposition — architecture over instructions.
-
-### 6. Close the Loop (Mandatory if INCLUDE items exist)
+### 4. Act on Findings
 
 **The synthesis is not the deliverable — the updated artifact is.**
 
-- **Case A (existing plan/doc):** Apply verified INCLUDEs directly. Tag changes with finding IDs. Don't ask permission.
-- **Case B (decision/code, no plan):** Offer plan-mode handoff if context is depleted.
-- **Case C (all DEFER/REJECT):** Synthesis is the deliverable.
+- **Verified findings:** Apply directly. Don't ask permission.
+- **Context depleted:** Offer plan-mode handoff.
+- **All deferred/rejected:** The synthesis is the deliverable.
 
 ### Artifact Handoff
 
