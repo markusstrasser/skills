@@ -66,7 +66,7 @@ if [ -n "$INVALID_FLAGS" ]; then
 fi
 
 # Invalid model names — catch common hallucinations
-MODEL=$(echo "$CMD" | grep -oE '(-m|--model)\s+[a-zA-Z0-9._-]+' | head -1 | sed 's/^-m\s*//;s/^--model\s*//')
+MODEL=$(echo "$CMD" | grep -oE '(-m|--model)\s+[a-zA-Z0-9._-]+' | head -1 | sed -E 's/^(-m|--model)[[:space:]]+//; s/^[[:space:]]+//; s/[[:space:]]+$//')
 if [ -n "$MODEL" ]; then
   case "$MODEL" in
     gemini-3.1-pro-preview|gemini-3-flash-preview|gemini-3.1-flash-image-preview) ;;
@@ -141,6 +141,16 @@ fi
 # 7. Background dispatch without -o (output lost)
 if echo "$CMD" | grep -qE 'llmx.*&\s*$' && ! echo "$CMD" | grep -qE -- '--output|-o\s'; then
   WARNINGS="${WARNINGS}[llmx-guard] Background llmx (&) without --output/-o. Output will be lost. Add -o file.md.\n"
+fi
+
+# 8. Suppressing llmx stderr hides the real failure cause
+if echo "$CMD" | grep -qE 'llmx.*2>\s*/dev/null|2>/dev/null.*llmx'; then
+  WARNINGS="${WARNINGS}[llmx-guard] llmx stderr is redirected to /dev/null. This hides transport/quota diagnostics; capture stderr to a file instead.\n"
+fi
+
+# 9. Downstream shell consumers can mask llmx exit codes
+if echo "$CMD" | grep -qE 'llmx.*\|\s*(head|tail|sed|awk)\b'; then
+  WARNINGS="${WARNINGS}[llmx-guard] llmx output is piped into a shell consumer. Without 'set -o pipefail', the shell reports the consumer's exit code, not llmx's.\n"
 fi
 
 if [ -n "$WARNINGS" ]; then

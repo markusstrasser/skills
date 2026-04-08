@@ -20,6 +20,7 @@ effort: medium
 6. **Know the transport triggers:** `google` prefers `gemini` CLI (free). Falls back to API for: `--schema`, `--search`, `--stream`, `--max-tokens`. GPT goes direct to API.
 7. **Hangs in agent context?** Claude Code's Bash tool pipes stdin without EOF. Fixed in current llmx (skips stdin when prompt provided).
 8. **Prompt is positional, context is `-f`.** `llmx "analyze this" -f context.md` — prompt as first positional arg, context files as `-f`. Two `-f` flags with no positional = no prompt = model invents a task from the context. (Evidence: 2026-04-05 — Gemini received two `-f` files, hallucinated a script implementation instead of analysis.)
+9. **For critical reviews, use one combined context file.** Multi-file `-f` has recurring failure modes with Gemini/CLI transport, including silently dropping earlier files. Pre-concatenate first.
 
 ## When llmx Fails — Diagnose, Don't Downgrade
 
@@ -30,6 +31,7 @@ effort: medium
 3. Check for transport switch / truncation warnings
 4. Re-run with `--debug` on a small prompt
 5. Common fixes: increase `--timeout`, add `--stream`, reduce context, check API key
+6. **When transport matters, probe it.** Run one tiny `--debug` smoke test before assuming CLI vs API routing from docs or memory.
 
 See [error-codes.md](references/error-codes.md) for full exit code table and Python patterns.
 
@@ -49,6 +51,25 @@ llmx chat -m gemini-3.1-pro-preview -f context.md --timeout 300 --stream "Review
 
 **What still forces API:** `--max-tokens` (CLI caps at 8K), `--schema`, `--search`, `--stream`.
 
+### 1.5. Multi-File `-f` Is Not Reliable Enough For Critical Review Flows
+
+If the task is high-stakes or review-oriented, do this:
+
+```bash
+cat overview.md diff.md touched-files.md > combined-context.md
+llmx chat -m gemini-3.1-pro-preview -f combined-context.md --timeout 300 "Review this"
+```
+
+Do **not** assume this is equivalent:
+
+```bash
+llmx chat -m gemini-3.1-pro-preview -f overview.md -f diff.md -f touched-files.md --timeout 300 "Review this"
+```
+
+Known failure mode: earlier `-f` files may be silently dropped or incompletely
+forwarded. This is acceptable for casual exploration, not for plan-close or
+adversarial review.
+
 ### 2. GPT-5.x Timeouts
 
 GPT-5.4 with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning. Default timeout: 300s. Max: **900s** (hard cap). GPT-5.4 xhigh on domain-heavy prompts can exceed 900s — use ChatGPT Pro for those.
@@ -58,14 +79,53 @@ GPT-5.4 with reasoning burns time BEFORE producing output. Non-streaming holds t
 ### 3. Output Capture — Use `-o FILE`, Never `> file`
 
 ```bash
-# CORRECT — -o auto-enables streaming for incremental file writes:
+# CORRECT — llmx writes the output file itself:
 llmx -m gpt-5.4 -f context.md --timeout 600 -o output.md "query"
 
 # BROKEN — 0 bytes until exit:
 llmx -m gpt-5.4 "query" > output.md
 ```
 
-**`-o` now auto-enables streaming** (as of 2026-04-07). Non-streaming held all output until full response, so timeouts or API errors produced 0-byte files silently. With auto-streaming, chunks write incrementally — partial output survives timeouts. If the file is still 0 bytes, llmx emits `[llmx:WARN]` to stderr.
+`-o` does not imply `--stream`. Current llmx preserves the requested transport and writes the returned result itself when needed. If the file is still 0 bytes, llmx emits `[llmx:WARN]` to stderr.
+
+For GPT specifically:
+
+- default `llmx -m gpt-5.4` routes to the OpenAI API in current llmx
+- `-o` preserves that transport; it does not force a transport switch
+- if you explicitly use `-p codex-cli`, diagnose any failure from stderr and output size, not shell exit alone
+
+If you need to verify the actual route, run:
+
+```bash
+llmx chat -p codex-cli -m gpt-5.4 --debug -o /tmp/probe.txt "Reply with exactly OK."
+```
+
+Then inspect the debug line for `transport`.
+
+### 3.5. Shell Pipelines Can Hide llmx Failures
+
+These are bad diagnostic patterns:
+
+```bash
+llmx chat -m gpt-5.4 "query" 2>/dev/null | head -200
+llmx chat -m gpt-5.4 "query" | sed -n '1,80p'
+```
+
+Why:
+
+- `2>/dev/null` discards llmx's real diagnostics
+- without `set -o pipefail`, the shell returns the last consumer's exit code (`head`, `sed`), not llmx's
+- an empty llmx response can look like success if the downstream command exits 0
+
+Safer pattern:
+
+```bash
+set -o pipefail
+llmx chat -m gpt-5.4 --debug -o /tmp/review.md "query" 2> /tmp/review.err
+echo $?
+sed -n '1,80p' /tmp/review.err
+sed -n '1,80p' /tmp/review.md
+```
 
 From Claude Code: set Bash tool `timeout: 660000` (11 min) — must exceed llmx's `--timeout`.
 
@@ -92,8 +152,8 @@ See [models.md](references/models.md) for full model table, token limits, and re
 
 | Provider | Default transport | Forces API fallback |
 |----------|------------------|---------------------|
-| `google` | Gemini CLI (free) | `--schema`, `--search`, `--stream`, `--max-tokens`, `-o` |
-| `openai` | Codex CLI (free) | `--search`, `--stream`, `-o` |
+| `google` | Gemini CLI (free) | `--schema`, `--search`, `--stream`, `--max-tokens` |
+| `openai` | OpenAI API | explicit `-p codex-cli` if you want Codex CLI instead |
 | `claude` | Claude CLI | v0.6.0+, non-nested contexts only |
 
 Both CLIs ignore explicit `--reasoning-effort` — they use their own defaults. See [transport-routing.md](references/transport-routing.md) for CLI vs API decision table, context budget, piping patterns.

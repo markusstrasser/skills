@@ -10,7 +10,7 @@ Gemini CLI and Codex CLI use flat subscription pricing — zero marginal cost pe
 
 ```bash
 llmx -p google "question"       # prefers Gemini CLI, falls back to API
-llmx -p openai "question"       # prefers Codex CLI, falls back to API
+llmx -p openai "question"       # uses OpenAI API
 llmx -p claude "question"       # Claude CLI backend (v0.6.0+, non-nested contexts only)
 llmx -p gemini-cli "question"   # force Gemini CLI transport
 llmx -p codex-cli "question"    # force Codex CLI transport
@@ -24,6 +24,12 @@ Falls back to API for:
 - Codex CLI now handles `--schema` via `codex exec --output-schema`
 - `--max-tokens` forces API because Gemini CLI defaults to 8K with no override
 - `--output` works with both CLI and API transport (Python-level, not shell)
+
+Current routing detail:
+
+- logical `openai` does **not** prefer Codex CLI anymore
+- Codex CLI is opt-in via `-p codex-cli`
+- this avoids startup overhead and CLI-specific limit surfaces for routine GPT calls
 
 ### When to Use CLIs vs API
 
@@ -41,10 +47,10 @@ Falls back to API for:
 Both approaches work:
 
 ```bash
-# Using -s flag (now stays on CLI — system text folded into prompt as <system> XML)
+# Using -s flag with the API transport
 llmx -p openai -m gpt-5.4 --timeout 600 -s "You are reviewing code. Be concrete." "Review this design"
 
-# Inline system tags (equivalent, also stays on CLI)
+# Inline system tags (equivalent prompt text)
 cat <<'EOF' | llmx chat -p openai -m gpt-5.4 --timeout 600
 <system>
 You are reviewing code. Be concrete. Reference specific files and tradeoffs.
@@ -93,12 +99,16 @@ When API transport is needed (or CLI free tier is restricted), select the tier v
 
 CLIs accept `-f FILE` for context. Use `.claude/overviews/` (5-10KB compressed project summaries) for codebase-aware queries at zero cost:
 
+For critical review flows, prefer **one combined context file** over multiple
+`-f` inputs. Multi-file `-f` has recurring loss/truncation issues in real use.
+
 ```bash
 # Code review with project context (Gemini CLI, free)
 llmx -p google -f .claude/overviews/source-overview.md "Review the error handling in the orchestrator pipeline"
 
-# Architecture question (Codex CLI, free)
-llmx -p openai -f .claude/overviews/source-overview.md -f .claude/overviews/tooling-overview.md "How does the telemetry pipeline flow?"
+# Architecture question (OpenAI API by default) — combine first for reliability
+cat .claude/overviews/source-overview.md .claude/overviews/tooling-overview.md > combined-context.md
+llmx -p openai -f combined-context.md "How does the telemetry pipeline flow?"
 
 # Specific file review (pipe file as context)
 llmx -p google -f src/providers.py "Find bugs in this code"
@@ -112,7 +122,7 @@ When dispatching from an agent context:
 # Quick codebase question (zero cost, ~5-15s)
 llmx -p google -f .claude/overviews/source-overview.md "What files handle authentication?"
 
-# Code review with inline system prompt (stays on CLI)
+# Code review with inline system prompt (API by default)
 cat <<'EOF' | llmx -p openai -m gpt-5.4 -o review.md
 <system>You are reviewing code. Be concrete. Reference specific files.</system>
 
@@ -127,11 +137,11 @@ for f in src/*.py; do
 done
 ```
 
-`-s` works with CLIs — system messages are folded into the prompt as `<system>` XML tags, staying on CLI transport.
+`-s` also works with CLI transports because llmx folds system text into the prompt as `<system>` XML.
 
 ### Codex CLI Reasoning Default
 
-`llmx -p openai` inherits Codex CLI's own reasoning default. llmx does **not** pass a reasoning-effort flag to `codex exec`.
+`llmx -p codex-cli` inherits Codex CLI's own reasoning default. llmx does **not** pass a reasoning-effort flag to `codex exec`.
 
 Set the Codex CLI default in `~/.codex/config.toml`:
 
@@ -148,5 +158,5 @@ codex exec -c 'model_reasoning_effort="xhigh"' "question"
 
 Practical implication:
 
-- `llmx -p openai ...` on a machine with `model_reasoning_effort = "xhigh"` uses Codex CLI at `xhigh`
+- `llmx -p codex-cli ...` on a machine with `model_reasoning_effort = "xhigh"` uses Codex CLI at `xhigh`
 - If llmx falls back to the OpenAI API, llmx's own default is `high` unless you pass `--reasoning-effort`
