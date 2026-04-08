@@ -1,6 +1,6 @@
 ---
 name: review
-description: "Cross-model validation — adversarial review, fact-checking, post-implementation close. Dispatches to Gemini 3.1 Pro + GPT-5.4 for independent critique."
+description: "Use when: 'what's wrong with this', 'review the plan', 'close out the implementation', 'fact-check these findings'. Modes: /review model (Gemini+GPT adversarial), /review verify (fact-check LLM output), /review close (post-implementation tests+review)."
 user-invocable: true
 argument-hint: <mode> [target]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent]

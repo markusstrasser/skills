@@ -1,6 +1,6 @@
 ---
 name: upgrade
-description: "Codebase improvement — parallel bug-finding, harness leverage discovery, novel analysis, agent-pliability optimization, concept lifecycle forensics."
+description: "Use when: 'audit the codebase', 'find bugs', 'what can be improved across the project'. Full codebase review via Gemini+GPT parallel analysis. Phased: inventory → brainstorm → research → plan → review → implement. NOT for single-change review (use /review) or session quality (use /observe)."
 user-invocable: true
 argument-hint: <mode> [project or target]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent]

@@ -1,6 +1,6 @@
 ---
 name: analyze
-description: "Reasoning frameworks — causal inference, DAG construction, sensitivity analysis, competing hypotheses (ACH), forensic investigation. All local analysis, no external dispatch."
+description: "Use when: 'why did X happen', 'root cause', 'what caused', 'is this fraud or error', 'control for confounders'. Modes: causal (why), dag (regression), hypotheses (competing explanations), investigate (forensic). Local only, no external dispatch."
 user-invocable: true
 argument-hint: <mode> [question or target]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit]

@@ -1,6 +1,6 @@
 ---
 name: observe
-description: "Diagnostic production -- behavioral anti-patterns, architectural patterns, supervision waste, retrospectives. Dispatches to Gemini 3.1 Pro for analysis. The recursive self-improvement engine."
+description: "Use when: 'what went wrong in recent sessions', 'check session quality', 'retrospective', 'where was time wasted'. Modes: /observe sessions (anti-patterns), /observe architecture (design patterns), /observe supervision (wasted human time), /observe retro (this session)."
 user-invocable: true
 argument-hint: <mode> [project] [options...]
 context: fork
