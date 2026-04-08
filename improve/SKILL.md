@@ -177,12 +177,25 @@ Fall back to reading the 10 most recent JSONL files from `~/.claude/projects/-Us
 
 Local analysis to identify candidate patterns -- extract 3/4/5-grams of tool sequences, count frequencies, filter to those appearing 2+ times.
 
-### Step 3: Pattern Analysis
+### Step 3: Dispatch to Gemini
 
-Analyze the transcripts and tool sequence data directly. For each repeated pattern:
-- Classify as SKILL candidate (multi-step, judgment needed) or MCP TOOL candidate (deterministic, reusable)
-- Note: pattern, frequency, current cost, trigger, parameters, skeleton
-- Only patterns appearing 2+ times across different sessions. Max 7 candidates. Rank by frequency x complexity saved.
+Send transcripts + tool sequence analysis to Gemini 3.1 Pro via `llmx.api.chat()`:
+
+```python
+from llmx.api import chat as llmx_chat
+
+transcripts = Path("$ARTIFACT_DIR/input.md").read_text()
+response = llmx_chat(
+    prompt=transcripts + "\n\nAnalyze Claude Code session transcripts for repeated workflows. "
+    "Classify as SKILL candidate (multi-step, judgment needed) or MCP TOOL candidate (deterministic, reusable). "
+    "For each: pattern, frequency, current cost, trigger, parameters, skeleton. "
+    "Only patterns appearing 2+ times across different sessions. Max 7 candidates. "
+    "Rank by frequency x complexity saved.",
+    provider="google",
+    model="gemini-3.1-pro-preview",
+    timeout=300,
+)
+```
 
 ### Step 4: Validate and Deduplicate
 

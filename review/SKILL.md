@@ -63,19 +63,9 @@ Common review biases — check your context for these before analysis:
 | **Missing project identity** in cross-project reviews | Models apply principles too literally to unfamiliar projects | Include 2-3 line identity per project |
 | **Missing scope declaration** — not stating target users and designed-for scale | Models assume personal/small when reviewing shared infra, or assume production when reviewing prototypes | Always include scope block (see above) |
 
-### 2. Review
+### 2. Dispatch
 
-Two paths — choose based on stakes:
-
-**Path A: Direct analysis (default).** You have the context in conversation. Analyze it directly using the prompts from `references/prompts.md` as your frame. Apply each relevant lens yourself:
-- **Architecture**: patterns, cross-references, structural gaps
-- **Formal**: math, logic, cost-benefit, testable predictions
-- **Domain**: fact correctness (skip for pure code reviews)
-- **Mechanical**: stale refs, wrong paths, naming inconsistencies
-
-This is faster, more reliable, and sufficient for most reviews.
-
-**Path B: Cross-model dispatch (optional, user-initiated).** For high-stakes reviews where cross-family adversarial pressure matters (shared infra, clinical, multi-project). The dispatch script handles parallel llmx calls:
+**Always use the script.** It handles: context assembly, constitutional preamble injection, parallel dispatch to Gemini + GPT via the llmx Python API, extraction, and disposition generation.
 
 ```bash
 uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
@@ -86,11 +76,20 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   "$ARGUMENTS"
 ```
 
-Set `timeout: 660000` on the Bash tool call. See `references/dispatch.md` for flags, presets, and troubleshooting.
+Set `timeout: 660000` on the Bash tool call. Add `--extract` to all standard/deep reviews.
 
-**Only use Path B when the user explicitly requests cross-model review.** The script has known reliability issues with llmx CLI transport (multi-file drops, 0-byte outputs, Gemini rate limits). If dispatch fails, fall back to Path A — don't retry the same command.
+See `references/dispatch.md` for `--questions`, `--context-files`, depth presets, and troubleshooting.
 
-**Genomics classification review** (monthly or after >10 commits to LR-engine/scoring): Use Path B with `--axes formal,domain`. GPT-5.4 found 11 conceptual/mathematical bugs for $6.54 — the only detector for incoherent Bayes.
+#### Depth Presets
+
+| Preset | Axes | When |
+|--------|------|------|
+| `standard` (default) | arch (Gemini) + formal (GPT-5.4) | Most reviews |
+| `--axes simple` | combined Gemini Pro | Config tweaks, refreshes |
+| `--axes deep` | arch + formal + domain + mechanical | Structural changes, domain-dense |
+| `--axes full` | all 5 | Shared infra, clinical, high-stakes |
+
+**Genomics classification review** (monthly or after >10 commits to LR-engine/scoring): Use `--axes formal,domain`. GPT-5.4 found 11 conceptual/mathematical bugs for $6.54 — the only detector for incoherent Bayes.
 
 ### 3. Fact-Check (Mandatory)
 
@@ -104,9 +103,9 @@ Use a **different model family** than the claim's author. Cross-family verificat
 
 ### 4. Extract & Disposition
 
-**If Path B with `--extract`:** Read `disposition.md` and skip to Step 5.
+**If `--extract` was used:** Read `disposition.md` and skip to Step 5. The script does cross-family extraction automatically (Flash extracts GPT output, GPT-Instant extracts Gemini output).
 
-**If Path A (direct analysis) or Path B without `--extract`:** Extract your own findings as a numbered list. For each: what's wrong, where (file/line), severity, proposed fix. See `references/extraction.md` for format.
+**If no `--extract`:** See `references/extraction.md` for manual extraction workflow. The core rule: **never go from raw model outputs directly to synthesis.** Extract mechanically first, then disposition every item, then synthesize. Extraction before synthesis: +24% recall, +29% precision (EVE, arXiv:2602.06103).
 
 ### 5. Synthesize
 
