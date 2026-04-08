@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Advisory hook: fires when agent writes Python code containing regression
-# patterns without evidence of DAG construction. Reminds about /causal-dag.
+# patterns without evidence of DAG construction. Reminds about /analyze dag.
 #
 # Event: PreToolUse (Write, Edit)
 # Mode: advisory (exit 0 always, prints STDERR reminder)
@@ -63,7 +63,7 @@ if echo "$CONTENT" | grep -qiE "$REGRESSION_PATTERNS"; then
 
         echo "⚠ REGRESSION WITHOUT DAG: This code specifies a regression model but contains no evidence of DAG/causal-graph thinking." >&2
         echo "  Before specifying controls/covariates, consider:" >&2
-        echo "  - /causal-dag to construct and validate the causal graph" >&2
+        echo "  - /analyze dag to construct and validate the causal graph" >&2
         echo "  - dag_check.py to verify adjustment set against back-door criterion" >&2
         echo "  - Classify each control: pre-treatment confounder? mediator? descendant of treatment?" >&2
         echo "  Key risk: descendants of treatment as controls create over-control or collider bias" >&2
