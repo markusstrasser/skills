@@ -2,6 +2,24 @@
 
 Track what changes with each model release so you know what to update.
 
+## 2026-04-08 -- Drop Kimi K2.5, Add Flash-Lite
+
+### Key changes
+- **Kimi K2.5 removed** from all model selection, benchmarks, prompting guides, and routing. 63% hallucination rate + derivative reasoning capabilities don't justify the routing complexity. Only Claude, GPT, and Gemini models tracked.
+- **Gemini 3.1 Flash-Lite added** to cost table ($0.25/$1.50, cheapest frontier).
+- **Review skill**: cross-model CLI dispatch no longer default. Direct analysis is primary path; model-review.py available for user-initiated dispatch.
+- **Observe skill**: all modes use direct Claude analysis instead of Gemini dispatch via llmx.
+
+### Files updated
+- SKILL.md: selection matrix, profiles, cost table, hallucination table
+- BENCHMARKS.md: Kimi rows removed, Flash-Lite added
+- PROMPTING_KIMI.md: deleted
+- review/SKILL.md: dispatch made optional
+- observe/SKILL.md: Gemini dispatch removed
+- improve/SKILL.md: Gemini dispatch removed from suggest mode
+- llmx-guide references: Kimi model names removed
+- meta/scripts: Kimi adapter and fixtures removed
+
 ## 2026-02-27 -- Initial Creation
 
 **Models covered:** Claude Opus 4.6, Claude Sonnet 4.6, GPT-5.2, Gemini 3.1 Pro, Kimi K2.5.
