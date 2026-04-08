@@ -107,9 +107,9 @@ find ~/.claude/projects/ -name '*.jsonl' -mtime -${DAYS} -size +10k 2>/dev/null 
 
 For each, grep for `"#f"` in user messages. Extract the feedback text after `#f`. These are ground-truth corrections — highest signal.
 
-**If `scripts/extract_user_tags.py` exists**, prefer it:
+**Use the collocated extraction script:**
 ```bash
-uv run python3 ~/Projects/meta/scripts/extract_user_tags.py --days ${DAYS} --tag f
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/extract_user_tags.py --days ${DAYS} --tag f
 ```
 
 ### 3b. Git Corrections

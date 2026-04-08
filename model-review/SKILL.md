@@ -65,7 +65,7 @@ When both models converge on the same wrong recommendation, the cause is almost 
 **Always use the script.** It handles: output directory creation, constitutional preamble injection, context splitting, parallel llmx dispatch, extraction, and disposition generation.
 
 ```bash
-uv run python3 ~/Projects/meta/scripts/model-review.py \
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --context context.md \
   --topic "$TOPIC" \
   --project "$(pwd)" \
@@ -78,7 +78,7 @@ Set `timeout: 660000` on the Bash tool call. Add `--extract` to all standard/dee
 For per-axis question customization, write a JSON file and pass `--questions`:
 ```bash
 echo '{"arch": "Focus on cross-cutting concerns", "formal": "Verify the cost model math"}' > questions.json
-uv run python3 ~/Projects/meta/scripts/model-review.py \
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --context context.md --topic "$TOPIC" --project "$(pwd)" --extract \
   --questions questions.json
 ```

@@ -45,7 +45,7 @@ Identify which sessions are worth deep analysis:
 
 ```bash
 # Shape anomaly detection — flags sessions with unusual tool patterns
-uv run python3 ~/Projects/meta/scripts/session-shape.py --days {DAYS} {--project PROJECT if specified}
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/session-shape.py --days {DAYS} {--project PROJECT if specified}
 ```
 
 Note anomalous sessions. These get priority in Phase 2.

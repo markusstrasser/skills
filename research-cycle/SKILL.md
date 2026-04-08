@@ -94,7 +94,7 @@ Each phase prompt must include:
 2. **Probe external claims inline:** If the plan references any URL, API endpoint, or version number, HTTP-probe it directly. This catches 404s and HTML-instead-of-API before wasting a review cycle (caught 2 bugs in 6 cycles).
 3. **Cross-model review via script:** Write the plan to a temp file, then dispatch:
 ```bash
-uv run python3 ~/Projects/meta/scripts/model-review.py \
+uv run python3 ~/Projects/skills/model-review/scripts/model-review.py \
   --context /tmp/cycle-plan.md \
   --topic "research-cycle-G{N}" \
   --axes simple \

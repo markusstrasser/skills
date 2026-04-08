@@ -8,21 +8,21 @@ The dispatch script handles: output directory creation, constitutional preamble 
 
 ```bash
 # Standard review (2 queries -- default)
-uv run python3 ~/Projects/meta/scripts/model-review.py \
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --context context.md \
   --topic "$TOPIC" \
   --project "$(pwd)" \
   "What's wrong with this [thing being reviewed]"
 
 # Simple review (1 query -- for low-stakes changes)
-uv run python3 ~/Projects/meta/scripts/model-review.py \
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --context context.md \
   --topic "$TOPIC" \
   --axes simple \
   "Review this change"
 
 # Deep review (4 queries -- structural/domain-dense)
-uv run python3 ~/Projects/meta/scripts/model-review.py \
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --context context.md \
   --topic "$TOPIC" \
   --axes deep \
@@ -30,7 +30,7 @@ uv run python3 ~/Projects/meta/scripts/model-review.py \
   "Review this plan"
 
 # Custom axes (mix and match)
-uv run python3 ~/Projects/meta/scripts/model-review.py \
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --context context.md \
   --topic "$TOPIC" \
   --axes arch,domain,mechanical \
@@ -52,7 +52,7 @@ Without `--extract`, you must manually extract claims (Step 5).
 
 ```bash
 # Standard review WITH auto-extraction (preferred)
-uv run python3 ~/Projects/meta/scripts/model-review.py \
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --context context.md \
   --topic "$TOPIC" \
   --project "$(pwd)" \
@@ -66,7 +66,7 @@ Use `--questions` to customize the review question per axis. Pass a JSON file ma
 
 ```bash
 echo '{"arch": "Focus on the DAG wiring", "formal": "Verify the cost model assumptions"}' > questions.json
-uv run python3 ~/Projects/meta/scripts/model-review.py \
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --context context.md --topic "$TOPIC" --project "$(pwd)" --extract \
   --questions questions.json \
   "Default question for axes not in the JSON"
@@ -79,7 +79,7 @@ Axes not present in the JSON file fall back to the positional `question` argumen
 Use `--context-files` to skip manual assembly. The script reads each file spec and concatenates with headers:
 
 ```bash
-uv run python3 ~/Projects/meta/scripts/model-review.py \
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --context-files docs/plan.md scripts/finding_ir.py:86-110 scripts/hard_locus_report.py:93-185 \
   --topic "expansion-plan" --project "$(pwd)" --extract \
   "Review this plan against the code it references"

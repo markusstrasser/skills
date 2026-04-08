@@ -50,13 +50,13 @@ Before testing or review, normalize the closeout conditions.
    - Do not rely on multiple `llmx -f` files.
    - Use:
    ```bash
-   uv run python3 ~/Projects/meta/scripts/build_plan_close_context.py \
+   uv run python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
      --repo "$(pwd)" \
      --output .model-review/plan-close-context.md
    ```
    - For commit-range review:
    ```bash
-   uv run python3 ~/Projects/meta/scripts/build_plan_close_context.py \
+   uv run python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
      --repo "$(pwd)" \
      --base <old-ref> \
      --head <new-ref> \
