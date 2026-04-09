@@ -15,7 +15,10 @@ CMD_CLEAN=$(echo "$CMD" | sed 's/^sleep [0-9]*[smh]* *&&//' | sed 's/^ *//')
 PATH_TARGET=$(echo "$CMD_CLEAN" | grep -oE '\b(wc|ls|head|tail|stat|cat|du)\b.*' | grep -oE '(/[^ |;>&]+)' | head -1)
 [ -z "$PATH_TARGET" ] && exit 0
 
-TRACKER="/tmp/claude-bash-poll-tracker-${PPID}"
+# Scope tracker per session + fork context to avoid cross-subagent false positives
+# CLAUDE_AGENT_ID is set for subagents; fall back to PPID for main session
+_SCOPE="${CLAUDE_AGENT_ID:-${CLAUDE_SESSION_ID:-$PPID}}"
+TRACKER="/tmp/claude-bash-poll-tracker-${_SCOPE}"
 echo "$PATH_TARGET" >> "$TRACKER"
 
 COUNT=$(grep -cF "$PATH_TARGET" "$TRACKER" 2>/dev/null || echo 0)
