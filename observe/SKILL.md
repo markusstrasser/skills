@@ -78,6 +78,17 @@ Analyze session transcripts for behavioral anti-patterns that no linter or stati
 
 Parse the project argument from $ARGUMENTS. Default: last 5 sessions.
 
+### Step 0: Run Numbering
+
+Check the latest run number in improvement-log.md to avoid collisions:
+
+```bash
+LAST_RUN=$(grep -oE 'Run [0-9]+' ~/Projects/meta/improvement-log.md | tail -1 | grep -oE '[0-9]+')
+NEXT_RUN=$((LAST_RUN + 1))
+```
+
+Use `Run $NEXT_RUN` in output headers. If the same session set was already analyzed in a recent run (check last 3 entries in improvement-log for matching session IDs), report "Sessions already covered in Run N" and stop unless `--force` was passed.
+
 ### Step 1: Extract & Pre-Filter
 
 Run shared transcript extraction above. Build operational context per `references/transcript-extraction.md` Step 1.3.
@@ -307,6 +318,17 @@ If `--days 7+`, compare against previous runs:
 End-of-session retrospective. LOCAL analysis only -- no Gemini dispatch. Classification in `lenses/retro-reflection.md`.
 
 The goal is error correction -- turning observations into hooks, rules, or architectural fixes.
+
+### Phase 0: Idempotency Check
+
+Before analyzing, check for existing retro artifacts for this session:
+
+```bash
+SID=$(cat ~/.claude/current-session-id 2>/dev/null | head -c8 || date +%s | tail -c 8)
+EXISTING=$(ls ~/Projects/meta/artifacts/session-retro/$(date +%Y-%m-%d)-${SID}-*.json 2>/dev/null | wc -l | tr -d ' ')
+```
+
+If EXISTING > 0 and `--force` was NOT passed: report "Already retro'd ({EXISTING} artifact(s) exist for session {SID} today). Use --force to re-analyze." and stop. This prevents diminishing-returns loops (5 retros on the same session observed, each adding zero new findings after the 2nd).
 
 ### Phase 1: Evidence Collection
 
