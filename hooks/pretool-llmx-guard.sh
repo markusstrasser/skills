@@ -94,11 +94,16 @@ fi
 
 # --- ADVISORY checks (warnings only) ---
 
-# 0. Python API preferred over CLI for programmatic dispatch
-# The CLI has 5 known failure modes (multi-file drops, 0-byte -o, rate limit loops, stdin EOF, pipe masking).
-# The Python API (llmx.api.chat) bypasses all of them.
+# 0. BLOCK llmx chat CLI — use Python API instead
+# The CLI has 5 known failure modes in agent context (multi-file drops, 0-byte -o,
+# rate limit loops, stdin EOF, pipe masking). The Python API bypasses all of them.
 if echo "$CMD" | grep -qE 'llmx\s+chat'; then
-  WARNINGS="${WARNINGS}[llmx-guard] Consider using llmx Python API instead of CLI: from llmx.api import chat; chat(prompt=..., provider=..., model=..., api_only=True). Avoids 5 known CLI transport failures. See llmx-guide skill.\n"
+  echo "[llmx-guard] BLOCKED: Do not use 'llmx chat' CLI. Use the Python API instead:" >&2
+  echo "  from llmx.api import chat as llmx_chat" >&2
+  echo "  r = llmx_chat(prompt=..., provider='google', model='gemini-3.1-pro-preview', api_only=True, timeout=300)" >&2
+  echo "  Bootstrap: sys.path.insert(0, glob.glob(str(Path.home() / '.local/share/uv/tools/llmx/lib/python*/site-packages'))[0])" >&2
+  ~/Projects/skills/hooks/hook-trigger-log.sh "llmx-chat-blocked" "block" "$(echo "$CMD" | head -c 200)" 2>/dev/null || true
+  exit 2
 fi
 
 # 0a. Gemini Pro without --stream — CLI transport hangs on thinking models + piped input, hits capacity limits
