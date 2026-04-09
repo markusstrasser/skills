@@ -10,11 +10,18 @@ INPUT=$(cat)
 # Extract command from tool_input
 CMD=$(echo "$INPUT" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("tool_input",{}).get("command",""))' 2>/dev/null)
 
-# Only block dangerous git add patterns that sweep in all changes.
-# git commit is safe — the index was already determined by prior git add calls.
-# git add <specific-files> is safe — the agent chose what to stage.
-if echo "$CMD" | grep -qE '^\s*git\s+add\s+(-A|--all|\.\s*$|\.\s*&&)'; then
+# Extract first line only — multi-line commit messages contain git substrings
+# that would false-positive the grep patterns below.
+CMD_FIRST=$(echo "$CMD" | head -1)
+
+# Block dangerous git patterns that sweep in or destroy other agents' changes:
+# - git add -A / --all / . — sweeps all changes
+# - git add -p — interactive staging shows hunks from all agents' modifications
+# - git checkout -- / git restore — destroys uncommitted changes
+if echo "$CMD_FIRST" | grep -qE '^\s*git\s+add\s+(-A|--all|-p|--patch|\.\s*$|\.\s*&&)'; then
     : # dangerous add — continue to check
+elif echo "$CMD_FIRST" | grep -qE '^\s*git\s+(checkout\s+--|restore\s)'; then
+    : # destructive discard — continue to check
 else
     exit 0  # git commit, specific-file add, or non-git command — all safe
 fi
@@ -36,5 +43,5 @@ fi
 ~/Projects/skills/hooks/hook-trigger-log.sh "multiagent-commit" "block" \
     "procs=$CLAUDE_PROCS cmd=$(echo "$CMD" | head -c 60)" 2>/dev/null || true
 
-echo '{"decision": "block", "reason": "MULTI-AGENT SAFETY: '"$CLAUDE_PROCS"' claude processes active in main repo (not a worktree). Use git add <specific-files> instead of git add . / -A to avoid sweeping other agents changes."}'
+echo '{"decision": "block", "reason": "MULTI-AGENT SAFETY: '"$CLAUDE_PROCS"' claude processes active in main repo (not a worktree). Use git add <specific-files> (not -A/-p/.). For git checkout/restore: stash instead, or verify the files are yours."}'
 exit 2
