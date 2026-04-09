@@ -121,6 +121,39 @@ GPT_TIMEOUT="--timeout 600"
 # 16K causes empty output (all tokens consumed by thinking). Use 16K only for medium reasoning.
 ```
 
+### Reasoning Effort Selection
+
+Default: `high` for GPT-5.4, `high` thinkingLevel for Gemini Pro. This is correct for 95% of review tasks.
+
+| Effort | When | Wall clock | Quality delta |
+|--------|------|-----------|---------------|
+| `high` (default) | Architectural review, plan critique, code review | 2-5 min | Baseline — strong |
+| `xhigh` | Formal math proofs, semiring law verification, multi-step logical chains | 5-15 min | Marginal for non-math tasks |
+| `medium` | Quick checks, mechanical audits, trivial reviews | 30-60s | Acceptable for low-stakes |
+
+**Empirical (genomics reasoning-substrate session, 2026-04-09):** `high` adversarial review (4 min, 788 lines) found the sharpest single insight across 6 reviews. Three `xhigh` calls (15 min each, 600+ lines each) had higher word count but similar signal density. The `xhigh` types review gave complete Pydantic code — useful but derivable from high-level recommendations. Save `xhigh` for when asking GPT to verify algebra or derive formal proofs.
+
+**GPT-only multi-query pattern:** For deep dives, dispatch 2-3 focused GPT-5.4 `high` queries in parallel (different questions per query) rather than one `xhigh` mega-query. More total signal per unit time. Each query should be a narrow, specific attack vector — not "review everything."
+
+### Context Formatting (Consult model-guide)
+
+Before assembling context, check `/model-guide` for per-model prompting rules. Key points:
+
+**GPT-5.4:**
+- Use XML `<doc id="..." title="...">` tags for document sections — JSON performs poorly
+- Do NOT say "think step by step" — hurts with reasoning mode on
+- Keep prompts simple and direct — the model does heavy reasoning internally
+- Static prefix (top) + dynamic content (bottom) for cache hits
+- `--max-tokens 32768` minimum for high effort (reasoning tokens count against limit)
+
+**Gemini Pro:**
+- Put query/question at the END after all context
+- Put critical constraints at the END — Gemini drops early constraints
+- Keep temperature at 1.0 (lower causes looping)
+- Default maxOutputTokens is only 8192 — raise explicitly
+- Add "Remember it is 2026" for date-sensitive reviews
+- Use few-shot examples when possible — matters more for Gemini
+
 ### Bash Timeout (Manual)
 
 Always set `timeout: 660000` (11 minutes -- must exceed llmx --timeout value) on the Bash tool call. The default 120s Bash timeout kills the process before llmx finishes. llmx's own `--timeout` handles the real deadline.

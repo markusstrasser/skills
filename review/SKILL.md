@@ -75,7 +75,13 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   "$ARGUMENTS"
 ```
 
-Set `timeout: 660000` on the Bash tool call. See `references/dispatch.md` for `--questions`, `--context-files`, depth presets, and troubleshooting.
+Set `timeout: 660000` on the Bash tool call. See `references/dispatch.md` for `--questions`, `--context-files`, depth presets, effort levels, and troubleshooting.
+
+**Model-specific prompting:** Before assembling context, consult `/model-guide` for per-model rules. Key: GPT-5.4 context should use XML `<doc>` tags, Gemini query goes at END. See `references/dispatch.md § Context Formatting` for the full checklist.
+
+**Effort levels:** Default `high` is correct for reviews. Use `xhigh` only for formal math verification. See `references/dispatch.md § Reasoning Effort Selection`.
+
+**GPT-only multi-query pattern:** For deep dives where you want multiple focused attack vectors, dispatch 2-3 GPT-5.4 `high` queries in parallel with different questions each, rather than one mega-query. More signal per unit time.
 
 #### Depth Presets
 
@@ -219,5 +225,8 @@ pytest tests/test_<new>.py -x  # should PASS
 ## Known Issues
 <!-- Append-only. Session-analyst may suggest additions. -->
 - **[2026-03-27] llmx output flag — never use shell redirects (> file) with llmx; use --output/-o flag instead. Shell redirects buffer until process exit, producing 0-byte files. Fixed in llmx v0.5.0 (2026-03-06).**
+- **[2026-04-09] GPT-5.4 xhigh timeout — default llmx timeout is 300s, xhigh needs 900s. Set `--timeout 900` for xhigh, `--timeout 600` for high. Three parallel xhigh calls may hit rate limits — run sequentially or use high effort instead.**
+- **[2026-04-09] xhigh vs high for architectural review — marginal quality delta. High-effort adversarial review (4 min) found the sharpest insight across 6 reviews. xhigh (15 min each) had more words, similar signal density. Reserve xhigh for formal math only. For deep dives: 2-3 parallel high queries with focused questions > 1 xhigh mega-query.**
+- **[2026-04-09] Context formatting matters — GPT-5.4 performs better with XML `<doc>` tags around context sections. Gemini needs query at END, critical constraints at END. Consult /model-guide before assembling context for manual dispatch.**
 
 $ARGUMENTS
