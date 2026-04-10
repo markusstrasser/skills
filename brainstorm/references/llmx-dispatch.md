@@ -1,31 +1,32 @@
 <!-- Reference file for brainstorm skill. Loaded on demand. -->
 # llmx Dispatch Templates
 
-> **DISPATCH VIA PYTHON API, NOT CLI.** Use `from llmx.api import chat as llmx_chat` and call
-> `llmx_chat(prompt=..., provider=..., model=..., timeout=...)`. Read context files with
-> `Path(...).read_text()` and write outputs with `Path(...).write_text(response.content)`.
-> The CLI commands below are template references for the prompt content — adapt them to Python API calls.
-> Bootstrap: `sys.path.insert(0, glob.glob(str(Path.home() / ".local/share/uv/tools/llmx/lib/python*/site-packages"))[0])`
+> **Automation path:** use `uv run python3 ~/Projects/skills/scripts/llm-dispatch.py` or the shared Python module in `shared/llm_dispatch.py`.
+> The CLI commands below are manual prompt templates only. Do not paste them into agent automation unchanged.
 
 All templates assume `$BRAINSTORM_DIR`, `$N_IDEAS`, `$CONSTITUTION`, and `$TOPIC` are set.
 Date injection: `$(date +%Y-%m-%d)` in every system prompt.
 
 ## Initial Generation (Step 2)
 
-**With llmx (and not `--no-llmx`):** Dispatch to an external model for parallel volume while you also generate your own set.
+**With external dispatch (and not `--no-llmx`):** Dispatch to an external model for parallel volume while you also generate your own set.
 
 ```bash
-llmx chat -m gemini-3.1-pro-preview \
-  ${CONSTITUTION:+-f "$BRAINSTORM_DIR/context.md"} \
-  --max-tokens 65536 --timeout 300 \
-  -o "$BRAINSTORM_DIR/external-generation.md" "
+cat > "$BRAINSTORM_DIR/external-generation.prompt.md" <<'EOF'
 <system>
 Generate approaches to the design space below. Maximize breadth — $N_IDEAS genuinely different approaches, not variations on a theme. No feasibility filtering yet. It is $(date +%Y-%m-%d).
 </system>
 
 [Design space + constraints + user-provided seeds if any]
 
-For each approach: one paragraph on the mechanism and why it differs from the others."
+For each approach: one paragraph on the mechanism and why it differs from the others.
+EOF
+
+uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
+  --profile deep_review \
+  --context "$BRAINSTORM_DIR/context.md" \
+  --prompt-file "$BRAINSTORM_DIR/external-generation.prompt.md" \
+  --output "$BRAINSTORM_DIR/external-generation.md"
 ```
 
 Simultaneously, generate your own `$N_IDEAS` approaches. Write to `$BRAINSTORM_DIR/claude-generation.md`.
@@ -130,17 +131,19 @@ cat "$BRAINSTORM_DIR"/*generation*.md \
     > "$BRAINSTORM_DIR/all-raw.md" 2>/dev/null
 ```
 
-If llmx available, dispatch extraction to a fast model:
+If shared dispatch is available, send extraction to a fast profile:
 
 ```bash
-llmx chat -m gemini-3-flash-preview --timeout 120 \
-  -f "$BRAINSTORM_DIR/all-raw.md" \
-  -o "$BRAINSTORM_DIR/extraction.md" "
+uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
+  --profile fast_extract \
+  --context "$BRAINSTORM_DIR/all-raw.md" \
+  --prompt "
 <system>
 Extract every discrete idea, approach, or insight as a numbered list. One per line. Tag the source (initial/denial-r1/denial-r2/domain/constraint). Do not evaluate — extract mechanically.
 </system>
 
-Extract all discrete ideas from the brainstorm artifacts."
+Extract all discrete ideas from the brainstorm artifacts." \
+  --output "$BRAINSTORM_DIR/extraction.md"
 ```
 
-If no llmx, extract yourself.
+If no shared dispatch is available, extract yourself.
