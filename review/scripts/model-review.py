@@ -29,17 +29,18 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from pathlib import Path
+from typing import NamedTuple
 
-# llmx is editable-installed as a uv tool; bootstrap from its venv if not importable
-try:
-    from llmx.api import chat as llmx_chat
-except ImportError:
-    import glob
-    _tool_site = glob.glob(str(Path.home() / ".local/share/uv/tools/llmx/lib/python*/site-packages"))
-    if _tool_site:
-        sys.path.insert(0, _tool_site[0])
-    sys.path.insert(0, str(Path.home() / "Projects" / "llmx"))
-    from llmx.api import chat as llmx_chat
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import shared.llm_dispatch as dispatch_core
+from shared.context_budget import enforce_budget
+from shared.context_packet import BudgetPolicy, ContextPacket, FileBlock, PacketSection, TextBlock
+from shared.context_preamble import build_review_preamble_blocks, find_constitution as shared_find_constitution
+from shared.context_renderers import write_packet_artifact
+from shared.file_specs import parse_file_spec, read_file_excerpt
 
 # --- Structured output schema (both models return this) ---
 
@@ -75,9 +76,7 @@ FINDING_SCHEMA = {
 AXES = {
     "arch": {
         "label": "Gemini (architecture/patterns)",
-        "model": "gemini-3.1-pro-preview",
-        "provider": "google",
-        "api_kwargs": {"timeout": 300},
+        "profile": "deep_review",
         "prompt": """\
 <system>
 You are reviewing a codebase. Be concrete. No platitudes. Reference specific code, configs, and findings. It is {date}.
@@ -108,9 +107,7 @@ What am I (Gemini) likely getting wrong? Where should you distrust my assessment
     },
     "formal": {
         "label": "GPT-5.4 (quantitative/formal)",
-        "model": "gpt-5.4",
-        "provider": "openai",
-        "api_kwargs": {"timeout": 600, "reasoning_effort": "high", "max_tokens": 32768},
+        "profile": "formal_review",
         "prompt": """\
 <system>
 You are performing QUANTITATIVE and FORMAL analysis. Other reviewers handle qualitative pattern review. Focus on what they can't do well. Be precise. Show your reasoning. No hand-waving.
@@ -141,9 +138,7 @@ What am I (GPT-5.4) probably getting wrong? Known biases to flag: overconfidence
     },
     "domain": {
         "label": "Gemini Pro (domain correctness)",
-        "model": "gemini-3.1-pro-preview",
-        "provider": "google",
-        "api_kwargs": {"timeout": 300},
+        "profile": "deep_review",
         "prompt": """\
 <system>
 You are verifying DOMAIN-SPECIFIC CLAIMS in this plan. Other reviewers handle architecture and formal logic.
@@ -164,9 +159,7 @@ Flag any URLs, API endpoints, or version numbers that should be probed before im
     },
     "mechanical": {
         "label": "Gemini Flash (mechanical audit)",
-        "model": "gemini-3-flash-preview",
-        "provider": "google",
-        "api_kwargs": {"timeout": 120},
+        "profile": "fast_extract",
         "prompt": """\
 <system>
 Mechanical audit only. No analysis, no recommendations. Fast and precise.
@@ -182,9 +175,7 @@ Output as a flat numbered list. One issue per line.""",
     },
     "alternatives": {
         "label": "Gemini Pro (alternative approaches)",
-        "model": "gemini-3.1-pro-preview",
-        "provider": "google",
-        "api_kwargs": {"timeout": 300},
+        "profile": "deep_review",
         "prompt": """\
 <system>
 You are generating ALTERNATIVE APPROACHES to the proposed plan. Other reviewers check correctness.
@@ -204,9 +195,7 @@ Do NOT critique the existing plan — generate alternatives. Different mechanism
     },
     "simple": {
         "label": "Gemini Pro (combined review)",
-        "model": "gemini-3.1-pro-preview",
-        "provider": "google",
-        "api_kwargs": {"timeout": 300},
+        "profile": "deep_review",
         "prompt": """\
 <system>
 Quick combined review. Be concrete. It is {date}. Budget: ~1000 words.
@@ -227,8 +216,8 @@ PRESETS = {
     "full": ["arch", "formal", "domain", "mechanical", "alternatives"],
 }
 
-GEMINI_PRO_MODEL = "gemini-3.1-pro-preview"
-GEMINI_FLASH_MODEL = "gemini-3-flash-preview"
+GEMINI_PRO_MODEL = dispatch_core.PROFILES["deep_review"].model
+GEMINI_FLASH_MODEL = dispatch_core.PROFILES["fast_extract"].model
 GEMINI_RATE_LIMIT_MARKERS = (
     "503",
     "rate limit",
@@ -237,6 +226,19 @@ GEMINI_RATE_LIMIT_MARKERS = (
     "overloaded",
     "429",
 )
+
+
+class ContextArtifact(NamedTuple):
+    content_path: Path
+    manifest_path: Path
+
+
+def context_content_path(value: Path | ContextArtifact) -> Path:
+    return value.content_path if isinstance(value, ContextArtifact) else value
+
+
+def context_manifest_path(value: Path | ContextArtifact) -> Path | None:
+    return value.manifest_path if isinstance(value, ContextArtifact) else None
 
 
 def slugify(text: str, max_len: int = 40) -> str:
@@ -249,36 +251,42 @@ def slugify(text: str, max_len: int = 40) -> str:
 def _add_additional_properties(schema: dict) -> dict:
     """Recursively add additionalProperties:false to all objects (OpenAI strict mode)."""
     import copy
-    s = copy.deepcopy(schema)
-    def _walk(obj: dict) -> None:
+
+    transformed = copy.deepcopy(schema)
+
+    def walk(obj: dict) -> None:
         if obj.get("type") == "object":
             obj["additionalProperties"] = False
-        for v in obj.values():
-            if isinstance(v, dict):
-                _walk(v)
-            elif isinstance(v, list):
-                for item in v:
+        for value in obj.values():
+            if isinstance(value, dict):
+                walk(value)
+            elif isinstance(value, list):
+                for item in value:
                     if isinstance(item, dict):
-                        _walk(item)
-    _walk(s)
-    return s
+                        walk(item)
+
+    walk(transformed)
+    return transformed
 
 
 def _strip_additional_properties(schema: dict) -> dict:
     """Recursively remove additionalProperties from all objects (Google API)."""
     import copy
-    s = copy.deepcopy(schema)
-    def _walk(obj: dict) -> None:
+
+    transformed = copy.deepcopy(schema)
+
+    def walk(obj: dict) -> None:
         obj.pop("additionalProperties", None)
-        for v in obj.values():
-            if isinstance(v, dict):
-                _walk(v)
-            elif isinstance(v, list):
-                for item in v:
+        for value in obj.values():
+            if isinstance(value, dict):
+                walk(value)
+            elif isinstance(value, list):
+                for item in value:
                     if isinstance(item, dict):
-                        _walk(item)
-    _walk(s)
-    return s
+                        walk(item)
+
+    walk(transformed)
+    return transformed
 
 
 def _call_llmx(
@@ -287,36 +295,35 @@ def _call_llmx(
     context_path: Path,
     prompt: str,
     output_path: Path,
+    context_manifest_path: Path | None = None,
     schema: dict | None = None,
     **kwargs,
 ) -> dict:
-    """Call llmx Python API, write output to file, return result dict."""
-    context = context_path.read_text()
-    full_prompt = context + "\n\n---\n\n" + prompt
-    # Reasoning models (GPT-5.x, Gemini 3.x) require temperature=1.0
-    temperature = 1.0 if any(m in model for m in ("gpt-5", "gemini-3")) else 0.7
-    api_kwargs: dict = {**kwargs}
-    if schema:
-        # OpenAI strict mode requires additionalProperties:false; Google rejects it
-        if provider == "openai":
-            api_kwargs["response_format"] = _add_additional_properties(schema)
-        else:
-            api_kwargs["response_format"] = _strip_additional_properties(schema)
+    """Call the shared dispatch helper and adapt its result shape for review logic."""
     try:
-        response = llmx_chat(
-            prompt=full_prompt,
-            provider=provider,
-            model=model,
-            temperature=temperature,
+        profile = dispatch_core.map_model_to_profile(model)
+        override_payload = {}
+        for key in ("timeout", "reasoning_effort", "max_tokens", "search"):
+            if key in kwargs and kwargs[key] is not None:
+                override_payload[key] = kwargs[key]
+        overrides = dispatch_core.DispatchOverrides(**override_payload) if override_payload else None
+        result = dispatch_core.dispatch(
+            profile=profile,
+            prompt=prompt,
+            context_path=context_path,
+            context_manifest_path=context_manifest_path,
+            output_path=output_path,
+            schema=schema,
+            overrides=overrides,
             api_only=True,
-            **api_kwargs,
         )
-        output_path.write_text(response.content)
+        output_size = output_path.stat().st_size if output_path.exists() else 0
+        exit_code = 0 if result.status in {"ok", "parse_error"} else 1
         return {
-            "exit_code": 0,
-            "size": output_path.stat().st_size,
-            "latency": response.latency,
-            "error": None,
+            "exit_code": exit_code,
+            "size": output_size,
+            "latency": result.latency,
+            "error": result.error_message,
         }
     except Exception as e:
         error_msg = str(e)[:500]
@@ -338,7 +345,7 @@ def axis_output_failed(info: object) -> bool:
 
 def collect_dispatch_failures(
     dispatch_result: dict,
-    ctx_files: dict[str, Path],
+    ctx_files: dict[str, Path | ContextArtifact],
 ) -> list[dict[str, object]]:
     """Summarize failed axes for machine-readable failure artifacts."""
     failures: list[dict[str, object]] = []
@@ -348,7 +355,7 @@ def collect_dispatch_failures(
             continue
         entry = dict(info)
         entry["axis"] = axis
-        entry["context"] = str(ctx_files.get(axis, ""))
+        entry["context"] = str(context_content_path(ctx_files[axis])) if axis in ctx_files else ""
         entry["failure_reason"] = (
             "nonzero_exit" if int(entry.get("exit_code", 0)) != 0 else "empty_output"
         )
@@ -360,7 +367,7 @@ def rerun_axis_with_flash(
     axis: str,
     axis_def: dict[str, object],
     review_dir: Path,
-    ctx_file: Path,
+    ctx_file: Path | ContextArtifact,
     prompt: str,
 ) -> dict:
     """Retry a failed Gemini Pro axis with Gemini Flash."""
@@ -373,7 +380,8 @@ def rerun_axis_with_flash(
     return _call_llmx(
         provider="google",
         model=GEMINI_FLASH_MODEL,
-        context_path=ctx_file,
+        context_path=context_content_path(ctx_file),
+        context_manifest_path=context_manifest_path(ctx_file),
         prompt=prompt,
         output_path=out_path,
         **api_kwargs,
@@ -381,85 +389,7 @@ def rerun_axis_with_flash(
 
 
 def find_constitution(project_dir: Path) -> tuple[str, str | None]:
-    """Find constitution text and GOALS.md path in project dir."""
-    constitution = ""
-    goals_path = None
-
-    # Check .claude/rules/constitution.md first (genomics, projects with standalone file)
-    rules_const = project_dir / ".claude" / "rules" / "constitution.md"
-    if rules_const.exists():
-        constitution = rules_const.read_text().strip()
-
-    # Fall back to CLAUDE.md <constitution> tag or ## Constitution heading
-    if not constitution:
-        claude_md = project_dir / "CLAUDE.md"
-        if claude_md.exists():
-            text = claude_md.read_text()
-            m = re.search(r"<constitution>(.*?)</constitution>", text, re.DOTALL)
-            if m:
-                constitution = m.group(1).strip()
-            elif "## Constitution" in text:
-                idx = text.index("## Constitution")
-                rest = text[idx:]
-                end = re.search(r"\n## (?!Constitution)", rest)
-                constitution = rest[: end.start()].strip() if end else rest.strip()
-
-    for gp in [project_dir / "GOALS.md", project_dir / "docs" / "GOALS.md"]:
-        if gp.exists():
-            goals_path = str(gp)
-            break
-
-    return constitution, goals_path
-
-
-def parse_file_spec(spec: str) -> str:
-    """Parse a file:start-end spec and return the content.
-
-    Formats:
-      path/file.py           — entire file
-      path/file.py:100-150   — lines 100-150 (1-based, inclusive)
-      path/file.py:100       — single line
-    """
-    if ":" in spec and not spec.startswith("/") or spec.count(":") == 1:
-        parts = spec.rsplit(":", 1)
-        file_path = parts[0]
-        range_spec = parts[1] if len(parts) > 1 else ""
-    else:
-        file_path = spec
-        range_spec = ""
-
-    path = Path(file_path).expanduser()
-    if not path.exists():
-        return f"# [FILE NOT FOUND: {file_path}]\n"
-
-    text = path.read_text()
-
-    if range_spec and "-" in range_spec:
-        try:
-            start, end = range_spec.split("-", 1)
-            start_line = int(start) - 1  # 0-based
-            end_line = int(end)
-            lines = text.splitlines()
-            text = "\n".join(lines[start_line:end_line])
-        except (ValueError, IndexError):
-            pass
-    elif range_spec:
-        try:
-            line_no = int(range_spec) - 1
-            lines = text.splitlines()
-            text = lines[line_no] if 0 <= line_no < len(lines) else text
-        except (ValueError, IndexError):
-            pass
-
-    return f"# {file_path}" + (f" (lines {range_spec})" if range_spec else "") + f"\n\n{text}\n\n"
-
-
-def assemble_context_files(specs: list[str]) -> str:
-    """Assemble content from multiple file:range specs into one context string."""
-    parts = []
-    for spec in specs:
-        parts.append(parse_file_spec(spec.strip()))
-    return "\n".join(parts)
+    return shared_find_constitution(project_dir)
 
 
 def build_context(
@@ -469,56 +399,80 @@ def build_context(
     axis_names: list[str],
     *,
     context_file_specs: list[str] | None = None,
-) -> dict[str, Path]:
-    """Assemble per-axis context files with constitutional preamble.
+    budget_limit_override: int | None = None,
+) -> dict[str, ContextArtifact]:
+    """Assemble shared context packet with constitutional preamble.
 
     Context sources (in order of precedence):
       1. --context FILE — single pre-assembled context file
       2. --context-files spec1 spec2 ... — auto-assembled from file:range specs
     """
-    constitution, goals_path = find_constitution(project_dir)
+    preamble_blocks, _ = build_review_preamble_blocks(project_dir)
+    packet_sections = [PacketSection("Preamble", preamble_blocks)]
 
-    preamble = ""
-    if constitution:
-        # Always include full constitution verbatim — summaries lose nuance
-        # that causes reviewers to over-apply or misapply principles
-        preamble += "# PROJECT CONSTITUTION (verbatim — review against these, not your priors)\n\n"
-        preamble += constitution + "\n\n"
-    if goals_path:
-        preamble += "# PROJECT GOALS\n\n"
-        preamble += Path(goals_path).read_text() + "\n\n"
-
-    # Agent economics framing — always included so reviewers don't
-    # recommend trading quality for dev time (which is ~free with agents)
-    preamble += "# DEVELOPMENT CONTEXT\n"
-    preamble += "All code, plans, and features in this project are developed by AI agents, not human developers. "
-    preamble += "Dev creation time is effectively zero. Therefore:\n"
-    preamble += "- NEVER recommend trading stability, composability, or robustness for dev time savings\n"
-    preamble += "- NEVER recommend simpler/hacky approaches because they're 'faster to implement'\n"
-    preamble += "- Cost-benefit analysis should filter on: maintenance burden, supervision cost, complexity budget, blast radius — not creation effort\n"
-    preamble += "- 'Effort to implement' is not a meaningful cost dimension — only ongoing drag matters\n\n"
-
-    # Assemble content from the right source
     if context_file:
-        content = context_file.read_text()
+        packet_sections.append(
+            PacketSection(
+                "Provided Context",
+                [TextBlock(str(context_file), context_file.read_text(), priority=400, drop_if_needed=False, metadata={"path": str(context_file)})],
+            )
+        )
     elif context_file_specs:
-        content = assemble_context_files(context_file_specs)
+        file_blocks = []
+        for spec_text in context_file_specs:
+            spec = parse_file_spec(spec_text.strip())
+            excerpt, truncated, omission_reason = read_file_excerpt(spec, max_chars=None)
+            metadata: dict[str, object] = {}
+            if omission_reason:
+                metadata["omission_reason"] = omission_reason
+            file_blocks.append(
+                FileBlock(
+                    spec.display_path,
+                    excerpt,
+                    range_spec=spec.range_spec,
+                    priority=40,
+                    drop_if_needed=True,
+                    min_chars=1_000,
+                    truncated=truncated,
+                    truncation_reason="file_range_excerpt" if truncated else None,
+                    metadata=metadata,
+                )
+            )
+        packet_sections.append(PacketSection("Context Files", file_blocks))
     else:
-        content = ""
+        packet_sections.append(PacketSection("Provided Context", [TextBlock("Context", "", priority=10, drop_if_needed=True)]))
 
-    ctx_files = {}
-    for axis in axis_names:
-        ctx_path = review_dir / f"{axis}-context.md"
-        ctx_path.write_text(preamble + content)
-        ctx_files[axis] = ctx_path
+    token_limits = [
+        dispatch_core.profile_input_budget(AXES[axis]["profile"])["input_token_limit"]
+        for axis in axis_names
+        if dispatch_core.profile_input_budget(AXES[axis]["profile"])["input_token_limit"] is not None
+    ]
+    budget_limit = budget_limit_override if budget_limit_override is not None else (min(token_limits) if token_limits else 120000)
+    packet = ContextPacket(
+        title="Model Review Context Packet",
+        sections=packet_sections,
+        metadata={"Project": str(project_dir), "Axes": ",".join(axis_names)},
+        budget_policy=BudgetPolicy(metric="tokens", limit=budget_limit),
+    )
+    packet = enforce_budget(packet, renderer="markdown").packet
 
-    # Warn on size
-    for axis, path in ctx_files.items():
-        size = path.stat().st_size
-        if size > 15_000:
-            print(f"warning: {axis} context {size} bytes > 15KB — consider summarizing", file=sys.stderr)
-
-    return ctx_files
+    content_path = review_dir / "shared-context.md"
+    manifest_path = review_dir / "shared-context.manifest.json"
+    artifact = write_packet_artifact(
+        packet,
+        renderer="markdown",
+        output_path=content_path,
+        manifest_path=manifest_path,
+        builder_name="model_review_context",
+        builder_version="2026-04-10-v1",
+    )
+    if artifact.rendered_bytes > 15_000:
+        print(
+            f"warning: shared context {artifact.rendered_bytes} bytes "
+            f"({artifact.token_estimate} tokens est.) may be large",
+            file=sys.stderr,
+        )
+    return {axis: ContextArtifact(content_path=content_path, manifest_path=manifest_path) for axis in axis_names}
 
 
 def dispatch(
@@ -559,19 +513,22 @@ def dispatch(
 
     def _run_axis(axis: str) -> tuple[str, dict]:
         axis_def = AXES[axis]
+        profile_name = str(axis_def["profile"])
+        profile_def = dispatch_core.PROFILES[profile_name]
         out_path = review_dir / f"{axis}-output.md"
+        context_artifact = ctx_files[axis]
         result = _call_llmx(
-            provider=str(axis_def["provider"]),
-            model=str(axis_def["model"]),
-            context_path=ctx_files[axis],
+            provider=profile_def.provider,
+            model=profile_def.model,
+            context_path=context_content_path(context_artifact),
+            context_manifest_path=context_manifest_path(context_artifact),
             prompt=prompts[axis],
             output_path=out_path,
-            **dict(axis_def.get("api_kwargs") or {}),  # type: ignore[arg-type]
         )
         entry = {
             "label": axis_def["label"],
-            "requested_model": str(axis_def["model"]),
-            "model": str(axis_def["model"]),
+            "requested_model": profile_def.model,
+            "model": profile_def.model,
             "exit_code": result["exit_code"],
             "output": str(out_path),
             "size": result["size"],
@@ -583,12 +540,12 @@ def dispatch(
 
         # Gemini Pro fallback to Flash on rate limit
         if (
-            str(axis_def["model"]) == GEMINI_PRO_MODEL
+            profile_def.model == GEMINI_PRO_MODEL
             and result["exit_code"] != 0
             and result.get("error")
             and any(m in result["error"].lower() for m in GEMINI_RATE_LIMIT_MARKERS)
         ):
-            entry["fallback_from"] = str(axis_def["model"])
+            entry["fallback_from"] = profile_def.model
             entry["fallback_reason"] = "gemini_rate_limit"
             entry["initial_exit_code"] = result["exit_code"]
             flash_result = rerun_axis_with_flash(
@@ -622,8 +579,8 @@ def dispatch(
                 if axis not in results:
                     results[axis] = {
                         "label": AXES[axis]["label"],
-                        "requested_model": str(AXES[axis]["model"]),
-                        "model": str(AXES[axis]["model"]),
+                        "requested_model": dispatch_core.PROFILES[str(AXES[axis]["profile"])].model,
+                        "model": dispatch_core.PROFILES[str(AXES[axis]["profile"])].model,
                         "exit_code": 1,
                         "output": str(review_dir / f"{axis}-output.md"),
                         "size": 0,
@@ -688,7 +645,7 @@ def extract_claims(
 
     Returns path to disposition.md, or None if no outputs to extract.
     """
-    extraction_tasks: list[tuple[str, Path, str, str]] = []  # (axis, output_path, model, provider)
+    extraction_tasks: list[tuple[str, Path, str]] = []  # (axis, output_path, profile)
     skip_keys = {"review_dir", "axes", "queries", "elapsed_seconds"}
 
     for axis, info in dispatch_result.items():
@@ -705,9 +662,9 @@ def extract_claims(
 
         # Cross-family: Gemini outputs → GPT extraction, GPT outputs → Gemini Flash extraction
         if "gemini" in model.lower():
-            extraction_tasks.append((axis, output_path, "gpt-5.3-chat-latest", "openai"))
+            extraction_tasks.append((axis, output_path, "gpt_general"))
         else:
-            extraction_tasks.append((axis, output_path, "gemini-3-flash-preview", "google"))
+            extraction_tasks.append((axis, output_path, "fast_extract"))
 
     if not extraction_tasks:
         return None
@@ -717,17 +674,18 @@ def extract_claims(
         file=sys.stderr,
     )
 
-    def _extract_one(task: tuple[str, Path, str, str]) -> tuple[str, list[dict] | None]:
-        axis, output_path, model, provider = task
+    def _extract_one(task: tuple[str, Path, str]) -> tuple[str, list[dict] | None]:
+        axis, output_path, profile = task
+        profile_def = dispatch_core.PROFILES[profile]
         extraction_path = review_dir / f"{axis}-extraction.json"
         result = _call_llmx(
-            provider=provider,
-            model=model,
+            provider=profile_def.provider,
+            model=profile_def.model,
             context_path=output_path,
+            context_manifest_path=None,
             prompt=EXTRACTION_PROMPT,
             output_path=extraction_path,
             schema=FINDING_SCHEMA,
-            timeout=120,
         )
         if result["exit_code"] != 0:
             print(f"warning: extraction for {axis} failed: {result.get('error', 'unknown')}", file=sys.stderr)

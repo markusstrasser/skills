@@ -60,13 +60,6 @@ if not head:
     sys.exit(0)
 
 # --- Check per-type markers (skip types already at HEAD) ---
-# Legacy migration: if old single marker exists but no per-type markers, use it as fallback
-legacy_marker_path = os.path.join(cwd, ".claude", "overview-marker")
-legacy_hash = None
-if os.path.isfile(legacy_marker_path):
-    with open(legacy_marker_path) as f:
-        legacy_hash = f.read().strip()
-
 types_needing_update = []
 for t in configured_types:
     type_marker = os.path.join(cwd, ".claude", f"overview-marker-{t}")
@@ -74,8 +67,6 @@ for t in configured_types:
         with open(type_marker) as f:
             if f.read().strip() == head:
                 continue  # This type is current
-    elif legacy_hash == head:
-        continue  # Legacy marker says current
     types_needing_update.append(t)
 
 if not types_needing_update:
@@ -90,8 +81,6 @@ for t in types_needing_update:
         with open(type_marker) as f:
             oldest_marker = f.read().strip()  # any marker is better than none
             break
-if not oldest_marker and legacy_hash:
-    oldest_marker = legacy_hash
 
 if oldest_marker:
     diff_range = f"{oldest_marker}..HEAD"
@@ -232,7 +221,7 @@ log_entry = {
     "ts": datetime.now().isoformat(timespec="seconds"),
     "session": session,
     "project": project,
-    "marker_hash": marker_hash or "initial",
+    "marker_hash": oldest_marker or "initial",
     "head_hash": head,
     "changed_files": len(changed_files),
     "scopes_triggered": triggered_scopes,

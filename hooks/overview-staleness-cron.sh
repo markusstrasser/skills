@@ -11,9 +11,9 @@ MAX_AGE_DAYS=7
 # Projects to check (add more as they opt in)
 PROJECTS=(
   "$HOME/Projects/intel"
-  "$HOME/Projects/selve"
+  "$HOME/Projects/phenome"
   "$HOME/Projects/genomics"
-  "$HOME/Projects/meta"
+  "$HOME/Projects/agent-infra"
 )
 
 for project_dir in "${PROJECTS[@]}"; do
@@ -24,9 +24,21 @@ for project_dir in "${PROJECTS[@]}"; do
   mode=$(grep -E '^OVERVIEW_MODE=' "$conf" 2>/dev/null | head -1 | cut -d= -f2 | tr -d '"' | xargs)
   [[ "$mode" == "live" ]] || continue
 
-  marker="$project_dir/.claude/overview-marker"
-  if [[ ! -f "$marker" ]]; then
-    # No marker = never generated. Generate now.
+  mapfile -t configured_types < <(grep -E '^OVERVIEW_TYPES=' "$conf" 2>/dev/null | head -1 | cut -d= -f2 | tr -d '"' | tr ',' '\n' | xargs -n1)
+  if [[ ${#configured_types[@]} -eq 0 ]]; then
+    continue
+  fi
+
+  marker=""
+  for overview_type in "${configured_types[@]}"; do
+    candidate="$project_dir/.claude/overview-marker-${overview_type}"
+    if [[ -f "$candidate" ]]; then
+      marker="$candidate"
+      break
+    fi
+  done
+
+  if [[ -z "$marker" ]]; then
     cd "$project_dir"
     "$GENERATE_SCRIPT" --auto --project-root "$project_dir" 2>/dev/null || true
     continue
@@ -48,7 +60,5 @@ for project_dir in "${PROJECTS[@]}"; do
   cd "$project_dir"
   if ! git diff --quiet "$marker_hash"..HEAD 2>/dev/null; then
     "$GENERATE_SCRIPT" --auto --project-root "$project_dir" 2>/dev/null || true
-    # Update marker
-    git rev-parse HEAD > "$marker"
   fi
 done
