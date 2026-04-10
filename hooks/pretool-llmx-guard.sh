@@ -94,17 +94,36 @@ fi
 
 # --- ADVISORY checks (warnings only) ---
 
-# 0. BLOCK llmx chat CLI — use Python API instead
-# The CLI has 5 known failure modes in agent context (multi-file drops, 0-byte -o,
-# rate limit loops, stdin EOF, pipe masking). The Python API bypasses all of them.
-if echo "$CMD" | grep -qE 'llmx\s+chat'; then
-  echo "[llmx-guard] BLOCKED: Do not use 'llmx chat' CLI. Use the Python API instead:" >&2
-  echo "  from llmx.api import chat as llmx_chat" >&2
-  echo "  r = llmx_chat(prompt=..., provider='google', model='gemini-3.1-pro-preview', api_only=True, timeout=300)" >&2
-  echo "  Bootstrap: sys.path.insert(0, glob.glob(str(Path.home() / '.local/share/uv/tools/llmx/lib/python*/site-packages'))[0])" >&2
-  ~/Projects/skills/hooks/hook-trigger-log.sh "llmx-chat-blocked" "block" "$(echo "$CMD" | head -c 200)" 2>/dev/null || true
-  exit 2
-fi
+# 0. BLOCK default llmx chat-style CLI automation — use shared dispatch instead
+# The CLI has recurring failure modes in agent context (multi-file drops, 0-byte -o,
+# rate limit loops, stdin EOF, pipe masking). Keep non-chat subcommands available.
+LLMX_NEXT_TOKEN=$(echo "$CMD" | sed -nE 's/.*(^|[;&|[:space:]])([^[:space:]]*\/)?llmx[[:space:]]+([^[:space:]]+).*/\3/p' | head -1)
+case "$LLMX_NEXT_TOKEN" in
+  image|vision|svg|research|keys|batch|help|--help|-h|"")
+    ;;
+  chat|-*|\"*|\'*)
+    echo "[llmx-guard] BLOCKED: Do not use llmx chat-style CLI automation. Use the shared dispatch helper instead:" >&2
+    echo "  uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \\" >&2
+    echo "    --profile fast_extract \\" >&2
+    echo "    --context context.md \\" >&2
+    echo "    --prompt 'Analyze this' \\" >&2
+    echo "    --output /tmp/result.md" >&2
+    ~/Projects/skills/hooks/hook-trigger-log.sh "llmx-chat-blocked" "block" "$(echo "$CMD" | head -c 200)" 2>/dev/null || true
+    exit 2
+    ;;
+  *)
+    if echo "$CMD" | grep -qE '(^|[;&|[:space:]])([^[:space:]]*/)?llmx([[:space:]]+|$)'; then
+      echo "[llmx-guard] BLOCKED: Do not use llmx default chat mode for automation. Use the shared dispatch helper instead:" >&2
+      echo "  uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \\" >&2
+      echo "    --profile fast_extract \\" >&2
+      echo "    --context context.md \\" >&2
+      echo "    --prompt 'Analyze this' \\" >&2
+      echo "    --output /tmp/result.md" >&2
+      ~/Projects/skills/hooks/hook-trigger-log.sh "llmx-chat-blocked" "block" "$(echo "$CMD" | head -c 200)" 2>/dev/null || true
+      exit 2
+    fi
+    ;;
+esac
 
 # 0a. Gemini Pro without --stream — CLI transport hangs on thinking models + piped input, hits capacity limits
 #    Flash/Lite on CLI is fine (non-thinking, better capacity) — no warning needed

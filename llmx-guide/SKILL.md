@@ -8,19 +8,47 @@ effort: medium
 
 # llmx Quick Reference
 
+Most agents should not call `llmx` directly for normal repo automation. Use the shared wrapper first:
+
+```bash
+uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
+  --profile fast_extract \
+  --context context.md \
+  --prompt "Analyze this" \
+  --output result.md
+```
+
+If the context was built by the shared packet layer, pass its manifest too:
+
+```bash
+uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
+  --profile fast_extract \
+  --context context.md \
+  --context-manifest context.manifest.json \
+  --prompt "Analyze this" \
+  --output result.md
+```
+
+Use this skill when:
+- debugging shared dispatch failures
+- writing or reviewing low-level code that calls `llmx.api.chat()`
+- doing manual terminal work where raw CLI transport matters
+
+Agent note: the repo hook blocks raw `llmx` chat-style Bash automation. The CLI examples below are for manual terminal debugging or maintainer reference, not for normal agent execution through the Bash tool.
+
 > Detail files in `references/`: [models.md](references/models.md) | [error-codes.md](references/error-codes.md) | [transport-routing.md](references/transport-routing.md) | [codex-dispatch.md](references/codex-dispatch.md) | [subcommands.md](references/subcommands.md)
 
 ## Before You Call llmx — Checklist
 
 1. **Model name correct?** Hyphens not dots (`claude-sonnet-4-6` not `claude-sonnet-4.6`)
-2. **Timeout set?** Reasoning models need `--timeout 600` or `--stream`. Max allowed: **900s**. GPT-5.4 xhigh can exceed this on domain-heavy prompts.
+2. **Timeout set?** Reasoning models need `--timeout 600` or `--stream`. Max allowed: **900s**. If dispatching from an agent shell, set the outer shell timeout above this (for Claude Code, use at least `1200000` ms).
 3. **Using `shell=True`?** Don't — parentheses in prompts break it. Use list args + `input=`
 4. **Using `-o FILE`?** Never use `> file` shell redirects — they buffer until exit
 5. **No provider prefixes needed.** `gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`.
-6. **Know the transport triggers:** `google` prefers `gemini` CLI (free). Falls back to API for: `--schema`, `--search`, `--stream`, `--max-tokens`. GPT goes direct to API.
+6. **Know the transport triggers:** `google` prefers `gemini` CLI (free). Gemini falls back to API for: `--schema`, `--search`, `--stream`, `--max-tokens`. Codex CLI also falls back for `--search` and `--stream`, but can keep `--schema` via `codex exec --output-schema`. GPT goes direct to API unless you explicitly force `-p codex-cli`.
 7. **Hangs in agent context?** Claude Code's Bash tool pipes stdin without EOF. Fixed in current llmx (skips stdin when prompt provided).
 8. **Prompt is positional, context is `-f`.** `llmx "analyze this" -f context.md` — prompt as first positional arg, context files as `-f`. Two `-f` flags with no positional = no prompt = model invents a task from the context. (Evidence: 2026-04-05 — Gemini received two `-f` files, hallucinated a script implementation instead of analysis.)
-9. **For critical reviews, use one combined context file.** Multi-file `-f` has recurring failure modes with Gemini/CLI transport, including silently dropping earlier files. Pre-concatenate first.
+9. **For critical reviews, use one combined context file.** Multi-file `-f` has recurring failure modes with Gemini/CLI transport, including silently dropping earlier files. Pre-concatenate first, but preserve file boundaries in the combined file.
 
 ## When llmx Fails — Diagnose, Don't Downgrade
 
@@ -56,7 +84,7 @@ llmx chat -m gemini-3.1-pro-preview -f context.md --timeout 300 --stream "Review
 If the task is high-stakes or review-oriented, do this:
 
 ```bash
-cat overview.md diff.md touched-files.md > combined-context.md
+awk 'FNR==1{print "\n# File: " FILENAME "\n"}1' overview.md diff.md touched-files.md > combined-context.md
 llmx chat -m gemini-3.1-pro-preview -f combined-context.md --timeout 300 "Review this"
 ```
 
@@ -72,7 +100,7 @@ adversarial review.
 
 ### 2. GPT-5.x Timeouts
 
-GPT-5.4 with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning. Default timeout: 300s. Max: **900s** (hard cap). GPT-5.4 xhigh on domain-heavy prompts can exceed 900s — use ChatGPT Pro for those.
+GPT-5.4 with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning. Default timeout: 300s. Max: **900s** (hard cap). GPT-5.4 xhigh on domain-heavy prompts can exceed 900s; for those, chunk the task, stream, or switch to an async/batch path if available. Do not punt operational work to a GUI tool.
 
 **`max_completion_tokens` includes reasoning tokens.** If you set `--max-tokens 4096` on GPT-5.4 with reasoning, the model may exhaust the budget on thinking. Use 16K+ for reasoning models.
 
@@ -123,11 +151,11 @@ Safer pattern:
 set -o pipefail
 llmx chat -m gpt-5.4 --debug -o /tmp/review.md "query" 2> /tmp/review.err
 echo $?
-sed -n '1,80p' /tmp/review.err
+tail -n 200 /tmp/review.err
 sed -n '1,80p' /tmp/review.md
 ```
 
-From Claude Code: set Bash tool `timeout: 660000` (11 min) — must exceed llmx's `--timeout`.
+From Claude Code: set Bash tool `timeout: 1200000` (20 min) — it must exceed llmx's `--timeout`.
 
 ### 4. shell=True + Parentheses
 
