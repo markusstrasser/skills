@@ -23,6 +23,14 @@ You are orchestrating divergent ideation. The goal is ideas that escape the defa
 
 **Late-stage warning:** When a frontier is mature, this skill should produce fewer, sharper ideas, not preserve the same idea count with weaker variants. One strong perturbation survivor is enough. If forced-domain rounds only yield reframings, stop and hand back to convergent filtering.
 
+## Default Architectural Stance
+
+Unless the user explicitly asks for compatibility, generate ideas as breaking refactors with full migration.
+
+- Do not spend idea budget on wrappers, adapters, transitional bridges, or phased coexistence by default.
+- Prefer ideas that delete obsolete paths and collapse complexity.
+- Only keep a compatibility boundary in the design space when a live external dependency is explicitly named.
+
 ## Parameters
 
 Parse `$ARGUMENTS` for these optional flags (order doesn't matter, remaining text is the topic):

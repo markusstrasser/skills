@@ -1,0 +1,322 @@
+{
+  "budget_limit": 120000,
+  "budget_metric": "tokens",
+  "builder_name": "plan_close_context",
+  "builder_version": "2026-04-10-v1",
+  "created_at": "2026-04-10T23:09:54Z",
+  "estimate_method": "heuristic:chars_div_4",
+  "normalization_version": "v1",
+  "packet_metadata": {
+    "Mode": "worktree",
+    "Profile": "formal_review",
+    "Ref": "HEAD vs current worktree",
+    "Repo": "/Users/alien/Projects/skills",
+    "budget_enforcement": {
+      "dropped_blocks": [],
+      "estimate_method": "heuristic:chars_div_4",
+      "limit": 120000,
+      "metric": "tokens",
+      "truncated_blocks": [],
+      "usage": 23413
+    },
+    "diff_char_cap": 40000,
+    "file_char_cap": 8000,
+    "max_file_count": 12
+  },
+  "packet_title": "Plan-Close Review Packet",
+  "payload_hash": "f2b761e66aed72adb584624b489f8fcaf8fda54340c564129f8cc4b81891ce21",
+  "rendered_bytes": 94201,
+  "rendered_content_hash": "f2b761e66aed72adb584624b489f8fcaf8fda54340c564129f8cc4b81891ce21",
+  "source_blocks": [
+    {
+      "block_hash": "ebe6484d46a9caff12ae856059430116275f9933908cb5b76d674c6d4bde4884",
+      "block_index": 0,
+      "block_title": "Touched Files",
+      "block_type": "list",
+      "drop_if_needed": true,
+      "metadata": {},
+      "priority": 70,
+      "section_index": 0,
+      "section_title": "Touched Files",
+      "source_path": null,
+      "truncated": false
+    },
+    {
+      "block_hash": "1311d3e2c33f669aa909ac2a49acd552b6c844738208984c697dfa92c8526083",
+      "block_index": 0,
+      "block_title": "git status --short",
+      "block_type": "command",
+      "drop_if_needed": true,
+      "metadata": {
+        "command": "git status --short"
+      },
+      "priority": 50,
+      "section_index": 1,
+      "section_title": "Git Status",
+      "source_path": null,
+      "truncated": false
+    },
+    {
+      "block_hash": "1d50aa45cf0ee4592074c02ca26f88494b3bfe24a6a9313f8f1e0389b011323a",
+      "block_index": 1,
+      "block_title": "git diff --stat",
+      "block_type": "command",
+      "drop_if_needed": true,
+      "metadata": {
+        "command": "git diff --stat"
+      },
+      "priority": 60,
+      "section_index": 1,
+      "section_title": "Git Status",
+      "source_path": null,
+      "truncated": false
+    },
+    {
+      "block_hash": "c3afa61ba10af31f0a3db08637d92ab0ced1fd733c3abdc80239a50875b16a5f",
+      "block_index": 2,
+      "block_title": "Unified Diff",
+      "block_type": "diff",
+      "drop_if_needed": false,
+      "metadata": {},
+      "priority": 200,
+      "section_index": 1,
+      "section_title": "Git Status",
+      "source_path": null,
+      "truncated": true
+    },
+    {
+      "block_hash": "144691d7a7ef992539067889b65a2611143e875547bc28bacd8bbceceb564d12",
+      "block_index": 0,
+      "block_title": ".claude/overview-marker-source",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": ".claude/overview-marker-source"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": ".claude/overview-marker-source",
+      "truncated": false
+    },
+    {
+      "block_hash": "c787fd514d4f8594a6ffea8b2a9cf27661b43e09d8422b34e17e9bac69b1eef8",
+      "block_index": 1,
+      "block_title": ".claude/overviews/source-overview.md",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": ".claude/overviews/source-overview.md"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": ".claude/overviews/source-overview.md",
+      "truncated": false
+    },
+    {
+      "block_hash": "5b1403200d75da39646a5c5d2d09a9d0a89562d37582fdd6c7cac8789f9c7059",
+      "block_index": 2,
+      "block_title": "_archive/architect/SKILL.md",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "_archive/architect/SKILL.md"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "_archive/architect/SKILL.md",
+      "truncated": true
+    },
+    {
+      "block_hash": "c8bf8272976e50697bfaa55ad3153abff608ed9b242c6f5ba700a1d70b9b7d0d",
+      "block_index": 3,
+      "block_title": "brainstorm/SKILL.md",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "brainstorm/SKILL.md"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "brainstorm/SKILL.md",
+      "truncated": true
+    },
+    {
+      "block_hash": "fcb4da961a9da6c0336d4fcea2c22693cc7f50405c62998936ae86af485cf677",
+      "block_index": 4,
+      "block_title": "brainstorm/references/llmx-dispatch.md",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "brainstorm/references/llmx-dispatch.md"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "brainstorm/references/llmx-dispatch.md",
+      "truncated": false
+    },
+    {
+      "block_hash": "d2e2877846e76e7e45602a3f7e0dff34731edeedd8f04ca5bad5d69dc0f58e4c",
+      "block_index": 5,
+      "block_title": "constitution/SKILL.md",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "constitution/SKILL.md"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "constitution/SKILL.md",
+      "truncated": true
+    },
+    {
+      "block_hash": "e27ead6147183e17ebf2f8aba9335a5a1f1226261c99004c422bc28d8d104efa",
+      "block_index": 6,
+      "block_title": "goals/SKILL.md",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "goals/SKILL.md"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "goals/SKILL.md",
+      "truncated": false
+    },
+    {
+      "block_hash": "85ba067de4ef302d2fee9023dd115e2ed35b339dad76e2686a0df6e7d98460c3",
+      "block_index": 7,
+      "block_title": "hooks/epistemic-domain-router.sh",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "hooks/epistemic-domain-router.sh"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "hooks/epistemic-domain-router.sh",
+      "truncated": false
+    },
+    {
+      "block_hash": "e63c65ce6e515a909479e9afd689ec8830ee93cea21fecbb359b7c1b8ffce5ee",
+      "block_index": 8,
+      "block_title": "hooks/generate-overview-batch.sh",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "hooks/generate-overview-batch.sh"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "hooks/generate-overview-batch.sh",
+      "truncated": false
+    },
+    {
+      "block_hash": "ef10c58d2b12b4e5b38d5b4befa17b065c552882e1c0785d0f756e32c2216681",
+      "block_index": 9,
+      "block_title": "hooks/generate-overview.sh",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "hooks/generate-overview.sh"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "hooks/generate-overview.sh",
+      "truncated": false
+    },
+    {
+      "block_hash": "b0713535c6b53c90a412f3bf4b55bb65ccf1e24da8ec04e9414e451657df0520",
+      "block_index": 10,
+      "block_title": "hooks/overview-staleness-cron.sh",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "hooks/overview-staleness-cron.sh"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "hooks/overview-staleness-cron.sh",
+      "truncated": false
+    },
+    {
+      "block_hash": "d87f861ce0e657edd85f8ccdf2769bb1870e5f100bee12e3298a95cb4732d412",
+      "block_index": 11,
+      "block_title": "hooks/permission-auto-allow.sh",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "hooks/permission-auto-allow.sh"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "hooks/permission-auto-allow.sh",
+      "truncated": false
+    },
+    {
+      "block_hash": "99f518b4b5e678519fc9400aaee0304b17858e41724f389a2c2ff93f7e225ed6",
+      "block_index": 12,
+      "block_title": "Omitted Files",
+      "block_type": "text",
+      "drop_if_needed": true,
+      "metadata": {},
+      "priority": 10,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": null,
+      "truncated": false
+    }
+  ],
+  "source_paths": [
+    ".claude/overview-marker-source",
+    ".claude/overviews/source-overview.md",
+    "_archive/architect/SKILL.md",
+    "brainstorm/SKILL.md",
+    "brainstorm/references/llmx-dispatch.md",
+    "constitution/SKILL.md",
+    "goals/SKILL.md",
+    "hooks/epistemic-domain-router.sh",
+    "hooks/generate-overview-batch.sh",
+    "hooks/generate-overview.sh",
+    "hooks/overview-staleness-cron.sh",
+    "hooks/permission-auto-allow.sh"
+  ],
+  "token_estimate": 23455,
+  "truncation_events": [
+    {
+      "block_label": "Unified Diff",
+      "original_chars": 39963,
+      "reason": "diff_char_limit",
+      "rendered_chars": 39963
+    },
+    {
+      "block_label": "_archive/architect/SKILL.md",
+      "original_chars": 13008,
+      "reason": "file_excerpt_limit",
+      "rendered_chars": 8000
+    },
+    {
+      "block_label": "brainstorm/SKILL.md",
+      "original_chars": 8488,
+      "reason": "file_excerpt_limit",
+      "rendered_chars": 8000
+    },
+    {
+      "block_label": "constitution/SKILL.md",
+      "original_chars": 9554,
+      "reason": "file_excerpt_limit",
+      "rendered_chars": 8000
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "findings": [
+    {
+      "category": "logic",
+      "confidence": 0.9,
+      "description": "In hooks/generate-overview.sh and research-ops/scripts/run-cycle.sh, uv run resolves the Python environment from the current working directory. Since these are called from sibling repos, the helper runs under different repo environments, contradicting the goal of a single shared dispatch path with predictable behavior.",
+      "file": "hooks/generate-overview.sh",
+      "fix": "Pin uv run to the source project using --project \"$SKILLS_ROOT\" or equivalent absolute path referencing the shared environment.",
+      "line": 0,
+      "severity": "high",
+      "title": "Shared dispatch environment instability via unpinned uv run"
+    },
+    {
+      "category": "bug",
+      "confidence": 0.95,
+      "description": "The throttling logic uses negative array indices (pids[-$MAX_CONCURRENT]), which is a syntax error in Bash 3.2 (macOS default). Additionally, the script performs a double-wait on child PIDs; once a child is reaped, a subsequent wait returns nonzero, causing successful jobs to be misreported as failures.",
+      "file": "hooks/generate-overview.sh",
+      "fix": "Replace negative index logic with a portable worker queue/map and ensure each PID is waited upon exactly once.",
+      "line": 0,
+      "severity": "high",
+      "title": "Unsound and non-portable concurrency logic in generate-overview.sh"
+    },
+    {
+      "category": "security",
+      "confidence": 0.95,
+      "description": "The regex in pretool-llmx-guard.sh only detects bare 'llmx' tokens. Commands using absolute paths, relative paths, or home-directory shortcuts (e.g., /usr/bin/llmx, ./llmx) bypass the guard entirely, allowing prohibited chat-style automation to proceed.",
+      "file": "pretool-llmx-guard.sh",
+      "fix": "Harden the parser to be executable-aware, accounting for path prefixes and shell tokenization rather than simple whitespace-delimited regex.",
+      "line": 0,
+      "severity": "high",
+      "title": "Guard bypass for path-qualified llmx invocations"
+    },
+    {
+      "category": "logic",
+      "confidence": 0.85,
+      "description": "The script prints diagnostics on dispatch failure but exits with code 0. This 'fails open' behavior prevents automated supervisors from detecting that the rate-limit fallback failed, treating errors as successful no-ops.",
+      "file": "research-ops/scripts/run-cycle.sh",
+      "fix": "Ensure the script returns a nonzero exit status when the fallback dispatch execution fails.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Silent failure in run-cycle.sh automation"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.85,
+      "description": "generate-overview.sh maintains its own OVERVIEW_MODEL to profile mapping and token limits. This duplicates logic already present in shared/llm_dispatch.py, creating a maintenance hazard where profiles can desynchronize between the shell wrappers and the core dispatch system.",
+      "file": "hooks/generate-overview.sh",
+      "fix": "Expose profile resolution and token budget metadata via the llm-dispatch.py CLI or a shared metadata file so the shell script can query the source of truth.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Duplicated profile and model mapping in shell logic"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.8,
+      "description": "model-review.py imports private internal functions (_add_additional_properties, _strip_additional_properties) from dispatch_core. Internal refactoring of the shared dispatch module will break the review script even if public contracts remain stable.",
+      "file": "scripts/model-review.py",
+      "fix": "Refactor model-review.py to use public API methods or move the required logic into a shared public utility module.",
+      "line": 0,
+      "severity": "low",
+      "title": "Fragile coupling to private shared helpers in model-review.py"
+    }
+  ]
+}

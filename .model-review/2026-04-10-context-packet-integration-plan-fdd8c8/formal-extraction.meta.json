@@ -1,0 +1,27 @@
+{
+  "api_only": true,
+  "context_sha256": "2ff016d98db3531932ace9b022e76c57a9bffa19c2288787a17ea98a396f7282",
+  "error_message": null,
+  "error_path": null,
+  "error_type": null,
+  "finished_at": "2026-04-10T22:00:16Z",
+  "helper_version": "2026-04-10-v1",
+  "latency": 16.52694821357727,
+  "llmx_version": "0.6.0",
+  "output_path": ".model-review/2026-04-10-context-packet-integration-plan-fdd8c8/formal-extraction.json",
+  "parsed_path": ".model-review/2026-04-10-context-packet-integration-plan-fdd8c8/formal-extraction.parsed.json",
+  "profile_fingerprint": "323e0dc4817129a1",
+  "profile_version": "v1",
+  "prompt_sha256": "c1f310dd3eead3f923759cc99069bae9231af75b6c7b0f5545dfeee80e787daf",
+  "requested_profile": "fast_extract",
+  "resolved_kwargs": {
+    "search": false,
+    "timeout": 180
+  },
+  "resolved_model": "gemini-3-flash-preview",
+  "resolved_provider": "google",
+  "retryable": false,
+  "schema_used": true,
+  "started_at": "2026-04-10T21:59:59Z",
+  "status": "ok"
+}

@@ -11,6 +11,14 @@ effort: high
 
 Same-model peer review is a martingale — no expected correctness improvement (ACL 2025, arXiv:2508.17536). Cross-model review provides real adversarial pressure because models have different failure modes, training biases, and blind spots.
 
+## Default Migration Stance
+
+Unless the user explicitly says compatibility matters, treat the target change as a breaking refactor with full migration.
+
+- Challenge wrappers, adapters, dual-read/dual-write paths, fallback reads, and "temporary" bridges as liabilities, not prudent defaults.
+- Prefer direct caller migration and old-path deletion over coexistence plans.
+- If compatibility is genuinely required, name the live boundary, why it must remain, and the removal condition. Unnamed future-proofing is design noise.
+
 ## Modes
 
 | Mode | Trigger | What it does |
@@ -65,7 +73,7 @@ Common review biases — check your context for these before analysis:
 
 ### 2. Dispatch
 
-**Always use the script.** It handles: context assembly, constitutional preamble injection, parallel dispatch to Gemini + GPT via the llmx Python API, extraction, and disposition generation.
+**Always use the script.** It handles: context assembly, constitutional preamble injection, parallel dispatch to Gemini + GPT via the shared dispatch core, extraction, and disposition generation.
 
 ```bash
 uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \

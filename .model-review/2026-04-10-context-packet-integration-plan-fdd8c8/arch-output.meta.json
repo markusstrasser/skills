@@ -1,0 +1,28 @@
+{
+  "api_only": true,
+  "context_sha256": "a8ea30553ff355572ab7692ab425ab3b75e7d545937b59149937ea99de779db5",
+  "error_message": null,
+  "error_path": null,
+  "error_type": null,
+  "finished_at": "2026-04-10T21:58:01Z",
+  "helper_version": "2026-04-10-v1",
+  "latency": 39.71765398979187,
+  "llmx_version": "0.6.0",
+  "output_path": ".model-review/2026-04-10-context-packet-integration-plan-fdd8c8/arch-output.md",
+  "parsed_path": null,
+  "profile_fingerprint": "2b5be9e501e5c074",
+  "profile_version": "v1",
+  "prompt_sha256": "4680b4da3ad84e448d4f44d2c4362f3f9ad756d7c40fdeb54a4d00f87d97f976",
+  "requested_profile": "deep_review",
+  "resolved_kwargs": {
+    "reasoning_effort": "high",
+    "search": false,
+    "timeout": 300
+  },
+  "resolved_model": "gemini-3.1-pro-preview",
+  "resolved_provider": "google",
+  "retryable": false,
+  "schema_used": false,
+  "started_at": "2026-04-10T21:57:20Z",
+  "status": "ok"
+}

@@ -49,7 +49,7 @@ Read everything that reveals intent:
 - MEMORY.md or persistent memory (prior decisions, constitutional questionnaire results)
 - Any README, docs/, or project description files
 - Recent git log (what has the human actually been working on vs. what they say they want?)
-- `$HOME/Projects/meta/memory/MEMORY.md` (cross-project decisions if it exists)
+- `$HOME/Projects/agent-infra/memory/MEMORY.md` (cross-project decisions if it exists)
 - **Phase 0 steering report** (corrections, feedback, topic drift, cost allocation)
 </exploration>
 
@@ -101,7 +101,7 @@ When GOALS.md already exists:
 
 ## Cross-Project Awareness
 
-If `$HOME/Projects/meta/memory/MEMORY.md` exists, read it for cross-project decisions. Goals in one project may constrain goals in another:
+If `$HOME/Projects/agent-infra/memory/MEMORY.md` exists, read it for cross-project decisions. Goals in one project may constrain goals in another:
 - Shared entity graph means shared data investments
 - Shared epistemics means compatible evidence standards
 - Time/attention is zero-sum across projects

@@ -40,7 +40,7 @@ Parse `$ARGUMENTS` for mode. First positional arg is the mode. Remaining args ar
 All modes except `retro` start with transcript extraction. See `references/transcript-extraction.md` for full commands.
 
 ```bash
-ARTIFACT_DIR="$HOME/Projects/meta/artifacts/observe"
+ARTIFACT_DIR="$HOME/Projects/agent-infra/artifacts/observe"
 mkdir -p "$ARTIFACT_DIR"
 
 # Claude Code sessions
@@ -59,7 +59,7 @@ Build operational context (hook triggers, receipts, git commits) for the session
 Generate existing-coverage digest so Gemini doesn't re-report known patterns:
 
 ```bash
-bash ~/Projects/meta/scripts/coverage-digest.sh > "$ARTIFACT_DIR/coverage-digest.txt"
+bash ~/Projects/agent-infra/scripts/coverage-digest.sh > "$ARTIFACT_DIR/coverage-digest.txt"
 ```
 
 ### Shape Pre-Filter (optional)
@@ -83,7 +83,7 @@ Parse the project argument from $ARGUMENTS. Default: last 5 sessions.
 Check the latest run number in improvement-log.md to avoid collisions:
 
 ```bash
-LAST_RUN=$(grep -oE 'Run [0-9]+' ~/Projects/meta/improvement-log.md | tail -1 | grep -oE '[0-9]+')
+LAST_RUN=$(grep -oE 'Run [0-9]+' ~/Projects/agent-infra/improvement-log.md | tail -1 | grep -oE '[0-9]+')
 NEXT_RUN=$((LAST_RUN + 1))
 ```
 
@@ -97,37 +97,20 @@ Run shared transcript extraction above. Build operational context per `reference
 
 Send full-fidelity transcript + coverage digest + operational context to Gemini 3.1 Pro. Full prompt in `references/gemini-dispatch-prompt.md`.
 
-Dispatch via llmx Python API (not CLI subprocess). Write the dispatch as a short inline script:
+Dispatch via the shared wrapper, not raw `llmx` calls:
 
 ```bash
-uv run python3 << 'PYEOF'
-import sys, glob
-from pathlib import Path
-
-# Bootstrap llmx from uv tool venv
-_site = glob.glob(str(Path.home() / ".local/share/uv/tools/llmx/lib/python*/site-packages"))
-if _site: sys.path.insert(0, _site[0])
-sys.path.insert(0, str(Path.home() / "Projects/llmx"))
-from llmx.api import chat as llmx_chat
-
-artifact_dir = Path("$HOME/Projects/meta/artifacts/observe").expanduser()
-context = (artifact_dir / "input.md").read_text()
-coverage = (artifact_dir / "coverage-digest.txt").read_text()
-prompt = Path("$CLAUDE_SKILL_DIR/references/gemini-dispatch-prompt.md").read_text()
-
-response = llmx_chat(
-    prompt=context + "\n\n" + coverage + "\n\n" + prompt,
-    provider="google",
-    model="gemini-3.1-pro-preview",
-    temperature=1.0,
-    timeout=300,
-)
-(artifact_dir / "gemini-output.md").write_text(response.content)
-print(f"✓ Gemini output: {len(response.content)} chars, {response.latency:.1f}s")
-PYEOF
+cat "$HOME/Projects/agent-infra/artifacts/observe/input.md" \
+  "$HOME/Projects/agent-infra/artifacts/observe/coverage-digest.txt" \
+  > /tmp/observe-context.md
+uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
+  --profile deep_review \
+  --context /tmp/observe-context.md \
+  --prompt-file "$CLAUDE_SKILL_DIR/references/gemini-dispatch-prompt.md" \
+  --output "$HOME/Projects/agent-infra/artifacts/observe/gemini-output.md" \
+  --meta "$HOME/Projects/agent-infra/artifacts/observe/gemini-output.meta.json" \
+  --error-output "$HOME/Projects/agent-infra/artifacts/observe/gemini-output.error.json"
 ```
-
-Substitute `$HOME` and `$CLAUDE_SKILL_DIR` with actual paths before running.
 
 ### Step 3: Stage Findings
 
@@ -186,7 +169,7 @@ Run shape pre-filter. Note anomalous sessions for priority analysis.
 
 ### Phase 2: Pattern Extraction (Gemini)
 
-Dispatch to Gemini 3.1 Pro for structured pattern extraction. Full prompt in `references/gemini-prompt.md`. Use `llmx.api.chat()` (Python API), not CLI subprocess.
+Dispatch to Gemini 3.1 Pro for structured pattern extraction. Full prompt in `references/gemini-prompt.md`. Use the shared dispatch helper, not raw CLI subprocess calls.
 
 **Gemini's output is DATA, not conclusions.** It extracts patterns; you do the creative synthesis in Phase 3.
 
@@ -245,7 +228,7 @@ Every correction, boilerplate instruction, and rubber stamp is a candidate for a
 ### Step 1: Structural Extraction
 
 ```bash
-ARTIFACT_DIR="$HOME/Projects/meta/artifacts/observe"
+ARTIFACT_DIR="$HOME/Projects/agent-infra/artifacts/observe"
 mkdir -p "$ARTIFACT_DIR"
 python3 ${CLAUDE_SKILL_DIR}/scripts/extract_supervision.py $ARGUMENTS --json --output "$ARTIFACT_DIR/supervision-raw.json"
 ```
@@ -293,7 +276,7 @@ Output format per finding:
    - Hook fix: implement now (cheap, deterministic, reversible)
    - Rule fix: check not already covered, then add
    - Architectural fix: add to maintenance-checklist.md with evidence
-4. Append summary to `~/Projects/meta/improvement-log.md`
+4. Append summary to `~/Projects/agent-infra/improvement-log.md`
 
 ### Step 5: Trend Report (weekly)
 
@@ -325,7 +308,7 @@ Before analyzing, check for existing retro artifacts for this session:
 
 ```bash
 SID=$(cat ~/.claude/current-session-id 2>/dev/null | head -c8 || date +%s | tail -c 8)
-EXISTING=$(ls ~/Projects/meta/artifacts/session-retro/$(date +%Y-%m-%d)-${SID}-*.json 2>/dev/null | wc -l | tr -d ' ')
+EXISTING=$(ls ~/Projects/agent-infra/artifacts/session-retro/$(date +%Y-%m-%d)-${SID}-*.json 2>/dev/null | wc -l | tr -d ' ')
 ```
 
 If EXISTING > 0 and `--force` was NOT passed: report "Already retro'd ({EXISTING} artifact(s) exist for session {SID} today). Use --force to re-analyze." and stop. This prevents diminishing-returns loops (5 retros on the same session observed, each adding zero new findings after the 2nd).
@@ -346,8 +329,8 @@ Classify each finding into exactly one category from `lenses/retro-reflection.md
 ### Phase 3: Prior Art Check
 
 Before proposing fixes:
-1. Run: `grep -c "^### " ~/Projects/meta/improvement-log.md` to confirm accessible
-2. Search for similar findings: `grep -i "KEYWORD" ~/Projects/meta/improvement-log.md | head -5`
+1. Run: `grep -c "^### " ~/Projects/agent-infra/improvement-log.md` to confirm accessible
+2. Search for similar findings: `grep -i "KEYWORD" ~/Projects/agent-infra/improvement-log.md | head -5`
 3. Match existing entry -> mark "RECURRING: matches entry from YYYY-MM-DD"
 4. Check if hook/rule/skill already addresses this -> note it
 
@@ -357,10 +340,10 @@ Use template from `lenses/retro-reflection.md`.
 
 ### Phase 5: Persist Findings
 
-Write findings as JSON to `~/Projects/meta/artifacts/session-retro/`:
+Write findings as JSON to `~/Projects/agent-infra/artifacts/session-retro/`:
 
 ```bash
-mkdir -p ~/Projects/meta/artifacts/session-retro
+mkdir -p ~/Projects/agent-infra/artifacts/session-retro
 SID=$(cat ~/.claude/current-session-id 2>/dev/null | head -c8 || date +%s | tail -c 8)
 ```
 
@@ -373,14 +356,15 @@ Write `{date}-{SID}-manual.json` with:
 
 ## Model Selection for Dispatch
 
-Default: Gemini 3.1 Pro (cheapest 1M context, good at pattern extraction). Use GPT-5.4 at medium effort for formal/quantitative analysis or when Gemini rate-limits. Both via `llmx.api.chat()` — never CLI subprocess. See `/model-guide` for detailed routing.
+Default: Gemini 3.1 Pro (cheapest 1M context, good at pattern extraction). Use GPT-5.4 at medium effort for formal/quantitative analysis or when Gemini rate-limits. Route both through the shared dispatch helper. See `/model-guide` for detailed routing.
 
 ```python
-from llmx.api import chat as llmx_chat
+from pathlib import Path
+from shared.llm_dispatch import dispatch
 # Gemini (default — pattern extraction, large context)
-r = llmx_chat(prompt=..., provider="google", model="gemini-3.1-pro-preview", timeout=300)
+r = dispatch(profile="deep_review", prompt="...", context_text="...", output_path=Path("/tmp/observe.md"))
 # GPT-5.4 medium effort (formal analysis, fact verification)
-r = llmx_chat(prompt=..., provider="openai", model="gpt-5.4", reasoning_effort="medium", timeout=300)
+r = dispatch(profile="gpt_general", prompt="...", context_text="...", output_path=Path("/tmp/observe-gpt.md"))
 ```
 
 ## Notes

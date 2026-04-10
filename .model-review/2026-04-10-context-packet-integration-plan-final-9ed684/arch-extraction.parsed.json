@@ -1,0 +1,144 @@
+{
+  "findings": [
+    {
+      "category": "bug",
+      "confidence": 0.96,
+      "description": "The review says the current status parsing in `build_plan_close_context.py` relies on `parse_status_paths`, and explicitly claims it fails on filenames containing spaces and on rename records. The reviewer recommends replacing this with `git status --porcelain -z` / `git diff --name-status -z` parsing in a shared helper to avoid silent path corruption.",
+      "file": "build_plan_close_context.py",
+      "fix": "Remove ad hoc status parsing and centralize path extraction in `shared/git_context.py` using NUL-delimited git output (`--porcelain -z`, `--name-status -z`).",
+      "line": 0,
+      "severity": "high",
+      "title": "`parse_status_paths` in `build_plan_close_context.py` breaks on spaces and renames"
+    },
+    {
+      "category": "logic",
+      "confidence": 0.97,
+      "description": "The review flags the shell math in `hooks/generate-overview.sh` that estimates tokens by dividing byte count by 4. It states this is highly inaccurate for dense codebases and causes random dispatch failures when model limits are exceeded.",
+      "file": "hooks/generate-overview.sh",
+      "fix": "Replace the `wc -c` heuristic with profile-aware token budgeting from shared Python code, using an explicit token estimate implementation tied to dispatch limits.",
+      "line": 0,
+      "severity": "high",
+      "title": "`generate-overview.sh` uses an inaccurate `wc -c / 4` token heuristic"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.86,
+      "description": "The review identifies a blind spot in the current review-packet flow: there is no `BuildArtifact`-style manifest with deterministic `content_hash` and `payload_hash`. The reviewer says this prevents reliable debugging, trace verification, and perfect cacheability of built context packets.",
+      "file": "",
+      "fix": "Introduce a `BuildArtifact` manifest for generated context/prompt artifacts, including stable content and payload hashes plus provenance metadata.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Context artifacts lack deterministic manifest/provenance hashes"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.98,
+      "description": "The review points out that `shared/llm_dispatch.py` defines `PROFILES` with only `max_tokens`, which governs output tokens, but does not publish `context_window` or `input_token_limit`. As written, a packet builder cannot enforce model-specific input budgets because the dispatch layer does not define them.",
+      "file": "shared/llm_dispatch.py",
+      "fix": "Extend `DispatchProfile`/`PROFILES` with an explicit input-token budget field such as `input_token_limit` (and optionally context window metadata), and make packet builders consume it.",
+      "line": 0,
+      "severity": "high",
+      "title": "`DispatchProfile` does not expose input-token limits needed for budget enforcement"
+    },
+    {
+      "category": "logic",
+      "confidence": 0.92,
+      "description": "The review says `hooks/generate-overview.sh` treats the built \"context\" as the entire prompt (`instructions + codebase`), while `shared/llm_dispatch.py` `_build_full_prompt()` always concatenates `context_text + \"\\n\\n---\\n\\n\" + prompt`. If overview generation starts passing a single built artifact as `--context`, dispatch will wrap an already-complete prompt in an extra delimiter structure.",
+      "file": "shared/llm_dispatch.py",
+      "fix": "Define a dispatch mode that accepts a fully assembled prompt artifact without adding the default context/prompt delimiter, or split overview artifacts into true context and prompt components.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Overview payloads collide with `llm_dispatch.py` prompt wrapping"
+    },
+    {
+      "category": "logic",
+      "confidence": 0.93,
+      "description": "The review flags `generate-overview-batch.sh` for constructing a single JSONL file using `python3 -c \"import json...\"` and raw string interpolation. The reviewer argues that unless the shared builder emits JSONL-ready rows natively, batch mode will keep using ad hoc string assembly and may violate `content_hash` equivalence with live generation.",
+      "file": "generate-overview-batch.sh",
+      "fix": "Move JSONL row generation into shared Python code so live and batch modes serialize the same payload structure from the same builder output.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Batch overview generation still assembles JSONL via raw string interpolation"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.9,
+      "description": "The review repeatedly recommends a single `shared/context_packet.py` layer with primitives such as `PacketSection`, `TextBlock`, and `FileBlock`, preserving structured filepath and line-range metadata before rendering. The current design is described as fragmented: context assembly logic is spread across scripts instead of being centralized.",
+      "file": "shared/context_packet.py",
+      "fix": "Create `shared/context_packet.py` as the sole context assembly engine and migrate existing packet/prompt construction to it.",
+      "line": 0,
+      "severity": "medium",
+      "title": "There is no canonical shared context-packet module"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.97,
+      "description": "The review notes that `shared/llm_dispatch.py` already contains its own `assemble_context(sources)` helper that renders labeled sources into a prompt string. This duplicates the proposed canonical packet assembly layer and prevents a single integration spine for context construction.",
+      "file": "shared/llm_dispatch.py",
+      "fix": "Delete `assemble_context` from `shared/llm_dispatch.py` and migrate its callers to `shared/context_packet.py`.",
+      "line": 0,
+      "severity": "medium",
+      "title": "`llm_dispatch.py` still contains a duplicate `assemble_context` packet builder"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.97,
+      "description": "The review says `llm_dispatch.py` calculates `context_sha256 = _sha256(context_body)` and writes it into `meta.json`, even though the proposed artifact layer would already provide a `payload_hash`. It also states dispatch currently accepts only raw text or unstructured paths, so the `BuildArtifact` contract is orphaned unless dispatch can ingest a manifest directly.",
+      "file": "shared/llm_dispatch.py",
+      "fix": "Add manifest-aware dispatch input (for example `--context-manifest`) and have dispatch reuse artifact `payload_hash`/token metadata instead of recomputing hashes from raw text.",
+      "line": 0,
+      "severity": "high",
+      "title": "`llm_dispatch.py` recomputes context hashes instead of consuming builder manifests"
+    },
+    {
+      "category": "bug",
+      "confidence": 0.98,
+      "description": "The review points to `build_plan_close_context.py` slicing diff output with `diff_text[:max_diff_chars]`. It argues that this can cut through the middle of unified diff hunks or file sections, breaking diff syntax, ruining syntax highlighting, and causing models to hallucinate file boundaries.",
+      "file": "build_plan_close_context.py",
+      "fix": "Truncate diffs only at safe boundaries such as whole-file or whole-hunk boundaries, ideally in `shared/git_context.py`, and emit an explicit truncation marker.",
+      "line": 0,
+      "severity": "high",
+      "title": "`build_plan_close_context.py` truncates diffs by raw character count and breaks patch structure"
+    },
+    {
+      "category": "bug",
+      "confidence": 0.88,
+      "description": "The review recommends that any truncation of code or diffs must close open markdown fences, giving an explicit example of appending `...` and a closing ``` fence before a truncation notice. Without this, truncated packets can leave malformed markdown/code blocks.",
+      "file": "",
+      "fix": "Update truncation helpers to detect open fences and always close them before appending truncation notices.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Truncation logic may leave markdown code fences unclosed"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.9,
+      "description": "The review explicitly argues against keeping `generate-overview-batch.sh` as the primary orchestrator and later expands that recommendation to both live and batch overview flows. The proposed direction is a single Python orchestrator that reads config, calls the packet engine, invokes repomix, and writes output/JSONL, with shell scripts reduced to thin `exec uv run ...` pass-throughs.",
+      "file": "generate-overview-batch.sh",
+      "fix": "Replace bash-heavy overview orchestration with a Python entry point (for example `scripts/overview_generator.py`) and keep shell wrappers minimal.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Overview generation should be rewritten in Python rather than orchestrated in bash"
+    },
+    {
+      "category": "logic",
+      "confidence": 0.89,
+      "description": "The review recommends deleting ad hoc parsing in `model-review.py` and relying entirely on `shared/file_specs.py` for `path:start-end` resolution. This implies the current file-spec handling in `model-review.py` is duplicated and should be replaced by the shared implementation.",
+      "file": "model-review.py",
+      "fix": "Remove custom file-spec parsing from `model-review.py` and delegate all range parsing/resolution to `shared/file_specs.py`.",
+      "line": 0,
+      "severity": "medium",
+      "title": "`model-review.py` still uses ad hoc file-spec parsing instead of shared helpers"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.81,
+      "description": "The review proposes stripping constitutional logic out of `model-review.py` into `shared/context_preamble.py`. This indicates the current implementation mixes preamble/constitutional semantics into the review script instead of reusing a shared component.",
+      "file": "model-review.py",
+      "fix": "Extract constitutional or preamble-building logic into `shared/context_preamble.py` and have `model-review.py` consume that shared helper.",
+      "line": 0,
+      "severity": "low",
+      "title": "`model-review.py` keeps constitutional/preamble logic inline instead of sharing it"
+    }
+  ]
+}

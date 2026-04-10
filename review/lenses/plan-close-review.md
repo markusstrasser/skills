@@ -19,6 +19,7 @@ Before testing or review, normalize the closeout conditions.
    ```
 
 3. **If the plan claims migration completion, prove it.**
+   - Default assumption for refactors: zero live compatibility boundaries remain.
    - List dead wrappers or compatibility seams you actually deleted.
    - List remaining live compatibility boundaries that are still intentionally
      kept, with the removal condition for each.
@@ -120,6 +121,9 @@ From calibration data (suspense accounts + prior reviews):
 ## Migration Completion Checklist
 
 Only claim a migration is complete if all of these are true:
+
+Default target: zero remaining compatibility boundaries. Any exception needs a
+named live dependency and removal condition.
 
 1. **Active callers migrated** — every live caller in scope uses the new contract.
 2. **Dead wrappers removed** — not just bypassed.

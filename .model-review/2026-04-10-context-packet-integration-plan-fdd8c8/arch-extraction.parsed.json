@@ -1,0 +1,84 @@
+{
+  "findings": [
+    {
+      "category": "architecture",
+      "confidence": 0.9,
+      "description": "The review says the plan's 'optional repomix capture helper' framing is misleading because `generate-overview.sh` depends on `repomix` for recursive directory resolution, `.gitignore` handling, and syntax-aware formatting. The reviewer argues that tightly wrapping a Node-based CLI inside Python would add orchestration and failure-mode management to the packet builder, increasing maintenance burden and blast radius.",
+      "file": "generate-overview.sh",
+      "fix": "Keep `repomix` execution and its failure handling in the shell workflow, write its output to a temporary file, and have the Python packet builder ingest that file as an opaque input block rather than owning the CLI orchestration.",
+      "line": 0,
+      "severity": "high",
+      "title": "Repomix handling is underestimated as a simple Python helper"
+    },
+    {
+      "category": "logic",
+      "confidence": 0.96,
+      "description": "The review flags a budgeting disconnect: `build_plan_close_context.py` uses character caps such as `max_diff_chars=40_000` and `max_file_chars=8_000`, while `generate-overview.sh` uses a rough token heuristic (`wc -c / 4`) and profile token limits. The reviewer warns that a shared truncation engine will mis-budget or behave inconsistently if it tries to unify these without standardizing the measurement model.",
+      "file": "",
+      "fix": "Introduce a single `ContextBudgeter` that budgets in `max_tokens` for all builders, using either the existing `wc -c / 4` heuristic or a real tokenizer such as `tiktoken`, and retire the ad hoc character limits.",
+      "line": 0,
+      "severity": "high",
+      "title": "Shared context budgeting ignores incompatible char- and token-based limits"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.92,
+      "description": "The review notes that `generate-overview-batch.sh` currently serializes request payloads into JSONL via inline Python at lines 135-141. If the new builder only emits Markdown files, the batch flow would need to re-read, escape, and re-serialize those files, creating a second handling layer and an additional failure point.",
+      "file": "generate-overview-batch.sh",
+      "fix": "Have the builder support a native structured export, such as a Python `dict` or JSON-ready prompt/context payload, so the batch script can write JSONL directly without shell re-escaping Markdown.",
+      "line": 135,
+      "severity": "high",
+      "title": "Markdown-only builder output would break the batch JSONL path"
+    },
+    {
+      "category": "bug",
+      "confidence": 0.93,
+      "description": "The reviewer points out that `generate-overview-batch.sh` parses `.claude/overview.conf` with `eval` at lines 53-73 to obtain values like `OVERVIEW_EXCLUDE` and `OVERVIEW_SOURCE_DIRS`. If the Python builder also assumes responsibility for overview packet generation without replacing this parser, two independent parsers will likely diverge and cause include/exclude mismatches.",
+      "file": "generate-overview-batch.sh",
+      "fix": "Make one component the single source of truth for `overview.conf` parsing: either keep parsing in Bash and pass resolved values into Python, or move parsing into a shared parser and delete the duplicated Bash logic.",
+      "line": 53,
+      "severity": "medium",
+      "title": "Overview config parsing will drift if Bash and Python both interpret overview.conf"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.87,
+      "description": "The review says `generate-overview.sh` heavily manages concurrency and state, including background jobs, `MAX_CONCURRENT=2`, and `.claude/overview-marker-${type}` writes around lines 173 and 201. Moving assembly into Python without clearly defining where Bash regains control for atomic `mv` operations and marker updates leaves a race-prone boundary and risks silent workflow breakage.",
+      "file": "generate-overview.sh",
+      "fix": "Constrain Python to deterministic packet construction and keep Bash responsible for concurrency control, atomic file moves, and marker writes, with an explicit file-based interface between them.",
+      "line": 173,
+      "severity": "medium",
+      "title": "Overview migration does not define ownership of concurrency and marker updates"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.97,
+      "description": "The review highlights that `build_plan_close_context.py` currently truncates large files by keeping both the beginning and end (`text[:head]` and `text[-tail:]`) at lines 142-149. The proposed `TextBlock`/`FileBlock` primitives do not specify how this behavior is represented, so a naive truncation implementation could keep only the start or only the end and lose critical end-of-file logic in plan-close reviews.",
+      "file": "build_plan_close_context.py",
+      "fix": "Add a native truncation mode such as `HEAD_TAIL` to the shared packet model and preserve the current start-and-end excerpt behavior during migration.",
+      "line": 142,
+      "severity": "high",
+      "title": "New packet primitives do not preserve head/tail file excerpt truncation"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.84,
+      "description": "The reviewer disagrees with migrating `build_plan_close_context.py` first, arguing it is high-risk because it combines diff stat parsing, untracked file resolution, and head/tail excerpt logic. By contrast, `model-review.py` is described as a low-risk 1:1 replacement that mainly parses `file:range` specs and injects preambles, making it a better first migration target.",
+      "file": "",
+      "fix": "Reorder the phases so `model-review.py` migrates first, use it to validate the shared packet engine, and defer the plan-close refactor until the primitives are proven.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Migration sequence starts with the riskiest script instead of the simplest one"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.74,
+      "description": "Although the review supports provenance manifests, it recommends implementing `.manifest.json` sidecars in existing outputs before replacing current internals. The rationale is that predictable manifest emission would immediately expose hashes, source paths, and truncation details, lowering supervision cost during the migration rather than waiting for a full rewrite.",
+      "file": "build_plan_close_context.py",
+      "fix": "Add `PacketManifest` JSON sidecar generation to current builders first, then refactor their content assembly onto shared packet primitives in a later step.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Manifest sidecars should be emitted before deeper builder rewrites"
+    }
+  ]
+}

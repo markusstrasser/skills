@@ -36,7 +36,7 @@ case "$TOOL" in
     mcp__context7__*|mcp__research__search_papers|mcp__research__list_*|mcp__research__get_*)
         allow_tool "$TOOL"
         ;;
-    mcp__brave-search__*|mcp__perplexity__*|mcp__paper-search__search_*|mcp__meta-knowledge__*)
+    mcp__brave-search__*|mcp__perplexity__*|mcp__paper-search__search_*|mcp__agent-infra__*)
         allow_tool "$TOOL"
         ;;
     Bash)

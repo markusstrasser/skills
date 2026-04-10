@@ -1,0 +1,44 @@
+{
+  "budget_limit": 120000,
+  "budget_metric": "tokens",
+  "builder_name": "model_review_context",
+  "builder_version": "2026-04-10-v1",
+  "created_at": "2026-04-10T22:30:55Z",
+  "estimate_method": "heuristic:chars_div_4",
+  "normalization_version": "v1",
+  "packet_metadata": {
+    "Axes": "arch,formal",
+    "Project": "/Users/alien/Projects/skills"
+  },
+  "packet_title": "Model Review Context Packet",
+  "payload_hash": "7a91bbbdd720d6dd1de3a60d2bbbe98b6d672740f49b8cec551c3599b717da06",
+  "rendered_bytes": 157850,
+  "rendered_content_hash": "7a91bbbdd720d6dd1de3a60d2bbbe98b6d672740f49b8cec551c3599b717da06",
+  "source_blocks": [
+    {
+      "block_hash": "d0cf76175c0edfdd5e22299bf830891f5108d454520cb3792f85b069b102f7e5",
+      "block_index": 0,
+      "block_title": "DEVELOPMENT CONTEXT",
+      "block_type": "preamble",
+      "metadata": {},
+      "section_index": 0,
+      "section_title": "Preamble",
+      "source_path": null,
+      "truncated": false
+    },
+    {
+      "block_hash": "47b8d9c4ccbd7a6c2a33d5e29be0e29818b59f5bd0ead1f574d80d57d905e8ac",
+      "block_index": 0,
+      "block_title": ".model-review/context-packet-plan-close-focused.md",
+      "block_type": "text",
+      "metadata": {},
+      "section_index": 1,
+      "section_title": "Provided Context",
+      "source_path": null,
+      "truncated": false
+    }
+  ],
+  "source_paths": [],
+  "token_estimate": 39456,
+  "truncation_events": []
+}

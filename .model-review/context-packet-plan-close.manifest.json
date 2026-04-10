@@ -1,0 +1,282 @@
+{
+  "budget_limit": 40000,
+  "budget_metric": "chars",
+  "builder_name": "plan_close_context",
+  "builder_version": "2026-04-10-v1",
+  "created_at": "2026-04-10T22:27:09Z",
+  "estimate_method": "heuristic:chars_div_4",
+  "normalization_version": "v1",
+  "packet_metadata": {
+    "Mode": "worktree",
+    "Ref": "HEAD vs current worktree",
+    "Repo": "/Users/alien/Projects/skills"
+  },
+  "packet_title": "Plan-Close Review Packet",
+  "payload_hash": "fe0702c7313e1fe6ee927d4f072d83599cadd8a21a36bf539855c8c5c7ae8117",
+  "rendered_bytes": 110802,
+  "rendered_content_hash": "fe0702c7313e1fe6ee927d4f072d83599cadd8a21a36bf539855c8c5c7ae8117",
+  "source_blocks": [
+    {
+      "block_hash": "4282fac5bb025324b75cd4340b6e926835668076d3d2d61030fd5e9858801d4c",
+      "block_index": 0,
+      "block_title": "Touched Files",
+      "block_type": "list",
+      "metadata": {},
+      "section_index": 0,
+      "section_title": "Touched Files",
+      "source_path": null,
+      "truncated": false
+    },
+    {
+      "block_hash": "dd0ff60216dd994a6f765d932895d7e8cddda2916b5b0b4fb37a0915e989f848",
+      "block_index": 0,
+      "block_title": "git status --short",
+      "block_type": "command",
+      "metadata": {
+        "command": "git status --short"
+      },
+      "section_index": 1,
+      "section_title": "Git Status",
+      "source_path": null,
+      "truncated": false
+    },
+    {
+      "block_hash": "f69694eb9a23b35215b040827833dfe0cc0c4a2c3d1a832e0ae82652eaa87f9d",
+      "block_index": 1,
+      "block_title": "git diff --stat",
+      "block_type": "command",
+      "metadata": {
+        "command": "git diff --stat"
+      },
+      "section_index": 1,
+      "section_title": "Git Status",
+      "source_path": null,
+      "truncated": false
+    },
+    {
+      "block_hash": "70e483c59fd3128dc5ab06f80ec05f0c71aa9cf55919b0ed975f9d89ca00214c",
+      "block_index": 2,
+      "block_title": "Unified Diff",
+      "block_type": "diff",
+      "metadata": {},
+      "section_index": 1,
+      "section_title": "Git Status",
+      "source_path": null,
+      "truncated": true
+    },
+    {
+      "block_hash": "70eb30c5fbb7a4986e884eaf4279b944f89091006331ab638aab6fc2ecbbd074",
+      "block_index": 0,
+      "block_title": ".claude/plans/2026-04-10-context-packet-integration-plan.md",
+      "block_type": "file",
+      "metadata": {
+        "path": ".claude/plans/2026-04-10-context-packet-integration-plan.md"
+      },
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": ".claude/plans/2026-04-10-context-packet-integration-plan.md",
+      "truncated": true
+    },
+    {
+      "block_hash": "ef10c58d2b12b4e5b38d5b4befa17b065c552882e1c0785d0f756e32c2216681",
+      "block_index": 1,
+      "block_title": "hooks/generate-overview.sh",
+      "block_type": "file",
+      "metadata": {
+        "path": "hooks/generate-overview.sh"
+      },
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "hooks/generate-overview.sh",
+      "truncated": false
+    },
+    {
+      "block_hash": "e63c65ce6e515a909479e9afd689ec8830ee93cea21fecbb359b7c1b8ffce5ee",
+      "block_index": 2,
+      "block_title": "hooks/generate-overview-batch.sh",
+      "block_type": "file",
+      "metadata": {
+        "path": "hooks/generate-overview-batch.sh"
+      },
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "hooks/generate-overview-batch.sh",
+      "truncated": false
+    },
+    {
+      "block_hash": "a877445096374c17adac94b7b6de97031302204636f7593c94fcd0d271768005",
+      "block_index": 3,
+      "block_title": "hooks/overview-staleness-cron.sh",
+      "block_type": "file",
+      "metadata": {
+        "path": "hooks/overview-staleness-cron.sh"
+      },
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "hooks/overview-staleness-cron.sh",
+      "truncated": false
+    },
+    {
+      "block_hash": "16c3efa1c4f1a9a112e7e640c6195d45400acd06512fff84e0979a170801c789",
+      "block_index": 4,
+      "block_title": "hooks/postmerge-overview.sh",
+      "block_type": "file",
+      "metadata": {
+        "path": "hooks/postmerge-overview.sh"
+      },
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "hooks/postmerge-overview.sh",
+      "truncated": false
+    },
+    {
+      "block_hash": "4cb5084795d0db083490f8cbcd013b7bf0baab7fddb803fa61150772d183812c",
+      "block_index": 5,
+      "block_title": "hooks/sessionend-overview-trigger.sh",
+      "block_type": "file",
+      "metadata": {
+        "path": "hooks/sessionend-overview-trigger.sh"
+      },
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "hooks/sessionend-overview-trigger.sh",
+      "truncated": false
+    },
+    {
+      "block_hash": "b6e89ea04c5e4d5de88f7305f9b86ec710c2aa15293634004c86ac669aec9ded",
+      "block_index": 6,
+      "block_title": "review/scripts/build_plan_close_context.py",
+      "block_type": "file",
+      "metadata": {
+        "path": "review/scripts/build_plan_close_context.py"
+      },
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "review/scripts/build_plan_close_context.py",
+      "truncated": false
+    },
+    {
+      "block_hash": "67582d51297a368c8601ef300399caeeeb091317662314944de8ad4af9c3a6e8",
+      "block_index": 7,
+      "block_title": "review/scripts/model-review.py",
+      "block_type": "file",
+      "metadata": {
+        "path": "review/scripts/model-review.py"
+      },
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "review/scripts/model-review.py",
+      "truncated": true
+    },
+    {
+      "block_hash": "ee8b817271711c23d5f637c41feffb3b38293c2e129636177b19f97b570e8197",
+      "block_index": 8,
+      "block_title": "review/scripts/test_model_review.py",
+      "block_type": "file",
+      "metadata": {
+        "path": "review/scripts/test_model_review.py"
+      },
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "review/scripts/test_model_review.py",
+      "truncated": true
+    },
+    {
+      "block_hash": "ca6e9bd5303e25cc6eba2bbf290bfd04ced33cad8cf60fafd698083bbb4a38a1",
+      "block_index": 9,
+      "block_title": "scripts/generate_overview.py",
+      "block_type": "file",
+      "metadata": {
+        "path": "scripts/generate_overview.py"
+      },
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "scripts/generate_overview.py",
+      "truncated": true
+    },
+    {
+      "block_hash": "78926ba1a65984202fefe4636b09fcd03df8cad2dec8df8ac0dcbad4d7a4b756",
+      "block_index": 10,
+      "block_title": "scripts/llm-dispatch.py",
+      "block_type": "file",
+      "metadata": {
+        "path": "scripts/llm-dispatch.py"
+      },
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "scripts/llm-dispatch.py",
+      "truncated": false
+    },
+    {
+      "block_hash": "87c92ddbb8f8018636fefeb01e1ea769b6ea1db2a22ab5899c41ec473d3f8a99",
+      "block_index": 11,
+      "block_title": "scripts/test_generate_overview.py",
+      "block_type": "file",
+      "metadata": {
+        "path": "scripts/test_generate_overview.py"
+      },
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "scripts/test_generate_overview.py",
+      "truncated": false
+    },
+    {
+      "block_hash": "ef377919e6e0698243952bc1d589949689feb6ab7e3620c7ce977df4b17bb4c2",
+      "block_index": 12,
+      "block_title": "Omitted Files",
+      "block_type": "text",
+      "metadata": {},
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": null,
+      "truncated": false
+    }
+  ],
+  "source_paths": [
+    ".claude/plans/2026-04-10-context-packet-integration-plan.md",
+    "hooks/generate-overview.sh",
+    "hooks/generate-overview-batch.sh",
+    "hooks/overview-staleness-cron.sh",
+    "hooks/postmerge-overview.sh",
+    "hooks/sessionend-overview-trigger.sh",
+    "review/scripts/build_plan_close_context.py",
+    "review/scripts/model-review.py",
+    "review/scripts/test_model_review.py",
+    "scripts/generate_overview.py",
+    "scripts/llm-dispatch.py",
+    "scripts/test_generate_overview.py"
+  ],
+  "token_estimate": 27686,
+  "truncation_events": [
+    {
+      "block_label": "Unified Diff",
+      "original_chars": 39992,
+      "reason": "diff_char_limit",
+      "rendered_chars": 39992
+    },
+    {
+      "block_label": ".claude/plans/2026-04-10-context-packet-integration-plan.md",
+      "original_chars": 21725,
+      "reason": "file_excerpt_limit",
+      "rendered_chars": 8041
+    },
+    {
+      "block_label": "review/scripts/model-review.py",
+      "original_chars": 39826,
+      "reason": "file_excerpt_limit",
+      "rendered_chars": 8041
+    },
+    {
+      "block_label": "review/scripts/test_model_review.py",
+      "original_chars": 12073,
+      "reason": "file_excerpt_limit",
+      "rendered_chars": 8041
+    },
+    {
+      "block_label": "scripts/generate_overview.py",
+      "original_chars": 16062,
+      "reason": "file_excerpt_limit",
+      "rendered_chars": 8041
+    }
+  ]
+}

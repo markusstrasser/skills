@@ -1,0 +1,54 @@
+{
+  "findings": [
+    {
+      "category": "missing",
+      "confidence": 0.98,
+      "description": "The review says the migration plan explicitly required \"golden fixture tests for plan-close packets\" to catch silent drift, but no corresponding test was added. It specifically calls out that `test_build_plan_close_context.py` does not exist and that there are no added or modified tests covering `build_plan_close_context.py`. This leaves formatting, ordering, and truncation behavior unverified after the shell-to-Python migration.",
+      "file": "review/scripts/test_build_plan_close_context.py",
+      "fix": "Add a golden-fixture test for `build_plan_close_context.py` using a static/mock git fixture and exact string assertions against a checked-in expected packet output.",
+      "line": 0,
+      "severity": "high",
+      "title": "Golden fixture test for plan-close context was not implemented"
+    },
+    {
+      "category": "logic",
+      "confidence": 0.97,
+      "description": "The review flags that `generate_overview.py` injects a `trailing_text` instruction \u2014 `\"Write the requested codebase overview in markdown.\"` \u2014 into the prompt. It states this changes the legacy prompt shape and breaks the required prompt/payload equivalence guarantees, with no prompt-equivalence or payload-hash regression test to document the change. The same issue is reiterated as both \"Contract Drift (Prompt Shape)\" and \"Silent Prompt Mutation.\"",
+      "file": "scripts/generate_overview.py",
+      "fix": "Remove the extra `trailing_text` from overview packets to preserve backward-compatible prompt shape, or add an explicit equivalence/regression test if the prompt contract is intentionally changing.",
+      "line": 0,
+      "severity": "high",
+      "title": "`generate_overview.py` mutates the historical prompt by appending `trailing_text`"
+    },
+    {
+      "category": "bug",
+      "confidence": 0.95,
+      "description": "The review notes that the previous shell implementation prepended a metadata comment like `<!-- Generated: ${gen_ts} | git: ${git_sha} | model: ${OVERVIEW_MODEL} -->`, but the new Python path writes the LLM output verbatim via `distribute_results` / `r.get(\"content\", \"\")`. That means generated markdown permanently loses generation timestamp, git SHA, and model provenance that existed in historical outputs.",
+      "file": "scripts/generate_overview.py",
+      "fix": "Prepend the historical HTML comment before writing overview markdown, e.g. generate UTC timestamp, current git SHA, and profile/model name, then write the header followed by the model output.",
+      "line": 0,
+      "severity": "high",
+      "title": "Overview generation no longer prepends the historical provenance header"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.94,
+      "description": "The review calls out that `generate_overview.py` uses `subprocess.run(batch_submit_command(...))` and then parses stdout lines such as `line.startswith(\"Submitted:\")` to recover the batch job ID. This is fragile compared with using native Python bindings, because CLI output format changes can break job submission or tracking without type-checked API guarantees.",
+      "file": "scripts/generate_overview.py",
+      "fix": "Replace CLI shell-out submission with the native `llmx` Python client/API and consume the returned batch/job object directly instead of parsing stdout text.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Overview batch orchestration is brittle because it shells out and scrapes stdout for the job ID"
+    },
+    {
+      "category": "logic",
+      "confidence": 0.76,
+      "description": "The review highlights a potential compatibility problem: the old bash prompt used lowercase tags like `<instructions>` and `<codebase>`, while `generate_overview.py` now builds `PacketSection(\"Instructions\", ... tag=\"instructions\")` and depends on the `tagged` renderer to emit exactly the legacy shape. If the renderer uses title-cased section names, ignores `tag`, or adds formatting differences, the prompt signature changes even though the content source is similar.",
+      "file": "scripts/generate_overview.py",
+      "fix": "Add a prompt-shape regression test that snapshots the fully rendered overview prompt and verifies exact tag names/formatting, or hardcode renderer behavior to match the historical shell output exactly.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Overview renderer may drift prompt tag casing/formatting from the legacy shell prompt"
+    }
+  ]
+}

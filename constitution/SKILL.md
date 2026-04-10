@@ -44,7 +44,7 @@ Before asking any questions, explore the project thoroughly. Read every instruct
 - **Phase 0 steering report** — corrections, feedback, hook signals
 </exploration_checklist>
 
-Also read ~/Projects/meta/ files for the philosophical framework:
+Also read ~/Projects/agent-infra/ files for the philosophical framework:
 - constitutional-delta.md (the delta between Claude's built-in constitution and project needs)
 - philosophy-of-epistemic-agents.md (epistemic foundations)
 - frontier-agentic-models.md (what research says about agent reliability)

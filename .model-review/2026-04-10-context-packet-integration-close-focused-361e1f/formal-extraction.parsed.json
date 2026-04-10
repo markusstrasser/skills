@@ -1,0 +1,84 @@
+{
+  "findings": [
+    {
+      "category": "bug",
+      "confidence": 1.0,
+      "description": "The functions read_file_excerpt and truncate_diff_text return content longer than max_chars because they append truncation markers after selecting characters up to the limit. In read_file_excerpt, the output is head + TRUNCATION_MARKER + tail, where head + tail equals max_chars, making the total length > max_chars.",
+      "file": "shared/file_specs.py",
+      "fix": "Rewrite truncation helpers so marker insertion is included inside the character budget, not appended after it.",
+      "line": 0,
+      "severity": "high",
+      "title": "Truncation helpers do not honor their own max_chars contracts"
+    },
+    {
+      "category": "bug",
+      "confidence": 1.0,
+      "description": "In truncate_diff_text, selected diff content is kept within max_chars, but then a newline and DIFF_TRUNCATION_MARKER are appended, resulting in a returned length exceeding the specified limit.",
+      "file": "shared/git_context.py",
+      "fix": "Modify truncate_diff_text to account for the marker length within the max_chars calculation.",
+      "line": 0,
+      "severity": "high",
+      "title": "Diff truncation appends marker outside of budget"
+    },
+    {
+      "category": "logic",
+      "confidence": 0.9,
+      "description": "The BudgetPolicy sets a limit based on max_diff_chars for the whole ContextPacket, but only the diff block is actually truncated by this value. File excerpts are separately capped, allowing the total artifact to exceed the declared budget by over 3.4x (approx 136,000 chars vs 40,000 char limit).",
+      "file": "review/scripts/build_plan_close_context.py",
+      "fix": "Replace single packet-level budget with an honest total upper bound or separate manifest fields for packet_budget_limit and block_limits.",
+      "line": 0,
+      "severity": "high",
+      "title": "Plan-close manifest budget is mathematically inconsistent"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.9,
+      "description": "The build_overview_packet function creates TextBlocks for instructions and codebase without metadata paths. Because build_manifest only records source_path when block.metadata['path'] exists, the resulting manifest is empty for these dominant inputs.",
+      "file": "scripts/generate_overview.py",
+      "fix": "Attach metadata={'path': str(prompt_file)} to the instructions block and metadata={'path': str(repomix_output)} to the codebase block.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Overview manifests missing source provenance for primary inputs"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.8,
+      "description": "The system produces artifact hashes without auditable source lineage for overview generation. The manifest exists but fails to identify which prompt file or repomix snapshot was used.",
+      "file": "shared/context_packet.py",
+      "fix": "Update build_manifest to ensure provenance captures both prompt templates and source snapshots consistently.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Migration claim of inspectable provenance is incomplete"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.8,
+      "description": "Current tests focus on rendered string output rather than the new ContextPacket models, manifest fidelity, or truncation bounds. Refactor risk has moved into manifests and budgets, but tests have not followed.",
+      "file": "review/scripts/test_build_plan_close_context.py",
+      "fix": "Add unit tests to exercise build_packet_model and write_packet_artifact, specifically checking manifest source-path fidelity.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Inadequate test coverage for new artifact contract"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.8,
+      "description": "There is no visible test asserting that live and batch overview paths produce identical payload hashes for the same repository state and configuration, leaving the 'shared path' claim unverified.",
+      "file": "scripts/generate_overview.py",
+      "fix": "Implement equivalence tests that build the same overview payload through both live and batch paths and assert payload_hash equality.",
+      "line": 0,
+      "severity": "high",
+      "title": "Lack of hash-equivalence tests for overview payloads"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.8,
+      "description": "Shared helpers handle complex edge cases like binary files, symlinks, and renames, but visible test coverage only hits happy-path scenarios. A failure in these centralized helpers has a high blast radius.",
+      "file": "shared/file_specs.py",
+      "fix": "Add fixture-driven tests and ensure 100% branch coverage for binary files, symlinks, deleted files, and renames with spaces.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Missing adversarial tests for shared context helpers"
+    }
+  ]
+}
