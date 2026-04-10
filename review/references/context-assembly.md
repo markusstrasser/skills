@@ -35,6 +35,23 @@ For whole-repo or multi-file architectural reviews, you need a compressed repres
 
 For broad reviews, always include: entry points, the files under question, and the project's stated architecture (CLAUDE.md relevant sections). Omit: tests, generated files, vendored deps.
 
+## Shared Packet Path
+
+For repo automation, prefer the shared packet builders over hand-assembling markdown:
+
+- `review/scripts/build_plan_close_context.py` now emits both the markdown packet and a sidecar manifest
+- `review/scripts/model-review.py` builds one shared context packet and reuses it across axes
+- overview generation uses the same packet spine for prompt payload construction
+
+The shared packet layer generalizes mechanics only:
+
+- block rendering
+- provenance labeling
+- hashing / manifests
+- truncation markers
+
+It does **not** generalize task-specific file selection. Builders still decide what belongs in context.
+
 ## Constitutional Preamble (Script Handles This)
 
 The dispatch script auto-injects constitutional preamble. For manual dispatch, find and inject it yourself:

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import contextlib
+import json
 import os
 import tempfile
 import unittest
@@ -13,6 +15,14 @@ SPEC = importlib.util.spec_from_file_location("model_review_script", MODEL_REVIE
 assert SPEC is not None and SPEC.loader is not None
 model_review = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(model_review)
+
+
+@contextlib.contextmanager
+def patched_llmx_chat(mock_chat):
+    with patch.object(model_review.dispatch_core, "_LLMX_CHAT", mock_chat), patch.object(
+        model_review.dispatch_core, "_LLMX_VERSION", "test"
+    ):
+        yield
 
 
 class ModelReviewDispatchTest(unittest.TestCase):
@@ -38,7 +48,7 @@ class ModelReviewDispatchTest(unittest.TestCase):
             resp.latency = 1.0
             return resp
 
-        with patch.object(model_review, "llmx_chat", mock_chat):
+        with patched_llmx_chat(mock_chat):
             result = model_review.dispatch(
                 self.review_dir,
                 self.ctx_files,
@@ -74,7 +84,7 @@ class ModelReviewDispatchTest(unittest.TestCase):
             resp.latency = 1.0
             return resp
 
-        with patch.object(model_review, "llmx_chat", mock_chat):
+        with patched_llmx_chat(mock_chat):
             result = model_review.dispatch(
                 self.review_dir,
                 self.ctx_files,
@@ -185,7 +195,7 @@ class CallLlmxTest(unittest.TestCase):
             ctx = Path(td) / "ctx.md"
             ctx.write_text("context")
             out = Path(td) / "out.md"
-            with patch.object(model_review, "llmx_chat", exploding_chat):
+            with patched_llmx_chat(exploding_chat):
                 result = model_review._call_llmx(
                     provider="google", model="gemini-3.1-pro-preview",
                     context_path=ctx, prompt="test", output_path=out,
@@ -208,7 +218,7 @@ class CallLlmxTest(unittest.TestCase):
             ctx = Path(td) / "ctx.md"
             ctx.write_text("context")
             out = Path(td) / "out.md"
-            with patch.object(model_review, "llmx_chat", capture_chat):
+            with patched_llmx_chat(capture_chat):
                 model_review._call_llmx(
                     provider="openai", model="gpt-5.4",
                     context_path=ctx, prompt="test", output_path=out,
@@ -231,7 +241,7 @@ class CallLlmxTest(unittest.TestCase):
             ctx = Path(td) / "ctx.md"
             ctx.write_text("context")
             out = Path(td) / "out.md"
-            with patch.object(model_review, "llmx_chat", capture_chat):
+            with patched_llmx_chat(capture_chat):
                 model_review._call_llmx(
                     provider="google", model="gemini-3.1-pro-preview",
                     context_path=ctx, prompt="test", output_path=out,
@@ -281,6 +291,57 @@ class ModelReviewMainTest(unittest.TestCase):
                 os.chdir(old_cwd)
 
             self.assertEqual(rc, 2)
+
+
+class ModelReviewContextBuildTest(unittest.TestCase):
+    def test_build_context_drops_file_specs_when_budget_is_tiny(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            review_dir = root / "review"
+            review_dir.mkdir()
+            project_dir = root / "project"
+            project_dir.mkdir()
+            context_file = project_dir / "context.txt"
+            context_file.write_text("A" * 4000)
+
+            ctx_files = model_review.build_context(
+                review_dir,
+                project_dir,
+                context_file=None,
+                axis_names=["formal"],
+                context_file_specs=[str(context_file)],
+                budget_limit_override=120,
+            )
+
+            shared_ctx = ctx_files["formal"]
+            manifest = json.loads(shared_ctx.manifest_path.read_text())
+            dropped = manifest["packet_metadata"]["budget_enforcement"]["dropped_blocks"]
+            self.assertTrue(dropped)
+            self.assertEqual(dropped[0]["block_title"], str(context_file))
+
+    def test_build_context_keeps_explicit_context_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            review_dir = root / "review"
+            review_dir.mkdir()
+            project_dir = root / "project"
+            project_dir.mkdir()
+            context_file = project_dir / "assembled.md"
+            context_file.write_text("B" * 4000)
+
+            ctx_files = model_review.build_context(
+                review_dir,
+                project_dir,
+                context_file=context_file,
+                axis_names=["formal"],
+                budget_limit_override=120,
+            )
+
+            shared_ctx = ctx_files["formal"]
+            manifest = json.loads(shared_ctx.manifest_path.read_text())
+            dropped = manifest["packet_metadata"]["budget_enforcement"]["dropped_blocks"]
+            self.assertEqual(dropped, [])
+            self.assertIn(str(context_file), shared_ctx.content_path.read_text())
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from shared.context_packet import estimate_tokens
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SCRIPT_PATH = SCRIPT_DIR / "build_plan_close_context.py"
@@ -99,6 +100,7 @@ class BuildPlanCloseContextTest(unittest.TestCase):
 
         packet = plan_close_context.build_packet(
             self.repo,
+            profile_name="formal_review",
             base=base,
             head=head,
             files=None,
@@ -116,6 +118,38 @@ class BuildPlanCloseContextTest(unittest.TestCase):
         self.assertIn("value = 1", packet)
         self.assertIn("value = 2", packet)
         self.assertIn("print(value)", packet)
+
+    def test_build_packet_model_budget_matches_rendered_packet(self) -> None:
+        target = self.repo / "module.py"
+        target.write_text("print('one')\n" * 50)
+        run(self.repo, "add", "module.py")
+        run(self.repo, "commit", "-m", "initial")
+
+        target.write_text("print('two')\n" * 80)
+
+        packet = plan_close_context.build_packet_model(
+            self.repo,
+            profile_name="formal_review",
+            base=None,
+            head=None,
+            files=None,
+            tracked_only=True,
+            scope_text="- Target users: internal\n- Scale: small\n- Rate of change: high\n",
+            scope_file=None,
+            max_diff_chars=200,
+            max_file_chars=120,
+            max_files=5,
+            budget_limit_override=120,
+        )
+
+        self.assertIsNotNone(packet.budget_policy)
+        self.assertEqual(packet.budget_policy.metric, "tokens")
+        token_estimate = estimate_tokens(plan_close_context.render_markdown(packet), packet.budget_policy.estimate_method)
+        dropped = packet.metadata["budget_enforcement"]["dropped_blocks"]
+        self.assertTrue(dropped)
+        surviving_titles = [block.title for section in packet.sections for block in section.blocks]
+        self.assertIn("Unified Diff", surviving_titles)
+        self.assertGreater(token_estimate, packet.budget_policy.limit)
 
 
 if __name__ == "__main__":
