@@ -11,6 +11,14 @@ effort: high
 
 Five modes covering the full improvement lifecycle: find bugs, strengthen enforcement, discover novel analyses, optimize agent discoverability, and forensic concept tracking.
 
+## Default Migration Stance
+
+Unless the user explicitly asks for compatibility, assume proposed improvements are breaking refactors with full migration.
+
+- Prefer replacing the old path cleanly over layering wrappers, adapters, or dual paths on top of it.
+- In `audit` and `harness`, treat compatibility scaffolding as a smell to verify, not a default to preserve.
+- In `discover`, spend idea budget on cleaner end states, not phased coexistence plans, unless a live external boundary is named.
+
 ## Modes
 
 | Mode | Trigger | What it does | Source skill |

@@ -1,0 +1,29 @@
+{
+  "api_only": true,
+  "context_sha256": "b11f63919540f87309b35340229e7f7134a58104269c194d53b24498185538ed",
+  "error_message": null,
+  "error_path": null,
+  "error_type": null,
+  "finished_at": "2026-04-10T19:47:40Z",
+  "helper_version": "2026-04-10-v1",
+  "latency": 205.81270289421082,
+  "llmx_version": "0.6.0",
+  "output_path": ".model-review/2026-04-10-llm-dispatch-focused-close-027c4b/formal-output.md",
+  "parsed_path": null,
+  "profile_fingerprint": "85b979e607f4b0fc",
+  "profile_version": "v1",
+  "prompt_sha256": "987ef9b2eac24a30ed6ed9d7412f209465b7a3903edd6bb02bc38a0ce09be741",
+  "requested_profile": "gpt_general",
+  "resolved_kwargs": {
+    "max_tokens": 16384,
+    "reasoning_effort": "medium",
+    "search": false,
+    "timeout": 600
+  },
+  "resolved_model": "gpt-5.4",
+  "resolved_provider": "openai",
+  "retryable": false,
+  "schema_used": false,
+  "started_at": "2026-04-10T19:44:13Z",
+  "status": "ok"
+}

@@ -1,0 +1,84 @@
+{
+  "findings": [
+    {
+      "category": "architecture",
+      "severity": "high",
+      "title": "God-module risk in context_selectors.py",
+      "description": "The proposed context_selectors.py mixes file-range parsing, git resolution, diff collection, and repomix capture, violating concern boundaries and creating a high-drift 'god helper'.",
+      "file": "context_selectors.py",
+      "line": 0,
+      "fix": "Split functionality into discrete modules such as file_specs.py, git_context.py, and repomix_source.py.",
+      "confidence": 0.9
+    },
+    {
+      "category": "logic",
+      "severity": "medium",
+      "title": "Incomplete overview migration allows continued drift",
+      "description": "The plan only migrates prompt/context assembly, leaving config parsing and include-pattern construction in shell scripts (generate-overview.sh/batch.sh), resulting in partial unification.",
+      "file": "scripts/generate-overview.sh",
+      "line": 0,
+      "fix": "Centralize overview config parsing and repomix argument construction in Python.",
+      "confidence": 0.85
+    },
+    {
+      "category": "missing",
+      "severity": "medium",
+      "title": "BuildArtifact underspecified for overview requirements",
+      "description": "The BuildArtifact schema lacks the prompt string data ('Write the requested codebase overview...') required by the overview flow, making the handoff boundary insufficient.",
+      "file": "context_packet.py",
+      "line": 0,
+      "fix": "Extend BuildArtifact to include prompt payloads or ensure the shared core handles task-specific instructions.",
+      "confidence": 0.8
+    },
+    {
+      "category": "logic",
+      "severity": "high",
+      "title": "Deterministic hashing lacks normalization contract",
+      "description": "Plan distinguishes hashes but fails to define newline normalization, trailing whitespace, path normalization, or section ordering, making hashes sensitive to environment/OS.",
+      "file": "",
+      "line": 0,
+      "fix": "Specify and implement a normalization contract including versioning and ordering rules before hashing.",
+      "confidence": 0.9
+    },
+    {
+      "category": "logic",
+      "severity": "medium",
+      "title": "Unification fails due to inconsistent budget metrics",
+      "description": "System uses chars for some truncations, tokens for others, and 'bytes/4' for estimates; a shared budget engine cannot function without a shared metric.",
+      "file": "",
+      "line": 0,
+      "fix": "Adopt a single shared metric engine and label manifests with the estimation method used.",
+      "confidence": 0.85
+    },
+    {
+      "category": "performance",
+      "severity": "medium",
+      "title": "Model-review creates redundant context files",
+      "description": "The current plan still allows model-review to write N identical context files for N axes, maintaining duplication of content and storage.",
+      "file": "model-review.py",
+      "line": 0,
+      "fix": "Update model-review to point all axes to a single shared content path if the content hash is identical.",
+      "confidence": 0.85
+    },
+    {
+      "category": "style",
+      "severity": "low",
+      "title": "Grep-based enforcement is architecturally weak",
+      "description": "Using grep to prevent helper duplication is easily evaded by renaming and doesn't verify behavioral consolidation.",
+      "file": "",
+      "line": 0,
+      "fix": "Replace grep checks with behavioral contract tests and strict import constraints in CI.",
+      "confidence": 0.8
+    },
+    {
+      "category": "missing",
+      "severity": "medium",
+      "title": "Missing policy for non-text files",
+      "description": "Current strategy lacks explicit handling for binary files, symlinks, or submodules, which may lead to silent mis-rendering.",
+      "file": "context_selectors.py",
+      "line": 0,
+      "fix": "Implement excerpt policy tests specifically for binary, symlink, and submodule inputs.",
+      "confidence": 0.8
+    }
+  ]
+}

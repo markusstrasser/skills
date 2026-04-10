@@ -1,0 +1,74 @@
+{
+  "findings": [
+    {
+      "category": "logic",
+      "confidence": 1.0,
+      "description": "build_plan_close_context.py sets BudgetPolicy(metric=\"chars\", limit=max_diff_chars), default 40_000. However, the packet includes up to 96_000 chars of excerpts plus metadata, meaning the manifest reports a limit that is only ~29% of the actual packet ceiling.",
+      "file": "build_plan_close_context.py",
+      "fix": "Compute a total-packet budget bound or emit per-section limits (diff_limit, file_excerpt_limit, etc) instead of a single misleading budget_limit.",
+      "line": 0,
+      "severity": "high",
+      "title": "Plan-close manifest budget does not describe the actual packet budget"
+    },
+    {
+      "category": "logic",
+      "confidence": 1.0,
+      "description": "shared/overview_config.py defaults OVERVIEW_LOC_THRESHOLD to 200, but hooks/sessionend-overview-trigger.sh defaults to 50, causing inconsistent automation behavior depending on which consumer reads the config.",
+      "file": "shared/overview_config.py",
+      "fix": "Unify all overview.conf parsing through shared.overview_config; replace manual parsing in shell scripts with the shared helper.",
+      "line": 0,
+      "severity": "high",
+      "title": "Overview trigger default threshold is inconsistent across consumers"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.9,
+      "description": "The default prompt location shifted from .claude/overview-prompts to ~/Projects/skills/hooks/overview-prompts, which may cause repositories relying on project-local prompts to fail or use incorrect defaults.",
+      "file": "shared/overview_config.py",
+      "fix": "Codify a fallback order for prompt discovery (project-local first, shared second) and add compatibility tests.",
+      "line": 0,
+      "severity": "high",
+      "title": "Live overview default prompt location changed without compatibility proof"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.9,
+      "description": "shared/llm_dispatch.py still supports raw context transport and emits parallel hashes (context_sha256 and context_payload_hash), making canonical provenance optional rather than enforced.",
+      "file": "shared/llm_dispatch.py",
+      "fix": "Deprecate raw-context dispatch and require context_manifest_path for automated entrypoints.",
+      "line": 0,
+      "severity": "high",
+      "title": "Dispatch is not packet-manifest canonical"
+    },
+    {
+      "category": "logic",
+      "confidence": 0.8,
+      "description": "shared/context_preamble.py ignores general CONSTITUTION.md files at the root or in docs/, only checking .claude/rules/constitution.md or CLAUDE.md, causing a semantic regression.",
+      "file": "shared/context_preamble.py",
+      "fix": "Update the shared preamble helper to include broad CONSTITUTION.md discovery as described in documentation.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Constitution discovery semantics narrowed relative to reference contract"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.9,
+      "description": "The current test suite fails to verify live-vs-batch payload hash equivalence, plan-close golden output, or binary/submodule omission behavior despite these being cited as risks.",
+      "file": "",
+      "fix": "Add a regression suite covering live/batch equivalence, plan-close golden packets, and constitution discovery matrices.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Insufficient regression testing for migration claims"
+    },
+    {
+      "category": "logic",
+      "confidence": 1.0,
+      "description": "Shell scripts sessionend-overview-trigger.sh and overview-staleness-cron.sh still parse overview.conf manually instead of utilizing the centralized shared.overview_config utility.",
+      "file": "hooks/sessionend-overview-trigger.sh",
+      "fix": "Replace manual shell-based parsing of config files with calls to the shared Python configuration module.",
+      "line": 0,
+      "severity": "low",
+      "title": "Leftover ad hoc contract parsing in shell hooks"
+    }
+  ]
+}

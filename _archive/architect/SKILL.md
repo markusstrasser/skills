@@ -7,6 +7,14 @@ description: Architectural decision-making workflow using tournament-based propo
 
 Minimal-linear review workflow for architectural decision-making: **proposals → tournament → ADR**
 
+## Default Migration Stance
+
+Unless the user explicitly asks for compatibility, evaluate proposals as breaking refactors with full migration.
+
+- Prefer architectures that replace old paths cleanly over ones that preserve them via wrappers, adapters, or phased coexistence.
+- Treat compatibility layers as costs that require explicit justification, not default prudence.
+- If a compatibility boundary must remain, proposals should name the live boundary and its removal condition.
+
 ## Quick Start
 
 ```bash

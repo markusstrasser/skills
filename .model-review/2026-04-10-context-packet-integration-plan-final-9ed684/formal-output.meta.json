@@ -1,0 +1,29 @@
+{
+  "api_only": true,
+  "context_sha256": "4de13df3df68812565438985c58c71bfefdc7a48b51ddae64cb96b259ccc4cee",
+  "error_message": null,
+  "error_path": null,
+  "error_type": null,
+  "finished_at": "2026-04-10T22:08:39Z",
+  "helper_version": "2026-04-10-v1",
+  "latency": 111.47107768058777,
+  "llmx_version": "0.6.0",
+  "output_path": ".model-review/2026-04-10-context-packet-integration-plan-final-9ed684/formal-output.md",
+  "parsed_path": null,
+  "profile_fingerprint": "85b979e607f4b0fc",
+  "profile_version": "v1",
+  "prompt_sha256": "945c30db288672f29b165accee5f2d1d4617d038ba529b7c80da35039f0ee701",
+  "requested_profile": "gpt_general",
+  "resolved_kwargs": {
+    "max_tokens": 16384,
+    "reasoning_effort": "medium",
+    "search": false,
+    "timeout": 600
+  },
+  "resolved_model": "gpt-5.4",
+  "resolved_provider": "openai",
+  "retryable": false,
+  "schema_used": false,
+  "started_at": "2026-04-10T22:06:47Z",
+  "status": "ok"
+}

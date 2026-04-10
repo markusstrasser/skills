@@ -35,11 +35,11 @@ Before each tick, check rate limit status:
 CLAUDE_PROCS=$(pgrep claude 2>/dev/null | wc -l | tr -d ' ')
 ```
 
-**If rate-limited (CLAUDE_PROCS >= 6):** Route LLM-heavy phases (discover, gap-analyze, plan) through llmx instead of Claude subagents:
-- Use `llmx chat -m gemini-3-flash-preview` for discover/gap-analyze (search + synthesis — Flash is free via CLI)
+**If rate-limited (CLAUDE_PROCS >= 6):** Route LLM-heavy phases (discover, gap-analyze, plan) through the shared dispatch helper instead of Claude subagents:
+- Use `uv run python3 ~/Projects/skills/scripts/llm-dispatch.py --profile cheap_tick ...` for discover/gap-analyze (shared artifact contract, no raw CLI dispatch)
 - Use `model-review.py` for review (already routes through llmx)
 - Execute and verify phases use tools, not LLM reasoning — run inline regardless
-- Write `[rate-limited: used llmx]` tag in CYCLE.md log entries for tracking
+- Write `[rate-limited: used shared dispatch]` tag in CYCLE.md log entries for tracking
 
 **If not rate-limited:** Normal operation (Claude subagents preferred).
 
@@ -76,19 +76,23 @@ Agent(
 )
 ```
 
-**llmx dispatch (rate-limited mode):** For discover/gap-analyze/plan phases, write the phase prompt to a temp file and dispatch via llmx:
+**Shared dispatch (rate-limited mode):** For discover/gap-analyze/plan phases, write the phase prompt to a temp file and dispatch via the wrapper:
 ```bash
 cat > /tmp/cycle-phase-prompt.md << 'EOF'
 [phase prompt with project context]
 EOF
-llmx chat -m gemini-3-flash-preview -f /tmp/cycle-phase-prompt.md \
-  --timeout 120 -o /tmp/cycle-phase-output.md \
-  "[phase instruction]"
-# Read output, apply to CYCLE.md, commit
+uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
+  --profile cheap_tick \
+  --context /tmp/cycle-phase-prompt.md \
+  --prompt "[phase instruction]" \
+  --output /tmp/cycle-phase-output.md \
+  --meta /tmp/cycle-phase-meta.json \
+  --error-output /tmp/cycle-phase-error.json
+# Read output, inspect meta/error artifacts on failure, apply to CYCLE.md, commit
 ```
-Gemini Flash is free via CLI transport — no rate limit conflict with Claude. For phases needing tool use (discover with Exa/S2), work inline with MCP tools but skip subagent delegation.
+For phases needing tool use (discover with Exa/S2), work inline with MCP tools but skip subagent delegation.
 
-**Fallback priority:** subagent (fresh context) -> llmx (rate-limited) -> inline (memory-constrained + rate-limited).
+**Fallback priority:** subagent (fresh context) -> shared dispatch (rate-limited) -> inline (memory-constrained + rate-limited).
 
 Each phase prompt must include:
 - Project root path and name
@@ -146,14 +150,14 @@ For both tracks, write results to `## Verification Results`. **If verification f
    mkdir -p artifacts/failed-experiments
    git format-patch HEAD~1 -o artifacts/failed-experiments/
    ```
-   Write a JSON sidecar `artifacts/failed-experiments/{gap-id}-{date}.json` with gap fingerprint schema: `{gap_id, repo, subsystem, failure_mode, mechanism_tags, base_commit, failing_metric, plan_summary, failure_reason, date, patch_file}`. Schema at `~/Projects/meta/schemas/gap-fingerprint.json`.
+   Write a JSON sidecar `artifacts/failed-experiments/{gap-id}-{date}.json` with gap fingerprint schema: `{gap_id, repo, subsystem, failure_mode, mechanism_tags, base_commit, failing_metric, plan_summary, failure_reason, date, patch_file}`. Schema at `~/Projects/agent-infra/schemas/gap-fingerprint.json`.
 2. Run `git revert HEAD` (preserves history, unlike reset).
 3. Mark the gap as `FAILED: {reason}` — skip it for 2 cycles.
 4. Write failure to DECISIONS.md for human triage.
 **TTL:** During improve phase archival, prune `artifacts/failed-experiments/` entries >90 days old that were never retrieved by a plan phase.
 
 **Improve:** Three parts — retro + archival + proposals.
-1. **Retro (structured):** Classify this cycle's events using retro categories: WRONG_ASSUMPTION, TOOL_MISUSE, SEARCH_WASTE, TOKEN_WASTE, BUILD_THEN_UNDO. Write structured findings to `## Cycle Retro` in CYCLE.md. Also write JSON to `~/Projects/meta/artifacts/session-retro/{date}-cycle.json` for the improvement pipeline.
+1. **Retro (structured):** Classify this cycle's events using retro categories: WRONG_ASSUMPTION, TOOL_MISUSE, SEARCH_WASTE, TOKEN_WASTE, BUILD_THEN_UNDO. Write structured findings to `## Cycle Retro` in CYCLE.md. Also write JSON to `~/Projects/agent-infra/artifacts/session-retro/{date}-cycle.json` for the improvement pipeline.
 2. **Archival:** Move entries older than 2 cycles from `## Autonomous (done)`, `## Verification Results`, and `## Cycle Retro` to `CYCLE-archive.md`. Keep CYCLE.md under 200 lines.
 3. **Proposals:** Write tool/process improvement proposals to `## Tool Improvements (proposed)`. For structural improvements, write to `~/.claude/steward-proposals/`. For things needing human input, append to `DECISIONS.md` (informational — no approval checkboxes). NEVER implement tool changes directly — propose only. Commit.
 
@@ -268,7 +272,7 @@ Search across all three projects for the concept:
 
 ```bash
 # Header-grep FIRST — finds files where concept is a primary topic
-grep -r "^#.*{concept}" ~/Projects/selve/docs/ ~/Projects/genomics/docs/ ~/Projects/meta/research/ --include="*.md" -l
+grep -r "^#.*{concept}" ~/Projects/phenome/docs/ ~/Projects/genomics/docs/ ~/Projects/agent-infra/research/ --include="*.md" -l
 
 # MCP search for section-level matches
 search_meta("{concept}", scope="all", max_tokens=500)
@@ -345,7 +349,7 @@ would resolve contradictions, follow-up research suggested.]
 Route the compiled article based on scope:
 
 **Cross-project compilations** (sources from 2+ projects):
-- Write to `~/Projects/meta/research/compiled/{concept-slug}.md`
+- Write to `~/Projects/agent-infra/research/compiled/{concept-slug}.md`
 
 **Single-project compilations** (all sources from one project):
 - Write to that project's `docs/compiled/{concept-slug}.md`
@@ -538,7 +542,7 @@ Phase 5: EXECUTE   Implement the plan (with user approval)         (~25%)
 |--------|------|----------|
 | `codex exec --model gpt-5.4` | Cross-referencing, counting, structured output | Free, parallel, output extraction fragile |
 | Claude Code `Agent` subagents | Same + DuckDB/MCP access | Costs tokens, output inline (reliable) |
-| `llmx chat --model gemini-3.1-pro-preview` | 1M context, huge file ingestion | Best for monolithic analysis |
+| `uv run python3 ~/Projects/skills/scripts/llm-dispatch.py --profile deep_review ...` | 1M context, huge file ingestion | Best for monolithic analysis |
 
 **Use Codex for:** 5+ parallel audits, cross-file grep+read tracing, wiring/drift/completeness checks.
 **Use Claude subagents for:** <3 file audits, tasks needing project-specific tooling (uv, DuckDB, MCP).

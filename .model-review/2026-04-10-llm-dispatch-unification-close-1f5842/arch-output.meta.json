@@ -1,0 +1,28 @@
+{
+  "api_only": true,
+  "context_sha256": "9b3c975d0f156a337bb0a94541b823372adfb1b541da24257eb6ac807c40c828",
+  "error_message": null,
+  "error_path": null,
+  "error_type": null,
+  "finished_at": "2026-04-10T19:35:50Z",
+  "helper_version": "2026-04-10-v1",
+  "latency": 75.85262417793274,
+  "llmx_version": "0.6.0",
+  "output_path": ".model-review/2026-04-10-llm-dispatch-unification-close-1f5842/arch-output.md",
+  "parsed_path": null,
+  "profile_fingerprint": "2b5be9e501e5c074",
+  "profile_version": "v1",
+  "prompt_sha256": "ae5d50224e05716a1147f9651d9c2ee87e6c99438e8111a9a4af8a86256bf618",
+  "requested_profile": "deep_review",
+  "resolved_kwargs": {
+    "reasoning_effort": "high",
+    "search": false,
+    "timeout": 300
+  },
+  "resolved_model": "gemini-3.1-pro-preview",
+  "resolved_provider": "google",
+  "retryable": false,
+  "schema_used": false,
+  "started_at": "2026-04-10T19:34:34Z",
+  "status": "ok"
+}

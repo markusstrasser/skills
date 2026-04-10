@@ -1,0 +1,64 @@
+{
+  "findings": [
+    {
+      "category": "bug",
+      "severity": "high",
+      "title": "\"Oldest marker\" selection logic is incorrectly implemented",
+      "description": "The comment in `hooks/sessionend-overview-trigger.sh` states it should use the oldest per-type marker as a diff baseline, but the code actually selects the first marker found in the configured types order and breaks immediately. This is an ordering property failure.",
+      "file": "hooks/sessionend-overview-trigger.sh",
+      "line": 0,
+      "fix": "Remove the 'break' statement and iterate through all markers to compare mtimes, selecting the one with the earliest timestamp.",
+      "confidence": 1.0
+    },
+    {
+      "category": "logic",
+      "severity": "high",
+      "title": "Staleness check logic is broken for multi-type projects",
+      "description": "In `hooks/overview-staleness-cron.sh`, the script picks the first existing marker file it finds and computes age from only that file. If the first marker is fresh but subsequent configured types are stale, the stale types will never be regenerated.",
+      "file": "hooks/overview-staleness-cron.sh",
+      "line": 0,
+      "fix": "Evaluate staleness for every configured type in the loop rather than exiting after the first found marker, or aggregate the staleness state across all markers.",
+      "confidence": 1.0
+    },
+    {
+      "category": "architecture",
+      "severity": "medium",
+      "title": "Overview configuration contract is duplicated across multiple parsers",
+      "description": "The logic for parsing `.claude/overview.conf` exists in three places: `shared.overview_config`, shell-based `grep/cut/xargs` in cron hooks, and an inline parser in the trigger hook. This creates a high risk of contract drift.",
+      "file": "hooks/overview-staleness-cron.sh",
+      "line": 0,
+      "fix": "Centralize all configuration reading and marker path resolution into a single shared Python utility and invoke it from the shell hooks.",
+      "confidence": 0.9
+    },
+    {
+      "category": "logic",
+      "severity": "medium",
+      "title": "Plan-close budget metadata under-reports actual packet size",
+      "description": "The `BudgetPolicy` limit (e.g., 40k chars) is attached to the packet but only describes the diff component. The total packet size includes file excerpts (up to 96k additional chars) and metadata, making the reported budget significantly smaller than the actual payload.",
+      "file": "review/scripts/build_plan_close_context.py",
+      "line": 0,
+      "fix": "Update the manifest to report total packet size or clarify that the budget policy applies specifically to the diff component only.",
+      "confidence": 0.9
+    },
+    {
+      "category": "missing",
+      "severity": "medium",
+      "title": "Lack of verification for migration success criteria",
+      "description": "The project claims 'implemented' status, but there are no shown tests enforcing live-vs-batch payload hash equivalence, marker semantics correctness, or plan-close golden output consistency.",
+      "file": "scripts/test_generate_overview.py",
+      "line": 0,
+      "fix": "Implement regression tests that assert byte-for-byte equality between live and batch rendering paths and validate marker selection logic.",
+      "confidence": 0.8
+    },
+    {
+      "category": "style",
+      "severity": "low",
+      "title": "Project enumeration is hardcoded in multiple locations",
+      "description": "Repo lists are hardcoded in both `scripts/generate_overview.py` and `hooks/overview-staleness-cron.sh`. Adding a new repository requires manual code edits in multiple files, which is not scalable.",
+      "file": "scripts/generate_overview.py",
+      "line": 0,
+      "fix": "Replace hardcoded lists with an automatic discovery mechanism that searches for directories containing `.claude/overview.conf`.",
+      "confidence": 0.9
+    }
+  ]
+}

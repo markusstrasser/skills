@@ -16,7 +16,7 @@ import re
 import sys
 from pathlib import Path
 
-ARTIFACT_DIR = Path.home() / "Projects/meta/artifacts/session-analyst"
+ARTIFACT_DIR = Path.home() / "Projects/agent-infra/artifacts/session-analyst"
 HEX8_PATTERN = re.compile(r"\b([0-9a-f]{8})\b")
 MANIFEST_ROW = re.compile(r"\|\s*([0-9a-f]{8})\s*\|")
 

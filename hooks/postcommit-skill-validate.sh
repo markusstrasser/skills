@@ -6,7 +6,7 @@
 set -euo pipefail
 
 SKILLS_DIR="$HOME/Projects/skills"
-META_DIR="$HOME/Projects/meta"
+META_DIR="$HOME/Projects/agent-infra"
 
 # Only run if we're in the skills repo
 if [[ "$(git -C "$SKILLS_DIR" rev-parse --show-toplevel 2>/dev/null)" != "$SKILLS_DIR" ]]; then

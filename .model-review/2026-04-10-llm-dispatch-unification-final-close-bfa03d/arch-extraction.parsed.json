@@ -1,0 +1,74 @@
+{
+  "findings": [
+    {
+      "category": "bug",
+      "confidence": 0.99,
+      "description": "The review flags `generate-overview.sh` line 179: `temp_prompt=$(mktemp /tmp/overview-prompt-$$-${type}-XXXXXX.txt)`. On standard BSD `mktemp` (the default on macOS), the template must end exactly with `XXXXXX`; adding `.txt` after the placeholder causes an immediate `mktemp: too few X's in template` failure.",
+      "file": "generate-overview.sh",
+      "fix": "Remove the suffix from the template, e.g. `mktemp /tmp/overview-prompt-$$-${type}-XXXXXX`, and do not rely on a file extension for downstream parsing.",
+      "line": 179,
+      "severity": "critical",
+      "title": "BSD `mktemp` template in `generate-overview.sh` will fail on macOS"
+    },
+    {
+      "category": "bug",
+      "confidence": 0.98,
+      "description": "The review identifies `run-cycle.sh` lines 39-42 as using suffixed `mktemp` templates such as `cycle_context=$(mktemp /tmp/cycle-dispatch-context-XXXXXX.md)` and similar output/meta/error variants. The reviewer states these crash on macOS because BSD `mktemp` requires the template to end exactly with `XXXXXX`.",
+      "file": "run-cycle.sh",
+      "fix": "Drop extensions from all `mktemp` templates in `run-cycle.sh`, e.g. use `mktemp /tmp/cycle-dispatch-context-XXXXXX` and similarly for output/meta/error temp files.",
+      "line": 39,
+      "severity": "critical",
+      "title": "BSD `mktemp` templates in `run-cycle.sh` are incompatible with macOS"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.72,
+      "description": "The review says `model-review.py` imports `shared.llm_dispatch as dispatch_core`, but tests such as `test_call_llmx_passes_schema_for_openai` show it still has its own `_call_llmx` path that invokes `_LLMX_CHAT` directly. The reviewer argues this bypasses `dispatch_core.dispatch()`, so it loses standardized `.meta.json`/`.error.json` output, centralized retry/error handling, and consistent exit-code mapping.",
+      "file": "review/scripts/model-review.py",
+      "fix": "Remove or stop using `_call_llmx`, and route review requests through `dispatch_core.dispatch(...)`, including from any thread pool used for concurrent axis reviews.",
+      "line": 0,
+      "severity": "high",
+      "title": "`model-review.py` bypasses the shared dispatch abstraction"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.78,
+      "description": "The review claims `model-review.py` manually injects or strips `additionalProperties` depending on the provider (OpenAI vs Google). It characterizes this as framework-level behavior that should not live in an individual caller, because it duplicates protocol logic and encourages other scripts to reinvent provider-specific schema handling.",
+      "file": "review/scripts/model-review.py",
+      "fix": "Move provider-specific schema normalization out of `model-review.py` and into the shared dispatch layer so callers pass plain schema dicts without mutating them per provider.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Provider-specific schema mutation is duplicated in `model-review.py`"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.61,
+      "description": "The review says `shared.llm_dispatch.dispatch` accepts `schema: dict | None` but 'does not appear' to normalize provider incompatibilities, specifically Google rejecting `additionalProperties` while OpenAI strict mode requires it. The reviewer warns that without this in the core wrapper, each upstream caller using `dispatch(schema=...)` will reimplement the same schema-mangling logic.",
+      "file": "shared/llm_dispatch.py",
+      "fix": "Normalize schemas inside `shared.llm_dispatch.py` during payload assembly, e.g. recursively strip `additionalProperties` for Google while preserving the form needed for OpenAI strict mode.",
+      "line": 0,
+      "severity": "high",
+      "title": "`shared.llm_dispatch.dispatch()` lacks centralized schema normalization for provider quirks"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.57,
+      "description": "The review suggests `model-review.py` may have bypassed `dispatch_core.dispatch()` because it needs to run four queries concurrently and the core helper appears synchronous-only. It identifies the absence of a clear threaded/bulk dispatch path in the shared wrapper as a gap that pushes consumers to build their own concurrency loops and bypass the abstraction.",
+      "file": "shared/llm_dispatch.py",
+      "fix": "Add a supported parallel or bulk dispatch interface, or document a safe pattern for calling `dispatch()` concurrently from `ThreadPoolExecutor` so clients do not need custom wrappers.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Shared dispatch layer lacks a parallel or bulk invocation API"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.84,
+      "description": "The review disagrees with `run-cycle.sh` assembling the prompt via `cat > $cycle_context`, arguing this conflates operational instructions with the context document. It notes the dispatch CLI already supports `--context` and `--prompt`, and says using those separately would better match the intended prompt/context separation.",
+      "file": "run-cycle.sh",
+      "fix": "Pass `CYCLE.md` through `--context` and provide the execution instructions via `--prompt` rather than concatenating both into a single temporary context file.",
+      "line": 0,
+      "severity": "low",
+      "title": "`run-cycle.sh` mixes prompt text into a temporary context file instead of using dispatch inputs separately"
+    }
+  ]
+}

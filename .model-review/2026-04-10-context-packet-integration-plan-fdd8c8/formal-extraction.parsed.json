@@ -1,0 +1,114 @@
+{
+  "findings": [
+    {
+      "category": "logic",
+      "confidence": 0.9,
+      "description": "The plan includes hooks/generate-overview.sh for migration but Phase 1 only specifies Markdown rendering. Current overview input uses a tagged prompt format (<instructions> and <code>), not a Markdown packet, creating a conflict in Phase 4.",
+      "file": "hooks/generate-overview.sh",
+      "fix": "Update Phase 1 to include a second renderer for prompt-wrapped formats or redefine the overview output scope.",
+      "line": 0,
+      "severity": "high",
+      "title": "Overview renderer migration scope inconsistency"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.8,
+      "description": "context_selectors.py is intended to be mechanical but is assigned responsibility for constitution/goals discovery and repomix capture, which are policy-driven semantic tasks.",
+      "file": "context_selectors.py",
+      "fix": "Separate the selectors module into mechanical source acquisition vs. a semantic policy layer for goals and constitutions.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Violation of 'shared mechanics, not semantics' in context selectors"
+    },
+    {
+      "category": "logic",
+      "confidence": 0.95,
+      "description": "The plan requires stable hashing and deterministic rendering but also includes 'created timestamp' in the manifest. If the hash covers the manifest, it cannot be stable across runs.",
+      "file": "",
+      "fix": "Explicitly define content_hash to cover normalized rendered content only, excluding run-metadata like timestamps.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Deterministic hash conflict with manifest timestamps"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.9,
+      "description": "Despite budgeting being a success criterion, the ContextPacket and PacketSection models lack fields for token estimates, budgets, or truncation contracts, likely leading to ad hoc logic in builders.",
+      "file": "",
+      "fix": "Introduce a BudgetPolicy and token_estimate field into the shared packet object model.",
+      "line": 0,
+      "severity": "high",
+      "title": "Budgeting and truncation policy missing from object contract"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.85,
+      "description": "The plan aims to eliminate duplicated preamble assembly but fails to specify a canonical API (e.g., build_preamble()) to handle constitution and goals discovery.",
+      "file": "",
+      "fix": "Extract shared preamble composition into a first-class module independent of packet rendering.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Absence of shared preamble assembly API"
+    },
+    {
+      "category": "logic",
+      "confidence": 0.8,
+      "description": "Current behavior handles absent/deleted files and diff placeholders (e.g., 'no tracked unified diff available'). The proposed schema does not explicitly model these provenance or error states.",
+      "file": "",
+      "fix": "Extend the block schema to include explicit states for error markers and file provenance.",
+      "line": 0,
+      "severity": "low",
+      "title": "Proposed block model ignores existing edge cases"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.9,
+      "description": "The plan treats plan-close, model-review, and overview as the same problem, but overview produces a tagged prompt rather than a Markdown document. A universal AST may introduce unnecessary maintenance drag.",
+      "file": "",
+      "fix": "Narrow the shared boundary to source fragments, provenance, and preamble composition instead of a forced universal AST.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Universal packet object model creates excessive coupling"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.95,
+      "description": "The test plan is missing coverage for critical edge cases including renamed, deleted, and untracked files, as well as commit-range vs. worktree modes.",
+      "file": "",
+      "fix": "Implement Git fixture tests covering renamed/deleted/untracked files and valid/invalid file-spec ranges.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Lack of mandatory Git fixture tests"
+    },
+    {
+      "category": "missing",
+      "confidence": 1.0,
+      "description": "There is no requirement for bit-for-bit or equivalent output verification before migrating live paths, risking silent behavior/prompt drift.",
+      "file": "",
+      "fix": "Capture golden fixtures for plan-close and overview payloads and require byte-identity (excluding metadata) for migration pass.",
+      "line": 0,
+      "severity": "high",
+      "title": "Missing golden output compatibility harness"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.85,
+      "description": "The plan underestimates the complexity of overview migration (repomix, config parsing, batch JSONL distribution) by treating it as just another packet.",
+      "file": "hooks/generate-overview.sh",
+      "fix": "Treat overview as a format-preservation migration gated by exact prompt equivalence tests.",
+      "line": 0,
+      "severity": "medium",
+      "title": "High risk in Overview live and batch migration"
+    },
+    {
+      "category": "performance",
+      "confidence": 0.8,
+      "description": "The plan mentions token budgets but does not require a token estimate to be generated before dispatch as part of the shared artifact contract.",
+      "file": "",
+      "fix": "Define a BuildArtifact structure that includes context_path, manifest_path, and token_estimate.",
+      "line": 0,
+      "severity": "low",
+      "title": "Token estimation not integrated into construction artifact"
+    }
+  ]
+}

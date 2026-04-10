@@ -8,6 +8,6 @@ trap 'exit 0' ERR
 # Small delay to let sessionend-log.sh finish writing the receipt
 sleep 1
 
-uv run --project ~/Projects/meta python3 ~/Projects/meta/scripts/sessions.py index 2>/dev/null
+uv run --project ~/Projects/agent-infra python3 ~/Projects/agent-infra/scripts/sessions.py index 2>/dev/null
 
 exit 0

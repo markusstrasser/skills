@@ -1,0 +1,74 @@
+{
+  "findings": [
+    {
+      "category": "logic",
+      "confidence": 0.85,
+      "description": "The review claims the old `generate-overview.sh` aborted when the prompt exceeded 900,000 tokens, but the new Python path only computes/stores the budget and never checks `token_estimate > input_token_limit` before dispatch. Evidence cited: `generate-overview.sh` had `if [[ $prompt_tokens -gt 900000 ]]; then ... return 1; fi`, while `scripts/generate_overview.py` allegedly omits the equivalent guard. The reviewer warns this can cause expensive API rejections or quota burn on large repositories.",
+      "file": "scripts/generate_overview.py",
+      "fix": "Reintroduce a pre-dispatch validation in `scripts/generate_overview.py` that aborts when the estimated prompt tokens exceed the configured/input token limit (including the legacy 900k threshold behavior where appropriate).",
+      "line": 0,
+      "severity": "high",
+      "title": "Overview generator no longer enforces the input token ceiling"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.83,
+      "description": "The review says the implementation failed its own mitigation plan by not adding the promised 'exact payload-hash equivalence tests' for live versus batch modes. Evidence cited: there are no tests asserting that the live packet build and the batch request path produce identical `payload_hash` values for the same repository/input.",
+      "file": "",
+      "fix": "Add a test (for example in `test_generate_overview.py`) that runs the live builder and batch loop on the same mocked repo/input and asserts identical `payload_hash` output.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Live-vs-batch payload hash equivalence test is missing"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.93,
+      "description": "The reviewer states there is no fixture coverage for binaries or symlinks in `test_context_packet.py`, despite that coverage being explicitly called for in the mitigation plan. The recommended verification is that a binary file yields a placeholder like `[binary file omitted...]` instead of causing decode failures, and that symlinks are handled correctly.",
+      "file": "test_context_packet.py",
+      "fix": "Add fixture-based tests in `test_context_packet.py` covering binary files and symlinks, asserting the expected placeholder/handling behavior.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Binary and symlink fixture coverage is missing in context packet tests"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.89,
+      "description": "The review flags `shared/git_context.py`'s `truncate_diff_text` as complex and currently untested. Evidence cited: the function uses a line-by-line fallback, and without tests an off-by-one error could silently corrupt unified diff blocks or drop required headers such as `diff --git`.",
+      "file": "shared/git_context.py",
+      "fix": "Add focused unit tests (for example in `test_git_context.py`) that feed multi-file diffs into `truncate_diff_text` and assert truncation occurs cleanly at file/line boundaries without mangling patch structure.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Diff truncation logic lacks unit tests"
+    },
+    {
+      "category": "bug",
+      "confidence": 0.42,
+      "description": "The reviewer reports that `scripts/generate_overview.py` references `batch_submit_command` and `batch_get_command` inside `batch_mode()`, and warns that if those functions are truly absent, batch mode will fail with `NameError`. The reviewer also notes the context snippet was truncated, so this may depend on omitted code.",
+      "file": "scripts/generate_overview.py",
+      "fix": "Ensure `batch_submit_command` and `batch_get_command` are defined/imported before use, or replace those calls with a supported execution path.",
+      "line": 0,
+      "severity": "high",
+      "title": "Batch mode may reference undefined helper functions"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.91,
+      "description": "The review notes duplication of `atomic_write_text` and `atomic_write_json` functionality between `shared/llm_dispatch.py` and `shared/context_packet.py`. This increases maintenance overhead and risks behavioral drift between two implementations of the same utility.",
+      "file": "shared/llm_dispatch.py",
+      "fix": "Remove the duplicate implementation (for example `_atomic_write_text` in `shared/llm_dispatch.py`) and import/reuse a single canonical atomic write helper from one shared module.",
+      "line": 0,
+      "severity": "low",
+      "title": "Atomic write helpers are duplicated across shared modules"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.63,
+      "description": "As an alternative design recommendation, the review argues that batch command execution should use `subprocess.run([\"uv\", \"run\", \"llmx\", \"batch\", ...])` inline rather than wrapping those CLI calls in helper functions such as `batch_submit_command`. The stated rationale is to keep orchestration clearer and closer to the prior shell behavior.",
+      "file": "scripts/generate_overview.py",
+      "fix": "Simplify batch orchestration by inlining the `subprocess.run(...)` calls for submit/get operations instead of introducing thin wrapper helpers, unless those helpers provide substantive reusable behavior.",
+      "line": 0,
+      "severity": "low",
+      "title": "Batch orchestration should call subprocesses directly instead of wrapper helpers"
+    }
+  ]
+}

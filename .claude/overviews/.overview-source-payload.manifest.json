@@ -1,0 +1,45 @@
+{
+  "budget_limit": 900000,
+  "budget_metric": "tokens",
+  "builder_name": "overview_payload",
+  "builder_version": "2026-04-10-v1",
+  "created_at": "2026-04-10T22:25:56Z",
+  "estimate_method": "heuristic:chars_div_4",
+  "normalization_version": "v1",
+  "packet_metadata": {
+    "overview_type": "source",
+    "project_root": "/Users/alien/Projects/skills",
+    "trailing_text": "Write the requested codebase overview in markdown."
+  },
+  "packet_title": "source overview payload",
+  "payload_hash": "4c52a10ceb6e71bdb98c7ce117fb7c4ebd2d859ce5c479ea01cd9fae8a3b17c7",
+  "rendered_bytes": 266959,
+  "rendered_content_hash": "4c52a10ceb6e71bdb98c7ce117fb7c4ebd2d859ce5c479ea01cd9fae8a3b17c7",
+  "source_blocks": [
+    {
+      "block_hash": "043f8f88b6121e571c69f40d75cf135ba2697e14d1fa15fdfa5aeaade264e0fc",
+      "block_index": 0,
+      "block_title": "instructions",
+      "block_type": "text",
+      "metadata": {},
+      "section_index": 0,
+      "section_title": "Instructions",
+      "source_path": null,
+      "truncated": false
+    },
+    {
+      "block_hash": "23c10cef48c087b51bcbd60e88bed8056cc06e7d9c4e1ee38ec0e9f1931beabd",
+      "block_index": 0,
+      "block_title": "codebase",
+      "block_type": "text",
+      "metadata": {},
+      "section_index": 1,
+      "section_title": "Codebase",
+      "source_path": null,
+      "truncated": false
+    }
+  ],
+  "source_paths": [],
+  "token_estimate": 66382,
+  "truncation_events": []
+}

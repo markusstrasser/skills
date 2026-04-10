@@ -1,0 +1,54 @@
+{
+  "findings": [
+    {
+      "category": "bug",
+      "severity": "high",
+      "title": "Non-functional fallback path in research-ops/scripts/run-cycle.sh",
+      "description": "The script attempts to invoke '$SKILL_DIR/scripts/llm-dispatch.py' when CLAUDE_PROCS exceeds the threshold. However, SKILL_DIR resolves to research-ops/, where no such script exists; the shared wrapper is located at the repo root scripts/llm-dispatch.py. This results in a 100% failure rate for rate-limited cycles.",
+      "file": "research-ops/scripts/run-cycle.sh",
+      "line": 0,
+      "fix": "Update the script to resolve the repo root explicitly and call the correct path for llm-dispatch.py.",
+      "confidence": 1.0
+    },
+    {
+      "category": "architecture",
+      "severity": "medium",
+      "title": "Non-portable direct import interface for shared.llm_dispatch",
+      "description": "Documentation suggests direct Python imports (from shared.llm_dispatch import dispatch) for sibling repos, but there is no mechanism (like packaging or PYTHONPATH management) to make this module available outside of the internal skills repo environment. The current setup only bootstraps sys.path within the wrapper script itself.",
+      "file": "improve/SKILL.md",
+      "line": 0,
+      "fix": "Promote shared dispatch to a formal installable package or entrypoint that sibling repos can consume without manual path hacks.",
+      "confidence": 0.9
+    },
+    {
+      "category": "logic",
+      "severity": "low",
+      "title": "Policy contradiction between llmx-guide and pretool-llmx-guard",
+      "description": "The llmx-guide/SKILL.md documentation states that raw llmx chat is appropriate for debugging, but hooks/pretool-llmx-guard.sh unconditionally blocks these calls in agent Bash environments with no escape hatch for diagnostics.",
+      "file": "hooks/pretool-llmx-guard.sh",
+      "line": 0,
+      "fix": "Introduce an explicit, logged debug mode for raw llmx chat or update documentation to reflect a total prohibition.",
+      "confidence": 0.95
+    },
+    {
+      "category": "missing",
+      "severity": "medium",
+      "title": "Lack of end-to-end integration tests for cross-repo dispatch",
+      "description": "There are no automated tests verifying the three primary entry paths for shared-dispatch: overview hook, model-review, and rate-limited research cycle. This leaves the system vulnerable to path drift and contract regressions.",
+      "file": "",
+      "line": 0,
+      "fix": "Add integration tests that shell into research-ops/scripts/run-cycle.sh and other entry points to assert correct path resolution and artifact generation.",
+      "confidence": 0.9
+    },
+    {
+      "category": "performance",
+      "severity": "low",
+      "title": "Underutilization of retryability metadata in calling scripts",
+      "description": "The shared dispatch helper provides classification for transient failures (timeouts, rate limits), but calling scripts like generate-overview.sh and run-cycle.sh treat all failures as identical, leading to stale artifacts or unnecessary manual intervention.",
+      "file": "research-ops/scripts/run-cycle.sh",
+      "line": 0,
+      "fix": "Consume 'retryable' status from dispatch metadata to distinguish transient failures from hard configuration errors and implement retries where appropriate.",
+      "confidence": 0.85
+    }
+  ]
+}

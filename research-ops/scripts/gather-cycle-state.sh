@@ -92,7 +92,7 @@ done
 # --- Improvement signals (for signal-driven gap selection) ---
 echo ""
 echo "=== IMPROVEMENT SIGNALS (top 5) ==="
-PROPOSE_WORK=~/Projects/meta/scripts/propose-work.py
+PROPOSE_WORK=~/Projects/agent-infra/scripts/propose-work.py
 if [[ -f "$PROPOSE_WORK" ]]; then
     uv run python3 "$PROPOSE_WORK" --json --project "$PROJECT_NAME" 2>/dev/null | \
         python3 -c "

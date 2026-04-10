@@ -23,10 +23,10 @@ else
       DOMAIN="trading"
       ;;
     /Users/alien/Projects/genomics|/Users/alien/Projects/genomics/*|\
-    /Users/alien/Projects/selve|/Users/alien/Projects/selve/*)
+    /Users/alien/Projects/phenome|/Users/alien/Projects/phenome/*)
       DOMAIN="research"
       ;;
-    /Users/alien/Projects/meta/experiments|/Users/alien/Projects/meta/experiments/*)
+    /Users/alien/Projects/agent-infra/experiments|/Users/alien/Projects/agent-infra/experiments/*)
       DOMAIN="engineering"
       ;;
     *)

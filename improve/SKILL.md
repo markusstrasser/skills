@@ -40,7 +40,7 @@ Parse from `$ARGUMENTS`:
 
 ```bash
 SID=$(cat ~/.claude/current-session-id 2>/dev/null | head -c8 || date +%s | tail -c 8)
-ARTIFACT_DIR="$HOME/Projects/meta/artifacts/harvest"
+ARTIFACT_DIR="$HOME/Projects/agent-infra/artifacts/harvest"
 mkdir -p "$ARTIFACT_DIR"
 DATE=$(date +%Y-%m-%d)
 OUTFILE="${ARTIFACT_DIR}/${DATE}-${SID}-harvest.md"
@@ -82,8 +82,8 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/extract_user_tags.py --days ${DAYS} -
 
 **3b. Git Corrections:**
 ```bash
-git -C ~/Projects/meta log --since="${CUTOFF}" --format='%h %s' --grep='Evidence:' --
-git -C ~/Projects/meta log --since="${CUTOFF}" --oneline -- .claude/rules/ improvement-log.md
+git -C ~/Projects/agent-infra log --since="${CUTOFF}" --format='%h %s' --grep='Evidence:' --
+git -C ~/Projects/agent-infra log --since="${CUTOFF}" --oneline -- .claude/rules/ improvement-log.md
 git -C ~/Projects/skills log --since="${CUTOFF}" --oneline -- '*/SKILL.md' hooks/
 ```
 Look for patterns -- if 3 commits fix hook edge cases, that signals weak hook testing.
@@ -166,7 +166,7 @@ Detect repeated multi-tool workflows in recent sessions and propose skill or MCP
 Parse project from `$ARGUMENTS`. Default: current project, last 10 sessions.
 
 ```bash
-ARTIFACT_DIR="$HOME/Projects/meta/artifacts/suggest-skill"
+ARTIFACT_DIR="$HOME/Projects/agent-infra/artifacts/suggest-skill"
 mkdir -p "$ARTIFACT_DIR"
 python3 ~/Projects/skills/session-analyst/scripts/extract_transcript.py <project> --sessions 10 --output "$ARTIFACT_DIR/input.md"
 ```
@@ -179,21 +179,27 @@ Local analysis to identify candidate patterns -- extract 3/4/5-grams of tool seq
 
 ### Step 3: Dispatch to Gemini
 
-Send transcripts + tool sequence analysis to Gemini 3.1 Pro via `llmx.api.chat()`:
+Send transcripts + tool sequence analysis to Gemini 3.1 Pro via the shared dispatch helper:
 
 ```python
-from llmx.api import chat as llmx_chat
+from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path.home() / "Projects" / "skills"))
+from shared.llm_dispatch import dispatch
 
 transcripts = Path("$ARTIFACT_DIR/input.md").read_text()
-response = llmx_chat(
-    prompt=transcripts + "\n\nAnalyze Claude Code session transcripts for repeated workflows. "
-    "Classify as SKILL candidate (multi-step, judgment needed) or MCP TOOL candidate (deterministic, reusable). "
-    "For each: pattern, frequency, current cost, trigger, parameters, skeleton. "
-    "Only patterns appearing 2+ times across different sessions. Max 7 candidates. "
-    "Rank by frequency x complexity saved.",
-    provider="google",
-    model="gemini-3.1-pro-preview",
-    timeout=300,
+response = dispatch(
+    profile="deep_review",
+    prompt=(
+        "Analyze Claude Code session transcripts for repeated workflows. "
+        "Classify as SKILL candidate (multi-step, judgment needed) or MCP TOOL candidate (deterministic, reusable). "
+        "For each: pattern, frequency, current cost, trigger, parameters, skeleton. "
+        "Only patterns appearing 2+ times across different sessions. Max 7 candidates. "
+        "Rank by frequency x complexity saved."
+    ),
+    context_text=transcripts,
+    output_path=Path("$ARTIFACT_DIR/candidates.md"),
 )
 ```
 
@@ -201,7 +207,7 @@ response = llmx_chat(
 
 1. Check existing skills: `ls ~/Projects/skills/`
 2. Check existing MCP tools: read `.mcp.json` files
-3. Check ideas.md backlog: `grep -i "KEYWORD" ~/Projects/meta/ideas.md`
+3. Check ideas.md backlog: `grep -i "KEYWORD" ~/Projects/agent-infra/ideas.md`
 4. Spot-check Gemini's frequency claims against transcripts
 
 ### Step 5: Output
@@ -233,7 +239,7 @@ Unified quality agent. Run with `/loop 15m`. Each tick: check state hash, pick O
 HASH_FILE=~/.claude/maintain-state-hash.txt
 ORCH_HASH=$(sqlite3 ~/.claude/orchestrator.db "SELECT count(*),group_concat(status) FROM tasks WHERE status IN (\"failed\",\"blocked\",\"pending\") ORDER BY id" 2>/dev/null || echo "na")
 RECEIPT_HASH=$(tail -3 ~/.claude/session-receipts.jsonl 2>/dev/null | md5 || echo "na")
-FINDING_HASH=$(grep -c "Status:\*\* \[ \]" ~/Projects/meta/improvement-log.md 2>/dev/null || echo "0")
+FINDING_HASH=$(grep -c "Status:\*\* \[ \]" ~/Projects/agent-infra/improvement-log.md 2>/dev/null || echo "0")
 MAINTAIN_HASH=$(md5 < "$(pwd)/MAINTAIN.md" 2>/dev/null || echo "na")
 PROPOSAL_HASH=$(ls -la ~/.claude/steward-proposals/ 2>/dev/null | md5 || echo "na")
 DB_HASH=$(for db in ClinVar gnomAD PharmCAT CPIC; do f=$(find "$(pwd)/databases/" -iname "*${db}*" -type f 2>/dev/null | head -1); [ -n "$f" ] && stat -f%m "$f" 2>/dev/null; done | md5 || echo "na")
@@ -246,7 +252,7 @@ if [ "$CURRENT_HASH" = "$PREV_HASH" ]; then
   echo "{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%S)\",\"action\":\"noop\",\"target\":\"state-unchanged\",\"result\":\"ok\",\"detail\":\"hash match\"}" >> "$(pwd)/maintenance-actions.jsonl" 2>/dev/null
   exit 0
 fi
-echo "=== ORCHESTRATOR ==="; cd ~/Projects/meta && uv run python3 scripts/orchestrator.py status 2>/dev/null || echo "(unavailable)"
+echo "=== ORCHESTRATOR ==="; cd ~/Projects/agent-infra && uv run python3 scripts/orchestrator.py status 2>/dev/null || echo "(unavailable)"
 echo ""; echo "=== RECENT SESSIONS ==="; tail -8 ~/.claude/session-receipts.jsonl 2>/dev/null | python3 -c "
 import sys,json
 for line in sys.stdin:
@@ -255,7 +261,7 @@ for line in sys.stdin:
     print(f\"  {ts} | {proj:10} | {cost:>6} | {nc}c | {reason:12}\")
   except: pass
 " || echo "(no receipts)"
-echo ""; echo "=== UNIMPLEMENTED FINDINGS ==="; grep -B2 "Status:\*\* \[ \]" ~/Projects/meta/improvement-log.md 2>/dev/null | grep -E "(###|\*\*Status)" | head -10 || echo "(all clear)"
+echo ""; echo "=== UNIMPLEMENTED FINDINGS ==="; grep -B2 "Status:\*\* \[ \]" ~/Projects/agent-infra/improvement-log.md 2>/dev/null | grep -E "(###|\*\*Status)" | head -10 || echo "(all clear)"
 echo ""; echo "=== PROPOSALS ==="; ls ~/.claude/steward-proposals/*.md 2>/dev/null | while read f; do echo "  $(basename "$f")"; done || echo "(none)"
 echo ""; echo "=== DB FRESHNESS ==="; for db in ClinVar gnomAD PharmCAT CPIC; do f=$(find "$(pwd)/databases/" -iname "*${db}*" -type f 2>/dev/null | head -1); if [ -n "$f" ]; then days=$(( ($(date +%s) - $(stat -f%m "$f" 2>/dev/null || echo 0)) / 86400 )); echo "  $db: ${days}d old"; else echo "  $db: not found"; fi; done
 echo ""; echo "=== MAINTAIN STATE ==="; if [ -f "$(pwd)/MAINTAIN.md" ]; then findings=$(grep -c "^\- \*\*M[0-9]" "$(pwd)/MAINTAIN.md" 2>/dev/null || echo 0); queued=$(grep -c "\[queued\]" "$(pwd)/MAINTAIN.md" 2>/dev/null || echo 0); echo "  $findings findings, $queued queued"; else echo "  (no MAINTAIN.md -- first run, create from template)"; fi
@@ -270,7 +276,7 @@ If state says "NO STATE CHANGE" -- report "noop" in one line and stop.
 ```bash
 CLAUDE_PROCS=$(pgrep -lf claude 2>/dev/null | wc -l | tr -d ' ')
 ```
-If >= 5: skip subagent dispatch (Tier 2). Route LLM-heavy analysis through `llmx chat -m gemini-3-flash-preview` (free).
+If >= 5: skip subagent dispatch (Tier 2). Route LLM-heavy analysis through `uv run python3 ~/Projects/skills/scripts/llm-dispatch.py --profile cheap_tick ...`.
 
 ### Each Tick: Pick ONE Task by Priority
 
@@ -373,13 +379,13 @@ Run one orchestrator tick and report status. Designed for `/loop 5m /tick`.
 ### Execute
 
 ```bash
-uv run python3 ~/Projects/meta/scripts/orchestrator.py tick 2>&1
+uv run python3 ~/Projects/agent-infra/scripts/orchestrator.py tick 2>&1
 ```
 
 ### Status
 
 ```bash
-uv run python3 ~/Projects/meta/scripts/orchestrator.py status 2>&1 | head -30
+uv run python3 ~/Projects/agent-infra/scripts/orchestrator.py status 2>&1 | head -30
 ```
 
 ### Report

@@ -1,0 +1,104 @@
+{
+  "findings": [
+    {
+      "category": "logic",
+      "severity": "high",
+      "title": "Under-defined hash taxonomy for content vs payload",
+      "description": "The manifest defines content_hash as normalized rendered content, but payload_hash (used for live/batch equivalence and model-consumable payloads) lacks a byte-scope definition. This makes hashes incomparable across different builders.",
+      "file": "",
+      "line": 0,
+      "fix": "Define a strict hash taxonomy with explicit byte-scopes for source_hash, block_hash, content_hash, payload_hash, and output_hash.",
+      "confidence": 0.9
+    },
+    {
+      "category": "logic",
+      "severity": "high",
+      "title": "Missing failure rule for budget vs protected blocks",
+      "description": "PreambleBlock is protected from truncation, but the system also enforces hard budgets. There is no defined behavior for when protected blocks alone exceed the budget.",
+      "file": "",
+      "line": 0,
+      "fix": "Extend the packet build contract to include an explicit 'budget_exceeded' or 'unrenderable_within_budget' failure outcome.",
+      "confidence": 0.95
+    },
+    {
+      "category": "architecture",
+      "severity": "medium",
+      "title": "Phase ordering and test criteria sequencing inconsistency",
+      "description": "Phase 1 exit criteria include equivalence tests for overview payloads and plan-close artifacts, but the migration for those components does not occur until Phase 2 and Phase 4.",
+      "file": "",
+      "line": 0,
+      "fix": "Move component-specific equivalence tests to the phases where those components are actually migrated.",
+      "confidence": 0.85
+    },
+    {
+      "category": "logic",
+      "severity": "high",
+      "title": "Inconsistent token budget metadata in dispatch profiles",
+      "description": "The plan relies on profile-aware token budgets, but profiles in 'shared/llm_dispatch.py' inconsistently define context-window limits, often conflating them with output-token limits.",
+      "file": "shared/llm_dispatch.py",
+      "line": 0,
+      "fix": "Standardize dispatch profiles to explicitly expose context-window limits separate from output limits.",
+      "confidence": 0.8
+    },
+    {
+      "category": "missing",
+      "severity": "high",
+      "title": "Unspecified handling of non-text source entities",
+      "description": "The plan requires test coverage for binary files, symlinks, and submodules, but no normative behavior or placeholder policy is defined for these types.",
+      "file": "",
+      "line": 0,
+      "fix": "Create a source-entity policy matrix specifying exact rendering and manifest behavior for text, binary, deleted, symlink, and submodule entities.",
+      "confidence": 0.9
+    },
+    {
+      "category": "logic",
+      "severity": "high",
+      "title": "Ambiguous equivalence target for Overview live/batch",
+      "description": "Current live paths prepend freshness metadata to final outputs, making byte-for-byte equivalence with batch mode impossible unless the 'payload' scope is strictly isolated.",
+      "file": "",
+      "line": 0,
+      "fix": "Introduce a single Python API that returns the exact prompt payload artifact and require both live and batch wrappers to call it.",
+      "confidence": 0.9
+    },
+    {
+      "category": "architecture",
+      "severity": "medium",
+      "title": "Lack of automated enforcement against helper duplication",
+      "description": "Success criteria prohibit duplicated helpers, but enforcement is described as manual or test-based rather than using machine-checkable AST or import boundary gates.",
+      "file": "",
+      "line": 0,
+      "fix": "Implement CI-level grep or AST rules (e.g., preventing 'parse_file_spec' definitions outside 'shared/file_specs.py').",
+      "confidence": 0.8
+    },
+    {
+      "category": "style",
+      "severity": "low",
+      "title": "Domain-specific logic leak in shared preamble helper",
+      "description": "The 'context_preamble.py' module includes constitution and agent-economics text assembly, which is semantically specialized for reviews rather than being a generic packet mechanic.",
+      "file": "context_preamble.py",
+      "line": 0,
+      "fix": "Isolate mechanical preamble assembly from task-specific semantic content.",
+      "confidence": 0.7
+    },
+    {
+      "category": "logic",
+      "severity": "medium",
+      "title": "Incomplete selector precedence rules for migration",
+      "description": "Legacy plan-close code has implicit precedence (e.g., --file overrides touched-file discovery) that is not recorded in the migration plan, risking silent drift.",
+      "file": "",
+      "line": 0,
+      "fix": "Explicitly document and formalize the precedence of selector rules (explicit files vs git ranges vs worktree).",
+      "confidence": 0.8
+    },
+    {
+      "category": "architecture",
+      "severity": "low",
+      "title": "Low-value CLI surface expansion",
+      "description": "The proposed 'scripts/context-packet.py' adds a public surface and compatibility burden that may be unnecessary if importable builders are the primary integration mode.",
+      "file": "scripts/context-packet.py",
+      "line": 0,
+      "fix": "Deprioritize or remove the generic CLI unless specifically required by shell-facing consumers.",
+      "confidence": 0.75
+    }
+  ]
+}

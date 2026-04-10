@@ -1,0 +1,32 @@
+{
+  "api_only": true,
+  "context_budget_metric": null,
+  "context_estimate_method": null,
+  "context_manifest_path": null,
+  "context_payload_hash": "27f4bb4d5e22f4099709522d21343b10443cea151d2e1c9b121ac2aea961d5ed",
+  "context_sha256": "27f4bb4d5e22f4099709522d21343b10443cea151d2e1c9b121ac2aea961d5ed",
+  "context_token_estimate": null,
+  "error_message": null,
+  "error_path": null,
+  "error_type": null,
+  "finished_at": "2026-04-10T22:33:46Z",
+  "helper_version": "2026-04-10-v1",
+  "latency": 16.772443771362305,
+  "llmx_version": "0.6.0",
+  "output_path": ".model-review/2026-04-10-context-packet-integration-close-focused-361e1f/formal-extraction.json",
+  "parsed_path": ".model-review/2026-04-10-context-packet-integration-close-focused-361e1f/formal-extraction.parsed.json",
+  "profile_fingerprint": "a67c6bfa17c4e8ca",
+  "profile_version": "v1",
+  "prompt_sha256": "c1f310dd3eead3f923759cc99069bae9231af75b6c7b0f5545dfeee80e787daf",
+  "requested_profile": "fast_extract",
+  "resolved_kwargs": {
+    "search": false,
+    "timeout": 180
+  },
+  "resolved_model": "gemini-3-flash-preview",
+  "resolved_provider": "google",
+  "retryable": false,
+  "schema_used": true,
+  "started_at": "2026-04-10T22:33:29Z",
+  "status": "ok"
+}

@@ -1,0 +1,54 @@
+{
+  "findings": [
+    {
+      "category": "architecture",
+      "confidence": 0.97,
+      "description": "The review states that `shared/context_packet.py` was supposed to own packet primitives, section composition, and truncation, but currently performs zero actual truncation. `BudgetPolicy` is only recorded in the manifest, while `build_plan_close_context.py` still manually truncates by character length before creating packet blocks. The reviewer also notes this leaves the original risk unmitigated: overly large packets can still be handed to dispatch because truncation is not tied to practical model limits.",
+      "file": "shared/context_packet.py",
+      "fix": "Implement token-aware truncation inside the packet engine (or a shared builder/enforcer) so raw blocks are passed in and the engine drops or truncates lower-priority content until an estimated token budget fits `BudgetPolicy.limit`. Remove pre-packet manual truncation from callers.",
+      "line": 0,
+      "severity": "high",
+      "title": "ContextPacket does not enforce BudgetPolicy or perform real truncation"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.95,
+      "description": "The review flags that `build_plan_close_context.py` retains `--max-diff-chars 40_000` and `--max-file-chars 8_000` rather than adjusting dynamically from a dispatch profile's input token budget. It further states the script has no concept of which model will consume the packet, so it cannot look up the correct `DispatchProfile` input limit. This undermines the intended migration to model-aware budgeting.",
+      "file": "build_plan_close_context.py",
+      "fix": "Replace static character-limit arguments with a `--profile` or equivalent model-selection input, look up the profile from dispatch configuration, and derive packet truncation from the model's input token budget.",
+      "line": 0,
+      "severity": "high",
+      "title": "build_plan_close_context.py still uses legacy character caps instead of profile-based model budgets"
+    },
+    {
+      "category": "performance",
+      "confidence": 0.96,
+      "description": "The review says `generate_overview.py` writes repomix output to `.overview-{type}-codebase.txt`, then reads the entire file back into memory using `repomix_output.read_text()`, wraps it in a packet, and writes it again as `.overview-{type}-payload.txt`. For large codebases this creates unnecessary disk I/O and memory overhead.",
+      "file": "generate_overview.py",
+      "fix": "Avoid full-file `read_text()` and support streaming into the final payload, e.g. via a `FileStreamBlock` or by writing the repomix output directly into the payload artifact without reloading the whole file into RAM.",
+      "line": 0,
+      "severity": "medium",
+      "title": "generate_overview.py double-buffers repomix output through disk and memory"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.79,
+      "description": "The review notes the plan explicitly called for stopping the creation of multiple semantically identical context payloads, but git status still shows axis-specific files such as `.model-review/.../arch-context.md` and `.model-review/.../formal-context.md`. Based on that evidence, the reviewer concludes `model-review.py` is still generating redundant context files per axis rather than one unified `shared-context.md` referenced by all review axes.",
+      "file": "model-review.py",
+      "fix": "Assemble one `shared-context.md` and corresponding manifest per run, then have each axis reuse that shared artifact rather than writing separate near-identical context files.",
+      "line": 0,
+      "severity": "medium",
+      "title": "model-review.py appears to generate redundant per-axis context files instead of one shared context"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.94,
+      "description": "The review says `test_context_packet.py` only covers basic manifest generation and file spec parsing, and does not test behavior when a packet exceeds a token budget. The reviewer ties this directly to the missing truncation engine: there is no test asserting that a large packet is reduced to fit a model budget.",
+      "file": "test_context_packet.py",
+      "fix": "Add tests that construct packets larger than the allowed budget and verify the packet engine truncates or drops lower-priority blocks until the estimated token count fits the selected policy/profile.",
+      "line": 0,
+      "severity": "medium",
+      "title": "test_context_packet.py lacks tests for budget-driven truncation"
+    }
+  ]
+}
