@@ -50,9 +50,10 @@ except (OSError, FileNotFoundError):
 try:
     with open(f'/tmp/session-baseline-{session_id}.txt') as f:
         for line in f:
-            line = line.strip()
-            if line:
-                # git status --short format: 'XY filename' or 'XY filename -> newname'
+            # git status --short format: 'XY filename' where X/Y may be space.
+            # Strip only trailing newline — leading space is significant (e.g. ' M path').
+            line = line.rstrip('\n')
+            if line.strip():
                 path = line[3:].split(' -> ')[-1]
                 baseline_dirty.add(path)
 except (OSError, FileNotFoundError):
