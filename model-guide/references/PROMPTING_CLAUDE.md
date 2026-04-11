@@ -181,7 +181,7 @@ Claude interprets "Can you suggest changes?" as a request for suggestions, not a
 | Pitfall | Solution |
 |---------|----------|
 | Overtriggering on tools/skills | Soften forceful instructions -- 4.6 is more responsive |
-| Overengineering code | `"Only make changes that are directly requested. Don't add features beyond what was asked."` |
+| Overengineering code (speculative abstraction, hypothetical futures) | `"Don't build speculative abstractions for hypothetical futures. The right amount of complexity is what the task actually requires. Incidental cleanup adjacent to the work is fine."` |
 | Hallucinating about unread code | `"Never speculate about code you have not opened. Read the file before answering."` |
 | Hard-coding test values | `"Implement a solution that works for all valid inputs, not just test cases."` |
 | Excessive subagent spawning (Opus 4.6) | `"For simple tasks, single-file edits, or sequential operations, work directly."` |
