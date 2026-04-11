@@ -34,7 +34,9 @@ Before searching, load the known landscape so you can filter against it.
 
 3. **Check vendor-versions baseline** — run `uv run python3 ${CLAUDE_SKILL_DIR}/scripts/vendor-versions.py` for current SDK/CLI versions. This catches version bumps that searches might miss.
 
-4. **Note the time window** — default is "since last scout memo date" or "past 7 days" if no prior memo exists.
+4. **Read tracked agent entities** — glob `analysis/agent-entities/*.md` in meta. Each file has `last_refreshed` frontmatter and a structured Current State section (version, pricing, context window, transport). Treat these as the canonical per-entity baseline — they are refreshed out-of-band by the `agent-entity-refresh` pipeline (weekly Mon 06:00). If an entity file is >14 days stale, note it in the search log; the scan should not substitute for the refresh pipeline but should flag stale entities back to the pipeline. See `decisions/2026-04-10-agent-entity-surveillance.md` for the architecture rationale.
+
+5. **Note the time window** — default is "since last scout memo date" or "past 7 days" if no prior memo exists.
 
 ## Phase 1: Multi-Source Parallel Scan
 
@@ -198,11 +200,22 @@ Brief list of things found in search that we already track — confirms coverage
 What was searched, what returned useful results, what didn't. Helps calibrate future scans.
 ```
 
+### Entity File Updates
+
+When a finding reveals state that is fresher than what's in `analysis/agent-entities/<entity>.md` — e.g., the scan catches a version bump or pricing change before the next refresh-pipeline run — edit the entity file in place:
+
+- update Current State fields
+- prepend a dated entry to Recent Changes with `[trending-scout]` tag and a source URL
+- bump `last_refreshed` in the frontmatter to today's date
+- do NOT edit Monitoring Triggers or Sources sections unless a trigger fired (in which case add `**TRIGGER FIRED**` at the top of Recent Changes)
+
+Don't create new entity files during a scout run. If a scan surfaces a new tool worth tracking, note it in the memo's "New Findings" section with a suggested entity file to create on the next refresh cycle — entity file creation is a deliberate act, not a scan side-effect.
+
 ### Pipeline Output
 
 When invoked as `--weekly` or via orchestrator, also:
 1. Update the research index in `.claude/rules/research-index.md` if new memo warrants a permanent entry
-2. Commit the memo: `[research] Trending scout — N new findings, window YYYY-MM-DD to YYYY-MM-DD`
+2. Commit the memo and any entity file updates: `[research] Trending scout — N new findings, window YYYY-MM-DD to YYYY-MM-DD`
 
 ## Orchestrator Integration
 
