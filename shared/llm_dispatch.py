@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import glob
 import hashlib
 import importlib.metadata
 import json
@@ -245,22 +244,65 @@ def _remove_if_exists(path: Path | None) -> None:
 
 def _bootstrap_llmx() -> tuple[Callable[..., Any], str]:
     global _LLMX_CHAT, _LLMX_VERSION
-    if _LLMX_CHAT is not None:
-        return _LLMX_CHAT, _LLMX_VERSION or "unknown"
+    cached_chat = _LLMX_CHAT
+    if cached_chat is not None:
+        return cached_chat, _LLMX_VERSION or "unknown"
 
+    # Phase 1: try direct import (works if llmx is installed in current venv).
+    llmx_chat: Callable[..., Any] | None = None
     try:
-        from llmx.api import chat as llmx_chat  # type: ignore
-        _LLMX_CHAT = llmx_chat
+        from llmx.api import chat as _llmx_chat  # type: ignore
+        llmx_chat = _llmx_chat
     except ImportError:
-        tool_sites = glob.glob(str(Path.home() / ".local/share/uv/tools/llmx/lib/python*/site-packages"))
-        if tool_sites:
-            sys.path.insert(0, tool_sites[0])
-        local_llmx = Path.home() / "Projects" / "llmx"
-        if local_llmx.exists():
-            sys.path.insert(0, str(local_llmx))
-        from llmx.api import chat as llmx_chat  # type: ignore
-        _LLMX_CHAT = llmx_chat
+        # Phase 2: fall back to the uv tool install. CRITICAL: must match the
+        # current Python's major.minor version, otherwise we'd add a
+        # site-packages dir whose compiled C extensions (e.g.
+        # pydantic_core._pydantic_core.cpython-313-darwin.so) cannot be loaded
+        # by the current interpreter, producing a cryptic
+        # `ModuleNotFoundError: No module named 'pydantic_core._pydantic_core'`
+        # at import time.
+        #
+        # Diagnosed 2026-04-11: phenome `uv run python3 model-review.py` ran
+        # under phenome's venv Python 3.12, but the previous fallback used
+        # `glob` to pick up the llmx tool install's python3.13 site-packages.
+        # Result: 3.13 .so files imported into a 3.12 process, cryptic crash.
+        #
+        # We also do NOT fall back to ~/Projects/llmx local editable source.
+        # That path can SEEM to work (it's pure Python at the entry point) but
+        # llmx's runtime deps (openai, pydantic, etc.) still need to be in the
+        # current venv, and they typically aren't, so the local-source fallback
+        # produces a different cryptic crash one import deeper. Cleaner to
+        # raise here with an actionable error message.
+        py_ver = f"python{sys.version_info.major}.{sys.version_info.minor}"
+        matching_site = Path.home() / ".local/share/uv/tools/llmx/lib" / py_ver / "site-packages"
+        if not matching_site.is_dir():
+            tool_root = Path.home() / ".local/share/uv/tools/llmx/lib"
+            installed_pys = sorted(p.name for p in tool_root.glob("python*")) if tool_root.is_dir() else []
+            raise ImportError(
+                f"llmx not importable in current Python ({py_ver}). "
+                f"The llmx uv tool install at {tool_root} has versions: "
+                f"{installed_pys or '(none)'}. "
+                f"To fix: either (1) `uv pip install llmx` in the current venv, or "
+                f"(2) re-run this script with a Python matching one of the installed "
+                f"tool versions (e.g., {installed_pys[0] if installed_pys else 'python3.13'})."
+            )
+        sys.path.insert(0, str(matching_site))
+        try:
+            from llmx.api import chat as _llmx_chat_2  # type: ignore
+            llmx_chat = _llmx_chat_2
+        except ImportError as exc:
+            raise ImportError(
+                f"llmx tool install at {matching_site} could not be imported: {exc}. "
+                f"The Python version matched but a runtime dependency is missing or "
+                f"corrupted. Try `uv tool install --reinstall llmx`."
+            ) from exc
 
+    assert llmx_chat is not None  # both branches above set or raise
+    _LLMX_CHAT = llmx_chat
+
+    # Resolve version string. Falls back gracefully if metadata is missing
+    # (e.g., when loaded from a path-injected source rather than an installed
+    # distribution).
     try:
         _LLMX_VERSION = importlib.metadata.version("llmx")
     except importlib.metadata.PackageNotFoundError:
@@ -272,7 +314,7 @@ def _bootstrap_llmx() -> tuple[Callable[..., Any], str]:
         else:
             _LLMX_VERSION = "unknown"
 
-    return _LLMX_CHAT, _LLMX_VERSION
+    return llmx_chat, _LLMX_VERSION or "unknown"
 
 
 def _add_additional_properties(schema: dict[str, Any]) -> dict[str, Any]:
