@@ -22,10 +22,19 @@ TRACKER="/tmp/claude-bash-poll-tracker-${_SCOPE}"
 echo "$PATH_TARGET" >> "$TRACKER"
 
 COUNT=$(grep -cF "$PATH_TARGET" "$TRACKER" 2>/dev/null || echo 0)
+
+# TaskOutput is a deferred tool — must be loaded via ToolSearch before
+# the agent can call it. Including the exact ToolSearch query in the
+# block / advisory message saves the agent a guess-and-fail cycle.
+LOAD_HINT='Load TaskOutput first: ToolSearch(query="select:TaskOutput,TaskList,TaskGet"). Then call TaskOutput with block=true to wait for the background task without polling.'
+
 if [ "$COUNT" -ge 5 ]; then
-  echo "BLOCKED: Polled ${PATH_TARGET} ${COUNT}x via Bash this session. Use TaskOutput with block:true to wait for background tasks, or Read the file once when ready." >&2
+  echo "BLOCKED: Polled ${PATH_TARGET} ${COUNT}x via Bash this session." >&2
+  echo "Use TaskOutput (deferred tool) to wait for background tasks, or Read the file once when ready." >&2
+  echo "${LOAD_HINT}" >&2
   exit 2
 elif [ "$COUNT" -ge 3 ]; then
-  echo "{\"additionalContext\": \"Polled ${PATH_TARGET} ${COUNT}x via Bash. If waiting for a background task, use TaskOutput with block:true instead of polling. Next poll will be blocked.\"}"
+  printf '{"additionalContext": "Polled %s %sx via Bash. If waiting for a background task, prefer TaskOutput over polling. %s Next poll will be blocked."}' \
+    "$PATH_TARGET" "$COUNT" "$LOAD_HINT"
 fi
 exit 0
