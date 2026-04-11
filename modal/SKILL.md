@@ -6,29 +6,103 @@ effort: low
 
 # Modal (v1.4.x, March 2026)
 
-## Critical Breaking Changes (v1.0+)
+Use this skill for Modal as an operational system, not just an SDK reference.
+Start from the question, choose the truth surface, then reason about failure mode.
 
-```python
-modal.Stub("name")           ->  modal.App("name")
-modal.Mount(...)              ->  REMOVED -- use Image.add_local_python_source()
-mount= parameter              ->  REMOVED everywhere
-modal.gpu.H100() objects      ->  gpu="H100" strings
-@modal.build decorator        ->  Image.run_function() or Volumes
-modal.web_endpoint             ->  modal.fastapi_endpoint
-.lookup()                     ->  .from_name() + .hydrate()
-allow_concurrent_inputs=N     ->  @modal.concurrent(max_inputs=N)
-concurrency_limit/keep_warm   ->  max_containers/min_containers/scaledown_window
-```
+Shared status contract:
+`references/status-reconciliation.md`
 
-**Automounting disabled** -- local packages NOT auto-included. Use `Image.add_local_python_source("mod")` or `Image.uv_sync()`.
+## Workflow
 
-**CLI flags go BEFORE the script path:** `modal run --detach script.py` (not `modal run script.py --detach`).
+1. State the operational question.
+2. Pick the primary truth surface before opening logs.
+3. Join by identity: `stage`, `run_id`, `attempt_id`, `sample_id`.
+4. If surfaces disagree, name the mismatch class.
+5. Only then choose the repair action.
 
-**Lifecycle hooks** -- use `@modal.enter()` / `@modal.exit()` decorators, not `__init__`.
+## Truth Surface By Question
 
-**v1.4 breaking:** `modal app logs` no longer streams -- add `--follow`. `-m` required for module paths. `.map()` exceptions no longer wrapped in `UserCodeException`.
+- `Is it running right now?` -> live Modal app state
+- `Did the worker finish?` -> immutable receipt / terminal artifact
+- `Why did it fail?` -> container logs, app logs, stderr tails, worker receipt error
+- `Can I trust the output?` -> volume artifact plus checksum/validation, not app state
+- `What did this cost?` -> billing rows joined by tags
 
-See `references/migration.md` for full migration table, v1.1-v1.3 features, and v1.4 details.
+Do not answer a live-state question from a volume file.
+Do not answer a billing question from app state.
+Do not merge these into one synthetic status.
+
+## First Response Pattern
+
+Report work in this shape:
+
+- `question`
+- `primary source`
+- `supporting sources`
+- `mismatch class` if any
+- `next action`
+
+If you cannot name the source artifact, the question is still open.
+
+## Common Failure Modes
+
+### Live State Disagrees With Worker State
+
+- `running_live`: live app exists now; worker state may simply be lagging
+- `stale_receipt`: latest receipt still says running, but live runtime is gone
+- `duplicate_live_app`: multiple live apps claim the same stage/run
+- `incomplete_attempt`: control plane or launcher says work should be active, but no matching live/runtime signal exists
+
+Usual checks:
+
+- `modal app list --json`
+- app tags
+- `modal app logs --follow`
+- receipt timestamp vs latest heartbeat/progress
+- If the live app is stopped but a stage receipt still says `RUNNING`, call it `stale_receipt`.
+- If the app has high wall-clock age but no fresh logs/heartbeats, do not treat app age as proof of useful compute.
+
+### Output Exists But Meaning Is Ambiguous
+
+- volume file exists but no receipt: manual artifact or partial write
+- receipt says success but validation fails: output is present, not trustworthy
+- local mirror exists while a newer run is active: `local_stale`
+- worker completed but local bridge is missing: `bridge_failed`
+
+Usual checks:
+
+- immutable receipt
+- completion marker or validation function
+- local bridge state
+- run-scoped output path or manifest hash
+
+### Spend Is Detached From Execution State
+
+- `unattributed_spend`: billing row has no usable tag join
+- running work with no tags: expect future attribution gap
+- spend after failure can be real; do not call it `running`
+
+Usual checks:
+
+- `modal billing report --json --tag-names ...`
+- app tags: `question_id`, `run_id`, `stage`
+- per-stage billing aggregation
+
+See `references/attribution.md` for the reporting template.
+
+## Launch Discipline
+
+Before any significant run, state:
+
+`containers * hours * $/hr = $expected`
+
+Minimum checklist:
+
+1. Name the question and expected artifact.
+2. Set `max_containers`.
+3. Set `timeout` as the cost circuit breaker.
+4. Attach tags: `question_id`, `run_id`, `stage`.
+5. Decide how progress will become visible during the run.
 
 ## GPU Decision Tree
 
@@ -46,65 +120,58 @@ Multi-GPU: `gpu="H100:8"`. Fallback: `gpu=["H100", "A100-80GB"]`.
 
 **Rules:** Inference -> prefer L4/L40S. Use `gpu=["L4", "A10G"]` for availability fallback only. See `references/gpu.md` for full specs.
 
-## Common Gotchas
+## Critical Breaking Changes
 
-1. **`volume.commit()` required** -- forgetting = silent data loss.
-2. **No relative paths** -- container cwd is `/root`. Always use absolute paths to volume mount.
-3. **No SQLite on volumes** -- NFS-based, POSIX locking fails silently. Use per-file JSON with `os.replace()` or `modal.Dict`.
-4. **Image caching** -- layers cached per method call. Slow/stable deps first, fast/changing last. `force_build=True` or `MODAL_FORCE_BUILD=1` to bust.
-5. **`--detach` + `.spawn()`** -- `modal run --detach` keeps only the LAST function alive. Run each individually.
-6. **Lazy imports** -- guard `import modal` with `if TYPE_CHECKING` for modules running both locally and on Modal.
-7. **Volume inode limit (v1)** -- 500K files hard limit. Upgrade to v2, or archive small files.
-8. **Exit code 144** -- Modal API timeout. Often from volume ops or slow API calls.
-9. **ASGI scope state leak** -- fixed in v1.3.3. Upgrade if on older versions.
-10. **Large datasets (>100 GiB)** -- use `CloudBucketMount` (R2 preferred). Download to `/tmp/` first if tools don't support FUSE. Budget `ephemeral_disk` for decompression.
-11. **`ephemeral_disk` range** -- valid: 524,288-3,145,728 MiB (~500 GiB-3 TiB). Omit for default.
-12. **Volume FUSE partial write leak** -- partially-written files visible to other containers even without `commit()`. Use atomic `os.replace()` on a completion marker.
-13. **`modal volume rm`** -- fails if volume mounted by running function/sandbox. Stop consumers first.
-14. **`Image.from_registry` Python conflicts** -- some Docker images bundle incompatible Python. Use `Image.micromamba()` instead.
-15. **C++ build deps** -- install BOTH `gcc` AND `g++`. Some Makefiles use `$(CXX)`.
-16. **`subprocess` + `capture_output=True`** -- hides output from `modal app logs`. Write subprocess output to volume file instead.
-17. **GPU contention across ephemeral apps** -- `.starmap()` holds all containers. Workspace-wide GPU limits block ALL new GPU apps. Can't `update_autoscaler()` on ephemeral apps.
-18. **Stale volume results after `app stop`** -- old results persist. Add run ID/timestamp to results JSON.
-19. **Empty files not persisted** -- 0-byte files may not persist after `commit()`. Write a sentinel value.
-20. **Subprocess logs invisible until `vol.commit()`** -- if subprocess hangs, zero visibility. Flush + commit periodically from background thread.
-21. **`.map()` kills all on first failure** -- default `return_exceptions=False`. Use `return_exceptions=True` when partial success is useful.
-22. **Validate downloads by integrity, not size** -- 9 GB vs expected 30 GB passes a `> 100MB` check. Use checksums or end-to-end read. Debian slim's `bcftools` is v1.13 -- missing modern subcommands.
-23. **Avoid intermediate concat files** -- check if downstream tool accepts multiple inputs natively. `tool --help` before designing pipeline.
-24. **`.starmap()` cost trap** -- one container per input if `max_containers` unset. Always set explicitly. `cost = max_containers * wall_time * gpu_price`.
-25. **Set `timeout` conservatively** -- 2h job -> `timeout=10800` (3h), not 12h. Timeout is your cost circuit breaker.
-26. **Micromamba/bioconda breaks pip** -- installing bioconda packages can silently downgrade Python, removing pip. Use `.uv_pip_install()` instead of `.pip_install()` after micromamba.
-27. **`git` required for `git+https://`** -- debian_slim/micromamba don't include git. `apt_install("git")` first.
-28. **Rolling deploy default** -- old containers may serve for minutes after deploy. Use `--strategy recreate` for immediate cutover.
-29. **`modal app logs` no longer streams** -- add `--follow` or you get last 100 entries and exit. #1 v1.4 behavior change.
-30. **`uv_pip_install` breaks CUDA base images** -- resolves latest torch regardless of base CUDA version. Use `pip_install` for CUDA base images with C extension compilation. `uv_pip_install` is safe on `debian_slim` (torch bundles own CUDA).
-31. **`cpu` = physical cores, NOT vCPUs.** `cpu=8` = 16 vCPUs. Soft limit = request + 16 cores.
-33. **Detached apps crash-loop on import errors** -- `modal run --detach` with a function that crashes on import (ModuleNotFoundError) keeps the app alive in "ephemeral" state retrying indefinitely. The input stays in the queue. Auto-stop or use the orchestrator's `_detect_crash_loop()` logic. (Evidence: 5 crash-looping apps on 2026-04-05.)
-34. **Dedup before launching** -- orchestrator restarts re-launch stages already running on Modal. Always check `modal app list --json` for live apps matching the stage description before launching. (Evidence: $85 excess on 2026-04-04, 113 unique apps for 65 stages.)
-35. **Container crashes retry differently from code exceptions** -- `retries=N` only controls user-code exceptions. Container crashes (import errors, OOM) are retried automatically by Modal: ephemeral apps retry until a failure threshold; deployed apps retry **indefinitely** with crash-loop backoff. `retries=0` does NOT prevent container crash retries.
-36. **`modal app list --json`** -- reliable machine-readable output. Table format truncates descriptions. Use `--json` for orchestrator tooling.
-37. **App tags for cost attribution** -- `modal.App(tags={"run_id": "...", "stage": "..."})` + `modal billing report --tag-names stage`. Free organizational metadata for billing reports.
-32. **Never `subprocess.run(timeout=N)` on `modal run --detach`** -- image builds take 2-5 min on first deploy. Timeout kills the local process but Modal continues building server-side, creating orphan apps with no tracked app ID. `modal run --detach` always returns after image build. No timeout needed. (Evidence: 63 orphan apps, 4 "fix" attempts increasing timeout before finding root cause.)
-38. **`modal volume ls/get` subprocess calls leak ~300MB each** -- Modal SDK loads fully per subprocess.run() call. Iterating 100 files = 29GB resident → jetsam kill. Always check local file existence BEFORE calling `modal volume ls`. Skip the subprocess if the file is already present locally. (Evidence: JetsamEvent 2026-04-05, 4x python3.12 at 29GB total.)
-39. **`modal volume get` has no progress output with `capture_output=True`** -- downloads are completely silent. For large files, monitor the local file size growth in a background thread. Scale timeout by file size (120s + 1s/MB) instead of flat 900s.
-40. **`modal volume ls --json` can timeout on slow API** -- set 120s timeout and catch `TimeoutExpired` gracefully. A timeout on `ls` should skip the file (will re-download), not crash the entire sync.
-41. **Use Modal Python SDK for volume reads, not subprocess** -- `vol = modal.Volume.from_name("name"); data = b"".join(vol.read_file(path))` is ~100ms. `subprocess.run(["modal", "volume", "get", ...])` loads the full SDK per call (~300MB, 5-15s), needs PATH resolution, `--force` for existing files, and times out under concurrent load. Use SDK for probes/reads. Subprocess only for CLI-specific features (app logs, app list). `vol.listdir(path)` replaces `modal volume ls`. (Evidence: 4 successive bugs in orchestrator probe, 2026-04-07.)
+```python
+modal.Stub("name")           ->  modal.App("name")
+modal.Mount(...)             ->  REMOVED -- use Image.add_local_python_source()
+mount= parameter             ->  REMOVED everywhere
+modal.gpu.H100() objects     ->  gpu="H100" strings
+@modal.build decorator       ->  Image.run_function() or Volumes
+modal.web_endpoint           ->  modal.fastapi_endpoint
+.lookup()                    ->  .from_name() + .hydrate()
+allow_concurrent_inputs=N    ->  @modal.concurrent(max_inputs=N)
+concurrency_limit/keep_warm  ->  max_containers/min_containers/scaledown_window
+```
 
-## MANDATORY: Cost Awareness
+Also remember:
 
-**Real-world lesson: $400 in 2 days, 60% wasted.** #1 cause: unbounded `.starmap()`.
+- automounting is off; local packages are not included unless you add them
+- CLI flags go before the script path: `modal run --detach script.py`
+- lifecycle hooks use `@modal.enter()` / `@modal.exit()`
+- `modal app logs` needs `--follow` on v1.4+
 
-Before ANY GPU launch, state: `containers * hours * $/hr = $expected`
+See `references/migration.md` for the full migration table.
 
-**Checklist:**
-1. `max_containers` set -- never unbounded GPU auto-scaling
-2. `timeout` = 1.5x expected -- cost circuit breaker
-3. Cost stated -- if >$20, get user confirmation
-4. Log visibility -- jobs >30min need periodic `vol.commit()` (every 5min)
-5. For `.starmap()`: `max_containers=min(len(tasks), budget / (hours * price))`
-6. Early stopping -- check eval metrics at intervals, stop if plateaued
-7. Intermediate snapshots -- any job >1h must save intermediate results
-8. Never download large data to `/tmp/` -- write to volume, `commit()` after each file, skip existing on restart
+## Failure-Mode Cheatsheet
+
+- **Import error or crash loop after detach** -> inspect live app state first; `retries=0` does not stop container crash retries
+- **Receipt says running forever** -> likely `stale_receipt`; compare receipt timestamp to live logs/progress
+- **Detached app looks alive for hours** -> app age is not progress; check latest worker logs and receipt heartbeat before assuming compute is still happening
+- **Logs show `Runner interrupted due to worker preemption` or `Worker disappeared`** -> treat the run as unhealthy until you see fresh progress after the restart
+- **Old results still visible after stop** -> outputs need run identity; volume state is not liveness
+- **Large sync or probe is slow/heavy** -> use Modal SDK reads, not repeated CLI subprocesses
+- **Download or write looks complete but is wrong** -> validate integrity, not just size; use atomic completion markers
+- **Unexpected GPU bill** -> check `max_containers`, tags, and `.starmap()` fanout before anything else
+
+## Durable Gotchas
+
+1. **`volume.commit()` required** -- forgetting it still causes silent loss.
+2. **No relative paths** -- container cwd is `/root`.
+3. **No SQLite on volumes** -- NFS locking is the wrong substrate.
+4. **`--detach` + `.spawn()`** -- only the last triggered function survives disconnect.
+5. **Detached import failures can crash-loop** -- live app stays up retrying failed imports.
+6. **Container crashes retry differently from code exceptions** -- `retries=N` is not the whole story.
+7. **Dedup before launching** -- check `modal app list --json` before restarting orchestrated work.
+8. **Use JSON output for tooling** -- table output truncates and lies by omission.
+9. **Use SDK for volume probes/reads** -- repeated CLI subprocesses are slow and memory-heavy.
+10. **`modal run --detach` should not be wrapped in local timeouts** -- build can continue server-side after your client dies.
+11. **`modal volume get` is silent with captured output** -- monitor file growth yourself for large transfers.
+12. **Validate downloads by integrity, not size**.
+13. **`.starmap()` is the easiest way to create runaway cost** -- always cap `max_containers`.
+14. **`cpu` means physical cores, not vCPUs**.
+15. **`uv_pip_install` on CUDA base images can break ABI/toolchain expectations** -- prefer `pip_install` for compiled CUDA stacks.
+16. **App wall-clock age lies by omission** -- a detached app can remain listed long after a worker was preempted or disappeared; always join app state with fresh receipt/progress.
 
 ## MANDATORY: Test Before Deploying
 
@@ -128,5 +195,7 @@ Detailed docs in `references/`:
 - `web-endpoints.md` -- FastAPI, ASGI/WSGI, streaming, auth, custom domains
 - `scheduled-jobs.md` -- Period, Cron, timezone, deployment
 - `resources.md` -- CPU, memory, disk, billing
+- `status-reconciliation.md` -- question -> truth surface -> mismatch class
+- `attribution.md` -- question/source/status/spend reporting pattern
 - `sandboxes.md` -- creation, exec, snapshots, named sandboxes
 - `examples.md` -- end-to-end code examples

@@ -80,6 +80,7 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --context context.md \
   --topic "$TOPIC" \
   --project "$(pwd)" \
+  --extract \
   "$ARGUMENTS"
 ```
 
@@ -96,9 +97,11 @@ Set `timeout: 660000` on the Bash tool call. See `references/dispatch.md` for `-
 | Preset | Axes | When |
 |--------|------|------|
 | `standard` (default) | arch (Gemini) + formal (GPT-5.4) | Most reviews |
-| `--axes simple` | combined Gemini Pro | Config tweaks, refreshes |
 | `--axes deep` | arch + formal + domain + mechanical | Structural changes, domain-dense |
 | `--axes full` | all 5 | Shared infra, clinical, high-stakes |
+
+User-facing presets are `standard`, `deep`, and `full`; each includes GPT-5.4.
+Non-GPT axis sets are internal-only and rejected by the default CLI contract.
 
 **Genomics classification review** (monthly or after >10 commits to LR-engine/scoring): Use `--axes formal,domain`. GPT-5.4 found 11 conceptual/mathematical bugs for $6.54 — the only detector for incoherent Bayes.
 
@@ -137,7 +140,19 @@ Don't let rigorous-looking analysis override what you can see in the code.
 
 ### Artifact Handoff
 
-Write summary JSON to `~/.claude/artifacts/$(basename $PWD)/model-review-$(date +%Y-%m-%d).json` with: skill, project, date, topic, include/defer/reject counts, key_findings[]. Used by project-upgrade as a cache gate.
+The shared review script writes the audit trail under `.model-review/...`:
+
+- `shared-context.md` and `shared-context.manifest.json`
+- `findings.json`
+- `disposition.md`
+- `coverage.json`
+- `verified-disposition.md` when `--verify` runs
+
+Treat `coverage.json` as the machine-readable contract. It records packet
+provenance, dispatch axes/models, extraction totals, and verification totals.
+Treat `verified-disposition.md` as grounded anchor checking, not semantic proof:
+it verifies structured findings against repo paths, line anchors, and file-local
+corroboration when available.
 
 ---
 
@@ -200,9 +215,11 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
   --output .model-review/plan-close-context.md
 ```
 
+Do not rely on auto-discovered touched-file scope when the worktree is already clean or the relevant changes were committed earlier in the session. In that case, build an explicit review scope packet with the concrete files under review. Otherwise `/review close` can silently review an empty packet and produce useless output.
+
 **Phase 1: Write Tests for New Code** — Identify new functions from plan commits. Write unit tests covering happy path, edge cases, error paths, and contract invariants.
 
-**Phase 2: Cross-Model Review** — Run `/review model` on the plan-close review packet (not a hand-written summary). Use `--context .model-review/plan-close-context.md`. Fact-check and disposition every finding.
+**Phase 2: Cross-Model Review** — Run `/review model` on the plan-close review packet (not a hand-written summary). Use `--context .model-review/plan-close-context.md --extract --verify`. Fact-check and disposition every finding. Inspect `coverage.json` before closing so you can see packet drops, axis coverage, and verification totals.
 
 **Phase 3: The Caught-Red-Handed Loop** — For each confirmed finding: would any Phase 1 tests have caught this? If yes, fix the test gap. If no, write a new test. Verify against pre-fix code:
 ```bash
@@ -225,15 +242,15 @@ pytest tests/test_<new>.py -x  # should PASS
 ## References
 
 - `references/context-assembly.md` — detailed context gathering patterns
-- `references/dispatch.md` — full dispatch mechanics, manual dispatch, timeouts, model flags
-- `references/extraction.md` — manual extraction workflow
-- `references/prompts.md` — full prompt templates per model
+- `references/dispatch.md` — shared dispatch contract, context formatting, extraction defaults
+- `references/extraction.md` — extraction/disposition coverage rules
+- `references/prompts.md` — prompt bodies used by the shared review script
 - `references/biases-and-antipatterns.md` — known model biases, per-model failure modes, common mistakes
 
 ## Known Issues
 <!-- Append-only. Session-analyst may suggest additions. -->
-- **[2026-03-27] llmx output flag — never use shell redirects (> file) with llmx; use --output/-o flag instead. Shell redirects buffer until process exit, producing 0-byte files. Fixed in llmx v0.5.0 (2026-03-06).**
-- **[2026-04-09] GPT-5.4 xhigh timeout — default llmx timeout is 300s, xhigh needs 900s. Set `--timeout 900` for xhigh, `--timeout 600` for high. Three parallel xhigh calls may hit rate limits — run sequentially or use high effort instead.**
+- **[2026-03-27] shared dispatch output — never use shell redirects (> file) for review artifacts; the shared review script writes directly to files. Shell redirects buffer until process exit, producing 0-byte files.**
+- **[2026-04-09] GPT-5.4 xhigh timeout — shared dispatch timeout is 300s by default; xhigh needs 900s. Set `--timeout 900` for xhigh, `--timeout 600` for high. Three parallel xhigh calls may hit rate limits — run sequentially or use high effort instead.**
 - **[2026-04-09] xhigh vs high for architectural review — marginal quality delta. High-effort adversarial review (4 min) found the sharpest insight across 6 reviews. xhigh (15 min each) had more words, similar signal density. Reserve xhigh for formal math only. For deep dives: 2-3 parallel high queries with focused questions > 1 xhigh mega-query.**
 - **[2026-04-09] Context formatting matters — GPT-5.4 performs better with XML `<doc>` tags around context sections. Gemini needs query at END, critical constraints at END. Consult /model-guide before assembling context for manual dispatch.**
 
