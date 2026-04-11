@@ -9,11 +9,19 @@ Parse the project argument from $ARGUMENTS. Default: last 5 sessions.
 # Claude Code sessions — use --full for session-analyst dispatch (3-5x more content, preserves corrections)
 python3 ${CLAUDE_SKILL_DIR}/scripts/extract_transcript.py <project> --sessions <N> --full --output ~/Projects/meta/artifacts/observe/input.md
 
-# Codex CLI sessions (GPT-5.4 via OpenAI) — same interface, reads ~/.codex/state_5.sqlite + rollout JSONL
-python3 ${CLAUDE_SKILL_DIR}/scripts/extract_codex_transcript.py <project> --sessions <N> --output ~/Projects/meta/artifacts/observe/input.md
+# Codex CLI sessions (GPT-5.4 via OpenAI) — reads ~/.codex/state_5.sqlite + rollout JSONL.
+# MUST write to codex.md (NOT input.md — that would overwrite Claude Code output).
+# Codex runs alongside Claude Code on the same project; absence is non-fatal, but
+# presence MUST feed the Step 2 dispatch context (never silently dropped).
+python3 ${CLAUDE_SKILL_DIR}/scripts/extract_codex_transcript.py <project> --sessions <N> --output ~/Projects/meta/artifacts/observe/codex.md 2>/dev/null || : > ~/Projects/meta/artifacts/observe/codex.md
 ```
 
-Use whichever extractor matches the sessions you want to analyze. Both produce identical markdown format.
+Run BOTH extractors every time. Claude Code is primary; Codex is additive when sessions exist.
+Both produce the same markdown format and must BOTH be concatenated into the dispatch context
+in Step 2 — never silently drop Codex. It regularly runs genomics work in parallel with Claude
+Code, and omitting it loses roughly half the signal. Empty `codex.md` is a valid state (no Codex
+sessions in window) and downstream code must tolerate it via `[ -s codex.md ]` guards.
+
 With `--full`: ~80-400KB per 5 sessions (well within Gemini's 1M). Without: ~20-100KB.
 Paper evidence: raw traces beat summaries by +15pp for diagnostic quality (Lee et al. 2026).
 

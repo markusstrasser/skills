@@ -46,8 +46,12 @@ mkdir -p "$ARTIFACT_DIR"
 # Claude Code sessions
 python3 ${CLAUDE_SKILL_DIR}/scripts/extract_transcript.py <project> --sessions <N> --full --output "$ARTIFACT_DIR/input.md"
 
-# Codex sessions (if any)
-python3 ${CLAUDE_SKILL_DIR}/scripts/extract_codex_transcript.py <project> --sessions <N> --output "$ARTIFACT_DIR/codex.md" 2>/dev/null || true
+# Codex CLI sessions (GPT-5.4) — reads ~/.codex/state_5.sqlite + rollout JSONL.
+# Codex runs alongside Claude Code on the same project; absence is non-fatal,
+# but presence MUST feed the Step 2 dispatch context (never silently dropped).
+# The `|| : > ...` guard ensures codex.md exists even when no sessions match,
+# so downstream concatenation in Step 2 doesn't fail on a missing file.
+python3 ${CLAUDE_SKILL_DIR}/scripts/extract_codex_transcript.py <project> --sessions <N> --output "$ARTIFACT_DIR/codex.md" 2>/dev/null || : > "$ARTIFACT_DIR/codex.md"
 ```
 
 ### Operational Context
@@ -97,12 +101,20 @@ Run shared transcript extraction above. Build operational context per `reference
 
 Send full-fidelity transcript + coverage digest + operational context to Gemini 3.1 Pro. Full prompt in `references/gemini-dispatch-prompt.md`.
 
-Dispatch via the shared wrapper, not raw `llmx` calls:
+Dispatch via the shared wrapper, not raw `llmx` calls. Concatenate BOTH transcript sources
+(Claude Code + Codex) plus the coverage digest. The `[ -s codex.md ]` guard keeps dispatch
+working when no Codex sessions exist in the window, but when they do, Codex must be included:
 
 ```bash
-cat "$HOME/Projects/agent-infra/artifacts/observe/input.md" \
-  "$HOME/Projects/agent-infra/artifacts/observe/coverage-digest.txt" \
-  > /tmp/observe-context.md
+{
+  cat "$HOME/Projects/agent-infra/artifacts/observe/input.md"
+  if [ -s "$HOME/Projects/agent-infra/artifacts/observe/codex.md" ]; then
+    printf '\n\n---\n\n'
+    cat "$HOME/Projects/agent-infra/artifacts/observe/codex.md"
+  fi
+  printf '\n\n---\n\n'
+  cat "$HOME/Projects/agent-infra/artifacts/observe/coverage-digest.txt"
+} > /tmp/observe-context.md
 uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
   --profile deep_review \
   --context /tmp/observe-context.md \
