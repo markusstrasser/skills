@@ -47,7 +47,7 @@ Present the plan to the user. Wait for approval before executing. If the plan ha
 3. **Commit after each phase** — not one big commit at the end
 4. **Run tests after code changes** — `uv run pytest tests/` or equivalent
 5. **Verify each fix** against the plan's verification commands
-6. **Don't over-engineer** — fix what was found, don't refactor the neighborhood
+6. **Fix the neighborhood when it unblocks progress** — incidental cleanup (lint markers, related bugs, broken adjacent code) is part of the work. The only thresholds: split when >100 lines or when the cleanup touches a public API/contract.
 7. **Parallel where possible** — use Agent tool for independent file edits
 8. **Verify paths before fixing paths** — when fixing a wrong file path, run `find` for actual location + `head -5` to check structure before editing. Don't guess from directory names (3-iteration failure observed)
 9. **Run the script after each fix** — don't batch all fixes then test. Optional fields with explicit `None` values, wrong JSON structures, etc. only surface at runtime
