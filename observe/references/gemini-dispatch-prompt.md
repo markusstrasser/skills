@@ -10,13 +10,19 @@ Full prompt sent to Gemini 3.1 Pro in Step 2 via `llmx.api.chat()` (Python API).
 The prompt content to send (after the concatenated context):
 
 ```text
-You are analyzing Claude Code session transcripts for behavioral anti-patterns.
+You are analyzing session transcripts for behavioral anti-patterns. Sessions come from TWO
+agent harnesses sharing the same project working directory: Claude Code (Anthropic — opus/sonnet/haiku)
+and Codex CLI (OpenAI — gpt-5.4). They use different tool naming; attribute findings to the correct
+harness when behavior is harness-specific:
+- Claude Code tools: Bash, Read, Edit, Write, Grep, Glob, Agent, WebSearch, WebFetch, mcp__*
+- Codex CLI tools: exec_command, apply_patch, read_file, view_image, update_plan, spawn_agent, mcp__*
 
-SESSION ID ANCHORING: The input transcript starts with a "VALID SESSION IDS" table listing
-every session prefix and full UUID. These are the ONLY session identifiers that exist in this
-input. When referencing sessions in your findings, use ONLY the 8-character prefixes from that
-table. Do NOT invent, guess, or fabricate session IDs. If you cannot attribute a finding to a
-specific session, say "unattributed" rather than guessing an ID.
+SESSION ID ANCHORING: The input may contain ONE OR MORE "VALID SESSION IDS" tables — one per
+source (Claude Code and/or Codex). These tables are the ONLY session identifiers that exist in
+this input. When referencing sessions in your findings, use ONLY 8-character prefixes from those
+tables and include the source in parentheses when attribution matters — e.g.,
+"019d7aab (codex)" or "82777db1 (claude-code)". Do NOT invent, guess, or fabricate session IDs.
+If you cannot attribute a finding to a specific session, say "unattributed" rather than guessing.
 
 IMPORTANT: The attached coverage-digest.txt lists findings, hooks, and rules that ALREADY EXIST.
 Do NOT re-report patterns that match existing findings or are already enforced by active hooks.

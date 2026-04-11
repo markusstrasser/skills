@@ -285,11 +285,13 @@ def format_markdown(sessions: list[dict], project: str) -> str:
 
     # UUID manifest — anchoring block for downstream LLM analysis.
     # Gemini 3.1 Pro fabricates session IDs without this (2 confirmed incidents).
-    lines.append("## VALID SESSION IDS — Use ONLY these. Never fabricate IDs.")
-    lines.append("| Prefix | Full UUID |")
-    lines.append("|--------|-----------|")
+    # The "Source" column distinguishes Claude Code from Codex when both transcript
+    # sources are concatenated into the same Gemini dispatch.
+    lines.append("## VALID SESSION IDS (Claude Code) — Use ONLY these. Never fabricate IDs.")
+    lines.append("| Prefix | Full UUID | Source |")
+    lines.append("|--------|-----------|--------|")
     for sess in sessions:
-        lines.append(f"| {sess['session_id'][:8]} | {sess['session_id']} |")
+        lines.append(f"| {sess['session_id'][:8]} | {sess['session_id']} | claude-code |")
     lines.append("")
 
     for sess in sessions:

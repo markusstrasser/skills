@@ -274,6 +274,17 @@ def format_markdown(sessions: list[dict], project: str) -> str:
     lines.append(f"Sessions: {len(sessions)}")
     lines.append("")
 
+    # UUID manifest — anchoring block for downstream LLM analysis (parity with
+    # extract_transcript.py). Without this anchor, Gemini fabricates session IDs.
+    # The "Source" column lets the analyst attribute findings by harness when
+    # Claude Code and Codex transcripts are concatenated into the same dispatch.
+    lines.append("## VALID SESSION IDS (Codex) — Use ONLY these. Never fabricate IDs.")
+    lines.append("| Prefix | Full UUID | Source |")
+    lines.append("|--------|-----------|--------|")
+    for sess in sessions:
+        lines.append(f"| {sess['session_id'][:8]} | {sess['session_id']} | codex |")
+    lines.append("")
+
     for sess in sessions:
         lines.append(f"## Session {sess['session_id'][:8]}...")
         model_str = sess["model"] or "?"
