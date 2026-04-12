@@ -177,6 +177,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True, help="Markdown packet path")
     parser.add_argument("--base", help="Base git ref for commit-range review")
     parser.add_argument("--head", help="Head git ref for commit-range review")
+    parser.add_argument(
+        "--since",
+        help=(
+            "Shorthand for --base <commit>~1 --head HEAD. Use when the worktree is "
+            "clean and all changes are committed (common in plan-close flows). "
+            "Example: --since be739e79 reviews everything from that commit to HEAD."
+        ),
+    )
     parser.add_argument("--file", action="append", dest="files", help="Specific file to include; may repeat")
     parser.add_argument(
         "--tracked-only",
@@ -202,11 +210,18 @@ def main() -> int:
         print(f"not a git repo: {repo}", file=sys.stderr)
         return 2
 
+    # --since is shorthand for --base <commit>~1 --head HEAD
+    base = args.base
+    head = args.head
+    if args.since and not base:
+        base = f"{args.since}~1"
+        head = head or "HEAD"
+
     packet = build_packet_model(
         repo,
         profile_name=args.profile,
-        base=args.base,
-        head=args.head,
+        base=base,
+        head=head,
         files=args.files,
         tracked_only=args.tracked_only,
         scope_text=args.scope_text,
