@@ -63,11 +63,13 @@ If 3+ sessions active: keep questions shorter, batch ambiguous items.
 - For "draft me an answer with citations," Parallel core was useful.
 
 **Paper pipeline (Standard+ academic queries) — run this, not just Exa snippets:**
-`search_papers` -> `save_paper` (seed papers) -> `fetch_paper` -> `prepare_evidence` -> `ask_papers(use_rcs=True)`
+`search_papers` -> `save_paper` (seed papers) -> `fetch_paper` -> `get_paper` -> `prepare_evidence` -> `ask_papers(use_rcs=True)`
 This is the highest-quality evidence path. RCS scoring produces significantly better synthesis than websearch snippets (PaperQA2 ablation: p<0.001). 3 well-read papers beat 20 snippet-scanned papers.
 
 **Critical rules:**
-- `fetch_paper` then `read_paper` BEFORE citing. Abstracts are not primary sources.
+- `fetch_paper` then `get_paper`/`read_paper` BEFORE citing. Abstracts are not primary sources.
+- Treat the `fetch_paper` quality card as part of the evidence, not optional metadata. If the card says `vetoed`, do not cite the paper as ordinary support without naming the veto.
+- When citing a paper with quality metadata, surface components directly: `RCT, n=200, human, double-blind, placebo, government-funded` or `VETOED — candidate gene study`.
 - Never trust PMIDs or PDB IDs from websearch without S2/database verification. Websearch confabulates citation details.
 - Sequential exploration: 3 broad queries -> scan results -> 3 narrower queries refining signal. Don't shotgun — query at position 3 in a burst cannot incorporate what query 1 returned.
 - Search/discovery tools are **map tools**. Primary documents, official databases, and fetched full text are **evidence tools**. Do not blur them.
@@ -195,7 +197,7 @@ If all your axes are from the same category, you have one axis with multiple que
 - Check single lab/group vs independent replication
 - If no contradictory evidence after genuine effort: "no contradictory evidence found" (not "none exists")
 
-**Citation stance check:** For claims that assert literature consensus or direction ("evidence supports...", "studies show...", "the literature suggests..."), run `search_literature` (scite) and append `[SCITE: S:X C:Y M:Z]`. These consensus claims are the highest-risk for hallucination — scite's contrasting citations catch things keyword disconfirmation misses. If scite returns 0 results, note `[SCITE: NO COVERAGE]` — don't treat absence as confirmation. (~$0/call, user-scope MCP, available everywhere.)
+**Citation stance check:** For claims that assert literature consensus or direction ("evidence supports...", "studies show...", "the literature suggests..."), and for any fetched paper you plan to lean on heavily, run `search_literature` (scite) and append `[SCITE: S:X C:Y M:Z]`. These consensus claims are the highest-risk for hallucination — scite's contrasting citations catch things keyword disconfirmation misses. If scite returns 0 results, note `[SCITE: NO COVERAGE]` — don't treat absence as confirmation. (~$0/call, user-scope MCP, available everywhere.)
 
 **Claim-level checks:**
 - Numbers: from a source, or generated? If generated -> `[ESTIMATED]`
