@@ -217,6 +217,24 @@ When using `--sweep`, also run `just bio-verify-status` at the end to show overa
 
 Full list with examples and workarounds: `references/known-issues.md`
 
+## Stale-Absence Detection
+
+When verifying claims against APIs, distinguish three outcomes:
+
+| API response | Action | Rationale |
+|---|---|---|
+| **Value matches config** | Verify, maintain current tier | Normal concordance |
+| **Value contradicts config** | Set `conflict: true` on claim, warn immediately | Active disagreement needs resolution |
+| **404 / entity not found** | Set `status: refuted`, payload: "entity removed from source" | Source removed the entry — likely sequencing artifact or reclassification |
+| **Timeout / server error** | Log warning, preserve current status and tier | Transport failure ≠ data invalidity |
+
+This prevents the blind spot where a database removes a sequencing artifact and bio-verify silently preserves a stale Tier 2 state.
+
+When `--sweep` encounters a 404 for a previously-verified entity:
+1. Check a second source (myvariant → ClinVar, or vice versa) to confirm removal
+2. If both return 404: mark `status: refuted` with `refutation_source` and date
+3. If only one returns 404: mark `conflict: true` and flag for human review
+
 ## Complementary Checks
 
 Bio-verify checks **data correctness** (are biological constants accurate?). Two complementary systems check **logic correctness**:
