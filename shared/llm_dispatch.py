@@ -286,7 +286,10 @@ def _bootstrap_llmx() -> tuple[Callable[..., Any], str]:
                 f"(2) re-run this script with a Python matching one of the installed "
                 f"tool versions (e.g., {installed_pys[0] if installed_pys else 'python3.13'})."
             )
-        sys.path.insert(0, str(matching_site))
+        # Add the site-packages dir. Also process .pth files (editable installs
+        # use _llmx.pth → ~/Projects/llmx/; sys.path.insert alone ignores .pth).
+        import site
+        site.addsitedir(str(matching_site))
         try:
             from llmx.api import chat as _llmx_chat_2  # type: ignore
             llmx_chat = _llmx_chat_2
