@@ -116,6 +116,8 @@ llmx -m gpt-5.4 "query" > output.md
 
 `-o` does not imply `--stream`. Current llmx preserves the requested transport and writes the returned result itself when needed. If the file is still 0 bytes, llmx emits `[llmx:WARN]` to stderr.
 
+**Agent background mode:** Claude Code's `run_in_background` captures stdout in its own task file. Shell redirects (`> file`) produce 0 bytes in background mode. Always use `-o` for background llmx calls. Read the `-o` file after the task-complete notification, not before.
+
 For GPT specifically:
 
 - default `llmx -m gpt-5.4` routes to the OpenAI API in current llmx
