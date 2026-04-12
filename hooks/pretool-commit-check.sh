@@ -19,7 +19,9 @@ RESULT=$(echo "$HOOK_INPUT" | python3 "$HOOK_DIR/commit-check-parse.py" 2>/dev/n
 # Blocking
 if echo "$RESULT" | grep -q "^BLOCK:"; then
   ~/Projects/skills/hooks/hook-trigger-log.sh "commit-check" "block" "$(echo "$RESULT" | sed 's/^BLOCK://' | head -c 100)" 2>/dev/null || true
-  echo "$RESULT" | sed 's/^BLOCK://'
+  msg=$(echo "$RESULT" | sed 's/^BLOCK://')
+  echo "[commit-check]: BLOCKED: $msg" >&2
+  echo "$msg"
   exit 2
 fi
 
