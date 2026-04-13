@@ -1,11 +1,11 @@
 <!-- Reference file for observe skill (sessions mode). Loaded on demand. -->
 # Gemini Dispatch Prompt
 
-Full prompt sent to Gemini 3.1 Pro in Step 2 via `llmx.api.chat()` (Python API).
+Full prompt sent to Gemini 3.1 Pro in Step 2 via the shared dispatch wrapper.
 
-> **DO NOT use the CLI command below.** It has a multi-file `-f` bug that silently drops files (4 confirmed occurrences).
-> Instead: read all files with `Path.read_text()`, concatenate, and pass as a single string to `llmx_chat()`.
-> See observe/SKILL.md sessions mode Step 2 for the executable dispatch pattern.
+> **Do not bypass the wrapper.** Read each file with `Path.read_text()`, concatenate the inputs,
+> and send one context string to the dispatcher. The wrapper owns model routing, logging, and
+> file handling.
 
 The prompt content to send (after the concatenated context):
 

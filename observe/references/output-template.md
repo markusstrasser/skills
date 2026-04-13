@@ -35,7 +35,8 @@ Sort by priority descending.
 Write to `YYYY-MM-DD.md` in `$ARTIFACT_DIR`.
 
 ```bash
-ARTIFACT_DIR="$HOME/Projects/meta/artifacts/observe"
+OBSERVE_PROJECT_ROOT="${OBSERVE_PROJECT_ROOT:-$HOME/Projects/agent-infra}"
+ARTIFACT_DIR="${OBSERVE_ARTIFACT_ROOT:-$OBSERVE_PROJECT_ROOT/artifacts/observe}"
 mkdir -p "$ARTIFACT_DIR"
 ```
 

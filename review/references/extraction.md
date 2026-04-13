@@ -2,41 +2,37 @@
 
 # Extraction Mechanics (Step 5)
 
-Detailed extraction workflow. Use when `--extract` was NOT passed to the dispatch script and you need to extract manually. If `--extract` was used, skip this file -- the script already did it.
+Use this only when `--extract` was not passed to the review script and you need to
+run extraction manually. In the normal closeout flow, the shared review script
+handles extraction for you and emits `disposition.md` plus `coverage.json`.
 
 ## Why This Step Exists
 
-Single-pass synthesis is lossy. The agent biases toward recent, vivid, or structurally convenient ideas and silently drops others. In observed sessions, users had to ask "did you include everything?" 3+ times -- each time recovering omissions. The EVE framework (Chen & Fleming, arXiv:2602.06103) shows that separating extraction from synthesis improves recall +24% and precision +29%.
+Single-pass synthesis is lossy. The agent biases toward recent, vivid, or
+structurally convenient ideas and silently drops others. In observed sessions,
+users had to ask "did you include everything?" 3+ times — each time recovering
+omissions. The EVE framework (Chen & Fleming, arXiv:2602.06103) shows that
+separating extraction from synthesis improves recall +24% and precision +29%.
 
 ## Cross-Family Extraction
 
-Use fast models for extraction -- this step is mechanical. Dispatch extraction to a fast model from a *different family* than the reviewer to avoid self-preference in what gets extracted (Wataoka NeurIPS 2024: same-family preferentially surfaces claims written in its style).
+The review script already dispatches extraction to a different model family from
+the reviewer and writes the extracted findings to `findings.json`.
 
-```bash
-# Extract Gemini's review with GPT-5.3 Instant (cross-family extraction)
-llmx chat -m gpt-5.3-chat-latest --stream --timeout 120 \
-  -f "$REVIEW_DIR/gemini-output.md" \
-  -o "$REVIEW_DIR/gemini-extraction.md" "
-<system>
-Extract every discrete recommendation, finding, or claim as a numbered list. One item per line. Do not evaluate or filter -- extract mechanically.
-</system>
+If you customize the extraction prompt, keep it mechanical:
 
-Extract all discrete ideas from this review."
+- extract every discrete recommendation, finding, or claim as a numbered list
+- one item per line
+- do not evaluate or filter
 
-# Extract GPT's review with Flash (cross-family extraction)
-llmx chat -m gemini-3-flash-preview --timeout 120 \
-  -f "$REVIEW_DIR/gpt-output.md" \
-  -o "$REVIEW_DIR/gpt-extraction.md" "
-<system>
-Extract every discrete recommendation, finding, or claim as a numbered list. One item per line. Do not evaluate or filter -- extract mechanically.
-</system>
-
-Extract all discrete ideas from this review."
-```
+The source of truth for the extraction prompt is `review/scripts/model-review.py`.
 
 ## Anonymize During Disposition
 
-Use anonymous labels (A1-An, B1-Bn) in the disposition table -- not model names. This prevents identity-driven bias during synthesis (Choi et al. arXiv:2510.07517 found model identity biases peer evaluation). Reveal model identities only in the "Model Errors" section where you need to know which model to distrust.
+Use anonymous labels (A1-An, B1-Bn) in the disposition table — not model names.
+This prevents identity-driven bias during synthesis (Choi et al. arXiv:2510.07517
+found model identity biases peer evaluation). Reveal model identities only in the
+"Model Errors" section where you need to know which model to distrust.
 
 ```markdown
 ## Extraction: Reviewer A
@@ -70,22 +66,30 @@ Every extracted item gets a verdict. No item left undispositioned.
 | ... | ... | ... | ... |
 ```
 
-Valid dispositions: `INCLUDE`, `DEFER (reason)`, `REJECT (reason)`, `MERGE WITH [ID]` (dedup).
+Valid dispositions: `INCLUDE`, `DEFER (reason)`, `REJECT (reason)`,
+`MERGE WITH [ID]` (dedup).
 
 ## Coverage Check
 
 Before proceeding to synthesis:
-- Count: total extracted, included, deferred, rejected, merged
-- If any ID has no disposition, stop and fix
-- Save extraction + disposition table to `$REVIEW_DIR/extraction.md`
 
-This file is the checklist. If the user asks "did you include everything?" -- point them here, not the prose.
+- count total extracted, included, deferred, rejected, merged
+- if any ID has no disposition, stop and fix
+- save extraction + disposition table to `$REVIEW_DIR/extraction.md`
+- inspect `coverage.json` when the review came from the shared script; it records
+  how many axes produced usable findings
+
+This file is the checklist. If the user asks "did you include everything?" point
+them here, not the prose.
 
 ## Multi-Round Extraction
 
-When running multiple dispatch rounds (e.g., Round 1 architecture + Round 2 red team):
+When running multiple dispatch rounds (e.g., Round 1 architecture + Round 2 red
+team):
 
-1. **Extract per round, not per synthesis.** Each round's outputs get their own extraction pass (G1-Gn for round 1 Gemini, G2.1-G2.n for round 2 Gemini, etc.).
-2. **Merge disposition tables across rounds** before writing the final synthesis. Dedup with `MERGE WITH [ID]`.
-3. **Never synthesize a synthesis.** The final prose is written once from the merged disposition table. Don't compress round 1's synthesis -- compress round 1's raw extraction alongside round 2's raw extraction.
-4. **Total coverage count** in the final output: "R1: 47 items extracted, R2: 38 items extracted. Final: 85 total, 62 included, 14 deferred, 9 rejected."
+1. Extract per round, not per synthesis.
+2. Merge disposition tables across rounds before writing the final synthesis.
+3. Never synthesize a synthesis. The final prose is written once from the merged
+   disposition table.
+4. Total coverage count in the final output should report round-level and merged
+   totals.

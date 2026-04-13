@@ -16,7 +16,9 @@
 - **GPT-5.4:** Confident fabrication (invents numbers/paths), overcautious scope, production-grade creep
 - **Flash/GPT-5.3:** Shallow analysis (extraction only), recency bias. Never use for architectural judgment.
 
-**Gemini Pro specifics:** CLI transport (free), temp locked 1.0, bare mode ~40% faster, no `--fallback`. **GPT-5.4 specifics:** `--reasoning-effort high` essential, `--stream` required, `--timeout 600` minimum, `--max-tokens 32768`. See `prompts.md` for full templates.
+**Dispatch specifics:** the shared review contract owns provider routing,
+timeouts, fallback, and artifact emission. This reference should track reviewer
+biases and workflow anti-patterns, not raw transport flags.
 
 ## Anti-Patterns
 

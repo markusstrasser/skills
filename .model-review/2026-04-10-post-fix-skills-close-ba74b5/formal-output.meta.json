@@ -1,0 +1,39 @@
+{
+  "api_only": true,
+  "context_budget_metric": "tokens",
+  "context_estimate_method": "heuristic:chars_div_4",
+  "context_manifest_path": ".model-review/2026-04-10-post-fix-skills-close-ba74b5/shared-context.manifest.json",
+  "context_payload_hash": "18b9db381123ccabaef2504103a30d9f26a480e63ecf7e3b4aa260a9fea63dfb",
+  "context_sha256": "18b9db381123ccabaef2504103a30d9f26a480e63ecf7e3b4aa260a9fea63dfb",
+  "context_token_estimate": 20401,
+  "error_message": null,
+  "error_path": null,
+  "error_type": null,
+  "finished_at": "2026-04-11T01:53:07Z",
+  "helper_version": "2026-04-10-v1",
+  "latency": 110.85534286499023,
+  "llmx_version": "0.6.0",
+  "output_path": ".model-review/2026-04-10-post-fix-skills-close-ba74b5/formal-output.md",
+  "parsed_path": null,
+  "profile_fingerprint": "859bda7b479f5cae",
+  "profile_version": "v1",
+  "prompt_sha256": "b1102cdd6eea7d9be934b710901b54e8fab1828505d7f369d110830c6811340b",
+  "requested_profile": "gpt_general",
+  "resolved_kwargs": {
+    "max_tokens": 16384,
+    "reasoning_effort": "medium",
+    "search": false,
+    "timeout": 600
+  },
+  "resolved_model": "gpt-5.4",
+  "resolved_provider": "openai",
+  "retryable": false,
+  "schema_used": false,
+  "started_at": "2026-04-11T01:51:16Z",
+  "status": "ok",
+  "usage": {
+    "completion_tokens": 0,
+    "prompt_tokens": 0,
+    "total_tokens": 0
+  }
+}

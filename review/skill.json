@@ -1,0 +1,70 @@
+{
+  "name": "review",
+  "kind": "worker",
+  "intent_class": "convergent",
+  "summary": "Cross-model critique, verification, and closeout review.",
+  "entrypoint": {
+    "type": "script",
+    "path": "review/scripts/model-review.py"
+  },
+  "modes": {
+    "model": {
+      "intent_class": "convergent",
+      "requires_packet": true,
+      "requires_gpt": true,
+      "artifacts": [
+        "shared-context.md",
+        "shared-context.manifest.json",
+        "findings.json",
+        "coverage.json",
+        "coverage.md"
+      ]
+    },
+    "verify": {
+      "intent_class": "verification",
+      "requires_packet": false,
+      "requires_gpt": false,
+      "artifacts": [
+        "findings.json",
+        "verified-disposition.md"
+      ]
+    },
+    "close": {
+      "intent_class": "convergent",
+      "requires_packet": true,
+      "requires_gpt": true,
+      "requires_verification": true,
+      "artifacts": [
+        "shared-context.md",
+        "shared-context.manifest.json",
+        "findings.json",
+        "coverage.json",
+        "coverage.md",
+        "verified-disposition.md"
+      ]
+    }
+  },
+  "uses": {
+    "dispatch_profiles": [
+      "deep_review",
+      "formal_review",
+      "fast_extract"
+    ],
+    "packet_builders": [
+      "shared_context_packet",
+      "plan_close_packet"
+    ],
+    "artifact_schemas": [
+      "review-coverage.v1"
+    ]
+  },
+  "follow_on": [
+    "upgrade",
+    "improve"
+  ],
+  "references": [
+    "review/SKILL.md",
+    "review/references/context-assembly.md",
+    "review/references/dispatch.md"
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "api_only": true,
+  "context_budget_metric": "tokens",
+  "context_estimate_method": "heuristic:chars_div_4",
+  "context_manifest_path": ".model-review/2026-04-10-skill-hardening-close-v2-95cdc4/shared-context.manifest.json",
+  "context_payload_hash": "4358e257aa1e2a14b0b3c539414d3093721e9ef24e357c2282eff9d15e6963fd",
+  "context_sha256": "4358e257aa1e2a14b0b3c539414d3093721e9ef24e357c2282eff9d15e6963fd",
+  "context_token_estimate": 27192,
+  "error_message": null,
+  "error_path": null,
+  "error_type": null,
+  "finished_at": "2026-04-11T01:47:49Z",
+  "helper_version": "2026-04-10-v1",
+  "latency": 136.68694591522217,
+  "llmx_version": "0.6.0",
+  "output_path": ".model-review/2026-04-10-skill-hardening-close-v2-95cdc4/formal-output.md",
+  "parsed_path": null,
+  "profile_fingerprint": "859bda7b479f5cae",
+  "profile_version": "v1",
+  "prompt_sha256": "e948f4e90968503dd8121b46e5eafd86a7124ba2f43a2d52c8b6e04c464d65e6",
+  "requested_profile": "gpt_general",
+  "resolved_kwargs": {
+    "max_tokens": 16384,
+    "reasoning_effort": "medium",
+    "search": false,
+    "timeout": 600
+  },
+  "resolved_model": "gpt-5.4",
+  "resolved_provider": "openai",
+  "retryable": false,
+  "schema_used": false,
+  "started_at": "2026-04-11T01:45:31Z",
+  "status": "ok",
+  "usage": {
+    "completion_tokens": 0,
+    "prompt_tokens": 0,
+    "total_tokens": 0
+  }
+}

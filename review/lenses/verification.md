@@ -4,7 +4,9 @@
 
 ## Claim Extraction
 
-Parse the report (file or inline text). Extract every **file-specific, verifiable claim**:
+Parse the report (file or inline text). Prefer structured findings (`findings.json`)
+when present; fall back to prose only when no structured artifact exists. Extract
+every **file-specific, verifiable claim**:
 
 ```
 For each finding, extract:
@@ -20,9 +22,10 @@ Skip vague observations ("code could be cleaner") — only extract concrete, fal
 
 For each extracted claim, verify against actual code:
 
-1. **File exists** — Glob/Grep for the cited path. Reject invented paths.
-2. **Line numbers are accurate** — Read the cited file:line, confirm the claim matches.
-3. **Logic matches description** — Read the surrounding context. Does the code actually do what the finding claims?
+1. **File exists** — Resolve exact relative paths first, then basename fallback. Reject invented paths.
+2. **Line numbers are accurate** — Read the cited file:line. If the line is stale but the file/symbol is right, mark `CORRECTED`.
+3. **Local anchors corroborate the claim** — Look for cited symbols, function names, or code anchors in the resolved file/context.
+4. **Logic matches description** — Read the surrounding context. Does the code actually do what the finding claims?
 4. **Counts are correct** — Re-run any counting logic yourself (`wc -l`, `grep -c`, etc.).
 5. **Severity is defensible** — Is a "critical bug" actually critical, or is it a style preference?
 6. **Not already fixed** — Check `git log --oneline -10 -- <file>` for recent changes.
@@ -53,7 +56,7 @@ Error rates vary by source and claim type:
 - **CONFIRMED** — claim matches reality, proceed to fix
 - **CORRECTED** — directionally right but details wrong (wrong count, wrong line, wrong severity). Note the correction.
 - **HALLUCINATED** — claim doesn't match reality. Drop it.
-- **INCONCLUSIVE** — can't verify without running the code or deeper investigation. Flag for human.
+- **INCONCLUSIVE** — the claim has some anchor, but local evidence is too weak or ambiguous to confirm/correct confidently.
 
 ## Synthesis Table Format
 

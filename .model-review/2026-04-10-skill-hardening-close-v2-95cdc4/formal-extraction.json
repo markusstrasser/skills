@@ -1,0 +1,54 @@
+{
+  "findings": [
+    {
+      "category": "bug",
+      "severity": "high",
+      "title": "Path instability in selective manifest linting mode",
+      "description": "The script accepts --manifest as raw Path and prints manifest_path.relative_to(ROOT). A relative path like brainstorm/skill.json is not under absolute ROOT, so relative_to() raises ValueError, crashing the linter.",
+      "file": "scripts/lint_skill_manifests.py",
+      "line": 0,
+      "fix": "Normalize all manifest CLI inputs to repo-rooted absolute paths before validation/output by converting each to (ROOT / path).resolve() when relative.",
+      "confidence": 1.0
+    },
+    {
+      "category": "bug",
+      "severity": "high",
+      "title": "Validator crash on malformed uses.* entries",
+      "description": "The validate_manifest function tests array items for membership (e.g., in PROFILES). Non-string unhashable items like dicts or lists in uses.dispatch_profiles, uses.packet_builders, or uses.artifact_schemas will raise TypeError instead of returning a validation issue.",
+      "file": "shared/skill_manifest.py",
+      "line": 0,
+      "fix": "Validate that each array member is a non-empty string before performing membership checks.",
+      "confidence": 1.0
+    },
+    {
+      "category": "logic",
+      "severity": "medium",
+      "title": "Review artifacts anchored to process CWD instead of project directory",
+      "description": "Review output directories are built using Path('.model-review/...') relative to the process CWD rather than the project directory resolved from --project. This causes artifacts to be written to the wrong tree if the script is invoked from outside the target repository.",
+      "file": "review/scripts/model-review.py",
+      "line": 0,
+      "fix": "Anchor review_dir creation to project_dir or add an explicit --output-dir argument.",
+      "confidence": 0.9
+    },
+    {
+      "category": "missing",
+      "severity": "medium",
+      "title": "Brainstorm schema registry underspecifies documented artifact contract",
+      "description": "Registry entries for brainstorm.matrix.v1 and brainstorm.coverage.v1 require fewer fields than documented (missing transfer_mechanism, caller_evidence, etc.), allowing malformed artifacts to pass contract checks.",
+      "file": "shared/skill_manifest.py",
+      "line": 0,
+      "fix": "Expand ARTIFACT_SCHEMAS definitions to match the documented matrix/coverage requirements or update documentation to match the registry.",
+      "confidence": 0.8
+    },
+    {
+      "category": "logic",
+      "severity": "low",
+      "title": "Contradictory fallback policy in review documentation",
+      "description": "Documentation contains internal contradictions, stating both that models should NEVER be downgraded on failure while also documenting automatic Gemini Pro to Flash fallback behavior.",
+      "file": "review/lenses/adversarial-review.md",
+      "line": 0,
+      "fix": "Align the documentation with actual implemented policy: automated fallback is allowed as implemented by the dispatch layer.",
+      "confidence": 0.9
+    }
+  ]
+}

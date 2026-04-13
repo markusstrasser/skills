@@ -8,9 +8,6 @@ Usage:
     # Standard review (2 queries: arch + formal)
     model-review.py --context plan.md --topic "hook architecture" "Review for gaps"
 
-    # Simple review (1 query: combined)
-    model-review.py --context plan.md --topic "config tweak" --axes simple "Review this change"
-
     # Deep review (4 queries: arch + formal + domain + mechanical)
     model-review.py --context plan.md --topic "classification logic" --axes arch,formal,domain,mechanical "Review this"
 
@@ -193,24 +190,10 @@ Generate 3-5 genuinely different approaches to the same problem. For each:
 
 Do NOT critique the existing plan — generate alternatives. Different mechanisms, not tweaks.""",
     },
-    "simple": {
-        "label": "Gemini Pro (combined review)",
-        "profile": "deep_review",
-        "prompt": """\
-<system>
-Quick combined review. Be concrete. It is {date}. Budget: ~1000 words.
-</system>
-
-{question}
-
-Check for: (1) anything that breaks existing functionality, (2) wrong assumptions, (3) missing edge cases.
-If everything looks correct, say so concisely.""",
-    },
 }
 
 # Presets map a single name to a list of axes
 PRESETS = {
-    "simple": ["simple"],
     "standard": ["arch", "formal"],
     "deep": ["arch", "formal", "domain", "mechanical"],
     "full": ["arch", "formal", "domain", "mechanical", "alternatives"],
@@ -218,6 +201,7 @@ PRESETS = {
 
 GEMINI_PRO_MODEL = dispatch_core.PROFILES["deep_review"].model
 GEMINI_FLASH_MODEL = dispatch_core.PROFILES["fast_extract"].model
+COVERAGE_SCHEMA_VERSION = "review-coverage.v1"
 GEMINI_RATE_LIMIT_MARKERS = (
     "503",
     "rate limit",
@@ -239,6 +223,35 @@ def context_content_path(value: Path | ContextArtifact) -> Path:
 
 def context_manifest_path(value: Path | ContextArtifact) -> Path | None:
     return value.manifest_path if isinstance(value, ContextArtifact) else None
+
+
+def axis_uses_gpt(axis_name: str) -> bool:
+    model_name = dispatch_core.PROFILES[str(AXES[axis_name]["profile"])].model.lower()
+    return "gpt" in model_name
+
+
+def resolve_axes(raw_axes: str, *, allow_non_gpt: bool = False) -> list[str]:
+    axes_text = raw_axes.strip()
+    if axes_text == "simple":
+        raise ValueError("the `simple` preset was removed; use `standard` for the GPT-inclusive default")
+
+    if axes_text in PRESETS:
+        axis_names = PRESETS[axes_text]
+    else:
+        axis_names = [axis.strip() for axis in axes_text.split(",") if axis.strip()]
+        if not axis_names:
+            raise ValueError("no review axes provided")
+        unknown_axes = [axis for axis in axis_names if axis not in AXES]
+        if unknown_axes:
+            raise ValueError(
+                f"unknown axis '{unknown_axes[0]}'. Available: {', '.join(sorted(AXES.keys()))}"
+            )
+
+    if not allow_non_gpt and not any(axis_uses_gpt(axis_name) for axis_name in axis_names):
+        raise ValueError(
+            "review requires at least one GPT-backed axis; add `formal` or use `standard`, `deep`, or `full`"
+        )
+    return axis_names
 
 
 def slugify(text: str, max_len: int = 40) -> str:
@@ -591,6 +604,139 @@ def dispatch(
     return results
 
 
+def _load_json(path: Path) -> dict:
+    try:
+        return json.loads(path.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _review_artifact_path(review_dir: Path, filename: str) -> str | None:
+    path = review_dir / filename
+    return str(path) if path.exists() else None
+
+
+def _context_packet_summary(review_dir: Path) -> dict[str, object]:
+    manifest_path = review_dir / "shared-context.manifest.json"
+    manifest = _load_json(manifest_path)
+    packet_metadata = manifest.get("packet_metadata") or {}
+    budget_enforcement = packet_metadata.get("budget_enforcement") or {}
+    return {
+        "path": str(manifest_path) if manifest_path.exists() else None,
+        "builder_name": manifest.get("builder_name"),
+        "builder_version": manifest.get("builder_version"),
+        "payload_hash": manifest.get("payload_hash"),
+        "rendered_content_hash": manifest.get("rendered_content_hash"),
+        "rendered_bytes": manifest.get("rendered_bytes"),
+        "token_estimate": manifest.get("token_estimate"),
+        "estimate_method": manifest.get("estimate_method"),
+        "budget_metric": manifest.get("budget_metric"),
+        "budget_limit": manifest.get("budget_limit"),
+        "source_paths_count": len(manifest.get("source_paths") or []),
+        "truncation_event_count": len(manifest.get("truncation_events") or []),
+        "dropped_blocks": budget_enforcement.get("dropped_blocks") or [],
+    }
+
+
+def write_coverage_artifact(
+    review_dir: Path,
+    dispatch_result: dict | None = None,
+    *,
+    extraction_tasks: list[tuple[str, Path, str]] | None = None,
+    axis_findings: dict[str, list[dict]] | None = None,
+    merged_findings: list[dict] | None = None,
+    disposition_path: str | None = None,
+    verification_summary: dict[str, object] | None = None,
+    verified_disposition_path: str | None = None,
+) -> Path:
+    coverage_path = review_dir / "coverage.json"
+    existing_payload = _load_json(coverage_path)
+    requested_axes: list[str] = []
+    dispatch_axes: list[dict[str, object]] = []
+
+    if dispatch_result is not None:
+        requested_axes = [str(axis) for axis in dispatch_result.get("axes", []) if isinstance(axis, str)]
+        if not requested_axes:
+            requested_axes = [
+                axis
+                for axis, info in dispatch_result.items()
+                if axis
+                not in {"review_dir", "axes", "queries", "elapsed_seconds", "dispatch_failures", "failed_axes"}
+                and isinstance(info, dict)
+            ]
+        dispatch_axes = [
+            {
+                "axis": axis,
+                "label": info.get("label"),
+                "requested_model": info.get("requested_model"),
+                "model": info.get("model"),
+                "exit_code": info.get("exit_code"),
+                "output_path": info.get("output"),
+                "output_bytes": info.get("size"),
+                "latency_seconds": info.get("latency"),
+                "fallback_from": info.get("fallback_from"),
+                "fallback_reason": info.get("fallback_reason"),
+            }
+            for axis, info in ((axis, dispatch_result[axis]) for axis in requested_axes)
+        ]
+
+    payload = {
+        "schema": COVERAGE_SCHEMA_VERSION,
+        "schema_version": COVERAGE_SCHEMA_VERSION,
+        "review_dir": str(review_dir),
+        "artifacts": existing_payload.get("artifacts", {}),
+        "context_packet": _context_packet_summary(review_dir),
+        "dispatch": existing_payload.get("dispatch", {}),
+        "extraction": existing_payload.get("extraction", {"enabled": False}),
+        "verification": existing_payload.get("verification", {"enabled": False}),
+    }
+
+    payload["artifacts"].update(
+        {
+            "shared_context": _review_artifact_path(review_dir, "shared-context.md"),
+            "shared_context_manifest": _review_artifact_path(review_dir, "shared-context.manifest.json"),
+            "findings": _review_artifact_path(review_dir, "findings.json"),
+            "disposition": disposition_path or payload["artifacts"].get("disposition"),
+            "verified_disposition": verified_disposition_path or payload["artifacts"].get("verified_disposition"),
+        }
+    )
+
+    if dispatch_result is not None:
+        payload["dispatch"] = {
+            "requested_axes": requested_axes,
+            "requested_axis_count": len(requested_axes),
+            "axes": dispatch_axes,
+            "elapsed_seconds": dispatch_result.get("elapsed_seconds"),
+        }
+
+    if extraction_tasks is not None or axis_findings is not None or merged_findings is not None:
+        usable_axes = [axis for axis, _, _ in (extraction_tasks or [])]
+        usable_axis_count = len(usable_axes)
+        findings_before_dedup = sum(len(findings) for findings in (axis_findings or {}).values())
+        payload["extraction"] = {
+            "enabled": True,
+            "usable_axes": usable_axes,
+            "usable_axis_count": usable_axis_count,
+            "axes_with_findings": list((axis_findings or {}).keys()),
+            "axes_with_findings_count": len(axis_findings or {}),
+            "findings_before_dedup": findings_before_dedup,
+            "findings_after_dedup": len(merged_findings or []),
+            "cross_model_agreements": sum(
+                1 for finding in (merged_findings or []) if finding.get("cross_model")
+            ),
+            "findings_by_axis": {
+                axis: len(findings) for axis, findings in (axis_findings or {}).items()
+            },
+            "coverage_ratio": round(len(axis_findings or {}) / usable_axis_count, 3) if usable_axis_count else 0.0,
+        }
+
+    if verification_summary is not None:
+        payload["verification"] = {"enabled": True, **verification_summary}
+
+    coverage_path.write_text(json.dumps(payload, indent=2) + "\n")
+    return coverage_path
+
+
 EXTRACTION_PROMPT = (
     "Extract every discrete recommendation, finding, or claimed bug from the review. "
     "Return JSON matching the schema. For each finding: category, severity, a one-line title, "
@@ -644,6 +790,7 @@ def extract_claims(
     """Cross-family extraction: Flash extracts GPT outputs, GPT-Instant extracts Gemini outputs.
 
     Returns path to disposition.md, or None if no outputs to extract.
+    Writes coverage.json whenever extraction tasks were attempted.
     """
     extraction_tasks: list[tuple[str, Path, str]] = []  # (axis, output_path, profile)
     skip_keys = {"review_dir", "axes", "queries", "elapsed_seconds"}
@@ -714,6 +861,13 @@ def extract_claims(
                 axis_findings[axis] = findings
 
     if not axis_findings:
+        write_coverage_artifact(
+            review_dir,
+            dispatch_result,
+            extraction_tasks=extraction_tasks,
+            axis_findings={},
+            merged_findings=[],
+        )
         return None
 
     # Merge findings across axes — keyword overlap for cross-model dedup
@@ -804,6 +958,14 @@ def extract_claims(
         f"Structured data: `findings.json`\n\n"
     )
     disposition.write_text(header + merged + response_template)
+    write_coverage_artifact(
+        review_dir,
+        dispatch_result,
+        extraction_tasks=extraction_tasks,
+        axis_findings=axis_findings,
+        merged_findings=merged_findings,
+        disposition_path=str(disposition),
+    )
     return str(disposition)
 
 
@@ -823,21 +985,129 @@ def verify_claims(
     """
     disposition_text = Path(disposition_path).read_text()
 
-    # Parse claims: numbered lines (e.g., "1. Function X in foo.py has bug")
-    claims: list[dict] = []
-    current_section = ""
-    for line in disposition_text.splitlines():
-        section_match = re.match(r"^##\s+(.+)", line)
-        if section_match:
-            current_section = section_match.group(1).strip()
-            continue
-        claim_match = re.match(r"^(\d+)\.\s+(.+)", line.strip())
-        if claim_match:
-            claims.append({
-                "num": int(claim_match.group(1)),
-                "text": claim_match.group(2),
-                "section": current_section,
-            })
+    def _parse_disposition_claims() -> list[dict[str, object]]:
+        parsed_claims: list[dict[str, object]] = []
+        current_section = ""
+        current_claim: dict[str, object] | None = None
+        current_lines: list[str] = []
+        for raw_line in disposition_text.splitlines():
+            line = raw_line.rstrip()
+            section_match = re.match(r"^##\s+(.+)", line)
+            if section_match:
+                if current_claim is not None:
+                    current_claim["body"] = "\n".join(current_lines).strip()
+                    parsed_claims.append(current_claim)
+                    current_claim = None
+                    current_lines = []
+                current_section = section_match.group(1).strip()
+                if current_section.lower().startswith("agent response"):
+                    break
+                continue
+            if line.strip() == "---":
+                if current_claim is not None:
+                    current_claim["body"] = "\n".join(current_lines).strip()
+                    parsed_claims.append(current_claim)
+                    current_claim = None
+                    current_lines = []
+                continue
+            claim_match = re.match(r"^(\d+)\.\s+(.+)", line.strip())
+            if claim_match:
+                if current_claim is not None:
+                    current_claim["body"] = "\n".join(current_lines).strip()
+                    parsed_claims.append(current_claim)
+                current_claim = {
+                    "num": int(claim_match.group(1)),
+                    "text": claim_match.group(2),
+                    "section": current_section,
+                }
+                current_lines = [line.strip()]
+                continue
+            if current_claim is not None:
+                current_lines.append(line)
+
+        if current_claim is not None:
+            current_claim["body"] = "\n".join(current_lines).strip()
+            parsed_claims.append(current_claim)
+        return parsed_claims
+
+    def _parse_structured_claims() -> list[dict[str, object]]:
+        findings_path = review_dir / "findings.json"
+        data = _load_json(findings_path)
+        findings = data.get("findings")
+        if not isinstance(findings, list):
+            return []
+        structured_claims: list[dict[str, object]] = []
+        for index, finding in enumerate(findings, 1):
+            if not isinstance(finding, dict):
+                continue
+            title = str(finding.get("title", "") or "").strip()
+            description = str(finding.get("description", "") or "").strip()
+            file_path = str(finding.get("file", "") or "").strip()
+            line_number = finding.get("line", 0)
+            fix_text = str(finding.get("fix", "") or "").strip()
+            body_lines = [
+                title,
+                f"Description: {description}" if description else "",
+                f"File: {file_path}:{line_number}" if file_path and isinstance(line_number, int) and line_number > 0 else (
+                    f"File: {file_path}" if file_path else ""
+                ),
+                f"Fix: {fix_text}" if fix_text else "",
+            ]
+            structured_claims.append(
+                {
+                    "num": int(finding.get("id", index) or index),
+                    "text": title or description or f"Finding {index}",
+                    "section": "Structured Findings",
+                    "body": "\n".join(line for line in body_lines if line),
+                    "file": file_path,
+                    "line": line_number if isinstance(line_number, int) else 0,
+                    "description": description,
+                    "fix": fix_text,
+                }
+            )
+        return structured_claims
+
+    def _extract_code_anchors(*texts: str) -> list[str]:
+        anchors: list[str] = []
+        seen: set[str] = set()
+        patterns = [
+            re.compile(r"`([^`]+)`"),
+            re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*\(\))"),
+            re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*__[A-Za-z0-9_]+)\b"),
+            re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*_[A-Za-z0-9_]+)\b"),
+            re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*[A-Z][A-Za-z0-9_]*)\b"),
+        ]
+        generic = {
+            "review", "finding", "findings", "description", "category", "confidence",
+            "source", "file", "fix", "error", "warning", "coverage", "json", "path",
+            "model", "script", "line", "claim", "claims",
+        }
+        for text in texts:
+            for pattern in patterns:
+                for match in pattern.findall(text):
+                    anchor = str(match).strip("`").strip()
+                    normalized = anchor.replace("()", "")
+                    if len(normalized) < 3:
+                        continue
+                    if normalized.lower() in generic:
+                        continue
+                    if normalized not in seen:
+                        seen.add(normalized)
+                        anchors.append(normalized)
+        return anchors
+
+    def _resolve_reference(filepath: str) -> tuple[str, Path | None, str]:
+        exact_path = project_dir / filepath
+        if exact_path.exists():
+            return "exact", exact_path, filepath
+        candidates = list(project_dir.rglob(filepath))
+        if not candidates:
+            return "missing", None, filepath
+        if len(candidates) > 1:
+            return "ambiguous", None, filepath
+        return "basename", candidates[0], filepath
+
+    claims: list[dict[str, object]] = _parse_structured_claims() or _parse_disposition_claims()
 
     if not claims:
         print("No numbered claims found in disposition.", file=sys.stderr)
@@ -846,58 +1116,129 @@ def verify_claims(
     # Verify each claim
     verified: list[dict] = []
     for claim in claims:
-        text = claim["text"]
-        verdict = "UNVERIFIABLE"
+        claim_text = str(claim["text"])
+        body_text = str(claim.get("body", claim_text))
+        verdict = "INCONCLUSIVE"
         notes: list[str] = []
 
-        # Extract file references: path/file.ext or file.ext:line or `file.ext`
-        file_refs = re.findall(
+        structured_file = str(claim.get("file", "") or "").strip()
+        structured_line = int(claim.get("line", 0) or 0)
+        file_refs = []
+        if structured_file:
+            file_refs.append((structured_file, str(structured_line) if structured_line > 0 else ""))
+        file_refs.extend(re.findall(
             r"`?([a-zA-Z_][\w/.-]*\.(?:py|js|ts|md|sh|json|yaml|yml|toml|cfg|sql|html|css|clj|cljc|edn))(?::(\d+))?`?",
-            text,
-        )
+            body_text,
+        ))
+        deduped_refs: list[tuple[str, str]] = []
+        seen_refs: set[tuple[str, str]] = set()
+        for filepath, line_str in file_refs:
+            key = (filepath, line_str)
+            if key not in seen_refs:
+                seen_refs.add(key)
+                deduped_refs.append(key)
+        file_refs = deduped_refs
 
         if not file_refs:
-            verified.append({**claim, "verdict": verdict, "notes": "no file references"})
+            verified.append({**claim, "verdict": verdict, "notes": "no file references or structured file anchors"})
             continue
 
-        all_found = True
+        claim_anchors = _extract_code_anchors(
+            claim_text,
+            str(claim.get("description", "") or ""),
+            str(claim.get("fix", "") or ""),
+            body_text,
+        )
+        reference_results: list[tuple[str, Path, str]] = []
         for filepath, line_str in file_refs:
-            candidates = list(project_dir.rglob(filepath))
-            if not candidates:
+            resolution, found_path, display_path = _resolve_reference(filepath)
+            if resolution == "missing" or found_path is None:
                 verdict = "HALLUCINATED"
                 notes.append(f"{filepath} not found")
-                all_found = False
+                reference_results.append((resolution, Path(filepath), line_str))
+            elif resolution == "ambiguous":
+                notes.append(f"{filepath} matched multiple files")
+                reference_results.append((resolution, Path(filepath), line_str))
             else:
-                found_path = candidates[0]
-                if line_str:
-                    line_num = int(line_str)
-                    try:
-                        lines = found_path.read_text().splitlines()
-                        if line_num > len(lines):
-                            notes.append(f"{filepath}:{line_num} beyond EOF ({len(lines)} lines)")
-                        else:
-                            notes.append(f"{filepath} exists, L{line_num} readable")
-                    except Exception:
-                        notes.append(f"{filepath} exists but unreadable")
-                else:
-                    notes.append(f"{filepath} exists")
+                reference_results.append((resolution, found_path, line_str))
 
-        if all_found and verdict != "HALLUCINATED":
-            verdict = "CONFIRMED"
+        if verdict == "HALLUCINATED":
+            verified.append({**claim, "verdict": verdict, "notes": "; ".join(notes)})
+            continue
+
+        anchor_confirmed = False
+        line_corrected = False
+        ambiguous_ref = any(resolution == "ambiguous" for resolution, _, _ in reference_results)
+        for resolution, found_path, line_str in reference_results:
+            if resolution == "ambiguous":
+                continue
+            try:
+                file_text = found_path.read_text()
+                file_lines = file_text.splitlines()
+            except OSError:
+                notes.append(f"{found_path.relative_to(project_dir)} unreadable")
+                continue
+
+            relative_display = str(found_path.relative_to(project_dir))
+            if line_str:
+                line_num = int(line_str)
+                if line_num > len(file_lines):
+                    line_corrected = True
+                    notes.append(f"{relative_display}:{line_num} beyond EOF ({len(file_lines)} lines)")
+                else:
+                    start = max(0, line_num - 4)
+                    end = min(len(file_lines), line_num + 3)
+                    window = "\n".join(file_lines[start:end]).lower()
+                    matched = [anchor for anchor in claim_anchors if anchor.lower() in window]
+                    if matched:
+                        anchor_confirmed = True
+                        notes.append(f"{relative_display}:{line_num} anchors {', '.join(sorted(set(matched)))}")
+                    else:
+                        notes.append(f"{relative_display}:{line_num} readable")
+            else:
+                file_text_lower = file_text.lower()
+                matched = [anchor for anchor in claim_anchors if anchor.lower() in file_text_lower]
+                if matched:
+                    anchor_confirmed = True
+                    notes.append(f"{relative_display} anchors {', '.join(sorted(set(matched)))}")
+                else:
+                    notes.append(f"{relative_display} exists")
+
+        if anchor_confirmed:
+            verdict = "CORRECTED" if line_corrected else "CONFIRMED"
+        elif line_corrected:
+            verdict = "CORRECTED"
+        elif ambiguous_ref:
+            verdict = "INCONCLUSIVE"
+        else:
+            verdict = "INCONCLUSIVE"
+
+        if verdict == "INCONCLUSIVE" and claim_anchors:
+            notes.append("anchors not corroborated in resolved file context")
 
         verified.append({**claim, "verdict": verdict, "notes": "; ".join(notes)})
 
     # Stats
     confirmed = sum(1 for v in verified if v["verdict"] == "CONFIRMED")
+    corrected = sum(1 for v in verified if v["verdict"] == "CORRECTED")
     hallucinated = sum(1 for v in verified if v["verdict"] == "HALLUCINATED")
-    unverifiable = sum(1 for v in verified if v["verdict"] == "UNVERIFIABLE")
+    inconclusive = sum(1 for v in verified if v["verdict"] == "INCONCLUSIVE")
+    verification_summary = {
+        "claim_count": len(verified),
+        "confirmed_count": confirmed,
+        "corrected_count": corrected,
+        "hallucinated_count": hallucinated,
+        "inconclusive_count": inconclusive,
+        "unverifiable_count": inconclusive,
+        "hallucination_rate": round(hallucinated / len(verified), 3) if verified else 0.0,
+    }
 
     # Write verified disposition
     out_path = review_dir / "verified-disposition.md"
     lines_out = [
         f"# Verified Disposition — {date.today().isoformat()}\n",
         f"**Claims:** {len(verified)} total — "
-        f"{confirmed} CONFIRMED, {hallucinated} HALLUCINATED, {unverifiable} UNVERIFIABLE\n",
+        f"{confirmed} CONFIRMED, {corrected} CORRECTED, {hallucinated} HALLUCINATED, {inconclusive} INCONCLUSIVE\n",
     ]
     if hallucinated > 0:
         rate = round(hallucinated / len(verified) * 100)
@@ -906,15 +1247,21 @@ def verify_claims(
     lines_out.append("| # | Verdict | Claim | Notes |")
     lines_out.append("|---|---------|-------|-------|")
     for v in verified:
-        claim_short = v["text"][:80] + ("..." if len(v["text"]) > 80 else "")
+        claim_text = str(v["text"])
+        claim_short = claim_text[:80] + ("..." if len(claim_text) > 80 else "")
         lines_out.append(f"| {v['num']} | {v['verdict']} | {claim_short} | {v.get('notes', '')} |")
     lines_out.append("")
 
     out_path.write_text("\n".join(lines_out) + "\n")
     print(
-        f"Verification: {confirmed} confirmed, {hallucinated} hallucinated, "
-        f"{unverifiable} unverifiable ({len(verified)} total)",
+        f"Verification: {confirmed} confirmed, {corrected} corrected, "
+        f"{hallucinated} hallucinated, {inconclusive} inconclusive ({len(verified)} total)",
         file=sys.stderr,
+    )
+    write_coverage_artifact(
+        review_dir,
+        verification_summary=verification_summary,
+        verified_disposition_path=str(out_path),
     )
     return str(out_path)
 
@@ -935,11 +1282,14 @@ def main() -> int:
     parser.add_argument("--project", type=Path, help="Project dir for constitution discovery (default: cwd)")
     parser.add_argument(
         "--axes", default="standard",
-        help="Comma-separated axes or preset name (simple, standard, deep, full). Default: standard",
+        help="Comma-separated axes or preset name (standard, deep, full). Default: standard",
     )
+    parser.add_argument("--allow-non-gpt", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument(
-        "--extract", action="store_true",
-        help="After dispatch, auto-extract claims from each output into disposition.md",
+        "--extract",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enable extraction. Enabled by default for user-facing reviews; use --no-extract for debugging-only runs.",
     )
     parser.add_argument(
         "--verify", action="store_true",
@@ -967,14 +1317,15 @@ def main() -> int:
         return 1
 
     # Resolve axes
-    if args.axes in PRESETS:
-        axis_names = PRESETS[args.axes]
-    else:
-        axis_names = [a.strip() for a in args.axes.split(",")]
-        for a in axis_names:
-            if a not in AXES:
-                print(f"error: unknown axis '{a}'. Available: {', '.join(AXES.keys())}", file=sys.stderr)
-                return 1
+    try:
+        axis_names = resolve_axes(args.axes, allow_non_gpt=bool(args.allow_non_gpt))
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    if not args.extract and args.verify:
+        print("error: --verify cannot be combined with --no-extract", file=sys.stderr)
+        return 1
 
     print(f"Dispatching {len(axis_names)} queries: {', '.join(axis_names)}", file=sys.stderr)
 
@@ -998,7 +1349,11 @@ def main() -> int:
         if not args.questions.exists():
             print(f"error: questions file {args.questions} not found", file=sys.stderr)
             return 1
-        question_overrides = json.loads(args.questions.read_text())
+        try:
+            question_overrides = json.loads(args.questions.read_text())
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"error: invalid questions file {args.questions}: {exc}", file=sys.stderr)
+            return 1
 
     # Dispatch and wait
     result = dispatch(review_dir, ctx_files, axis_names, args.question, bool(constitution), question_overrides)
@@ -1016,12 +1371,15 @@ def main() -> int:
         print(json.dumps(result, indent=2))
         return 2
 
-    # --verify implies --extract
-    do_extract = args.extract or args.verify
+    do_extract = bool(args.extract) or args.verify
 
     # Optional extraction phase
     if do_extract:
         disposition_path = extract_claims(review_dir, result)
+        coverage_path = review_dir / "coverage.json"
+        if coverage_path.exists():
+            result["coverage"] = str(coverage_path)
+            print(f"Coverage written to {coverage_path}", file=sys.stderr)
         if disposition_path:
             result["disposition"] = disposition_path
             print(f"Disposition written to {disposition_path}", file=sys.stderr)

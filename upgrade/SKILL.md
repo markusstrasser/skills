@@ -58,7 +58,7 @@ Feed entire codebase to Gemini 3.1 Pro (1M context) + GPT-5.4 in parallel, get s
 
 ### Cross-model dispatch
 
-Uses `~/Projects/skills/review/scripts/model-review.py` for Gemini+GPT parallel dispatch. Provider names: Google is `-p google` (not `-p gemini`). Always pass `--max-tokens 65536` on Gemini dispatches.
+Route through the shared review/dispatch surfaces and the shared packet contract in `shared/context_packet.py`. Consume `coverage.json` plus `findings.json`; do not rebuild provider flags, packet manifests, or raw model recipes inside `upgrade`.
 
 ### Why dual-model?
 
@@ -139,7 +139,7 @@ Systematically discover what's missing from a codebase, validate feasibility, an
 | # | Failure | Prevention Gate |
 |---|---------|-----------------|
 | F1 | Researching already-built features | **Inventory gate**: grep `scripts/*.py` for concept keywords before ANY research |
-| F2 | Codex CLI as file-output tool | **Tool gate**: use `llmx -o file.md`, never `codex -q "write to X"` |
+| F2 | Prompt-driven file output | **Tool gate**: use the shared file-output contract; never rely on prompt text alone to create or overwrite artifacts |
 | F3 | Gemini Pro timeout on large context | **Context gate**: summarize to <15KB for Gemini Pro; <50KB for GPT-5.4 |
 | F4 | Duplicate frontier candidates re-entering | **Idempotency gate**: maintain existing-ID ban list |
 | F5 | MCP tool-call schema mismatch | **Schema gate**: validate payload shape before dispatch |
@@ -160,7 +160,7 @@ Systematically discover what's missing from a codebase, validate feasibility, an
 
 ### Key judgments
 
-- Up to 3 Claude agents + 2 llmx GPT-5.4 in parallel. One idea per agent.
+- Up to 3 Claude agents + 2 GPT-5.4 shared dispatches in parallel. One idea per agent.
 - Survivor calibration: default 0-2. A 0-survivor pass is healthy.
 - Every object must have a caller -- dead code with a plan does not pass.
 - Can stop after Phase 4 if user wants to implement later.

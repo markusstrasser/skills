@@ -100,6 +100,16 @@ Charged based on whichever is higher: reservation or actual usage.
 Disk requests increase memory request at 20:1 ratio:
 - Requesting 500 GiB disk → increases memory request to 25 GiB (if not already higher)
 
+## Attribution
+
+Treat status and spend as separate dimensions.
+
+- Status comes from logs, container state, or the dashboard.
+- Spend comes from billing reports grouped by tags.
+- Tag launches with `question_id`, `run_id`, and `stage` so the two can be joined later.
+
+See `attribution.md` for the reporting template.
+
 ## Maximum Requests
 
 Modal enforces maximums at Function creation time. Requests exceeding maximum will be rejected with `InvalidError`.

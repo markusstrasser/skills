@@ -114,14 +114,14 @@ Each phase prompt must include:
 2. **Probe external claims inline:** If the plan references any URL, API endpoint, or version number, HTTP-probe it directly. This catches 404s and HTML-instead-of-API before wasting a review cycle (caught 2 bugs in 6 cycles).
 3. **Cross-model review via script:** Write the plan to a temp file, then dispatch:
 ```bash
-uv run python3 ~/Projects/skills/model-review/scripts/model-review.py \
+uv run python3 ~/Projects/skills/review/scripts/model-review.py \
   --context /tmp/cycle-plan.md \
   --topic "research-cycle-G{N}" \
-  --axes simple \
+  --axes standard \
   --project "$(pwd)" \
   "Review this plan for wrong assumptions, missing steps, and anything that could break existing functionality"
 ```
-Route `--axes` by stakes: `simple` for autonomous/low-risk, `standard` for needs-approval, `deep` for structural changes. Skip cross-model entirely for trivial changes (docstring fixes, config tweaks).
+Route `--axes` by stakes: `standard` for autonomous/low-risk, `deep` for needs-approval, `full` for structural changes. Skip cross-model entirely for trivial changes (docstring fixes, config tweaks).
 Read the output files, apply verified findings to plan. If critical issues, move plan back to gaps. **On model-review failure:** check exit code + stderr before retrying. Classify: auth (retry), rate-limit (fall back to other model), timeout (reduce context), schema error (fix input). Do NOT blindly retry the same model (FM24). Commit.
 
 **Execute:** Read reviewed plan. Implement it — the queue is the approval, no `[x]` gate. **Before executing:** note current HEAD SHA. After implementation, commit. **Reflect inline** (1-3 lines under the done entry): what was easier/harder than planned, did plan assumptions hold, anything to carry forward. Move item from Active Plan to `## Autonomous (done)` with date + reflection. Mark corresponding gap entry with `~~done~~` prefix.

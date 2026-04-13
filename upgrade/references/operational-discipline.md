@@ -32,7 +32,7 @@ Do not stage or commit cross-repo edits from the wrong cwd just because the abso
 | Phase | % of session | Tokens (typical) | Parallelizable? |
 |-------|-------------|-------------------|-----------------|
 | Inventory | 10% | ~20K | No |
-| Brainstorm | 15% | ~200K (with llmx dispatch) | Partially (llmx calls) |
+| Brainstorm | 15% | ~200K (with shared dispatch) | Partially (shared model calls) |
 | Research | 25% | ~500K (across agents) | Yes (up to 5 agents) |
 | Plan | 15% | ~30K | No |
 | Review | 15% | ~300K (cross-model) | Yes (models run in parallel) |

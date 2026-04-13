@@ -1,82 +1,69 @@
 <!-- Reference file for novel-expansion skill. Loaded on demand. -->
 
-> **DISPATCH VIA PYTHON API, NOT CLI.** Use `llmx.api.chat()` — see observe/SKILL.md for the executable pattern.
-
 # Phase 3: Research (~25% of effort)
 
-Dispatch parallel research agents on EXPLORE ideas. This is where F1, F2, and F3 hit hardest, with F4/F5 as common secondary failures.
+Dispatch parallel research workers on explore ideas. This is where F1, F2, and
+F3 hit hardest, with F4/F5 as common secondary failures.
 
-## Pre-dispatch checklist (MANDATORY)
+## Pre-dispatch Checklist (Mandatory)
 
-For EACH idea being researched:
+For each idea being researched:
 
-- [ ] **F1 gate:** `grep -l "keyword1\|keyword2" scripts/*.py` returns 0 matches for this concept
-- [ ] **F1 gate:** Checked `existing_concepts.txt` — concept not listed
-- [ ] **F4 gate:** Checked `/tmp/novel_expansion_existing_ids.txt` for duplicate IDs
-- [ ] Agent prompt includes specific output file path
-- [ ] Agent prompt includes: "Write findings to {file} INCREMENTALLY. After every 3 searches, append."
-- [ ] Scope is narrow enough for 8 search calls per agent (per subagent-output-discipline rule)
+- `F1 gate`: grep the repo for the concept first
+- `F1 gate`: check the existing concept list
+- `F4 gate`: check the duplicate-ID ban list
+- give the worker a specific output file path
+- require incremental, file-first writes
+- keep scope narrow enough for the budgeted search count
 
-## Tool schema guardrails (F5 gate)
+## Tool Schema Guardrails (F5)
 
 - `mcp__scite__search_literature`:
-  - `title` is a scalar string per call.
-  - Pass multiple titles as repeated calls, not one array payload.
-- `mcp__brave_search__brave_news_search`, `mcp__brave_search__brave_web_search`:
-  - Keep query focused; open/crawl on selected URLs for source details.
-- `perplexity` calls:
-  - Set `search_context_size` explicitly and use recent `search_recency_filter` only when needed.
+  - `title` is a scalar string per call
+  - pass multiple titles as repeated calls, not one array payload
+- Brave search tools:
+  - keep the query focused, then open/crawl selected URLs
+- Perplexity:
+  - set `search_context_size` explicitly
+  - use recency filters only when they matter
 
-## Research dispatch patterns
+## Research Dispatch Patterns
 
-**For paper reading / tool evaluation:**
-```bash
-# CORRECT — llmx with file output
-llmx -p openai -m gpt-5.4 --reasoning-effort high --stream --timeout 600 \
-  -o "$RESEARCH_DIR/research-{topic}.md" \
-  "Research {specific question}. Find: (1) existing tools, (2) feasibility at 30x short-read,
-   (3) key papers with DOIs. Stop at 70% of your reasoning budget and synthesize."
-```
+Prefer stable worker surfaces over raw model command recipes:
 
-**For codebase analysis:**
-```
-Agent(subagent_type="researcher", prompt="...", name="research-{topic}")
-```
-with the file-first incremental output rule.
+- tool/paper evaluation:
+  - use a shared research helper or a file-first research worker
+  - output goes directly to the target memo file
+- codebase analysis:
+  - use a dedicated researcher/explore worker
+  - keep one idea per worker
 
-**Codex CLI — correct pattern (if using dispatch-research):**
-```bash
-# CORRECT — Codex text output captured via -o, NOT by telling the agent to write files
-codex exec --full-auto -o "$RESEARCH_DIR/research-{topic}.md" "Research X. Do NOT create files."
-```
+Do not teach prompt-only file creation or raw ad hoc model shell blocks here.
+If a reusable research dispatch helper is missing, add it once to the shared
+stack instead of copying a new local recipe into `upgrade`.
 
-**NEVER use (F2 gate):**
-```bash
-# BROKEN — codex CLI cannot write to specified files from prompt instructions
-codex -q --full-auto "Research X. Write to research-X.md"  # → 0 bytes every time
-# See also: dispatch-research skill (same fix, prompt template rewritten 2026-03-26)
-```
+## Parallel Dispatch Strategy
 
-## Parallel dispatch strategy
+- up to 3 researcher workers in parallel
+- up to 2 GPT-backed shared research/review calls in parallel
+- each worker covers one idea, not the whole frontier
 
-- Up to 3 Claude researcher agents in parallel (more causes MCP contention)
-- Up to 2 llmx GPT-5.4 calls in parallel
-- Each agent covers ONE idea (not "research all 5 ideas")
+## Post-Research Verification
 
-## Post-research verification
+After workers complete:
 
-After agents complete:
-1. Check output file sizes: `wc -c $RESEARCH_DIR/*.md`
-2. Any file < 200 bytes → transcript recovery (read agent task output)
-3. Cross-check: did any agent "discover" something from existing_concepts.txt? → discard
+1. Check output file sizes.
+2. Recover any suspiciously tiny output from the worker transcript or artifact log.
+3. Discard “discoveries” that already existed in the concept list.
 
-## Survivor calibration (F6 gate)
+## Survivor Calibration (F6)
 
-Do **not** target a fixed survivor count.
+Do not target a fixed survivor count.
 
-- Default expectation for mature frontiers: **0-2 survivors**
-- **1 strong survivor** is a good pass
-- **0 survivors** is acceptable and should be logged explicitly
-- A pass with 3+ survivors should be treated as unusual and justified, not assumed
+- default expectation for mature frontiers: `0-2` survivors
+- `1` strong survivor is a good pass
+- `0` survivors is acceptable and should be logged explicitly
+- `3+` survivors should be treated as unusual and justified
 
-If the search is producing reframings, caveats with no caller, or operator duplicates, stop and log a no-survivor pass instead of padding.
+If the search only produces reframings, caveats with no caller, or operator
+duplicates, stop and log a no-survivor pass instead of padding.

@@ -4,21 +4,25 @@
 
 ## Loop Mode Output
 
-When invoked via `/loop`, use quick mode. Output patterns as JSONL (one per line) to the rolling patterns file:
+When invoked via `/loop`, use quick mode. The primary rolling store is still the candidate queue.
+`patterns.jsonl` is an architecture promotion surface, not the first write.
 
 ```bash
-PATTERNS_FILE="$HOME/Projects/meta/artifacts/observe/patterns.jsonl"
-mkdir -p "$(dirname "$PATTERNS_FILE")"
+OBSERVE_PROJECT_ROOT="${OBSERVE_PROJECT_ROOT:-$HOME/Projects/agent-infra}"
+OBSERVE_ARTIFACT_ROOT="${OBSERVE_ARTIFACT_ROOT:-$OBSERVE_PROJECT_ROOT/artifacts/observe}"
+CANDIDATES_FILE="$OBSERVE_ARTIFACT_ROOT/candidates.jsonl"
+PATTERNS_FILE="$OBSERVE_ARTIFACT_ROOT/patterns.jsonl"
+mkdir -p "$OBSERVE_ARTIFACT_ROOT"
 ```
 
-For each pattern found, append one JSON line:
+For each promoted architecture pattern, append one JSON line:
 ```json
 {"ts": "2026-03-17T14:00:00Z", "type": "WORKFLOW_REPEAT", "name": "research-verify-commit", "frequency": 4, "sessions": ["abc123", "def456"], "projects": ["intel", "meta"], "evidence": "user typed 'now verify those claims'...", "verified": true}
 ```
 
-After writing patterns, check timestamp of last synthesis:
+After writing promoted patterns, check timestamp of last synthesis:
 ```bash
-SYNTH_FILE="$HOME/Projects/meta/artifacts/observe/last-synthesis.md"
+SYNTH_FILE="$OBSERVE_ARTIFACT_ROOT/last-synthesis.md"
 ```
 If `last-synthesis.md` is >24h old or doesn't exist, AND there are 5+ new patterns since last synthesis, trigger a full synthesis (Phases 3-5) and write to `artifacts/observe/YYYY-MM-DD-synthesis.md`. The synthesis reads ALL patterns from the last 7 days, deduplicates by name, counts recurrences, and produces ranked proposals.
 
@@ -30,14 +34,15 @@ The synthesis file is picked up by `propose-work.py` in the morning brief -- pro
 
 ```
 Quick runs (every 4h)
-  -> patterns.jsonl (append-only, rolling)
+  -> candidates.jsonl (append-only, rolling)
+     -> patterns.jsonl (architecture-only promotions)
      -> Daily synthesis (auto-triggered when 5+ new patterns + >24h since last)
         -> YYYY-MM-DD-synthesis.md (ranked proposals)
            -> propose-work.py morning brief (surfaces top proposals)
               -> Human approves -> orchestrator task or interactive session
 ```
 
-**Recurrence is the quality signal.** A pattern seen once is noise. Seen 3 times across 2 projects = proposal. Seen 5+ times = urgent. The patterns.jsonl file is the institutional memory of what the system wants to become.
+**Recurrence is the quality signal.** A pattern seen once is noise. Seen 3 times across 2 projects = proposal. Seen 5+ times = urgent. `candidates.jsonl` is the working queue; `patterns.jsonl` is the promoted architecture memory.
 
 ## Pruning
 
@@ -47,7 +52,7 @@ Patterns older than 30 days are archived to `patterns-archive.jsonl`. Implemente
 
 After writing patterns, check implementation status:
 ```bash
-for pattern in $(cat artifacts/observe/patterns.jsonl | python3 -c "import sys,json; [print(json.loads(l).get('name','')) for l in sys.stdin]"); do
+for pattern in $(cat "$PATTERNS_FILE" | python3 -c "import sys,json; [print(json.loads(l).get('name','')) for l in sys.stdin]"); do
   if git log --oneline --since="30 days ago" --grep="$pattern" | head -1 | grep -q .; then
     echo "IMPLEMENTED: $pattern"
   fi

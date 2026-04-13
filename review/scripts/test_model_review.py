@@ -252,7 +252,351 @@ class CallLlmxTest(unittest.TestCase):
         self.assertNotIn("additionalProperties", str(fmt))
 
 
+class AxisResolutionTest(unittest.TestCase):
+    def test_standard_preset_is_gpt_inclusive(self) -> None:
+        self.assertEqual(model_review.resolve_axes("standard"), ["arch", "formal"])
+
+    def test_simple_preset_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "simple"):
+            model_review.resolve_axes("simple")
+
+    def test_non_gpt_axis_sets_are_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "GPT-backed axis"):
+            model_review.resolve_axes("arch,domain,mechanical")
+
+    def test_internal_non_gpt_axis_sets_can_opt_in(self) -> None:
+        self.assertEqual(
+            model_review.resolve_axes("arch,domain,mechanical", allow_non_gpt=True),
+            ["arch", "domain", "mechanical"],
+        )
+
+
+class ExtractionCoverageTest(unittest.TestCase):
+    def test_extract_claims_writes_coverage_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            review_dir = Path(td)
+            arch_output = review_dir / "arch-output.md"
+            arch_output.write_text("arch output")
+            formal_output = review_dir / "formal-output.md"
+            formal_output.write_text("formal output")
+            (review_dir / "shared-context.md").write_text("# shared context")
+            (review_dir / "shared-context.manifest.json").write_text(
+                json.dumps(
+                    {
+                        "builder_name": "model_review_context",
+                        "builder_version": "2026-04-10-v1",
+                        "payload_hash": "payload-hash",
+                        "rendered_content_hash": "content-hash",
+                        "rendered_bytes": 120,
+                        "token_estimate": 30,
+                        "estimate_method": "heuristic:chars_div_4",
+                        "budget_metric": "tokens",
+                        "budget_limit": 42,
+                        "source_paths": ["context.md"],
+                        "truncation_events": [],
+                        "packet_metadata": {
+                            "budget_enforcement": {
+                                "dropped_blocks": [{"block_title": "context.md"}],
+                            }
+                        },
+                    }
+                )
+            )
+
+            dispatch_result = {
+                "review_dir": str(review_dir),
+                "axes": ["arch", "formal"],
+                "queries": 2,
+                "elapsed_seconds": 1.0,
+                "arch": {
+                    "label": "Gemini (architecture/patterns)",
+                    "model": "gemini-3.1-pro-preview",
+                    "requested_model": "gemini-3.1-pro-preview",
+                    "exit_code": 0,
+                    "size": 12,
+                    "output": str(arch_output),
+                },
+                "formal": {
+                    "label": "GPT-5.4 (quantitative/formal)",
+                    "model": "gpt-5.4",
+                    "requested_model": "gpt-5.4",
+                    "exit_code": 0,
+                    "size": 12,
+                    "output": str(formal_output),
+                },
+            }
+
+            def mock_call_llmx(**kwargs):
+                output_path = Path(kwargs["output_path"])
+                if output_path.name == "arch-extraction.json":
+                    payload = {
+                        "findings": [
+                            {
+                                "category": "bug",
+                                "severity": "high",
+                                "title": "Missing guard",
+                                "description": "arch bug",
+                                "file": "review.py",
+                                "line": 12,
+                                "fix": "add guard",
+                                "confidence": 0.9,
+                            }
+                        ]
+                    }
+                else:
+                    payload = {
+                        "findings": [
+                            {
+                                "category": "logic",
+                                "severity": "medium",
+                                "title": "Cost mismatch",
+                                "description": "formal bug",
+                                "file": "model.py",
+                                "line": 8,
+                                "fix": "adjust formula",
+                                "confidence": 0.8,
+                            }
+                        ]
+                    }
+                output_path.write_text(json.dumps(payload))
+                return {"exit_code": 0, "size": output_path.stat().st_size, "latency": 0.1, "error": None}
+
+            with patch.object(model_review, "_call_llmx", side_effect=mock_call_llmx):
+                disposition_path = model_review.extract_claims(review_dir, dispatch_result)
+
+            self.assertEqual(Path(disposition_path).name, "disposition.md")
+            coverage_path = review_dir / "coverage.json"
+            self.assertTrue(coverage_path.exists())
+            coverage = json.loads(coverage_path.read_text())
+            self.assertEqual(coverage["schema"], "review-coverage.v1")
+            self.assertEqual(coverage["schema_version"], "review-coverage.v1")
+            self.assertEqual(coverage["dispatch"]["requested_axis_count"], 2)
+            self.assertEqual(coverage["dispatch"]["axes"][1]["model"], "gpt-5.4")
+            self.assertEqual(coverage["context_packet"]["payload_hash"], "payload-hash")
+            self.assertEqual(coverage["context_packet"]["dropped_blocks"][0]["block_title"], "context.md")
+            self.assertEqual(coverage["extraction"]["usable_axis_count"], 2)
+            self.assertEqual(coverage["extraction"]["axes_with_findings_count"], 2)
+            self.assertEqual(coverage["extraction"]["findings_before_dedup"], 2)
+            self.assertEqual(coverage["extraction"]["findings_after_dedup"], 2)
+            self.assertEqual(coverage["extraction"]["findings_by_axis"]["arch"], 1)
+            self.assertEqual(coverage["extraction"]["findings_by_axis"]["formal"], 1)
+            self.assertEqual(coverage["extraction"]["coverage_ratio"], 1.0)
+            self.assertEqual(Path(coverage["artifacts"]["disposition"]).name, "disposition.md")
+            self.assertFalse(coverage["verification"]["enabled"])
+
+    def test_verify_claims_updates_coverage_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            review_dir = Path(td)
+            project_dir = review_dir / "project"
+            project_dir.mkdir()
+            source_file = project_dir / "module.py"
+            source_file.write_text("value = 1\n")
+            disposition = review_dir / "disposition.md"
+            disposition.write_text(
+                "# Review Findings\n\n"
+                "1. `module.py:1` defines `value` with the wrong value\n"
+                "2. `missing.py:1` is referenced but absent\n"
+            )
+            coverage = {
+                "schema_version": "review-coverage.v1",
+                "review_dir": str(review_dir),
+                "artifacts": {"disposition": str(disposition)},
+                "context_packet": {},
+                "dispatch": {},
+                "extraction": {"enabled": True},
+                "verification": {"enabled": False},
+            }
+            (review_dir / "coverage.json").write_text(json.dumps(coverage))
+
+            verified_path = model_review.verify_claims(review_dir, str(disposition), project_dir)
+
+            self.assertEqual(Path(verified_path).name, "verified-disposition.md")
+            updated = json.loads((review_dir / "coverage.json").read_text())
+            self.assertTrue(updated["verification"]["enabled"])
+            self.assertEqual(updated["verification"]["claim_count"], 2)
+            self.assertEqual(updated["verification"]["confirmed_count"], 1)
+            self.assertEqual(updated["verification"]["corrected_count"], 0)
+            self.assertEqual(updated["verification"]["hallucinated_count"], 1)
+            self.assertEqual(updated["verification"]["inconclusive_count"], 0)
+            self.assertEqual(updated["verification"]["unverifiable_count"], 0)
+            self.assertEqual(updated["verification"]["hallucination_rate"], 0.5)
+            self.assertEqual(Path(updated["artifacts"]["verified_disposition"]).name, "verified-disposition.md")
+
+    def test_verify_claims_parses_multiline_disposition_blocks(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            review_dir = Path(td)
+            project_dir = review_dir / "project"
+            (project_dir / "review" / "scripts").mkdir(parents=True)
+            source_file = project_dir / "review" / "scripts" / "model-review.py"
+            source_file.write_text("def verify_claims():\n    return 0\n")
+            disposition = review_dir / "disposition.md"
+            disposition.write_text(
+                "# Review Findings\n\n"
+                "1. **[HIGH]** verify_claims misses multiline file refs\n"
+                "   Category: logic | Confidence: 0.9 | Source: formal\n"
+                "   The verifier ignores file references on metadata lines.\n"
+                "   File: review/scripts/model-review.py:1\n"
+                "   Fix: parse full finding blocks\n\n"
+                "---\n\n"
+                "## Agent Response (fill before implementing)\n"
+            )
+            coverage = {
+                "schema_version": "review-coverage.v1",
+                "review_dir": str(review_dir),
+                "artifacts": {"disposition": str(disposition)},
+                "context_packet": {},
+                "dispatch": {},
+                "extraction": {"enabled": True},
+                "verification": {"enabled": False},
+            }
+            (review_dir / "coverage.json").write_text(json.dumps(coverage))
+
+            verified_path = model_review.verify_claims(review_dir, str(disposition), project_dir)
+
+            self.assertEqual(Path(verified_path).name, "verified-disposition.md")
+            verified_text = Path(verified_path).read_text()
+            self.assertIn("| 1 | CONFIRMED |", verified_text)
+
+    def test_verify_claims_prefers_structured_findings_and_can_correct_line_numbers(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            review_dir = Path(td)
+            project_dir = review_dir / "project"
+            (project_dir / "review" / "scripts").mkdir(parents=True)
+            source_file = project_dir / "review" / "scripts" / "model-review.py"
+            source_file.write_text("def verify_claims():\n    return 0\n")
+            disposition = review_dir / "disposition.md"
+            disposition.write_text("# Review Findings\n\n1. Placeholder finding\n")
+            findings = {
+                "findings": [
+                    {
+                        "id": 1,
+                        "title": "verify_claims() line reference is stale",
+                        "description": "The finding points at verify_claims() in review/scripts/model-review.py",
+                        "file": "review/scripts/model-review.py",
+                        "line": 99,
+                        "fix": "update the stale line reference",
+                        "category": "logic",
+                        "severity": "medium",
+                        "confidence": 0.8,
+                    }
+                ]
+            }
+            (review_dir / "findings.json").write_text(json.dumps(findings))
+            coverage = {
+                "schema_version": "review-coverage.v1",
+                "review_dir": str(review_dir),
+                "artifacts": {"disposition": str(disposition)},
+                "context_packet": {},
+                "dispatch": {},
+                "extraction": {"enabled": True},
+                "verification": {"enabled": False},
+            }
+            (review_dir / "coverage.json").write_text(json.dumps(coverage))
+
+            verified_path = model_review.verify_claims(review_dir, str(disposition), project_dir)
+
+            updated = json.loads((review_dir / "coverage.json").read_text())
+            self.assertEqual(updated["verification"]["claim_count"], 1)
+            self.assertEqual(updated["verification"]["corrected_count"], 1)
+            self.assertEqual(updated["verification"]["confirmed_count"], 0)
+            verified_text = Path(verified_path).read_text()
+            self.assertIn("| 1 | CORRECTED |", verified_text)
+
+
 class ModelReviewMainTest(unittest.TestCase):
+    def test_main_accepts_explicit_extract_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = Path(temp_dir)
+            context_path = project_dir / "context.md"
+            context_path.write_text("context")
+            review_dir = project_dir / ".model-review" / "auto"
+            review_dir.mkdir(parents=True)
+            dispatch_result = {
+                "review_dir": str(review_dir),
+                "axes": ["formal"],
+                "queries": 1,
+                "elapsed_seconds": 1.0,
+                "formal": {
+                    "label": "Formal",
+                    "model": "gpt-5.4",
+                    "requested_model": "gpt-5.4",
+                    "exit_code": 0,
+                    "size": 10,
+                    "output": str(review_dir / "formal-output.md"),
+                },
+            }
+            (review_dir / "formal-output.md").write_text("output")
+            coverage_path = review_dir / "coverage.json"
+            coverage_path.write_text(json.dumps({"schema": "review-coverage.v1", "schema_version": 1}))
+
+            old_cwd = Path.cwd()
+            os.chdir(project_dir)
+            try:
+                with patch.object(model_review, "build_context", return_value={"formal": project_dir / "ctx.md"}), \
+                     patch.object(model_review, "dispatch", return_value=dispatch_result), \
+                     patch.object(model_review, "find_constitution", return_value=("", None)), \
+                     patch.object(model_review, "extract_claims", return_value=str(review_dir / "disposition.md")) as mock_extract, \
+                     patch.object(model_review.os, "urandom", return_value=b"\xab\xcd\x13"), \
+                     patch.object(model_review.sys, "argv", [
+                         "model-review.py",
+                         "--context", str(context_path),
+                         "--topic", "explicit-extract",
+                         "--project", str(project_dir),
+                         "--extract",
+                     ]):
+                    rc = model_review.main()
+            finally:
+                os.chdir(old_cwd)
+
+            self.assertEqual(rc, 0)
+            mock_extract.assert_called_once()
+
+    def test_main_extracts_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = Path(temp_dir)
+            context_path = project_dir / "context.md"
+            context_path.write_text("context")
+            review_dir = project_dir / ".model-review" / "auto"
+            review_dir.mkdir(parents=True)
+            dispatch_result = {
+                "review_dir": str(review_dir),
+                "axes": ["formal"],
+                "queries": 1,
+                "elapsed_seconds": 1.0,
+                "formal": {
+                    "label": "Formal",
+                    "model": "gpt-5.4",
+                    "requested_model": "gpt-5.4",
+                    "exit_code": 0,
+                    "size": 10,
+                    "output": str(review_dir / "formal-output.md"),
+                },
+            }
+            (review_dir / "formal-output.md").write_text("output")
+            coverage_path = review_dir / "coverage.json"
+            coverage_path.write_text(json.dumps({"schema": "review-coverage.v1", "schema_version": 1}))
+
+            old_cwd = Path.cwd()
+            os.chdir(project_dir)
+            try:
+                with patch.object(model_review, "build_context", return_value={"formal": project_dir / "ctx.md"}), \
+                     patch.object(model_review, "dispatch", return_value=dispatch_result), \
+                     patch.object(model_review, "find_constitution", return_value=("", None)), \
+                     patch.object(model_review, "extract_claims", return_value=str(review_dir / "disposition.md")) as mock_extract, \
+                     patch.object(model_review.os, "urandom", return_value=b"\xab\xcd\x12"), \
+                     patch.object(model_review.sys, "argv", [
+                         "model-review.py",
+                         "--context", str(context_path),
+                         "--topic", "default-extract",
+                         "--project", str(project_dir),
+                     ]):
+                    rc = model_review.main()
+            finally:
+                os.chdir(old_cwd)
+
+            self.assertEqual(rc, 0)
+            mock_extract.assert_called_once()
+
     def test_main_returns_nonzero_when_axis_output_is_empty(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_dir = Path(temp_dir)
@@ -291,6 +635,74 @@ class ModelReviewMainTest(unittest.TestCase):
                 os.chdir(old_cwd)
 
             self.assertEqual(rc, 2)
+
+    def test_main_rejects_verify_with_no_extract(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = Path(temp_dir)
+            context_path = project_dir / "context.md"
+            context_path.write_text("context")
+            old_cwd = Path.cwd()
+            os.chdir(project_dir)
+            try:
+                with patch.object(model_review.sys, "argv", [
+                    "model-review.py",
+                    "--context", str(context_path),
+                    "--topic", "invalid",
+                    "--project", str(project_dir),
+                    "--verify",
+                    "--no-extract",
+                ]):
+                    rc = model_review.main()
+            finally:
+                os.chdir(old_cwd)
+
+            self.assertEqual(rc, 1)
+
+    def test_main_rejects_non_gpt_axes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = Path(temp_dir)
+            context_path = project_dir / "context.md"
+            context_path.write_text("context")
+
+            old_cwd = Path.cwd()
+            os.chdir(project_dir)
+            try:
+                with patch.object(model_review.sys, "argv", [
+                    "model-review.py",
+                    "--context", str(context_path),
+                    "--topic", "non-gpt",
+                    "--project", str(project_dir),
+                    "--axes", "arch,domain,mechanical",
+                ]):
+                    rc = model_review.main()
+            finally:
+                os.chdir(old_cwd)
+
+            self.assertEqual(rc, 1)
+
+    def test_main_rejects_invalid_questions_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = Path(temp_dir)
+            context_path = project_dir / "context.md"
+            context_path.write_text("context")
+            questions_path = project_dir / "questions.json"
+            questions_path.write_text('{"arch": ')
+
+            old_cwd = Path.cwd()
+            os.chdir(project_dir)
+            try:
+                with patch.object(model_review.sys, "argv", [
+                    "model-review.py",
+                    "--context", str(context_path),
+                    "--topic", "bad-questions",
+                    "--project", str(project_dir),
+                    "--questions", str(questions_path),
+                ]):
+                    rc = model_review.main()
+            finally:
+                os.chdir(old_cwd)
+
+            self.assertEqual(rc, 1)
 
 
 class ModelReviewContextBuildTest(unittest.TestCase):

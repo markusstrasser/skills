@@ -11,7 +11,8 @@ Pick distant domains, not adjacent ones — the discomfort is the mechanism.
 | **Human institutions** | common law, military logistics, jazz improvisation, kitchen brigade, air traffic control, insurance underwriting |
 | **Engineering** | civil engineering, control theory, materials science, packet switching, compiler design, wastewater treatment |
 
-Pick one from each row. If `--domains` is specified, use those instead.
+Pick one from each row. Record the row label in `matrix.json` as `domain_row`. If `--domains`
+is specified, use those instead and still preserve the closest row or mark `domain_row: "custom"`.
 
 ## Knowledge Injection (before perturbation)
 

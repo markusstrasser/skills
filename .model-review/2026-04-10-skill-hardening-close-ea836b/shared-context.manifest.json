@@ -1,0 +1,60 @@
+{
+  "budget_limit": 120000,
+  "budget_metric": "tokens",
+  "builder_name": "model_review_context",
+  "builder_version": "2026-04-10-v1",
+  "created_at": "2026-04-11T01:24:15Z",
+  "estimate_method": "heuristic:chars_div_4",
+  "normalization_version": "v1",
+  "packet_metadata": {
+    "Axes": "arch,formal",
+    "Project": "/Users/alien/Projects/skills",
+    "budget_enforcement": {
+      "dropped_blocks": [],
+      "estimate_method": "heuristic:chars_div_4",
+      "limit": 120000,
+      "metric": "tokens",
+      "truncated_blocks": [],
+      "usage": 25103
+    }
+  },
+  "packet_title": "Model Review Context Packet",
+  "payload_hash": "2aa2b4c164f93c9308a110d94c41d27df37bd060e986fb6bc723fa405fe6d314",
+  "rendered_bytes": 100484,
+  "rendered_content_hash": "2aa2b4c164f93c9308a110d94c41d27df37bd060e986fb6bc723fa405fe6d314",
+  "source_blocks": [
+    {
+      "block_hash": "d0cf76175c0edfdd5e22299bf830891f5108d454520cb3792f85b069b102f7e5",
+      "block_index": 0,
+      "block_title": "DEVELOPMENT CONTEXT",
+      "block_type": "preamble",
+      "drop_if_needed": false,
+      "metadata": {},
+      "priority": 1000,
+      "section_index": 0,
+      "section_title": "Preamble",
+      "source_path": null,
+      "truncated": false
+    },
+    {
+      "block_hash": "f2094cbd41e2015ee9798ee2239c989b7c54afe192c8faa37e64c22a92384401",
+      "block_index": 0,
+      "block_title": "/Users/alien/Projects/skills/.model-review/2026-04-10-skill-hardening-close-context.md",
+      "block_type": "text",
+      "drop_if_needed": false,
+      "metadata": {
+        "path": "/Users/alien/Projects/skills/.model-review/2026-04-10-skill-hardening-close-context.md"
+      },
+      "priority": 400,
+      "section_index": 1,
+      "section_title": "Provided Context",
+      "source_path": "/Users/alien/Projects/skills/.model-review/2026-04-10-skill-hardening-close-context.md",
+      "truncated": false
+    }
+  ],
+  "source_paths": [
+    "/Users/alien/Projects/skills/.model-review/2026-04-10-skill-hardening-close-context.md"
+  ],
+  "token_estimate": 25103,
+  "truncation_events": []
+}

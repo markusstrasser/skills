@@ -15,14 +15,19 @@ Unified diagnostic workflow. Four lenses on the same transcript data, each answe
 ## Current Environment
 `!echo "Date: $(date +%Y-%m-%d) | CWD: $(basename $PWD) | Transcripts: $(ls ~/.claude/projects/ | wc -l | tr -d ' ') project dirs"`
 
+## Artifact Contract
+
+See `references/artifact-contract.md` for the canonical observe artifact tree, deterministic
+signal/candidate flow, and promotion gates.
+
 ## Mode Routing
 
-| Mode | Question answered | Gemini dispatch? | Output destination |
-|------|------------------|------------------|--------------------|
-| `sessions` | What behavioral anti-patterns appeared? | Yes | improvement-log.md |
-| `architecture` | What design wants to emerge? | Yes | artifacts/observe/ |
-| `supervision` | Where was human time wasted? | Yes | improvement-log.md |
-| `retro` | What went wrong this session? | No (local) | artifacts/session-retro/ |
+| Mode | Question answered | Gemini dispatch? | Canonical artifacts |
+|------|------------------|------------------|---------------------|
+| `sessions` | What behavioral anti-patterns appeared? | Yes | `manifest.json` -> `signals.jsonl` -> `candidates.jsonl` -> `digest.md` (+ `dispatch.meta.json` when dispatched) |
+| `architecture` | What design wants to emerge? | Yes | `manifest.json` -> `signals.jsonl` -> `candidates.jsonl` -> `patterns.jsonl` -> `YYYY-MM-DD.md` |
+| `supervision` | Where was human time wasted? | Yes | `manifest.json` -> `signals.jsonl` -> `candidates.jsonl` -> `digest.md` (+ `dispatch.meta.json` when dispatched) |
+| `retro` | What went wrong this session? | No (local) | `artifacts/session-retro/` |
 
 Parse `$ARGUMENTS` for mode. First positional arg is the mode. Remaining args are project, options.
 
@@ -40,18 +45,30 @@ Parse `$ARGUMENTS` for mode. First positional arg is the mode. Remaining args ar
 All modes except `retro` start with transcript extraction. See `references/transcript-extraction.md` for full commands.
 
 ```bash
-ARTIFACT_DIR="$HOME/Projects/agent-infra/artifacts/observe"
+OBSERVE_PROJECT_ROOT="${OBSERVE_PROJECT_ROOT:-$HOME/Projects/agent-infra}"
+ARTIFACT_DIR="${OBSERVE_ARTIFACT_ROOT:-$OBSERVE_PROJECT_ROOT/artifacts/observe}"
 mkdir -p "$ARTIFACT_DIR"
+cat > "$ARTIFACT_DIR/manifest.json" <<EOF
+{"mode":"$MODE","project":"${PROJECT:-all}","artifact_dir":"$ARTIFACT_DIR"}
+EOF
 
 # Claude Code sessions
 python3 ${CLAUDE_SKILL_DIR}/scripts/extract_transcript.py <project> --sessions <N> --full --output "$ARTIFACT_DIR/input.md"
 
 # Codex CLI sessions (GPT-5.4) — reads ~/.codex/state_5.sqlite + rollout JSONL.
-# Codex runs alongside Claude Code on the same project; absence is non-fatal,
-# but presence MUST feed the Step 2 dispatch context (never silently dropped).
-# The `|| : > ...` guard ensures codex.md exists even when no sessions match,
-# so downstream concatenation in Step 2 doesn't fail on a missing file.
+# Codex runs alongside Claude Code on the same project. Absence is non-fatal, but
+# presence MUST be included in the dispatch context (never silently dropped).
+# The `|| : > ...` ensures codex.md exists even when no sessions match, so the
+# downstream concatenation in Step 2 doesn't fail.
 python3 ${CLAUDE_SKILL_DIR}/scripts/extract_codex_transcript.py <project> --sessions <N> --output "$ARTIFACT_DIR/codex.md" 2>/dev/null || : > "$ARTIFACT_DIR/codex.md"
+```
+
+Record both inputs in `manifest.json` so downstream tooling can audit what was analyzed:
+
+```bash
+cat > "$ARTIFACT_DIR/manifest.json" <<EOF
+{"mode":"$MODE","project":"${PROJECT:-all}","artifact_dir":"$ARTIFACT_DIR","inputs":["input.md","codex.md"]}
+EOF
 ```
 
 ### Operational Context
@@ -63,7 +80,7 @@ Build operational context (hook triggers, receipts, git commits) for the session
 Generate existing-coverage digest so Gemini doesn't re-report known patterns:
 
 ```bash
-bash ~/Projects/agent-infra/scripts/coverage-digest.sh > "$ARTIFACT_DIR/coverage-digest.txt"
+bash "$OBSERVE_PROJECT_ROOT/scripts/coverage-digest.sh" > "$ARTIFACT_DIR/coverage-digest.txt"
 ```
 
 ### Shape Pre-Filter (optional)
@@ -82,16 +99,19 @@ Analyze session transcripts for behavioral anti-patterns that no linter or stati
 
 Parse the project argument from $ARGUMENTS. Default: last 5 sessions.
 
-### Step 0: Run Numbering
+### Step 0: Run Manifest
 
-Check the latest run number in improvement-log.md to avoid collisions:
+Treat `manifest.json`, `signals.jsonl`, and `candidates.jsonl` as the primary outputs.
+`improvement-log.md` is a promotion sink, not the working artifact store.
 
-```bash
-LAST_RUN=$(grep -oE 'Run [0-9]+' ~/Projects/agent-infra/improvement-log.md | tail -1 | grep -oE '[0-9]+')
-NEXT_RUN=$((LAST_RUN + 1))
-```
+At run start, record:
+- mode
+- project filter
+- session ids / extraction inputs
+- artifact root
+- whether dispatch ran
 
-Use `Run $NEXT_RUN` in output headers. If the same session set was already analyzed in a recent run (check last 3 entries in improvement-log for matching session IDs), report "Sessions already covered in Run N" and stop unless `--force` was passed.
+If the same session set already exists in the current manifest and `--force` was not passed, stop instead of appending another narrative-only run.
 
 ### Step 1: Extract & Pre-Filter
 
@@ -101,32 +121,32 @@ Run shared transcript extraction above. Build operational context per `reference
 
 Send full-fidelity transcript + coverage digest + operational context to Gemini 3.1 Pro. Full prompt in `references/gemini-dispatch-prompt.md`.
 
-Dispatch via the shared wrapper, not raw `llmx` calls. Concatenate BOTH transcript sources
+Dispatch via the shared wrapper, not raw SDK calls. Concatenate BOTH transcript sources
 (Claude Code + Codex) plus the coverage digest. The `[ -s codex.md ]` guard keeps dispatch
 working when no Codex sessions exist in the window, but when they do, Codex must be included:
 
 ```bash
 {
-  cat "$HOME/Projects/agent-infra/artifacts/observe/input.md"
-  if [ -s "$HOME/Projects/agent-infra/artifacts/observe/codex.md" ]; then
+  cat "$ARTIFACT_DIR/input.md"
+  if [ -s "$ARTIFACT_DIR/codex.md" ]; then
     printf '\n\n---\n\n'
-    cat "$HOME/Projects/agent-infra/artifacts/observe/codex.md"
+    cat "$ARTIFACT_DIR/codex.md"
   fi
   printf '\n\n---\n\n'
-  cat "$HOME/Projects/agent-infra/artifacts/observe/coverage-digest.txt"
+  cat "$ARTIFACT_DIR/coverage-digest.txt"
 } > /tmp/observe-context.md
 uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
   --profile deep_review \
   --context /tmp/observe-context.md \
   --prompt-file "$CLAUDE_SKILL_DIR/references/gemini-dispatch-prompt.md" \
-  --output "$HOME/Projects/agent-infra/artifacts/observe/gemini-output.md" \
-  --meta "$HOME/Projects/agent-infra/artifacts/observe/gemini-output.meta.json" \
-  --error-output "$HOME/Projects/agent-infra/artifacts/observe/gemini-output.error.json"
+  --output "$ARTIFACT_DIR/gemini-output.md" \
+  --meta "$ARTIFACT_DIR/gemini-output.meta.json" \
+  --error-output "$ARTIFACT_DIR/gemini-output.error.json"
 ```
 
 ### Step 3: Stage Findings
 
-Validate Gemini output against transcript, check session UUIDs, save as JSON artifact. Full procedure and JSON template in `references/findings-staging.md`.
+Validate Gemini output against transcript, check session UUIDs, and stage the result as a candidate record before any promotion. Full procedure, JSON template, and candidate contract live in `references/findings-staging.md` and `references/artifact-contract.md`.
 
 **Judgment calls when staging:**
 - Gemini flags "unprompted commit" as HIGH -- false positive, global CLAUDE.md authorizes auto-commit
@@ -134,18 +154,22 @@ Validate Gemini output against transcript, check session UUIDs, save as JSON art
 - "Agent paused before executing" -- rubber-stamp approvals are intentional oversight, not sycophancy
 - Promotion criteria: recurs 2+ sessions, not already covered, checkable predicate or architectural change
 - Novel high-severity findings can be promoted immediately (don't wait for recurrence)
+- If the item is not promotable, leave it in `candidates.jsonl` with an explicit state instead of forcing a log entry.
 
 ### Step 4: Summary
 
 Report to user:
 - Sessions analyzed: N
 - Shape anomalies detected: N
-- Findings staged: N (by category)
+- Signals staged: N
+- Candidates staged: N (by category)
 - Ready for promotion: N (2+ recurrences)
 - New failure modes discovered: N
 - Proposed fixes: list
 
-### Output Format (appended to improvement-log.md)
+Write the operator summary to `digest.md`. Only write `improvement-log.md` entries for promoted candidates that pass the gates in `references/artifact-contract.md`.
+
+### Promotion Sink (`improvement-log.md`, only after promotion)
 
 ```markdown
 ### [YYYY-MM-DD] [CATEGORY]: [summary]
@@ -161,7 +185,8 @@ Report to user:
 
 Extract user correction patterns instead of behavioral anti-patterns. Full procedure in `references/corrections-mode.md`.
 
-Steps: extract correction signals (zero LLM) -> classify with Haiku -> stage candidates -> check promotion gates (recurs 2+, not covered, checkable) -> integrate with hook telemetry.
+Treat this as a narrower signal source over the same pipeline:
+deterministic extraction -> `signals.jsonl` -> optional classification -> `candidates.jsonl` -> promotion check.
 
 ---
 
@@ -240,7 +265,8 @@ Every correction, boilerplate instruction, and rubber stamp is a candidate for a
 ### Step 1: Structural Extraction
 
 ```bash
-ARTIFACT_DIR="$HOME/Projects/agent-infra/artifacts/observe"
+OBSERVE_PROJECT_ROOT="${OBSERVE_PROJECT_ROOT:-$HOME/Projects/agent-infra}"
+ARTIFACT_DIR="${OBSERVE_ARTIFACT_ROOT:-$OBSERVE_PROJECT_ROOT/artifacts/observe}"
 mkdir -p "$ARTIFACT_DIR"
 python3 ${CLAUDE_SKILL_DIR}/scripts/extract_supervision.py $ARGUMENTS --json --output "$ARTIFACT_DIR/supervision-raw.json"
 ```
@@ -262,7 +288,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/extract_transcript.py <project> --sessions 5
 
 ### Step 3: LLM Synthesis (Gemini)
 
-Dispatch raw classification + transcripts to Gemini 3.1 Pro via `llmx.api.chat()`. Read both files, concatenate with the prompt below, call the API (same pattern as sessions mode dispatch). For each non-NEW_AGENCY pattern, Gemini should determine:
+Dispatch raw classification + transcripts to Gemini 3.1 Pro via the shared dispatch wrapper. Read both files, concatenate with the prompt below, and call the wrapper (same pattern as sessions mode dispatch). For each non-NEW_AGENCY pattern, Gemini should determine:
 1. Is it genuinely automatable? (Filter out actual new information)
 2. Fix type: HOOK | RULE | DEFAULT | SKILL | ARCHITECTURAL
 3. Recurrence count (3+ is signal, 1 is noise)
@@ -280,15 +306,13 @@ Output format per finding:
 - **Expected reduction:** what % of this pattern would this fix eliminate?
 ```
 
-### Step 4: Review and Act
+### Step 4: Review and Stage
 
 1. Read Gemini output critically -- it may hallucinate session details
 2. Cross-check specific claims against raw JSON and transcripts
-3. For HIGH/MEDIUM priority findings:
-   - Hook fix: implement now (cheap, deterministic, reversible)
-   - Rule fix: check not already covered, then add
-   - Architectural fix: add to maintenance-checklist.md with evidence
-4. Append summary to `~/Projects/agent-infra/improvement-log.md`
+3. Stage verified items into `candidates.jsonl` with explicit state transitions
+4. Write the human-readable summary to `"$ARTIFACT_DIR/digest.md"`
+5. Promote to `"$OBSERVE_PROJECT_ROOT/improvement-log.md"` only when the canonical gates pass
 
 ### Step 5: Trend Report (weekly)
 
@@ -320,7 +344,7 @@ Before analyzing, check for existing retro artifacts for this session:
 
 ```bash
 SID=$(cat ~/.claude/current-session-id 2>/dev/null | head -c8 || date +%s | tail -c 8)
-EXISTING=$(ls ~/Projects/agent-infra/artifacts/session-retro/$(date +%Y-%m-%d)-${SID}-*.json 2>/dev/null | wc -l | tr -d ' ')
+EXISTING=$(find "$OBSERVE_PROJECT_ROOT/artifacts/session-retro" -maxdepth 1 -name "$(date +%Y-%m-%d)-${SID}-*.json" 2>/dev/null | wc -l | tr -d ' ')
 ```
 
 If EXISTING > 0 and `--force` was NOT passed: report "Already retro'd ({EXISTING} artifact(s) exist for session {SID} today). Use --force to re-analyze." and stop. This prevents diminishing-returns loops (5 retros on the same session observed, each adding zero new findings after the 2nd).
@@ -341,8 +365,8 @@ Classify each finding into exactly one category from `lenses/retro-reflection.md
 ### Phase 3: Prior Art Check
 
 Before proposing fixes:
-1. Run: `grep -c "^### " ~/Projects/agent-infra/improvement-log.md` to confirm accessible
-2. Search for similar findings: `grep -i "KEYWORD" ~/Projects/agent-infra/improvement-log.md | head -5`
+1. Review `"$ARTIFACT_DIR/candidates.jsonl"` for existing candidate matches and prior state transitions
+2. Search `"$OBSERVE_PROJECT_ROOT/improvement-log.md"` only for already-promoted parallels: `grep -i "KEYWORD" "$OBSERVE_PROJECT_ROOT/improvement-log.md" | head -5`
 3. Match existing entry -> mark "RECURRING: matches entry from YYYY-MM-DD"
 4. Check if hook/rule/skill already addresses this -> note it
 
@@ -352,10 +376,10 @@ Use template from `lenses/retro-reflection.md`.
 
 ### Phase 5: Persist Findings
 
-Write findings as JSON to `~/Projects/agent-infra/artifacts/session-retro/`:
+Write findings as JSON to `"$OBSERVE_PROJECT_ROOT/artifacts/session-retro/"`:
 
 ```bash
-mkdir -p ~/Projects/agent-infra/artifacts/session-retro
+mkdir -p "$OBSERVE_PROJECT_ROOT/artifacts/session-retro"
 SID=$(cat ~/.claude/current-session-id 2>/dev/null | head -c8 || date +%s | tail -c 8)
 ```
 
@@ -381,9 +405,11 @@ r = dispatch(profile="gpt_general", prompt="...", context_text="...", output_pat
 
 ## Notes
 
-- Transcript source: `~/.claude/projects/-Users-alien-Projects-{project}/` (native Claude Code storage)
+- Transcript sources (BOTH must be extracted and concatenated into dispatch context):
+  - Claude Code JSONL at `~/.claude/projects/-Users-alien-Projects-{project}/`
+  - Codex CLI at `~/.codex/state_5.sqlite` + rollout JSONL (reads project by `cwd` match)
+- Codex runs alongside Claude Code on the same project; dropping it silently loses ~50% of the signal
 - Preprocessor strips thinking blocks and base64 content
 - Gemini 3.1 Pro at ~$0.001/query cached -- cheap enough to run frequently
-- Codex transcript extraction requires `~/.codex/state_5.sqlite`
 
 $ARGUMENTS

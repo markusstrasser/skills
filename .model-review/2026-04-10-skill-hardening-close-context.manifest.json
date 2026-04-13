@@ -1,0 +1,321 @@
+{
+  "budget_limit": 120000,
+  "budget_metric": "tokens",
+  "builder_name": "plan_close_context",
+  "builder_version": "2026-04-10-v1",
+  "created_at": "2026-04-11T01:24:03Z",
+  "estimate_method": "heuristic:chars_div_4",
+  "normalization_version": "v1",
+  "packet_metadata": {
+    "Mode": "worktree",
+    "Profile": "formal_review",
+    "Ref": "HEAD vs current worktree",
+    "Repo": "/Users/alien/Projects/skills",
+    "budget_enforcement": {
+      "dropped_blocks": [],
+      "estimate_method": "heuristic:chars_div_4",
+      "limit": 120000,
+      "metric": "tokens",
+      "truncated_blocks": [],
+      "usage": 24896
+    },
+    "diff_char_cap": 40000,
+    "file_char_cap": 8000,
+    "max_file_count": 12
+  },
+  "packet_title": "Plan-Close Review Packet",
+  "payload_hash": "f2094cbd41e2015ee9798ee2239c989b7c54afe192c8faa37e64c22a92384401",
+  "rendered_bytes": 99657,
+  "rendered_content_hash": "f2094cbd41e2015ee9798ee2239c989b7c54afe192c8faa37e64c22a92384401",
+  "source_blocks": [
+    {
+      "block_hash": "dacb06bf51d576094ea9125ee74e9f8a95a34e3915e0714e362639ace7f2ba10",
+      "block_index": 0,
+      "block_title": "Touched Files",
+      "block_type": "list",
+      "drop_if_needed": true,
+      "metadata": {},
+      "priority": 70,
+      "section_index": 0,
+      "section_title": "Touched Files",
+      "source_path": null,
+      "truncated": false
+    },
+    {
+      "block_hash": "ff0ebba3a1df903a448fde8d7c14d7f68727376323374d9d180f9903bf0a2565",
+      "block_index": 0,
+      "block_title": "git status --short",
+      "block_type": "command",
+      "drop_if_needed": true,
+      "metadata": {
+        "command": "git status --short"
+      },
+      "priority": 50,
+      "section_index": 1,
+      "section_title": "Git Status",
+      "source_path": null,
+      "truncated": false
+    },
+    {
+      "block_hash": "c5ad4f17f860199eadab2193e2d4ee0f47e160cbf1b267a4d31a1eb17b467f9c",
+      "block_index": 1,
+      "block_title": "git diff --stat",
+      "block_type": "command",
+      "drop_if_needed": true,
+      "metadata": {
+        "command": "git diff --stat"
+      },
+      "priority": 60,
+      "section_index": 1,
+      "section_title": "Git Status",
+      "source_path": null,
+      "truncated": false
+    },
+    {
+      "block_hash": "04efe1cee7bfa98feb13939d49773d3e1c1e4ec1ead8cd6aa5940963c6f286cc",
+      "block_index": 2,
+      "block_title": "Unified Diff",
+      "block_type": "diff",
+      "drop_if_needed": false,
+      "metadata": {},
+      "priority": 200,
+      "section_index": 1,
+      "section_title": "Git Status",
+      "source_path": null,
+      "truncated": true
+    },
+    {
+      "block_hash": "ef6e940fefa0100e2b596f9fb66bdd1049051b3fb521d8977527660c4680884a",
+      "block_index": 0,
+      "block_title": "shared/skill_manifest.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "shared/skill_manifest.py"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "shared/skill_manifest.py",
+      "truncated": true
+    },
+    {
+      "block_hash": "a05a62b7f2602d084adb9b3c928508de7a5914845d96010057a402ee4fe990ab",
+      "block_index": 1,
+      "block_title": "scripts/lint_skill_manifests.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "scripts/lint_skill_manifests.py"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "scripts/lint_skill_manifests.py",
+      "truncated": false
+    },
+    {
+      "block_hash": "0e9839652cd29e64e40614cc246ac15498c591fa0900895e858228d56e9bfc41",
+      "block_index": 2,
+      "block_title": "scripts/test_skill_manifest.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "scripts/test_skill_manifest.py"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "scripts/test_skill_manifest.py",
+      "truncated": false
+    },
+    {
+      "block_hash": "88b05f6f4cf0430c6e8280b3df4b283be7ba3b2403ed72d1518dac41f413c3ee",
+      "block_index": 3,
+      "block_title": "review/scripts/model-review.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "review/scripts/model-review.py"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "review/scripts/model-review.py",
+      "truncated": true
+    },
+    {
+      "block_hash": "9d91bdcb38d593e6d79dd5ebf59bd29b8d06994d49ce14cd9f6d24d80a6fc9e1",
+      "block_index": 4,
+      "block_title": "review/scripts/test_model_review.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "review/scripts/test_model_review.py"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "review/scripts/test_model_review.py",
+      "truncated": true
+    },
+    {
+      "block_hash": "36c3d000e074124b6ee4bb35ee21f08b61ba6accecb4dbf54884173e5aa0cb60",
+      "block_index": 5,
+      "block_title": "observe/scripts/observe_artifacts.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "observe/scripts/observe_artifacts.py"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "observe/scripts/observe_artifacts.py",
+      "truncated": false
+    },
+    {
+      "block_hash": "fb16fc43e0def1ed78fdf1904e8c7e71b47c9f67a0f86dd6f89e4797cc20340f",
+      "block_index": 6,
+      "block_title": "observe/scripts/session-shape.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "observe/scripts/session-shape.py"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "observe/scripts/session-shape.py",
+      "truncated": true
+    },
+    {
+      "block_hash": "8d9ae0c4734903951f552164800fc16c6c7d3929bffddb120cbc3689fda8a870",
+      "block_index": 7,
+      "block_title": "observe/scripts/session_shape.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "observe/scripts/session_shape.py"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "observe/scripts/session_shape.py",
+      "truncated": false
+    },
+    {
+      "block_hash": "a5efa9a0c08ebcdf01b754eca349b30a49b873f9186636f69cc5d0e009b79890",
+      "block_index": 8,
+      "block_title": "observe/scripts/validate_session_ids.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "observe/scripts/validate_session_ids.py"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "observe/scripts/validate_session_ids.py",
+      "truncated": false
+    },
+    {
+      "block_hash": "a5b1499c1fc8aa3235c74ddda49831cfcb66a9078d6f2507b9a02fe2bdba2831",
+      "block_index": 9,
+      "block_title": "brainstorm/tests/test_brainstorm_contract.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "brainstorm/tests/test_brainstorm_contract.py"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "brainstorm/tests/test_brainstorm_contract.py",
+      "truncated": false
+    },
+    {
+      "block_hash": "a4d2e19e7d56781708656abcc857d5e3103c75feabaeb912321fb1b635441cc8",
+      "block_index": 10,
+      "block_title": "scripts/test_modal_attribution_contract.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "scripts/test_modal_attribution_contract.py"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "scripts/test_modal_attribution_contract.py",
+      "truncated": false
+    },
+    {
+      "block_hash": "10b07d5e85b63d4ee74c90d57bdb359b961953f0f08e56782ff4e7248b841ab4",
+      "block_index": 11,
+      "block_title": "research-ops/SKILL.md",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "research-ops/SKILL.md"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "research-ops/SKILL.md",
+      "truncated": true
+    }
+  ],
+  "source_paths": [
+    "shared/skill_manifest.py",
+    "scripts/lint_skill_manifests.py",
+    "scripts/test_skill_manifest.py",
+    "review/scripts/model-review.py",
+    "review/scripts/test_model_review.py",
+    "observe/scripts/observe_artifacts.py",
+    "observe/scripts/session-shape.py",
+    "observe/scripts/session_shape.py",
+    "observe/scripts/validate_session_ids.py",
+    "brainstorm/tests/test_brainstorm_contract.py",
+    "scripts/test_modal_attribution_contract.py",
+    "research-ops/SKILL.md"
+  ],
+  "token_estimate": 24896,
+  "truncation_events": [
+    {
+      "block_label": "Unified Diff",
+      "original_chars": 39992,
+      "reason": "diff_char_limit",
+      "rendered_chars": 39992
+    },
+    {
+      "block_label": "shared/skill_manifest.py",
+      "original_chars": 8467,
+      "reason": "file_excerpt_limit",
+      "rendered_chars": 8000
+    },
+    {
+      "block_label": "review/scripts/model-review.py",
+      "original_chars": 48030,
+      "reason": "file_excerpt_limit",
+      "rendered_chars": 8000
+    },
+    {
+      "block_label": "review/scripts/test_model_review.py",
+      "original_chars": 26149,
+      "reason": "file_excerpt_limit",
+      "rendered_chars": 8000
+    },
+    {
+      "block_label": "observe/scripts/session-shape.py",
+      "original_chars": 11977,
+      "reason": "file_excerpt_limit",
+      "rendered_chars": 8000
+    },
+    {
+      "block_label": "research-ops/SKILL.md",
+      "original_chars": 33134,
+      "reason": "file_excerpt_limit",
+      "rendered_chars": 8000
+    }
+  ]
+}

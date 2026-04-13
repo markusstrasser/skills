@@ -5,8 +5,10 @@
 Dispatch compressed transcripts to Gemini 3.1 Pro for structured pattern extraction.
 
 ```bash
-ARTIFACT_DIR="$HOME/Projects/meta/artifacts/observe"
-llmx -p google -m gemini-3.1-pro-preview -f "$ARTIFACT_DIR/all.md" "$(cat <<'PROMPT'
+OBSERVE_PROJECT_ROOT="${OBSERVE_PROJECT_ROOT:-$HOME/Projects/agent-infra}"
+ARTIFACT_DIR="${OBSERVE_ARTIFACT_ROOT:-$OBSERVE_PROJECT_ROOT/artifacts/observe}"
+PROMPT_FILE="$ARTIFACT_DIR/gemini-pattern-prompt.txt"
+cat > "$PROMPT_FILE" <<'PROMPT'
 You are extracting STRUCTURAL PATTERNS from agent session transcripts. Output structured findings, not prose.
 
 For each pattern found, output this exact JSON-like format (one per finding):
@@ -41,7 +43,12 @@ IMPORTANT:
 - If you find fewer than 3 patterns, that's fine. Don't fabricate.
 - Output ONLY the patterns, no preamble or summary.
 PROMPT
-)"
+uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
+  --profile deep_review \
+  --context "$ARTIFACT_DIR/all.md" \
+  --prompt-file "$PROMPT_FILE" \
+  --output "$ARTIFACT_DIR/patterns.md" \
+  --meta "$ARTIFACT_DIR/dispatch.meta.json"
 ```
 
 Save Gemini output to `patterns.md` in `$ARTIFACT_DIR`.

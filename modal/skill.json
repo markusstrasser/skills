@@ -1,0 +1,36 @@
+{
+  "name": "modal",
+  "kind": "operator",
+  "intent_class": "operator",
+  "summary": "Modal runtime and operator guidance oriented around truth sources and failure modes.",
+  "entrypoint": {
+    "type": "skill_doc",
+    "path": "modal/SKILL.md"
+  },
+  "modes": {
+    "default": {
+      "intent_class": "operator",
+      "requires_packet": false,
+      "requires_gpt": false,
+      "artifacts": [
+        "status_reconciliation.md"
+      ]
+    }
+  },
+  "uses": {
+    "dispatch_profiles": [],
+    "packet_builders": [
+      "status_reconciliation_packet"
+    ],
+    "artifact_schemas": [
+      "status-reconciliation.v1"
+    ]
+  },
+  "follow_on": [
+    "genomics-status"
+  ],
+  "references": [
+    "modal/SKILL.md",
+    "modal/references/status-reconciliation.md"
+  ]
+}

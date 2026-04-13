@@ -1,46 +1,41 @@
 <!-- Reference file for project-upgrade skill. Loaded on demand. -->
 
-> **DISPATCH VIA PYTHON API, NOT CLI.** Use `llmx.api.chat()` — see observe/SKILL.md for the executable pattern.
-
 # Phase 3: Cross-Validation (Optional)
 
-For high-stakes projects or when `--thorough` is passed, send a focused summary to GPT-5.4 for second opinion.
+For high-stakes projects or `--thorough`, run a second-pass review through the
+shared review surface instead of constructing a one-off GPT shell pipeline.
 
-```bash
-# Only if findings.json has >10 items or user requested thorough mode
-FINDING_COUNT=$(python3 -c "import json; print(len(json.load(open('$UPGRADE_DIR/findings.json'))))")
+## Shared Contract
 
-if [ "$FINDING_COUNT" -gt 10 ] || [ "$THOROUGH" = "true" ]; then
-  # Send findings + key files to GPT for validation
-  {
-    echo "# Gemini's Findings (verify these)"
-    cat "$UPGRADE_DIR/findings.json"
-    echo ""
-    echo "# Key Source Files"
-    # Include only files referenced in findings
-    python3 -c "
-import json
-findings = json.load(open('$UPGRADE_DIR/findings.json'))
-files = set()
-for f in findings:
-    files.update(f.get('files', []))
-for f in sorted(files):
-    print(f)
-" | head -20 | while read filepath; do
-      [ -f "$filepath" ] && echo -e "\n## $filepath\n\`\`\`\n$(cat "$filepath")\n\`\`\`"
-    done
-  } | llmx chat -m gpt-5.4 --reasoning-effort high --stream --timeout 600 "
-Gemini analyzed a codebase and produced findings (JSON above). Your job:
+Inputs:
 
-1. For each finding: is it CORRECT? Does the code actually have this issue?
-2. Which findings are FALSE POSITIVES? (Gemini hallucinated the problem)
-3. What did Gemini MISS that you can see in the source files?
-4. Rank the real findings by IMPACT (which fixes prevent the most future bugs).
+- the primary `findings.json`
+- a bounded set of source files referenced by those findings
+- the same packet/manifest discipline used in Phase 2
 
-Output a JSON array of objects:
-{\"id\": \"F001\", \"verdict\": \"CONFIRMED|FALSE_POSITIVE|NEEDS_CHECK\", \"reason\": \"...\"}
+Outputs:
 
-Include new findings Gemini missed as {\"id\": \"NEW_001\", \"verdict\": \"NEW\", ...} using the same schema as Gemini's findings.
-" > "$UPGRADE_DIR/gpt-validation.txt" 2>&1
-fi
-```
+- a second-pass findings/disposition artifact
+- `coverage.json` showing which axes ran and what context was dropped or kept
+
+## Procedure
+
+1. Count current findings in `findings.json`.
+2. If the count is large or the project is high-stakes, build a focused packet
+   containing:
+   - the first-pass findings
+   - only the source files cited by those findings
+   - the concrete validation question for the second pass
+3. Dispatch via the shared review contract with GPT-inclusive axes.
+4. Compare the first-pass and second-pass artifacts:
+   - confirmed findings
+   - false positives
+   - newly surfaced findings
+5. Trust the second pass only after checking its `coverage.json` for axis gaps or
+   packet truncation.
+
+## What Not To Do
+
+- do not pipe giant ad hoc markdown blobs into raw model commands
+- do not bypass packet manifests for “just one more GPT check”
+- do not consume raw transcripts when structured artifacts are available

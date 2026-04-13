@@ -8,7 +8,7 @@ IDs and optionally strips them from findings.
 Usage:
     python validate_session_ids.py [--input FILE] [--output FILE] [--strip]
 
-Defaults to session-analyst artifact paths.
+Defaults to the canonical observe artifact root.
 """
 
 import argparse
@@ -16,7 +16,8 @@ import re
 import sys
 from pathlib import Path
 
-ARTIFACT_DIR = Path.home() / "Projects/agent-infra/artifacts/session-analyst"
+from observe_artifacts import artifact_root
+
 HEX8_PATTERN = re.compile(r"\b([0-9a-f]{8})\b")
 MANIFEST_ROW = re.compile(r"\|\s*([0-9a-f]{8})\s*\|")
 
@@ -72,20 +73,25 @@ def strip_fabricated(gemini_text: str, fabricated: set[str]) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="Validate session IDs in Gemini output")
-    parser.add_argument("--input", "-i", type=Path, default=ARTIFACT_DIR / "input.md")
-    parser.add_argument("--gemini", "-g", type=Path, default=ARTIFACT_DIR / "gemini-output.md")
+    parser.add_argument("--artifact-root", type=Path, help="Override the observe artifact root")
+    parser.add_argument("--input", "-i", type=Path, help="Input transcript markdown")
+    parser.add_argument("--gemini", "-g", type=Path, help="Gemini output markdown")
     parser.add_argument("--strip", action="store_true", help="Replace fabricated IDs in output")
     parser.add_argument("--output", "-o", type=Path, help="Write stripped output to file")
     args = parser.parse_args()
 
-    if not args.input.exists():
-        print(f"✗ Input not found: {args.input}", file=sys.stderr)
+    root = args.artifact_root or artifact_root()
+    input_path = args.input or (root / "input.md")
+    gemini_path = args.gemini or (root / "gemini-output.md")
+
+    if not input_path.exists():
+        print(f"✗ Input not found: {input_path}", file=sys.stderr)
         sys.exit(1)
-    if not args.gemini.exists():
-        print(f"✗ Gemini output not found: {args.gemini}", file=sys.stderr)
+    if not gemini_path.exists():
+        print(f"✗ Gemini output not found: {gemini_path}", file=sys.stderr)
         sys.exit(1)
 
-    report = validate(args.input, args.gemini)
+    report = validate(input_path, gemini_path)
 
     print(f"  Manifest IDs: {len(report['valid_ids'])} {report['valid_ids']}")
     print(f"  Referenced:   {len(report['referenced_ids'])} {report['referenced_ids']}")
@@ -99,9 +105,9 @@ def main():
         print(f"  ! Unreferenced sessions: {report['unreferenced']}")
 
     if args.strip and report["fabricated"]:
-        gemini_text = args.gemini.read_text()
+        gemini_text = gemini_path.read_text()
         cleaned = strip_fabricated(gemini_text, set(report["fabricated"]))
-        out_path = args.output or args.gemini
+        out_path = args.output or gemini_path
         out_path.write_text(cleaned)
         print(f"  ✓ Stripped {len(report['fabricated'])} fabricated IDs → {out_path}")
 
