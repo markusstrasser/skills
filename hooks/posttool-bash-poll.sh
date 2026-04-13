@@ -28,12 +28,12 @@ COUNT=$(grep -cF "$PATH_TARGET" "$TRACKER" 2>/dev/null || echo 0)
 # block / advisory message saves the agent a guess-and-fail cycle.
 LOAD_HINT='Load TaskOutput first: ToolSearch(query="select:TaskOutput,TaskList,TaskGet"). Then call TaskOutput with block=true to wait for the background task without polling.'
 
-if [ "$COUNT" -ge 5 ]; then
+if [ "$COUNT" -ge 15 ]; then
   echo "BLOCKED: Polled ${PATH_TARGET} ${COUNT}x via Bash this session." >&2
   echo "Use TaskOutput (deferred tool) to wait for background tasks, or Read the file once when ready." >&2
   echo "${LOAD_HINT}" >&2
   exit 2
-elif [ "$COUNT" -ge 3 ]; then
+elif [ "$COUNT" -ge 10 ]; then
   printf '{"additionalContext": "Polled %s %sx via Bash. If waiting for a background task, prefer TaskOutput over polling. %s Next poll will be blocked."}' \
     "$PATH_TARGET" "$COUNT" "$LOAD_HINT"
 fi
