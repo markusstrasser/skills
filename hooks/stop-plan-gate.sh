@@ -152,10 +152,11 @@ if fm:
             issues.append(f"Plan {plan_name}: status={status} ({phase_info})")
 
 # --- Check 1b: strict full-plan sessions require explicit closeout ---
-strict_requested = bool(re.search(r"execute the entire plan|full migration", text, re.IGNORECASE))
+# Only check the transcript for user directives — NOT the plan file text.
+# Plan files often mention "full migration" in narrative/description without
+# the user requesting full execution in this session (false positive).
 transcript_path = resolve_transcript_path()
-transcript_strict, closeout_observed = transcript_flags(transcript_path)
-strict_requested = strict_requested or transcript_strict
+strict_requested, closeout_observed = transcript_flags(transcript_path)
 if strict_requested and not closeout_observed:
     issues.append(
         "FULL-PLAN CLOSEOUT: Session was framed as execute-the-entire-plan/full-migration work, "
