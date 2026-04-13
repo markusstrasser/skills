@@ -52,11 +52,91 @@ plan_path = recent[0][0]
 plan_name = os.path.basename(plan_path)
 
 try:
-    text = open(plan_path).read(8000)
+    text = open(plan_path).read(16000)
 except Exception:
     sys.exit(0)
 
 issues = []
+
+def resolve_transcript_path():
+    transcript_path = data.get("transcript_path", "")
+    if transcript_path and os.path.isfile(transcript_path):
+        return transcript_path
+
+    session_id = data.get("session_id", "")
+    if not session_id and os.path.isfile(sid_path):
+        try:
+            session_id = open(sid_path).read().strip()
+        except Exception:
+            session_id = ""
+    if not session_id:
+        return ""
+
+    project_key = cwd.replace("/", "-")
+    candidate = os.path.expanduser(
+        f"~/.claude/projects/{project_key}/{session_id}.jsonl"
+    )
+    if os.path.isfile(candidate):
+        return candidate
+    return ""
+
+def transcript_flags(transcript_path: str):
+    strict_patterns = (
+        r"execute the entire plan",
+        r"full migration",
+        r"do until all is done",
+        r"after all is done execute a /plan-close",
+    )
+    strict_re = re.compile("|".join(strict_patterns), re.IGNORECASE)
+    review_close_re = re.compile(
+        r"<command-name>/review</command-name>.*?<command-(?:args|message)>close</command-(?:args|message)>",
+        re.IGNORECASE | re.DOTALL,
+    )
+    plan_close_re = re.compile(r"<command-name>/plan-close</command-name>", re.IGNORECASE)
+    closeout_artifact_re = re.compile(
+        r"build_plan_close_context\\.py|plan-close-context|plan-close-review",
+        re.IGNORECASE,
+    )
+
+    strict_requested = False
+    closeout_observed = False
+    if not transcript_path or not os.path.isfile(transcript_path):
+        return strict_requested, closeout_observed
+
+    try:
+        with open(transcript_path) as handle:
+            for raw_line in handle:
+                try:
+                    entry = json.loads(raw_line)
+                except Exception:
+                    continue
+
+                entry_type = entry.get("type", "")
+                raw = raw_line
+
+                texts = []
+                message = entry.get("message", {})
+                content = message.get("content", "")
+                if isinstance(content, str):
+                    texts.append(content)
+                elif isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            texts.append(block.get("text", ""))
+
+                if entry_type == "user":
+                    if any(strict_re.search(text or "") for text in texts):
+                        strict_requested = True
+                    if review_close_re.search(raw) or plan_close_re.search(raw):
+                        closeout_observed = True
+                else:
+                    if review_close_re.search(raw) or plan_close_re.search(raw):
+                        closeout_observed = True
+                    if closeout_artifact_re.search(raw):
+                        closeout_observed = True
+        return strict_requested, closeout_observed
+    except Exception:
+        return False, False
 
 # --- Check 1: incomplete plan status ---
 fm = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
@@ -70,6 +150,18 @@ if fm:
             done = sum(1 for p in phases if re.search(r"(DONE|done|\u2713|\u2705|\[x\])", p))
             phase_info = f"{done}/{total} phases done" if total > 0 else "no phase markers"
             issues.append(f"Plan {plan_name}: status={status} ({phase_info})")
+
+# --- Check 1b: strict full-plan sessions require explicit closeout ---
+strict_requested = bool(re.search(r"execute the entire plan|full migration", text, re.IGNORECASE))
+transcript_path = resolve_transcript_path()
+transcript_strict, closeout_observed = transcript_flags(transcript_path)
+strict_requested = strict_requested or transcript_strict
+if strict_requested and not closeout_observed:
+    issues.append(
+        "FULL-PLAN CLOSEOUT: Session was framed as execute-the-entire-plan/full-migration work, "
+        "but no closeout step (`/review close`, `/plan-close`, or plan-close context build) "
+        "was observed. Before stopping, run the closeout step or state the deferred residue."
+    )
 
 # --- Check 2: verify block acceptance criteria ---
 lines = text.splitlines()

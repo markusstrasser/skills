@@ -2,40 +2,44 @@
 
 # Phase 5: Model Review (~15% of effort)
 
-Invoke `/model-review` on the plan. Depth depends on blast radius:
+Invoke the shared review surface on the plan packet. Depth depends on blast
+radius:
 
 | Plan scope | Review depth | Axes |
 |-----------|-------------|------|
-| 1-2 simple additions | `--axes simple` | 1 query (Gemini Pro combined) |
-| 3-5 new analyses | `--axes arch,formal` | 2 queries (standard) |
-| 6+ analyses or domain-dense | `--axes deep` | 4 queries (arch + formal + domain + mechanical) |
-| Shared infrastructure changes | `--axes full` | 5 queries |
+| 1-2 narrow additions | `standard` | `arch,formal` |
+| 3-5 new analyses | `standard` | `arch,formal` |
+| 6+ analyses or domain-dense | `deep` | `arch,formal,domain,mechanical` |
+| Shared infrastructure changes | `full` | `arch,formal,domain,mechanical,alternatives` |
 
-## Context size gate (F3 gate)
+Do not route user-facing upgrade review through the removed Gemini-only
+`simple` preset.
 
-Before dispatching:
+## Context Size Gate (F3)
 
-```bash
-wc -c context.md
-# If > 15KB: summarize before sending to Gemini Pro
-# If > 50KB: summarize before sending to GPT-5.4
-# The model-review.py script handles this automatically with --extract
-```
+Before dispatch:
 
-**Why 15KB for Gemini:** model-review.py dispatches Gemini via CLI transport (free tier,
-`--timeout 300`, no `--stream`, no `--max-tokens`). CLI transport can handle 1M context
-in theory but thinking models timeout at ~15KB within the 300s window. The script falls
-back to Flash on failure, but Flash is shallow — you lose deep review. Summarize instead.
+- build one bounded packet or context artifact
+- prefer the shared packet builder over ad hoc stuffing
+- inspect the packet manifest if the context had to be trimmed
 
-**To force API transport** (paid, handles larger context): add `--stream` to the axis flags
-in model-review.py. But this costs money — prefer summarizing to <15KB.
+`coverage.json` and the sidecar manifest are the source of truth for what the
+review actually saw. Do not reason from the nominal input set alone.
 
-**Preferred:** Use `model-review.py --extract` (auto-extracts claims cross-family).
+## Preferred Invocation
 
-## Review integration
+Use the shared review flow with extraction enabled. For high-stakes closeout or
+implementation follow-through, add verification:
+
+- review packet only: `--extract`
+- plan-close or high-trust review: `--extract --verify`
+
+## Review Integration
 
 After review completes:
-1. Read all outputs (formal, domain, mechanical, arch)
-2. For each finding: ACCEPT (amend plan), REJECT (with reason), or NOTE (track but don't change)
-3. Update the plan with a "## Model Review Amendments" section at top
-4. Adjust tiers based on review (things may get demoted)
+
+1. Read `findings.json` and `coverage.json`.
+2. For each finding: ACCEPT (amend plan), REJECT (with reason), or NOTE.
+3. Update the plan with a `## Model Review Amendments` section.
+4. If `coverage.json` shows dropped packet blocks or missing axes, fix the packet
+   and rerun before trusting the verdict.

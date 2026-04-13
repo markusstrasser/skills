@@ -1,0 +1,78 @@
+{
+  "name": "upgrade",
+  "kind": "orchestrator",
+  "intent_class": "operator",
+  "summary": "Repo-scale improvement routing over shared packets, dispatch, and worker skills.",
+  "entrypoint": {
+    "type": "skill_doc",
+    "path": "upgrade/SKILL.md"
+  },
+  "modes": {
+    "audit": {
+      "intent_class": "operator",
+      "requires_packet": true,
+      "requires_gpt": true,
+      "artifacts": [
+        "coverage.json",
+        "report.md"
+      ]
+    },
+    "harness": {
+      "intent_class": "operator",
+      "requires_packet": true,
+      "requires_gpt": true,
+      "artifacts": [
+        "coverage.json",
+        "report.md"
+      ]
+    },
+    "discover": {
+      "intent_class": "operator",
+      "requires_packet": true,
+      "requires_gpt": true,
+      "artifacts": [
+        "synthesis.md",
+        "coverage.json",
+        "report.md"
+      ]
+    },
+    "pliability": {
+      "intent_class": "operator",
+      "requires_packet": false,
+      "requires_gpt": false,
+      "artifacts": [
+        "report.md"
+      ]
+    },
+    "forensics": {
+      "intent_class": "operator",
+      "requires_packet": true,
+      "requires_gpt": true,
+      "artifacts": [
+        "report.md"
+      ]
+    }
+  },
+  "uses": {
+    "dispatch_profiles": [
+      "deep_review",
+      "formal_review"
+    ],
+    "packet_builders": [
+      "shared_context_packet"
+    ],
+    "artifact_schemas": [
+      "review-coverage.v1",
+      "brainstorm.matrix.v1"
+    ]
+  },
+  "follow_on": [
+    "review",
+    "brainstorm",
+    "research",
+    "research-ops"
+  ],
+  "references": [
+    "upgrade/SKILL.md"
+  ]
+}

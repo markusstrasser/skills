@@ -2,24 +2,30 @@
 """Session shape detector — zero-LLM-cost structural anomaly detection.
 
 Analyzes session topology (tool patterns, message ratios, structural signals)
-to flag anomalous sessions worth deep analysis. Pre-filter for session-analyst:
-most sessions are fine — don't waste Gemini on them.
+to flag anomalous sessions worth deep analysis. The deterministic output can
+also be written as observe signal/candidate JSONL records for backlog staging.
 
 Usage:
     session-shape.py [--days N] [--project P] [--threshold T] [--json]
+        [--signals-out PATH] [--candidates-out PATH]
 """
 
 import argparse
 import json
 import sqlite3
 import sys
-from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from statistics import mean, stdev
 
 import os
+
+from observe_artifacts import (
+    append_jsonl,
+    artifact_path,
+    stable_id,
+)
 
 # Inlined from meta/scripts/common/paths.py and meta/scripts/config.py
 _CLAUDE_DIR = Path(os.environ.get("CLAUDE_DIR", str(Path.home() / ".claude")))
@@ -138,6 +144,66 @@ def compute_anomalies(
     return shapes
 
 
+def build_signal_record(shape: SessionShape, *, threshold: float) -> dict:
+    """Build a deterministic signal record for backlog staging."""
+    return {
+        "schema": "observe.signal.v1",
+        "kind": "session_shape",
+        "session_id": shape.uuid,
+        "signal_id": stable_id(
+            "signal",
+            "session_shape",
+            shape.uuid,
+            shape.project,
+        ),
+        "project": shape.project,
+        "start_ts": shape.start_ts,
+        "threshold": threshold,
+        "anomaly_score": round(shape.anomaly_score, 3),
+        "reasons": list(shape.anomaly_reasons),
+        "features": {k: round(v, 6) for k, v in shape.features.items()},
+        "first_message": shape.first_message,
+        "source": "scripts/session-shape.py",
+        "status": "signal",
+    }
+
+
+def build_candidate_record(shape: SessionShape, *, threshold: float) -> dict:
+    """Build a candidate backlog record derived from a signal."""
+    signal_id = stable_id("signal", "session_shape", shape.uuid, shape.project)
+    candidate_summary = (
+        f"Session shape anomaly for {shape.project} {shape.uuid[:8]} "
+        f"(score {shape.anomaly_score:.1f}, threshold {threshold:.1f})"
+    )
+    return {
+        "schema": "observe.candidate.v1",
+        "kind": "session_shape_anomaly",
+        "candidate_id": stable_id(
+            "candidate",
+            "session_shape_anomaly",
+            shape.uuid,
+            shape.project,
+        ),
+        "session_id": shape.uuid,
+        "project": shape.project,
+        "source_signal_ids": [signal_id],
+        "recurrence": 1,
+        "promoted": False,
+        "state": "candidate",
+        "checkable": True,
+        "summary": candidate_summary,
+        "evidence": {
+            "score": round(shape.anomaly_score, 3),
+            "threshold": threshold,
+            "reasons": list(shape.anomaly_reasons),
+            "first_message": shape.first_message,
+            "duration_min": round(shape.duration_min, 2),
+            "cost_usd": round(shape.cost_usd, 2),
+        },
+        "source": "scripts/session-shape.py",
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Session shape anomaly detector")
     parser.add_argument("--days", type=int, default=7, help="Look back N days (default: 7)")
@@ -147,6 +213,16 @@ def main():
     )
     parser.add_argument("--json", action="store_true", help="JSON output")
     parser.add_argument("--all", action="store_true", help="Show all sessions, not just anomalies")
+    parser.add_argument(
+        "--signals-out",
+        type=Path,
+        help="Append deterministic signal records as JSONL",
+    )
+    parser.add_argument(
+        "--candidates-out",
+        type=Path,
+        help="Append candidate backlog records as JSONL",
+    )
     args = parser.parse_args()
 
     if not DB_PATH.exists():
@@ -194,6 +270,7 @@ def main():
 
     # Compute anomalies
     shapes = compute_anomalies(shapes, threshold=args.threshold)
+    signal_shapes = list(shapes)
 
     # Filter to anomalies unless --all
     anomalous = len([s for s in shapes if s.anomaly_score > 0])
@@ -235,6 +312,13 @@ def main():
                 print(f"  ↳ {reason}")
             print(f"  {s.first_message}")
             print()
+
+    signals_out = args.signals_out or artifact_path("signals.jsonl")
+    candidates_out = args.candidates_out or artifact_path("candidates.jsonl")
+    for shape in signal_shapes:
+        append_jsonl(signals_out, build_signal_record(shape, threshold=args.threshold))
+        if shape.anomaly_score > 0:
+            append_jsonl(candidates_out, build_candidate_record(shape, threshold=args.threshold))
 
     # Log metric
     log_metric("session_shape",

@@ -1,0 +1,44 @@
+{
+  "name": "brainstorm",
+  "kind": "worker",
+  "intent_class": "divergent",
+  "summary": "Divergent ideation with auditable coverage and disposition artifacts.",
+  "entrypoint": {
+    "type": "skill_doc",
+    "path": "brainstorm/SKILL.md"
+  },
+  "modes": {
+    "default": {
+      "intent_class": "divergent",
+      "requires_packet": true,
+      "requires_gpt": false,
+      "artifacts": [
+        "synthesis.md",
+        "matrix.json",
+        "matrix.md",
+        "coverage.json"
+      ]
+    }
+  },
+  "uses": {
+    "dispatch_profiles": [
+      "deep_review"
+    ],
+    "packet_builders": [
+      "brainstorm_context_packet"
+    ],
+    "artifact_schemas": [
+      "brainstorm.matrix.v1",
+      "brainstorm.coverage.v1"
+    ]
+  },
+  "follow_on": [
+    "review",
+    "upgrade"
+  ],
+  "references": [
+    "brainstorm/SKILL.md",
+    "brainstorm/references/synthesis-templates.md",
+    "brainstorm/references/llmx-dispatch.md"
+  ]
+}

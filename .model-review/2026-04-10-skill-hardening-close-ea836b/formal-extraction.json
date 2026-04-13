@@ -1,0 +1,54 @@
+{
+  "findings": [
+    {
+      "category": "logic",
+      "severity": "high",
+      "title": "review_coverage_v1 contract mismatch",
+      "description": "In shared/skill_manifest.py, ARTIFACT_SCHEMAS['review_coverage_v1'] requires keys like schema, topic, mode, and axes, but review/scripts/model-review.py:write_coverage_artifact() writes schema_version, review_dir, and artifacts. This manifest-contract drift means downstream readers cannot trust the metadata.",
+      "file": "shared/skill_manifest.py",
+      "line": 0,
+      "fix": "Update either ARTIFACT_SCHEMAS or write_coverage_artifact so the declared required fields match the emitted payload.",
+      "confidence": 1.0
+    },
+    {
+      "category": "logic",
+      "severity": "medium",
+      "title": "Implicit and non-idempotent observe artifact mutation",
+      "description": "session-shape.py claims artifact emission is optional in docs, but the implementation always resolves default paths and appends to signals.jsonl and candidates.jsonl. Because IDs are deterministic but the write is a blind append, repeated runs result in 100% duplicate logical records.",
+      "file": "observe/scripts/session_shape.py",
+      "line": 0,
+      "fix": "Require an explicit --emit-artifacts flag or make writes idempotent by checking existing IDs before appending.",
+      "confidence": 0.9
+    },
+    {
+      "category": "bug",
+      "severity": "medium",
+      "title": "Invalid SQL predicate using SELECT alias",
+      "description": "The query in session-shape.py selects project_slug AS project but the filter adds AND project = ?. In SQLite, using a SELECT alias in a WHERE clause is non-portable and often causes OperationalError: no such column.",
+      "file": "observe/scripts/session_shape.py",
+      "line": 0,
+      "fix": "Change the filter predicate to use the source column: AND project_slug = ?.",
+      "confidence": 0.8
+    },
+    {
+      "category": "architecture",
+      "severity": "low",
+      "title": "Brittle module import wrapper",
+      "description": "The script observe/scripts/session_shape.py uses module_from_spec and exec_module without registering the module in sys.modules. This is fragile in fresh import contexts and can fail when sibling imports like from observe_artifacts import ... are used.",
+      "file": "observe/scripts/session_shape.py",
+      "line": 0,
+      "fix": "Move the implementation into a standard importable module and use a thin 3-line CLI shim to invoke the main function.",
+      "confidence": 0.8
+    },
+    {
+      "category": "logic",
+      "severity": "low",
+      "title": "Manifest validation lacks type safety for list members",
+      "description": "validate_manifest() checks membership of dispatch_profiles, packet_builders, and artifact_schemas items without ensuring they are strings. A malformed manifest with objects/lists in these fields will cause a TypeError crash rather than returning a validation issue.",
+      "file": "shared/skill_manifest.py",
+      "line": 0,
+      "fix": "Add type assertions to ensure each list member is a string before performing membership checks.",
+      "confidence": 0.9
+    }
+  ]
+}

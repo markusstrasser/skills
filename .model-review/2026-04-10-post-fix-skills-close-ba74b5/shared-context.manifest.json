@@ -1,0 +1,92 @@
+{
+  "budget_limit": 120000,
+  "budget_metric": "tokens",
+  "builder_name": "model_review_context",
+  "builder_version": "2026-04-10-v1",
+  "created_at": "2026-04-11T01:51:16Z",
+  "estimate_method": "heuristic:chars_div_4",
+  "normalization_version": "v1",
+  "packet_metadata": {
+    "Axes": "arch,formal",
+    "Project": "/Users/alien/Projects/skills",
+    "budget_enforcement": {
+      "dropped_blocks": [],
+      "estimate_method": "heuristic:chars_div_4",
+      "limit": 120000,
+      "metric": "tokens",
+      "truncated_blocks": [],
+      "usage": 20401
+    }
+  },
+  "packet_title": "Model Review Context Packet",
+  "payload_hash": "18b9db381123ccabaef2504103a30d9f26a480e63ecf7e3b4aa260a9fea63dfb",
+  "rendered_bytes": 81652,
+  "rendered_content_hash": "18b9db381123ccabaef2504103a30d9f26a480e63ecf7e3b4aa260a9fea63dfb",
+  "source_blocks": [
+    {
+      "block_hash": "d0cf76175c0edfdd5e22299bf830891f5108d454520cb3792f85b069b102f7e5",
+      "block_index": 0,
+      "block_title": "DEVELOPMENT CONTEXT",
+      "block_type": "preamble",
+      "drop_if_needed": false,
+      "metadata": {},
+      "priority": 1000,
+      "section_index": 0,
+      "section_title": "Preamble",
+      "source_path": null,
+      "truncated": false
+    },
+    {
+      "block_hash": "aee047de4c0e01cf2c79ccb716874775328147f1bead63d8f2133cdcbdc4cc5e",
+      "block_index": 0,
+      "block_title": "review/scripts/model-review.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "review/scripts/model-review.py"
+      },
+      "priority": 40,
+      "section_index": 1,
+      "section_title": "Context Files",
+      "source_path": "review/scripts/model-review.py",
+      "truncated": false
+    },
+    {
+      "block_hash": "5a8cbd07e258fe44ae22765ab345a807216f75c166b2ce5155782ea7ecd64f4e",
+      "block_index": 1,
+      "block_title": "review/scripts/test_model_review.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "review/scripts/test_model_review.py"
+      },
+      "priority": 40,
+      "section_index": 1,
+      "section_title": "Context Files",
+      "source_path": "review/scripts/test_model_review.py",
+      "truncated": false
+    },
+    {
+      "block_hash": "481805be1eaa59b2f49f9a1388fcee4e80b64a2f230a5d5ca51433494f742fb4",
+      "block_index": 2,
+      "block_title": "observe/scripts/observe_artifacts.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "observe/scripts/observe_artifacts.py"
+      },
+      "priority": 40,
+      "section_index": 1,
+      "section_title": "Context Files",
+      "source_path": "observe/scripts/observe_artifacts.py",
+      "truncated": false
+    }
+  ],
+  "source_paths": [
+    "review/scripts/model-review.py",
+    "review/scripts/test_model_review.py",
+    "observe/scripts/observe_artifacts.py"
+  ],
+  "token_estimate": 20401,
+  "truncation_events": []
+}

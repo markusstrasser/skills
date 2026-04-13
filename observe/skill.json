@@ -1,0 +1,78 @@
+{
+  "name": "observe",
+  "kind": "worker",
+  "intent_class": "observational",
+  "summary": "Transcript-derived diagnostics and backlog candidate generation.",
+  "entrypoint": {
+    "type": "skill_doc",
+    "path": "observe/SKILL.md"
+  },
+  "modes": {
+    "sessions": {
+      "intent_class": "observational",
+      "requires_packet": true,
+      "requires_gpt": false,
+      "artifacts": [
+        "manifest.json",
+        "signals.jsonl",
+        "candidates.jsonl",
+        "digest.md",
+        "dispatch.meta.json"
+      ]
+    },
+    "architecture": {
+      "intent_class": "observational",
+      "requires_packet": true,
+      "requires_gpt": false,
+      "artifacts": [
+        "manifest.json",
+        "signals.jsonl",
+        "candidates.jsonl",
+        "digest.md",
+        "dispatch.meta.json"
+      ]
+    },
+    "supervision": {
+      "intent_class": "observational",
+      "requires_packet": false,
+      "requires_gpt": false,
+      "artifacts": [
+        "manifest.json",
+        "signals.jsonl",
+        "candidates.jsonl",
+        "digest.md"
+      ]
+    },
+    "retro": {
+      "intent_class": "observational",
+      "requires_packet": false,
+      "requires_gpt": false,
+      "artifacts": [
+        "manifest.json",
+        "signals.jsonl",
+        "candidates.jsonl",
+        "digest.md"
+      ]
+    }
+  },
+  "uses": {
+    "dispatch_profiles": [
+      "deep_review"
+    ],
+    "packet_builders": [
+      "observe_transcript_packet"
+    ],
+    "artifact_schemas": [
+      "observe.signal.v1",
+      "observe.candidate.v1"
+    ]
+  },
+  "follow_on": [
+    "improve",
+    "upgrade"
+  ],
+  "references": [
+    "observe/SKILL.md",
+    "observe/references/artifact-contract.md"
+  ]
+}

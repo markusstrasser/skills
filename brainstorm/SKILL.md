@@ -19,7 +19,7 @@ You are orchestrating divergent ideation. The goal is ideas that escape the defa
 
 **Core mechanism:** Systematic perturbation of the search space (denial, domain forcing, constraint inversion), not model diversity. Models trained on similar data converge on similar ideas regardless of vendor. The prompting structure does the work.
 
-**This skill is DIVERGENT only.** For convergent critique, use `/model-review`.
+**This skill is DIVERGENT only.** It produces candidate space and coverage artifacts, not final selections or implementation plans. For convergent critique, use `/model-review`.
 
 **Late-stage warning:** When a frontier is mature, this skill should produce fewer, sharper ideas, not preserve the same idea count with weaker variants. One strong perturbation survivor is enough. If forced-domain rounds only yield reframings, stop and hand back to convergent filtering.
 
@@ -42,19 +42,20 @@ Parse `$ARGUMENTS` for these optional flags (order doesn't matter, remaining tex
 | `--axes` | comma-separated: `denial`, `domain`, `constraint` | all three | Run only specified perturbation axes |
 | `--domains` | quoted comma-separated domain names | auto-select | Override domain forcing domains (e.g., `--domains "jazz, geology, packet switching"`) |
 | `--n-ideas` | integer | 15 | Target idea count per generation round |
-| `--no-llmx` | — | off | Run everything locally, no external model dispatch |
+| `--no-llmx` | — | off | Run everything locally, no external dispatch |
 
 **Effort presets:** default (2 denial, 3 domains, 3 inversions, ~15/round), `--quick` (1 denial, 2 domains, no inversions, ~5/round), `--deep` (3 denial, 4 domains, 4 inversions, ~20/round).
 
 ## Prerequisites
 
-- `llmx` CLI optional — skill works without it (you run all rounds). With llmx, perturbation rounds run in parallel for speed. Use `--no-llmx` to force local-only.
+- Shared external-dispatch helper optional — skill works without it (you run all rounds). With external dispatch, perturbation rounds run in parallel for speed. Use `--no-llmx` to force local-only.
 
 ## Pre-Flight
 
 1. **Dedup check:** Search `.brainstorm/` for synthesis.md files < 24h old on same topic. Check `git log` for cross-session brainstorms. If space already explored, target "one non-duplicate survivor or clean exhaustion proof."
 2. **Constitutional check:** Find CONSTITUTION.md or constitution section in CLAUDE.md + GOALS.md. Inject as preamble so generation stays within project principles.
-3. **Output setup:** Create `$BRAINSTORM_DIR` with date-slug-id naming.
+3. **Packet setup:** Reuse the shared packet spine for topic, constitution/goals, recent incidents, and prior brainstorm artifacts. Do not hand-roll an unbounded context blob when the packet builder exists.
+4. **Output setup:** Create `$BRAINSTORM_DIR` with date-slug-id naming.
 
 See `references/synthesis-templates.md` for pre-flight scripts.
 
@@ -66,17 +67,17 @@ State clearly: the question, current approach (if any), hard constraints vs soft
 
 ### Step 2: Initial Generation
 
-Generate `$N_IDEAS` approaches. Cast wide — no evaluation yet. Optimize for volume and diversity over individual brilliance — research confirms LLMs are competitive with humans on creative volume but not at distribution extremes (Nature Human Behaviour 2025). More seeds = more raw material for perturbation. If user included seed ideas, diversify from there.
+Generate `$N_IDEAS` approaches. Cast wide — no evaluation yet. Optimize for volume and diversity over individual brilliance. More seeds = more raw material for perturbation. If user included seed ideas, diversify from there.
 
-With llmx: dispatch external model in parallel while generating your own set. See `references/llmx-dispatch.md` for templates.
+With external dispatch: dispatch a parallel external pass while generating your own set. See `references/llmx-dispatch.md` for prompt payloads and artifact contracts.
 
 ### Step 3: Perturbation Rounds (The Core Mechanism)
 
-Run axes specified by `--axes` (default: all three). With llmx, dispatch active axes in parallel (multiple Bash calls, `timeout: 360000`). Without llmx, run sequentially.
+Run axes specified by `--axes` (default: all three). With external dispatch, fan out active axes in parallel. Without it, run sequentially.
 
 First: identify the 3-5 dominant paradigms from Step 2. These are what we're escaping.
 
-**3a: Denial Cascade** — Ban dominant paradigms, force genuinely different approaches. Novelty rises continuously with denial depth (NEOGAUGE, NAACL 2025). This is the primary divergence mechanism. See `references/llmx-dispatch.md` for prompt templates.
+**3a: Denial Cascade** — Ban dominant paradigms, force genuinely different approaches. Novelty rises continuously with denial depth (NEOGAUGE, NAACL 2025). This is the primary divergence mechanism. See `references/llmx-dispatch.md` for prompt payloads.
 
 **3b: Domain Forcing** — Map the problem to distant, unrelated domains. Pick from domain pools in `references/domain-pools.md`. Distant domains, not adjacent ones — the discomfort is the mechanism.
 
@@ -86,11 +87,21 @@ First: identify the 3-5 dominant paradigms from Step 2. These are what we're esc
 
 **Mature frontier cutoff:** After one forced-domain pass on a mature frontier, discard duplicates/no-caller ideas, don't keep forcing more domains.
 
+### Step 3.5: Build Coverage Artifacts
+
+Before synthesis, create the structured coverage artifacts first, then render the operator views:
+
+- `$BRAINSTORM_DIR/matrix.json` — one row per idea/cell with axis, domain row, paradigm escaped, transfer mechanism, and disposition fields.
+- `$BRAINSTORM_DIR/matrix.md` — rendered coverage table for operator review.
+- `$BRAINSTORM_DIR/coverage.json` — requested axes, executed axes, counts, uncovered cells, merge counts, and mature-frontier stop reason.
+
+If you cannot populate `matrix.json` without hand-waving, stop. The frontier is not covered enough to synthesize yet.
+
 ### Step 4: Extract & Enumerate (Anti-Loss Protocol)
 
 **Do this BEFORE synthesis.** Single-pass synthesis drops ideas.
 
-Mechanically extract every discrete idea from all artifacts into a numbered list tagged by source. Then build a disposition table: `EXPLORE`, `PARK`, `REJECT`, or `MERGE WITH [ID]`. Every extracted item must have a disposition. See `references/synthesis-templates.md` for table format and extraction scripts.
+Mechanically extract every discrete idea from all artifacts into a numbered list tagged by source and matrix cell. Then build a disposition table: `EXPLORE`, `PARK`, `REJECT`, or `MERGE WITH [ID]`. Every extracted item must have a disposition, and the disposition table should render from the same `matrix.json` rows rather than becoming a second source of truth. See `references/synthesis-templates.md` for the matrix, coverage, and extraction templates.
 
 ### Step 5: Synthesize
 
@@ -104,6 +115,8 @@ Before offering to plan or implement ANY explore item, verify it solves a real p
 2. `grep -r "<topic>" ~/.claude/projects/*/memory/` — session pain moments
 3. For each EXPLORE item: "This would have prevented [specific incident] on [date]"
 4. If no incident: mark `SPECULATIVE` in disposition. Default to PARK, not EXPLORE.
+
+This gate exists to populate `caller_evidence`, `speculative`, and final disposition support. It is not a convergent review pass and should not turn brainstorm into a findings engine.
 
 **Why this exists:** Brainstorm session (2026-03-26) generated 47 ideas, 12 explored, 7 planned, 1 built. 6/7 layers defended against hypothetical problems with zero incident history. Absence of a feature ≠ presence of a problem.
 
@@ -121,6 +134,8 @@ Don't auto-implement — divergent ideas need convergent validation first.
 - **Skipping denial rounds.** Initial generation IS the attractor basin. Denial is how you escape it.
 - **"Related" domains for domain forcing.** Adjacent fields converge to the same basin. Pick distant domains.
 - **Implementing brainstorm output directly.** Prototype cheaply or stress-test with `/model-review` first.
+- **Skipping coverage artifacts.** If you cannot name the matrix cells you covered, you do not yet know what was actually explored.
+- **Using brainstorm as a decision memo.** It produces candidate space plus coverage, not the final call.
 - **Synthesizing without extracting.** Drops ideas silently. Always extract first.
 - **Treating model choice as the diversity mechanism.** The prompting structure (denial, domains, inversions) produces divergence. Model choice is for volume and availability.
 
@@ -128,9 +143,9 @@ Don't auto-implement — divergent ideas need convergent validation first.
 
 | File | Contents |
 |------|----------|
-| `references/llmx-dispatch.md` | Prompt templates for all llmx calls (generation, denial, domain, constraint, extraction) |
+| `references/llmx-dispatch.md` | Shared dispatch prompt payloads, packet expectations, and artifact contract |
 | `references/domain-pools.md` | Domain forcing pools, perturbation axis presets, knowledge injection details |
-| `references/synthesis-templates.md` | Disposition table format, synthesis output template, pre-flight bash scripts |
+| `references/synthesis-templates.md` | Matrix, coverage, disposition table, synthesis output template, pre-flight bash scripts |
 
 $ARGUMENTS
 

@@ -1,0 +1,90 @@
+{
+  "schema": "review-coverage.v1",
+  "schema_version": "review-coverage.v1",
+  "review_dir": ".model-review/2026-04-10-skill-hardening-close-v2-95cdc4",
+  "artifacts": {
+    "shared_context": ".model-review/2026-04-10-skill-hardening-close-v2-95cdc4/shared-context.md",
+    "shared_context_manifest": ".model-review/2026-04-10-skill-hardening-close-v2-95cdc4/shared-context.manifest.json",
+    "findings": ".model-review/2026-04-10-skill-hardening-close-v2-95cdc4/findings.json",
+    "disposition": ".model-review/2026-04-10-skill-hardening-close-v2-95cdc4/disposition.md",
+    "verified_disposition": ".model-review/2026-04-10-skill-hardening-close-v2-95cdc4/verified-disposition.md"
+  },
+  "context_packet": {
+    "path": ".model-review/2026-04-10-skill-hardening-close-v2-95cdc4/shared-context.manifest.json",
+    "builder_name": "model_review_context",
+    "builder_version": "2026-04-10-v1",
+    "payload_hash": "4358e257aa1e2a14b0b3c539414d3093721e9ef24e357c2282eff9d15e6963fd",
+    "rendered_content_hash": "4358e257aa1e2a14b0b3c539414d3093721e9ef24e357c2282eff9d15e6963fd",
+    "rendered_bytes": 108978,
+    "token_estimate": 27192,
+    "estimate_method": "heuristic:chars_div_4",
+    "budget_metric": "tokens",
+    "budget_limit": 120000,
+    "source_paths_count": 1,
+    "truncation_event_count": 0,
+    "dropped_blocks": []
+  },
+  "dispatch": {
+    "requested_axes": [
+      "arch",
+      "formal"
+    ],
+    "requested_axis_count": 2,
+    "axes": [
+      {
+        "axis": "arch",
+        "label": "Gemini (architecture/patterns)",
+        "requested_model": "gemini-3.1-pro-preview",
+        "model": "gemini-3.1-pro-preview",
+        "exit_code": 0,
+        "output_path": ".model-review/2026-04-10-skill-hardening-close-v2-95cdc4/arch-output.md",
+        "output_bytes": 7492,
+        "latency_seconds": 51.776043176651,
+        "fallback_from": null,
+        "fallback_reason": null
+      },
+      {
+        "axis": "formal",
+        "label": "GPT-5.4 (quantitative/formal)",
+        "requested_model": "gpt-5.4",
+        "model": "gpt-5.4",
+        "exit_code": 0,
+        "output_path": ".model-review/2026-04-10-skill-hardening-close-v2-95cdc4/formal-output.md",
+        "output_bytes": 11984,
+        "latency_seconds": 136.68694591522217,
+        "fallback_from": null,
+        "fallback_reason": null
+      }
+    ],
+    "elapsed_seconds": 137.3
+  },
+  "extraction": {
+    "enabled": true,
+    "usable_axes": [
+      "arch",
+      "formal"
+    ],
+    "usable_axis_count": 2,
+    "axes_with_findings": [
+      "arch",
+      "formal"
+    ],
+    "axes_with_findings_count": 2,
+    "findings_before_dedup": 11,
+    "findings_after_dedup": 11,
+    "cross_model_agreements": 0,
+    "findings_by_axis": {
+      "arch": 6,
+      "formal": 5
+    },
+    "coverage_ratio": 1.0
+  },
+  "verification": {
+    "enabled": true,
+    "claim_count": 11,
+    "confirmed_count": 1,
+    "hallucinated_count": 0,
+    "unverifiable_count": 10,
+    "hallucination_rate": 0.0
+  }
+}

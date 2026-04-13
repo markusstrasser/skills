@@ -1,0 +1,90 @@
+{
+  "schema": "review-coverage.v1",
+  "schema_version": "review-coverage.v1",
+  "review_dir": ".model-review/2026-04-10-genomics-status-close-fa5ad2",
+  "artifacts": {
+    "shared_context": ".model-review/2026-04-10-genomics-status-close-fa5ad2/shared-context.md",
+    "shared_context_manifest": ".model-review/2026-04-10-genomics-status-close-fa5ad2/shared-context.manifest.json",
+    "findings": ".model-review/2026-04-10-genomics-status-close-fa5ad2/findings.json",
+    "disposition": ".model-review/2026-04-10-genomics-status-close-fa5ad2/disposition.md",
+    "verified_disposition": ".model-review/2026-04-10-genomics-status-close-fa5ad2/verified-disposition.md"
+  },
+  "context_packet": {
+    "path": ".model-review/2026-04-10-genomics-status-close-fa5ad2/shared-context.manifest.json",
+    "builder_name": "model_review_context",
+    "builder_version": "2026-04-10-v1",
+    "payload_hash": "a348b6135fa17df0db7a0b54a3a829c188c639b9e6f651e0ce83f13a2ed0f387",
+    "rendered_content_hash": "a348b6135fa17df0db7a0b54a3a829c188c639b9e6f651e0ce83f13a2ed0f387",
+    "rendered_bytes": 171956,
+    "token_estimate": 42489,
+    "estimate_method": "heuristic:chars_div_4",
+    "budget_metric": "tokens",
+    "budget_limit": 120000,
+    "source_paths_count": 1,
+    "truncation_event_count": 0,
+    "dropped_blocks": []
+  },
+  "dispatch": {
+    "requested_axes": [
+      "arch",
+      "formal"
+    ],
+    "requested_axis_count": 2,
+    "axes": [
+      {
+        "axis": "arch",
+        "label": "Gemini (architecture/patterns)",
+        "requested_model": "gemini-3.1-pro-preview",
+        "model": "gemini-3.1-pro-preview",
+        "exit_code": 0,
+        "output_path": ".model-review/2026-04-10-genomics-status-close-fa5ad2/arch-output.md",
+        "output_bytes": 8096,
+        "latency_seconds": 64.38160490989685,
+        "fallback_from": null,
+        "fallback_reason": null
+      },
+      {
+        "axis": "formal",
+        "label": "GPT-5.4 (quantitative/formal)",
+        "requested_model": "gpt-5.4",
+        "model": "gpt-5.4",
+        "exit_code": 0,
+        "output_path": ".model-review/2026-04-10-genomics-status-close-fa5ad2/formal-output.md",
+        "output_bytes": 13365,
+        "latency_seconds": 141.6186420917511,
+        "fallback_from": null,
+        "fallback_reason": null
+      }
+    ],
+    "elapsed_seconds": 142.3
+  },
+  "extraction": {
+    "enabled": true,
+    "usable_axes": [
+      "arch",
+      "formal"
+    ],
+    "usable_axis_count": 2,
+    "axes_with_findings": [
+      "arch",
+      "formal"
+    ],
+    "axes_with_findings_count": 2,
+    "findings_before_dedup": 14,
+    "findings_after_dedup": 14,
+    "cross_model_agreements": 0,
+    "findings_by_axis": {
+      "arch": 7,
+      "formal": 7
+    },
+    "coverage_ratio": 1.0
+  },
+  "verification": {
+    "enabled": true,
+    "claim_count": 14,
+    "confirmed_count": 0,
+    "hallucinated_count": 0,
+    "unverifiable_count": 14,
+    "hallucination_rate": 0.0
+  }
+}

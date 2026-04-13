@@ -1,0 +1,39 @@
+{
+  "api_only": true,
+  "context_budget_metric": null,
+  "context_estimate_method": null,
+  "context_manifest_path": null,
+  "context_payload_hash": "37f7b0c2b3a37632cf45378dafe4f1e3d8130bc332f8d0fd3553656c2d9244da",
+  "context_sha256": "37f7b0c2b3a37632cf45378dafe4f1e3d8130bc332f8d0fd3553656c2d9244da",
+  "context_token_estimate": null,
+  "error_message": null,
+  "error_path": null,
+  "error_type": null,
+  "finished_at": "2026-04-11T01:48:32Z",
+  "helper_version": "2026-04-10-v1",
+  "latency": 38.67699885368347,
+  "llmx_version": "0.6.0",
+  "output_path": ".model-review/2026-04-10-genomics-status-close-fa5ad2/arch-extraction.json",
+  "parsed_path": ".model-review/2026-04-10-genomics-status-close-fa5ad2/arch-extraction.parsed.json",
+  "profile_fingerprint": "859bda7b479f5cae",
+  "profile_version": "v1",
+  "prompt_sha256": "c1f310dd3eead3f923759cc99069bae9231af75b6c7b0f5545dfeee80e787daf",
+  "requested_profile": "gpt_general",
+  "resolved_kwargs": {
+    "max_tokens": 16384,
+    "reasoning_effort": "medium",
+    "search": false,
+    "timeout": 600
+  },
+  "resolved_model": "gpt-5.4",
+  "resolved_provider": "openai",
+  "retryable": false,
+  "schema_used": true,
+  "started_at": "2026-04-11T01:47:54Z",
+  "status": "ok",
+  "usage": {
+    "completion_tokens": 0,
+    "prompt_tokens": 0,
+    "total_tokens": 0
+  }
+}

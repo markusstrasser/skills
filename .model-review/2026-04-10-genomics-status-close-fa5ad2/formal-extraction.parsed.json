@@ -1,0 +1,74 @@
+{
+  "findings": [
+    {
+      "category": "bug",
+      "confidence": 0.9,
+      "description": "_reconcile_stage_rows() assigns 'incomplete_attempt' when the control plane is in 'failed', 'manual', or 'dataset_blocked' states, which contradicts the skill definition requiring an active work expectation.",
+      "file": "",
+      "fix": "Restrict 'incomplete_attempt' assignment to cases where control_plane_status is 'running'.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Incorrect 'incomplete_attempt' classification for non-running control plane"
+    },
+    {
+      "category": "logic",
+      "confidence": 1.0,
+      "description": "The SDK probe path caps scanning to 20 stages based on directory mtime. In large repositories, this risks excluding active work. Furthermore, parent directory mtime is an unreliable proxy for liveness as it does not necessarily update when nested receipt or log files are modified.",
+      "file": "",
+      "fix": "Remove the 20-stage cap from the collection phase and base selection on the freshness of actual receipt or log files.",
+      "line": 0,
+      "severity": "high",
+      "title": "Evidence truncation and unreliable liveness proxy in SDK probe"
+    },
+    {
+      "category": "missing",
+      "confidence": 0.9,
+      "description": "Current reconciliation logic fails to surface cases where the control plane and worker have reached conflicting terminal states (e.g., CP 'failed' but worker 'success'), violating the 'Fail loud on drift' principle.",
+      "file": "",
+      "fix": "Add explicit drift detection and reporting when cp_terminal does not match receipt_terminal.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Silent drift between control plane and worker terminal states"
+    },
+    {
+      "category": "logic",
+      "confidence": 0.85,
+      "description": "_local_bridge_state_for_stage relies on file existence rather than verifying linkage to the current run_id or manifest, leading to false 'ready' signals for stale local artifacts after reruns.",
+      "file": "",
+      "fix": "Validate local bridge freshness by verifying run_id, attempt_id, or manifest hashes.",
+      "line": 0,
+      "severity": "medium",
+      "title": "Unsound readiness proxy for local bridge"
+    },
+    {
+      "category": "architecture",
+      "confidence": 0.95,
+      "description": "The system maintains two separate implementations for volume probing (SDK vs helper) which have inconsistent behaviors regarding stage limits and log filtering, creating architectural drift and non-equivalent 'truth' surfaces.",
+      "file": "",
+      "fix": "Unify the probing semantics or enforce equivalence through normalized parity tests on synthetic volume trees.",
+      "line": 0,
+      "severity": "high",
+      "title": "Semantic divergence between SDK and helper probe implementations"
+    },
+    {
+      "category": "bug",
+      "confidence": 0.8,
+      "description": "_reconcile_stage_rows() triages local bridge existence as 'local_stale' when the control plane is in terminal or blocked states, which fails to distinguish between actual staleness and operational blocking.",
+      "file": "",
+      "fix": "Implement specific mismatch classes that align with the defined taxonomy for manual or blocked states.",
+      "line": 0,
+      "severity": "low",
+      "title": "Invalid inference of 'local_stale' for non-running statuses"
+    },
+    {
+      "category": "missing",
+      "confidence": 1.0,
+      "description": "Automated tests are missing for critical scenarios including large stage counts (>20), terminal state disagreements, and explicit SDK/helper implementation parity.",
+      "file": "",
+      "fix": "Add a comprehensive test matrix covering all permutations of control plane, worker, and local states.",
+      "line": 0,
+      "severity": "high",
+      "title": "Missing validation for high-risk reconciliation branches"
+    }
+  ]
+}

@@ -1,0 +1,328 @@
+{
+  "budget_limit": 120000,
+  "budget_metric": "tokens",
+  "builder_name": "plan_close_context",
+  "builder_version": "2026-04-10-v1",
+  "created_at": "2026-04-11T01:45:26Z",
+  "estimate_method": "heuristic:chars_div_4",
+  "normalization_version": "v1",
+  "packet_metadata": {
+    "Mode": "worktree",
+    "Profile": "formal_review",
+    "Ref": "HEAD vs current worktree",
+    "Repo": "/Users/alien/Projects/skills",
+    "budget_enforcement": {
+      "dropped_blocks": [],
+      "estimate_method": "heuristic:chars_div_4",
+      "limit": 120000,
+      "metric": "tokens",
+      "truncated_blocks": [],
+      "usage": 26985
+    },
+    "diff_char_cap": 40000,
+    "file_char_cap": 8000,
+    "max_file_count": 12
+  },
+  "packet_title": "Plan-Close Review Packet",
+  "payload_hash": "7a712ee372cf38723db20e74632da16d31d75c3224e75954a353ae036196e4f5",
+  "rendered_bytes": 108148,
+  "rendered_content_hash": "7a712ee372cf38723db20e74632da16d31d75c3224e75954a353ae036196e4f5",
+  "source_blocks": [
+    {
+      "block_hash": "edc826d677960d665c51dbd9590256cb1a43a0dc8cc18ec5d4908cb04ff2e46a",
+      "block_index": 0,
+      "block_title": "Touched Files",
+      "block_type": "list",
+      "drop_if_needed": true,
+      "metadata": {},
+      "priority": 70,
+      "section_index": 0,
+      "section_title": "Touched Files",
+      "source_path": null,
+      "truncated": false
+    },
+    {
+      "block_hash": "160165354578d2b4c6377a2beb52bc9d7349826f03f1aa86abebb76eb62c4b1f",
+      "block_index": 0,
+      "block_title": "git status --short",
+      "block_type": "command",
+      "drop_if_needed": true,
+      "metadata": {
+        "command": "git status --short"
+      },
+      "priority": 50,
+      "section_index": 1,
+      "section_title": "Git Status",
+      "source_path": null,
+      "truncated": false
+    },
+    {
+      "block_hash": "e64dabf8c4809d09095a8515c191229de912000999ea521f086244bdfb86b2ce",
+      "block_index": 1,
+      "block_title": "git diff --stat",
+      "block_type": "command",
+      "drop_if_needed": true,
+      "metadata": {
+        "command": "git diff --stat"
+      },
+      "priority": 60,
+      "section_index": 1,
+      "section_title": "Git Status",
+      "source_path": null,
+      "truncated": false
+    },
+    {
+      "block_hash": "5ad24bbc6c51e701b2af545704532dfc6dfc3e82a0367f090d5f4328c0f460f2",
+      "block_index": 2,
+      "block_title": "Unified Diff",
+      "block_type": "diff",
+      "drop_if_needed": false,
+      "metadata": {},
+      "priority": 200,
+      "section_index": 1,
+      "section_title": "Git Status",
+      "source_path": null,
+      "truncated": true
+    },
+    {
+      "block_hash": "8c3bd475a8c73913f20e53a3baa5a2f5116d271d47789d2402171165434c19be",
+      "block_index": 0,
+      "block_title": "shared/skill_manifest.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "shared/skill_manifest.py"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "shared/skill_manifest.py",
+      "truncated": true
+    },
+    {
+      "block_hash": "a05a62b7f2602d084adb9b3c928508de7a5914845d96010057a402ee4fe990ab",
+      "block_index": 1,
+      "block_title": "scripts/lint_skill_manifests.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "scripts/lint_skill_manifests.py"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "scripts/lint_skill_manifests.py",
+      "truncated": false
+    },
+    {
+      "block_hash": "ca02807ed18af7425f46174534778e1443a0029e4bcee723d836a6b283569953",
+      "block_index": 2,
+      "block_title": "scripts/test_skill_manifest.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "scripts/test_skill_manifest.py"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "scripts/test_skill_manifest.py",
+      "truncated": false
+    },
+    {
+      "block_hash": "88b05f6f4cf0430c6e8280b3df4b283be7ba3b2403ed72d1518dac41f413c3ee",
+      "block_index": 3,
+      "block_title": "review/scripts/model-review.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "review/scripts/model-review.py"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "review/scripts/model-review.py",
+      "truncated": true
+    },
+    {
+      "block_hash": "9d91bdcb38d593e6d79dd5ebf59bd29b8d06994d49ce14cd9f6d24d80a6fc9e1",
+      "block_index": 4,
+      "block_title": "review/scripts/test_model_review.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "review/scripts/test_model_review.py"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "review/scripts/test_model_review.py",
+      "truncated": true
+    },
+    {
+      "block_hash": "66c582faa7c7d49304b67932c76f8579d2f1964e88d0d98e5d44780a54377ca4",
+      "block_index": 5,
+      "block_title": "review/SKILL.md",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "review/SKILL.md"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "review/SKILL.md",
+      "truncated": true
+    },
+    {
+      "block_hash": "1eee922b54c3055fe64883966a0aa18735dd330128153e38e16bc39813f67b60",
+      "block_index": 6,
+      "block_title": "review/references/dispatch.md",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "review/references/dispatch.md"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "review/references/dispatch.md",
+      "truncated": false
+    },
+    {
+      "block_hash": "875be1204fe3b8eec7dbc02520d8b5e00b72bc74a3318810a407103d229b0ce0",
+      "block_index": 7,
+      "block_title": "review/references/extraction.md",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "review/references/extraction.md"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "review/references/extraction.md",
+      "truncated": false
+    },
+    {
+      "block_hash": "e3ef683332fbc230f15ff558470d632eefcbe624dfc751d127b15ef1e46eaffa",
+      "block_index": 8,
+      "block_title": "review/references/prompts.md",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "review/references/prompts.md"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "review/references/prompts.md",
+      "truncated": false
+    },
+    {
+      "block_hash": "ddde0f79785c5a7fac648852a2755bfead15628f43d5a32a6559805220cf09ea",
+      "block_index": 9,
+      "block_title": "review/references/biases-and-antipatterns.md",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "review/references/biases-and-antipatterns.md"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "review/references/biases-and-antipatterns.md",
+      "truncated": false
+    },
+    {
+      "block_hash": "b9d4c31db16b55210a8d52ad0077c83688e14b3d3f05b1aecaa60a3fbe92bca2",
+      "block_index": 10,
+      "block_title": "review/lenses/adversarial-review.md",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "review/lenses/adversarial-review.md"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "review/lenses/adversarial-review.md",
+      "truncated": false
+    },
+    {
+      "block_hash": "36c3d000e074124b6ee4bb35ee21f08b61ba6accecb4dbf54884173e5aa0cb60",
+      "block_index": 11,
+      "block_title": "observe/scripts/observe_artifacts.py",
+      "block_type": "file",
+      "drop_if_needed": true,
+      "metadata": {
+        "path": "observe/scripts/observe_artifacts.py"
+      },
+      "priority": 30,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": "observe/scripts/observe_artifacts.py",
+      "truncated": false
+    },
+    {
+      "block_hash": "af18a92f6bb71360c5a431e64c7c896a1209bef4e3c90ebdc93c75afbdc16b5c",
+      "block_index": 12,
+      "block_title": "Omitted Files",
+      "block_type": "text",
+      "drop_if_needed": true,
+      "metadata": {},
+      "priority": 10,
+      "section_index": 2,
+      "section_title": "Current File Excerpts",
+      "source_path": null,
+      "truncated": false
+    }
+  ],
+  "source_paths": [
+    "shared/skill_manifest.py",
+    "scripts/lint_skill_manifests.py",
+    "scripts/test_skill_manifest.py",
+    "review/scripts/model-review.py",
+    "review/scripts/test_model_review.py",
+    "review/SKILL.md",
+    "review/references/dispatch.md",
+    "review/references/extraction.md",
+    "review/references/prompts.md",
+    "review/references/biases-and-antipatterns.md",
+    "review/lenses/adversarial-review.md",
+    "observe/scripts/observe_artifacts.py"
+  ],
+  "token_estimate": 26985,
+  "truncation_events": [
+    {
+      "block_label": "Unified Diff",
+      "original_chars": 39989,
+      "reason": "diff_char_limit",
+      "rendered_chars": 39989
+    },
+    {
+      "block_label": "shared/skill_manifest.py",
+      "original_chars": 8467,
+      "reason": "file_excerpt_limit",
+      "rendered_chars": 8000
+    },
+    {
+      "block_label": "review/scripts/model-review.py",
+      "original_chars": 48073,
+      "reason": "file_excerpt_limit",
+      "rendered_chars": 8000
+    },
+    {
+      "block_label": "review/scripts/test_model_review.py",
+      "original_chars": 26252,
+      "reason": "file_excerpt_limit",
+      "rendered_chars": 8000
+    },
+    {
+      "block_label": "review/SKILL.md",
+      "original_chars": 14226,
+      "reason": "file_excerpt_limit",
+      "rendered_chars": 8000
+    }
+  ]
+}

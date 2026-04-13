@@ -11,18 +11,18 @@
 | `domain` | Gemini 3.1 Pro | Domain fact correctness — citations, API endpoints, schemas, biological claims, numbers | Domain-dense plans; skip for pure code reviews |
 | `mechanical` | Gemini Flash | Stale refs, wrong paths, naming inconsistencies, duplicated content | Large codebases; include grep results — Flash hallucinates about fixed state (~13%) |
 | `alternatives` | Kimi K2.5 | 3-5 genuinely different approaches with different mechanisms | Architecture decisions; SEPARATE from convergent review (never mix critique + brainstorm) |
-| `simple` | Gemini 3.1 Pro | Quick combined: breaks, wrong assumptions, edge cases | Config tweaks, refreshes, low-stakes |
 
 ## Depth Presets
 
 | Preset | Axes | Blast radius | Cost |
 |--------|------|-------------|------|
-| `simple` | simple | Trivial changes | ~$0 (Gemini CLI free) |
-| `standard` | arch + formal | Most features | ~$2-4 |
-| `deep` | arch + formal + domain + mechanical | Structural/domain-dense | ~$4-6 |
-| `full` | all 5 | Shared infra, clinical, high-stakes | ~$6-10 |
+| `standard` | arch + formal | User-facing default; most features | ~$2-4 |
+| `deep` | arch + formal + domain + mechanical | User-facing; structural/domain-dense | ~$4-6 |
+| `full` | all 5 | User-facing; shared infra, clinical, high-stakes | ~$6-10 |
 
 Classify by blast radius, not file count. `standard` is the default.
+The user-facing presets are `standard`, `deep`, and `full`; each includes GPT-5.4.
+Gemini-only passes are internal-only and should not be documented to users as review presets.
 
 ## Per-Model Prompts
 
@@ -82,22 +82,26 @@ Set `timeout: 660000` on the Bash tool call (11 min). The script fires all queri
 
 ### Script Flags
 
-- `--extract` — Auto-extract claims via cross-family models, merge into `disposition.md`. Add to all standard/deep reviews.
+- `--extract` — Auto-extract claims via cross-family models, merge into `disposition.md`, and emit `coverage.json`. Add to all standard/deep/full reviews.
 - `--verify` — After extraction, verify cited files/symbols exist. Implies `--extract`.
 - `--questions FILE` — JSON mapping axis names to custom questions. Unmapped axes use positional question.
 - `--context-files spec1 spec2` — Auto-assemble from `file.py`, `file.py:100-150`, `file.py:100` specs.
 - `--axes NAME` — Preset name or comma-separated axes.
 
-### Model Selection & Transport
+### Model Selection Contract
 
 ```
-Gemini Pro:  gemini-3.1-pro-preview, CLI (free), auto-escalates to API (--stream) for >15KB context
-GPT-5.4:     gpt-5.4, API (openai provider), --reasoning-effort high --stream --timeout 600 --max-tokens 32768
-Flash:       gemini-3-flash-preview, CLI (free), --timeout 120
-Kimi K2.5:   kimi-k2.5, --stream --timeout 300
+Gemini Pro:  architecture / pattern pass
+GPT-5.4:     quantitative / formal pass
+Flash:       fallback or extraction-only pass
+Kimi K2.5:   alternatives-only pass when configured
 ```
 
-**NEVER downgrade models on failure.** Diagnose via stderr/exit code/`llmx --debug`.
+The shared dispatch layer owns providers, transport, retries, and timeout
+policy. This lens should describe review responsibilities, not raw model flags.
+
+**NEVER downgrade models on failure.** Diagnose via shared dispatch metadata and
+coverage artifacts instead of teaching transport-specific debugging here.
 
 ### Gemini Rate Limit Fallback
 
@@ -115,7 +119,8 @@ Automatic with `--extract`: the script tags numeric thresholds (e.g., `>=20% AUP
 - **Correlated errors:** ~60% shared wrong answers when both err (Kim ICML 2025, pre-reasoning). Never same-family reviewer + synthesizer.
 - **Self-preference:** 74.9% demographic parity bias (Wataoka NeurIPS 2024). Different-family synthesis.
 - **Debate = martingale:** Sequential discussion has no correctness improvement (Choi 2025). Independent parallel reviews only.
-- **llmx output flag:** Never use `> file` shell redirects with llmx; use `--output/-o`. Shell redirects buffer until exit.
+- **Shared dispatch output:** Never rely on shell redirects for review artifacts;
+  the shared script writes directly to files.
 
 ## Anti-Patterns
 
