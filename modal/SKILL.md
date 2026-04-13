@@ -143,6 +143,37 @@ Also remember:
 
 See `references/migration.md` for the full migration table.
 
+## Preemption & Retry Resilience
+
+Modal can preempt containers at any time to reclaim capacity. Default detached behavior: auto-retry once. Not enough for long stages.
+
+### `modal.Retries` (free, no cost multiplier)
+```python
+@app.function(
+    retries=modal.Retries(initial_delay=0.0, max_retries=5),
+    single_use_containers=True,  # fresh container per retry, avoids stale state
+)
+```
+Add to: any stage >30min, any stage that has been preempted before. Cost: zero — just re-queues. `single_use_containers=True` prevents state leaks between retries.
+
+### `nonpreemptible=True` (3x CPU+Memory cost, CPU-only)
+```python
+@app.function(nonpreemptible=True, memory=196608)
+```
+Guarantees no preemption. **3x multiplier on CPU and Memory billing.** Not available for GPU functions. Use for: stages that repeatedly fail from preemption AND lack mid-step checkpointing. Calculate cost impact first.
+
+### High-memory scheduling constraints
+Containers requesting >64GB RAM compete for fewer workers. Symptoms: `"waiting to be scheduled on a CPU worker. Relaxing requirements (memory=X) may lead to faster scheduling"`. Mitigations:
+- Reduce parallelism (don't request 200×80GB simultaneously)
+- Add `retries` so preempted containers re-queue automatically
+- Reduce memory if workload permits
+- Schedule large-memory jobs when cluster is less busy (off-peak)
+
+### Budget kills
+When account spend hits the limit, ALL running containers die instantly — no graceful shutdown, no checkpoint write. The only defense is frequent `vol.commit()` between steps. Monitor Live Usage on the dashboard.
+
+Evidence: SBayesRC 80GB×200 parallel containers couldn't schedule. Pangenie 192GB preempted 3+ times across 3 days. Budget limit killed all containers mid-run ($620 limit, 2026-04-13).
+
 ## Failure-Mode Cheatsheet
 
 - **Import error or crash loop after detach** -> inspect live app state first; `retries=0` does not stop container crash retries
