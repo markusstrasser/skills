@@ -26,6 +26,39 @@ docs/entities/
 
 One file per entity at `docs/entities/<category>/<entity-name>.md`.
 
+## Frontmatter (Required for Search Elevation)
+
+All entity files MUST have YAML frontmatter with at least `title`, `tags`, and `summary`.
+These fields are **load-bearing for search** — entity elevation in `src/selve/search.py`
+matches query words against tags and summary to surface relevant entities at rank 0.
+
+```yaml
+---
+title: "Entity Name — Short Description"
+date: YYYY-MM-DD
+last_reviewed: YYYY-MM-DD
+tags: category, entity-type, topic1, topic2, key-person-name
+summary: "One-line summary covering the entity's domain vocabulary"
+---
+```
+
+**Tag strategy:** Include the entity's domain vocabulary — what someone would search for.
+"warfarin, sensitivity, anticoagulation" on vkorc1.md means a search for "warfarin dosing"
+surfaces the entity. Tags are cheap; missing tags mean invisible entities.
+
+## Epistemic Integration
+
+Entity pages are the highest-authority source in the system. Claims within entity pages
+map to confidence tiers from `config/epistemic_adapter.json`:
+
+- **T3:** Lab-confirmed, guideline-backed, database-verified — cite the authority
+- **T2:** Multiple independent sources agree — cite both
+- **T1:** Single source confirmed — cite it, note single-source
+- **T0:** Claimed but unchecked — mark `[UNVERIFIED]`
+
+The tier is implicit in provenance quality, not a separate frontmatter field. A `verification:
+primary-verified` gene page is T2-T3. No verification field = T0-T1.
+
 ## Provenance Rules
 
 Every claim must cite a ground-truth source or explicit derivation chain:
