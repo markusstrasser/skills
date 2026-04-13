@@ -156,10 +156,13 @@ This prevents the dominant waste pattern: re-running full inventory + external s
 ## Phase 1 — Ground Truth
 
 Before external search, check what exists locally:
-1. **Personal knowledge** — `selve` MCP or local docs if available
-2. **Project data** — DuckDB views, entity docs, local analysis
-3. **Research corpus** — `list_corpus` for previously saved papers
-4. **Training data** — what you know (label `[TRAINING-DATA]`)
+1. **Entity pages first** — `!grep -ril "keyword" docs/entities/ 2>/dev/null | head -5` — these are curated, authoritative, and current. If an entity page covers the topic, read it before doing any external search. Entity pages outrank everything else.
+2. **Research memos** — `!grep -ril "keyword" docs/research/ 2>/dev/null | head -10` — prior deep dives on this topic.
+3. **Personal knowledge** — `selve` MCP search for personal context (conversations, git history, notes).
+4. **Research corpus** — `list_corpus` for previously saved papers.
+5. **Training data** — what you know (label `[TRAINING-DATA]`).
+
+**Source hierarchy for interpreting results:** Entity pages (curated) > research memos (sourced) > git commits (implemented) > AI conversations (raw, often stale). When old AI conversations contradict entity pages, the entity page wins.
 
 Flag contradictions with later findings. **Quick tier:** If ground truth answers the question, stop here.
 
@@ -331,3 +334,14 @@ Never present inference as sourced fact. Never present training data as retrieve
 </anti_patterns>
 
 $ARGUMENTS
+
+<!-- knowledge-index
+generated: 2026-04-13T03:42:36Z
+hash: fec94825a44e
+
+cross_refs: docs/research/*.md, research/*.md, research/adversarial-case-library.md
+sources: 1
+  DATA: BASE: name
+table_claims: 5
+
+end-knowledge-index -->
