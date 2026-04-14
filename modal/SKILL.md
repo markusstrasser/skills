@@ -170,9 +170,72 @@ Containers requesting >64GB RAM compete for fewer workers. Symptoms: `"waiting t
 - Schedule large-memory jobs when cluster is less busy (off-peak)
 
 ### Budget kills
-When account spend hits the limit, ALL running containers die instantly — no graceful shutdown, no checkpoint write. The only defense is frequent `vol.commit()` between steps. Monitor Live Usage on the dashboard.
+When account spend hits the limit, ALL running containers die instantly — no graceful shutdown, no checkpoint write, no `@modal.exit()` handler. The only defense is frequent `vol.commit()` between steps AND committing partial work during long steps.
 
-Evidence: SBayesRC 80GB×200 parallel containers couldn't schedule. Pangenie 192GB preempted 3+ times across 3 days. Budget limit killed all containers mid-run ($620 limit, 2026-04-13).
+Evidence: SBayesRC 80GB×200 parallel containers couldn't schedule. Pangenie 192GB preempted 3+ times across 3 days. Budget limit killed all 3 active apps simultaneously mid-run — 6h of SBayesRC compute, 4h of sven_sv annotation (21.8GB artifact on ephemeral disk), 5h of pangenie genotyping — all lost because ephemeral disk is wiped and the commit-at-step-boundary model saves nothing mid-step (2026-04-13).
+
+## Progress Survivability
+
+The commit-at-step-boundary model is a trap for long subprocess steps (>30min). If a step takes 4h and commits only at the end, you lose 4h on any interruption. Design for survivability from the start.
+
+### Rule: ephemeral disk is ephemeral
+Anything written to `/tmp/`, `/root/`, or container-local paths is lost on:
+- preemption (auto-retry restarts from scratch unless state is on volume)
+- budget kill (instant SIGKILL, no grace period)
+- container crash / OOM
+
+Subprocess work directories (e.g. `/tmp/sven_workdir`) are NOT preserved across retries in the same function call — each retry starts with a fresh container and fresh `/tmp`.
+
+### Rule: `vol.commit()` only persists what's already on volume
+`vol.commit()` syncs the volume mount to durable storage. It doesn't copy from ephemeral disk. To save a 21GB artifact from `/tmp/`, you must `shutil.copy` it to the volume mount first, THEN `vol.commit()`.
+
+### Mid-step checkpoint pattern
+For subprocess steps >30min, copy partial artifacts to volume during the heartbeat loop:
+
+```python
+mid_step_checkpointed = False
+while True:
+    try:
+        stdout, _ = process.communicate(timeout=60)
+        break
+    except subprocess.TimeoutExpired:
+        # Check if large artifact exists, commit ONCE
+        if not mid_step_checkpointed:
+            sources = [p for p in artifact_sources if p.exists()]
+            total_bytes = sum(p.stat().st_size for p in sources if p.is_file())
+            if total_bytes > 1_000_000_000:  # >1GB worth saving
+                try:
+                    shutil.copytree(artifact_dir, volume_checkpoint_dir, dirs_exist_ok=True)
+                    vol.commit()
+                    mid_step_checkpointed = True  # once-only flag
+                except Exception:
+                    mid_step_checkpointed = True  # don't retry on error
+```
+
+Critical: **ONCE-only flag**. A naive implementation copies 21GB on every 60s heartbeat, blocking the heartbeat thread and burning disk bandwidth.
+
+### Rule: subprocess stdout is fully buffered without PYTHONUNBUFFERED
+Python subprocess with `stdout=PIPE` and no TTY buffers ALL output until exit. `process.communicate(timeout=60)` returns empty `TimeoutExpired.stdout` until the subprocess flushes. For multi-hour subprocesses, you see nothing. Set `env["PYTHONUNBUFFERED"] = "1"` on subprocess invocation.
+
+### Rule: tee subprocess output to volume
+Even with PYTHONUNBUFFERED, partial stdout is only available via `TimeoutExpired.stdout` during heartbeats. Write it to a volume-visible log file so it survives the container:
+```python
+subprocess_log = volume_results_dir / f"subprocess_{step}.log"
+fh = open(subprocess_log, "w")
+# ... in heartbeat loop:
+if partial_stdout:
+    fh.write(partial_stdout + "\n")
+    fh.flush()
+```
+
+### Rule: timeout = max expected + 50%, not max expected
+A timeout equal to the actual runtime kills the subprocess at the finish line. Sven annotation took 4h; timeout was 4h; killed at 4h+0 with artifact built but subprocess not yet exited, no checkpoint saved, retry starts from scratch. Budget 50% headroom.
+
+### Rule: `.map()` containers are invisible without per-trait logging
+A `.map()` fanout over N traits runs N containers. Each has its own PipelineLogger writing to volume. But the volume commit only happens at trait completion. Until the first trait finishes, you have zero visibility into what any container is doing. Add stdout `print()` at step boundaries so `modal app logs` shows step transitions, not just "Starting..."
+
+### Rule: budget monitoring before launch
+Check Modal Live Usage before launching anything significant. >85% = don't launch long jobs. There's no graceful budget-aware degradation; you hit the limit and everything dies.
 
 ## Failure-Mode Cheatsheet
 
@@ -203,6 +266,13 @@ Evidence: SBayesRC 80GB×200 parallel containers couldn't schedule. Pangenie 192
 14. **`cpu` means physical cores, not vCPUs**.
 15. **`uv_pip_install` on CUDA base images can break ABI/toolchain expectations** -- prefer `pip_install` for compiled CUDA stacks.
 16. **App wall-clock age lies by omission** -- a detached app can remain listed long after a worker was preempted or disappeared; always join app state with fresh receipt/progress.
+17. **Ephemeral disk is wiped on ANY container exit** -- `/tmp`, `/root`, and work dirs are gone on preemption, budget kill, retry, or crash. If a subprocess builds a 21GB artifact in `/tmp` over 3h, that artifact is lost unless explicitly copied to volume mid-step.
+18. **Subprocess stdout is fully buffered without a TTY** -- `subprocess.PIPE` with no `PYTHONUNBUFFERED=1` returns empty `TimeoutExpired.stdout` for multi-hour runs. You see CUDA banner then nothing until exit. Always set `env["PYTHONUNBUFFERED"] = "1"`.
+19. **Timeout = max runtime kills at the finish line** -- sven annotation took 4h, timeout was 4h, killed at 4h+0 with artifact complete but subprocess not yet exited. Use 1.5x expected max.
+20. **Budget kill ≠ preemption** -- preemption triggers `retries`; budget kill SIGKILLs everything with no grace period, no exit handler, no retry. Only committed volume state survives.
+21. **`.map()` containers are invisible until they commit** -- PipelineLogger JSONL writes go to volume but commits happen at trait end. 10 containers running for 6h with 0 commits = 0 visibility into what they're doing. Add explicit `print()` at step transitions for stdout trace.
+22. **vol.commit() does not copy from ephemeral disk** -- it syncs the volume mount to durable storage. `shutil.copy` to the volume mount first, then `vol.commit()`. Subprocess output in `/tmp` is NOT saved by a naked `vol.commit()`.
+23. **Artifact file watchdogs are fooled by retry leftovers** -- if a subprocess times out with a 21GB file on ephemeral disk, the retry's new container starts fresh. If the watchdog runs before the retry subprocess touches the dir, it sees `annotation_mb=21793.4` but that's the OLD file from a DIFFERENT container (Modal cleans `/tmp` between retries... usually). Verify via timestamps, not presence.
 
 ## MANDATORY: Test Before Deploying
 
