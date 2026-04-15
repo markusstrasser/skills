@@ -1,6 +1,6 @@
 ---
-name: review
-description: "Use when: 'what's wrong with this', 'review the plan', 'close out the implementation', 'fact-check these findings'. Modes: /review model (Gemini+GPT adversarial), /review verify (fact-check LLM output), /review close (post-implementation tests+review)."
+name: critique
+description: "Use when: 'what's wrong with this', 'review the plan', 'close out the implementation', 'fact-check these findings'. Modes: /critique model (Gemini+GPT adversarial), /critique verify (fact-check LLM output), /critique close (post-implementation tests+review). Renamed from /review (built-in conflict)."
 user-invocable: true
 argument-hint: <mode> [target]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent]
@@ -23,9 +23,9 @@ Unless the user explicitly says compatibility matters, treat the target change a
 
 | Mode | Trigger | What it does |
 |------|---------|-------------|
-| `model` | Default, or explicit `/review model [topic]` | Adversarial cross-model review via Gemini + GPT |
-| `verify` | `/review verify <report>` | Fact-check LLM findings against actual code |
-| `close` | `/review close` | Post-implementation: tests, review, caught-red-handed loop |
+| `model` | Default, or explicit `/critique model [topic]` | Adversarial cross-model review via Gemini + GPT |
+| `verify` | `/critique verify <report>` | Fact-check LLM findings against actual code |
+| `close` | `/critique close` | Post-implementation: tests, review, caught-red-handed loop |
 
 **Auto-routing (when no mode specified):**
 - Recent plan in `.claude/plans/` with commits since plan start → `close`
@@ -215,11 +215,11 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
   --output .model-review/plan-close-context.md
 ```
 
-Do not rely on auto-discovered touched-file scope when the worktree is already clean or the relevant changes were committed earlier in the session. In that case, build an explicit review scope packet with the concrete files under review. Otherwise `/review close` can silently review an empty packet and produce useless output.
+Do not rely on auto-discovered touched-file scope when the worktree is already clean or the relevant changes were committed earlier in the session. In that case, build an explicit review scope packet with the concrete files under review. Otherwise `/critique close` can silently review an empty packet and produce useless output.
 
 **Phase 1: Write Tests for New Code** — Identify new functions from plan commits. Write unit tests covering happy path, edge cases, error paths, and contract invariants.
 
-**Phase 2: Cross-Model Review** — Run `/review model` on the plan-close review packet (not a hand-written summary). Use `--context .model-review/plan-close-context.md --extract --verify`. Fact-check and disposition every finding. Inspect `coverage.json` before closing so you can see packet drops, axis coverage, and verification totals.
+**Phase 2: Cross-Model Review** — Run `/critique model` on the plan-close review packet (not a hand-written summary). Use `--context .model-review/plan-close-context.md --extract --verify`. Fact-check and disposition every finding. Inspect `coverage.json` before closing so you can see packet drops, axis coverage, and verification totals.
 
 **Phase 3: The Caught-Red-Handed Loop** — For each confirmed finding: would any Phase 1 tests have caught this? If yes, fix the test gap. If no, write a new test. Verify against pre-fix code:
 ```bash

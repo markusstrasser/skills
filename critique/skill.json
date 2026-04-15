@@ -1,11 +1,11 @@
 {
-  "name": "review",
+  "name": "critique",
   "kind": "worker",
   "intent_class": "convergent",
   "summary": "Cross-model critique, verification, and closeout review.",
   "entrypoint": {
     "type": "script",
-    "path": "review/scripts/model-review.py"
+    "path": "critique/scripts/model-review.py"
   },
   "modes": {
     "model": {
@@ -63,8 +63,8 @@
     "improve"
   ],
   "references": [
-    "review/SKILL.md",
-    "review/references/context-assembly.md",
-    "review/references/dispatch.md"
+    "critique/SKILL.md",
+    "critique/references/context-assembly.md",
+    "critique/references/dispatch.md"
   ]
 }

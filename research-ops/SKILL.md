@@ -114,7 +114,7 @@ Each phase prompt must include:
 2. **Probe external claims inline:** If the plan references any URL, API endpoint, or version number, HTTP-probe it directly. This catches 404s and HTML-instead-of-API before wasting a review cycle (caught 2 bugs in 6 cycles).
 3. **Cross-model review via script:** Write the plan to a temp file, then dispatch:
 ```bash
-uv run python3 ~/Projects/skills/review/scripts/model-review.py \
+uv run python3 ~/Projects/skills/critique/scripts/model-review.py \
   --context /tmp/cycle-plan.md \
   --topic "research-cycle-G{N}" \
   --axes standard \
@@ -212,7 +212,7 @@ No [x] checkboxes — approvals go to CYCLE.md ## Queue only.
 | Situation | Invoke | Why |
 |-----------|--------|-----|
 | Deep audit sweep (SWE quality) | `/improve maintain` owns this lane | Use `/research dispatch` directly for growth-adjacent audits only |
-| Plan review (non-trivial) | `/review model` via script | Cross-model adversarial — same-model can't catch own blind spots |
+| Plan review (non-trivial) | `/critique model` via script | Cross-model adversarial — same-model can't catch own blind spots |
 | Discover returns empty | `/brainstorm` inline | Divergent ideation -> ideas to DECISIONS.md (informational) |
 | Need literature depth on a paper | `/research query` | Deep paper analysis with epistemic rigor |
 | Improve phase (every cycle) | retro classification framework | Structured findings -> JSON for improvement pipeline |

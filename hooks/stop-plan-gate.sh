@@ -89,7 +89,7 @@ def transcript_flags(transcript_path: str):
     )
     strict_re = re.compile("|".join(strict_patterns), re.IGNORECASE)
     review_close_re = re.compile(
-        r"<command-name>/review</command-name>.*?<command-(?:args|message)>close</command-(?:args|message)>",
+        r"<command-name>/critique</command-name>.*?<command-(?:args|message)>close</command-(?:args|message)>",
         re.IGNORECASE | re.DOTALL,
     )
     plan_close_re = re.compile(r"<command-name>/plan-close</command-name>", re.IGNORECASE)
@@ -160,7 +160,7 @@ strict_requested, closeout_observed = transcript_flags(transcript_path)
 if strict_requested and not closeout_observed:
     issues.append(
         "FULL-PLAN CLOSEOUT: Session was framed as execute-the-entire-plan/full-migration work, "
-        "but no closeout step (`/review close`, `/plan-close`, or plan-close context build) "
+        "but no closeout step (`/critique close`, `/plan-close`, or plan-close context build) "
         "was observed. Before stopping, run the closeout step or state the deferred residue."
     )
 
