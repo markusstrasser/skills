@@ -79,7 +79,7 @@ This file documents HTTP error codes returned by the Claude API, their common ca
 - Using deprecated model ID
 - Invalid API endpoint
 
-**Fix:** Use exact model IDs from the models documentation. You can use aliases (e.g., `claude-opus-4-6`).
+**Fix:** Use exact model IDs from the models documentation. You can use aliases (e.g., `claude-opus-4-7`).
 
 ---
 
@@ -100,18 +100,29 @@ This file documents HTTP error codes returned by the Claude API, their common ca
 Some 400 errors are specifically related to parameter validation:
 
 - `max_tokens` exceeds model's limit
-- Invalid `temperature` value (must be 0.0-1.0)
-- `budget_tokens` >= `max_tokens` in extended thinking
+- `temperature`, `top_p`, `top_k` set to a non-default value on Opus 4.7 (the model rejects sampling parameters — omit them entirely)
+- `thinking: {type: "enabled", budget_tokens: N}` used on Opus 4.7 (use `{type: "adaptive"}` instead)
+- Assistant-message prefill used on Opus 4.6+ (use structured outputs or system prompts)
+- `budget_tokens` >= `max_tokens` on legacy models that still accept it (Sonnet 4.5 and earlier)
 - Invalid tool definition schema
 
-**Common mistake with extended thinking:**
+**Opus 4.7 migration common mistakes:**
 
 ```
-# Wrong: budget_tokens must be < max_tokens
-thinking: budget_tokens=10000, max_tokens=1000  → Error!
+# Wrong: budget_tokens returns 400 on Opus 4.7
+thinking: {type: "enabled", budget_tokens: 10000}
 
-# Correct
-thinking: budget_tokens=10000, max_tokens=16000
+# Correct: adaptive thinking + effort
+thinking: {type: "adaptive"}
+output_config: {effort: "xhigh"}
+```
+
+```
+# Wrong: temperature returns 400 on Opus 4.7
+temperature: 0.7
+
+# Correct: omit sampling params; steer via prompting
+(no sampling parameters)
 ```
 
 ---
@@ -161,7 +172,7 @@ thinking: budget_tokens=10000, max_tokens=16000
 | Mistake                         | Error            | Fix                                                     |
 | ------------------------------- | ---------------- | ------------------------------------------------------- |
 | `budget_tokens` >= `max_tokens` | 400              | Ensure `budget_tokens` < `max_tokens`                   |
-| Typo in model ID                | 404              | Use valid model ID like `claude-opus-4-6`               |
+| Typo in model ID                | 404              | Use valid model ID like `claude-opus-4-7`               |
 | First message is `assistant`    | 400              | First message must be `user`                            |
 | Consecutive same-role messages  | 400              | Alternate `user` and `assistant`                        |
 | API key in code                 | 401 (leaked key) | Use environment variable                                |
