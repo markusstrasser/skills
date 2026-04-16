@@ -158,11 +158,9 @@ response = client.messages.create(
 
 ## Extended Thinking
 
-> **Opus 4.7:** Use adaptive thinking. `budget_tokens` returns a 400 error. Adaptive is OFF by default — set it explicitly.
-> **Sonnet 4.6:** Use adaptive thinking (preferred) or `budget_tokens` (deprecated but still functional).
-> **Sonnet 4.5 and earlier:** Use `thinking: {type: "enabled", budget_tokens: N}` (must be < `max_tokens`, min 1024).
->
-> **Thinking display:** On Opus 4.7, `thinking.display` defaults to `"omitted"` — thinking blocks appear but their `thinking` field is empty. Set `display: "summarized"` to restore visible reasoning progress.
+Use `thinking: {type: "adaptive"}` on Opus 4.7 and Sonnet 4.6. Adaptive is OFF by default on Opus 4.7 — set it explicitly. `budget_tokens` returns a 400 error on Opus 4.7.
+
+`thinking.display` defaults to `"omitted"` on Opus 4.7 — thinking blocks appear but their `thinking` field is empty. Set `display: "summarized"` to restore visible reasoning progress in UIs.
 
 ```python
 # Opus 4.7: adaptive thinking with visible summary
@@ -264,7 +262,7 @@ response2 = conversation.send("What's my name?")  # Claude remembers "Alice"
 
 ### Compaction (long conversations)
 
-> **Beta, Opus 4.6 only.** When conversations approach the 200K context window, compaction automatically summarizes earlier context server-side. The API returns a `compaction` block; you must pass it back on subsequent requests — append `response.content`, not just the text.
+> **Beta.** When conversations approach the context window, compaction automatically summarizes earlier context server-side. The API returns a `compaction` block; you must pass it back on subsequent requests — append `response.content`, not just the text. Requires beta header `compact-2026-01-12`.
 
 ```python
 import anthropic

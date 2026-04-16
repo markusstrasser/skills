@@ -30,7 +30,7 @@ async with async_client.messages.stream(
 
 Claude may return text, thinking blocks, or tool use. Handle each appropriately:
 
-> **Opus 4.7:** Use `thinking: {type: "adaptive"}` — adaptive is off by default on 4.7, set it explicitly. For visible streaming of reasoning, add `"display": "summarized"` (default is `"omitted"`, which emits empty thinking blocks). On Sonnet 4.5 or older, use `thinking: {type: "enabled", budget_tokens: N}` instead.
+> Set `thinking: {type: "adaptive"}` explicitly — adaptive is off by default on Opus 4.7. For visible streaming of reasoning, add `"display": "summarized"` (default is `"omitted"`, which emits empty thinking blocks).
 
 ```python
 with client.messages.stream(

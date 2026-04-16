@@ -23,7 +23,7 @@ for await (const event of stream) {
 
 ## Handling Different Content Types
 
-> **Opus 4.7:** Use `thinking: {type: "adaptive"}` — adaptive is off by default on 4.7, set it explicitly. For visible streaming of reasoning, add `display: "summarized"` (default is `"omitted"`, which emits empty thinking blocks). On Sonnet 4.5 or older, use `thinking: {type: "enabled", budget_tokens: N}` instead.
+> Set `thinking: {type: "adaptive"}` explicitly — adaptive is off by default on Opus 4.7. For visible streaming of reasoning, add `display: "summarized"` (default is `"omitted"`, which emits empty thinking blocks).
 
 ```typescript
 const stream = client.messages.stream({

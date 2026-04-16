@@ -22,7 +22,7 @@ This file contains WebFetch URLs for fetching current information from platform.
 
 | Topic             | URL                                                                          | Extraction Prompt                                                                      |
 | ----------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Extended Thinking | `https://platform.claude.com/docs/en/build-with-claude/extended-thinking.md` | "Extract extended thinking parameters, budget_tokens requirements, and usage examples" |
+| Extended Thinking | `https://platform.claude.com/docs/en/build-with-claude/extended-thinking.md` | "Extract adaptive thinking parameters, effort levels, thinking.display defaults, and usage examples" |
 | Adaptive Thinking | `https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking.md` | "Extract adaptive thinking setup, effort levels (including xhigh), thinking.display defaults, and Claude Opus 4.7 usage examples" |
 | Effort Parameter  | `https://platform.claude.com/docs/en/build-with-claude/effort.md`            | "Extract effort levels, cost-quality tradeoffs, and interaction with thinking"        |
 | Tool Use          | `https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview.md`  | "Extract tool definition schema, tool_choice options, and handling tool results"       |

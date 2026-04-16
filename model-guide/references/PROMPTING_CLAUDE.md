@@ -4,8 +4,6 @@ Specific to Claude Opus 4.7 and Sonnet 4.6. Updated 2026-04-16.
 
 **Sources:** Anthropic official docs (platform.claude.com/docs), Claude Code system prompt analysis.
 
-> **Note on 4.7 vs 4.6 behavior:** Opus 4.7 is more literal, more direct, and more concise than 4.6. It spawns fewer subagents by default, uses tools less often (raise effort to xhigh if you need more), and respects effort levels strictly. Specific 4.6 pain points below ("over-exploration," "LaTeX defaults," "excessive subagent spawning") may be reduced or reversed on 4.7 per Anthropic's 2026-04-16 release notes. Validate before applying 4.6-era counter-prompts.
-
 ---
 
 ## 1. XML Tags -- Claude's Signature Technique
@@ -36,9 +34,9 @@ Your task is to analyze the documents above.
 
 ## 2. Thinking & Reasoning Modes
 
-### Adaptive Thinking (Recommended for Opus 4.7)
+### Adaptive Thinking
 
-Adaptive thinking is **off by default** on Opus 4.7 — set it explicitly. `budget_tokens` returns a 400 error. `thinking.display` defaults to `"omitted"`; add `"display": "summarized"` to restore visible reasoning in UIs.
+Adaptive thinking is **off by default** on Opus 4.7 — set it explicitly. `budget_tokens` returns a 400 error on Opus 4.7. `thinking.display` defaults to `"omitted"`; add `"display": "summarized"` to restore visible reasoning in UIs.
 
 ```python
 client.messages.create(
@@ -53,25 +51,12 @@ client.messages.create(
 | Effort | Behavior |
 |--------|----------|
 | `max` | Deepest reasoning. Can overthink simple tasks. Test before committing. |
-| `xhigh` | **Recommended for coding and agentic work** on Opus 4.7 (new level). |
+| `xhigh` | **Recommended for coding and agentic work** (new level on 4.7). |
 | `high` | Minimum for intelligence-sensitive tasks. |
 | `medium` | Cost-sensitive; acceptable intelligence tradeoff. |
 | `low` | Strictly scopes to what was asked. May under-think complex problems — raise effort rather than prompt around it. |
 
-Adaptive mode automatically enables **interleaved thinking** (thinking between tool calls). No beta header needed.
-
-### Manual Extended Thinking (Sonnet 4.6 only)
-
-```python
-client.messages.create(
-    model="claude-sonnet-4-6",
-    max_tokens=16384,
-    thinking={"type": "enabled", "budget_tokens": 16384},
-    messages=[...]
-)
-```
-
-Sonnet 4.6 interleaved thinking is automatic when using adaptive thinking — no beta header needed. The `interleaved-thinking-2025-05-14` beta header is deprecated; it was required with manual `budget_tokens` mode, which is itself deprecated on 4.6.
+Adaptive mode automatically enables **interleaved thinking** (thinking between tool calls). No beta header needed. Works the same on Sonnet 4.6.
 
 ### Prompt-Level Chain-of-Thought (when thinking is off)
 
@@ -80,22 +65,12 @@ Sonnet 4.6 interleaved thinking is automatic when using adaptive thinking — no
 - Include `<thinking>` tags in few-shot examples -- Claude generalizes the pattern
 - Add self-check: `"Before finishing, verify your answer against [criteria]"`
 
-### Controlling Overthinking
-
-Opus 4.6 does significantly more upfront exploration than previous models. Counter with:
-
-```
-When deciding how to approach a problem, choose an approach and commit to it.
-Avoid revisiting decisions unless you encounter new information that directly
-contradicts your reasoning.
-```
-
 ---
 
 ## 3. System Prompts & Role Setting
 
 - Set roles in the **system prompt**, not user message
-- Claude 4.6 is **more responsive to system prompts** than older models -- soften forceful language:
+- Opus 4.7 follows instructions literally and is highly responsive to system prompts. Keep instructions precise and drop forceful scaffolding:
   - Bad: `"CRITICAL: You MUST use this tool when..."`
   - Good: `"Use this tool when..."`
 - **Explain the why** behind constraints:
@@ -107,7 +82,7 @@ contradicts your reasoning.
 
 ## 4. Long Context Best Practices
 
-1M context for Opus/Sonnet 4.6 (GA March 13, 2026). MRCR v2: 78.3% at 1M tokens.
+1M context native on Opus 4.7 at standard pricing. 1M on Sonnet 4.6 via `context-1m-2025-08-07` beta header. MRCR v2: 78.3% at 1M tokens (4.6 baseline; 4.7 improves per announcement).
 
 **Critical rule:** Put **long documents at the TOP**, query/instructions at the **BOTTOM**. Measured 30% improvement.
 
@@ -129,14 +104,14 @@ Then, based on these quotes, provide your analysis in <info> tags.
 
 ---
 
-## 5. Prefilling -- DEPRECATED on 4.6
+## 5. Prefilling — not supported
 
-Starting with Claude 4.6, prefilled responses on the last assistant turn are no longer supported.
+Prefilled responses on the last assistant turn are not supported on Opus 4.6+ (return a 400 error on Opus 4.7).
 
-**Migration paths:**
-- Format control: Use system prompt instructions or structured output via tool schemas
+**Use instead:**
+- Format control: system prompt instructions or structured output via `output_config.format`
 - Eliminating preambles: `"Respond directly without preamble. Do not start with 'Here is...', 'Based on...'"`
-- Continuations: Move to user message: `"Your previous response ended with [text]. Continue from where you left off."`
+- Continuations: move to user message: `"Your previous response ended with [text]. Continue from where you left off."`
 
 ---
 
@@ -154,13 +129,16 @@ Write **detailed, specific descriptions** for each tool and parameter. Short des
   ```
 
 ### Parallel Tool Calls
-Claude 4.6 excels at parallel execution. Boost to ~100% with:
+Claude excels at parallel execution. Boost to ~100% with:
 ```xml
 <use_parallel_tool_calls>
 If you intend to call multiple tools and there are no dependencies between
 the calls, make all independent calls in parallel.
 </use_parallel_tool_calls>
 ```
+
+### Opus 4.7: Fewer Tools by Default
+Opus 4.7 uses tools less often than prior Opus versions and relies more on reasoning. To increase tool usage, raise effort to `xhigh` — don't prompt-engineer around the default.
 
 ### Action vs. Suggestion
 Claude interprets "Can you suggest changes?" as a request for suggestions, not action.
@@ -175,9 +153,8 @@ Claude interprets "Can you suggest changes?" as a request for suggestions, not a
 - Tell Claude what **TO do**, not what **NOT to do**:
   - Bad: `"Do not use markdown"`
   - Good: `"Compose your response in smoothly flowing prose paragraphs"`
-- Match your prompt style to desired output -- if your prompt has no markdown, Claude produces less
-- **Opus 4.6 defaults to LaTeX** for math. Prevent with: `"Format in plain text only. Do not use LaTeX."`
-- **4.6 is more concise** than previous models. May skip summaries after tool calls. For verbosity: `"After completing tool use, provide a quick summary"`
+- Match your prompt style to desired output — if your prompt has no markdown, Claude produces less
+- Opus 4.7 is direct and concise; it calibrates response length to task complexity. For longer, fuller responses: `"Give a thorough, multi-paragraph answer with examples"`
 
 ---
 
@@ -185,13 +162,12 @@ Claude interprets "Can you suggest changes?" as a request for suggestions, not a
 
 | Pitfall | Solution |
 |---------|----------|
-| Overtriggering on tools/skills | Soften forceful instructions -- 4.6 is more responsive |
 | Overengineering code (speculative abstraction, hypothetical futures) | `"Don't build speculative abstractions for hypothetical futures. The right amount of complexity is what the task actually requires. Incidental cleanup adjacent to the work is fine."` |
 | Hallucinating about unread code | `"Never speculate about code you have not opened. Read the file before answering."` |
 | Hard-coding test values | `"Implement a solution that works for all valid inputs, not just test cases."` |
-| Excessive subagent spawning (Opus 4.6) | `"For simple tasks, single-file edits, or sequential operations, work directly."` |
 | Excessive file creation | `"If you create temporary files, clean them up at the end."` |
-| Opus 4.5 sensitivity to "think" | Use "consider", "evaluate", "reason through" when thinking is disabled (4.5 only) |
+| Shallow reasoning at low/medium effort on complex task | Raise effort to `high` or `xhigh`. Opus 4.7 respects effort levels strictly — don't prompt around it. |
+| Literal interpretation dropping old scaffolding | Remove "after every N tool calls, summarize" style prompts. Opus 4.7 handles progress updates natively. |
 
 ---
 
@@ -199,19 +175,19 @@ Claude interprets "Can you suggest changes?" as a request for suggestions, not a
 
 | Model | Best For | Effort Setting |
 |-------|----------|---------------|
-| **Opus 4.6** | Large-scale migrations, deep research, extended autonomous work, highest reasoning, 128K output | `max` or `high` |
-| **Sonnet 4.6** | Agentic coding, tool-heavy workflows, most applications (best speed/intelligence ratio) | `medium` for most; `low` for high-volume |
+| **Opus 4.7** | Agentic coding, large-scale migrations, deep research, extended autonomous work, highest reasoning, 128K output, 1M native context | `xhigh` for coding/agentic; `high` for most |
+| **Sonnet 4.6** | Tool-heavy workflows, most applications (best speed/intelligence ratio) | `medium` for most; `low` for high-volume |
 
 **Upgrade to Opus when:** large-scale code migrations, deep research, extended autonomous work, problems requiring highest reasoning quality, or when you need >64K output.
 
-**Sonnet tip:** Set max_tokens to 64K at medium/high effort to give room for thinking. Sonnet's GDPval (1633) actually beats Opus (1606) on expert preference -- it's not always a downgrade.
+**Sonnet tip:** Set `max_tokens` to 64K at medium/high effort to give room for thinking.
 
 ---
 
 ## 10. Agentic Patterns
 
 ### Context Awareness
-Claude 4.5+ tracks remaining context. Tell it about infrastructure:
+Claude tracks remaining context. Tell it about infrastructure:
 ```
 Your context window will be automatically compacted as it approaches its limit.
 Do not stop tasks early due to token budget concerns. Save progress to memory
@@ -223,25 +199,27 @@ before context refreshes.
 2. Subsequent windows: iterate on todo-list
 3. Write tests in structured format before starting work
 4. Use git for state tracking across sessions
-5. Starting fresh often beats compacting -- 4.6 rediscovers state from filesystem
+5. Starting fresh often beats compacting — Claude rediscovers state from filesystem
 
 ### Safety Guardrails
-Opus 4.6 may take irreversible actions without asking:
+For high-autonomy tasks, explicitly ask Claude to pause on irreversible actions:
 ```
 For actions that are hard to reverse, affect shared systems, or could be
 destructive, ask the user before proceeding.
 ```
 
 ### Prompt Chaining
-Most useful pattern: **generate -> review against criteria -> refine**. Each step as a separate API call lets you inspect, log, or branch.
+Most useful pattern: **generate → review against criteria → refine**. Each step as a separate API call lets you inspect, log, or branch.
 
 ---
 
 ## 11. Vision
 
-- 4.5+ and 4.6 have improved multi-image processing
-- Give Claude a "crop tool" to zoom into image regions -- consistent uplift measured
-- Analyze videos by breaking into frames
+- Opus 4.7 supports high-resolution images up to 2576px / 3.75 MP on the long edge.
+- Full-resolution images can use up to ~4,784 tokens each (up from ~1,600 on prior models) — re-budget `max_tokens` for image-heavy workloads, or downsample before sending.
+- Bounding-box coordinates returned by 4.7 are 1:1 with actual image pixels; no scale-factor conversion needed.
+- Give Claude a "crop tool" to zoom into image regions — consistent uplift measured.
+- Analyze videos by breaking into frames.
 
 ---
 
