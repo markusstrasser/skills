@@ -2,6 +2,30 @@
 
 Track what changes with each model release so you know what to update.
 
+## 2026-04-16 -- Claude Opus 4.7 Release
+
+**Claude Opus 4.7 replaces Opus 4.6 as the default Opus model.** Same pricing ($5/$25), 1M native context (no long-context premium), 128K max output.
+
+### Key changes
+- **Default model:** `claude-opus-4-6` → `claude-opus-4-7` across SKILL.md, claude-api reference docs, and prompting guides.
+- **Effort levels:** new `xhigh` level between `high` and `max`. Recommended default for coding/agentic.
+- **Adaptive thinking:** OFF by default on 4.7 — must be set explicitly. `budget_tokens` returns 400. `thinking.display` defaults to `"omitted"` (set `"summarized"` for visible reasoning in UIs).
+- **Sampling parameters removed:** `temperature`, `top_p`, `top_k` all return 400. Steer via prompting.
+- **Tokenizer:** new tokenizer produces 1.0–1.35× more input tokens than Opus 4.6 for the same text.
+- **Vision:** high-resolution image support up to 2576px / 3.75 MP (up to ~4,784 tokens per full-res image). Bounding-box coordinates are 1:1 with image pixels.
+- **Behavior:** more literal instruction following, fewer subagents/tool calls by default, stricter effort calibration at low/medium, more direct tone.
+- **New stop_reason:** `model_context_window_exceeded` (distinct from `max_tokens`).
+- **Task budgets:** new beta feature (`task-budgets-2026-03-13`) for agentic loops to self-pace.
+- **Beta headers now GA** and removed from docs: `effort-2025-11-24`, `interleaved-thinking-2025-05-14`, `fine-grained-tool-streaming-2025-05-14`, `structured-outputs-2025-11-13`.
+- **Legacy model catalog trimmed:** `shared/models.md` now lists only current frontier (Opus 4.7, Sonnet 4.6, Haiku 4.5). Older models resolved via WebFetch of the Anthropic Models Overview.
+
+### Files updated
+- claude-api SKILL.md + all language refs (Python, TypeScript, Java, Go, Ruby, C#, PHP, cURL)
+- claude-api shared/ (models.md, error-codes.md, tool-use-concepts.md, live-sources.md)
+- model-guide SKILL.md (selection matrix, Opus profile, cost table, Sonnet profile)
+- model-guide references (PROMPTING_CLAUDE.md rewritten, BENCHMARKS.md relabeled)
+- agent-infra: skill-authoring example; compaction-canary (no functional change)
+
 ## 2026-04-08 -- Drop Kimi K2.5, Add Flash-Lite
 
 ### Key changes

@@ -130,9 +130,7 @@ curl https://api.anthropic.com/v1/messages \
 
 ## Extended Thinking
 
-> **Opus 4.7:** Use adaptive thinking. `budget_tokens` returns a 400 error. Adaptive is OFF by default — set it explicitly. `thinking.display` defaults to `"omitted"`; add `"display": "summarized"` to restore visible reasoning text.
-> **Sonnet 4.6:** Use adaptive thinking (preferred) or `budget_tokens` (deprecated but still functional).
-> **Sonnet 4.5 and earlier:** Use `"type": "enabled"` with `"budget_tokens": N` (must be < `max_tokens`, min 1024).
+Use adaptive thinking on Opus 4.7 and Sonnet 4.6. Adaptive is OFF by default on Opus 4.7 — set it explicitly. `budget_tokens` returns a 400 error on Opus 4.7. `thinking.display` defaults to `"omitted"`; add `"display": "summarized"` to restore visible reasoning text.
 
 ```bash
 # Opus 4.7: adaptive thinking with visible summary

@@ -139,9 +139,9 @@ Everything goes through `POST /v1/messages`. Tools and output constraints are fe
 | Claude Sonnet 4.6 | `claude-sonnet-4-6` | 200K (1M beta) | $3.00      | $15.00      |
 | Claude Haiku 4.5  | `claude-haiku-4-5`  | 200K           | $1.00      | $5.00       |
 
-**ALWAYS use `claude-opus-4-7` unless the user explicitly names a different model.** This is non-negotiable. Do not use `claude-sonnet-4-6`, `claude-sonnet-4-5`, or any other model unless the user literally says "use sonnet" or "use haiku". Never downgrade for cost — that's the user's decision, not yours.
+**ALWAYS use `claude-opus-4-7` unless the user explicitly names a different model.** Never downgrade for cost — that's the user's decision, not yours.
 
-**CRITICAL: Use only the exact model ID strings from the table above — they are complete as-is. Do not append date suffixes.** For example, use `claude-sonnet-4-5`, never `claude-sonnet-4-5-20250514` or any other date-suffixed variant you might recall from training data. If the user requests an older model not in the table (e.g., "opus 4.6", "opus 4.5", "sonnet 3.7"), read `shared/models.md` for the exact ID — do not construct one yourself.
+**Use only the exact model ID strings from the table above.** Do not append date suffixes. If the user requests a model not in the table, read `shared/models.md` or WebFetch the Anthropic Models Overview — do not construct an ID yourself.
 
 A note: if any of the model strings above look unfamiliar to you, that's to be expected — that just means they were released after your training data cutoff. Rest assured they are real models; we wouldn't mess with you like that.
 
@@ -172,8 +172,6 @@ output_config = {"effort": "high", "task_budget": {"type": "tokens", "total": 12
 Beta header: `task-budgets-2026-03-13`. Minimum 20,000 tokens. Don't set for open-ended tasks where quality matters more than speed. `task_budget` is advisory (the model sees it and paces itself); `max_tokens` is a hard per-request ceiling.
 
 **Assistant-message prefills return a 400 error on Opus 4.7.** Use structured outputs (`output_config.format`), system prompt instructions, or continuation-as-user-turn patterns instead.
-
-**Older models:** If the user specifically asks for Sonnet 4.5 or earlier, use `thinking: {type: "enabled", budget_tokens: N}`. `budget_tokens` must be less than `max_tokens` (minimum 1024).
 
 ---
 
@@ -252,7 +250,7 @@ Live documentation URLs are in `shared/live-sources.md`.
 ## Common Pitfalls
 
 - Don't truncate inputs when passing files or content to the API. If the content is too long to fit in the context window, notify the user and discuss options (chunking, summarization, etc.) rather than silently truncating.
-- **Opus 4.7 thinking:** Use `thinking: {type: "adaptive"}` — `budget_tokens` returns a 400 error on Opus 4.7. For Sonnet 4.5 or older, `budget_tokens` is still supported (must be less than `max_tokens`, minimum 1024).
+- **Thinking:** Use `thinking: {type: "adaptive"}` on Opus 4.7 and Sonnet 4.6. `budget_tokens` returns a 400 error on Opus 4.7.
 - **Opus 4.7 prefill removed:** Assistant message prefills return a 400 error. Use structured outputs (`output_config.format`), system prompt instructions, or continuation-as-user-turn patterns instead.
 - **Opus 4.7 sampling parameters removed:** `temperature`, `top_p`, `top_k` return 400 on Opus 4.7. Omit them. Use prompting to guide behavior.
 - **Opus 4.7 thinking.display default is "omitted":** Thinking field is empty unless you set `display: "summarized"`. UIs showing thinking progress need the explicit opt-in or they appear frozen.

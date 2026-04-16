@@ -81,7 +81,7 @@ For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
 
 **Quick prompting tips:**
 - Same XML tag patterns as Opus
-- Use **adaptive thinking** (`thinking: {type: "adaptive"}`). Manual extended thinking with `budget_tokens` still works but is deprecated.
+- Use **adaptive thinking** (`thinking: {type: "adaptive"}`).
 - Adaptive thinking automatically enables **interleaved thinking** (between tool calls) — no beta header needed.
 - Add parameter validation instruction: `"If a required parameter is missing, ask instead of guessing"`
 - Set `max_tokens` to 64K at medium/high effort to give room for thinking

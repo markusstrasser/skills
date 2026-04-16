@@ -97,32 +97,22 @@ This file documents HTTP error codes returned by the Claude API, their common ca
 
 ### 400 Validation Errors
 
-Some 400 errors are specifically related to parameter validation:
+Common parameter-validation 400s on current models:
 
-- `max_tokens` exceeds model's limit
-- `temperature`, `top_p`, `top_k` set to a non-default value on Opus 4.7 (the model rejects sampling parameters — omit them entirely)
-- `thinking: {type: "enabled", budget_tokens: N}` used on Opus 4.7 (use `{type: "adaptive"}` instead)
-- Assistant-message prefill used on Opus 4.6+ (use structured outputs or system prompts)
-- `budget_tokens` >= `max_tokens` on legacy models that still accept it (Sonnet 4.5 and earlier)
+- `max_tokens` exceeds the model's limit
+- `temperature`, `top_p`, or `top_k` set to any non-default value (Opus 4.7 rejects sampling parameters — omit entirely; steer via prompting)
+- `thinking: {type: "enabled", budget_tokens: N}` (use `thinking: {type: "adaptive"}` with `output_config.effort`)
+- Assistant-message prefill (use `output_config.format` or system prompts)
 - Invalid tool definition schema
 
-**Opus 4.7 migration common mistakes:**
-
 ```
-# Wrong: budget_tokens returns 400 on Opus 4.7
+# Wrong
 thinking: {type: "enabled", budget_tokens: 10000}
-
-# Correct: adaptive thinking + effort
-thinking: {type: "adaptive"}
-output_config: {effort: "xhigh"}
-```
-
-```
-# Wrong: temperature returns 400 on Opus 4.7
 temperature: 0.7
 
-# Correct: omit sampling params; steer via prompting
-(no sampling parameters)
+# Correct
+thinking: {type: "adaptive"}
+output_config: {effort: "xhigh"}
 ```
 
 ---
@@ -169,14 +159,16 @@ temperature: 0.7
 
 ## Common Mistakes and Fixes
 
-| Mistake                         | Error            | Fix                                                     |
-| ------------------------------- | ---------------- | ------------------------------------------------------- |
-| `budget_tokens` >= `max_tokens` | 400              | Ensure `budget_tokens` < `max_tokens`                   |
-| Typo in model ID                | 404              | Use valid model ID like `claude-opus-4-7`               |
-| First message is `assistant`    | 400              | First message must be `user`                            |
-| Consecutive same-role messages  | 400              | Alternate `user` and `assistant`                        |
-| API key in code                 | 401 (leaked key) | Use environment variable                                |
-| Custom retry needs              | 429/5xx          | SDK retries automatically; customize with `max_retries` |
+| Mistake                                          | Error            | Fix                                                     |
+| ------------------------------------------------ | ---------------- | ------------------------------------------------------- |
+| `budget_tokens` on Opus 4.7                      | 400              | Use `thinking: {type: "adaptive"}` + `effort`           |
+| `temperature` / `top_p` / `top_k` on Opus 4.7    | 400              | Omit sampling parameters                                |
+| Assistant-message prefill                        | 400              | Use `output_config.format` or system prompts            |
+| Typo in model ID                                 | 404              | Use valid model ID like `claude-opus-4-7`               |
+| First message is `assistant`                     | 400              | First message must be `user`                            |
+| Consecutive same-role messages                   | 400              | Alternate `user` and `assistant`                        |
+| API key in code                                  | 401 (leaked key) | Use environment variable                                |
+| Custom retry needs                               | 429/5xx          | SDK retries automatically; customize with `max_retries` |
 
 ## Typed Exceptions in SDKs
 

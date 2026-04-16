@@ -482,7 +482,7 @@ response = client.messages.parse(
         "role": "user",
         "content": "Extract: Jane Doe (jane@co.com) wants Enterprise, interested in API and SDKs, wants a demo."
     }],
-    output_format=ContactInfo,
+    output_config={"format": ContactInfo},
 )
 
 # response.parsed_output is a validated ContactInfo instance
