@@ -1,8 +1,10 @@
 # Claude Prompting Guide
 
-Specific to Claude Opus 4.6 and Sonnet 4.6. Updated 2026-03-20.
+Specific to Claude Opus 4.7 and Sonnet 4.6. Updated 2026-04-16.
 
 **Sources:** Anthropic official docs (platform.claude.com/docs), Claude Code system prompt analysis.
+
+> **Note on 4.7 vs 4.6 behavior:** Opus 4.7 is more literal, more direct, and more concise than 4.6. It spawns fewer subagents by default, uses tools less often (raise effort to xhigh if you need more), and respects effort levels strictly. Specific 4.6 pain points below ("over-exploration," "LaTeX defaults," "excessive subagent spawning") may be reduced or reversed on 4.7 per Anthropic's 2026-04-16 release notes. Validate before applying 4.6-era counter-prompts.
 
 ---
 
@@ -34,26 +36,29 @@ Your task is to analyze the documents above.
 
 ## 2. Thinking & Reasoning Modes
 
-### Adaptive Thinking (Recommended for Opus 4.6)
+### Adaptive Thinking (Recommended for Opus 4.7)
+
+Adaptive thinking is **off by default** on Opus 4.7 — set it explicitly. `budget_tokens` returns a 400 error. `thinking.display` defaults to `"omitted"`; add `"display": "summarized"` to restore visible reasoning in UIs.
 
 ```python
 client.messages.create(
-    model="claude-opus-4-6",
+    model="claude-opus-4-7",
     max_tokens=64000,
-    thinking={"type": "adaptive"},
-    output_config={"effort": "high"},  # max, high, medium, low
+    thinking={"type": "adaptive", "display": "summarized"},
+    output_config={"effort": "xhigh"},  # max, xhigh, high, medium, low
     messages=[...]
 )
 ```
 
 | Effort | Behavior |
 |--------|----------|
-| `max` | Opus 4.6 only. Always thinks, no constraints |
-| `high` | Always thinks, deep reasoning (default) |
-| `medium` | Moderate thinking, may skip on simple queries |
-| `low` | Minimizes thinking, skips on simple tasks |
+| `max` | Deepest reasoning. Can overthink simple tasks. Test before committing. |
+| `xhigh` | **Recommended for coding and agentic work** on Opus 4.7 (new level). |
+| `high` | Minimum for intelligence-sensitive tasks. |
+| `medium` | Cost-sensitive; acceptable intelligence tradeoff. |
+| `low` | Strictly scopes to what was asked. May under-think complex problems — raise effort rather than prompt around it. |
 
-Adaptive mode automatically enables **interleaved thinking** (thinking between tool calls). Manual extended thinking on Opus 4.6 does NOT support interleaved thinking -- always use adaptive for agentic workflows.
+Adaptive mode automatically enables **interleaved thinking** (thinking between tool calls). No beta header needed.
 
 ### Manual Extended Thinking (Sonnet 4.6 only)
 
