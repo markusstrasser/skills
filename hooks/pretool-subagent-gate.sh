@@ -225,6 +225,21 @@ if [ -n "$PROMPT" ]; then
     fi
 fi
 
+# Check 10: Write-stub-first discipline when output file is specified
+# When a dispatch prompt requests file output, it should instruct the agent to
+# write a stub/scaffold file FIRST, before searching. Without this, the agent
+# can die mid-run (API rate limit, network blip, turn exhaustion) and leave
+# zero output — the transcript holds the work but nothing persists.
+# 2026-04-16 incident: general-purpose agent on HF OpenMed probe hit API limit
+# after 43 tool calls, returned status=completed with zero file output.
+if [ -n "$PROMPT" ] && [ "${HAS_FILE_OUTPUT:-0}" -gt 0 ]; then
+    HAS_EARLY_WRITE=$(echo "$PROMPT" | grep -ciE 'write.*(stub|scaffold|skeleton|draft|placeholder|empty).*(first|before|initially)|(first|before).*(tool|call|action|step).*write|write.*(before|prior to).*(search|probe|fetch|research)|initial.*(write|draft).*file|(scaffold|stub|placeholder).*(first|before)' || true)
+    if [ "$HAS_EARLY_WRITE" -eq 0 ]; then
+        CHECK_IDS="${CHECK_IDS}10,"
+        WARNINGS="${WARNINGS}SUBAGENT WRITE-FIRST: Prompt specifies file output but doesn't instruct write-stub-first. Add: 'Your FIRST tool call MUST be Write with a PROBE IN PROGRESS stub at the output path. Then append findings incrementally.' Guards against API-limit / turn-exhaustion producing zero output. "
+    fi
+fi
+
 # Check 9: Inject write_json_atomic guidance for genomics project agents
 # Agents consistently use json.dump(…, fh) which fails the ratchet test.
 # 3/3 measurement agents in 2026-04-05 session needed post-hoc fixes.
