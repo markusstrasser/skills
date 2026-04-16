@@ -31,7 +31,7 @@ using Anthropic.Models.Messages;
 
 var parameters = new MessageCreateParams
 {
-    Model = Model.ClaudeOpus4_6,
+    Model = Model.ClaudeOpus4_7,
     MaxTokens = 1024,
     Messages = [new() { Role = Role.User, Content = "What is the capital of France?" }]
 };
@@ -48,7 +48,7 @@ using Anthropic.Models.Messages;
 
 var parameters = new MessageCreateParams
 {
-    Model = Model.ClaudeOpus4_6,
+    Model = Model.ClaudeOpus4_7,
     MaxTokens = 1024,
     Messages = [new() { Role = Role.User, Content = "Write a haiku" }]
 };

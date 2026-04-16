@@ -18,7 +18,7 @@ curl https://api.anthropic.com/v1/messages \
   -H "x-api-key: $ANTHROPIC_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "claude-opus-4-6",
+    "model": "claude-opus-4-7",
     "max_tokens": 1024,
     "messages": [
       {"role": "user", "content": "What is the capital of France?"}
@@ -36,7 +36,7 @@ curl https://api.anthropic.com/v1/messages \
   -H "x-api-key: $ANTHROPIC_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "claude-opus-4-6",
+    "model": "claude-opus-4-7",
     "max_tokens": 1024,
     "stream": true,
     "messages": [{"role": "user", "content": "Write a haiku"}]
@@ -75,7 +75,7 @@ curl https://api.anthropic.com/v1/messages \
   -H "x-api-key: $ANTHROPIC_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "claude-opus-4-6",
+    "model": "claude-opus-4-7",
     "max_tokens": 1024,
     "tools": [{
       "name": "get_weather",
@@ -100,7 +100,7 @@ curl https://api.anthropic.com/v1/messages \
   -H "x-api-key: $ANTHROPIC_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "claude-opus-4-6",
+    "model": "claude-opus-4-7",
     "max_tokens": 1024,
     "tools": [{
       "name": "get_weather",
@@ -130,23 +130,25 @@ curl https://api.anthropic.com/v1/messages \
 
 ## Extended Thinking
 
-> **Opus 4.6 and Sonnet 4.6:** Use adaptive thinking. `budget_tokens` is deprecated on both Opus 4.6 and Sonnet 4.6.
-> **Older models:** Use `"type": "enabled"` with `"budget_tokens": N` (must be < `max_tokens`, min 1024).
+> **Opus 4.7:** Use adaptive thinking. `budget_tokens` returns a 400 error. Adaptive is OFF by default — set it explicitly. `thinking.display` defaults to `"omitted"`; add `"display": "summarized"` to restore visible reasoning text.
+> **Sonnet 4.6:** Use adaptive thinking (preferred) or `budget_tokens` (deprecated but still functional).
+> **Sonnet 4.5 and earlier:** Use `"type": "enabled"` with `"budget_tokens": N` (must be < `max_tokens`, min 1024).
 
 ```bash
-# Opus 4.6: adaptive thinking (recommended)
+# Opus 4.7: adaptive thinking with visible summary
 curl https://api.anthropic.com/v1/messages \
   -H "Content-Type: application/json" \
   -H "x-api-key: $ANTHROPIC_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "claude-opus-4-6",
-    "max_tokens": 16000,
+    "model": "claude-opus-4-7",
+    "max_tokens": 64000,
     "thinking": {
-      "type": "adaptive"
+      "type": "adaptive",
+      "display": "summarized"
     },
     "output_config": {
-      "effort": "high"
+      "effort": "xhigh"
     },
     "messages": [{"role": "user", "content": "Solve this step by step..."}]
   }'
