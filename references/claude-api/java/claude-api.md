@@ -45,7 +45,7 @@ import com.anthropic.models.messages.Message;
 import com.anthropic.models.messages.Model;
 
 MessageCreateParams params = MessageCreateParams.builder()
-    .model(Model.CLAUDE_OPUS_4_6)
+    .model(Model.CLAUDE_OPUS_4_7)
     .maxTokens(1024L)
     .addUserMessage("What is the capital of France?")
     .build();
@@ -65,7 +65,7 @@ import com.anthropic.core.http.StreamResponse;
 import com.anthropic.models.messages.RawMessageStreamEvent;
 
 MessageCreateParams params = MessageCreateParams.builder()
-    .model(Model.CLAUDE_OPUS_4_6)
+    .model(Model.CLAUDE_OPUS_4_7)
     .maxTokens(1024L)
     .addUserMessage("Write a haiku")
     .build();
@@ -107,9 +107,8 @@ static class GetWeather implements Supplier<String> {
 
 BetaToolRunner toolRunner = client.beta().messages().toolRunner(
     MessageCreateParams.builder()
-        .model("claude-opus-4-6")
+        .model("claude-opus-4-7")
         .maxTokens(1024L)
-        .putAdditionalHeader("anthropic-beta", "structured-outputs-2025-11-13")
         .addTool(GetWeather.class)
         .addUserMessage("What's the weather in San Francisco?")
         .build());
