@@ -6,20 +6,21 @@
 
 | Friendly Name     | Alias (use this)    | Full ID                       | Context        | Max Output | Status |
 |-------------------|---------------------|-------------------------------|----------------|------------|--------|
-| Claude Opus 4.6   | `claude-opus-4-6`   | —                             | 200K (1M beta) | 128K       | Active |
-| Claude Sonnet 4.6 | `claude-sonnet-4-6` | -                             | 200K (1M beta) | 64K        | Active |
+| Claude Opus 4.7   | `claude-opus-4-7`   | —                             | 1M             | 128K       | Active |
+| Claude Sonnet 4.6 | `claude-sonnet-4-6` | —                             | 200K (1M beta) | 64K        | Active |
 | Claude Haiku 4.5  | `claude-haiku-4-5`  | `claude-haiku-4-5-20251001`   | 200K           | 64K        | Active |
 
 ### Model Descriptions
 
-- **Claude Opus 4.6** — Our most intelligent model for building agents and coding. Supports adaptive thinking (recommended), 128K max output tokens (requires streaming for large outputs). 1M context window available in beta via `context-1m-2025-08-07` header.
-- **Claude Sonnet 4.6** — Our best combination of speed and intelligence. Supports adaptive thinking (recommended). 1M context window available in beta via `context-1m-2025-08-07` header. 64K max output tokens.
+- **Claude Opus 4.7** — Our most intelligent model for agents, coding, and long-horizon knowledge work. Adaptive thinking (off by default — set `thinking: {type: "adaptive"}` explicitly), effort levels `low | medium | high | xhigh | max` (`xhigh` recommended for coding/agentic). 1M native context at standard pricing (no beta header). 128K max output tokens — streaming required for large outputs. High-resolution image support up to 2576px / 3.75 MP. Task budgets available in beta (`task-budgets-2026-03-13`). Uses a new tokenizer — same text produces 1.0–1.35× more tokens than Opus 4.6.
+- **Claude Sonnet 4.6** — Best combination of speed and intelligence. Supports adaptive thinking. 1M context available via `context-1m-2025-08-07` beta header. 64K max output tokens.
 - **Claude Haiku 4.5** — Fastest and most cost-effective model for simple tasks.
 
-## Legacy Models (still active)
+## Legacy Models (still active via explicit model ID)
 
 | Friendly Name     | Alias (use this)    | Full ID                       | Status |
 |-------------------|---------------------|-------------------------------|--------|
+| Claude Opus 4.6   | `claude-opus-4-6`   | —                             | Active |
 | Claude Opus 4.5   | `claude-opus-4-5`   | `claude-opus-4-5-20251101`    | Active |
 | Claude Opus 4.1   | `claude-opus-4-1`   | `claude-opus-4-1-20250805`    | Active |
 | Claude Sonnet 4.5 | `claude-sonnet-4-5` | `claude-sonnet-4-5-20250929`  | Active |
@@ -51,7 +52,8 @@ When a user asks for a model by name, use this table to find the correct model I
 
 | User says...                              | Use this model ID              |
 |-------------------------------------------|--------------------------------|
-| "opus", "most powerful"                   | `claude-opus-4-6`              |
+| "opus", "most powerful"                   | `claude-opus-4-7`              |
+| "opus 4.7"                                | `claude-opus-4-7`              |
 | "opus 4.6"                                | `claude-opus-4-6`              |
 | "opus 4.5"                                | `claude-opus-4-5`              |
 | "opus 4.1"                                | `claude-opus-4-1`              |
