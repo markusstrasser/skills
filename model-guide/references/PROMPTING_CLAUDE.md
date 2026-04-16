@@ -71,7 +71,7 @@ client.messages.create(
 )
 ```
 
-For Sonnet 4.6 interleaved thinking, use the `interleaved-thinking-2025-05-14` beta header.
+Sonnet 4.6 interleaved thinking is automatic when using adaptive thinking — no beta header needed. The `interleaved-thinking-2025-05-14` beta header is deprecated; it was required with manual `budget_tokens` mode, which is itself deprecated on 4.6.
 
 ### Prompt-Level Chain-of-Thought (when thinking is off)
 
