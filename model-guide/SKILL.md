@@ -10,8 +10,9 @@ effort: low
 
 Select the right frontier model for a task and prompt it correctly.
 
-**Models covered:** Claude Opus 4.6, Claude Sonnet 4.6, GPT-5.4, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3 Flash, Gemini 3.1 Flash-Lite.
-**Last updated:** 2026-04-08. See `${CLAUDE_SKILL_DIR}/references/CHANGELOG.md` for update history.
+**Models covered:** Claude Opus 4.7, Claude Sonnet 4.6, GPT-5.4, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3 Flash, Gemini 3.1 Flash-Lite.
+**Last updated:** 2026-04-16. See `${CLAUDE_SKILL_DIR}/references/CHANGELOG.md` for update history.
+**Benchmark note:** Numbers cited for Claude Opus are the published Opus 4.6 baseline. Opus 4.7 (released 2026-04-16) improves on most of these per Anthropic's announcement; specific 4.7 figures update on the next benchmark refresh.
 
 ## Long-Horizon Research Routing
 
@@ -31,11 +32,11 @@ Practical split:
 
 | Task | Best Model | Why | Runner-up |
 |------|-----------|-----|-----------|
-| **Agentic coding** | Claude Opus 4.6 | SWE-bench 80.8%, Arena coding #1 | Sonnet 4.6 (79.6%, ~60% cost) |
-| **Fact-sensitive work** | Claude Opus 4.6 / Gemini 3.1 / GPT-5.4 | SimpleQA ~72% (tied) | -- |
-| **Legal reasoning** | Claude Opus 4.6 | BigLaw 90.2% | -- |
-| **Professional analysis** | Claude Opus 4.6 | GDPval-AA Elo 1606 (expert preference) | Sonnet 4.6 (GDPval 1633) |
-| **Computer use / browsing** | Claude Opus 4.6 | OSWorld 72.7% | -- |
+| **Agentic coding** | Claude Opus 4.7 | SWE-bench 80.8%, Arena coding #1 | Sonnet 4.6 (79.6%, ~60% cost) |
+| **Fact-sensitive work** | Claude Opus 4.7 / Gemini 3.1 / GPT-5.4 | SimpleQA ~72% (tied) | -- |
+| **Legal reasoning** | Claude Opus 4.7 | BigLaw 90.2% | -- |
+| **Professional analysis** | Claude Opus 4.7 | GDPval-AA Elo 1606 (expert preference) | Sonnet 4.6 (GDPval 1633) |
+| **Computer use / browsing** | Claude Opus 4.7 | OSWorld 72.7% | -- |
 | **Hard math** | GPT-5.4 | MATH 98%+, AIME 100% | Gemini 3.1 Pro (GPQA 94.3%) |
 | **Precise structured output** | GPT-5.4 | IFEval 95%+, native Structured Outputs + Tool Search | Claude (94%) |
 | **Vision / document OCR** | GPT-5.4 | DocVQA 95%+, native computer use | Gemini 3.1 Pro |
@@ -52,18 +53,23 @@ For full benchmark tables, read `${CLAUDE_SKILL_DIR}/references/BENCHMARKS.md`.
 
 ## Model Profiles
 
-### Claude Opus 4.6 -- "The Investigator"
+### Claude Opus 4.7 -- "The Investigator"
 
-**Strengths:** Agentic coding, professional analysis, legal reasoning, factual accuracy, computer use, long-form expert work. 1M native context (GA March 13, 2026). MRCR v2: 78.3% at 1M tokens (highest among frontier).
-**Weaknesses:** Most expensive ($5/$25), weaker abstract reasoning than Gemini, weaker raw math than GPT.
+**Strengths:** Agentic coding, professional analysis, legal reasoning, factual accuracy, computer use, long-form expert work, memory across sessions, high-resolution vision (2576px). 1M native context at standard pricing (no long-context premium). Best-in-class on Finance Agent and GDPval-AA per Anthropic's 2026-04-16 release.
+**Weaknesses:** Most expensive ($5/$25), weaker abstract reasoning than Gemini, weaker raw math than GPT. New tokenizer produces 1.0–1.35× more input tokens than Opus 4.6 for the same text — re-baseline cost expectations on migration.
 
 **Quick prompting tips:**
 - Use **XML tags** for structure -- Claude was trained on this: `<instructions>`, `<context>`, `<documents>`
-- Use **adaptive thinking** (`effort: high/medium/low`) -- better than manual extended thinking on Opus 4.6
+- **Set `thinking: {type: "adaptive"}` explicitly** — adaptive is OFF by default on Opus 4.7. `budget_tokens` returns a 400 error.
+- **Start at `effort: "xhigh"` for coding and agentic work** — new effort level between `high` and `max`. Minimum `high` for most intelligence-sensitive work. Low and medium strictly scope to what was asked (may under-think on complex problems).
+- **Drop `temperature`, `top_p`, `top_k`** — non-default values return 400 on Opus 4.7. Use prompting to guide behavior.
+- **Drop assistant-message prefills** — return 400 on Opus 4.7. Use `output_config.format`, system prompts, or continuation-as-user-turn patterns.
 - Put **long documents at the TOP**, query at the BOTTOM (30% improvement measured)
 - Explain the **why** behind constraints -- Claude generalizes from explanations
-- Soften forceful instructions -- 4.6 overtriggers on "CRITICAL: You MUST..."
-- Prefilling is **deprecated** on 4.6 -- use system prompt instructions instead
+- **4.7 is more literal than 4.6** — remove scaffolding like "summarize progress after 3 tool calls"; 4.7 has built-in progress updates. Fewer subagents and tools called by default; raise effort to `xhigh` if you need more.
+- **Set `thinking.display: "summarized"`** in UIs that show reasoning — default is `"omitted"` on 4.7, so the UI appears frozen until first output otherwise.
+- **Re-budget `max_tokens`** — same text → more tokens; 4.7 uses more output at high efforts. Start at 64K for `xhigh`/`max`.
+- **High-resolution images** — 4.7 reads up to 2576px. Full-res images use up to ~3× more image tokens. Remove scale-factor conversion on bounding-box coordinates; 4.7 returns 1:1 with actual pixels.
 - Add `"Avoid over-engineering"` for coding tasks -- Opus tends to over-abstract
 
 For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
@@ -202,7 +208,7 @@ Run these when using outputs from each model:
 
 | Model | Input/MTok | Output/MTok | Cache Discount | Context | Max Output |
 |-------|:----------:|:-----------:|:--------------:|:-------:|:----------:|
-| Claude Opus 4.6 | $5 | $25 | -- | 1M | 128K |
+| Claude Opus 4.7 | $5 | $25 | -- | 1M | 128K |
 | Claude Sonnet 4.6 | $3 | $15 | -- | 1M | 64K |
 | GPT-5.4 (<272K) | $2.50 | $15.00 | 90% ($0.25) | 1M | 128K |
 | GPT-5.4 (>272K) | $5.00 | $22.50 | 90% ($0.50) | 1M | 128K |
@@ -234,7 +240,7 @@ Claude (orchestrator -- best professional judgment)
 
 | Model | SimpleQA | Error Rate |
 |-------|:--------:|:----------:|
-| Claude Opus 4.6 | 72% | 28% wrong |
+| Claude Opus 4.7 | 72% | 28% wrong |
 | Gemini 3.1 Pro | 72.1% | 28% wrong |
 | GPT-5.4 | ~72% | ~28% wrong (33% fewer errors vs 5.2) |
 | GPT-5.4 + web search | ~95%+ | ~5% wrong |
