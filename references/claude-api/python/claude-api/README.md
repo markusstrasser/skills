@@ -27,7 +27,7 @@ async_client = anthropic.AsyncAnthropic()
 
 ```python
 response = client.messages.create(
-    model="claude-opus-4-6",
+    model="claude-opus-4-7",
     max_tokens=1024,
     messages=[
         {"role": "user", "content": "What is the capital of France?"}
@@ -42,7 +42,7 @@ print(response.content[0].text)
 
 ```python
 response = client.messages.create(
-    model="claude-opus-4-6",
+    model="claude-opus-4-7",
     max_tokens=1024,
     system="You are a helpful coding assistant. Always provide examples in Python.",
     messages=[{"role": "user", "content": "How do I read a JSON file?"}]
@@ -53,6 +53,8 @@ response = client.messages.create(
 
 ## Vision (Images)
 
+> **Opus 4.7 high-resolution support:** Images up to 2576px on the long edge (≈3.75 MP) are processed at full fidelity. Full-resolution images can use up to ~4,784 tokens each (up from ~1,600 on prior models) — re-budget `max_tokens` for image-heavy workloads, or downsample before sending if you don't need the extra detail. Pointing and bounding-box coordinates returned by 4.7 are 1:1 with actual image pixels; remove any scale-factor conversion from earlier versions.
+
 ### Base64
 
 ```python
@@ -62,7 +64,7 @@ with open("image.png", "rb") as f:
     image_data = base64.standard_b64encode(f.read()).decode("utf-8")
 
 response = client.messages.create(
-    model="claude-opus-4-6",
+    model="claude-opus-4-7",
     max_tokens=1024,
     messages=[{
         "role": "user",
@@ -85,7 +87,7 @@ response = client.messages.create(
 
 ```python
 response = client.messages.create(
-    model="claude-opus-4-6",
+    model="claude-opus-4-7",
     max_tokens=1024,
     messages=[{
         "role": "user",
@@ -115,7 +117,7 @@ Use top-level `cache_control` to automatically cache the last cacheable block in
 
 ```python
 response = client.messages.create(
-    model="claude-opus-4-6",
+    model="claude-opus-4-7",
     max_tokens=1024,
     cache_control={"type": "ephemeral"},  # auto-caches the last cacheable block
     system="You are an expert on this large document...",
@@ -129,7 +131,7 @@ For fine-grained control, add `cache_control` to specific content blocks:
 
 ```python
 response = client.messages.create(
-    model="claude-opus-4-6",
+    model="claude-opus-4-7",
     max_tokens=1024,
     system=[{
         "type": "text",
@@ -141,7 +143,7 @@ response = client.messages.create(
 
 # With explicit TTL (time-to-live)
 response = client.messages.create(
-    model="claude-opus-4-6",
+    model="claude-opus-4-7",
     max_tokens=1024,
     system=[{
         "type": "text",
@@ -156,16 +158,19 @@ response = client.messages.create(
 
 ## Extended Thinking
 
-> **Opus 4.6 and Sonnet 4.6:** Use adaptive thinking. `budget_tokens` is deprecated on both Opus 4.6 and Sonnet 4.6.
-> **Older models:** Use `thinking: {type: "enabled", budget_tokens: N}` (must be < `max_tokens`, min 1024).
+> **Opus 4.7:** Use adaptive thinking. `budget_tokens` returns a 400 error. Adaptive is OFF by default — set it explicitly.
+> **Sonnet 4.6:** Use adaptive thinking (preferred) or `budget_tokens` (deprecated but still functional).
+> **Sonnet 4.5 and earlier:** Use `thinking: {type: "enabled", budget_tokens: N}` (must be < `max_tokens`, min 1024).
+>
+> **Thinking display:** On Opus 4.7, `thinking.display` defaults to `"omitted"` — thinking blocks appear but their `thinking` field is empty. Set `display: "summarized"` to restore visible reasoning progress.
 
 ```python
-# Opus 4.6: adaptive thinking (recommended)
+# Opus 4.7: adaptive thinking with visible summary
 response = client.messages.create(
-    model="claude-opus-4-6",
-    max_tokens=16000,
-    thinking={"type": "adaptive"},
-    output_config={"effort": "high"},  # low | medium | high | max
+    model="claude-opus-4-7",
+    max_tokens=64000,  # headroom for xhigh effort
+    thinking={"type": "adaptive", "display": "summarized"},
+    output_config={"effort": "xhigh"},  # low | medium | high | xhigh | max
     messages=[{"role": "user", "content": "Solve this step by step..."}]
 )
 
@@ -242,7 +247,7 @@ class ConversationManager:
 # Usage
 conversation = ConversationManager(
     client=anthropic.Anthropic(),
-    model="claude-opus-4-6",
+    model="claude-opus-4-7",
     system="You are a helpful assistant."
 )
 
@@ -272,7 +277,7 @@ def chat(user_message: str) -> str:
 
     response = client.beta.messages.create(
         betas=["compact-2026-01-12"],
-        model="claude-opus-4-6",
+        model="claude-opus-4-7",
         max_tokens=4096,
         messages=messages,
         context_management={
@@ -305,6 +310,7 @@ The `stop_reason` field in the response indicates why the model stopped generati
 | `tool_use` | Claude wants to call a tool — execute it and continue |
 | `pause_turn` | Model paused and can be resumed (agentic flows) |
 | `refusal` | Claude refused for safety reasons — output may not match your schema |
+| `model_context_window_exceeded` | Generation stopped at the context window limit (distinct from `max_tokens`) |
 
 ---
 
@@ -315,7 +321,7 @@ The `stop_reason` field in the response indicates why the model stopped generati
 ```python
 # Automatic caching (simplest — caches the last cacheable block)
 response = client.messages.create(
-    model="claude-opus-4-6",
+    model="claude-opus-4-7",
     max_tokens=1024,
     cache_control={"type": "ephemeral"},
     system=large_document_text,  # e.g., 50KB of context
@@ -331,7 +337,7 @@ response = client.messages.create(
 ```python
 # Default to Opus for most tasks
 response = client.messages.create(
-    model="claude-opus-4-6",  # $5.00/$25.00 per 1M tokens
+    model="claude-opus-4-7",  # $5.00/$25.00 per 1M tokens
     max_tokens=1024,
     messages=[{"role": "user", "content": "Explain quantum computing"}]
 )
@@ -355,7 +361,7 @@ simple_response = client.messages.create(
 
 ```python
 count_response = client.messages.count_tokens(
-    model="claude-opus-4-6",
+    model="claude-opus-4-7",
     messages=messages,
     system=system
 )
