@@ -10,7 +10,7 @@ effort: low
 
 Select the right frontier model for a task and prompt it correctly.
 
-**Models covered:** Claude Opus 4.7, Claude Sonnet 4.6, GPT-5.4, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3 Flash, Gemini 3.1 Flash-Lite.
+**Models covered:** Claude Opus 4.7, Claude Sonnet 4.6, GPT-5.4, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3 Flash, Gemini 3.1 Flash-Lite, Grok 4.20 Reasoning.
 **Last updated:** 2026-04-16. See `${CLAUDE_SKILL_DIR}/references/CHANGELOG.md` for update history.
 **Benchmark note:** Numbers cited for Claude Opus are the published Opus 4.6 baseline. Opus 4.7 (released 2026-04-16) improves on most of these per Anthropic's announcement; specific 4.7 figures update on the next benchmark refresh.
 
@@ -45,7 +45,11 @@ Practical split:
 | **Long document ingestion** (>200K) | Gemini 3.1 Pro / GPT-5.4 / Claude | Native 1M context (all three) | -- |
 | **Subagent coding** | Claude Sonnet 4.6 | 79.6% SWE-bench at $3/$15, 1M context | Gemini 3 Flash (cheap) |
 | **Doc → schema extraction** | GPT-5.3 Instant | Less preachy, structured output, fast | GPT-5.4 (stronger reasoning) |
-| **Cross-model review** | Pro + GPT-5.4 | Cross-family required (+31pp accuracy, FINCH-ZK). Same-family = no adversarial pressure | -- |
+| **Cross-model review** | Pro + GPT-5.4 | Cross-family required (+31pp accuracy, FINCH-ZK). Same-family = no adversarial pressure | (Grok 4.20 NOT recommended as 3rd — abstention bias ≠ adversarial pressure) |
+| **Claim/quote verification** | Grok 4.20 Reasoning | AA-Omniscience 17% hallucination rate (#1) — strongly prefers "UNCERTAIN" over guessing | Claude Opus 4.7 |
+| **Strict instruction following** | Grok 4.20 Reasoning | IFBench 82.9% (#1) | GPT-5.4 (IFEval 95%) |
+| **Tabular data analysis** | Grok 4.20 Reasoning | LiveBench Data Analysis 87.06 (#1) | -- |
+| **Web-grounded search** | Grok 4.20 Reasoning | LMArena Search Arena 1226 (#1) | GPT-5.2 Search (1219) |
 | **High-volume classification** | Gemini 3 Flash | $0.50/$3/M, 1M ctx | Gemini 3.1 Flash-Lite ($0.25/$1.50) |
 | **Video understanding** | Gemini 3.1 Pro | Native video support | GPT-5.4 |
 
@@ -159,6 +163,39 @@ For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_GPT.md`.
 - **When to use Flash/Pro instead:** reasoning, math, multi-step analysis, fact-sensitive work
 - Released March 3, 2026 — monitor for stability before production use
 
+### Grok 4.20 Reasoning -- "The Calibrated Skeptic"
+
+**Real third-party category wins** (cross-checked Artificial Analysis, LiveBench, LMArena, Apr 2026):
+- **AA-Omniscience hallucination rate #1** — 17% (v2 0309), beating Claude 4.5 Haiku at 25%. Wins by abstaining aggressively rather than knowing more.
+- **IFBench #1** — 82.9% strict instruction-following (note: IFBench ≠ IFEval, where it's untested; +29.2pp over Grok 4).
+- **LiveBench Data Analysis #1** — 87.06 sub-score.
+- **LMArena Search Arena #1** — 1226 ELO, ahead of GPT-5.2 Search (1219) and Gemini 3 Pro Grounding (1215).
+- **τ²-Bench Telecom #2** — 97% agentic tool-use (behind GLM-5).
+
+**Honest weaknesses:**
+- **AA-Omniscience Index #3** (15) — Gemini 3.1 Pro wins the *composite* (33). Grok wins on raw fabrication rate, not on calibrated knowledge breadth.
+- **Math is the weak axis** — LiveBench Math 43.33 (lowest sub-score), LMArena Math 1458. Don't route hard math to Grok.
+- AA Intelligence Index 49 (#11/132) vs GPT-5.4/Gemini 3.1 Pro at 57, Opus at 53.
+- SWE-Bench 73.5% (below Claude/GPT ~80%), GPQA 78.5% (below Gemini 94.3%).
+- **2M context window is unverified by independent benchmarks.** No published RULER / MRCR-v2 / LongBench-v2 score for Grok 4.20. xAI's ">95% NIAH at all 2M positions" is vendor-sourced. AA confirmed *capacity*, not *retrieval quality at scale*.
+- **20× price cliff above 200K input** ($40/$120 per M) makes the 2M window economically usable only up to 200K.
+- **Multi-agent variant underperforms single-model** on AI Benchy (#47 vs #24). Cost scales without intelligence return — avoid by default.
+- xAI hasn't disclosed AIME/HLE/LiveCodeBench/ARC-AGI numbers for the `-reasoning` SKU.
+- **No published Simon Willison / Ethan Mollick / Aidan McLau review** of Grok 4.20 (negative finding as of 2026-04-16). Hands-on testers (Medium/Elizabeta, 5hr) confirm all four frontier models including Grok fail the same reasoning traps — Grok was *fastest* but didn't break any pattern.
+
+**Quick prompting tips:**
+- **Do NOT pass `reasoning_effort` to `grok-4.20-reasoning`** — the API errors out. The model reasons automatically. Only `grok-4.20-multi-agent` accepts a `reasoning.effort` field, and there it controls **agent count** (low/med→4, high/xhigh→16), not thinking depth.
+- **`logprobs` is silently ignored** on all 4.20 SKUs. Don't rely on it.
+- **Endpoint:** `https://api.x.ai/v1` — both native Responses API and OpenAI-compatible SDK. Use `openai` client with `base_url="https://api.x.ai/v1"` for drop-in compatibility.
+- **Pair with web grounding** for current events — knowledge cutoff is Sep 1, 2025.
+- **xAI web search not yet supported** via OpenAI SDK (per llmx provider notes) — use Exa/Perplexity/Brave separately for grounding.
+- **Don't pass full documents >200K tokens** — price cliff + multi-needle retrieval at scale unverified. Pre-summarize or chunk.
+- **Best-fit applications:**
+  1. **Claim/quote verification on synthesized outputs** (research-mcp paper synthesis post-pass) — AA-Omniscience methodology directly maps to citation-fabrication failure mode. ~$0.03/synthesis check at $6/M output.
+  2. **Convergent "no findings" verification** (session-analyst, audit outputs) — second-pass adversarial reviewer with prompt that strongly prefers UNCERTAIN over guessing. Probe with 50 findings before deploying broadly.
+  3. **Web-grounded search re-ranking** — its LMArena Search Arena #1 holds when paired with external grounding (Exa/Perplexity).
+- **Don't use for:** raw math, hard agentic coding, GPQA-tier science reasoning, deep multi-step abstract reasoning, anything >200K context. Don't add as a 3rd `/critique model` opinion (epistemic diversity vs Gemini+GPT is small — its strength is abstention, not adversarial design pressure).
+
 ### Gemini 3.1 Pro -- "The Polymath"
 
 **Strengths:** Science reasoning (GPQA 94.3%), abstract reasoning (ARC-AGI-2 77.1%), 1M native context, cheapest closed frontier ($2/$12), grounding with Google Search.
@@ -216,6 +253,8 @@ Run these when using outputs from each model:
 | Gemini 3.1 Pro | $2 | $12 | 75% | 1M | 64K |
 | **Gemini 3 Flash** | **$0.50** | **$3** | 75% | 1M | 65K |
 | **Gemini 3.1 Flash-Lite** | **$0.25** | **$1.50** | 75% | 1M | 1000K |
+| Grok 4.20 Reasoning (≤200K in) | $2 | $6 | 90% ($0.20) | **2M** | 128K |
+| Grok 4.20 Reasoning (>200K in) | **$40** | **$120** | 90% ($4.00) | 2M | 128K |
 
 **Cost optimization:** Default to Sonnet 4.6 for subagents. Reserve Opus for synthesis, narratives, and orchestration. Use Gemini Flash/Flash-Lite for bulk work. GPT-5.4 with cache hits ($0.25/M input) is the cheapest frontier reasoning — but only for cache-friendly workloads with static prefixes. For long-context (>272K), Gemini Pro ($2/$12) is cheaper than GPT-5.4 ($5/$22.50).
 
@@ -244,8 +283,11 @@ Claude (orchestrator -- best professional judgment)
 | Gemini 3.1 Pro | 72.1% | 28% wrong |
 | GPT-5.4 | ~72% | ~28% wrong (33% fewer errors vs 5.2) |
 | GPT-5.4 + web search | ~95%+ | ~5% wrong |
+| Grok 4.20 Reasoning | n/a (no public SimpleQA); **AA-Omniscience 78%** (best at calibrated abstention) | -- |
 
 **Key insight:** GPT-5.4 closed most of the hallucination gap vs Claude/Gemini (33% fewer errors vs 5.2). But ~28% error rate remains — always query data sources for dollar amounts, dates, entity names, and legal claims.
+
+**AA-Omniscience vs SimpleQA:** SimpleQA tests *factual recall* ("did the model know the answer?"). AA-Omniscience tests *calibrated abstention* ("when the model didn't know, did it say 'I don't know' instead of fabricating?"). Grok 4.20 Reasoning leads on the second axis — useful for verification workflows where false confidence is more costly than missing answers.
 
 ## Compliance Pressure & Null Paths
 

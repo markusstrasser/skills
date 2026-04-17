@@ -2,6 +2,47 @@
 
 Track what changes with each model release so you know what to update.
 
+## 2026-04-16 -- Add Grok 4.20 Reasoning
+
+xAI's `grok-4.20-0309-reasoning` (public beta 2026-02-17, GA 2026-03-10, "0309" snapshot 2026-03-31) added to selection matrix, profile section, cost table, hallucination table, and BENCHMARKS.md.
+
+### Key positioning (deep-research pass via /research, 2026-04-16)
+- **Standout differentiator:** **AA-Omniscience hallucination rate 17%** (v2 0309) — #1 lowest fabrication rate. Wins by abstaining aggressively. Note: on the *composite* AA-Omniscience Index, Grok ranks #3 (15) behind Gemini 3.1 Pro (#1, 33) — Gemini both knows more *and* abstains well. (Earlier "78%" figure = non-hallucination rate, framed misleadingly without composite context.)
+- **Real third-party category wins** (cross-checked AA + LiveBench + LMArena):
+  - IFBench #1 at 82.9% (note: IFBench ≠ IFEval; +29.2pp over Grok 4)
+  - LiveBench Data Analysis #1 at 87.06
+  - LMArena Search Arena #1 at 1226 ELO (ahead of GPT-5.2 Search 1219, Gemini 3 Pro Grounding 1215)
+  - τ²-Bench Telecom #2 at 97% (agentic tool-use, behind GLM-5)
+- **Math is the weak axis** — LiveBench Math 43.33 (lowest sub-score), LMArena Math 1458. Don't route hard math to Grok.
+- **2M context unverified by independent multi-needle benchmarks** — Awesome Agents leaderboard explicitly lists Grok 4 Fast (2M) with all RULER/MRCR-v2/LongBench-v2 scores as dashes. xAI's ">95% NIAH at 2M" is vendor-sourced. AA confirmed *capacity*, not *retrieval quality at scale*. Treat as marketing for now.
+- **Multi-agent variant underperforms single-model** on AI Benchy (#47 vs #24, agent-wars.com 2026-03-13). Cost scales without intelligence return.
+- **Pricing:** $2/$6 per M (≤200K input), $0.20/M cached. Cheaper output than Sonnet, Opus, GPT-5.4, Gemini Pro.
+- **Long-context cliff:** >200K input triggers $40/$120 tier (20×). Operationally use up to 200K only.
+- **No published Simon Willison / Mollick / McLau review** as of 2026-04-16 — negative finding (could be search miss, but no viral practitioner endorsement to date).
+
+### API gotchas
+- `reasoning_effort` param **errors** on `grok-4.20-reasoning` — model reasons automatically.
+- On `grok-4.20-multi-agent`, `reasoning.effort` controls **agent count** (low/med→4 agents, high/xhigh→16), not depth.
+- `logprobs` silently ignored on all 4.20 SKUs.
+- Endpoint `https://api.x.ai/v1` — both native Responses API and OpenAI-compatible SDK.
+- xAI web search not yet supported via OpenAI SDK (per llmx provider notes).
+
+### Integration verdicts (from /research)
+- **ADOPT — research-mcp claim/quote verification.** AA-Omniscience methodology directly maps to citation-fabrication failure mode. Pattern: `verify_claim_with_quote(claim, quote, paper_text) -> {SUPPORTED, NOT_SUPPORTED, ABSTAIN}` after Claude synthesis. ~$0.03/synthesis check at typical volumes. Use the **non-reasoning** variant for high-volume (abstention bias is in post-training, not CoT).
+- **PROBE-FIRST — session-analyst / agent-infra audit second-pass.** Run 50-finding probe against last 30 days of session-analyst output. Measure how many findings Grok flags as NOT_SUPPORTED that human review confirms were noise. Deploy if catch rate >10%; don't deploy if <5% (theater).
+- **DECLINE — `/critique model` 3rd opinion.** Grok 4.20's strengths are abstention and IF, not adversarial design pressure. Cross-family value of /critique is epistemic diversity — xAI's lineage is real but its training data overlaps OpenAI/Anthropic enough that novel critiques are rare. AA Intelligence Index 49 vs Gemini/GPT 57 also means it under-calls complex critiques.
+- **DECLINE — PGx variant verification.** AA-Omniscience Health domain is general health knowledge, not clinical-grade. PGx hallucinations are *typed* (wrong star allele) not *unknown* — abstention bias doesn't help unless paired with PharmCAT/CPIC structured grounding. Reuse claim/quote pattern (above) for PGx literature only.
+
+### Verification gaps (flagged, not fabricated)
+- No public AIME / HLE / LiveCodeBench / ARC-AGI / MMLU number for the `-reasoning` SKU specifically. Cells marked `--` in BENCHMARKS.md.
+- No Opus 4.7 head-to-head on Grok-equivalent tasks.
+- Pricing inconsistency in third-party recaps ($20/$60 vs xAI's $2/$6) likely Grok-4-base conflation; xAI docs treated as canonical.
+
+### Files updated
+- model-guide/SKILL.md (selection matrix, profile, cost table, hallucination table, models-covered list)
+- model-guide/references/BENCHMARKS.md (head-to-head column, AA-Omniscience row, AA Intelligence Index row, pricing rows, category-winners rows)
+- llmx-guide/SKILL.md, references/models.md, references/transport-routing.md (xAI provider, model names, reasoning_effort gotcha, search support)
+
 ## 2026-04-16 -- Claude Opus 4.7 Release
 
 **Claude Opus 4.7 replaces Opus 4.6 as the default Opus model.** Same pricing ($5/$25), 1M native context (no long-context premium), 128K max output.

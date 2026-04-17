@@ -14,6 +14,7 @@ llmx -p openai "question"       # uses OpenAI API
 llmx -p claude "question"       # Claude CLI backend (v0.6.0+, non-nested contexts only)
 llmx -p gemini-cli "question"   # force Gemini CLI transport
 llmx -p codex-cli "question"    # force Codex CLI transport
+llmx -p xai "question"          # xAI API (OpenAI-compatible at https://api.x.ai/v1)
 ```
 
 Falls back to API for:
