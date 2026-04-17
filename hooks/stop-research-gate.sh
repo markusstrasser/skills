@@ -93,7 +93,7 @@ SOURCE_TAG = re.compile(
     # Markdown links to canonical citation hosts count as provenance
     r'\]\(https?://(?:dx\.)?doi\.org/|'
     r'\]\(https?://(?:www\.)?ncbi\.nlm\.nih\.gov/(?:pubmed|pmc)|'
-    # Prose DOI/PMID (e.g. "DOI 10.1038/..." or "PMID 12345678")
+    # Prose DOI/PMID (e.g. DOI 10.1038/... or PMID 12345678)
     r'(?:\bDOI[:\s]\s*10\.\d{4,}/|\bPMID[:\s]\s*\d{6,})'
 )
 
