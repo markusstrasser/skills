@@ -1165,16 +1165,43 @@ def verify_claims(
                         anchors.append(normalized)
         return anchors
 
+    # Extension-swap fallbacks — models frequently hallucinate these when
+    # citing data/config files. Order reflects observed frequency: GPT-5.4
+    # and Gemini both emit ``.js`` where ``.json`` was meant, and there's
+    # a similar ``.yml`` ⇄ ``.yaml`` ambiguity. Known issue logged at
+    # /Users/alien/.claude/skills/critique/SKILL.md § Known Issues
+    # (2026-04-16 entry).
+    _FUZZY_EXT_ALIASES = {
+        ".js": (".json",),
+        ".jsn": (".json",),
+        ".yml": (".yaml",),
+        ".yaml": (".yml",),
+        ".ts": (".tsx",),
+        ".jsx": (".tsx",),
+    }
+
     def _resolve_reference(filepath: str) -> tuple[str, Path | None, str]:
         exact_path = project_dir / filepath
         if exact_path.exists():
             return "exact", exact_path, filepath
         candidates = list(project_dir.rglob(filepath))
-        if not candidates:
-            return "missing", None, filepath
+        if len(candidates) == 1:
+            return "basename", candidates[0], filepath
         if len(candidates) > 1:
             return "ambiguous", None, filepath
-        return "basename", candidates[0], filepath
+
+        # No direct hit — try extension-swap aliases before declaring missing.
+        suffix = Path(filepath).suffix
+        for alt_ext in _FUZZY_EXT_ALIASES.get(suffix, ()):
+            alt_filepath = filepath[: -len(suffix)] + alt_ext if suffix else filepath + alt_ext
+            alt_exact = project_dir / alt_filepath
+            if alt_exact.exists():
+                return "exact_extswap", alt_exact, alt_filepath
+            alt_candidates = list(project_dir.rglob(alt_filepath))
+            if len(alt_candidates) == 1:
+                return "basename_extswap", alt_candidates[0], alt_filepath
+
+        return "missing", None, filepath
 
     claims: list[dict[str, object]] = _parse_structured_claims() or _parse_disposition_claims()
 
