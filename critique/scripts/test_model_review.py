@@ -271,6 +271,30 @@ class AxisResolutionTest(unittest.TestCase):
         )
 
 
+class UnderspecifiedPromptTest(unittest.TestCase):
+    def test_bare_close_is_rewritten(self) -> None:
+        out = model_review._rewrite_underspecified_prompt("close", "plan-X")
+        self.assertIn("Adversarial review of: plan-X", out)
+        self.assertIn("touched file", out)
+
+    def test_empty_is_rewritten(self) -> None:
+        out = model_review._rewrite_underspecified_prompt("", "topic")
+        self.assertIn("Adversarial review", out)
+
+    def test_single_verb_is_rewritten(self) -> None:
+        for verb in ("review", "verify", "check", "full", "audit"):
+            out = model_review._rewrite_underspecified_prompt(verb, "t")
+            self.assertIn("Adversarial review", out, msg=f"verb={verb}")
+
+    def test_real_question_passes_through(self) -> None:
+        q = "Find bugs in the signal-merging logic introduced by commit abc123."
+        self.assertEqual(model_review._rewrite_underspecified_prompt(q, "topic"), q)
+
+    def test_multi_word_short_question_passes_through(self) -> None:
+        q = "Review the PRS flow for edge cases."
+        self.assertEqual(model_review._rewrite_underspecified_prompt(q, "topic"), q)
+
+
 class ExtractionCoverageTest(unittest.TestCase):
     def test_extract_claims_writes_coverage_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as td:

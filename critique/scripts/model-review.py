@@ -32,6 +32,30 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+
+def _reexec_under_llmx_python_if_needed() -> None:
+    # `uv run python3 model-review.py` inherits the caller project's venv Python.
+    # If that Python can't import llmx (typical: 3.12 caller vs 3.13 tool install),
+    # _bootstrap_llmx() later raises ImportError and the user has to restart by
+    # hand. Re-exec transparently under the llmx tool's own Python instead.
+    try:
+        import llmx  # type: ignore  # noqa: F401
+        return
+    except ImportError:
+        pass
+    llmx_py = Path.home() / ".local/share/uv/tools/llmx/bin/python3"
+    if not llmx_py.exists():
+        return
+    try:
+        if Path(sys.executable).resolve() == llmx_py.resolve():
+            return
+    except OSError:
+        return
+    os.execv(str(llmx_py), [str(llmx_py), str(Path(__file__).resolve()), *sys.argv[1:]])
+
+
+_reexec_under_llmx_python_if_needed()
+
 import shared.llm_dispatch as dispatch_core
 from shared.context_budget import enforce_budget
 from shared.context_packet import BudgetPolicy, ContextPacket, FileBlock, PacketSection, TextBlock
@@ -259,6 +283,51 @@ def slugify(text: str, max_len: int = 40) -> str:
     s = re.sub(r"[^a-z0-9]+", "-", s)
     s = s.strip("-")
     return s[:max_len]
+
+
+# Prompts that are almost certainly slash-command-mode leakage rather than a
+# real review question. Passing these verbatim to the model produces generic
+# "looks good to me" synthesis because the model has no attack surface. Two
+# genomics sessions on 2026-04-16 dispatched with `"close"` and got weak output.
+_UNDERSPECIFIED_PROMPTS = {
+    "close", "review", "verify", "check", "model", "deep", "full",
+    "standard", "model-review", "critique", "audit", "fix",
+}
+
+
+def _rewrite_underspecified_prompt(question: str, topic: str) -> str:
+    """Replace slash-command-mode verbs with a structured adversarial prompt.
+
+    Returns the original question unchanged if it looks like a real prompt
+    (> 30 chars or multi-clause). Otherwise substitutes a template that invites
+    concrete attack surface against the supplied topic.
+    """
+    q = (question or "").strip()
+    single_token = q.lower().strip(" .?!:-")
+    too_short = len(q) < 25 and " " not in q.strip()
+    is_verb = single_token in _UNDERSPECIFIED_PROMPTS
+    if not (too_short or is_verb):
+        return question
+    print(
+        f"warning: positional prompt {q!r} looks like slash-command leakage; "
+        f"substituting a structured adversarial template. Pass a concrete "
+        f"review question to silence this.",
+        file=sys.stderr,
+    )
+    return (
+        f"Adversarial review of: {topic}. "
+        f"(1) For each touched file in the context packet, name one concrete "
+        f"bug, logic error, missing edge case, or boundary-condition failure. "
+        f"Cite file and line. "
+        f"(2) Flag any claim in the diff that contradicts the surrounding "
+        f"code (silent semantic failure). "
+        f"(3) Identify tests that would pass on the committed code but "
+        f"would NOT catch a plausible regression — what's the blind spot? "
+        f"(4) Call out compatibility scaffolding, dual-paths, or wrappers "
+        f"that should be deleted under the default breaking-refactor stance. "
+        f"(5) If you find nothing substantial, say so explicitly — do not "
+        f"manufacture findings."
+    )
 
 
 def _add_additional_properties(schema: dict) -> dict:
@@ -1327,6 +1396,8 @@ def main() -> int:
         print("error: --verify cannot be combined with --no-extract", file=sys.stderr)
         return 1
 
+    args.question = _rewrite_underspecified_prompt(args.question, args.topic)
+
     print(f"Dispatching {len(axis_names)} queries: {', '.join(axis_names)}", file=sys.stderr)
 
     # Create output directory
@@ -1391,6 +1462,33 @@ def main() -> int:
                 print(f"Verified disposition written to {verified_path}", file=sys.stderr)
 
     print(json.dumps(result, indent=2))
+
+    # Trailing summary — designed to survive `| tail -N` truncation. Callers
+    # that pipe this output through tail would otherwise only see closing JSON
+    # braces and silently lose the artifact paths and finding counts.
+    summary_lines = ["", "=== model-review summary ==="]
+    summary_lines.append(f"Review dir:  {review_dir}")
+    if result.get("coverage"):
+        summary_lines.append(f"Coverage:    {result['coverage']}")
+    if result.get("disposition"):
+        summary_lines.append(f"Disposition: {result['disposition']}")
+    if result.get("verified_disposition"):
+        summary_lines.append(f"Verified:    {result['verified_disposition']}")
+    try:
+        cov_path = result.get("coverage")
+        if cov_path:
+            cov_data = json.loads(Path(cov_path).read_text())
+            ext = cov_data.get("extraction") or {}
+            if ext:
+                summary_lines.append(
+                    f"Findings:    {ext.get('findings_after_dedup', '?')} after dedup, "
+                    f"{ext.get('cross_model_agreements', 0)} cross-model"
+                )
+    except Exception:
+        pass
+    if result.get("failed_axes"):
+        summary_lines.append(f"FAILED axes: {', '.join(result['failed_axes'])}")
+    print("\n".join(summary_lines))
     return 0
 
 
