@@ -8,6 +8,8 @@ recurring loss/truncation failures in critical review flows.
 from __future__ import annotations
 
 import argparse
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -203,6 +205,31 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _session_commit_range(repo: Path, session_id: str) -> tuple[str, str] | None:
+    """When a session-id is known, find commits tagged with `Session-ID: <id>`
+    in the commit body and return (base, head) = (oldest~1, HEAD).
+
+    This replaces worktree auto-discovery with a clean commit-range when the
+    current session actually produced commits. Guards against peer-agent
+    uncommitted state polluting the packet — the #1 failure mode of the
+    auto-discovery path in multi-agent sessions.
+    """
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(repo), "log",
+             f"--grep=Session-ID: {session_id}",
+             "--format=%H", "-n", "200"],
+            stderr=subprocess.DEVNULL, text=True, timeout=5,
+        ).strip()
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return None
+    if not out:
+        return None
+    shas = out.splitlines()
+    oldest = shas[-1]
+    return f"{oldest}~1", "HEAD"
+
+
 def main() -> int:
     args = parse_args()
     repo = args.repo.resolve()
@@ -216,6 +243,29 @@ def main() -> int:
     if args.since and not base:
         base = f"{args.since}~1"
         head = head or "HEAD"
+
+    # Session-aware auto-detection: when nothing explicit was given AND the
+    # environment carries CLAUDE_SESSION_ID, prefer commits tagged with that
+    # session over worktree diff. Keeps peer-agent dirt out of the packet.
+    if not base and not args.files:
+        session_id = os.environ.get("CLAUDE_SESSION_ID", "").strip()
+        if not session_id:
+            sid_file = repo / ".claude" / "current-session-id"
+            if sid_file.is_file():
+                session_id = sid_file.read_text().strip()
+        if session_id:
+            range_ = _session_commit_range(repo, session_id)
+            if range_ is not None:
+                base, head = range_
+                log_progress(f"auto-detected session commits: base={base} head={head}")
+                # Also force tracked-only, since we don't want peer-agent
+                # uncommitted files bleeding in even as status context.
+                args.tracked_only = True
+            else:
+                log_progress(
+                    f"session {session_id[:8]}… has no commits; falling back "
+                    "to worktree mode (beware peer-agent dirt)"
+                )
 
     packet = build_packet_model(
         repo,

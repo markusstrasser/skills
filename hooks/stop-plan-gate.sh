@@ -89,10 +89,17 @@ def transcript_flags(transcript_path: str):
     )
     strict_re = re.compile("|".join(strict_patterns), re.IGNORECASE)
     review_close_re = re.compile(
-        r"<command-name>/critique</command-name>.*?<command-(?:args|message)>close</command-(?:args|message)>",
+        # User typed `/critique close` as a slash command:
+        r"<command-name>/critique</command-name>.*?<command-(?:args|message)>close</command-(?:args|message)>"
+        # OR agent invoked the Skill tool with skill=critique args=close*:
+        r'\''|"name"\s*:\s*"Skill"[^}]*"skill"\s*:\s*"critique"[^}]*"args"\s*:\s*"close'\'',
         re.IGNORECASE | re.DOTALL,
     )
-    plan_close_re = re.compile(r"<command-name>/plan-close</command-name>", re.IGNORECASE)
+    plan_close_re = re.compile(
+        r"<command-name>/plan-close</command-name>"
+        r'\''|"name"\s*:\s*"Skill"[^}]*"skill"\s*:\s*"plan-close"'\'',
+        re.IGNORECASE,
+    )
     closeout_artifact_re = re.compile(
         r"build_plan_close_context\\.py|plan-close-context|plan-close-review",
         re.IGNORECASE,
