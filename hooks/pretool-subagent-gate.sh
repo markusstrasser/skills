@@ -186,8 +186,12 @@ if [ -n "$PROMPT" ]; then
         HAS_WORKTREE=$(echo "$INPUT" | grep -c '"worktree"' || true)
 
         case "$STYPE" in
-            Explore|observe|claude-code-guide|statusline-setup)
-                # Advisory only — these are read-only or self-managed
+            Explore|observe|claude-code-guide|statusline-setup|researcher)
+                # Advisory only — these subtypes self-manage via their SKILL.md.
+                # researcher's SKILL.md already embeds the CORAL 70%-stop epoch
+                # convention; re-requiring it in every dispatch is redundant
+                # friction. If a researcher subagent still exhausts turns, the
+                # fix is in its SKILL.md, not in dispatch prompts.
                 CHECK_IDS="${CHECK_IDS}7,"
                 WARNINGS="${WARNINGS}SUBAGENT OUTPUT: Dispatch prompt missing ${MISSING}. "
                 ;;

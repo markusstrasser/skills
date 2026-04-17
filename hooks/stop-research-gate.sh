@@ -85,8 +85,16 @@ if not research_files:
 
 # Check each research file for source tags
 SOURCE_TAG = re.compile(
+    # Explicit bracket-tagged provenance
     r'\[SOURCE:|\[DATABASE:|\[DATA[\]:]|\[INFERENCE[\]:]|\[TRAINING-DATA[\]:]|'
-    r'\[PREPRINT[\]:]|\[FRONTIER[\]:]|\[UNVERIFIED[\]:]|\[[A-F][1-6]\]'
+    r'\[PREPRINT[\]:]|\[FRONTIER[\]:]|\[UNVERIFIED[\]:]|\[[A-F][1-6]\]|'
+    # Equivalent identifier-bracket forms: [DOI:...], [PMID:...], [PMC######]
+    r'\[DOI:\s*10\.\d{4,}|\[PMID:\s*\d+|\[PMC\d{4,}\]|'
+    # Markdown links to canonical citation hosts count as provenance
+    r'\]\(https?://(?:dx\.)?doi\.org/|'
+    r'\]\(https?://(?:www\.)?ncbi\.nlm\.nih\.gov/(?:pubmed|pmc)|'
+    # Prose DOI/PMID (e.g. "DOI 10.1038/..." or "PMID 12345678")
+    r'(?:\bDOI[:\s]\s*10\.\d{4,}/|\bPMID[:\s]\s*\d{6,})'
 )
 
 missing = []
