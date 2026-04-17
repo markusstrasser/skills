@@ -264,8 +264,14 @@ def main() -> int:
             else:
                 log_progress(
                     f"session {session_id[:8]}… has no commits; falling back "
-                    "to worktree mode (beware peer-agent dirt)"
+                    "to worktree mode with --tracked-only (peer-agent dirt guard). "
+                    "Pass --tracked-only=false to include untracked."
                 )
+                # In multi-agent environments the current-session-id file can
+                # be clobbered by a peer, so the session ID we read may not
+                # match the commits we actually made. Default to tracked-only
+                # so .scratch/ and untracked peer files don't drown the packet.
+                args.tracked_only = True
 
     packet = build_packet_model(
         repo,
