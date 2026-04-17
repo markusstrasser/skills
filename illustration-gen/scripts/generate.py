@@ -56,7 +56,7 @@ def main() -> int:
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=180) as resp:
             payload = json.loads(resp.read())
     except urllib.error.HTTPError as e:
         detail = e.read().decode(errors="replace")
@@ -83,6 +83,7 @@ def main() -> int:
             out = base_path
         else:
             out = base_path.with_name(f"{base_path.stem}_{idx}{base_path.suffix or '.svg'}")
+        out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(svg)
         written.append(out)
         _ok(f"wrote {out} ({len(svg)} bytes)")
