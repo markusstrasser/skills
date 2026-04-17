@@ -29,7 +29,7 @@ from observe_artifacts import (
 
 # Inlined from meta/scripts/common/paths.py and meta/scripts/config.py
 _CLAUDE_DIR = Path(os.environ.get("CLAUDE_DIR", str(Path.home() / ".claude")))
-DB_PATH = _CLAUDE_DIR / "runlogs.db"
+DB_PATH = _CLAUDE_DIR / "sessions.db"
 _METRICS_FILE = _CLAUDE_DIR / "epistemic-metrics.jsonl"
 
 
@@ -226,20 +226,18 @@ def main():
     args = parser.parse_args()
 
     if not DB_PATH.exists():
-        print("Runlogs DB not found. Run: uv run python3 scripts/runlog.py import && uv run python3 scripts/sessions.py index", file=sys.stderr)
+        print("sessions.db not found. Run: uv run python3 scripts/sessions.py index", file=sys.stderr)
         sys.exit(1)
 
     db = _open_db(DB_PATH)
 
     since = (datetime.now(timezone.utc) - timedelta(days=args.days)).isoformat()
     query = """
-        SELECT vendor_session_id AS uuid, project_slug AS project, started_at AS start_ts, first_message, duration_min, cost_usd,
+        SELECT uuid, project, start_ts, first_message, duration_min, cost_usd,
                tools_used, commits, transcript_lines
         FROM sessions
-        WHERE vendor = 'claude'
-          AND client = 'claude-code'
-          AND jsonl_path IS NOT NULL
-          AND started_at >= ?
+        WHERE jsonl_path IS NOT NULL
+          AND start_ts >= ?
           AND duration_min IS NOT NULL
           AND duration_min > 0.5
     """
@@ -247,7 +245,7 @@ def main():
     if args.project:
         query += " AND project = ?"
         params.append(args.project)
-    query += " ORDER BY started_at DESC"
+    query += " ORDER BY start_ts DESC"
 
     rows = db.execute(query, params).fetchall()
     if not rows:
