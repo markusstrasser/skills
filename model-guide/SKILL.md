@@ -49,7 +49,7 @@ Practical split:
 | **Claim/quote verification** | Grok 4.20 Reasoning | AA-Omniscience 17% hallucination rate (#1) — strongly prefers "UNCERTAIN" over guessing | Claude Opus 4.7 |
 | **Strict instruction following** | Grok 4.20 Reasoning | IFBench 82.9% (#1) | GPT-5.4 (IFEval 95%) |
 | **Tabular data analysis** | Grok 4.20 Reasoning | LiveBench Data Analysis 87.06 (#1) | -- |
-| **Web-grounded search** | Grok 4.20 Reasoning | LMArena Search Arena 1226 (#1) | GPT-5.2 Search (1219) |
+| **Web-grounded search** | Grok 4.20 Reasoning (with xAI Live Search) | LMArena Search Arena 1226 (#1). Note: Live Search is **not exposed via OpenAI SDK** — requires direct xAI Responses API. | GPT-5.2 Search (1219), Perplexity, Exa |
 | **High-volume classification** | Gemini 3 Flash | $0.50/$3/M, 1M ctx | Gemini 3.1 Flash-Lite ($0.25/$1.50) |
 | **Video understanding** | Gemini 3.1 Pro | Native video support | GPT-5.4 |
 
@@ -190,11 +190,12 @@ For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_GPT.md`.
 - **Pair with web grounding** for current events — knowledge cutoff is Sep 1, 2025.
 - **xAI web search not yet supported** via OpenAI SDK (per llmx provider notes) — use Exa/Perplexity/Brave separately for grounding.
 - **Don't pass full documents >200K tokens** — price cliff + multi-needle retrieval at scale unverified. Pre-summarize or chunk.
-- **Best-fit applications:**
-  1. **Claim/quote verification on synthesized outputs** (research-mcp paper synthesis post-pass) — AA-Omniscience methodology directly maps to citation-fabrication failure mode. ~$0.03/synthesis check at $6/M output.
-  2. **Convergent "no findings" verification** (session-analyst, audit outputs) — second-pass adversarial reviewer with prompt that strongly prefers UNCERTAIN over guessing. Probe with 50 findings before deploying broadly.
-  3. **Web-grounded search re-ranking** — its LMArena Search Arena #1 holds when paired with external grounding (Exa/Perplexity).
-- **Don't use for:** raw math, hard agentic coding, GPQA-tier science reasoning, deep multi-step abstract reasoning, anything >200K context. Don't add as a 3rd `/critique model` opinion (epistemic diversity vs Gemini+GPT is small — its strength is abstention, not adversarial design pressure).
+- **Best-fit applications (ranked by realism, not enthusiasm):**
+  1. **PRIMARY — Claim/quote verification on synthesized outputs** (e.g. research-mcp paper synthesis post-pass). AA-Omniscience methodology directly maps to the citation-fabrication failure mode that already burns Claude/GPT/Gemini synthesis. Pattern: `verify(claim, quote, source_text) → {SUPPORTED, NOT_SUPPORTED, ABSTAIN}`. ~$0.03/synthesis check at $6/M output. Use the **non-reasoning** variant for high volume — abstention bias is in post-training, not CoT.
+  2. **PROBE-FIRST — convergent "no findings" verification** (session-analyst, audit outputs). Run 50-finding probe against existing pipeline; deploy only if >10% catch rate of confirmed-noise findings. Deploy threshold matters because Claude with explicit triage gates already abstains well — Grok must materially beat that, which is unproven.
+  3. **NICHE — end-to-end web-grounded fact lookup via xAI Live Search** (LMArena Search Arena #1, ahead of GPT-5.2 Search and Gemini 3 Pro Grounding). Genuine win, but Live Search is **not exposed via OpenAI SDK** as of 2026-04-16 — requires direct xAI Responses API integration. For users with Exa/Perplexity already wired, integration cost likely > marginal value.
+- **Don't use for:** raw math, hard agentic coding, GPQA-tier science reasoning, deep multi-step abstract reasoning, anything >200K context. Don't add as a 3rd `/critique model` opinion — its strength is abstention, not adversarial design pressure; epistemic diversity vs Gemini+GPT cross-family is small.
+- **Stack reality check:** for users already running Claude Opus 4.7 + GPT-5.4 + Gemini 3.1 Pro, Grok 4.20 Reasoning's value-add is **narrow but real** — the citation/claim verifier is the one genuine new capability. Other "wins" are marginal vs existing stack.
 
 ### Gemini 3.1 Pro -- "The Polymath"
 
