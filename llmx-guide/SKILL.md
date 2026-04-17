@@ -175,8 +175,30 @@ subprocess.run(['llmx', '--provider', 'google'], input=prompt, capture_output=Tr
 - `gemini-flash-3` -- wrong order
 - `gpt-5.3` -- needs `-chat-latest` suffix
 - `claude-sonnet-4.6` -- dots, needs hyphens
+- `grok-4.20-reasoning` -- needs full `-0309-` snapshot suffix: `grok-4.20-0309-reasoning`. Not in llmx's `_RECOMMENDED_MODELS` — pass full name explicitly via `-m`.
 
 See [models.md](references/models.md) for full model table, token limits, and reasoning effort values.
+
+### 6. Grok 4.20 Reasoning — Three Footguns
+
+Use `-p xai` (env: `XAI_API_KEY` or `GROK_API_KEY`). xAI is OpenAI-SDK-compatible at `https://api.x.ai/v1`.
+
+1. **`--reasoning-effort` errors out** on `grok-4.20-0309-reasoning`. The model reasons automatically. Strip the flag from any wrapper before dispatching to xAI.
+2. **Multi-agent variant repurposes `reasoning.effort`** — on `grok-4.20-multi-agent-0309`, `effort=low|medium`→4 agents, `effort=high|xhigh`→16 agents. **Selects agent count, not depth.** Cost scales with agent count.
+3. **>200K input → 20× price tier** ($40/$120 per M instead of $2/$6). The 2M context window is operationally usable up to 200K only. Pre-summarize or chunk before exceeding.
+
+Also: `logprobs` is silently ignored. xAI web search not yet supported via OpenAI SDK (llmx provider config explicitly warns and ignores `--search` for `xai`) — use Exa/Perplexity/Brave for grounding instead.
+
+```bash
+# Correct invocation (as of 2026-04-16)
+llmx chat -p xai -m grok-4.20-0309-reasoning -f context.md --timeout 600 -o out.md "Verify these claims"
+
+# WRONG — errors:
+llmx chat -p xai -m grok-4.20-0309-reasoning --reasoning-effort high "..."
+
+# WRONG — uses obsolete default model:
+llmx chat -p xai "..."   # llmx default is still `grok-4`, superseded by 4.20 family
+```
 
 ## Transport Routing Summary
 
