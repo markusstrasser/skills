@@ -30,6 +30,8 @@ Need diagram?
 
 **Default to Typst + CeTZ** unless the task specifically needs TikZ packages (circuits, chemistry, Feynman) or D2 (architecture). Typst compiles in milliseconds vs seconds for LaTeX.
 
+For designer-style illustrations (logos, icons, decorative SVGs) where deterministic code is overkill, use the `illustration-gen` skill (Quiver Arrow API, paid).
+
 ## Typst + CeTZ (Default)
 
 ```typst
