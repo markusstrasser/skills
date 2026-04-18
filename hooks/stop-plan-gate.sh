@@ -81,11 +81,15 @@ def resolve_transcript_path():
     return ""
 
 def transcript_flags(transcript_path: str):
+    # Strict patterns require an execution verb adjacent to the scope phrase.
+    # Bare "full migration" or "the entire plan" appearing in design framing
+    # (e.g. "this is a breaking refactor - full migration") is not an execute
+    # directive and must not trip the gate.
     strict_patterns = (
-        r"execute the entire plan",
-        r"full migration",
-        r"do until all is done",
-        r"after all is done execute a /plan-close",
+        r"\b(execute|run|do|implement|build|ship|start|go|finish|complete)\b[^\n]{0,60}\bthe entire plan\b",
+        r"\b(execute|run|do|implement|build|ship|start|go|finish|complete)\b[^\n]{0,60}\bfull migration\b",
+        r"\bdo until all is done\b",
+        r"\bafter all is done execute a /plan-close\b",
     )
     strict_re = re.compile("|".join(strict_patterns), re.IGNORECASE)
     review_close_re = re.compile(
@@ -158,19 +162,63 @@ if fm:
             phase_info = f"{done}/{total} phases done" if total > 0 else "no phase markers"
             issues.append(f"Plan {plan_name}: status={status} ({phase_info})")
 
+def execution_signals_present(plan_text):
+    # True if this session actually wrote code against the declared plan scope.
+    # Planning-only sessions (plan written + reviewed, no implementation) must
+    # not trip the closeout gate. Signal = commits since session start OR
+    # uncommitted file changes, excluding plan files and review artifacts.
+    plan_only_prefixes = (".claude/plans/", ".model-review/", ".claude/overview-marker")
+
+    scope_candidates = set()
+    scope_candidates.update(re.findall(r"`([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)`", plan_text))
+    scope_candidates.update(
+        re.findall(r"^\s*[-*]\s+`?([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)`?", plan_text, re.MULTILINE)
+    )
+    scope_paths = {p for p in scope_candidates if not p.startswith(plan_only_prefixes)}
+
+    try:
+        since_iso = subprocess.check_output(
+            ["date", "-r", str(int(session_start)), "+%Y-%m-%dT%H:%M:%S"],
+            text=True, stderr=subprocess.DEVNULL,
+        ).strip()
+        committed_raw = subprocess.check_output(
+            ["git", "-C", cwd, "log", f"--since={since_iso}", "--name-only", "--pretty=format:"],
+            text=True, stderr=subprocess.DEVNULL,
+        )
+        committed = {line.strip() for line in committed_raw.splitlines() if line.strip()}
+        dirty_raw = subprocess.check_output(
+            ["git", "-C", cwd, "status", "--porcelain"],
+            text=True, stderr=subprocess.DEVNULL,
+        )
+        dirty = {line[3:].strip() for line in dirty_raw.splitlines() if line.strip()}
+    except Exception:
+        return False
+
+    touched = {
+        p for p in (committed | dirty)
+        if p and not p.startswith(plan_only_prefixes)
+    }
+    if not touched:
+        return False
+    if not scope_paths:
+        return True  # no declared scope; any non-plan work counts as execution
+    return any(
+        t == s or t.endswith("/" + s) or s in t
+        for t in touched for s in scope_paths
+    )
+
 # --- Check 1b: strict full-plan sessions require explicit closeout ---
-# Only check the transcript for user directives — NOT the plan file text.
-# Plan files often mention "full migration" in narrative/description without
-# the user requesting full execution in this session (false positive).
+# Fires ONLY when all three hold:
+#   (a) transcript contains an execute-verb + scope-phrase user directive,
+#   (b) no closeout artifact / slash-command observed, AND
+#   (c) execution actually happened (commits or dirty files against plan scope).
+# Planning-only sessions — plan written + reviewed + no code — stay silent.
 #
 # Once-per-plan rate-limit: after this advisory fires once in a session, we
-# keep nagging only if the plan file has been modified since. This prevents
-# 10+ identical nags when the agent has already acknowledged the deferred
-# state in a prior residue statement (the advisory is the same every time,
-# the user gains nothing from repetition).
+# keep nagging only if the plan file has been modified since.
 transcript_path = resolve_transcript_path()
 strict_requested, closeout_observed = transcript_flags(transcript_path)
-if strict_requested and not closeout_observed:
+if strict_requested and not closeout_observed and execution_signals_present(text):
     # Hash: (session_id, plan_path, plan_mtime). Marker written after first fire.
     # If plan file has been edited since marker was written, we silently re-fire
     # (plan changed = progress made, worth re-advising about closeout).
