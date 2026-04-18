@@ -168,3 +168,35 @@ For PyTorch Lightning, set strategy to `ddp_spawn` or `ddp_notebook`.
 - Use batching when possible
 - Consider L40S before jumping to H100/B200
 - Profile to identify bottlenecks
+
+## model.predict vs eager loop — measure, don't assume
+
+Counter-intuitive pattern: for models with very long input sequences
+(seq_len ≥ 100k tokens), a one-sample-at-a-time eager loop can be **faster**
+than `model.predict(x, batch_size=N)` on GPU.
+
+Measured on T4 with batch_size=16 for a 131k-context Keras/TF model:
+
+| Path | 25-sample probe |
+|---|---|
+| Eager loop (`model(x[y])` per sample) | 13.8 s |
+| `model.predict(x, batch_size=16)` | 154.5 s — 11× slower |
+
+`model.predict` triggers XLA JIT compile on first call (~88 s observed).
+The compile is amortized at scale but the cached-eager-graph path from
+repeated `model()` calls can be cheaper per sample once warm.
+
+Before "optimizing" an existing eager loop to batched predict, **measure both
+at the probe scale** ($0.50 probe beats $50 full-run pessimization). Don't
+assume batched is faster on GPU — it isn't always, especially for long
+sequences or small batch counts.
+
+## Split-brain CUDA
+
+If `nvidia-smi` passes inside the container but `tf.config.list_physical_devices('GPU')`
+returns `[]` (or `torch.cuda.is_available()` is `False`), the framework
+can't find cuDNN even though the driver is mounted. See `images.md` →
+"GPU Image Recipes — Split-Brain CUDA" for the base-image + `XLA_FLAGS` fix.
+Add a two-layer check (nvidia-smi + framework device count) at the top of
+every GPU function body so split-brain CUDA fails at launch, not after hours
+of CPU fallback.

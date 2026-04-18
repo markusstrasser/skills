@@ -110,6 +110,17 @@ modal volume get my-volume remote.txt local.txt
 Max file size via CLI: No limit
 Max file size via dashboard: 16 MB
 
+**Gotcha: `modal volume get` does NOT overwrite existing local files by default.**
+If `local.txt` exists, the CLI prompts for confirmation; in detached or
+non-TTY contexts the prompt fires and the command exits without writing,
+leaving the stale local copy in place. Agents reading a "downloaded" file
+after that get last-run data. Fix: `rm -f local.txt` before the `get`, or
+use a fresh timestamped local path per fetch.
+
+Evidence: 2026-04-15 post-compute audit on genomics/prs_percentile — old
+12-row output was served instead of new 39-row because /tmp/prs_percentiles.json
+already existed from the morning run and the overwrite prompt didn't resolve.
+
 ### Via Python SDK
 
 ```python
@@ -197,6 +208,51 @@ def finetune():
 ```
 
 Background commits ensure checkpoints persist even if training is interrupted.
+
+## Commit-and-Checkpoint Pattern for Long Jobs
+
+For any job running >10 min, commit intermediate results so progress
+survives crashes, preemption, or workspace budget-kill. The pattern:
+
+```python
+for i, chunk in enumerate(chunks):
+    process(chunk, output_path)        # write to /data/...
+    if i % 10 == 0:
+        vol.commit()                   # flush to volume
+        print(f"[{i}/{len(chunks)}] checkpoint committed", flush=True)
+
+# final commit at function exit (or use @modal.exit() / background commit)
+vol.commit()
+```
+
+Rules:
+
+1. Commit after every logical step, not every iteration. Volume commits
+   have non-trivial latency — too frequent hurts throughput.
+2. During a single long subprocess (>30 min), copy its in-progress artifact
+   to the volume during a heartbeat loop + commit once the first full
+   artifact appears. Guard with a once-only flag to avoid repeated copies.
+3. Use `_atomic_write(path, content)` (temp-file + fsync + rename) for any
+   artifact >100 MB to avoid partial-write corruption if the container
+   SIGKILLs mid-write.
+4. When resuming, verify on-volume checkpoints before trusting them —
+   compare size + SHA256 against an expected value. Missing or truncated
+   files → re-run from scratch, don't silently resume on garbage.
+
+## Ephemeral vs Volume Paths
+
+Ephemeral disk (`/tmp`, `/root/...`) is **gone** on container shutdown.
+Everything written there is lost on:
+- Normal shutdown after function return
+- Preemption
+- OOM kill
+- Workspace budget-kill
+- Any SIGKILL
+
+Only files under a mounted volume path survive. For multi-step pipelines,
+land intermediate artifacts on the volume even if the next step will
+immediately read them — future-you will be glad when step 3 crashes and
+step 2's 21 GB output wasn't rebuildable.
 
 ## CLI Commands
 
