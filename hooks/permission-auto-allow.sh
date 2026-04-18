@@ -42,7 +42,27 @@ case "$TOOL" in
     Bash)
         CMD=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_input',{}).get('command',''))" 2>/dev/null) || exit 0
         case "$CMD" in
-            git\ log*|git\ diff*|git\ status*|git\ branch*|git\ show*|ls*|wc\ *|pwd|date|which\ *)
+            git\ log*|git\ diff*|git\ status*|git\ branch*|git\ show*|git\ blame*|git\ stash\ list*|git\ ls-files*|git\ rev-parse*|git\ config\ --get*|git\ remote\ -v*|git\ remote\ show*)
+                allow_tool "Bash:${CMD:0:50}"
+                ;;
+            ls*|wc\ *|pwd|date|which\ *|file\ *|stat\ *|du\ *|df\ *|uptime|whoami|hostname|env|printenv*|tree\ *)
+                allow_tool "Bash:${CMD:0:50}"
+                ;;
+            rg\ *|fd\ *|find\ *|jq\ *|yq\ *|xmllint\ *|head\ *|tail\ *|cat\ *|less\ *|more\ *|cut\ *|sort\ *|uniq\ *|column\ *|grep\ *|awk\ *|sed\ -n*)
+                allow_tool "Bash:${CMD:0:50}"
+                ;;
+            sqlite3\ *)
+                # Read-only sqlite3: no INSERT/UPDATE/DELETE/DROP/CREATE/ALTER/ATTACH/PRAGMA-write
+                if ! echo "$CMD" | grep -qiE '\b(insert|update|delete|drop|create|alter|attach|replace|vacuum|reindex)\b'; then
+                    allow_tool "Bash:sqlite3:ro"
+                fi
+                ;;
+            duckdb\ *)
+                if ! echo "$CMD" | grep -qiE '\b(insert|update|delete|drop|create|alter|attach|replace|copy\s+.*\s+to)\b'; then
+                    allow_tool "Bash:duckdb:ro"
+                fi
+                ;;
+            just\ --list*|just\ -l*|uv\ run\ python3\ --version*|python3\ --version*|node\ --version*|bun\ --version*)
                 allow_tool "Bash:${CMD:0:50}"
                 ;;
         esac
