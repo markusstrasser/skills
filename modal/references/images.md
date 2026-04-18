@@ -201,6 +201,116 @@ image = (
 )
 ```
 
+## GPU Image Recipes — Split-Brain CUDA
+
+Stages that install TensorFlow — or any framework resolving CUDA user-space
+libs via the system dynamic linker — hit "split-brain CUDA" on NVIDIA
+`-runtime` base images. Symptoms:
+
+- `nvidia-smi` passes inside the container (driver mount works)
+- `tf.config.list_physical_devices('GPU')` returns `[]`
+- TF silently falls back to CPU — jobs run to "completion" but produce
+  partial/incomplete output
+- Downstream step crashes on missing file hours later
+
+Root cause: `nvidia/cuda:X-runtime-ubuntu22.04` ships `libcudart` but NOT
+cuDNN. `tensorflow[and-cuda]==2.16.1` ships cuDNN wheels under
+`site-packages/nvidia/cudnn/lib`. `LD_LIBRARY_PATH` does NOT recurse into
+nested paths, so the linker resolves `libcudart` from the system path but
+cannot find `libcudnn.so.8` at the same location. TF silently skips GPU
+init. Reference: TF issue #65842.
+
+**Fix recipe for TF stages:**
+
+```python
+image = (
+    modal.Image.from_registry(
+        "nvidia/cuda:12.2.2-cudnn8-devel-ubuntu22.04",
+        # 12.2.2-cudnn8 is the correct TF 2.16 pair:
+        # - TF 2.16 wants CUDA 12.3 + cuDNN 8.9;
+        # - CUDA 12.3 only ships cudnn9 tags (wrong ABI);
+        # - kind=devel ships libdevice.10.bc for XLA (runtime strips it).
+        add_python="3.11",
+    )
+    .pip_install(
+        "tensorflow==2.16.1",
+        # NOT tensorflow[and-cuda] — let the system libs take over; the
+        # and-cuda extra ships nested cuDNN wheels that the linker can't find.
+    )
+)
+```
+
+Then in subprocess env set:
+
+```python
+env["XLA_FLAGS"] = "--xla_gpu_cuda_data_dir=/usr/local/cuda"
+```
+
+XLA JIT needs `libdevice.10.bc` (LLVM NVVM bitcode) for kernel compilation.
+The `-runtime` image strips it; `-devel` ships it at
+`/usr/local/cuda/nvvm/libdevice/libdevice.10.bc`. Without the flag XLA
+searches `./libdevice.10.bc` (CWD) and fails with "libdevice not found".
+
+### NVIDIA `nvidia/cuda` tag naming (non-obvious)
+
+| CUDA | cuDNN variant tag |
+|---|---|
+| 12.2.2 | `cudnn8` (TF 2.16-compatible) |
+| 12.3.2 | `cudnn9` only (breaks TF 2.16 ABI) |
+| 12.4.1 / 12.5.1 / 12.6+ / 12.8+ / 13.x | `cudnn` (implicit, always latest) |
+
+Verify via `https://hub.docker.com/v2/repositories/nvidia/cuda/tags` before
+pinning a tag. Model-generated tag suggestions (e.g. `12.3.2-cudnn8`) often
+don't exist on Docker Hub — always verify first.
+
+### Channel priority for PyTorch + compiled C++ extensions
+
+For tools needing PyTorch + a GPU-built C++ extension (PyG, DGL,
+scatter/sparse/cluster, deepchem, flash-attn, transformer-engine), the
+conda channel priority matters. Default `append` lets conda-forge's CPU-only
+torch win the resolve and ABI-mismatch the GPU extensions.
+
+```python
+# bioconda_base(extra_channels=["pytorch", "nvidia", "pyg"],
+#               extra_channels_priority="prepend")
+# ... or equivalent .micromamba_install() with channel_priority="prepend"
+```
+
+Triple-pin extension packages: `pyg=2.6.1=py311_torch_2.4.0_cu121`, NOT
+just `pyg`. Without the build string, the solver picks mismatched
+CUDA / Python builds; C++ `.so` files crash at import with
+`_version_cuda.so: undefined symbol _ZN5torch3jit17parse…`.
+
+### uv_pip_install vs pip_install on CUDA base images
+
+`uv_pip_install("torch")` resolves to the latest torch (CUDA 13.0 default)
+regardless of base image CUDA version. On `nvidia/cuda:12.4` images with
+`run_commands` compiling flash-attn or transformer-engine, this causes
+CUDA version mismatch or ABI breakage. Use `pip_install` for the entire
+chain when the base image dictates a specific CUDA.
+
+### Fail-loud assertion pattern
+
+Add an explicit CUDA-visibility check at the top of any GPU stage body:
+
+```python
+@app.function(image=image, gpu="T4")
+def run():
+    import subprocess
+    # Driver mount check
+    subprocess.run(["nvidia-smi"], check=True)
+    # Framework check (the one that catches split-brain CUDA)
+    import tensorflow as tf
+    gpus = tf.config.list_physical_devices('GPU')
+    if not gpus:
+        raise RuntimeError("TF GPU init failed — split-brain CUDA?")
+    # ... actual work
+```
+
+For PyTorch stages: `assert torch.cuda.is_available()`. The two-layer check
+(nvidia-smi + framework device count) catches split-brain CUDA at launch
+instead of after hours of CPU fallback.
+
 ## Image Caching
 
 Images are cached per layer. Breaking cache on one layer causes cascading rebuilds for subsequent layers.

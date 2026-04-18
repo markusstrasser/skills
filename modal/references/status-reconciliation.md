@@ -38,3 +38,47 @@ For each stage you discuss, report:
 Example:
 
 `Is triage running now? -> live Modal app list -> receipt says RUNNING, local mirror old -> local_stale -> inspect app tags/logs before trusting local output`
+
+## INTERRUPTED as a first-class status
+
+For any workflow that can be preempted mid-run, treat `INTERRUPTED` as a
+distinct receipt status alongside `SUCCESS` / `FAILED` / `RUNNING`. See
+`resources.md` → "INTERRUPTED State Machine" for the reconciler branch
+table (receipt × live-app × marker combinations) and the marker-scoping
+rules (filter by `app_id` on read, delete by `run_id` on write-success).
+
+## Pre-Launch Survivability Probe
+
+Before any long-duration relaunch, validate the live control plane
+round-trips end-to-end. A $0 probe that takes <60 s beats learning your
+`modal.Dict` auth is broken two hours into a paid run.
+
+Three sub-probes worth running:
+
+- **worker_state**: write → Dict → read → external observer surfaces it →
+  cleanup. Validates the 7-day-TTL live channel.
+- **budget_halt**: set flag → read → admission-control path raises →
+  clear. Validates the graceful-halt catch.
+- **interrupt_markers**: write synthetic markers (one matching app_id,
+  one stale) → strict filter returns only the match → run-id-scoped
+  delete → stage dir clean.
+
+Exit code = count of failed sub-probes. Never launch a full batch if any
+sub-probe fails — a broken control plane costs more than it saves.
+
+## Reconciler Testing
+
+`modal.Volume` access in a reconciler makes tests painful. Accept an
+injectable volume factory:
+
+```python
+class ControllerReconciler:
+    def __init__(self, volume_factory=None):
+        self._make_volume = volume_factory or (
+            lambda: modal.Volume.from_name("my-volume")
+        )
+```
+
+Tests pass a `FakeVolume` with `listdir`/`read_file`/`remove_file` —
+no Modal auth required. The reconciler stays testable offline and
+every INTERRUPTED-state-machine branch gets direct coverage.
