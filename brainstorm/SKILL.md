@@ -21,6 +21,24 @@ You are orchestrating divergent ideation. The goal is ideas that escape the defa
 
 **This skill is DIVERGENT only.** It produces candidate space and coverage artifacts, not final selections or implementation plans. For convergent critique, use `/model-review`.
 
+## Mode Discipline (READ FIRST — gates everything below)
+
+This skill is **GENERATIVE**, not analytical. It produces ideas that did not exist before the session started. It does NOT search the codebase to find what is missing.
+
+**Forbidden during ideation phases (Steps 2 and 3):**
+- `rg`, `grep`, `sed`, `awk`, `wc`, `find`, `cat`, `head`, `tail` to inspect caller code or "discover what to brainstorm about"
+- `sleep N && check` polling loops on background dispatch output files
+- Treating the absence of a feature in the codebase as a signal to add that feature (that's gap-analysis, a different task)
+- Reading any file written by an in-flight `llmx`/external-dispatch process before completion is signalled — read once after the process exits, never poll
+- Converging to "single survivor" before the disposition table exists
+
+**Required before any tool call other than packet-build (Pre-Flight) and dispatch-launch:**
+- Produce ≥5 candidate ideas as **plain text in the conversation**, with no tool use between them. This is non-negotiable. If you cannot generate 5 candidates from your own reasoning, the topic is under-specified — push back to the user, do not search the codebase to compensate.
+
+**If you find yourself running `rg`/`grep`/`sed`/`wc` or polling files in this skill:** STOP. You are violating the contract. Re-enter divergent mode: write 5 raw ideas as conversation text, then continue from Step 3. This is not optional and is not advisory.
+
+**Why this gate exists:** Codex/GPT-5.4 with the multi-MCP execution harness defaulted to `rg`/`sed` filtering loops in 8/8 automated brainstorm sessions on 2026-04-18 (genomics), ignoring the skill body entirely. HAIExplore v2 (arxiv 2512.18388, April 2026): execution-first interfaces cause premature convergence and design fixation. Architecture beats instructions — this section is the architecture.
+
 **Late-stage warning:** When a frontier is mature, this skill should produce fewer, sharper ideas, not preserve the same idea count with weaker variants. One strong perturbation survivor is enough. If forced-domain rounds only yield reframings, stop and hand back to convergent filtering.
 
 ## Default Architectural Stance
@@ -67,9 +85,9 @@ State clearly: the question, current approach (if any), hard constraints vs soft
 
 ### Step 2: Initial Generation
 
-Generate `$N_IDEAS` approaches. Cast wide — no evaluation yet. Optimize for volume and diversity over individual brilliance. More seeds = more raw material for perturbation. If user included seed ideas, diversify from there.
+**In-conversation first, dispatch second.** Generate `$N_IDEAS` approaches as plain text in the conversation BEFORE launching any external dispatch. The Mode Discipline gate above requires this — at least 5 candidate ideas must exist as conversation text before any non-packet tool call. Cast wide — no evaluation yet. Optimize for volume and diversity over individual brilliance. More seeds = more raw material for perturbation. If user included seed ideas, diversify from there.
 
-With external dispatch: dispatch a parallel external pass while generating your own set. See `references/llmx-dispatch.md` for prompt payloads and artifact contracts.
+With external dispatch: AFTER your own in-conversation set exists, dispatch a parallel external pass for additional volume. See `references/llmx-dispatch.md` for prompt payloads and artifact contracts. **Do not poll** the dispatch output file — wait for the explicit completion signal (process exit, marker file), then read once.
 
 ### Step 3: Perturbation Rounds (The Core Mechanism)
 
@@ -152,3 +170,4 @@ $ARGUMENTS
 ## Known Issues
 <!-- Append-only. Session-analyst may suggest additions. -->
 - **[2026-03-27] Duplicate runs — brainstorm dispatched 3x to same model when parallel subagent calls failed silently. Check subagent output before re-dispatching.**
+- **[2026-04-18] Codex/GPT-5.4 bypassed entire skill body in 8/8 automated genomics sessions** — defaulted to `rg`/`sed`/`wc` loops to find missing implementations and converged to "single survivor" without any divergent generation. Polled background `domain-forcing.md` 11x while still being written. Mode Discipline gate added to head of skill on this date as architectural mitigation. Sessions: 019d9ff9, 019da0d4, 019da08d, 019da11b, 019da165, 019da1a1, 019da1d8, 019da210. Evidence: `agent-infra/research/brainstorm-codex-execution-failure-2026-04-18.md` and `agent-infra/improvement-log.md` 2026-04-18 entry.
