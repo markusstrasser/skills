@@ -68,9 +68,26 @@ try:
 except Exception:
     sys.exit(0)
 
-# Exclude files that were already dirty at session start (other agents' work)
+# Exclude files that were already dirty at session start (other agents' work).
+# Baseline entries include both individual files (' M path', '?? path') and
+# untracked directories ('?? dir/'). A file f is considered pre-existing if:
+#   - f itself is in baseline_dirty, OR
+#   - any ancestor directory of f appears as 'dir/' in baseline_dirty
+# Without the ancestor check, a peer agent's untracked directory with new
+# files inside will trip this hook on every Stop, because 'git status' lists
+# only the dir, not its children.
 if baseline_dirty:
-    changed = [f for f in changed if f not in baseline_dirty]
+    baseline_dirs = {d for d in baseline_dirty if d.endswith('/')}
+
+    def _covered_by_baseline(path):
+        if path in baseline_dirty:
+            return True
+        for d in baseline_dirs:
+            if path.startswith(d):
+                return True
+        return False
+
+    changed = [f for f in changed if not _covered_by_baseline(f)]
 
 # Filter to research-path markdown files, excluding known non-research files
 research_files = [
