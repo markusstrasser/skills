@@ -162,14 +162,40 @@ if fm:
 # Only check the transcript for user directives — NOT the plan file text.
 # Plan files often mention "full migration" in narrative/description without
 # the user requesting full execution in this session (false positive).
+#
+# Once-per-plan rate-limit: after this advisory fires once in a session, we
+# keep nagging only if the plan file has been modified since. This prevents
+# 10+ identical nags when the agent has already acknowledged the deferred
+# state in a prior residue statement (the advisory is the same every time,
+# the user gains nothing from repetition).
 transcript_path = resolve_transcript_path()
 strict_requested, closeout_observed = transcript_flags(transcript_path)
 if strict_requested and not closeout_observed:
-    issues.append(
-        "FULL-PLAN CLOSEOUT: Session was framed as execute-the-entire-plan/full-migration work, "
-        "but no closeout step (`/critique close`, `/plan-close`, or plan-close context build) "
-        "was observed. Before stopping, run the closeout step or state the deferred residue."
-    )
+    # Hash: (session_id, plan_path, plan_mtime). Marker written after first fire.
+    # If plan file has been edited since marker was written, we silently re-fire
+    # (plan changed = progress made, worth re-advising about closeout).
+    import hashlib
+
+    try:
+        session_id_val = open(sid_path).read().strip() if os.path.isfile(sid_path) else "no-sid"
+    except Exception:
+        session_id_val = "no-sid"
+    plan_mtime_ns = int(os.path.getmtime(plan_path) * 1e9)
+    marker_key = hashlib.sha1(
+        f"{session_id_val}|{plan_path}|{plan_mtime_ns}".encode()
+    ).hexdigest()[:16]
+    closeout_marker = f"/tmp/claude-plan-gate-closeout-{marker_key}"
+
+    if not os.path.isfile(closeout_marker):
+        issues.append(
+            "FULL-PLAN CLOSEOUT: Session was framed as execute-the-entire-plan/full-migration work, "
+            "but no closeout step (`/critique close`, `/plan-close`, or plan-close context build) "
+            "was observed. Before stopping, run the closeout step or state the deferred residue."
+        )
+        try:
+            open(closeout_marker, "w").close()
+        except Exception:
+            pass
 
 # --- Check 2: verify block acceptance criteria ---
 lines = text.splitlines()
