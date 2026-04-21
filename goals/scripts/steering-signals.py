@@ -2,8 +2,10 @@
 """Steering signal extraction from cross-vendor session data.
 
 Mines corrections, feedback, topic drift, and permission signals from
-runlogs.db (Claude, Codex, Gemini, Kimi), hook telemetry, and session
-receipts. Designed to feed goals/constitution skill reconnaissance.
+agentlogs.db (unified store for Claude, Codex, Gemini, Kimi — replaced
+the separate runlogs.db + sessions.db on 2026-04-20), hook telemetry,
+and session receipts. Designed to feed goals/constitution skill
+reconnaissance.
 
 Usage:
     steering-signals.py [--days N] [--project P] [--json] [--verbose]
@@ -22,10 +24,10 @@ from pathlib import Path
 
 import os
 
-# Inlined from meta/scripts/common/paths.py
+# Inlined from agent-infra/src/agentlogs/paths.py
 _CLAUDE_DIR = Path(os.environ.get("CLAUDE_DIR", str(Path.home() / ".claude")))
 EVENT_LOG = _CLAUDE_DIR / "event-log.jsonl"
-RUNLOGS_DB = _CLAUDE_DIR / "runlogs.db"
+AGENTLOGS_DB = Path(os.environ.get("AGENTLOGS_DB", str(_CLAUDE_DIR / "agentlogs.db")))
 RECEIPTS_PATH = _CLAUDE_DIR / "session-receipts.jsonl"
 
 # ---------------------------------------------------------------------------
@@ -95,7 +97,7 @@ def classify_correction(text: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 def get_db() -> sqlite3.Connection:
-    db = sqlite3.connect(str(RUNLOGS_DB), timeout=5.0, isolation_level="DEFERRED")
+    db = sqlite3.connect(str(AGENTLOGS_DB), timeout=5.0, isolation_level="DEFERRED")
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA foreign_keys = ON")
@@ -103,7 +105,7 @@ def get_db() -> sqlite3.Connection:
 
 
 def query_user_messages(db: sqlite3.Connection, days: int, project: str | None) -> list[dict]:
-    """Get user messages from runlogs.db across all vendors."""
+    """Get user messages from agentlogs.db across all vendors."""
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     sql = """
         SELECT e.event_id, e.run_id, e.text, e.ts,
@@ -453,8 +455,8 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Show debug info")
     args = parser.parse_args()
 
-    if not RUNLOGS_DB.exists():
-        print("runlogs.db not found. Run: uv run python3 scripts/runlog.py import", file=sys.stderr)
+    if not AGENTLOGS_DB.exists():
+        print(f"agentlogs.db not found at {AGENTLOGS_DB}. Run: agentlogs index", file=sys.stderr)
         sys.exit(1)
 
     db = get_db()
