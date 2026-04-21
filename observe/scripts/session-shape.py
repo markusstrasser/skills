@@ -29,7 +29,7 @@ from observe_artifacts import (
 
 # Inlined from meta/scripts/common/paths.py and meta/scripts/config.py
 _CLAUDE_DIR = Path(os.environ.get("CLAUDE_DIR", str(Path.home() / ".claude")))
-DB_PATH = _CLAUDE_DIR / "sessions.db"
+DB_PATH = Path(os.environ.get("AGENTLOGS_DB", str(_CLAUDE_DIR / "agentlogs.db")))
 _METRICS_FILE = _CLAUDE_DIR / "epistemic-metrics.jsonl"
 
 
@@ -226,26 +226,42 @@ def main():
     args = parser.parse_args()
 
     if not DB_PATH.exists():
-        print("sessions.db not found. Run: uv run python3 scripts/sessions.py index", file=sys.stderr)
+        print(f"agentlogs DB not found at {DB_PATH}. Run: uv run agentlogs index", file=sys.stderr)
         sys.exit(1)
 
     db = _open_db(DB_PATH)
 
     since = (datetime.now(timezone.utc) - timedelta(days=args.days)).isoformat()
+    # agentlogs schema: derive tools_used as a JSON array of distinct tool
+    # names from tool_calls joined via runs. commits come from the git_commits
+    # table on vendor_session_id.
     query = """
-        SELECT uuid, project, start_ts, first_message, duration_min, cost_usd,
-               tools_used, commits, transcript_lines
-        FROM sessions
-        WHERE jsonl_path IS NOT NULL
-          AND start_ts >= ?
-          AND duration_min IS NOT NULL
-          AND duration_min > 0.5
+        SELECT
+            s.session_uuid AS uuid,
+            s.project_slug AS project,
+            s.start_ts,
+            s.first_message,
+            s.duration_min,
+            s.cost_usd,
+            (SELECT json_group_array(tool_name) FROM (
+                SELECT DISTINCT tc.tool_name
+                FROM tool_calls tc JOIN runs r ON r.run_id = tc.run_id
+                WHERE r.session_pk = s.session_pk
+            )) AS tools_used,
+            (SELECT json_group_array(gc.hash) FROM git_commits gc
+             WHERE gc.session_id = s.vendor_session_id) AS commits,
+            s.transcript_lines
+        FROM sessions s
+        WHERE s.session_uuid IS NOT NULL
+          AND s.start_ts >= ?
+          AND s.duration_min IS NOT NULL
+          AND s.duration_min > 0.5
     """
     params = [since]
     if args.project:
-        query += " AND project = ?"
+        query += " AND s.project_slug = ?"
         params.append(args.project)
-    query += " ORDER BY start_ts DESC"
+    query += " ORDER BY s.start_ts DESC"
 
     rows = db.execute(query, params).fetchall()
     if not rows:
