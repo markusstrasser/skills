@@ -10,8 +10,9 @@ effort: low
 
 Select the right frontier model for a task and prompt it correctly.
 
-**Models covered:** Claude Opus 4.7, Claude Sonnet 4.6, GPT-5.4, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3 Flash, Gemini 3.1 Flash-Lite, Grok 4.20 Reasoning.
-**Last updated:** 2026-04-16. See `${CLAUDE_SKILL_DIR}/references/CHANGELOG.md` for update history.
+**Models covered:** Claude Opus 4.7, Claude Sonnet 4.6, GPT-5.5, GPT-5.5 Pro, GPT-5.4, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3 Flash, Gemini 3.1 Flash-Lite, Grok 4.20 Reasoning.
+**Last updated:** 2026-04-23. See `${CLAUDE_SKILL_DIR}/references/CHANGELOG.md` for update history.
+**API note (2026-04-23):** GPT-5.5 is live in ChatGPT + Codex CLI. API access is "coming very soon" per OpenAI but not yet wired — probe with `llmx chat -m gpt-5.5 "ping"` before routing scripts to it. Until the API ships, the Codex-CLI path (`-p codex-cli -m gpt-5.5`) is the only programmatic route once Codex ≥0.124 lands.
 **Benchmark note:** Numbers cited for Claude Opus are the published Opus 4.6 baseline. Opus 4.7 (released 2026-04-16) improves on most of these per Anthropic's announcement; specific 4.7 figures update on the next benchmark refresh.
 
 ## Long-Horizon Research Routing
@@ -24,7 +25,7 @@ For long novelty sweeps and frontier-mapping work:
 
 Practical split:
 
-- `Gemini 3.1 Pro` or `GPT-5.4`: compress overlapping ideas, detect hidden operator structure, write synthesis memos
+- `Gemini 3.1 Pro` or `GPT-5.5` (falls back to `GPT-5.4` until API ships): compress overlapping ideas, detect hidden operator structure, write synthesis memos
 - `Gemini 3 Flash` or broad search tools: generate cheap perturbation passes and map candidate seams
 - `Claude` or the main orchestrator: decide what survives and what gets rejected
 
@@ -32,20 +33,20 @@ Practical split:
 
 | Task | Best Model | Why | Runner-up |
 |------|-----------|-----|-----------|
-| **Agentic coding** | Claude Opus 4.7 | SWE-bench 80.8%, Arena coding #1 | Sonnet 4.6 (79.6%, ~60% cost) |
-| **Fact-sensitive work** | Claude Opus 4.7 / Gemini 3.1 / GPT-5.4 | SimpleQA ~72% (tied) | -- |
+| **Agentic coding** | GPT-5.5 (Codex) / Claude Opus 4.7 | GPT-5.5 Terminal-Bench 2.0 82.7% (vs Opus 69.4%), Expert-SWE 73.1% (vs 5.4's 68.5%). Opus still wins on SWE-bench Pro 64.3%. | Sonnet 4.6 (79.6% SWE-bench, ~60% cost) |
+| **Fact-sensitive work** | Claude Opus 4.7 / Gemini 3.1 / GPT-5.5 | SimpleQA ~72% (tied); GPT-5.5 BrowseComp 84.4% beats 5.4's 82.7% | -- |
 | **Legal reasoning** | Claude Opus 4.7 | BigLaw 90.2% | -- |
-| **Professional analysis** | Claude Opus 4.7 | GDPval-AA Elo 1606 (expert preference) | Sonnet 4.6 (GDPval 1633) |
-| **Computer use / browsing** | Claude Opus 4.7 | OSWorld 72.7% | -- |
-| **Hard math** | GPT-5.4 | MATH 98%+, AIME 100% | Gemini 3.1 Pro (GPQA 94.3%) |
-| **Precise structured output** | GPT-5.4 | IFEval 95%+, native Structured Outputs + Tool Search | Claude (94%) |
-| **Vision / document OCR** | GPT-5.4 | DocVQA 95%+, native computer use | Gemini 3.1 Pro |
-| **Science reasoning** | Gemini 3.1 Pro | GPQA Diamond 94.3% | GPT-5.4 |
-| **Abstract pattern recognition** | Gemini 3.1 Pro | ARC-AGI-2 77.1% | Claude (68.8%) |
-| **Long document ingestion** (>200K) | Gemini 3.1 Pro / GPT-5.4 / Claude | Native 1M context (all three) | -- |
+| **Professional analysis** | GPT-5.5 / Claude Opus 4.7 | GDPval 84.9% (5.5) vs 80.3% (Opus); Sonnet still leads on expert-preference Elo | Sonnet 4.6 (GDPval 1633) |
+| **Computer use / browsing** | GPT-5.5 / Claude Opus 4.7 | OSWorld-Verified 78.7% (5.5) vs 78.0% (Opus); GPT-5.5 also Tau2-bench Telecom 98.0% without prompt tuning | -- |
+| **Hard math** | GPT-5.5 Pro / GPT-5.5 | FrontierMath Tier 4: 39.6% (Pro), 35.4% (base) vs 27.1% (5.4), 22.9% (Opus 4.7), 16.7% (Gemini 3.1 Pro) | Gemini 3.1 Pro (GPQA 94.3%) |
+| **Precise structured output** | GPT-5.5 | IFEval 95%+, native Structured Outputs + Tool Search; higher token efficiency than 5.4 | Claude (94%) |
+| **Vision / document OCR** | GPT-5.5 | DocVQA 95%+, native computer use; MMMU Pro with tools 83.2% | Gemini 3.1 Pro |
+| **Science reasoning** | GPT-5.5 Pro / Gemini 3.1 Pro | GeneBench 33.2% (5.5 Pro) vs 25.6% (5.4 Pro); BixBench 80.5% (5.5) vs 74.0% (5.4). GPQA Diamond still a tie at ~94%. | GPT-5.4 |
+| **Abstract pattern recognition** | Gemini 3.1 Pro | ARC-AGI-2 77.1% (Gemini) vs 85.0% (GPT-5.5 verified) — **GPT-5.5 now leads** per OpenAI's reported numbers; keep Gemini as runner-up until independent confirmation | GPT-5.5 (85.0% reported) |
+| **Long document ingestion** (>200K) | Gemini 3.1 Pro / GPT-5.5 / Claude | Native 1M context (all three). GPT-5.5 wins long-context on MRCR v2 at 512K-1M (74.0% vs Opus 32.2%) | -- |
 | **Subagent coding** | Claude Sonnet 4.6 | 79.6% SWE-bench at $3/$15, 1M context | Gemini 3 Flash (cheap) |
-| **Doc → schema extraction** | GPT-5.3 Instant | Less preachy, structured output, fast | GPT-5.4 (stronger reasoning) |
-| **Cross-model review** | Pro + GPT-5.4 | Cross-family required (+31pp accuracy, FINCH-ZK). Same-family = no adversarial pressure | (Grok 4.20 NOT recommended as 3rd — abstention bias ≠ adversarial pressure) |
+| **Doc → schema extraction** | GPT-5.3 Instant | Less preachy, structured output, fast | GPT-5.5 (stronger reasoning, more expensive) |
+| **Cross-model review** | Opus 4.7 + GPT-5.5 | Cross-family required (+31pp accuracy, FINCH-ZK). GPT-5.5 slot upgrades from 5.4. | (Grok 4.20 NOT recommended as 3rd — abstention bias ≠ adversarial pressure) |
 | **Claim/quote verification** | Grok 4.20 Reasoning | AA-Omniscience 17% hallucination rate (#1) — strongly prefers "UNCERTAIN" over guessing | Claude Opus 4.7 |
 | **Strict instruction following** | Grok 4.20 Reasoning | IFBench 82.9% (#1) | GPT-5.4 (IFEval 95%) |
 | **Tabular data analysis** | Grok 4.20 Reasoning | LiveBench Data Analysis 87.06 (#1) | -- |
@@ -93,33 +94,43 @@ For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
 
 For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
 
-### GPT-5.4 -- "The Professional"
+### GPT-5.5 -- "The Professional" (replaces GPT-5.4)
 
-**Strengths:** 1M context (up from 400K), math (MATH 98%+, AIME 100%), vision + native computer use, 33% fewer claim errors vs 5.2 (SimpleQA ~72% inferred), Tool Search API, structured outputs, 90% prompt cache discount. Consolidates GPT-5.3-Codex coding capabilities. First general-purpose model rated **High capability in Cybersecurity** (Preparedness Framework) — strong at CTF, CVE exploitation, end-to-end cyber operations.
-**Weaknesses:** Abstract reasoning still below Gemini (ARC-AGI-2 52.9%). CoT controllability is near-zero (0.3% at 10k chars) — you cannot steer what the model reasons about via prompts. CoT monitorability lower than GPT-5 Thinking overall (but near-100% for agentic misalignment detection).
-**Pricing:** $2.50/$15.00 per MTok (<272K context), $5.00/$22.50 (>272K). 90% cache discount. 272K boundary means long-context work costs 2x — prefer Gemini for bulk 1M ingestion.
+**Strengths:** 1M API context / 400K Codex context, math (FrontierMath Tier 4 35.4% — +8.3pp over 5.4), state-of-the-art agentic coding (Terminal-Bench 2.0 82.7%, Expert-SWE 73.1%), vision + native computer use, BrowseComp 84.4%, Tau2-bench Telecom 98.0% *without* prompt tuning. Understands task intent earlier, asks for less guidance, uses fewer tokens per Codex task than 5.4. Tool Search API, structured outputs, 90% prompt cache discount. Still rated **High capability in Cybersecurity** (below Critical) — cyber safeguards tightened vs 5.4.
+**Weaknesses:** CoT controllability even lower than 5.4 (0.2% at 50k chars) — you cannot steer internal reasoning via prompts; this is a safety property (harder to obfuscate) but also a practical constraint. Small regressions on harassment/hate disallowed-content benchmarks vs 5.4-thinking (not statistically significant per system card).
+**Pricing (API, when it ships):** $5.00/$30.00 per MTok at 1M context. Batch + Flex tiers at **half standard rate**; Priority at 2.5x. 90% cache discount. Note: this is **higher per-token than 5.4** ($2.50/$15) — offset by fewer tokens needed per task. Re-baseline cost estimates on migration.
+**Codex Fast mode:** 1.5x faster for 2.5x cost. NOT a default — only worth it for latency-sensitive interactive work.
 
-**Variants** (same weights, different compute ceiling):
-- GPT-5.4 (base) — API/llmx, effort none→high. Default for programmatic use.
-- GPT-5.4 effort=xhigh — API/llmx, extended reasoning. Pro-lite. Timeouts at ~15 min.
-- GPT-5.4 Pro — **ChatGPT Pro web UI only** ($200/mo). No API access. No time ceiling. Use for domain-heavy derivations that exceed 15 min.
+**Variants** (per system card: same weights, different compute):
+- GPT-5.5 (base) — API/llmx/Codex CLI, effort none→high. Default for programmatic use once API ships.
+- GPT-5.5 effort=xhigh — API/llmx, extended reasoning. Pro-lite. Timeouts at llmx's 900s cap.
+- GPT-5.5 Pro — ChatGPT Pro/Business/Enterprise + API ("coming very soon") at $30/$180 per MTok. **Same underlying weights** + parallel test-time compute. Gate to high-uncertainty × high-irreversibility decisions only (6x cost).
 - "Thinking" in ChatGPT web UI = effort=high (the default mode). Not a separate model.
+
+**Availability as of 2026-04-23:**
+- ✅ ChatGPT web (Plus, Pro, Business, Enterprise)
+- ✅ Codex CLI (requires `codex ≥0.124`; 0.123.0 does NOT route 5.5 successfully — passes to OpenAI API which rejects)
+- ⏳ OpenAI API ("coming very soon") — llmx model registry has zero refs; probe before scripting
 
 **Effort levels:** `none` (no reasoning, enables temperature/top_p), `minimal`, `low`, `medium`, `high` (default via llmx), `xhigh` (max compute).
 
-**Quick prompting tips (thinking mode, high effort):**
-- Do **NOT** use "think step by step" -- hurts performance when thinking is on
-- Keep prompts **simple and direct** -- the model does heavy reasoning internally
-- Use **`strict: true`** on all function definitions -- guaranteed schema conformance
+**Quick prompting tips** (thinking mode, high effort — carry forward from 5.4, largely unchanged):
+- Do **NOT** use "think step by step" — hurts performance when thinking is on
+- Keep prompts **simple and direct** — the model does heavy reasoning internally
+- 5.5 needs **less explicit scaffolding** than 5.4 ("plan before you act", "check your work") — it does this natively. Remove that boilerplate from existing prompts.
+- Use **`strict: true`** on all function definitions — guaranteed schema conformance
 - Use **XML format** for documents: `<doc id='1' title='Title'>Content</doc>` (JSON performs poorly)
 - Add `Formatting re-enabled` as first line of developer message (markdown off by default in thinking)
-- Enable **web search** for fact-sensitive queries
 - Use Responses API with `previous_response_id` for **reasoning persistence** across tool calls
 - **STATIC prefix (top) + DYNAMIC content (bottom)** for 90% cache discount
-- **Tool Search** for large tool sets -- avoids dumping all tool definitions into prompt
+- **Tool Search** for large tool sets — avoids dumping all tool definitions into prompt
 - **llmx defaults to `--reasoning-effort high`** for GPT-5 models automatically
 
 For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_GPT.md`.
+
+### GPT-5.4 -- Legacy fallback
+
+Kept as an active fallback until GPT-5.5 lands on the OpenAI API. Everything prompting-wise carries forward to 5.5; 5.5 uses fewer tokens for the same task. Pricing $2.50/$15 (<272K) / $5/$22.50 (>272K). **Do not start new work on 5.4** — use 5.5 via Codex CLI (≥0.124) if you need it now, otherwise wait for API. Will be deprecated from this guide once 5.5 API is GA + stable for ~2 weeks.
 
 ### GPT-5.3 Instant -- "The Restructurer"
 

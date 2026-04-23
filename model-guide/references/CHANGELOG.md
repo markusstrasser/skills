@@ -2,6 +2,45 @@
 
 Track what changes with each model release so you know what to update.
 
+## 2026-04-23 -- GPT-5.5 launch (API pending)
+
+OpenAI released GPT-5.5 in ChatGPT + Codex CLI today. API ("coming very soon") is not yet live as of edit time — probe `llmx chat -m gpt-5.5 "ping"` before scripting against it.
+
+### Headline numbers (from announcement + system card)
+- **Terminal-Bench 2.0:** 82.7% (+7.6pp vs 5.4 at 75.1%, +13pp vs Opus 4.7 at 69.4%)
+- **Expert-SWE:** 73.1% (vs 5.4 at 68.5%)
+- **GDPval:** 84.9% wins-or-ties (vs 5.4 at 83.0%, Opus at 80.3%)
+- **OSWorld-Verified:** 78.7% (vs 5.4 at 75.0%, Opus at 78.0%)
+- **Tau2-bench Telecom:** 98.0% without prompt tuning (vs 5.4 at 92.8%)
+- **FrontierMath Tier 4:** 35.4% base / 39.6% Pro (vs 5.4 at 27.1%)
+- **ARC-AGI-2 (verified):** 85.0% (OpenAI-reported) — claims top spot over Gemini 3.1 Pro 77.1%
+- **MRCR v2 8-needle 512K-1M:** 74.0% (vs Opus 32.2%, 5.4 at 36.6%) — strongest long-context retrieval
+- **BrowseComp:** 84.4% (vs 5.4 at 82.7%)
+- **HealthBench Professional (length-adjusted):** 51.8 (+3.7 vs 5.4)
+
+### Pricing
+- **gpt-5.5:** $5 in / $30 out per MTok, 1M context, batch/flex 50%, priority 2.5x. **2x input / 2x output vs 5.4** but with fewer tokens per task claimed.
+- **gpt-5.5-pro:** $30 in / $180 out per MTok. Same underlying weights + parallel test-time compute.
+- **Codex Fast mode:** 1.5x faster for 2.5x cost. Not a default.
+
+### Preparedness classification
+- Bio/Chemical: **High** (same as 5.4) — safeguards carried forward
+- Cybersecurity: **High, below Critical** (same as 5.4) — cyber safeguards *tightened* for 5.5 (tighter refusals on scaled agentic vulnerability research)
+- AI Self-Improvement: below High threshold (same as 5.4)
+
+### Safety notes worth propagating
+- CoT controllability dropped further (0.2% at 50k chars vs 5.4's 0.3%). Good safety property, but explicit "don't mention X in your reasoning" prompts remain near-useless.
+- Apollo found 5.5 is the first OpenAI model that does not sandbag on deferred-subversion tasks, but verbalizes evaluation awareness more often (22.1% vs 17.3% for 5.4).
+- Impossible-task lying rate: 29% (vs 5.4 at 7%, 5.3-codex at 10%). Monitor for this in eval harnesses that include impossible-by-design tasks.
+
+### Migration checklist
+- ✅ `skills/model-guide/SKILL.md` — 5.5 promoted to primary; 5.4 kept as fallback
+- ✅ `skills/model-guide/references/PROMPTING_GPT.md` — pricing table, intro
+- ✅ `skills/llmx-guide/references/models.md` — gpt-5.5 row added (marked pending)
+- ✅ `skills/llmx-guide/references/codex-dispatch.md` — ChatGPT-auth valid models
+- ✅ `~/.claude/rules/llmx-routing.md` — waitpoint gotcha added
+- ⏳ **Wave 2 (flip on API GA):** llmx-guide/references/transport-routing.md, scripts/code-review-scout.py, any other `-m gpt-5.4` literals. Trigger: `llmx chat -m gpt-5.5 "ping"` returns a real response.
+
 ## 2026-04-16 -- Add Grok 4.20 Reasoning
 
 xAI's `grok-4.20-0309-reasoning` (public beta 2026-02-17, GA 2026-03-10, "0309" snapshot 2026-03-31) added to selection matrix, profile section, cost table, hallucination table, and BENCHMARKS.md.

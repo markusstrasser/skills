@@ -1,8 +1,12 @@
-# GPT-5.4 Prompting Guide
+# GPT-5.5 Prompting Guide (formerly GPT-5.4)
 
-Specific to GPT-5.4 with thinking (high effort). Updated 2026-03-06. Most GPT-5.4 prompting patterns carry forward — GPT-5.4 adds 1M context, native computer use, Tool Search, and fewer hallucinations.
+Covers GPT-5.5 (primary) and GPT-5.4 (fallback until 5.5 hits OpenAI API). Updated 2026-04-23.
 
-**Sources:** OpenAI official docs (developers.openai.com).
+**What changed with 5.5 (2026-04-23):** Understands task intent earlier, asks for less guidance, uses fewer tokens per task, better tool-use persistence. Prompting patterns carry forward from 5.4 — mostly you can **remove** scaffolding ("plan before acting", "check your work", "iterate until done") because 5.5 does this natively.
+
+**Availability (2026-04-23):** ChatGPT + Codex CLI (≥0.124) live; OpenAI API "coming very soon" — probe `llmx chat -m gpt-5.5 "ping"` before routing scripts to it.
+
+**Sources:** OpenAI official docs (developers.openai.com), GPT-5.5 announcement + system card (2026-04-23).
 
 ---
 
@@ -99,10 +103,12 @@ Formatting re-enabled
 
 | Variant | Access | Reasoning budget | Pricing (in/out per MTok) | Timeout |
 |---------|--------|-----------------|--------------------------|---------|
-| `gpt-5.4` effort=high | API, llmx | Standard reasoning | $2.50/$15 | ~10 min |
-| `gpt-5.4` effort=xhigh | API, llmx | Extended reasoning | $2.50/$15 | ~15 min (llmx hard cap 900s) |
-| `gpt-5.4-pro` | ChatGPT Pro web UI only | Maximum reasoning — no practical ceiling | Subscription ($200/mo) | Minutes to tens of minutes |
-| GPT-5.4 Thinking | ChatGPT web UI | Same as effort=high (default) | Subscription | N/A |
+| `gpt-5.5` effort=high | API (pending), llmx (pending), Codex CLI ≥0.124 | Standard reasoning | $5/$30 per MTok (batch/flex 50%, priority 2.5x) | ~10 min |
+| `gpt-5.5` effort=xhigh | API (pending), llmx (pending) | Extended reasoning | $5/$30 | ~15 min (llmx hard cap 900s) |
+| `gpt-5.5-pro` | ChatGPT Pro/Business/Enterprise + API (pending) | Maximum reasoning + parallel test-time compute (same weights) | $30/$180 per MTok (API) or subscription ($200/mo) | Minutes to tens of minutes |
+| GPT-5.5 Thinking | ChatGPT web UI | Same as effort=high (default) | Subscription | N/A |
+| `gpt-5.4` effort=high | API, llmx | **Fallback only** until 5.5 API ships | $2.50/$15 | ~10 min |
+| `gpt-5.4` effort=xhigh | API, llmx | Fallback extended reasoning | $2.50/$15 | ~15 min |
 
 **The only real difference is how long the model is allowed to think.** `xhigh` on base is "Pro-lite" — same extended reasoning, but capped by API timeout. Pro can think for 10+ minutes on a single request with no ceiling. ChatGPT "Thinking" in the web UI is just `effort=high` as the default mode.
 
