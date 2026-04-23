@@ -10,7 +10,9 @@
 | Gemini 3 Flash | `gemini-3-flash-preview` | Cheap. `-preview` required |
 | Gemini 3.1 Flash Image | `gemini-3.1-flash-image-preview` | No text-only 3.1 Flash yet |
 | GPT-5.3 Instant | `gpt-5.3-chat-latest` | Reasoning max: **medium only**. Auto-defaults |
-| GPT-5.4 | `gpt-5.4` | **Default OpenAI model.** `openai` prefers Codex CLI when installed. API fallback defaults reasoning to `high`; `xhigh` is also supported. |
+| GPT-5.5 | `gpt-5.5` | **Target default, API pending (2026-04-23).** Live in ChatGPT + Codex CLI ≥0.124 only. `llmx chat -m gpt-5.5` errors "Unknown model" — llmx registry not yet updated. Probe before scripting. Pricing $5/$30 per MTok at 1M context. |
+| GPT-5.5 Pro | `gpt-5.5-pro` | **API pending.** Same weights as 5.5 + parallel test-time compute. $30/$180 per MTok. Available in ChatGPT Pro/Business/Enterprise now. |
+| GPT-5.4 | `gpt-5.4` | **Current active default** until 5.5 API ships. `openai` prefers Codex CLI when installed. API fallback defaults reasoning to `high`; `xhigh` is also supported. |
 | GPT-5.2 (legacy) | `gpt-5.2` | Legacy OpenAI default. |
 | GPT-5-Codex | `gpt-5-codex` | No `minimal` reasoning-effort |
 | Claude Sonnet 4.6 | `claude-sonnet-4-6` | Hyphens, not dots |
@@ -30,6 +32,7 @@
 
 | Model | Max Input | Max Output | Notes |
 |-------|----------|-----------|-------|
+| GPT-5.5 | 1,000,000 (API) / 400,000 (Codex) | 128,000 | API limit per announcement; Codex limit per Plus/Pro/Business/Enterprise/Edu/Go plans |
 | GPT-5.4 | 1,050,000 | 128,000 | |
 | GPT-5.2 | 272,000 | 128,000 | |
 | GPT-5.3 Chat | 128,000 | 16,384 | Smallest output cap — watch for truncation |
@@ -43,6 +46,7 @@
 | Model | Valid values | Default |
 |-------|------------|---------|
 | GPT-5.3 Instant | **medium only** | medium (auto) |
+| GPT-5.5 | none, minimal, low, medium, high, xhigh | high |
 | GPT-5.4 | none, minimal, low, medium, high, xhigh | high |
 | GPT-5.2 | minimal, low, medium, high | high |
 | GPT-5-Codex | low, medium, high | high |
