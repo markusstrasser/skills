@@ -12,10 +12,12 @@ agents. It distills the useful pattern from Codex's Life Science Research plugin
 a small router plus many source-specific lookup recipes. Do not treat it as a
 single monolithic "biomed answer engine."
 
-Concrete source-specific skills are nested under `sources/` inside this skill.
-Do not expose them all as top-level skills; that blows the Claude Code skill
-description budget. When a narrow source lookup matches the request, open only
-that source's `sources/<source-skill>/SKILL.md` and run its local helper script.
+Concrete source-specific recipes are nested under `sources/` inside this skill.
+Each is a directory with an `INSTRUCTIONS.md` (renamed from SKILL.md so harness
+skill-discovery does not surface all 50 as top-level skills — that blows the
+skill-description budget in Claude Code and Codex). When a narrow source lookup
+matches the request, open only that source's `sources/<source-skill>/INSTRUCTIONS.md`
+and run its local helper script.
 
 ## Lessons From Codex's Life Science Plugin
 
