@@ -129,81 +129,82 @@ available everywhere.
 When no MCP is exposed, use local CLIs or direct APIs. State the fallback in the
 answer if it affects confidence.
 
-## Source-Specific Recipes
+## Source Index
 
-These are request recipes, not mandatory tools.
+Open only the `sources/<name>/INSTRUCTIONS.md` you need. Each source has a local
+helper script under `sources/<name>/scripts/`.
 
-| Source | Good First Query |
+| Source | Covers |
 |---|---|
-| ClinVar | gene or exact variant; separate star/review status from significance |
-| gnomAD | exact variant with build and ref/alt; population AF before pathogenicity claims |
-| Ensembl | gene/transcript/variant normalization and assembly coordinates |
-| Open Targets | disease-target or target-disease evidence; distinguish genetics from literature/mining |
-| GWAS Catalog | trait associations and ancestry/study context |
-| GTEx / eQTL Catalogue | tissue-specific eQTLs; report tissue and variant build |
-| Human Protein Atlas / Bgee | tissue expression; do not infer causality from expression alone |
-| Reactome / QuickGO | pathway/function labels; verify species and evidence code where available |
-| STRING | network topology; treat as interaction/context, not proof of mechanism |
-| UniProt | canonical protein function, domains, isoforms, variants |
-| AlphaFold / RCSB PDB | structure availability and confidence; do not overstate low-confidence regions |
-| ChEMBL / BindingDB | target activity; report assay type, organism, units, and relation where available |
-| PharmGKB / CPIC | clinical PGx annotations; report evidence/guideline level |
-| ClinicalTrials.gov | trial existence/status; do not treat as efficacy evidence |
-| cBioPortal / CIViC | cancer variant context; keep tumor type and evidence level attached |
-| PubMed / PMC / bioRxiv | discovery and full-text support; preprints are provisional |
+| alphafold-skill | AlphaFold structure predictions; UniProt/sequence/annotation lookups |
+| bgee-skill | Bgee expression SPARQL — healthy wild-type tissue |
+| bindingdb-skill | BindingDB ligand-target binding (PDB/UniProt/similarity search) |
+| biobankjapan-phewas-skill | BioBank Japan PheWAS — single variant, GRCh37 resolve |
+| biorxiv-skill | bioRxiv/medRxiv preprint metadata, DOI publication linkage |
+| biostudies-arrayexpress-skill | BioStudies/ArrayExpress study text search + accession |
+| cbioportal-skill | cBioPortal — studies, profiles, mutations, clinical data, samples |
+| cellxgene-skill | CELLxGENE Discover — single-cell collection/dataset metadata |
+| chebi-skill | ChEBI 2.0 — chemical search, compound, ontology, structure |
+| chembl-skill | ChEMBL — activity, molecule, target, mechanism, text-search |
+| civic-skill | CIViC GraphQL — cancer variant interpretation evidence |
+| clinicaltrials-skill | ClinicalTrials.gov API v2 — study search, metadata, field stats |
+| clinvar-variation-skill | ClinVar + NCBI Variation — VCV/RCV/SCV/RefSNP lookups |
+| efo-ontology-skill | EFO OLS4 — search, term lookup, children/descendants |
+| encode-skill | ENCODE — object lookups, portal search, metadata |
+| ensembl-skill | Ensembl REST — lookup, overlap, xref, variation |
+| epigraphdb-skill | EpiGraphDB — ontology, literature, MR, gene-drug, support paths |
+| eqtl-catalogue-skill | eQTL Catalogue — association retrieval + metadata endpoints |
+| eva-skill | European Variation Archive — species metadata, archived variants |
+| finngen-phewas-skill | FinnGen PheWAS — single variant, GRCh38 resolve |
+| genebass-gene-burden-skill | Genebass gene burden — one Ensembl gene + one burden set |
+| gnomad-graphql-skill | gnomAD GraphQL — frequency, gene constraint, variant context |
+| gtex-eqtl-skill | GTEx v2 single-tissue eQTLs — GRCh38 variant |
+| gwas-catalog-skill | GWAS Catalog REST v2 — studies, associations, SNPs, EFO, loci |
+| hmdb-skill | HMDB — metabolites, proteins, diseases, pathways |
+| human-protein-atlas-skill | Human Protein Atlas — gene JSON, tissue/cell-line pages |
+| ipd-skill | IPD REST — HLA allele + cell-level metadata |
+| locus-to-gene-mapper-skill | GWAS locus→candidate gene chain (EFO→GWAS→OT L2G→eQTL→burden) |
+| metabolights-skill | MetaboLights — study discovery + metabolomics metadata |
+| mgnify-skill | MGnify — microbiome studies, samples, biome metadata |
+| ncbi-blast-skill | NCBI BLAST Common URL — submit/poll/summarize BLAST jobs |
+| ncbi-clinicaltables-skill | NCBI Clinical Tables — human gene autocomplete search |
+| ncbi-datasets-skill | NCBI Datasets v2 — assembly, genome, taxonomy metadata |
+| ncbi-entrez-skill | NCBI Entrez (E-Utilities) — PubMed/Gene/Protein/PMC/GEO |
+| ncbi-pmc-skill | NCBI PMC Open Access — article/file availability |
+| opentargets-skill | Open Targets GraphQL — target/disease/drug/variant, L2G heatmaps |
+| pharmgkb-skill | PharmGKB — genes, variants, clinical annotations, guidelines |
+| pride-skill | PRIDE Archive — proteomics project discovery + metadata |
+| proteomexchange-skill | ProteomeXchange PROXI — datasets, peptides, PSMs, spectra, USI |
+| pubchem-pug-skill | PubChem PUG REST — compound properties, descriptions, assays |
+| quickgo-skill | QuickGO — GO terms, annotations, ontology traversal |
+| rcsb-pdb-skill | RCSB PDB — core metadata, Search API, FASTA |
+| reactome-skill | Reactome ContentService — pathway/event/participant/search |
+| research-router-skill | Internal router — normalize entities, fan out sub-skills, synthesize |
+| rhea-skill | Rhea — biochemical reaction search, reaction IDs |
+| rnacentral-skill | RNAcentral — RNA entries, single-entry lookup, cross-references |
+| string-skill | STRING — network, interaction partners, enrichment |
+| tpmi-phewas-skill | TPMI PheWAS — single variant, GRCh38 resolve |
+| ukb-topmed-phewas-skill | UKB-TOPMed PheWAS — single variant, GRCh38 resolve |
+| uniprot-skill | UniProt REST — UniProtKB/UniRef/UniParc, FASTA stream |
 
-Local source skill paths:
+### Retrieval Discipline (per-source)
 
-- `sources/alphafold-skill`
-- `sources/bgee-skill`
-- `sources/bindingdb-skill`
-- `sources/biobankjapan-phewas-skill`
-- `sources/biorxiv-skill`
-- `sources/biostudies-arrayexpress-skill`
-- `sources/cbioportal-skill`
-- `sources/cellxgene-skill`
-- `sources/chebi-skill`
-- `sources/chembl-skill`
-- `sources/civic-skill`
-- `sources/clinicaltrials-skill`
-- `sources/clinvar-variation-skill`
-- `sources/efo-ontology-skill`
-- `sources/encode-skill`
-- `sources/ensembl-skill`
-- `sources/epigraphdb-skill`
-- `sources/eqtl-catalogue-skill`
-- `sources/eva-skill`
-- `sources/finngen-phewas-skill`
-- `sources/genebass-gene-burden-skill`
-- `sources/gnomad-graphql-skill`
-- `sources/gtex-eqtl-skill`
-- `sources/gwas-catalog-skill`
-- `sources/hmdb-skill`
-- `sources/human-protein-atlas-skill`
-- `sources/ipd-skill`
-- `sources/locus-to-gene-mapper-skill`
-- `sources/metabolights-skill`
-- `sources/mgnify-skill`
-- `sources/ncbi-blast-skill`
-- `sources/ncbi-clinicaltables-skill`
-- `sources/ncbi-datasets-skill`
-- `sources/ncbi-entrez-skill`
-- `sources/ncbi-pmc-skill`
-- `sources/opentargets-skill`
-- `sources/pharmgkb-skill`
-- `sources/pride-skill`
-- `sources/proteomexchange-skill`
-- `sources/pubchem-pug-skill`
-- `sources/quickgo-skill`
-- `sources/rcsb-pdb-skill`
-- `sources/reactome-skill`
-- `sources/research-router-skill`
-- `sources/rhea-skill`
-- `sources/rnacentral-skill`
-- `sources/string-skill`
-- `sources/tpmi-phewas-skill`
-- `sources/ukb-topmed-phewas-skill`
-- `sources/uniprot-skill`
+Request-time cautions that matter more than source identity:
+
+- **ClinVar:** separate star/review status from clinical significance.
+- **gnomAD:** report population AF with build + ref/alt *before* any pathogenicity claim.
+- **Open Targets:** distinguish genetics evidence from literature/mining scores.
+- **GWAS Catalog:** carry ancestry and study context into the answer.
+- **GTEx / eQTL Catalogue:** report tissue and variant build.
+- **Human Protein Atlas / Bgee:** tissue expression is not causality.
+- **Reactome / QuickGO:** verify species and evidence code where available.
+- **STRING:** network topology = interaction context, not proof of mechanism.
+- **AlphaFold / RCSB PDB:** check confidence; do not overstate low-confidence regions.
+- **ChEMBL / BindingDB:** report assay type, organism, units, relation.
+- **PharmGKB / CPIC:** attach evidence/guideline level.
+- **ClinicalTrials.gov:** trial existence ≠ efficacy evidence.
+- **cBioPortal / CIViC:** carry tumor type and evidence level.
+- **PubMed / PMC / bioRxiv:** preprints are provisional.
 
 ## Execution Discipline
 
