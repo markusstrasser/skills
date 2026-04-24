@@ -1,6 +1,6 @@
 ---
 name: critique
-description: "Use when: 'what's wrong with this', 'review the plan', 'close out the implementation', 'fact-check these findings'. Modes: /critique model (Gemini+GPT adversarial), /critique verify (fact-check LLM output), /critique close (post-implementation tests+review). Renamed from /review (built-in conflict)."
+description: "Review plans, fact-check, close implementations. Modes: model (Gemini+GPT adversarial), verify (fact-check LLM output), close (post-impl tests+review). Use for 'what's wrong', 'review plan', 'fact-check'."
 user-invocable: true
 argument-hint: <mode> [target]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent]

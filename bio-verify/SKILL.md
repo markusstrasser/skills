@@ -1,6 +1,6 @@
 ---
 name: bio-verify
-description: Verify hardcoded biological constants in Python scripts and config JSON against authoritative sources (Ensembl, ClinVar, ISBT, gnomAD, PanelApp). Dispatches parallel verification agents by domain. Use when auditing scripts with genomic coordinates, gene lists, risk ratios, or clinical classifications. Triggers on "verify claims", "fact-check script", "bio-verify", "check constants".
+description: Verify hardcoded biological constants (coords, genes, risk ratios, clinical classes) against Ensembl, ClinVar, ISBT, gnomAD, PanelApp. Use for "fact-check script", "verify claims", "bio-verify", "check constants".
 argument-hint: "[file or glob] [--domain nutrigenomics|blood|hla|traits|carrier|pgx|all] [--fix] [--sweep]"
 effort: high
 ---

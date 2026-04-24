@@ -1,6 +1,6 @@
 ---
 name: upgrade
-description: "Use when: 'audit the codebase', 'find bugs', 'what can be improved across the project'. Full codebase review via Gemini+GPT parallel analysis. Phased: inventory → brainstorm → research → plan → review → implement. NOT for single-change review (use /review) or session quality (use /observe)."
+description: "Full codebase audit via Gemini+GPT parallel analysis (inventory→brainstorm→research→plan→review→implement). Use for 'audit codebase', 'find bugs'. Not for single-change review (/critique) or session quality (/observe)."
 user-invocable: true
 argument-hint: <mode> [project or target]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent]

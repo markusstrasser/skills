@@ -1,6 +1,6 @@
 ---
 name: observe
-description: "Use when: 'what went wrong in recent sessions', 'check session quality', 'retrospective', 'where was time wasted'. Modes: /observe sessions (anti-patterns), /observe architecture (design patterns), /observe supervision (wasted human time), /observe retro (this session)."
+description: "Session retrospectives. Modes: sessions (anti-patterns), architecture (design patterns), supervision (wasted human time), retro (this session). Use for 'what went wrong', 'session quality', 'where was time wasted'."
 user-invocable: true
 argument-hint: <mode> [project] [options...]
 context: fork

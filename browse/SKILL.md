@@ -1,6 +1,6 @@
 ---
 name: browse
-description: Persistent headless browser daemon for web interaction, QA, and scraping. Wraps gstack's browse binary (Playwright-based, Bun-compiled). Use for automated QA workflows, web testing, screenshot verification, and interactive page exploration. Replaces stateless MCP browser calls for multi-step workflows.
+description: Persistent headless browser daemon (Playwright via gstack's browse binary) for QA, scraping, screenshot verification, multi-step web workflows. Replaces stateless MCP browser calls.
 argument-hint: [URL to navigate to, or "status" to check daemon]
 allowed-tools:
   - Bash
