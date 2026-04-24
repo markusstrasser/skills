@@ -1,6 +1,6 @@
 ---
 name: research
-description: "Use when: 'find papers about', 'what does the latest guidance say', 'research X', 'what's known about'. One-shot research with source grading. For cycle/compile/diff/dispatch use /research-ops."
+description: "'find papers about', 'research X', 'what's known about'. One-shot research with source grading. /research-ops for cycles/compile/diff."
 user-invocable: true
 argument-hint: '[question]'
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent, WebSearch, WebFetch]
@@ -336,8 +336,8 @@ Never present inference as sourced fact. Never present training data as retrieve
 $ARGUMENTS
 
 <!-- knowledge-index
-generated: 2026-04-13T03:42:36Z
-hash: fec94825a44e
+generated: 2026-04-24T22:13:28Z
+hash: 1dee9535a3dc
 
 cross_refs: docs/research/*.md, research/*.md, research/adversarial-case-library.md
 sources: 1

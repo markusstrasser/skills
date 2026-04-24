@@ -1,6 +1,6 @@
 ---
 name: modal
-description: "Modal serverless Python cloud compute. Use when writing or debugging Modal scripts, deploying to Modal, or choosing GPU/resource configs. Covers v1.0-v1.4.x API (current as of March 2026)."
+description: "Modal serverless Python. Writing/debugging Modal scripts, deploying, or choosing GPU/resource configs. v1.0–v1.4.x API."
 effort: low
 ---
 
@@ -189,6 +189,69 @@ Subprocess work directories (e.g. `/tmp/sven_workdir`) are NOT preserved across 
 ### Rule: `vol.commit()` only persists what's already on volume
 `vol.commit()` syncs the volume mount to durable storage. It doesn't copy from ephemeral disk. To save a 21GB artifact from `/tmp/`, you must `shutil.copy` it to the volume mount first, THEN `vol.commit()`.
 
+### Rule: `@modal.exit()` requires `@app.cls`, not `@app.function`
+`@modal.exit()` is a lifecycle-method decorator on class methods. A plain `@app.function` does not accept it. To get 30s-grace preemption handling on a `.map()` worker, convert the function to a class:
+
+```python
+@app.cls(...)
+class Runner:
+    state: WorkerState | None = None
+
+    @modal.enter()
+    def _prepare(self) -> None:
+        self.state = None  # reset per container, not per input
+
+    @modal.method()
+    def run(self, unit_id: str) -> dict:
+        self.state = WorkerState.from_context(stage="foo", unit_id=unit_id)
+        try:
+            result = do_work(self.state)
+        except BaseException:
+            emit_step(self.state, "failed", ...)
+            raise
+        # ... commit, mark success, emit "committed"
+        self.state = None  # clear so idle-between-inputs exit handler no-ops
+        return result
+
+    @modal.exit()
+    def _on_exit(self) -> None:
+        if self.state is None or self.state.step in TERMINAL_STEPS:
+            return
+        emergency_save(self.state)
+
+# Caller: runner = Runner(); runner.run.map(inputs, ...)
+```
+
+`@modal.exit()` fires on preemption, NOT on budget kill. 30s grace before SIGKILL. Inside the handler, do NOT `vol.commit()` unconditionally — a large pending diff may overrun the grace window mid-sync and produce a partial durable snapshot. Use dirty-flag logic:
+
+```python
+def emergency_save(state):
+    write_json_atomic(f"_INTERRUPTED.{state.unit_id}.json", state.to_dict())
+    write_worker_state(state)  # update Dict live plane
+    if state.needs_commit:  # main loop set this True after new writes
+        vol.commit()
+```
+
+`@modal.enter()` runs once per container start, not per `.map()` input — containers reuse across inputs. Assignment `self.state = None` in a `finally`-style path at end of `run()` prevents the exit handler from acting on stale state during idle time between inputs.
+
+### Checkpoint durability: `.SUCCESS` sentinels
+Size-only checks on resume are unsafe for large artifacts — a SIGTERM mid-write can leave a truncated file that passes `min_bytes=1024`. Write a sidecar sentinel AFTER `vol.commit()` returns; resume trusts only artifacts with their sentinel:
+
+```python
+# After work + commit:
+vol.commit()
+write_json_atomic(f"{artifact_path}.SUCCESS", {"completed_at": time.time()})
+vol.commit()  # persist the sentinel itself
+
+# On resume:
+def verify_checkpoint(path, require_success_sentinel=True):
+    if not Path(path).exists(): return False
+    if require_success_sentinel and not Path(f"{path}.SUCCESS").exists(): return False
+    return True
+```
+
+The sentinel is atomic relative to the artifact because `vol.commit()` completes before it's written — a partial write never has a sentinel, so resume falls through to rebuild.
+
 ### Mid-step checkpoint pattern
 For subprocess steps >30min, copy partial artifacts to volume during the heartbeat loop:
 
@@ -234,8 +297,52 @@ A timeout equal to the actual runtime kills the subprocess at the finish line. S
 ### Rule: `.map()` containers are invisible without per-trait logging
 A `.map()` fanout over N traits runs N containers. Each has its own PipelineLogger writing to volume. But the volume commit only happens at trait completion. Until the first trait finishes, you have zero visibility into what any container is doing. Add stdout `print()` at step boundaries so `modal app logs` shows step transitions, not just "Starting..."
 
+### Live control plane: `modal.Dict` for per-worker state
+`modal.Dict.from_name(name, create_if_missing=True)` gives a durable key-value store: writes persist across app restarts with a 7-day TTL (TTL resets on any read or write).  `modal.Queue` does NOT persist — cleaned up at app completion; don't use it for checkpointing.
+
+Use for: live per-worker progress state, orchestrator control flags (budget_halt), cross-app counters. Don't use for: large artifacts (KB-scale), append-only provenance (use JSONL on volume).
+
+**Namespace mandatory.** With a 7-day TTL, a key like `f"sbayesrc.{trait_id}"` collides with stale state from a prior failed run — the reconciler would see "already completed" when nothing has run this session. Prefix every live key with a run_id: `f"{run_id}.{stage}.{unit_id}"`. Set `WORKER_RUN_ID` env var once per launch so every container inherits the same scope.
+
+```python
+d = modal.Dict.from_name("worker_state", create_if_missing=True)
+key = f"{run_id}.{stage}.{unit_id}"
+d[key] = {"step": "mcmc_start", "last_heartbeat": time.time(), ...}
+```
+
+Wrap reads in `try/except (modal.exception.AuthError, ConnectionError, KeyError)` — Dict is the live control plane, NOT the source of truth. JSONL on volume is the audit plane. One truth per axis; never write the same fact to both.
+
+### Identity API (v1.4.1, 2026-03)
+`modal.current_container_id` and `modal.current_app_id` do NOT exist on top-level `modal` and are NOT on `modal.functions` either. Use:
+
+- `modal.current_input_id()` — unique per `.map()` input (returns Optional[str], None locally)
+- `modal.current_function_call_id()` — app invocation identity
+- `os.environ.get("MODAL_TASK_ID", "local")` — Modal-runtime-set container identity env var
+
 ### Rule: budget monitoring before launch
 Check Modal Live Usage before launching anything significant. >85% = don't launch long jobs. There's no graceful budget-aware degradation; you hit the limit and everything dies.
+
+### Programmatic spend queries (v1.3.3+, Feb 2026)
+`modal.billing.workspace_billing_report(*, start: datetime, end: Optional[datetime] = None, resolution: str = 'd', tag_names: list[str] | None = None)` returns `list[dict]` with keys `{object_id, description, environment_name, interval_start, cost (Decimal), tags}` on SDK 1.4.1. CLI: `modal billing report --for today --json`.
+
+Cloud billing APIs typically lag 5-15 min. A 60s watchdog poll + 90% threshold can still miss bursts that cross the cap before the poll. Pair polling (belt) with admission control at launch (suspenders).
+
+### Budget defense: sidecar watchdog + halt flag
+The most reliable defense against budget kill is prevention: a separate daemon that polls `workspace_billing_report` and sets a halt flag in `modal.Dict` which every launch path reads before dispatching.
+
+```python
+# Daemon (local process, not on Modal — it'd be killed by the event it detects):
+dict_ = modal.Dict.from_name("orchestrator_state", create_if_missing=True)
+if mtd >= threshold_usd:
+    dict_["budget_halt"] = {"set_at": time.time(), "reason": "...", "remaining_budget": cap - mtd}
+
+# Launcher (orchestrator):
+halt = dict_.get("budget_halt")
+if halt:
+    raise BudgetHaltError(halt["reason"])  # refuse launch cleanly
+```
+
+On launch failure, also inspect the subprocess stderr for `ResourceExhausted` / `quota exceeded` / `workspace budget` / `spend limit`. Do NOT include `auth error` / `unauthenticated` in that signature set — `MODAL_TOKEN_ID` rotation gets misclassified and poisons `orchestrator_state` globally until a human clears it.
 
 ## Failure-Mode Cheatsheet
 
@@ -273,6 +380,9 @@ Check Modal Live Usage before launching anything significant. >85% = don't launc
 21. **`.map()` containers are invisible until they commit** -- PipelineLogger JSONL writes go to volume but commits happen at trait end. 10 containers running for 6h with 0 commits = 0 visibility into what they're doing. Add explicit `print()` at step transitions for stdout trace.
 22. **vol.commit() does not copy from ephemeral disk** -- it syncs the volume mount to durable storage. `shutil.copy` to the volume mount first, then `vol.commit()`. Subprocess output in `/tmp` is NOT saved by a naked `vol.commit()`.
 23. **Artifact file watchdogs are fooled by retry leftovers** -- if a subprocess times out with a 21GB file on ephemeral disk, the retry's new container starts fresh. If the watchdog runs before the retry subprocess touches the dir, it sees `annotation_mb=21793.4` but that's the OLD file from a DIFFERENT container (Modal cleans `/tmp` between retries... usually). Verify via timestamps, not presence.
+
+### Testing preemption handling
+`modal.experimental.simulate_preemption` does NOT exist on SDK 1.4.1 (`ImportError` from `modal.experimental`). To force-test `@modal.exit()` handling, use `modal app stop <app-id>` mid-work — imperfect proxy because it fires the graceful-shutdown path but does NOT validate budget-kill behavior (which SIGKILLs with no handler run).
 
 ## MANDATORY: Test Before Deploying
 

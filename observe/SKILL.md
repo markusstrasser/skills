@@ -1,6 +1,6 @@
 ---
 name: observe
-description: "Session retrospectives. Modes: sessions (anti-patterns), architecture (design patterns), supervision (wasted human time), retro (this session). Use for 'what went wrong', 'session quality', 'where was time wasted'."
+description: "Session retros. Modes: sessions/architecture/supervision/retro. 'what went wrong', 'session quality', 'wasted time'."
 user-invocable: true
 argument-hint: <mode> [project] [options...]
 context: fork

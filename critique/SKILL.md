@@ -1,6 +1,6 @@
 ---
 name: critique
-description: "Review plans, fact-check, close implementations. Modes: model (Gemini+GPT adversarial), verify (fact-check LLM output), close (post-impl tests+review). Use for 'what's wrong', 'review plan', 'fact-check'."
+description: "Adversarial review. Modes: model (Gemini+GPT), verify (fact-check), close (post-impl tests). 'review plan', 'what's wrong', 'fact-check'."
 user-invocable: true
 argument-hint: <mode> [target]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent]

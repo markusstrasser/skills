@@ -29,7 +29,18 @@ llmx svg "prompt" -o out.svg         # SVG output
 ## Vision Analysis
 
 ```bash
-llmx vision file.png -p "describe"          # single image
-llmx vision "frames/*.png" -p "summarize"   # multiple
-llmx vision video.mp4 -p "list UI elements" # video
+llmx vision file.png -p "describe"              # single image
+llmx vision "frames/*.png" -p "summarize"       # multiple
+llmx vision video.mp4 -p "list UI elements"     # video
+llmx vision page.png -p "extract" -o result.md  # -o writes to file (added 2026-04)
 ```
+
+**PDFs** — vision doesn't accept PDFs directly. Convert first:
+```bash
+pdftoppm -png -r 200 report.pdf out
+llmx vision out-*.png -p "transcribe everything"
+```
+
+**Binary file in `-f`** — `llmx chat -f foo.pdf` now detects binary and emits
+a clear error with conversion hints (2026-04). Before that fix, it threw an
+opaque `UnicodeDecodeError`.

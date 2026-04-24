@@ -1,6 +1,6 @@
 ---
 name: bio-verify
-description: Verify hardcoded biological constants (coords, genes, risk ratios, clinical classes) against Ensembl, ClinVar, ISBT, gnomAD, PanelApp. Use for "fact-check script", "verify claims", "bio-verify", "check constants".
+description: Verify hardcoded bio constants (coords, genes, ratios) vs Ensembl/ClinVar/ISBT/gnomAD/PanelApp. 'fact-check script', 'verify claims', 'bio-verify'.
 argument-hint: "[file or glob] [--domain nutrigenomics|blood|hla|traits|carrier|pgx|all] [--fix] [--sweep]"
 effort: high
 ---
