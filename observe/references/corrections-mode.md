@@ -38,7 +38,7 @@ Append the deterministic correction signals to `signals.jsonl`, then append clas
 
 ## Step C4: Check Promotion Gates
 
-Before promoting any candidate to improvement-log.md, ALL three constitutional gates must pass:
+Before promoting any candidate to improvement-log.md, ALL three governance gates must pass:
 1. **Recurs 2+ sessions** -- check recurrence count in `candidates.jsonl`
 2. **Not already covered** -- grep existing rules/ and hooks for the pattern
 3. **Checkable predicate OR architectural change** -- is this enforceable?

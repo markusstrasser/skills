@@ -2,7 +2,7 @@
 # permission-auto-allow.sh — PermissionRequest hook.
 # Auto-approves known-safe read-only tools to reduce permission fatigue.
 # Deployed disabled (not in settings.json) until hook telemetry confirms
-# permission prompt frequency justifies it. Constitution principle #3.
+# permission prompt frequency justifies it. the autonomy boundary in GOALS.md.
 #
 # Exit 0 with JSON {"hookSpecificOutput":{"hookEventName":"PermissionRequest",
 #   "decision":{"behavior":"allow"}}} to auto-allow.

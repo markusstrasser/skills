@@ -150,7 +150,7 @@ Validate Gemini output against transcript, check session UUIDs, and stage the re
 
 **Judgment calls when staging:**
 - Gemini flags "unprompted commit" as HIGH -- false positive, global CLAUDE.md authorizes auto-commit
-- `done_with_denials` status is NOT a failure -- it's a constitutional approval gate
+- `done_with_denials` status is NOT a failure -- it's a governance approval gate
 - "Agent paused before executing" -- rubber-stamp approvals are intentional oversight, not sycophancy
 - Promotion criteria: recurs 2+ sessions, not already covered, checkable predicate or architectural change
 - Novel high-severity findings can be promoted immediately (don't wait for recurrence)
@@ -240,7 +240,7 @@ Load `references/output-template.md` for proposal template. Sort proposals by pr
 
 Write to `$ARTIFACT_DIR/YYYY-MM-DD.md`. Include header from `references/output-template.md`.
 
-**Do NOT:** implement anything, write to improvement-log.md, modify constitution/GOALS.md, propose things in backlog without marking KNOWN.
+**Do NOT:** implement anything, write to improvement-log.md, modify GOALS.md, propose things in backlog without marking KNOWN.
 
 **DO:** include at least one wild card challenging a current assumption, name the system's trajectory, flag the single highest-leverage abstraction.
 

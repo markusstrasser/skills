@@ -52,22 +52,13 @@ The shared packet layer generalizes mechanics only:
 
 It does **not** generalize task-specific file selection. Builders still decide what belongs in context.
 
-## Constitutional Preamble (Script Handles This)
+## Goals & Governance Preamble (Script Handles This)
 
-The dispatch script auto-injects constitutional preamble. For manual dispatch, find and inject it yourself:
+The dispatch script auto-injects the project's goals + governance doc as preamble. For manual dispatch, find and inject it yourself:
 
 ```bash
-# Check for project principles
-CONSTITUTION=$(find . -maxdepth 3 -name "CONSTITUTION.md" 2>/dev/null | head -1)
-if [ -z "$CONSTITUTION" ]; then
-  CLAUDE_MD=$(find . -maxdepth 1 -name "CLAUDE.md" | head -1)
-  if [ -n "$CLAUDE_MD" ] && grep -q "^## Constitution" "$CLAUDE_MD"; then
-    CONSTITUTION="$CLAUDE_MD"  # Constitution is inline
-  fi
-fi
 GOALS=$(find . -maxdepth 3 -name "GOALS.md" 2>/dev/null | head -1)
 ```
 
-- **If constitution found:** Inject as preamble into ALL context bundles.
-- **If GOALS.md exists:** Inject into GPT context (quantitative alignment check) and Gemini context (strategic coherence).
-- **If neither exists:** Proceed anyway -- cross-model review still has value without constitutional grounding.
+- **If GOALS.md found:** Inject as preamble into ALL context bundles (one block covers both stated goals and operating principles).
+- **If GOALS.md missing:** Proceed anyway — cross-model review still has value without project-specific grounding.

@@ -6,8 +6,8 @@
 
 | Axis | Model | What it checks | When to include |
 |------|-------|---------------|-----------------|
-| `arch` | Gemini 3.1 Pro | Patterns, architecture, cross-reference, constitutional alignment | Always (default) |
-| `formal` | GPT-5.4 (high reasoning) | Math, logic, cost-benefit, testable predictions, quantified constitutional coverage | Always (default) |
+| `arch` | Gemini 3.1 Pro | Patterns, architecture, cross-reference, principles alignment | Always (default) |
+| `formal` | GPT-5.4 (high reasoning) | Math, logic, cost-benefit, testable predictions, quantified principles coverage | Always (default) |
 | `domain` | Gemini 3.1 Pro | Domain fact correctness — citations, API endpoints, schemas, biological claims, numbers | Domain-dense plans; skip for pure code reviews |
 | `mechanical` | Gemini Flash | Stale refs, wrong paths, naming inconsistencies, duplicated content | Large codebases; include grep results — Flash hallucinates about fixed state (~13%) |
 | `alternatives` | Kimi K2.5 | 3-5 genuinely different approaches with different mechanisms | Architecture decisions; SEPARATE from convergent review (never mix critique + brainstorm) |
@@ -35,7 +35,7 @@ Required sections:
 2. What Was Missed — cite files, line ranges, gaps
 3. Better Approaches — Agree (refine) / Disagree (alternative) / Upgrade
 4. What I'd Prioritize Differently — top 5, testable criteria
-5. Constitutional Alignment — violations and well-served principles (or internal consistency if no constitution)
+5. Goals & Principles Alignment — violations and well-served principles (or internal consistency if no GOALS.md)
 6. Blind Spots In My Own Analysis — where to distrust Gemini
 
 ### GPT-5.4 — Quantitative/Formal Analysis (formal axis)
@@ -46,7 +46,7 @@ Required sections:
 1. Logical Inconsistencies — contradictions, assumptions, invalid inferences, math verification
 2. Cost-Benefit Analysis — impact, maintenance burden, composability, risk. Filter on ongoing drag, NOT creation effort
 3. Testable Predictions — falsifiable predictions with success criteria
-4. Constitutional Alignment (Quantified) — per-principle coverage 0-100%, gaps, fixes
+4. Goals & Principles Alignment (Quantified) — per-principle coverage 0-100%, gaps, fixes
 5. My Top 5 Recommendations — measurable impact, quantitative justification, verification metrics
 6. Where I'm Likely Wrong — GPT-5.4 known biases: confident fabrication, overcautious scope-limiting, production-grade creep
 
@@ -130,7 +130,7 @@ Automatic with `--extract`: the script tags numeric thresholds (e.g., `>=20% AUP
 - **Model agreement = proof** — Agreement is evidence, not proof. Verify against source code.
 - **Same prompt to both models** — Gemini = patterns, GPT = quantitative/formal. Different strengths need different prompts.
 - **Writing to /tmp** — Persist to `.model-review/YYYY-MM-DD-topic/`.
-- **Skipping constitutional check** — Unanchored reviews drift into generic advice.
+- **Skipping governance check** — Unanchored reviews drift into generic advice.
 - **Mixing review and brainstorming** — Convergent only. Use `/brainstorm` for divergent.
 - **Priming tool names** — Turns critique into evaluation. Use `alternatives` axis separately.
 - **Scale-ambiguous context** — Both models converge on the same wrong answer from shared misleading context.

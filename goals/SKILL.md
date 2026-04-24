@@ -1,6 +1,6 @@
 ---
 name: goals
-description: Elicit, clarify, or revise project goals AND constitutional principles through structured questioning. Produces or updates a single docs/GOALS.md covering mission, strategy, success metrics, operating principles, autonomy boundaries, and governance — one source of truth. Use when starting a new project, pivoting strategy, revising operating principles, or when goals/governance feel unclear.
+description: Elicit, clarify, or revise project goals AND operating principles through structured questioning. Produces or updates a single docs/GOALS.md covering mission, strategy, success metrics, operating principles, autonomy boundaries, and governance — one source of truth. Use when starting a new project, pivoting strategy, revising operating principles, or when goals/governance feel unclear.
 user-invocable: true
 disable-model-invocation: true
 effort: medium
@@ -10,7 +10,7 @@ effort: medium
 
 You are helping the human clarify what they want from this project (goals: WHAT to optimize for) AND how agents should operate within it (governance: HOW to behave). Both dimensions go into a single `docs/GOALS.md`. CLAUDE.md / AGENTS.md gets at most a short pointer.
 
-**Why one doc:** Split governance (separate constitution + GOALS.md) drifts. Two documents expressing related ideas with no sync mechanism diverge over time. Empirically observed across genomics + evo before the 2026-04-24 merge. The previous standalone `/constitution` skill was folded into this one for the same reason.
+**Why one doc:** Two governance documents expressing related ideas with no sync mechanism diverge over time. One source of truth wins.
 
 ## Modes
 
@@ -45,7 +45,7 @@ The report reveals the **live system's contradictions** — not just files disag
 
 - **Explicit feedback** (`#f` tags) — ground-truth corrections the user made during sessions
 - **Corrections** — "no", "don't", "stop", "wrong" — agent behavior the user pushed back on. Each correction is evidence of a missing principle.
-- **Redirects** — "actually", "instead", "let's not" — softer course corrections that reveal preference the constitution hasn't captured.
+- **Redirects** — "actually", "instead", "let's not" — softer course corrections that reveal preference GOALS.md hasn't captured.
 - **Recurring themes** — what words keep appearing in corrections (these are the real priorities)
 - **Topic distribution** — time and cost allocation across projects (revealed preferences)
 - **Hook signals** — systematic blocks/warnings (architectural steering already in place)
@@ -62,7 +62,6 @@ Read everything that reveals intent — both human-side and agent-side:
 <exploration_checklist>
 - `docs/GOALS.md` (if exists — this is a revision, not creation)
 - CLAUDE.md / AGENTS.md (note which is the symlink target)
-- Any legacy constitution: `.claude/rules/constitution.md`, `## Constitution` section in CLAUDE.md, `<constitution>` XML tag — flag for merging
 - `.claude/rules/` (all files — domain-specific rules, not governance)
 - `.claude/settings.json` (hooks — these are architectural enforcement)
 - `.claude/skills/` and `.claude/agents/` (operational extensions)
@@ -73,11 +72,7 @@ Read everything that reveals intent — both human-side and agent-side:
 - **Phase 0 steering report** (corrections, feedback, topic drift, cost allocation)
 </exploration_checklist>
 
-For the philosophical framework, read `~/Projects/agent-infra/`:
-- constitutional-delta.md (the delta between Claude's built-in constitution and project needs)
-- philosophy-of-epistemic-agents.md (epistemic foundations)
-- frontier-agentic-models.md (what research says about agent reliability)
-- agent-failure-modes.md (documented failure modes)
+For documented agent failure modes, read `~/Projects/agent-infra/agent-failure-modes.md`.
 
 Pay attention to the gap between stated and revealed: if GOALS.md says "X is primary" but the last 20 commits / recent corrections target Y, that gap matters more than either statement alone.
 
@@ -86,7 +81,7 @@ Pay attention to the gap between stated and revealed: if GOALS.md says "X is pri
 Identify every tension, contradiction, or ambiguity that would cause an autonomous agent to make inconsistent decisions. Mine three sources:
 
 **A. Files vs. files** — contradictions within the existing instruction surface.
-**B. Files vs. behavior** — steering-report corrections that contradict stated principles. If the constitution says "be autonomous" but the user keeps correcting agent behavior, the autonomy boundary is wrong.
+**B. Files vs. behavior** — steering-report corrections that contradict stated principles. If GOALS.md says "be autonomous" but the user keeps correcting agent behavior, the autonomy boundary is wrong.
 **C. Files vs. allocation** — stated priorities vs. where time/money actually goes.
 
 Common tensions across both dimensions:
@@ -215,19 +210,6 @@ When `docs/GOALS.md` already exists:
 4. Ask targeted questions about the drift only (not the whole questionnaire)
 5. Update only the sections that changed
 6. Add a dated entry to the revision log explaining what changed and why
-
-## Merging Legacy Split-Governance Projects
-
-For projects that currently have BOTH a separate constitution (either `.claude/rules/constitution.md` or inline `## Constitution` section in CLAUDE.md) AND a `docs/GOALS.md`:
-
-1. **Identify unique content in each.** Most of the constitution will already be expressed in GOALS.md under Strategy or Success Metrics. Usually only 3-6 items are genuinely unique (fail-loud-on-drift, architectural-enforcement, delete-superseded-paths, etc.).
-2. **Fold uniques into GOALS.md** under the appropriate sections: new ones become Operating Principles; hard limits go under Architecture Boundary; pre-registered tests under Success Metrics; autonomy/change-control under Governance.
-3. **Drop redundant content.** Mission/strategy duplicates, session-level principles (move to CLAUDE.md if not already there).
-4. **Delete the standalone constitution file OR replace the `## Constitution` section in CLAUDE.md** with a short pointer.
-5. **Update the auto-load table** in CLAUDE.md if the constitution was in `.claude/rules/`.
-6. **Commit with evidence.** Commit message should cite the specific overlap that justified the merge.
-
-Reference implementations: genomics (2026-04-24, commit `6a8c094f`), evo (2026-04-24, commit `5978d661`).
 
 ## Cross-Project Awareness
 

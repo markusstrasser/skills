@@ -71,8 +71,8 @@ Parse `$ARGUMENTS` for these optional flags (order doesn't matter, remaining tex
 ## Pre-Flight
 
 1. **Dedup check:** Search `.brainstorm/` for synthesis.md files < 24h old on same topic. Check `git log` for cross-session brainstorms. If space already explored, target "one non-duplicate survivor or clean exhaustion proof."
-2. **Constitutional check:** Find CONSTITUTION.md or constitution section in CLAUDE.md + GOALS.md. Inject as preamble so generation stays within project principles.
-3. **Packet setup:** Reuse the shared packet spine for topic, constitution/goals, recent incidents, and prior brainstorm artifacts. Do not hand-roll an unbounded context blob when the packet builder exists.
+2. **Goals & governance check:** Find `docs/GOALS.md`. Inject as preamble so generation stays within project principles.
+3. **Packet setup:** Reuse the shared packet spine for topic, goals/governance, recent incidents, and prior brainstorm artifacts. Do not hand-roll an unbounded context blob when the packet builder exists.
 4. **Output setup:** Create `$BRAINSTORM_DIR` with date-slug-id naming.
 
 See `references/synthesis-templates.md` for pre-flight scripts.

@@ -33,7 +33,7 @@ biases and workflow anti-patterns, not raw transport flags.
 - **Same prompt to both models.** Gemini = patterns, GPT = quantitative/formal. Different strengths need different prompts.
 - **Writing to /tmp.** Persist to `.model-review/YYYY-MM-DD-topic/`.
 - **Bare date directories.** Always append topic slug to avoid same-day collisions.
-- **Skipping constitutional check.** Unanchored reviews drift into generic advice.
+- **Skipping the goals/governance preamble.** Unanchored reviews drift into generic advice.
 - **Mixing review and brainstorming.** Convergent only. Use `/brainstorm` for divergent.
 - **Priming tool names in review prompt.** Turns critique into evaluation. Use `alternatives` axis separately.
 - **Scale-ambiguous context.** Both models converge on the same wrong answer from shared misleading context.

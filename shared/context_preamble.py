@@ -15,15 +15,7 @@ All code, plans, and features in this project are developed by AI agents, not hu
 
 
 def find_governance(project_dir: Path) -> str | None:
-    """Locate the project's merged goals + governance doc.
-
-    The single-doc convention (2026-04-24) is `docs/GOALS.md`. Falls back
-    to root `GOALS.md` for projects without a docs/ directory. Legacy
-    constitution locations (`.claude/rules/constitution.md`, inline
-    `## Constitution` section in CLAUDE.md, `<constitution>` XML tag) are
-    no longer searched — projects with split governance should be merged
-    via the `/goals` skill.
-    """
+    """Return path to the project's `docs/GOALS.md` (or root `GOALS.md`)."""
     for candidate in (project_dir / "docs" / "GOALS.md", project_dir / "GOALS.md"):
         if candidate.exists():
             return str(candidate)

@@ -14,7 +14,7 @@ Concrete examples from improvement-log ground the judge -- see `references/groun
 6. **Missing disconfirmation** [W:3] -- Research without contradictory evidence search
 7. **Source grading gaps** [W:2] -- Claims in research files without provenance tags
 8. **First-answer convergence** [W:4, mandatory] -- Implemented the first approach without generating alternatives on a task with a genuine design space. Not every task needs divergence.
-9. **Missing phase artifacts** [W:3] -- Design/architecture decision (high uncertainty + high irreversibility) without auditable phase artifacts (divergent-options + selection-rationale). Constitution Principle #6.
+9. **Missing phase artifacts** [W:3] -- Design/architecture decision (high uncertainty + high irreversibility) without auditable phase artifacts (divergent-options + selection-rationale). GOALS.md operating principles.
 
 ## MAST-Informed (10-14, Berkeley NeurIPS 2025, kappa=0.88)
 

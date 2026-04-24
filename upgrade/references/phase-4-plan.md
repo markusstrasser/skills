@@ -23,7 +23,7 @@ Write a structured implementation plan. Use `/plan` or write directly to `.claud
 
 ## Implementation Order
 ## QA Integration (per-analysis: @stage, validate(), canary impact)
-## Constitutional Alignment (per-principle assessment)
+## Goals & Principles Alignment (per-principle assessment)
 ## Falsification Criteria (per-analysis: what would disprove this)
 ```
 

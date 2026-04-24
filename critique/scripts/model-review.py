@@ -59,7 +59,7 @@ _reexec_under_llmx_python_if_needed()
 import shared.llm_dispatch as dispatch_core
 from shared.context_budget import enforce_budget
 from shared.context_packet import BudgetPolicy, ContextPacket, FileBlock, PacketSection, TextBlock
-from shared.context_preamble import build_review_preamble_blocks, find_governance as shared_find_governance
+from shared.context_preamble import build_review_preamble_blocks, find_governance
 from shared.context_renderers import write_packet_artifact
 from shared.file_specs import parse_file_spec, read_file_excerpt
 
@@ -75,7 +75,7 @@ FINDING_SCHEMA = {
                 "properties": {
                     "category": {
                         "type": "string",
-                        "enum": ["bug", "logic", "architecture", "missing", "performance", "security", "style", "constitutional"],
+                        "enum": ["bug", "logic", "architecture", "missing", "performance", "security", "style", "principles"],
                     },
                     "severity": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
                     "title": {"type": "string", "description": "One-line summary"},
@@ -120,8 +120,8 @@ For each recommendation, either: Agree (with refinements), Disagree (with altern
 ## 4. What I'd Prioritize Differently
 Your ranked list of the 5 most impactful changes, with testable verification criteria.
 
-## 5. Constitutional Alignment
-{constitution_instruction}
+## 5. Goals & Principles Alignment
+{principles_instruction}
 
 ## 6. Blind Spots In My Own Analysis
 What am I (Gemini) likely getting wrong? Where should you distrust my assessment?""",
@@ -148,8 +148,8 @@ For each proposed change: expected impact, maintenance burden, composability, ri
 ## 3. Testable Predictions
 Convert vague claims into falsifiable predictions with success criteria. If a claim can't be made testable, flag it.
 
-## 4. Constitutional Alignment (Quantified)
-{constitution_instruction}
+## 4. Goals & Principles Alignment (Quantified)
+{principles_instruction}
 
 ## 5. My Top 5 Recommendations (different from the originals)
 Ranked by measurable impact. Each must have: (a) what, (b) why with quantitative justification, (c) how to verify with specific metrics.
@@ -470,10 +470,6 @@ def rerun_axis_with_flash(
     )
 
 
-def find_governance(project_dir: Path) -> str | None:
-    return shared_find_governance(project_dir)
-
-
 def build_context(
     review_dir: Path,
     project_dir: Path,
@@ -568,7 +564,7 @@ def dispatch(
     """Fire N llmx API calls in parallel (one per axis), wait, return results."""
     today = date.today().isoformat()
 
-    const_instruction = {
+    principles_instruction = {
         "arch": (
             "Where does the reviewed work violate or neglect the project's stated goals and operating principles? Which principles are well-served?"
             if has_governance
@@ -590,7 +586,7 @@ def dispatch(
         prompts[axis] = axis_def["prompt"].format(
             date=today,
             question=axis_question,
-            constitution_instruction=const_instruction.get(axis, ""),
+            principles_instruction=principles_instruction.get(axis, ""),
         )
 
     def _run_axis(axis: str) -> tuple[str, dict]:
@@ -1397,7 +1393,7 @@ def main() -> int:
     )
     parser.add_argument(
         "question", nargs="?",
-        default="Review this for logical gaps, missed edge cases, and constitutional alignment.",
+        default="Review this for logical gaps, missed edge cases, and principles alignment.",
         help="Review question for all models",
     )
 
