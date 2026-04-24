@@ -49,6 +49,11 @@ def _open_db(path: Path, *, wal: bool = True) -> sqlite3.Connection:
         db.execute("PRAGMA journal_mode=WAL")
     return db
 
+
+def _table_columns(db: sqlite3.Connection, table: str) -> set[str]:
+    """Return available column names for schema-drift-tolerant queries."""
+    return {row["name"] for row in db.execute(f"PRAGMA table_info({table})")}
+
 # Structural features extracted per session
 FEATURE_NAMES = [
     "tool_diversity",       # unique tools / total tool calls
@@ -230,19 +235,21 @@ def main():
         sys.exit(1)
 
     db = _open_db(DB_PATH)
+    session_columns = _table_columns(db, "sessions")
+    cost_expr = "s.cost_usd" if "cost_usd" in session_columns else "0.0"
 
     since = (datetime.now(timezone.utc) - timedelta(days=args.days)).isoformat()
     # agentlogs schema: derive tools_used as a JSON array of distinct tool
     # names from tool_calls joined via runs. commits come from the git_commits
     # table on vendor_session_id.
-    query = """
+    query = f"""
         SELECT
             s.session_uuid AS uuid,
             s.project_slug AS project,
             s.start_ts,
             s.first_message,
             s.duration_min,
-            s.cost_usd,
+            {cost_expr} AS cost_usd,
             (SELECT json_group_array(tool_name) FROM (
                 SELECT DISTINCT tc.tool_name
                 FROM tool_calls tc JOIN runs r ON r.run_id = tc.run_id

@@ -1,6 +1,6 @@
 ---
 name: analyze
-description: "Root-cause analysis. Modes: causal (why), dag (regression), hypotheses (competing), investigate (forensic). Use for 'why did X happen', 'root cause', 'control for confounders'. Local only."
+description: "Root-cause analysis — causal/dag/hypotheses/investigate modes. Use for 'why did X happen', 'regression', 'confounders'. Local only."
 user-invocable: true
 argument-hint: <mode> [question or target]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit]

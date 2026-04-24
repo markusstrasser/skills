@@ -1,6 +1,6 @@
 ---
 name: life-science-research
-description: Route biomedical questions across ClinVar, gnomAD, Ensembl, GWAS, GTEx, Open Targets, ChEMBL, PharmGKB, UniProt, AlphaFold, PDB, PubMed, ClinicalTrials, bioRxiv, and related public APIs. Use for source lookup or multi-lane evidence synthesis.
+description: Biomedical source routing — ClinVar, gnomAD, Ensembl, GTEx, OpenTargets, ChEMBL, PharmGKB, UniProt, PDB, PubMed, bioRxiv. Source lookup + multi-lane synthesis.
 argument-hint: "[question] [--lane genetics|variant|expression|pathway|structure|chemistry|clinical|literature|omics] [--personal]"
 effort: high
 ---

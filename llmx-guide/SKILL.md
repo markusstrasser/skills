@@ -1,6 +1,6 @@
 ---
 name: llmx-guide
-description: Critical gotchas when calling llmx from Python or Bash. Non-obvious bugs and incompatibilities. Use when writing code that calls llmx, debugging llmx failures, or choosing llmx model/provider options.
+description: llmx CLI gotchas (Python/Bash). Use when writing llmx calls, debugging llmx failures, or choosing model/provider options.
 user-invocable: true
 argument-hint: '[model name or issue description]'
 effort: medium

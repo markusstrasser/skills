@@ -1,0 +1,36 @@
+{
+  "name": "life-science-research",
+  "kind": "reference",
+  "intent_class": "reference",
+  "summary": "Portable biomedical evidence routing across genetics, expression, pathways, structure, pharmacology, clinical evidence, literature, and omics databases.",
+  "entrypoint": {
+    "type": "skill_doc",
+    "path": "life-science-research/SKILL.md"
+  },
+  "modes": {
+    "default": {
+      "intent_class": "reference",
+      "requires_packet": false,
+      "requires_gpt": false,
+      "artifacts": [
+        "evidence_synthesis.md"
+      ]
+    }
+  },
+  "uses": {
+    "dispatch_profiles": [
+      "deep_review"
+    ],
+    "packet_builders": [],
+    "artifact_schemas": []
+  },
+  "follow_on": [
+    "bio-verify",
+    "research",
+    "epistemics",
+    "source-grading"
+  ],
+  "references": [
+    "life-science-research/SKILL.md"
+  ]
+}

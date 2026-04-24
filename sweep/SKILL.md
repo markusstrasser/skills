@@ -1,6 +1,6 @@
 ---
 name: sweep
-description: "Cheap-model codebase consistency scan via Gemini Flash — pattern drift, convention violations, config misalignment. Git-change-driven. Use for 'check inconsistencies', 'sweep codebase', 'what diverged'."
+description: "Codebase consistency scan (Flash classifier). Pattern/convention/config drift, function divergence. 'sweep', 'inconsistencies'."
 user-invocable: true
 argument-hint: "[axes...] [--depth N] [--path dir]"
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent]

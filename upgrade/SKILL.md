@@ -1,6 +1,6 @@
 ---
 name: upgrade
-description: "Full codebase audit via Gemini+GPT parallel analysis (inventory→brainstorm→research→plan→review→implement). Use for 'audit codebase', 'find bugs'. Not for single-change review (/critique) or session quality (/observe)."
+description: "Full codebase audit, Gemini+GPT (inventory→plan→review→implement). 'audit codebase', 'find bugs'. Not /critique or /observe."
 user-invocable: true
 argument-hint: <mode> [project or target]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent]
