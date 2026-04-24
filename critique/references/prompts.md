@@ -35,8 +35,8 @@ For each recommendation, either: Agree (with refinements), Disagree (with altern
 ## 4. What I'd Prioritize Differently
 Your ranked list of the 5 most impactful changes, with testable verification criteria.
 
-## 5. Constitutional Alignment
-$([ -n "$CONSTITUTION" ] && echo "Where does the reviewed work violate or neglect stated principles? Which principles are well-served?" || echo "No constitution provided — assess internal consistency only.")
+## 5. Goals & Principles Alignment
+$([ -n "$GOALS" ] && echo "Where does the reviewed work violate or neglect stated principles? Which principles are well-served?" || echo "No project goals/governance provided — assess internal consistency only.")
 
 ## 6. Blind Spots In My Own Analysis
 What am I (Gemini) likely getting wrong? Where should you distrust my assessment?
@@ -67,8 +67,8 @@ For each proposed change: expected impact, maintenance burden, composability, ri
 ## 3. Testable Predictions
 Convert vague claims into falsifiable predictions with success criteria. If a claim can't be made testable, flag it.
 
-## 4. Constitutional Alignment (Quantified)
-$([ -n "$CONSTITUTION" ] && echo "For each constitutional principle: coverage score (0-100%), specific gaps, suggested fixes." || echo "No constitution provided — assess internal logical consistency.")
+## 4. Goals & Principles Alignment (Quantified)
+$([ -n "$GOALS" ] && echo "For each stated principle: coverage score (0-100%), specific gaps, suggested fixes." || echo "No project goals/governance provided — assess internal logical consistency.")
 
 ## 5. My Top 5 Recommendations (different from the originals)
 Ranked by measurable impact. Each must have: (a) what, (b) why with quantitative justification, (c) how to verify with specific metrics.

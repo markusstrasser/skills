@@ -225,7 +225,7 @@ If user approves a candidate:
 - Don't suggest MCP tools for things better as bash aliases.
 - Frequency matters more than complexity.
 - No strong candidates? Say so. Don't fabricate.
-- Cross-check 10-use threshold from constitution.
+- Cross-check 10-use threshold from GOALS.md.
 
 ---
 
@@ -352,7 +352,7 @@ Item IDs: monotonic M001, M002... WIP caps enforce flow:
 
 **Autonomous:** meta-only files, advisory hooks, measurement scripts, retry transient failures, finding triage, rule additions (2+ recurrence).
 **Propose only:** changes to intel/selve/genomics/skills, shared hooks/skills, new pipelines, structural changes, multiple viable approaches.
-**Never:** constitution/GOALS.md, capital deployment, external contacts, shared infra deployment.
+**Never:** GOALS.md, capital deployment, external contacts, shared infra deployment.
 
 ### Error Recovery
 

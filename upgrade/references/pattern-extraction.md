@@ -32,7 +32,7 @@ For each rule added to CLAUDE.md or rules/ within the window:
 | no-git-add-A | 03-10 | 100% | 90% | 85% | ~60d | Rule is working |
 ```
 
-Rules with half-life <14 days need hook promotion. Rules with half-life >30 days are fine as instructions. This directly validates the constitution's "architecture over instructions" principle.
+Rules with half-life <14 days need hook promotion. Rules with half-life >30 days are fine as instructions. This directly validates the "architectural enforcement beats reminders" operating principle in GOALS.md.
 
 ## 2c. Improvement-Log Cycle Time
 

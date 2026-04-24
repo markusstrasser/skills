@@ -58,7 +58,7 @@ Every extracted item gets a verdict. No item left undispositioned.
 |-----|--------------|-------------|--------|
 | G1  | Prediction ledger | INCLUDE -- Tier 1 | Both models, verified gap |
 | G2  | Silent except blocks | INCLUDE -- Tier 6 | Verified in signal_scanner.py |
-| G3  | DuckDB > vector DB | INCLUDE -- YAGNI | Constitutional alignment |
+| G3  | DuckDB > vector DB | INCLUDE -- YAGNI | Goals & principles alignment |
 | P1  | Universe survivorship | INCLUDE -- Tier 4 | Verified, no PIT table exists |
 | P2  | first_seen_date | INCLUDE -- Tier 1 | Verified, downloads lack it |
 | P3  | FDR control | DEFER | Needs experiment registry first |

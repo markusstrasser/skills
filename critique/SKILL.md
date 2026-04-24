@@ -51,7 +51,7 @@ Write review material to a single context file.
 
 This prevents the #1 review failure mode: models optimizing for the wrong scale. Evidence: selve UMLS review (2026-04-06) — GPT scored a plan 27/100 as "over-engineered for 105 personal entities" when the actual scope was multi-user scalable.
 
-**Constitutional anchoring:** Check for constitution (`## Constitution` in CLAUDE.md) and GOALS.md. Include as preamble if found.
+**Goals & governance anchoring:** Check for `docs/GOALS.md`. Include as preamble if found.
 
 See `references/context-assembly.md` for detailed context gathering (narrow, broad, auto-assembled).
 
@@ -73,7 +73,7 @@ Common review biases — check your context for these before analysis:
 
 ### 2. Dispatch
 
-**Always use the script.** It handles: context assembly, constitutional preamble injection, parallel dispatch to Gemini + GPT via the shared dispatch core, extraction, and disposition generation.
+**Always use the script.** It handles: context assembly, goals/governance preamble injection, parallel dispatch to Gemini + GPT via the shared dispatch core, extraction, and disposition generation.
 
 ```bash
 uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \

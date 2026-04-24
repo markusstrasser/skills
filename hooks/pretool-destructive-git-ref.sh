@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # pretool-destructive-git-ref.sh — Warn on destructive git ops with unstable refs
-# in multi-agent sessions. ADVISORY-FIRST per Constitution §10 (fail open).
+# in multi-agent sessions. ADVISORY-FIRST per advisory-first (fail open).
 # Promotion to blocking (exit 2) requires baseline FP measurement.
 #
 # Triggered: PreToolUse:Bash globally (~/.claude/settings.json)

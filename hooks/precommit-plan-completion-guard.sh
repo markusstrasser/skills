@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # precommit-plan-completion-guard.sh — Detect "Status: completed" on plans with
-# unchecked items. ADVISORY-FIRST per Constitution §10. Triggered as
+# unchecked items. ADVISORY-FIRST (fail open). Triggered as
 # PreToolUse:Bash hook on `git commit*` invocations.
 #
 # Detects: any staged file matching docs/ops/plans/**/*.md or .claude/plans/**/*.md

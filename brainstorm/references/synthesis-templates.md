@@ -135,16 +135,9 @@ Also check git for cross-session brainstorms:
 git log --oneline -10 --all | grep -i "brainstorm"
 ```
 
-### Constitutional Check
+### Goals & Governance Check
 
 ```bash
-CONSTITUTION=$(find . -maxdepth 3 -name "CONSTITUTION.md" 2>/dev/null | head -1)
-if [ -z "$CONSTITUTION" ]; then
-  CLAUDE_MD=$(find . -maxdepth 1 -name "CLAUDE.md" | head -1)
-  if [ -n "$CLAUDE_MD" ] && grep -q "^## Constitution" "$CLAUDE_MD"; then
-    CONSTITUTION="$CLAUDE_MD"
-  fi
-fi
 GOALS=$(find . -maxdepth 3 -name "GOALS.md" 2>/dev/null | head -1)
 ```
 

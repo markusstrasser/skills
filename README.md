@@ -17,10 +17,10 @@ All three tools discover skills via user-level symlinks pointing here:
 | Skill | What it does | Portability |
 |-------|-------------|-------------|
 | `causal-check` | Causal inference discipline. Shape-match explanations to observations, define the null. | Portable |
-| `constitution` | Elicit project goals and constitutional principles through structured questionnaire. | Portable |
 | `epistemics` | Bio/medical/scientific evidence hierarchy and anti-hallucination rules. | Portable |
+| `life-science-research` | Route biomedical questions across genetics, expression, pathways, structure, pharmacology, clinical evidence, literature, and omics sources. | Portable |
 | `source-grading` | NATO Admiralty System (A-F reliability, 1-6 credibility). For OSINT, forensic, legal work. | Portable |
-| `goals` | Elicit, clarify, or revise project goals. Produces or updates GOALS.md. | Portable |
+| `goals` | Elicit, clarify, or revise project goals AND operating principles through structured questioning. Produces or updates docs/GOALS.md (one source of truth for goals + governance). | Portable |
 | `investigate` | Deep forensic investigation. Fraud detection, OSINT, billing audits. Adversarial, cross-domain. | Portable |
 | `competing-hypotheses` | Analysis of Competing Hypotheses (ACH). Bayesian LLR scoring. | Mostly portable |
 | `entity-management` | Versioned knowledge files for entities (people, companies, genes, drugs). | Mostly portable |
@@ -34,6 +34,21 @@ All three tools discover skills via user-level symlinks pointing here:
 | `session-analyst` | Analyzes session transcripts for behavioral anti-patterns. Dispatches to Gemini. | Claude-heavy |
 | `project-upgrade` | Autonomous codebase improvement via Gemini structured analysis. | Claude-heavy |
 | `debug-mcp-servers` | Debug MCP server loading issues in Claude Code. | Claude-only |
+
+## Life Science Source Skills
+
+The Life Science Research bundle is hierarchical to stay inside Claude Code's
+skill-description budget. `life-science-research` is the only top-level skill.
+Its source-specific lookup recipes live under
+`life-science-research/sources/*-skill/` and are loaded on demand for AlphaFold,
+Bgee, BindingDB, BioBank Japan PheWAS, bioRxiv/medRxiv,
+BioStudies/ArrayExpress, cBioPortal, CELLxGENE, ChEBI, ChEMBL, CIViC,
+ClinicalTrials.gov, ClinVar, EFO, ENCODE, Ensembl, EpiGraphDB, eQTL Catalogue,
+EVA, FinnGen, Genebass, gnomAD, GTEx, GWAS Catalog, HMDB, Human Protein Atlas,
+IPD, MetaboLights, MGnify, NCBI BLAST, NCBI Clinical Tables, NCBI Datasets,
+NCBI Entrez, NCBI PMC, Open Targets, PharmGKB, PRIDE, ProteomeXchange,
+PubChem, QuickGO, RCSB PDB, Reactome, Rhea, RNAcentral, STRING, TPMI,
+UKB-TOPMed, and UniProt.
 
 ## Hooks
 
@@ -53,6 +68,18 @@ Skills are discovered automatically via the symlinks above. For per-project sele
 ```bash
 ln -s ~/Projects/skills/researcher /your-project/.claude/skills/researcher
 ```
+
+For this machine, sync the intended user-level symlink layout with:
+
+```bash
+uv run python3 scripts/sync_skill_links.py --dry-run
+uv run python3 scripts/sync_skill_links.py
+```
+
+Codex uses one full-tree symlink at `~/.agents/skills`. Claude Code and Gemini
+use budget-safe core top-level skill symlinks so large nested source bundles and
+low-frequency skills do not consume the skills context budget. Use
+`--full` only for a session profile where discovery matters more than context.
 
 ## Archive
 
