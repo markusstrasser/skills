@@ -11,7 +11,7 @@ Usage:
     # Deep review (4 queries: arch + formal + domain + mechanical)
     model-review.py --context plan.md --topic "classification logic" --axes arch,formal,domain,mechanical "Review this"
 
-    # With project dir for constitution discovery
+    # With project dir for goals/governance doc discovery (docs/GOALS.md)
     model-review.py --context plan.md --topic "data wiring" --project ~/Projects/intel "Review this plan"
 """
 
@@ -59,7 +59,7 @@ _reexec_under_llmx_python_if_needed()
 import shared.llm_dispatch as dispatch_core
 from shared.context_budget import enforce_budget
 from shared.context_packet import BudgetPolicy, ContextPacket, FileBlock, PacketSection, TextBlock
-from shared.context_preamble import build_review_preamble_blocks, find_constitution as shared_find_constitution
+from shared.context_preamble import build_review_preamble_blocks, find_governance as shared_find_governance
 from shared.context_renderers import write_packet_artifact
 from shared.file_specs import parse_file_spec, read_file_excerpt
 
@@ -470,8 +470,8 @@ def rerun_axis_with_flash(
     )
 
 
-def find_constitution(project_dir: Path) -> tuple[str, str | None]:
-    return shared_find_constitution(project_dir)
+def find_governance(project_dir: Path) -> str | None:
+    return shared_find_governance(project_dir)
 
 
 def build_context(
@@ -483,7 +483,7 @@ def build_context(
     context_file_specs: list[str] | None = None,
     budget_limit_override: int | None = None,
 ) -> dict[str, ContextArtifact]:
-    """Assemble shared context packet with constitutional preamble.
+    """Assemble shared context packet with goals/governance preamble.
 
     Context sources (in order of precedence):
       1. --context FILE — single pre-assembled context file
@@ -562,7 +562,7 @@ def dispatch(
     ctx_files: dict[str, Path],
     axis_names: list[str],
     question: str,
-    has_constitution: bool,
+    has_governance: bool,
     question_overrides: dict[str, str] | None = None,
 ) -> dict:
     """Fire N llmx API calls in parallel (one per axis), wait, return results."""
@@ -570,14 +570,14 @@ def dispatch(
 
     const_instruction = {
         "arch": (
-            "Where does the reviewed work violate or neglect stated principles? Which principles are well-served?"
-            if has_constitution
-            else "No constitution provided — assess internal consistency only."
+            "Where does the reviewed work violate or neglect the project's stated goals and operating principles? Which principles are well-served?"
+            if has_governance
+            else "No project goals/governance provided — assess internal consistency only."
         ),
         "formal": (
-            "For each constitutional principle: coverage score (0-100%), specific gaps, suggested fixes."
-            if has_constitution
-            else "No constitution provided — assess internal logical consistency."
+            "For each stated operating principle: coverage score (0-100%), specific gaps, suggested fixes."
+            if has_governance
+            else "No project goals/governance provided — assess internal logical consistency."
         ),
     }
 
@@ -1375,7 +1375,7 @@ def main() -> int:
         help="Auto-assemble context from file:range specs (e.g., plan.md scripts/ir.py:86-110)",
     )
     parser.add_argument("--topic", required=True, help="Short topic label (used in output dir name)")
-    parser.add_argument("--project", type=Path, help="Project dir for constitution discovery (default: cwd)")
+    parser.add_argument("--project", type=Path, help="Project dir for goals/governance doc discovery (default: cwd)")
     parser.add_argument(
         "--axes", default="standard",
         help="Comma-separated axes or preset name (standard, deep, full). Default: standard",
@@ -1439,7 +1439,7 @@ def main() -> int:
         context_file_specs=args.context_files,
     )
 
-    constitution, _ = find_constitution(project_dir)
+    governance_path = find_governance(project_dir)
 
     # Load per-axis question overrides
     question_overrides = None
@@ -1454,7 +1454,7 @@ def main() -> int:
             return 1
 
     # Dispatch and wait
-    result = dispatch(review_dir, ctx_files, axis_names, args.question, bool(constitution), question_overrides)
+    result = dispatch(review_dir, ctx_files, axis_names, args.question, bool(governance_path), question_overrides)
     failures = collect_dispatch_failures(result, ctx_files)
     if failures:
         failure_path = review_dir / "dispatch-failures.json"

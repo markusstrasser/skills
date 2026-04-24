@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from shared.context_packet import PreambleBlock
@@ -15,46 +14,31 @@ All code, plans, and features in this project are developed by AI agents, not hu
 """
 
 
-def find_constitution(project_dir: Path) -> tuple[str, str | None]:
-    constitution = ""
-    goals_path = None
+def find_governance(project_dir: Path) -> str | None:
+    """Locate the project's merged goals + governance doc.
 
-    rules_constitution = project_dir / ".claude" / "rules" / "constitution.md"
-    if rules_constitution.exists():
-        constitution = rules_constitution.read_text().strip()
-
-    if not constitution:
-        claude_md = project_dir / "CLAUDE.md"
-        if claude_md.exists():
-            text = claude_md.read_text()
-            tag_match = re.search(r"<constitution>(.*?)</constitution>", text, re.DOTALL)
-            if tag_match:
-                constitution = tag_match.group(1).strip()
-            elif "## Constitution" in text:
-                start = text.index("## Constitution")
-                rest = text[start:]
-                end = re.search(r"\n## (?!Constitution)", rest)
-                constitution = rest[: end.start()].strip() if end else rest.strip()
-
-    for candidate in (project_dir / "GOALS.md", project_dir / "docs" / "GOALS.md"):
+    The single-doc convention (2026-04-24) is `docs/GOALS.md`. Falls back
+    to root `GOALS.md` for projects without a docs/ directory. Legacy
+    constitution locations (`.claude/rules/constitution.md`, inline
+    `## Constitution` section in CLAUDE.md, `<constitution>` XML tag) are
+    no longer searched — projects with split governance should be merged
+    via the `/goals` skill.
+    """
+    for candidate in (project_dir / "docs" / "GOALS.md", project_dir / "GOALS.md"):
         if candidate.exists():
-            goals_path = str(candidate)
-            break
-    return constitution, goals_path
+            return str(candidate)
+    return None
 
 
 def build_review_preamble_blocks(project_dir: Path) -> tuple[list, bool]:
-    constitution, goals_path = find_constitution(project_dir)
+    goals_path = find_governance(project_dir)
     blocks = []
-    if constitution:
+    if goals_path:
         blocks.append(
             PreambleBlock(
-                "PROJECT CONSTITUTION (verbatim — review against these, not your priors)",
-                constitution,
+                "PROJECT GOALS & GOVERNANCE (verbatim — review against these, not your priors)",
+                Path(goals_path).read_text(),
             )
         )
-    if goals_path:
-        blocks.append(PreambleBlock("PROJECT GOALS", Path(goals_path).read_text()))
     blocks.append(PreambleBlock("DEVELOPMENT CONTEXT", DEVELOPMENT_CONTEXT))
-    return blocks, bool(constitution)
-
+    return blocks, bool(goals_path)

@@ -1,13 +1,15 @@
 ---
 name: constitution
-description: Elicit project goals and constitutional principles through structured questionnaire. Produces a ## Constitution section in CLAUDE.md (operational principles) and GOALS.md (personal objectives). Use for any new project or to revisit existing constitutional decisions.
+description: Elicit project goals and constitutional principles through structured questionnaire. Produces a single expanded GOALS.md covering mission, principles, autonomy boundaries, and governance — one source of truth, not split between CLAUDE.md and GOALS.md. Use for any new project or to revisit existing constitutional decisions.
 user-invocable: true
 effort: medium
 ---
 
 # Constitutional Elicitation
 
-You are conducting a structured constitutional elicitation for a software project that uses autonomous AI agents. Your job is to identify tensions, ask the right questions, and produce two artifacts: a `## Constitution` section inside CLAUDE.md (how agents operate) and GOALS.md (what the human wants). The constitution goes INTO CLAUDE.md — not as a separate file.
+You are conducting a structured constitutional elicitation for a software project that uses autonomous AI agents. Your job is to identify tensions, ask the right questions, and produce a single consolidated `docs/GOALS.md` that covers both what the human wants (mission, success metrics, scope) and how agents operate (principles, autonomy boundaries, governance). CLAUDE.md gets a short pointer to GOALS.md, not a duplicate constitution section.
+
+**Single-doc rationale:** Split governance (Constitution in CLAUDE.md + GOALS.md) created drift — two documents expressing the same ideas with no mechanism to keep them in sync. Rolled out as one doc across genomics + evo on 2026-04-24. New projects should start this way. Existing projects with split governance should merge (see the `/merge-constitution` playbook at the bottom of this file).
 
 ## Phase 0: Mine Steering Intelligence
 
@@ -33,12 +35,13 @@ Works across Claude Code, Codex, and Gemini sessions (all stored in runlogs.db).
 Before asking any questions, explore the project thoroughly. Read every instruction file, rule, and configuration:
 
 <exploration_checklist>
-- CLAUDE.md (root + any subdirectories)
-- .claude/rules/ (all files)
+- CLAUDE.md / AGENTS.md (root + any subdirectories; note which is the symlink target)
+- docs/GOALS.md if it exists
+- .claude/rules/ (all files; flag any named `constitution*` — these are legacy, will be merged)
 - .claude/settings.json (hooks)
 - .claude/skills/ (skill definitions)
 - .claude/agents/ (agent specs)
-- docs/ (any existing constitution, goals, principles, values)
+- docs/ (any existing goals, principles, values docs)
 - Any file matching: *constitution*, *principles*, *values*, *guidelines*, *goals*
 - MEMORY.md or any persistent memory files
 - **Phase 0 steering report** — corrections, feedback, hook signals
@@ -90,69 +93,92 @@ Question design principles:
 
 ## Phase 4: Synthesis
 
-After the human answers, produce two artifacts:
+After the human answers, produce ONE artifact: `docs/GOALS.md`. Do NOT create a separate constitution file or a `## Constitution` section in CLAUDE.md.
 
-### GOALS.md (separate file, human-owned)
+CLAUDE.md / AGENTS.md should contain at most a short pointer:
+
+```markdown
+## Goals & Governance
+
+> **Human-protected.** Agent may propose changes but must not modify without explicit approval.
+
+Canonical text lives in `docs/GOALS.md`. Covers: [1-line summary of what's in it].
+```
+
+### `docs/GOALS.md` template
+
 <goals_template>
-# Goals
+# Goals & Governance
 
-> Human-owned. Agent may propose changes but must not modify without explicit approval.
+> Human-owned. Agents may propose changes but must not modify without explicit approval.
 
 ## Mission
-[What the system exists to do — one paragraph]
+[What the system exists to do — one paragraph. State the cardinal rule if there is one.]
 
 ## Generative Principle
 [One sentence. What everything derives from. Must be measurable.]
 
-## Primary Success Metric
-[How to know it's working]
+## Domain
+[What the system operates on; what scale; what assumptions about input.]
 
 ## Strategy
-[How the mission gets accomplished]
+[Numbered sections covering how the mission gets accomplished. 4-8 typical.]
 
-## Deferred Scope
-[Things explicitly NOT being done yet]
-
-## Exit Condition
-[When does this project become unnecessary?]
-</goals_template>
-
-### ## Constitution section in CLAUDE.md (not a separate file)
-
-The constitution goes INTO the project's CLAUDE.md as a `## Constitution` heading. This keeps operational principles co-located with operational reference information. The `## Constitution` section is human-protected — agent may propose changes but must not modify without explicit approval.
-
-<constitution_template>
-## Constitution
-
-> **Human-protected.** Agent may propose changes but must not modify without explicit approval.
-
-### Generative Principle
-[One sentence that derives all other principles. Must be measurable.]
-
-### Principles
-[7-12 numbered principles. Each must be:
+## Operating Principles
+[5-10 principles, each:
 - Derivable from the generative principle
-- Actionable (an agent can follow it without asking for clarification)
-- Testable (you can describe a scenario where it would be violated)]
+- Actionable (an agent can follow without asking for clarification)
+- Testable (you can describe a scenario where it would be violated)
 
-### Autonomy Boundaries
-**Hard limits:** [never without human]
-**Autonomous:** [do without asking]
+Session-level principles (action-default, no-early-stop, plan-before-architecture)
+belong in CLAUDE.md, not here. These are about HOW the engine works, not how a
+session works.]
 
-### Self-Improvement Governance
-[Rules of change, rules of adjudication, what requires human approval]
+## Architecture Boundary
+[What the project owns vs. doesn't own. Include a diagram if the boundary is
+architectural. Hard limits — data exposure, destructive actions, cross-repo
+edits — go here as a subsection.]
 
-### Session Architecture
-[Turn limits, context management, subagent patterns]
-
-### Known Limitations
-[What can't be enforced architecturally]
+## Success Metrics
+[Ranked table of metrics, each with "Measures" and "Why it matters" columns.
+Include priority order when metrics conflict.]
 
 ### Pre-Registered Tests
-[How to verify this constitution is working — specific testable predictions to check via session-analyst after 2 weeks]
-</constitution_template>
+[6-10 falsifiable observables that measure whether the engine is getting more
+trustworthy over time. Regression on any is a signal to reassess.]
 
-**Process improvement:** Before writing the constitution, draft it and dispatch to `/model-review` for critique. Model review works better on proposals than open questions. When model review disagrees with the user's expressed preference, surface the disagreement explicitly and let the user decide — don't silently adjudicate.
+## Resource Constraints
+[Table of resources with status + implication. Autonomous-spend threshold goes
+here.]
+
+## Deferred Scope
+[Things explicitly NOT being done yet. Link to exit conditions if applicable.]
+
+## Governance
+[Autonomous changes vs. changes requiring explicit human approval. Short.]
+
+## Exit / Pivot Conditions
+[When does this project pivot or end?]
+
+---
+*Revision log: dated entries as the doc evolves. Non-trivial revisions should
+include a one-line rationale.*
+</goals_template>
+
+**Process improvement:** Before writing the final doc, draft it and dispatch to `/critique model` for critique. Model review works better on proposals than open questions. When model review disagrees with the user's expressed preference, surface the disagreement explicitly and let the user decide — don't silently adjudicate.
+
+## Merging Legacy Split-Governance Projects
+
+For projects that currently have BOTH a separate constitution (either `.claude/rules/constitution.md` or inline `## Constitution` section in CLAUDE.md) AND a `docs/GOALS.md`:
+
+1. **Identify unique content in each.** Most of the constitution will already be expressed in GOALS.md under Strategy or Success Metrics. Usually only 3-6 items are genuinely unique (fail-loud-on-drift, architectural-enforcement, delete-superseded-paths, etc.).
+2. **Fold uniques into GOALS.md** under the appropriate sections: new ones become an "Operating Principles" section; hard limits go under Architecture Boundary; pre-registered tests under Success Metrics; autonomy/change-control under Governance.
+3. **Drop redundant content.** Mission/strategy duplicates, session-level principles (move to CLAUDE.md if not already there).
+4. **Delete the standalone constitution file OR replace the `## Constitution` section in CLAUDE.md** with a short pointer.
+5. **Update the auto-load table** in CLAUDE.md if the constitution was in `.claude/rules/`.
+6. **Commit with evidence.** Commit message should cite the specific overlap that justified the merge.
+
+Reference implementations: genomics (2026-04-24, commit `6a8c094f`), evo (2026-04-24, commit `5978d661`).
 
 ## Key Research Constraints
 
@@ -165,6 +191,7 @@ These are empirically validated — apply to every constitution:
 5. **Context degrades with length even with perfect retrieval** (Du et al., arXiv:2510.05381). 15-turn sessions with Document & Clear > 40-turn marathons.
 6. **Text alignment =/= action alignment** (Mind the GAP, arXiv:2602.16943). Models refuse in text but execute via tools. Hooks are the enforcement mechanism.
 7. **The generative principle concept** (Askell, arXiv:2310.13798): A single well-internalized principle derives all behavior better than 50 pages of rules.
+8. **Single-doc governance reduces drift.** Split governance documents diverge over time without a sync mechanism. Empirically observed across genomics + evo before the 2026-04-24 merge.
 
 ## Prompting Notes (Model-Agnostic)
 
