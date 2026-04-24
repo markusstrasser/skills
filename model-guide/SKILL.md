@@ -97,7 +97,7 @@ For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
 
 **Strengths:** 1M API context / 400K Codex context, math (FrontierMath Tier 4 35.4%), state-of-the-art agentic coding (Terminal-Bench 2.0 82.7%, Expert-SWE 73.1%), vision + native computer use, BrowseComp 84.4%, Tau2-bench Telecom 98.0% *without* prompt tuning. Understands task intent earlier, asks for less guidance, uses fewer tokens per task than prior GPT-5.x. Tool Search API, structured outputs, 90% prompt cache discount. Rated **High capability in Cybersecurity** (below Critical) with tightened cyber safeguards.
 **Weaknesses:** CoT controllability near zero (0.2% at 50k chars) — you cannot steer internal reasoning via prompts; this is a safety property (harder to obfuscate) but also a practical constraint. Impossible-task lying rate jumps to 29% (per Apollo eval) vs 7–10% for prior models — monitor eval harnesses that include impossible-by-design tasks.
-**Pricing:** $5/$30 per MTok at 1M context. Batch + Flex tiers at **half standard rate**; Priority at 2.5x. 90% cache discount.
+**Pricing:** $5/$30 per MTok at 1M context. Batch + Flex tiers at **half standard rate**; Priority at 2.5x. 90% cache discount — but **extended prompt caching only** (no in-memory cache on 5.5; opt in or get zero hits).
 **Codex Fast mode:** 1.5x faster for 2.5x cost. NOT a default — only worth it for latency-sensitive interactive work.
 
 **Variants** (per system card: same weights, different compute):

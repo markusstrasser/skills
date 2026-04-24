@@ -320,10 +320,12 @@ GPT-5.5 has **~72% SimpleQA** (inferred from OpenAI's "33% fewer claim errors vs
 
 ### Cache Retention
 
-| Type | Duration |
-|------|----------|
-| In-Memory | 5-10 min idle, max 1 hour |
-| Extended (24h) | Up to 24 hours (GPT-5.5 supported) |
+| Type | Duration | GPT-5.4 | GPT-5.5 |
+|------|----------|:-------:|:-------:|
+| In-Memory | 5-10 min idle, max 1 hour | yes | **NO** |
+| Extended (24h) | Up to 24 hours | yes | yes (only path) |
+
+**GPT-5.5 caching gotcha (per OpenAI 2026-04-24):** GPT-5.5 supports *only* extended prompt caching — in-memory caching is not available. If your workload depended on the default in-memory cache (short-lived prefixes, no opt-in), you must enable extended retention to see any cache hits at all on 5.5. Verify via `usage.prompt_tokens_details.cached_tokens` after migration.
 
 Monitor: check `usage.prompt_tokens_details.cached_tokens` in API response.
 
