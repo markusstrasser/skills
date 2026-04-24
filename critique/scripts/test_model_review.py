@@ -64,7 +64,7 @@ class ModelReviewDispatchTest(unittest.TestCase):
         # Both models called
         models_called = {c["model"] for c in call_log}
         self.assertIn("gemini-3.1-pro-preview", models_called)
-        self.assertIn("gpt-5.4", models_called)
+        self.assertIn("gpt-5.5", models_called)
 
     def test_dispatch_falls_back_after_gemini_rate_limit(self) -> None:
         call_count = {"arch": 0}
@@ -108,8 +108,8 @@ class ModelReviewDispatchTest(unittest.TestCase):
             "elapsed_seconds": 1.0,
             "formal": {
                 "label": "Formal",
-                "model": "gpt-5.4",
-                "requested_model": "gpt-5.4",
+                "model": "gpt-5.5",
+                "requested_model": "gpt-5.5",
                 "exit_code": 0,
                 "size": 0,
                 "output": str(self.review_dir / "formal-output.md"),
@@ -220,7 +220,7 @@ class CallLlmxTest(unittest.TestCase):
             out = Path(td) / "out.md"
             with patched_llmx_chat(capture_chat):
                 model_review._call_llmx(
-                    provider="openai", model="gpt-5.4",
+                    provider="openai", model="gpt-5.5",
                     context_path=ctx, prompt="test", output_path=out,
                     schema=model_review.FINDING_SCHEMA, timeout=10,
                 )
@@ -342,8 +342,8 @@ class ExtractionCoverageTest(unittest.TestCase):
                 },
                 "formal": {
                     "label": "GPT-5.4 (quantitative/formal)",
-                    "model": "gpt-5.4",
-                    "requested_model": "gpt-5.4",
+                    "model": "gpt-5.5",
+                    "requested_model": "gpt-5.5",
                     "exit_code": 0,
                     "size": 12,
                     "output": str(formal_output),
@@ -395,7 +395,7 @@ class ExtractionCoverageTest(unittest.TestCase):
             self.assertEqual(coverage["schema"], "review-coverage.v1")
             self.assertEqual(coverage["schema_version"], "review-coverage.v1")
             self.assertEqual(coverage["dispatch"]["requested_axis_count"], 2)
-            self.assertEqual(coverage["dispatch"]["axes"][1]["model"], "gpt-5.4")
+            self.assertEqual(coverage["dispatch"]["axes"][1]["model"], "gpt-5.5")
             self.assertEqual(coverage["context_packet"]["payload_hash"], "payload-hash")
             self.assertEqual(coverage["context_packet"]["dropped_blocks"][0]["block_title"], "context.md")
             self.assertEqual(coverage["extraction"]["usable_axis_count"], 2)
@@ -542,8 +542,8 @@ class ModelReviewMainTest(unittest.TestCase):
                 "elapsed_seconds": 1.0,
                 "formal": {
                     "label": "Formal",
-                    "model": "gpt-5.4",
-                    "requested_model": "gpt-5.4",
+                    "model": "gpt-5.5",
+                    "requested_model": "gpt-5.5",
                     "exit_code": 0,
                     "size": 10,
                     "output": str(review_dir / "formal-output.md"),
@@ -589,8 +589,8 @@ class ModelReviewMainTest(unittest.TestCase):
                 "elapsed_seconds": 1.0,
                 "formal": {
                     "label": "Formal",
-                    "model": "gpt-5.4",
-                    "requested_model": "gpt-5.4",
+                    "model": "gpt-5.5",
+                    "requested_model": "gpt-5.5",
                     "exit_code": 0,
                     "size": 10,
                     "output": str(review_dir / "formal-output.md"),
@@ -634,8 +634,8 @@ class ModelReviewMainTest(unittest.TestCase):
                 "elapsed_seconds": 1.0,
                 "formal": {
                     "label": "Formal",
-                    "model": "gpt-5.4",
-                    "requested_model": "gpt-5.4",
+                    "model": "gpt-5.5",
+                    "requested_model": "gpt-5.5",
                     "exit_code": 0,
                     "size": 0,
                     "output": str(project_dir / "formal-output.md"),

@@ -70,7 +70,7 @@ MODEL=$(echo "$CMD" | grep -oE '(-m|--model)\s+[a-zA-Z0-9._-]+' | head -1 | sed 
 if [ -n "$MODEL" ]; then
   case "$MODEL" in
     gemini-3.1-pro-preview|gemini-3-flash-preview|gemini-3.1-flash-image-preview) ;;
-    gpt-5.4|gpt-5.2|gpt-5.3-chat-latest|gpt-5-codex|o4-mini) ;;
+    gpt-5.5|gpt-5.5-pro|gpt-5.4|gpt-5.2|gpt-5.3-chat-latest|gpt-5-codex|o4-mini) ;;
     gemini-3.1-flash-lite-preview) ;;
     claude-sonnet-4-6|claude-opus-4-6|claude-haiku-4-5) ;;
     *gemini-3.1-pro*|*gemini-3-flash*) ;; # close enough variants

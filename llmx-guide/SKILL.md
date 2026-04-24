@@ -47,7 +47,7 @@ Agent note: the repo hook blocks raw `llmx` chat-style Bash automation. The CLI 
 5. **No provider prefixes needed.** `gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`.
 6. **Know the transport triggers:** `google` prefers `gemini` CLI (free). Gemini falls back to API for: `--schema`, `--search`, `--stream`, `--max-tokens`. Codex CLI also falls back for `--search` and `--stream`, but can keep `--schema` via `codex exec --output-schema`. GPT goes direct to API unless you explicitly force `-p codex-cli`.
 7. **Hangs in agent context?** Claude Code's Bash tool pipes stdin without EOF. Fixed in current llmx (skips stdin when prompt provided).
-8. **Prompt is POSITIONAL, `-p` is PROVIDER.** `llmx chat -m gpt-5.4 -f context.md "Analyze this"` — prompt goes LAST as a bare string. `-p` means `--provider` (openai, google, codex-cli), NOT prompt. Using `-p "long text..."` sends the text as a provider name → "Unknown provider" error. Context goes in `-f`, system message in `-s`. Two `-f` flags with no positional prompt = model invents a task from context. (Evidence: 2026-04-05 — Gemini hallucinated; 2026-04-12 — 4 consecutive failures from `-p` misuse.)
+8. **Prompt is POSITIONAL, `-p` is PROVIDER.** `llmx chat -m gpt-5.5 -f context.md "Analyze this"` — prompt goes LAST as a bare string. `-p` means `--provider` (openai, google, codex-cli), NOT prompt. Using `-p "long text..."` sends the text as a provider name → "Unknown provider" error. Context goes in `-f`, system message in `-s`. Two `-f` flags with no positional prompt = model invents a task from context. (Evidence: 2026-04-05 — Gemini hallucinated; 2026-04-12 — 4 consecutive failures from `-p` misuse.)
 9. **For critical reviews, use one combined context file.** Multi-file `-f` has recurring failure modes with Gemini/CLI transport, including silently dropping earlier files. Pre-concatenate first, but preserve file boundaries in the combined file.
 
 ## When llmx Fails — Diagnose, Don't Downgrade
@@ -100,18 +100,18 @@ adversarial review.
 
 ### 2. GPT-5.x Timeouts
 
-GPT-5.4 with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning. Default timeout: 300s. Max: **900s** (hard cap). GPT-5.4 xhigh on domain-heavy prompts can exceed 900s; for those, chunk the task, stream, or switch to an async/batch path if available. Do not punt operational work to a GUI tool.
+GPT-5.5 with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning. Default timeout: 300s. Max: **900s** (hard cap). GPT-5.5 xhigh on domain-heavy prompts can exceed 900s; for those, chunk the task, stream, or switch to an async/batch path if available. Do not punt operational work to a GUI tool.
 
-**`max_completion_tokens` includes reasoning tokens.** If you set `--max-tokens 4096` on GPT-5.4 with reasoning, the model may exhaust the budget on thinking. Use 16K+ for reasoning models.
+**`max_completion_tokens` includes reasoning tokens.** If you set `--max-tokens 4096` on GPT-5.5 with reasoning, the model may exhaust the budget on thinking. Use 16K+ for reasoning models.
 
 ### 3. Output Capture — Use `-o FILE`, Never `> file`
 
 ```bash
 # CORRECT — llmx writes the output file itself:
-llmx -m gpt-5.4 -f context.md --timeout 600 -o output.md "query"
+llmx -m gpt-5.5 -f context.md --timeout 600 -o output.md "query"
 
 # BROKEN — 0 bytes until exit:
-llmx -m gpt-5.4 "query" > output.md
+llmx -m gpt-5.5 "query" > output.md
 ```
 
 `-o` does not imply `--stream`. Current llmx preserves the requested transport and writes the returned result itself when needed. If the file is still 0 bytes, llmx emits `[llmx:WARN]` to stderr.
@@ -120,14 +120,14 @@ llmx -m gpt-5.4 "query" > output.md
 
 For GPT specifically:
 
-- default `llmx -m gpt-5.4` routes to the OpenAI API in current llmx
+- default `llmx -m gpt-5.5` routes to the OpenAI API in current llmx
 - `-o` preserves that transport; it does not force a transport switch
 - if you explicitly use `-p codex-cli`, diagnose any failure from stderr and output size, not shell exit alone
 
 If you need to verify the actual route, run:
 
 ```bash
-llmx chat -p codex-cli -m gpt-5.4 --debug -o /tmp/probe.txt "Reply with exactly OK."
+llmx chat -p codex-cli -m gpt-5.5 --debug -o /tmp/probe.txt "Reply with exactly OK."
 ```
 
 Then inspect the debug line for `transport`.
@@ -137,8 +137,8 @@ Then inspect the debug line for `transport`.
 These are bad diagnostic patterns:
 
 ```bash
-llmx chat -m gpt-5.4 "query" 2>/dev/null | head -200
-llmx chat -m gpt-5.4 "query" | sed -n '1,80p'
+llmx chat -m gpt-5.5 "query" 2>/dev/null | head -200
+llmx chat -m gpt-5.5 "query" | sed -n '1,80p'
 ```
 
 Why:
@@ -151,7 +151,7 @@ Safer pattern:
 
 ```bash
 set -o pipefail
-llmx chat -m gpt-5.4 --debug -o /tmp/review.md "query" 2> /tmp/review.err
+llmx chat -m gpt-5.5 --debug -o /tmp/review.md "query" 2> /tmp/review.err
 echo $?
 tail -n 200 /tmp/review.err
 sed -n '1,80p' /tmp/review.md
