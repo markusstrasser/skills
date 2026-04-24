@@ -20,15 +20,14 @@ codex exec --full-auto -C /path/to/project "List all API endpoints"
 codex exec --full-auto --output-schema schema.json "Extract function signatures"
 ```
 
-**Key facts (v0.116.0, 2026-03-26; gpt-5.5 support added in v0.124+):**
-- **Auth:** ChatGPT account (browser login). Only subscription-tier models work: `gpt-5.5` (current, Codex ≥0.124 only), `gpt-5.4`, `gpt-5.3-codex`. `o3`, `gpt-4.1`, etc. are rejected.
-- **Codex 0.123.0 does NOT route gpt-5.5 successfully** — it accepts the flag but falls back to OpenAI API which rejects the unknown model. Upgrade to ≥0.124 before routing 5.5 through Codex CLI. Probe: `codex -m gpt-5.5 exec "say OK"`.
+**Key facts (v0.123.0, verified with gpt-5.5 on 2026-04-24):**
+- **Auth:** ChatGPT account (browser login). Subscription-tier models work: `gpt-5.5` (default), `gpt-5.4`, `gpt-5.3-codex`. `o3`, `gpt-4.1`, etc. are rejected.
 - **Token overhead:** ~37K tokens per call from MCP server tool descriptions (9 servers). No flag to disable. Structural cost — fine for substantial tasks, wasteful for trivial queries.
 - **MCP servers loaded:** context7, exa, research, meta-knowledge, brave-search, paper-search, perplexity, scite, codex_apps. Configured in `~/.codex/config.toml`.
 - **`--ephemeral`:** Avoid — sandbox cleanup deletes file writes including `-o` output.
 - **`--full-auto`:** Sandboxed auto-approval (workspace-write). Required for non-interactive use.
 - **`--search`:** Only works in interactive mode, NOT in `exec`. Use MCP tools instead.
-- **Default model:** Set in `~/.codex/config.toml` (`model = "gpt-5.4"` current; change to `"gpt-5.5"` once Codex ≥0.124 is installed). Don't pass `--model` unless overriding.
+- **Default model:** Set in `~/.codex/config.toml` (`model = "gpt-5.5"`). Don't pass `--model` unless overriding.
 
 **As Claude Code subagent:** Call via Bash tool. Set `timeout: 120000` or higher. Output is on stdout (last message repeated at end). Use `-o FILE` for file capture, but read/copy immediately — sandbox cleanup can delete.
 

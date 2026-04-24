@@ -2,9 +2,9 @@
 
 Track what changes with each model release so you know what to update.
 
-## 2026-04-23 -- GPT-5.5 launch (API pending)
+## 2026-04-23 -- GPT-5.5 launch
 
-OpenAI released GPT-5.5 in ChatGPT + Codex CLI today. API ("coming very soon") is not yet live as of edit time — probe `llmx chat -m gpt-5.5 "ping"` before scripting against it.
+OpenAI released GPT-5.5 on 2026-04-23; API reached GA the next day (2026-04-24). Model snapshot: `gpt-5.5-2026-04-23`. Replaces GPT-5.4 as the default OpenAI model across llmx, scripts, and docs.
 
 ### Headline numbers (from announcement + system card)
 - **Terminal-Bench 2.0:** 82.7% (+7.6pp vs 5.4 at 75.1%, +13pp vs Opus 4.7 at 69.4%)
@@ -33,13 +33,15 @@ OpenAI released GPT-5.5 in ChatGPT + Codex CLI today. API ("coming very soon") i
 - Apollo found 5.5 is the first OpenAI model that does not sandbag on deferred-subversion tasks, but verbalizes evaluation awareness more often (22.1% vs 17.3% for 5.4).
 - Impossible-task lying rate: 29% (vs 5.4 at 7%, 5.3-codex at 10%). Monitor for this in eval harnesses that include impossible-by-design tasks.
 
-### Migration checklist
-- ✅ `skills/model-guide/SKILL.md` — 5.5 promoted to primary; 5.4 kept as fallback
-- ✅ `skills/model-guide/references/PROMPTING_GPT.md` — pricing table, intro
-- ✅ `skills/llmx-guide/references/models.md` — gpt-5.5 row added (marked pending)
-- ✅ `skills/llmx-guide/references/codex-dispatch.md` — ChatGPT-auth valid models
-- ✅ `~/.claude/rules/llmx-routing.md` — waitpoint gotcha added
-- ⏳ **Wave 2 (flip on API GA):** llmx-guide/references/transport-routing.md, scripts/code-review-scout.py, any other `-m gpt-5.4` literals. Trigger: `llmx chat -m gpt-5.5 "ping"` returns a real response.
+### Migration (complete 2026-04-24)
+- llmx providers.py: `gpt-5.5` / `gpt-5.5-pro` added to MODEL_RESTRICTIONS, _KNOWN_MODELS, PROVIDER_CONFIGS default; gpt-4* auto-upgrades now target 5.5
+- llmx cli.py + api.py: help text and docstring examples flipped to gpt-5.5
+- model-guide SKILL.md: 5.5 promoted to primary, 5.4 section removed
+- model-guide references/PROMPTING_GPT.md: title + pricing table
+- llmx-guide references/models.md + codex-dispatch.md
+- ~/.claude/rules/llmx-routing.md: all invocation examples
+- agent-infra scripts/code-review-scout.py: daily code-review cron now uses gpt-5.5
+- ~/.env: OPENAI_API_KEY rotated
 
 ## 2026-04-16 -- Add Grok 4.20 Reasoning
 

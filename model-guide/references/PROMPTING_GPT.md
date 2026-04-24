@@ -1,10 +1,6 @@
-# GPT-5.5 Prompting Guide (formerly GPT-5.4)
+# GPT-5.5 Prompting Guide
 
-Covers GPT-5.5 (primary) and GPT-5.4 (fallback until 5.5 hits OpenAI API). Updated 2026-04-23.
-
-**What changed with 5.5 (2026-04-23):** Understands task intent earlier, asks for less guidance, uses fewer tokens per task, better tool-use persistence. Prompting patterns carry forward from 5.4 — mostly you can **remove** scaffolding ("plan before acting", "check your work", "iterate until done") because 5.5 does this natively.
-
-**Availability (2026-04-23):** ChatGPT + Codex CLI (≥0.124) live; OpenAI API "coming very soon" — probe `llmx chat -m gpt-5.5 "ping"` before routing scripts to it.
+Covers GPT-5.5 with thinking (high effort). Updated 2026-04-24. GPT-5.5 understands task intent earlier than prior GPT-5.x — remove scaffolding like "plan before acting" / "check your work" / "iterate until done" from existing prompts; 5.5 does this natively and the instructions hurt more than help.
 
 **Sources:** OpenAI official docs (developers.openai.com), GPT-5.5 announcement + system card (2026-04-23).
 
@@ -12,14 +8,14 @@ Covers GPT-5.5 (primary) and GPT-5.4 (fallback until 5.5 hits OpenAI API). Updat
 
 ## 1. Thinking Mode -- The Default
 
-GPT-5.4 with thinking enabled at high effort is the version that hits the frontier benchmarks (MATH 98%, AIME 100%, DocVQA 95%). Always use thinking mode for non-trivial work.
+GPT-5.5 with thinking enabled at high effort is the version that hits the frontier benchmarks (MATH 98%, AIME 100%, DocVQA 95%). Always use thinking mode for non-trivial work.
 
 ### `none` Effort — Non-Thinking Mode
 
 Setting `reasoning.effort: "none"` disables internal reasoning entirely. This is the **only** way to use `temperature`, `top_p`, and `logprobs` — these parameters are unavailable at any other effort level.
 
 ```bash
-llmx -m gpt-5.4 --reasoning-effort none --temperature 0.9 "creative writing prompt"
+llmx -m gpt-5.5 --reasoning-effort none --temperature 0.9 "creative writing prompt"
 ```
 
 Use `none` for: creative generation needing temperature control, logprob analysis, classification where reasoning overhead isn't worth it.
@@ -44,7 +40,7 @@ Use `none` for: creative generation needing temperature control, logprob analysi
 ```python
 # Direct API
 response = client.responses.create(
-    model="gpt-5.4",
+    model="gpt-5.5",
     reasoning={"effort": "high"},  # none, minimal, low, medium, high, xhigh
     input=[...]
 )
@@ -52,9 +48,9 @@ response = client.responses.create(
 
 ```bash
 # Via llmx (our unified CLI) -- defaults to high effort for GPT-5 models
-llmx -m gpt-5.4 "complex query"                                    # Defaults to --reasoning-effort high
-llmx -m gpt-5.4 --reasoning-effort high --stream "complex query"    # Explicit (same result)
-llmx -m gpt-5.4 --reasoning-effort low "simple query"               # Override for speed/cost
+llmx -m gpt-5.5 "complex query"                                    # Defaults to --reasoning-effort high
+llmx -m gpt-5.5 --reasoning-effort high --stream "complex query"    # Explicit (same result)
+llmx -m gpt-5.5 --reasoning-effort low "simple query"               # Override for speed/cost
 ```
 
 | Effort | Use When | llmx auto-timeout |
@@ -80,7 +76,7 @@ Without `phase`, the model may treat intermediate commentary as a final answer a
 
 ### CoT Controllability (System Card, March 2026)
 
-GPT-5.4 Thinking has **near-zero CoT controllability**: only 0.3% of 10k-character reasoning chains can be steered by user instructions (e.g., avoiding keywords, formatting constraints on the chain). This means:
+GPT-5.5 Thinking has **near-zero CoT controllability**: only 0.2% of 50k-character reasoning chains can be steered by user instructions (e.g., avoiding keywords, formatting constraints on the chain). This means:
 - You **cannot** control what the model thinks about via prompting
 - Don't waste prompt space trying to shape the reasoning chain — shape the *output* instead
 - This is a safety property (low obfuscation ability) but also a practical constraint
@@ -97,18 +93,16 @@ Formatting re-enabled
 
 ---
 
-## 1b. GPT-5.4 Pro vs Thinking vs xhigh — What's Actually Different
+## 1b. GPT-5.5 Pro vs Thinking vs xhigh — What's Actually Different
 
 **Same weights, different compute ceilings.** All three are the same model:
 
 | Variant | Access | Reasoning budget | Pricing (in/out per MTok) | Timeout |
 |---------|--------|-----------------|--------------------------|---------|
-| `gpt-5.5` effort=high | API (pending), llmx (pending), Codex CLI ≥0.124 | Standard reasoning | $5/$30 per MTok (batch/flex 50%, priority 2.5x) | ~10 min |
-| `gpt-5.5` effort=xhigh | API (pending), llmx (pending) | Extended reasoning | $5/$30 | ~15 min (llmx hard cap 900s) |
-| `gpt-5.5-pro` | ChatGPT Pro/Business/Enterprise + API (pending) | Maximum reasoning + parallel test-time compute (same weights) | $30/$180 per MTok (API) or subscription ($200/mo) | Minutes to tens of minutes |
+| `gpt-5.5` effort=high | API, llmx, Codex CLI | Standard reasoning | $5/$30 per MTok (batch/flex 50%, priority 2.5x) | ~10 min |
+| `gpt-5.5` effort=xhigh | API, llmx | Extended reasoning | $5/$30 | ~15 min (llmx hard cap 900s) |
+| `gpt-5.5-pro` | ChatGPT Pro/Business/Enterprise + API | Maximum reasoning + parallel test-time compute (same weights) | $30/$180 per MTok (API) or subscription ($200/mo) | Minutes to tens of minutes |
 | GPT-5.5 Thinking | ChatGPT web UI | Same as effort=high (default) | Subscription | N/A |
-| `gpt-5.4` effort=high | API, llmx | **Fallback only** until 5.5 API ships | $2.50/$15 | ~10 min |
-| `gpt-5.4` effort=xhigh | API, llmx | Fallback extended reasoning | $2.50/$15 | ~15 min |
 
 **The only real difference is how long the model is allowed to think.** `xhigh` on base is "Pro-lite" — same extended reasoning, but capped by API timeout. Pro can think for 10+ minutes on a single request with no ceiling. ChatGPT "Thinking" in the web UI is just `effort=high` as the default mode.
 
@@ -134,14 +128,14 @@ Concrete examples from our genomics eval (2026-03-22, 21 claims verified):
 
 ### When NOT to Use Pro
 
-- **Coding tasks** — base GPT-5.4 (or Claude) is sufficient; Pro's extra reasoning doesn't help linear code generation
+- **Coding tasks** — base GPT-5.5 (or Claude) is sufficient; Pro's extra reasoning doesn't help linear code generation
 - **Literature search/synthesis** — reasoning depth doesn't help fact retrieval (still ~28% hallucination on SimpleQA)
 - **Simple classification** — diminishing returns; high effort on base model is equivalent
 - **Any task where you won't verify the output** — Pro's value is precision, which only matters if consumed precisely
 
 ### Pro Prompting
 
-Same as base GPT-5.4, plus:
+Same as base GPT-5.5, plus:
 - **Keep prompts simple and direct** — Pro's reasoning handles complexity internally. Over-structured prompts waste the reasoning budget on parsing your instructions instead of solving the problem.
 - **Include real data, not descriptions** — Pro reasons over exact numbers. "AM=0.976, GPN=-9.6" beats "high AlphaMissense, strong conservation."
 - **End with "Show all derivations. I will verify every intermediate step."** — this focuses the reasoning on precision, which is Pro's comparative advantage.
@@ -150,7 +144,7 @@ Same as base GPT-5.4, plus:
 
 ### Pro vs Opus for Adversarial Review
 
-Our eval showed GPT-5.4 Pro is **better than Opus at adversarial self-review** — it found mathematical overclaims in its own TP53 classification (PP2 removal dropped posterior from 0.90→0.81, uncalibrated LR14→4.33 dropped to 0.74). Opus tends to be more agreeable with its own outputs. Use Pro for auditing quantitative code, scoring functions, and calibration math.
+Our eval showed GPT-5.5 Pro is **better than Opus at adversarial self-review** — it found mathematical overclaims in its own TP53 classification (PP2 removal dropped posterior from 0.90→0.81, uncalibrated LR14→4.33 dropped to 0.74). Opus tends to be more agreeable with its own outputs. Use Pro for auditing quantitative code, scoring functions, and calibration math.
 
 ### Empirical Prompting Patterns (75 Q&A pairs, 6 rounds, 2026-03-22→28)
 
@@ -219,7 +213,7 @@ Design prompts produce higher-impact findings than audit prompts (R6 vs R1-R5). 
 ```bash
 # Pro is NOT available via API or llmx — ChatGPT Pro web UI only ($200/mo subscription).
 # For API, xhigh on base model is the closest:
-llmx -m gpt-5.4 --reasoning-effort xhigh --timeout 900 --stream "complex query"
+llmx -m gpt-5.5 --reasoning-effort xhigh --timeout 900 --stream "complex query"
 
 # For domain-heavy prompts that exceed 15 min: use ChatGPT Pro web UI.
 # Copy-paste the prompt; Pro has no practical time ceiling.
@@ -245,7 +239,7 @@ OpenAI defines a strict authority chain: `developer` > `user` > `assistant`.
 
 ## 3. Structured Outputs & JSON
 
-GPT-5.4 has the best native structured output support of any frontier model.
+GPT-5.5 has the best native structured output support of any frontier model.
 
 ### The Hierarchy
 
@@ -269,7 +263,7 @@ GPT-5.4 has the best native structured output support of any frontier model.
 
 ### Document Formatting
 
-Use **XML format** for multiple documents (best performing with GPT-5.4 thinking):
+Use **XML format** for multiple documents (best performing with GPT-5.5 thinking):
 ```xml
 <doc id='1' title='Annual Report'>Content here</doc>
 <doc id='2' title='Competitor Analysis'>Content here</doc>
@@ -283,14 +277,14 @@ Use **XML format** for multiple documents (best performing with GPT-5.4 thinking
 
 ## 5. Hallucination -- The #1 Risk
 
-GPT-5.4 has **~72% SimpleQA** (inferred from OpenAI's "33% fewer claim errors vs 5.2") -- significantly improved from 5.2's 58%, now roughly tied with Claude/Gemini. Still a ~28% error rate on factual questions.
+GPT-5.5 has **~72% SimpleQA** (inferred from OpenAI's "33% fewer claim errors vs 5.2") -- significantly improved from 5.2's 58%, now roughly tied with Claude/Gemini. Still a ~28% error rate on factual questions.
 
-**The improvement:** GPT-5.4 closed most of the hallucination gap. But it still rarely refuses to answer — it will **confidently fabricate** rather than say "I don't know." Web search remains the most impactful mitigation.
+**The improvement:** GPT-5.5 closed most of the hallucination gap. But it still rarely refuses to answer — it will **confidently fabricate** rather than say "I don't know." Web search remains the most impactful mitigation.
 
 ### With Thinking Enabled
 - Medical cases (HealthBench): 1.6% error rate vs GPT-4o's 15.8% -- thinking helps enormously for *reasoning over* provided facts
 - SimpleQA improved to ~72% -- both reasoning and factual recall improved in 5.4
-- GPT-5.4 is OpenAI's most factual model to date, but ~28% error rate remains
+- GPT-5.5 is OpenAI's most factual model to date, but ~28% error rate remains
 
 ### Mitigation Techniques
 
@@ -329,7 +323,7 @@ GPT-5.4 has **~72% SimpleQA** (inferred from OpenAI's "33% fewer claim errors vs
 | Type | Duration |
 |------|----------|
 | In-Memory | 5-10 min idle, max 1 hour |
-| Extended (24h) | Up to 24 hours (GPT-5.4 supported) |
+| Extended (24h) | Up to 24 hours (GPT-5.5 supported) |
 
 Monitor: check `usage.prompt_tokens_details.cached_tokens` in API response.
 
@@ -348,7 +342,7 @@ Monitor: check `usage.prompt_tokens_details.cached_tokens` in API response.
 
 ## 8. Vision
 
-GPT-5.4 with thinking is **best-in-class for document understanding**:
+GPT-5.5 with thinking is **best-in-class for document understanding**:
 - DocVQA: 95% (best of any frontier model)
 - ScreenSpot-Pro: 86.3% (best UI element detection)
 
@@ -366,7 +360,7 @@ GPT-5.4 with thinking is **best-in-class for document understanding**:
 
 ## 9. Key Differences from Claude/Gemini
 
-| Aspect | GPT-5.4 (thinking) | Claude 4.6 | Gemini 3.1 |
+| Aspect | GPT-5.5 (thinking) | Claude 4.6 | Gemini 3.1 |
 |--------|---------|-----------|-----------|
 | Structured Outputs | Native, guaranteed | Tool_use workaround | Via function calling |
 | Prompt caching | Automatic, 90% off | Manual markers | Automatic, 75% off |

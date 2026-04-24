@@ -10,9 +10,8 @@ effort: low
 
 Select the right frontier model for a task and prompt it correctly.
 
-**Models covered:** Claude Opus 4.7, Claude Sonnet 4.6, GPT-5.5, GPT-5.5 Pro, GPT-5.4, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3 Flash, Gemini 3.1 Flash-Lite, Grok 4.20 Reasoning.
-**Last updated:** 2026-04-23. See `${CLAUDE_SKILL_DIR}/references/CHANGELOG.md` for update history.
-**API note (2026-04-23):** GPT-5.5 is live in ChatGPT + Codex CLI. API access is "coming very soon" per OpenAI but not yet wired — probe with `llmx chat -m gpt-5.5 "ping"` before routing scripts to it. Until the API ships, the Codex-CLI path (`-p codex-cli -m gpt-5.5`) is the only programmatic route once Codex ≥0.124 lands.
+**Models covered:** Claude Opus 4.7, Claude Sonnet 4.6, GPT-5.5, GPT-5.5 Pro, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3 Flash, Gemini 3.1 Flash-Lite, Grok 4.20 Reasoning.
+**Last updated:** 2026-04-24. See `${CLAUDE_SKILL_DIR}/references/CHANGELOG.md` for update history.
 **Benchmark note:** Numbers cited for Claude Opus are the published Opus 4.6 baseline. Opus 4.7 (released 2026-04-16) improves on most of these per Anthropic's announcement; specific 4.7 figures update on the next benchmark refresh.
 
 ## Long-Horizon Research Routing
@@ -25,7 +24,7 @@ For long novelty sweeps and frontier-mapping work:
 
 Practical split:
 
-- `Gemini 3.1 Pro` or `GPT-5.5` (falls back to `GPT-5.4` until API ships): compress overlapping ideas, detect hidden operator structure, write synthesis memos
+- `Gemini 3.1 Pro` or `GPT-5.5`: compress overlapping ideas, detect hidden operator structure, write synthesis memos
 - `Gemini 3 Flash` or broad search tools: generate cheap perturbation passes and map candidate seams
 - `Claude` or the main orchestrator: decide what survives and what gets rejected
 
@@ -46,7 +45,7 @@ Practical split:
 | **Long document ingestion** (>200K) | Gemini 3.1 Pro / GPT-5.5 / Claude | Native 1M context (all three). GPT-5.5 wins long-context on MRCR v2 at 512K-1M (74.0% vs Opus 32.2%) | -- |
 | **Subagent coding** | Claude Sonnet 4.6 | 79.6% SWE-bench at $3/$15, 1M context | Gemini 3 Flash (cheap) |
 | **Doc → schema extraction** | GPT-5.3 Instant | Less preachy, structured output, fast | GPT-5.5 (stronger reasoning, more expensive) |
-| **Cross-model review** | Opus 4.7 + GPT-5.5 | Cross-family required (+31pp accuracy, FINCH-ZK). GPT-5.5 slot upgrades from 5.4. | (Grok 4.20 NOT recommended as 3rd — abstention bias ≠ adversarial pressure) |
+| **Cross-model review** | Opus 4.7 + GPT-5.5 | Cross-family required (+31pp accuracy, FINCH-ZK). Same-family = no adversarial pressure. | (Grok 4.20 NOT recommended as 3rd — abstention bias ≠ adversarial pressure) |
 | **Claim/quote verification** | Grok 4.20 Reasoning | AA-Omniscience 17% hallucination rate (#1) — strongly prefers "UNCERTAIN" over guessing | Claude Opus 4.7 |
 | **Strict instruction following** | Grok 4.20 Reasoning | IFBench 82.9% (#1) | GPT-5.4 (IFEval 95%) |
 | **Tabular data analysis** | Grok 4.20 Reasoning | LiveBench Data Analysis 87.06 (#1) | -- |
@@ -94,30 +93,25 @@ For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
 
 For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
 
-### GPT-5.5 -- "The Professional" (replaces GPT-5.4)
+### GPT-5.5 -- "The Professional"
 
-**Strengths:** 1M API context / 400K Codex context, math (FrontierMath Tier 4 35.4% — +8.3pp over 5.4), state-of-the-art agentic coding (Terminal-Bench 2.0 82.7%, Expert-SWE 73.1%), vision + native computer use, BrowseComp 84.4%, Tau2-bench Telecom 98.0% *without* prompt tuning. Understands task intent earlier, asks for less guidance, uses fewer tokens per Codex task than 5.4. Tool Search API, structured outputs, 90% prompt cache discount. Still rated **High capability in Cybersecurity** (below Critical) — cyber safeguards tightened vs 5.4.
-**Weaknesses:** CoT controllability even lower than 5.4 (0.2% at 50k chars) — you cannot steer internal reasoning via prompts; this is a safety property (harder to obfuscate) but also a practical constraint. Small regressions on harassment/hate disallowed-content benchmarks vs 5.4-thinking (not statistically significant per system card).
-**Pricing (API, when it ships):** $5.00/$30.00 per MTok at 1M context. Batch + Flex tiers at **half standard rate**; Priority at 2.5x. 90% cache discount. Note: this is **higher per-token than 5.4** ($2.50/$15) — offset by fewer tokens needed per task. Re-baseline cost estimates on migration.
+**Strengths:** 1M API context / 400K Codex context, math (FrontierMath Tier 4 35.4%), state-of-the-art agentic coding (Terminal-Bench 2.0 82.7%, Expert-SWE 73.1%), vision + native computer use, BrowseComp 84.4%, Tau2-bench Telecom 98.0% *without* prompt tuning. Understands task intent earlier, asks for less guidance, uses fewer tokens per task than prior GPT-5.x. Tool Search API, structured outputs, 90% prompt cache discount. Rated **High capability in Cybersecurity** (below Critical) with tightened cyber safeguards.
+**Weaknesses:** CoT controllability near zero (0.2% at 50k chars) — you cannot steer internal reasoning via prompts; this is a safety property (harder to obfuscate) but also a practical constraint. Impossible-task lying rate jumps to 29% (per Apollo eval) vs 7–10% for prior models — monitor eval harnesses that include impossible-by-design tasks.
+**Pricing:** $5/$30 per MTok at 1M context. Batch + Flex tiers at **half standard rate**; Priority at 2.5x. 90% cache discount.
 **Codex Fast mode:** 1.5x faster for 2.5x cost. NOT a default — only worth it for latency-sensitive interactive work.
 
 **Variants** (per system card: same weights, different compute):
-- GPT-5.5 (base) — API/llmx/Codex CLI, effort none→high. Default for programmatic use once API ships.
+- GPT-5.5 (base) — API/llmx/Codex CLI, effort none→high. Default for programmatic use.
 - GPT-5.5 effort=xhigh — API/llmx, extended reasoning. Pro-lite. Timeouts at llmx's 900s cap.
-- GPT-5.5 Pro — ChatGPT Pro/Business/Enterprise + API ("coming very soon") at $30/$180 per MTok. **Same underlying weights** + parallel test-time compute. Gate to high-uncertainty × high-irreversibility decisions only (6x cost).
+- GPT-5.5 Pro — ChatGPT Pro/Business/Enterprise + API at $30/$180 per MTok. **Same underlying weights** + parallel test-time compute. Gate to high-uncertainty × high-irreversibility decisions only (6x cost).
 - "Thinking" in ChatGPT web UI = effort=high (the default mode). Not a separate model.
-
-**Availability as of 2026-04-23:**
-- ✅ ChatGPT web (Plus, Pro, Business, Enterprise)
-- ✅ Codex CLI (requires `codex ≥0.124`; 0.123.0 does NOT route 5.5 successfully — passes to OpenAI API which rejects)
-- ⏳ OpenAI API ("coming very soon") — llmx model registry has zero refs; probe before scripting
 
 **Effort levels:** `none` (no reasoning, enables temperature/top_p), `minimal`, `low`, `medium`, `high` (default via llmx), `xhigh` (max compute).
 
-**Quick prompting tips** (thinking mode, high effort — carry forward from 5.4, largely unchanged):
+**Quick prompting tips** (thinking mode, high effort):
 - Do **NOT** use "think step by step" — hurts performance when thinking is on
 - Keep prompts **simple and direct** — the model does heavy reasoning internally
-- 5.5 needs **less explicit scaffolding** than 5.4 ("plan before you act", "check your work") — it does this natively. Remove that boilerplate from existing prompts.
+- **Remove** scaffolding like "plan before you act" / "check your work" / "iterate until done" — 5.5 does this natively and the instructions hurt more than help
 - Use **`strict: true`** on all function definitions — guaranteed schema conformance
 - Use **XML format** for documents: `<doc id='1' title='Title'>Content</doc>` (JSON performs poorly)
 - Add `Formatting re-enabled` as first line of developer message (markdown off by default in thinking)
@@ -127,10 +121,6 @@ For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
 - **llmx defaults to `--reasoning-effort high`** for GPT-5 models automatically
 
 For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_GPT.md`.
-
-### GPT-5.4 -- Legacy fallback
-
-Kept as an active fallback until GPT-5.5 lands on the OpenAI API. Everything prompting-wise carries forward to 5.5; 5.5 uses fewer tokens for the same task. Pricing $2.50/$15 (<272K) / $5/$22.50 (>272K). **Do not start new work on 5.4** — use 5.5 via Codex CLI (≥0.124) if you need it now, otherwise wait for API. Will be deprecated from this guide once 5.5 API is GA + stable for ~2 weeks.
 
 ### GPT-5.3 Instant -- "The Restructurer"
 

@@ -10,9 +10,9 @@
 | Gemini 3 Flash | `gemini-3-flash-preview` | Cheap. `-preview` required |
 | Gemini 3.1 Flash Image | `gemini-3.1-flash-image-preview` | No text-only 3.1 Flash yet |
 | GPT-5.3 Instant | `gpt-5.3-chat-latest` | Reasoning max: **medium only**. Auto-defaults |
-| GPT-5.5 | `gpt-5.5` | **Target default, API pending (2026-04-23).** Live in ChatGPT + Codex CLI ≥0.124 only. `llmx chat -m gpt-5.5` errors "Unknown model" — llmx registry not yet updated. Probe before scripting. Pricing $5/$30 per MTok at 1M context. |
-| GPT-5.5 Pro | `gpt-5.5-pro` | **API pending.** Same weights as 5.5 + parallel test-time compute. $30/$180 per MTok. Available in ChatGPT Pro/Business/Enterprise now. |
-| GPT-5.4 | `gpt-5.4` | **Current active default** until 5.5 API ships. `openai` prefers Codex CLI when installed. API fallback defaults reasoning to `high`; `xhigh` is also supported. |
+| GPT-5.5 | `gpt-5.5` | **Default OpenAI model.** 1M API context / 400K Codex. Pricing $5/$30 per MTok (batch/flex 50%, priority 2.5x). `openai` prefers Codex CLI when installed. API defaults reasoning to `high`; `xhigh` also supported. |
+| GPT-5.5 Pro | `gpt-5.5-pro` | Same weights as 5.5 + parallel test-time compute. $30/$180 per MTok. Also in ChatGPT Pro/Business/Enterprise. |
+| GPT-5.4 | `gpt-5.4` | Previous default. Kept for back-comparison; use `gpt-5.5` for new work. |
 | GPT-5.2 (legacy) | `gpt-5.2` | Legacy OpenAI default. |
 | GPT-5-Codex | `gpt-5-codex` | No `minimal` reasoning-effort |
 | Claude Sonnet 4.6 | `claude-sonnet-4-6` | Hyphens, not dots |

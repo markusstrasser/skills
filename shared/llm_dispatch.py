@@ -92,7 +92,7 @@ PROFILES: dict[str, DispatchProfile] = {
         name="formal_review",
         intent="Formal or quantitative GPT-backed review",
         provider="openai",
-        model="gpt-5.4",
+        model="gpt-5.5",
         timeout=600,
         reasoning_effort="high",
         max_tokens=32768,
@@ -102,7 +102,7 @@ PROFILES: dict[str, DispatchProfile] = {
         name="gpt_general",
         intent="General-purpose GPT-backed dispatch",
         provider="openai",
-        model="gpt-5.4",
+        model="gpt-5.5",
         timeout=600,
         reasoning_effort="medium",
         max_tokens=16384,
@@ -130,7 +130,7 @@ PROFILES: dict[str, DispatchProfile] = {
 MODEL_TO_PROFILE = {
     "gemini-3-flash-preview": "fast_extract",
     "gemini-3.1-pro-preview": "deep_review",
-    "gpt-5.4": "gpt_general",
+    "gpt-5.5": "gpt_general",
 }
 
 
