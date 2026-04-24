@@ -4,7 +4,7 @@
 Mines corrections, feedback, topic drift, and permission signals from
 agentlogs.db (unified store for Claude, Codex, Gemini, Kimi — replaced
 the separate runlogs.db + sessions.db on 2026-04-20), hook telemetry,
-and session receipts. Designed to feed goals/constitution skill
+and session receipts. Designed to feed the goals skill
 reconnaissance.
 
 Usage:

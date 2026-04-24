@@ -54,7 +54,7 @@ class ModelReviewDispatchTest(unittest.TestCase):
                 self.ctx_files,
                 ["arch", "formal"],
                 "Review this",
-                has_constitution=False,
+                has_governance=False,
             )
 
         self.assertEqual(result["arch"]["exit_code"], 0)
@@ -90,7 +90,7 @@ class ModelReviewDispatchTest(unittest.TestCase):
                 self.ctx_files,
                 ["arch", "formal"],
                 "Review this",
-                has_constitution=False,
+                has_governance=False,
             )
 
         # arch should have fallen back to Flash
@@ -558,7 +558,7 @@ class ModelReviewMainTest(unittest.TestCase):
             try:
                 with patch.object(model_review, "build_context", return_value={"formal": project_dir / "ctx.md"}), \
                      patch.object(model_review, "dispatch", return_value=dispatch_result), \
-                     patch.object(model_review, "find_constitution", return_value=("", None)), \
+                     patch.object(model_review, "find_governance", return_value=None), \
                      patch.object(model_review, "extract_claims", return_value=str(review_dir / "disposition.md")) as mock_extract, \
                      patch.object(model_review.os, "urandom", return_value=b"\xab\xcd\x13"), \
                      patch.object(model_review.sys, "argv", [
@@ -605,7 +605,7 @@ class ModelReviewMainTest(unittest.TestCase):
             try:
                 with patch.object(model_review, "build_context", return_value={"formal": project_dir / "ctx.md"}), \
                      patch.object(model_review, "dispatch", return_value=dispatch_result), \
-                     patch.object(model_review, "find_constitution", return_value=("", None)), \
+                     patch.object(model_review, "find_governance", return_value=None), \
                      patch.object(model_review, "extract_claims", return_value=str(review_dir / "disposition.md")) as mock_extract, \
                      patch.object(model_review.os, "urandom", return_value=b"\xab\xcd\x12"), \
                      patch.object(model_review.sys, "argv", [
@@ -648,7 +648,7 @@ class ModelReviewMainTest(unittest.TestCase):
             try:
                 with patch.object(model_review, "build_context", return_value={"formal": project_dir / "ctx.md"}), \
                      patch.object(model_review, "dispatch", return_value=dispatch_result), \
-                     patch.object(model_review, "find_constitution", return_value=("", None)), \
+                     patch.object(model_review, "find_governance", return_value=None), \
                      patch.object(model_review.os, "urandom", return_value=b"\xab\xcd\x12"), \
                      patch.object(model_review.sys, "argv", [
                          "model-review.py", "--context", str(context_path),
