@@ -1,6 +1,6 @@
 ---
 name: model-guide
-description: Frontier model selection and prompting guide. Which model for which task, how to prompt each one, known pitfalls, validation checklists. Use when choosing between Claude/GPT/Gemini, routing tasks to models, writing prompts for non-Claude models, debugging model-specific issues, or optimizing multi-model workflows. Triggers on "which model", "how to prompt", "model comparison", "model selection", "prompting guide", "GPT tips", "Gemini tips".
+description: Frontier model selection and prompting guide. Use for "which model", "how to prompt", model comparison, task routing, debugging model-specific issues, GPT/Gemini/Claude tips.
 user-invocable: true
 argument-hint: '[task description or model name]'
 effort: low

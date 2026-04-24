@@ -1,6 +1,6 @@
 ---
 name: dataset-register
-description: "Register an acquired dataset in the per-topic dataset catalog. Use when: you've just staged data via /data-acquisition, adding a new source to an existing topic, or formalizing an existing ad-hoc entry. Produces a standardized dataset card (provenance, access state, variables, known quirks) so future sessions don't re-probe or re-download. Card format is shared across topics."
+description: "Register staged dataset in per-topic catalog with provenance, variables, access state, quirks. Use after /data-acquisition, adding a source to a topic, or formalizing an ad-hoc entry."
 user-invocable: true
 argument-hint: "<topic> <dataset-id>"
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit]

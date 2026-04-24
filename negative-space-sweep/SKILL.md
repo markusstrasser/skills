@@ -1,6 +1,6 @@
 ---
 name: negative-space-sweep
-description: "Divergent discovery of what's MISSING from an optimized system. Multi-perspective search with exclusion lists, pertinent negatives, and category rotation. Use when a domain has been heavily optimized (health protocol, codebase, investment portfolio) and you suspect blind spots. The anti-convergence tool — finds the saffron, not more of the same."
+description: "Divergent discovery of what's MISSING from an optimized system. Multi-perspective search with exclusion lists and category rotation. Use when a domain is heavily optimized and you suspect blind spots."
 argument-hint: "[domain to sweep] [--perspectives N] [--category override]"
 effort: high
 ---

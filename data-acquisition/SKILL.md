@@ -1,6 +1,6 @@
 ---
 name: data-acquisition
-description: "Canonical probe→stage→register pattern for pulling external datasets (Census, NCES, PSID, MEPS, IPUMS, AHRQ, IRS SOI, BLS, FRED, etc.). Use when: downloading a public-use microdata file, bulk-fetching codebooks, setting up a new dataset in a research topic, or verifying whether a dataset is already on the local SSD before re-downloading. Covers: archive-first check, HTTP HEAD probe, codebook-alongside-data convention, topic-local staging paths, dataset-card registration, and Wayback Machine fallback for dead URLs."
+description: "Probe→stage→register pattern for pulling external datasets (Census, NCES, PSID, MEPS, IPUMS, AHRQ, IRS SOI, BLS, FRED). Use when downloading microdata, bulk-fetching codebooks, or setting up a new dataset in a research topic."
 user-invocable: true
 argument-hint: "[probe|acquire|catalog] <url-or-dataset-id>"
 allowed-tools: [Read, Glob, Grep, Bash, Write, WebFetch]

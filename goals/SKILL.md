@@ -1,6 +1,6 @@
 ---
 name: goals
-description: Elicit, clarify, or revise project goals AND operating principles through structured questioning. Produces or updates a single docs/GOALS.md covering mission, strategy, success metrics, operating principles, autonomy boundaries, and governance — one source of truth. Use when starting a new project, pivoting strategy, revising operating principles, or when goals/governance feel unclear.
+description: Elicit or revise project goals and operating principles into docs/GOALS.md (mission, strategy, metrics, autonomy boundaries). Use when starting a project, pivoting strategy, or governance feels unclear.
 user-invocable: true
 disable-model-invocation: true
 effort: medium

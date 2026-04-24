@@ -1,6 +1,6 @@
 ---
 name: sweep
-description: "Cheap-model codebase consistency scan. Uses structural analysis + Gemini Flash as classifier to find pattern drift, convention violations, config misalignment, and function divergence. Git-change-driven scope. Near-free ($0 via CLI). Use when: 'check for inconsistencies', 'sweep the codebase', 'what diverged recently', 'pattern drift'."
+description: "Cheap-model codebase consistency scan via Gemini Flash — pattern drift, convention violations, config misalignment. Git-change-driven. Use for 'check inconsistencies', 'sweep codebase', 'what diverged'."
 user-invocable: true
 argument-hint: "[axes...] [--depth N] [--path dir]"
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent]

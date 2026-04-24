@@ -1,6 +1,6 @@
 ---
 name: verify-before
-description: "Know the true state before acting or diagnosing. Two modes: 'probe' (validate code/config on a tiny slice before full-scale run) and 'status' (query live ground truth before writing a status claim). Use when: about to launch an expensive pipeline, about to diagnose a remote/long-running job, about to claim something 'worked' or 'crashed' without verification, or the user asks for 'probe', 'dry run', 'check status', 'verify'. Promotes global rule #8 (Probe before build) and the ground-truth-first principle to architecture."
+description: "Probe before acting, check status before claiming. Modes: probe (validate on tiny slice), status (query live ground truth). Use for 'dry run', 'verify', 'check status', before expensive pipelines or worked/crashed claims."
 user-invocable: true
 argument-hint: "[probe|status] [target]"
 allowed-tools: [Read, Glob, Grep, Bash, Write]

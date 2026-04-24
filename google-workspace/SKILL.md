@@ -1,6 +1,6 @@
 ---
 name: google-workspace
-description: Automate Google Workspace via gws CLI — Drive uploads, Sheets logging, Gmail notifications, Calendar scheduling. Use when automating Workspace workflows, writing session logs to spreadsheets, uploading artifacts to Drive, or sending pipeline alerts. NOT for general API usage (use raw HTTP), non-Google services, or interactive human workflows.
+description: Automate Google Workspace via gws CLI — Drive uploads, Sheets logs, Gmail alerts, Calendar. Use for session logs to sheets, artifact uploads, pipeline notifications. Not for general HTTP or interactive workflows.
 user-invocable: true
 argument-hint: [operation — e.g., "log metrics to sheet", "upload file", "send notification"]
 allowed-tools:
