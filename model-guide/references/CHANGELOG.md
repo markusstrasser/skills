@@ -2,6 +2,14 @@
 
 Track what changes with each model release so you know what to update.
 
+## 2026-04-24 -- GPT-5.5 GA caching clarification
+
+OpenAI API changelog (2026-04-24) clarified post-GA behavior worth propagating:
+
+- **Caching:** GPT-5.5 supports *only* extended prompt caching. In-memory caching is unsupported — workloads relying on the default short-lived cache get zero hits on 5.5 unless extended retention is opted in. Updated `references/PROMPTING_GPT.md` cache retention table + SKILL.md GPT-5.5 pricing line.
+- **Reasoning effort:** API default is now `medium` (llmx still forces `high` for GPT-5 by default — separate layer).
+- **`image_detail`:** when unset or `auto`, model uses original (pre-5.5) detail behavior. Minor; not propagated.
+
 ## 2026-04-23 -- GPT-5.5 launch
 
 OpenAI released GPT-5.5 on 2026-04-23; API reached GA the next day (2026-04-24). Model snapshot: `gpt-5.5-2026-04-23`. Replaces GPT-5.4 as the default OpenAI model across llmx, scripts, and docs.
