@@ -183,8 +183,10 @@ helper script under `sources/<name>/scripts/`.
 | chebi-skill | ChEBI 2.0 — chemical search, compound, ontology, structure |
 | chembl-skill | ChEMBL — activity, molecule, target, mechanism, text-search |
 | civic-skill | CIViC GraphQL — cancer variant interpretation evidence |
+| clingen-allele-registry-skill | ClinGen Allele Registry — canonical allele IDs (CAids) and cross-references for variant normalization |
 | clinicaltrials-skill | ClinicalTrials.gov API v2 — study search, metadata, field stats |
 | clinvar-variation-skill | ClinVar + NCBI Variation — VCV/RCV/SCV/RefSNP lookups |
+| dgidb-skill | DGIdb v5 — drug-gene interactions aggregated across 40+ sources (GraphQL) |
 | efo-ontology-skill | EFO OLS4 — search, term lookup, children/descendants |
 | encode-skill | ENCODE — object lookups, portal search, metadata |
 | ensembl-skill | Ensembl REST — lookup, overlap, xref, variation |
@@ -193,13 +195,15 @@ helper script under `sources/<name>/scripts/`.
 | eva-skill | European Variation Archive — species metadata, archived variants |
 | finngen-phewas-skill | FinnGen PheWAS — single variant, GRCh38 resolve |
 | genebass-gene-burden-skill | Genebass gene burden — one Ensembl gene + one burden set |
-| gnomad-graphql-skill | gnomAD GraphQL — frequency, gene constraint, variant context |
+| gnomad-graphql-skill | gnomAD GraphQL — frequency, gene constraint, variant context (SNV/indel) |
+| gnomad-sv-skill | gnomAD-SV v4 GraphQL — population frequencies for DEL/DUP/INV/INS/BND/CPX |
 | gtex-eqtl-skill | GTEx v2 single-tissue eQTLs — GRCh38 variant |
 | gwas-catalog-skill | GWAS Catalog REST v2 — studies, associations, SNPs, EFO, loci |
 | hmdb-skill | HMDB — metabolites, proteins, diseases, pathways |
 | human-protein-atlas-skill | Human Protein Atlas — gene JSON, tissue/cell-line pages |
 | ipd-skill | IPD REST — HLA allele + cell-level metadata |
 | locus-to-gene-mapper-skill | GWAS locus→candidate gene chain (EFO→GWAS→OT L2G→eQTL→burden) |
+| mavedb-skill | MaveDB — multiplexed assay variant-effect (MAVE / DMS) score sets |
 | metabolights-skill | MetaboLights — study discovery + metabolomics metadata |
 | mgnify-skill | MGnify — microbiome studies, samples, biome metadata |
 | ncbi-blast-skill | NCBI BLAST Common URL — submit/poll/summarize BLAST jobs |
@@ -218,6 +222,7 @@ helper script under `sources/<name>/scripts/`.
 | research-router-skill | Internal router — normalize entities, fan out sub-skills, synthesize |
 | rhea-skill | Rhea — biochemical reaction search, reaction IDs |
 | rnacentral-skill | RNAcentral — RNA entries, single-entry lookup, cross-references |
+| strchive-skill | STRchive — curated disease-associated STR loci, motif, thresholds, gnomAD AF |
 | string-skill | STRING — network, interaction partners, enrichment |
 | tpmi-phewas-skill | TPMI PheWAS — single variant, GRCh38 resolve |
 | ukb-topmed-phewas-skill | UKB-TOPMed PheWAS — single variant, GRCh38 resolve |
@@ -230,12 +235,8 @@ recipe in this skill yet. Use the endpoint directly until a wrapper lands.
 
 | Need | Endpoint | Notes |
 |---|---|---|
-| Canonical allele IDs (CAids) across dbSNP/ClinVar/gnomAD | `reg.clinicalgenome.org/allele?hgvs={HGVS}` or `/allele/{CA_ID}` | ClinGen Allele Registry, no auth, JSON-LD. Foundational for variant normalization. |
-| Multiplexed assay variant-effect (MAVE / DMS) data | `api.mavedb.org/api/v1/` (REST) or `/graphql` | MaveDB, no auth for read; orthogonal to AlphaMissense/AlphaGenome computational predictions. |
-| Drug-gene interactions (40-source aggregation) | `dgidb.org/api/graphql` | DGIdb v5, GraphQL only; complements Open Targets. |
-| gnomAD-SV v4 frequencies | `gnomad.broadinstitute.org/api` (GraphQL `structural_variant` type) | Same server as SNV API but distinct query type; not covered by the existing `gnomad-graphql-skill` recipe. |
-| Disease-STR locus catalog | `github.com/dashnowlab/STRchive` (JSON / BED) | 75+ curated repeat-expansion loci with gnomAD allele frequencies. Static, no API. |
-| dbVar (NCBI SV archive) | `eutils.ncbi.nlm.nih.gov` Entrez against `dbvar` | 6M+ SVs; FTP bulk at `ftp.ncbi.nlm.nih.gov/pub/dbVar/data/`. |
+| dbVar (NCBI SV archive) | `eutils.ncbi.nlm.nih.gov` Entrez against `dbvar` | 6M+ SVs; FTP bulk at `ftp.ncbi.nlm.nih.gov/pub/dbVar/data/`. Use `ncbi-entrez-skill` with `db=dbvar`. |
+| AnnotSV (SV annotation) | `lbgi.fr/AnnotSV/` web UI or local Tcl install | No REST API. Project pipelines use the local install via the `annotsv` skill. |
 | AlphaMissense bulk scores | Zenodo `10.5281/zenodo.8360242` | Precomputed table, ~70M variants; download-only, no API. |
 | ProteinGym DMS benchmarks | `marks.hms.harvard.edu/proteingym/` | Precomputed; download-only. |
 | Retraction / correction status of a DOI | `api.crossref.org/v1/works/{DOI}` → `update-to[]` | CrossRef ingests Retraction Watch since 2025-01; no auth (set `mailto`). Single GET, no wrapper needed. |

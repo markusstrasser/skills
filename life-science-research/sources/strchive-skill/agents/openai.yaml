@@ -1,0 +1,3 @@
+interface:
+  display_name: "STRchive"
+  short_description: "Curated disease-associated STR loci with motif, thresholds, gnomAD AF"

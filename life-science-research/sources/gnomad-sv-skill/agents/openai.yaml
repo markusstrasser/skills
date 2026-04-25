@@ -1,0 +1,3 @@
+interface:
+  display_name: "gnomAD-SV v4"
+  short_description: "Population structural variant frequencies (DEL/DUP/INV/INS/BND/CPX)"

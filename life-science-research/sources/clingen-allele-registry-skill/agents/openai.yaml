@@ -1,0 +1,3 @@
+interface:
+  display_name: "ClinGen Allele Registry"
+  short_description: "Resolve canonical allele IDs (CAids) and cross-references for variants"

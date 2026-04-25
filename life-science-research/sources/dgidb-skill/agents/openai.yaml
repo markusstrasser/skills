@@ -1,0 +1,3 @@
+interface:
+  display_name: "DGIdb v5"
+  short_description: "Drug-gene interactions aggregated across 40+ sources"
