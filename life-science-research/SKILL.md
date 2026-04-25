@@ -64,6 +64,41 @@ For this skill, the right shape is: one visible shared router plus nested source
 wrappers. Do not expose every source wrapper as a top-level skill unless a
 specific agent cannot reliably discover the router and the benefit is measured.
 
+## Quick Route (start here)
+
+Before anything else, decide which entry point fits the question shape. This
+table compresses the lane + tool tables below into a single decision.
+
+| Question shape | First move |
+|---|---|
+| Personal genome / variant in this user's WGS | `genomics-consumer` MCP → `gene_profile` / `variant_lookup` / `explain_finding` |
+| Public variant annotation (ClinVar / gnomAD / AF) | `biomedical` MCP `variants_lookup`, `variants_clinvar`, `population_variant_frequency`; or BioMCP |
+| Variant regulatory effect prediction | `biomcp get variant <id> predict` (AlphaGenome) |
+| Gene → disease / panel / dosage | `biomedical` MCP `curation_*`, `panels_*`, `phenotype_*`, `targets_disease_associations` |
+| Drug / PGx / mechanism / labels | `biomedical` MCP `drugs_*`, `supplements_pharmgkb_lookup`, `targets_pharmacogenetics`; PharmGKB skill |
+| Pathway / interaction / GO | `biomedical` MCP `pathways_*`, `proteins_interactions`; Reactome / STRING skills |
+| Structure / domain | UniProt / AlphaFold / RCSB skills |
+| Locus → gene (GWAS, noncoding) | `locus-to-gene-mapper` skill; eQTL Catalogue / Open Targets |
+| Structural variants / CNV / STR / MEI | dedicated SV lane below — none of the 50 source skills are SV-aware |
+| Clinical trials | `biomedical` MCP `clinical_*`; ClinicalTrials.gov skill |
+| Literature search | `research` MCP, scite, NCBI Entrez/PMC, bioRxiv skills — and **always check retraction status (see Output Contract)** |
+
+Do NOT scan the full Source Index until the route above falls through.
+
+## Biomedical MCP coverage hint
+
+If the host agent has the `biomedical` MCP loaded, the following sources are
+already wrapped — prefer the MCP tool over opening the source skill:
+HPO / OMIM / Orphanet / Monarch (`phenotype_*`, `rare_disease_*`),
+PanelApp (`panels_*`), ClinGen gene validity + dosage (`curation_*`),
+KEGG (`pathways_kegg_*`), CPIC (folded into `supplements_pharmgkb_lookup` /
+`targets_pharmacogenetics`), DGIdb (via `targets_*`), LitVar2
+(`literature_variant_publications`), ISBT blood groups (`bloodgroups_*`),
+GTEx eQTL (`expression_eqtl`), USDA FoodData (`nutrition_*`).
+Open the per-source skill only if (a) the MCP isn't loaded, (b) the MCP
+wrapper is too coarse for the question, or (c) you need a query the wrapper
+doesn't expose.
+
 ## Core Rule
 
 Start by deciding the evidence lane, normalize entities, then call the smallest
@@ -86,7 +121,8 @@ Pick 1-3 lanes. Expanding beyond that is usually a landscape review.
 
 | Lane | Use When | First Sources |
 |---|---|---|
-| Genetics / variant interpretation | rsID, HGVS, ClinVar, allele frequency, ACMG style questions | local WGS/claim store if available; ClinVar; gnomAD; Ensembl; BioMCP |
+| Genetics / variant interpretation (SNV/indel) | rsID, HGVS, ClinVar, allele frequency, ACMG style questions | local WGS/claim store if available; ClinVar; gnomAD; Ensembl; BioMCP |
+| Structural variation / CNV / STR / MEI | DEL/DUP/INV/BND, repeat-expansion locus, mobile-element insertion, large CNV | gnomAD-SV v4 (GraphQL on same `gnomad.broadinstitute.org/api`, query type `structural_variant`); dbVar (NCBI Entrez); DGV (UCSC BigBed); STRchive (GitHub JSON, repeat-expansion loci); AnnotSV (web UI / local install); local `annotsv` skill for project pipeline output |
 | Locus-to-gene | GWAS locus, credible set, noncoding variant mechanism | GWAS Catalog; Open Targets; GTEx/eQTL Catalogue; locus-to-gene mapper |
 | Expression / tissue context | tissue, cell type, disease expression, protein localization | GTEx; Human Protein Atlas; Bgee; CELLxGENE; ENCODE |
 | Pathway / network biology | mechanism, pathway membership, protein interaction | Reactome; STRING; QuickGO; UniProt |
@@ -187,6 +223,23 @@ helper script under `sources/<name>/scripts/`.
 | ukb-topmed-phewas-skill | UKB-TOPMed PheWAS — single variant, GRCh38 resolve |
 | uniprot-skill | UniProt REST — UniProtKB/UniRef/UniParc, FASTA stream |
 
+### Endpoints without a local wrapper yet
+
+These have public APIs / downloads but no `sources/<name>/INSTRUCTIONS.md`
+recipe in this skill yet. Use the endpoint directly until a wrapper lands.
+
+| Need | Endpoint | Notes |
+|---|---|---|
+| Canonical allele IDs (CAids) across dbSNP/ClinVar/gnomAD | `reg.clinicalgenome.org/allele?hgvs={HGVS}` or `/allele/{CA_ID}` | ClinGen Allele Registry, no auth, JSON-LD. Foundational for variant normalization. |
+| Multiplexed assay variant-effect (MAVE / DMS) data | `api.mavedb.org/api/v1/` (REST) or `/graphql` | MaveDB, no auth for read; orthogonal to AlphaMissense/AlphaGenome computational predictions. |
+| Drug-gene interactions (40-source aggregation) | `dgidb.org/api/graphql` | DGIdb v5, GraphQL only; complements Open Targets. |
+| gnomAD-SV v4 frequencies | `gnomad.broadinstitute.org/api` (GraphQL `structural_variant` type) | Same server as SNV API but distinct query type; not covered by the existing `gnomad-graphql-skill` recipe. |
+| Disease-STR locus catalog | `github.com/dashnowlab/STRchive` (JSON / BED) | 75+ curated repeat-expansion loci with gnomAD allele frequencies. Static, no API. |
+| dbVar (NCBI SV archive) | `eutils.ncbi.nlm.nih.gov` Entrez against `dbvar` | 6M+ SVs; FTP bulk at `ftp.ncbi.nlm.nih.gov/pub/dbVar/data/`. |
+| AlphaMissense bulk scores | Zenodo `10.5281/zenodo.8360242` | Precomputed table, ~70M variants; download-only, no API. |
+| ProteinGym DMS benchmarks | `marks.hms.harvard.edu/proteingym/` | Precomputed; download-only. |
+| Retraction / correction status of a DOI | `api.crossref.org/v1/works/{DOI}` → `update-to[]` | CrossRef ingests Retraction Watch since 2025-01; no auth (set `mailto`). Single GET, no wrapper needed. |
+
 ### Retrieval Discipline (per-source)
 
 Request-time cautions that matter more than source identity:
@@ -204,7 +257,8 @@ Request-time cautions that matter more than source identity:
 - **PharmGKB / CPIC:** attach evidence/guideline level.
 - **ClinicalTrials.gov:** trial existence ≠ efficacy evidence.
 - **cBioPortal / CIViC:** carry tumor type and evidence level.
-- **PubMed / PMC / bioRxiv:** preprints are provisional.
+- **PubMed / PMC / bioRxiv:** preprints are provisional. **Always check retraction / correction status** for any paper that drives a clinical or mechanistic claim — query `api.crossref.org/v1/works/{DOI}` and inspect `update-to[]` for `type: retraction` or `type: correction`. Retrieval can otherwise launder retracted sources into confident answers.
+- **Guideline currency:** when citing CPIC / ACMG / professional-society guidance, name the version and year — older guideline versions are routinely superseded (e.g., ACMG 2015 → 2023, CPIC v1 → v2 per gene). Don't anchor on a guideline number without checking PharmGKB/CPIC for the current revision.
 
 ## Execution Discipline
 
@@ -257,6 +311,14 @@ For personal health/genomics answers, add:
 - what local artifact was used
 - whether external evidence updates or weakens the local state
 - whether the conclusion is action-grade, research-only, or null
+
+For any literature-anchored claim, also surface:
+
+- publication year + retraction/correction status (CrossRef `update-to[]`)
+- guideline version where applicable (ACMG / CPIC / professional society)
+- whether the cited evidence is on **current frontier models** when the
+  claim is about LLM behavior — pre-frontier findings (GPT-3.5/4, Claude 3,
+  Gemini 1.x) don't transfer unless the result is scale-independent.
 
 ## When To Stop
 
