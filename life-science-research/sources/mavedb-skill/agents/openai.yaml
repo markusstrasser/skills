@@ -1,0 +1,3 @@
+interface:
+  display_name: "MaveDB"
+  short_description: "Multiplexed assay variant-effect (MAVE / DMS) score sets"
