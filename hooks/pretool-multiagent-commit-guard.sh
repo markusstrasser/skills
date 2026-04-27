@@ -43,5 +43,5 @@ fi
 ~/Projects/skills/hooks/hook-trigger-log.sh "multiagent-commit" "block" \
     "procs=$CLAUDE_PROCS cmd=$(echo "$CMD" | head -c 60)" 2>/dev/null || true
 
-echo '{"decision": "block", "reason": "MULTI-AGENT SAFETY: '"$CLAUDE_PROCS"' claude processes active in main repo (not a worktree). Use git add <specific-files> (not -A/-p/.). For git checkout/restore: stash instead, or verify the files are yours."}'
+echo '{"decision": "block", "reason": "MULTI-AGENT SAFETY: '"$CLAUDE_PROCS"' claude processes active in main repo (not a worktree). Use git add <specific-files> (not -A/-p/.). For git checkout/restore (destructive): prefer Read + Edit to repair the file in place — you can recover the pre-corruption content from earlier tool results in this conversation. Only use git checkout/restore if you are certain no other agent has uncommitted work on those paths, AND in that case run \"git stash push -- <files>\" first so the discard is reversible."}'
 exit 2
