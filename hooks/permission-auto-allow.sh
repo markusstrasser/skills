@@ -31,6 +31,7 @@ case "$TOOL" in
         FPATH=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_input',{}).get('file_path',''))" 2>/dev/null) || true
         case "$FPATH" in
             */.claude/checkpoint.md) allow_tool "$TOOL:checkpoint" ;;
+            */.claude/plans/*) allow_tool "$TOOL:plans" ;;
         esac
         ;;
     mcp__context7__*|mcp__research__search_papers|mcp__research__list_*|mcp__research__get_*)
