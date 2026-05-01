@@ -114,14 +114,26 @@ Read both review outputs. You are the merger — you have both in context and ca
 2. **Check if both models found it** — cross-model agreement is the strongest signal.
 3. **Grep "missing feature" claims** — the feature may already exist.
 
-**Trust ranking:**
+**Bucket findings into three categories before recommending action:**
+
+| Bucket | Definition | Action |
+|--------|-----------|--------|
+| **Convergent** | Both models flagged the same issue (`cross_model: true` in `findings.json`) | Verify in code, then fix. Strongest signal. |
+| **Single-source** | One model flagged it, the other was silent on this point | Verify in code. If real, fix it. Coverage gap, not disagreement. |
+| **Divergent** | Both models addressed the same question but recommended **different answers** (e.g., A says "use X", B says "use Y"; A says "delete the wrapper", B says "keep it for boundary Z") | Do **not** auto-resolve. Surface to user as a taste/judgment call with both positions stated. |
+
+The first two are convergence on whether something is a problem — verifiable, act. The third is genuine disagreement on the right answer — taste, escalate. Synthesizing divergent recommendations into a single "balanced" position discards the most actionable signal: that there's a real choice the user should make.
+
+**Detecting divergence:** scan both reviewer outputs for the same target (file, function, decision point) and check whether the recommendations are compatible (same direction, different depth) or incompatible (different directions). Same problem + conflicting fixes = divergent.
+
+**Trust ranking for verified findings:**
 
 | Signal | Action |
 |--------|--------|
-| Both models found it + you verified in code | Fix it |
-| One model found it + you verified in code | Fix it |
-| Both agree but unverified | Verify first |
-| Single model, unverified | Investigate before acting |
+| Convergent + verified in code | Fix it |
+| Single-source + verified in code | Fix it |
+| Convergent but unverified | Verify first |
+| Single-source, unverified | Investigate before acting |
 | Contradicts what you see in the code | Discard |
 
 **Before implementing:** Ask yourself two questions:
@@ -134,9 +146,18 @@ Don't let rigorous-looking analysis override what you can see in the code.
 
 **The synthesis is not the deliverable — the updated artifact is.**
 
-- **Verified findings:** Apply directly. Don't ask permission.
-- **Context depleted:** Offer plan-mode handoff.
-- **All deferred/rejected:** The synthesis is the deliverable.
+Structure your response to the user with the three buckets explicit:
+
+- **Convergent (acting):** what both models agreed on, what you verified, what you're fixing.
+- **Single-source (acting / investigating):** what one model caught, verified status, action.
+- **Divergent (your call):** the questions where models disagreed. State both positions, what each implies, and ask the user to pick. Do not pre-resolve.
+
+Then:
+
+- **Verified convergent + single-source findings:** apply directly. Don't ask permission.
+- **Divergent findings:** wait for user direction before implementing either side.
+- **Context depleted:** offer plan-mode handoff.
+- **All deferred/rejected:** the synthesis is the deliverable.
 
 ### Artifact Handoff
 
