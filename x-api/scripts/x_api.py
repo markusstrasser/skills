@@ -10,9 +10,11 @@ Pricing (2026-05-01):
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,8 +24,25 @@ API_BASE = "https://api.x.com/2"
 COST_USER_LOOKUP = 0.010
 COST_TWEET_READ = 0.005
 
-# Cost ledger lives in CWD/.scratch — caller's project sees its own ledger
-COST_LEDGER = Path(".scratch/x_api_cost_ledger.jsonl")
+# Wait at most this long for a rate-limit reset before raising.
+# X API resets are typically <=15 min; longer indicates an account-level cap.
+MAX_RATE_LIMIT_WAIT_SECONDS = 900
+
+# Global ledger location — wallet-scoped, NOT CWD-scoped, so spend across
+# projects sharing one bearer token rolls up to a single budget.
+DEFAULT_LEDGER = Path.home() / ".local/state/x-api/cost_ledger.jsonl"
+
+
+class RateLimitExceeded(RuntimeError):
+    """Raised when the rate-limit reset is further away than the caller can wait."""
+
+    def __init__(self, wait_seconds: int):
+        super().__init__(f"rate-limited; reset in {wait_seconds}s")
+        self.wait_seconds = wait_seconds
+
+
+class BudgetExceeded(RuntimeError):
+    """Raised before any call that would push spend past the monthly cap."""
 
 
 @dataclass
@@ -54,13 +73,12 @@ def _load_dotenv_into_environ(env_file: Path) -> None:
 
 
 def load_token_from_dotenv(env_file: Path | str | None = None) -> None:
-    """Convenience: load X_API_BEARER_TOKEN from a .env file into os.environ.
+    """Load X_API_BEARER_TOKEN from a .env file into os.environ.
 
-    Default search order:
+    Default search order (stops at first hit):
       1. CWD/.env.local
       2. CWD/.env
       3. ~/.env
-    Stops at the first file that defines X_API_BEARER_TOKEN.
     """
     if env_file is not None:
         _load_dotenv_into_environ(Path(env_file))
@@ -84,13 +102,20 @@ def _headers() -> dict[str, str]:
 
 
 def _request(url: str, params: dict | None = None) -> dict:
-    """GET with single retry on 429 honoring Reset header."""
+    """GET with single retry on 429.
+
+    Sleeps until the actual rate-limit reset time. If reset is more than
+    MAX_RATE_LIMIT_WAIT_SECONDS away, raises RateLimitExceeded so the caller
+    can skip cleanly instead of blocking the whole batch.
+    """
     for attempt in range(2):
         r = requests.get(url, headers=_headers(), params=params, timeout=30)
         if r.status_code == 429 and attempt == 0:
             reset = int(r.headers.get("x-rate-limit-reset", "0"))
             wait = max(1, reset - int(time.time()))
-            time.sleep(min(wait, 60))
+            if wait > MAX_RATE_LIMIT_WAIT_SECONDS:
+                raise RateLimitExceeded(wait)
+            time.sleep(wait + 1)
             continue
         r.raise_for_status()
         return r.json()
@@ -143,31 +168,72 @@ def get_user_tweets(
     return out
 
 
+@contextmanager
+def _exclusive_lock(path: Path):
+    """Whole-file fcntl.LOCK_EX held for the duration of the block."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.touch(exist_ok=True)
+    with path.open("a+") as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        try:
+            yield f
+        finally:
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+
 def log_cost(tally: CostTally, label: str, ledger: Path | None = None) -> None:
-    """Append cost line to ledger for monthly budget tracking."""
-    path = ledger or COST_LEDGER
-    path.parent.mkdir(exist_ok=True)
+    """Append cost line under exclusive lock so concurrent runs don't interleave."""
+    path = Path(ledger) if ledger else DEFAULT_LEDGER
     rec = {
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "label": label,
         "user_lookups": tally.user_lookups,
         "tweet_reads": tally.tweet_reads,
-        "usd": round(tally.usd, 4),
+        "usd": round(tally.usd, 6),
     }
-    with path.open("a") as f:
+    with _exclusive_lock(path) as f:
         f.write(json.dumps(rec) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
 
 
 def month_to_date_usd(ledger: Path | None = None) -> float:
-    path = ledger or COST_LEDGER
+    """Sum spend in current UTC month. Holds shared lock during read."""
+    path = Path(ledger) if ledger else DEFAULT_LEDGER
     if not path.exists():
         return 0.0
     month = time.strftime("%Y-%m", time.gmtime())
     total = 0.0
-    for line in path.read_text().splitlines():
-        if not line.strip():
-            continue
-        rec = json.loads(line)
-        if rec.get("ts", "").startswith(month):
-            total += rec.get("usd", 0.0)
-    return round(total, 4)
+    with path.open("r") as f:
+        fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+        try:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                rec = json.loads(line)
+                if rec.get("ts", "").startswith(month):
+                    total += rec.get("usd", 0.0)
+        finally:
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+    return round(total, 6)
+
+
+def assert_budget(
+    monthly_cap: float,
+    projected_call_cost: float,
+    ledger: Path | None = None,
+    in_flight: float = 0.0,
+) -> float:
+    """Raise BudgetExceeded if MTD + in_flight + projected > monthly_cap.
+
+    Returns current MTD. Call this BEFORE making each billable request.
+    """
+    mtd = month_to_date_usd(ledger=ledger)
+    if mtd + in_flight + projected_call_cost >= monthly_cap:
+        raise BudgetExceeded(
+            f"would exceed ${monthly_cap:.2f} cap: "
+            f"MTD ${mtd:.2f} + in-flight ${in_flight:.2f} + "
+            f"projected ${projected_call_cost:.2f}"
+        )
+    return mtd

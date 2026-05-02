@@ -6,7 +6,13 @@ Generic, project-agnostic. Caller supplies:
   - --themes-dir (optional): dir with theme files (lists shown in digest header)
   - --digest-out (optional): where to write the markdown digest
 
-$100/month hard cap. Refuses to run if MTD > cap.
+Cost discipline:
+  - Preflight projection — refuses to run if max projected cost exceeds
+    --max-run-usd (default $3, the project cost-approval gate)
+  - Per-account budget assertion — checks the global ledger before each call
+    so an in-flight run can't exceed --monthly-cap (default $100)
+  - Per-account log_cost — partial spend is recorded even if process crashes
+  - Global ledger at ~/.local/state/x-api/cost_ledger.jsonl with fcntl locking
 
 Usage:
     python3 ~/Projects/skills/x-api/scripts/pull.py --config accounts.json
@@ -24,7 +30,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from x_api import (
+    COST_TWEET_READ,
+    COST_USER_LOOKUP,
+    BudgetExceeded,
     CostTally,
+    RateLimitExceeded,
+    assert_budget,
     get_user,
     get_user_tweets,
     load_token_from_dotenv,
@@ -32,9 +43,11 @@ from x_api import (
     month_to_date_usd,
 )
 
-MONTHLY_HARD_CAP = 100.0  # USD
-
-CASHTAG_FALLBACK = re.compile(r"\$([A-Z][A-Z0-9.]{0,6})\b")
+# Allow at least 2 chars after the $ to avoid matching $M / $B / $T
+# (money-unit abbreviations) as tickers. Single-letter tickers like $F or $T
+# slip through here — server-side entities.cashtags is the primary path
+# anyway and X's own tagger correctly handles single-letter tickers.
+CASHTAG_FALLBACK = re.compile(r"\$([A-Za-z][A-Za-z0-9.]{1,6})\b")
 MATERIAL_KEYWORDS = re.compile(
     r"\b(earnings|guidance|contract|deal|partnership|acquisition|"
     r"merger|order|qualified|customer win|design win|FDA|clinical|"
@@ -95,6 +108,17 @@ def format_tweet(t: dict, username: str) -> str:
     )
 
 
+def project_max_cost(accounts: list[dict], max_pages: int) -> float:
+    """Worst-case spend if every account hits max pagination.
+
+    Per account: 1 user lookup IF user_id missing from config + (max_pages * 100)
+    tweet reads.
+    """
+    user_calls = sum(1 for a in accounts if not a.get("user_id"))
+    tweet_calls = len(accounts) * max_pages * 100
+    return user_calls * COST_USER_LOOKUP + tweet_calls * COST_TWEET_READ
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True,
@@ -103,23 +127,40 @@ def main() -> int:
     ap.add_argument("--max-pages", type=int, default=2,
                     help="Pages per account; cap is max_pages * 100 tweets")
     ap.add_argument("--tracked-tickers-file",
-                    help="Newline-delimited tickers we already track (for coverage delta)")
+                    help="Newline-delimited tickers we already track")
     ap.add_argument("--themes-dir",
                     help="Dir with theme *.md files (listed in digest header)")
     ap.add_argument("--digest-out",
                     help="Output markdown path (default: .scratch/social_digest_<date>.md)")
+    ap.add_argument("--monthly-cap", type=float, default=100.0,
+                    help="Hard monthly spend cap (USD)")
+    ap.add_argument("--max-run-usd", type=float, default=3.0,
+                    help="Per-run projection cap (USD). Project policy: actions "
+                         ">$3 require explicit approval — pass a higher value to "
+                         "authorize larger runs.")
     args = ap.parse_args()
 
     load_token_from_dotenv()
 
-    mtd = month_to_date_usd()
-    if mtd > MONTHLY_HARD_CAP:
-        sys.exit(f"BLOCKED: month-to-date ${mtd:.2f} exceeds ${MONTHLY_HARD_CAP} cap")
-    print(f"[budget] month-to-date=${mtd:.2f} / cap=${MONTHLY_HARD_CAP}")
-
     cfg = json.loads(Path(args.config).read_text())
     accounts = cfg["accounts"]
     print(f"[accounts] {len(accounts)} curated")
+
+    projected = project_max_cost(accounts, args.max_pages)
+    print(f"[preflight] worst-case projection: ${projected:.2f}  "
+          f"(--max-run-usd={args.max_run_usd:.2f})")
+    if projected > args.max_run_usd:
+        sys.exit(
+            f"BLOCKED: projected ${projected:.2f} exceeds --max-run-usd "
+            f"${args.max_run_usd:.2f}. Re-run with --max-run-usd {projected:.2f} "
+            f"to authorize, or reduce --max-pages / accounts."
+        )
+
+    mtd_start = month_to_date_usd()
+    if mtd_start >= args.monthly_cap:
+        sys.exit(f"BLOCKED: month-to-date ${mtd_start:.2f} reached "
+                 f"${args.monthly_cap:.2f} cap")
+    print(f"[budget] month-to-date=${mtd_start:.2f} / cap=${args.monthly_cap}")
 
     since = datetime.now(timezone.utc) - timedelta(hours=args.since_hours)
     start_time = since.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -128,7 +169,6 @@ def main() -> int:
     tracked = load_tracked(Path(args.tracked_tickers_file)
                            if args.tracked_tickers_file else None)
     themes = list_themes(Path(args.themes_dir) if args.themes_dir else None)
-    tally = CostTally()
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     digest: list[str] = []
@@ -144,12 +184,33 @@ def main() -> int:
 
     all_ticker_counts: Counter[str] = Counter()
     untracked_hits: dict[str, list[str]] = {}
+    total_spend = 0.0  # rolling spend across accounts in this run
 
     for acct in accounts:
         username = acct["username"]
+        tally = CostTally()  # fresh per-account so log_cost is granular
         print(f"\n[pull] @{username}")
+
+        # Per-account budget assertion BEFORE the call. Worst-case for this
+        # account = 1 user lookup (if missing user_id) + max_pages * 100 tweets.
+        per_account_max = (
+            (0 if acct.get("user_id") else COST_USER_LOOKUP)
+            + args.max_pages * 100 * COST_TWEET_READ
+        )
         try:
-            user = get_user(username, tally=tally)
+            assert_budget(args.monthly_cap, per_account_max, in_flight=total_spend)
+        except BudgetExceeded as e:
+            print(f"  BUDGET STOP: {e}")
+            digest.append(f"## @{username} — STOPPED (budget): {e}\n")
+            break
+
+        try:
+            user_id = acct.get("user_id")
+            if user_id:
+                # Skip $0.01 user lookup when ID is cached in config
+                user = {"id": user_id, "name": acct.get("display_name", username)}
+            else:
+                user = get_user(username, tally=tally)
             tweets = get_user_tweets(
                 user["id"],
                 max_results=100,
@@ -157,9 +218,18 @@ def main() -> int:
                 max_pages=args.max_pages,
                 tally=tally,
             )
+        except RateLimitExceeded as e:
+            print(f"  RATE-LIMITED: skipping (reset in {e.wait_seconds}s)")
+            digest.append(f"## @{username} — SKIPPED (rate limit, "
+                          f"reset in {e.wait_seconds}s)\n")
+            log_cost(tally, label=f"x_api_pull/{username} (rate-limited)")
+            total_spend += tally.usd
+            continue
         except Exception as e:
             print(f"  ERROR: {e}")
             digest.append(f"## @{username} — ERROR: {e}\n")
+            log_cost(tally, label=f"x_api_pull/{username} (error)")
+            total_spend += tally.usd
             continue
 
         material = [t for t in tweets if is_material(t["text"])]
@@ -173,8 +243,12 @@ def main() -> int:
                     if tracked and tag not in tracked:
                         untracked_hits.setdefault(tag, []).append(username)
 
+        # Log cost FIRST so a crash during digest formatting still records spend
+        log_cost(tally, label=f"x_api_pull/{username}")
+        total_spend += tally.usd
+
         print(f"  pulled={len(tweets)}  material={len(material)}  "
-              f"with_tickers={len(ticker_hits)}")
+              f"with_tickers={len(ticker_hits)}  spend=${tally.usd:.3f}")
 
         digest.append(f"## @{username}")
         sig = acct.get("track_record_signal")
@@ -233,20 +307,19 @@ def main() -> int:
 
     digest.append("---\n")
     digest.append(
-        f"_Cost this run: ${tally.usd:.3f} "
-        f"({tally.user_lookups} user × $0.010 + {tally.tweet_reads} tweet × $0.005). "
-        f"MTD after run: ${mtd + tally.usd:.2f}._"
+        f"_Run spend: ${total_spend:.3f}. "
+        f"MTD before run: ${mtd_start:.2f}. "
+        f"MTD after run: ${mtd_start + total_spend:.2f}._"
     )
 
     out_path = (Path(args.digest_out) if args.digest_out
                 else Path(".scratch") / f"social_digest_{today}.md")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(digest))
-    log_cost(tally, label=f"x_api_pull --since-hours {args.since_hours}")
 
     print(f"\n[digest] {out_path}")
-    print(f"[cost]   ${tally.usd:.3f} this run, "
-          f"${mtd + tally.usd:.2f} MTD")
+    print(f"[cost]   ${total_spend:.3f} this run, "
+          f"${mtd_start + total_spend:.2f} MTD")
     return 0
 
 
