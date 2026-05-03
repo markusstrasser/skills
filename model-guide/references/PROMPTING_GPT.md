@@ -221,6 +221,83 @@ llmx -m gpt-5.5 --reasoning-effort xhigh --timeout 900 --stream "complex query"
 
 ---
 
+## 1c. Deep Research Mode — Two-Phase Pattern
+
+**Deep Research** is a separate ChatGPT Pro mode (toggle in the composer) that runs an autonomous web-search agent: 80–160 searches, 5–15 min wall-clock, returns a long report with footnoted citations. It is NOT the same as standard Pro reasoning. Same underlying weights, different harness — the harness is biased toward search.
+
+### The failure mode
+
+Deep Research **over-searches by default and under-reasons.** Cross-domain finding from agentic-search literature (Sep–Dec 2025): when prompts don't gate the retrieve-vs-think decision, models burn budget on URL retrieval even when pretraining contains the answer. References: arxiv:2601.08747 ("To Retrieve or To Think?"), arxiv:2511.18743 (RhinoInsight gating), arxiv:2512.06653 (LightSearcher), ReSearch (EMNLP 2025). Same pattern as Cao et al. 2026 finding that BM25/embedding retrieval HURTS coding agent performance by 40.5% when the agent already has grep.
+
+Empirical confirmation from a 5-prompt × 8-response Synthoria pharma-value evaluation (2026-05-03, archived in `phenome:docs/research/synthoria_pharma_value_2026-05-03/`): the **frames** Deep Research returned (verdicts, rankings, narratives, comparable transactions known by mid-2025) were strong and convergent across runs. The **specifics** Deep Research surfaced via web search (post-cutoff deal sizes, current pricing pages, named contacts) were mixed — several hallucinated, several stale, all required `[UNVERIFIED]` tagging. The model's strongest work was its pretrained reasoning; the weakest work was its URL retrieval.
+
+### What Deep Research is good at vs not
+
+| Strong | Weak / dangerously confabulating |
+|---|---|
+| Market structure, business archetypes, deal patterns | Specific recent deal $ amounts post-cutoff |
+| Causal chains, regulatory framework synthesis | Current pricing pages, current eligibility rules |
+| Comparable transactions known by training cutoff | Named contacts at companies (often stale or invented) |
+| Strategy synthesis across 8–15 sources | Very recent (last 6 months) news |
+| Adversarial steelmanning when prompted | Open-ended "find everything" — produces low-signal URL stew |
+
+### The two-phase template
+
+For Deep Research prompts where the answer depends mostly on synthesis (strategy, market analysis, business model evaluation, technical landscape mapping):
+
+```
+PASS 1 — PRETRAINING-FIRST SYNTHESIS (no web search this pass)
+
+[Operator + question + relevant prior context]
+
+Use only your pretraining knowledge for this pass. Do NOT search the web yet.
+
+Tag every claim:
+- [TRAINED]            — known from pretraining, high confidence
+- [TRAINED-APPROX]     — recall a number but unsure of magnitude
+- [PRETRAINING-UNKNOWN] — don't know, flagged for verification
+- [POST-CUTOFF]        — happened after my training and I cannot answer
+
+Produce the full structural answer (frame, ranking, narrative, comparables-
+from-memory). At the end, list the 5–10 specific facts your conclusion most
+depends on that are tagged [TRAINED-APPROX] or [PRETRAINING-UNKNOWN]. These
+are the verification queue for Pass 2.
+
+PASS 2 — TARGETED VERIFICATION (web search this pass)
+
+For each item in the Pass-1 verification queue, run one focused web search.
+Update the Pass 1 conclusion ONLY if a verification result contradicts a
+load-bearing claim. Do NOT broaden the search beyond the queue. Do NOT
+regenerate the frame.
+
+Output:
+- Pass 1 conclusion (unchanged frame)
+- Verification table: claim → source → verdict (CONFIRMED / WRONG / NOT FOUND)
+- Diff: which Pass 1 conclusions changed and why
+```
+
+This roughly halves wall-clock time, avoids URL-stew compute waste, and lets the model's strongest work (pretrained synthesis) get a clean unconstrained pass before being asked to fact-check itself.
+
+### When to use which mode
+
+| Prompt type | Use |
+|---|---|
+| Strategy / market structure / business archetype synthesis | Two-phase (Pass 1 + Pass 2) |
+| Adversarial review of a plan or document | Standard Pro reasoning (no Deep Research) — search adds noise |
+| Quantitative derivation (Bayesian, formal proofs) | Standard Pro reasoning (no Deep Research) |
+| Account-list / contact-list / current-news mapping | Deep Research, web-first, **cap search budget** ("max 30 searches; return what you have plus an honest 'incomplete' if budget exhausts") |
+| Mixed (half synthesis, half empirical) | Two-phase, but Pass 2 is wider (current conferences, recent funding rounds) |
+| Verifying a specific number or fact | Single-pass with `verify_claim` (Exa /answer) — Deep Research is overkill |
+
+### Sequencing within a multi-prompt batch
+
+For multi-prompt research bundles (5+ Deep Research prompts on related questions):
+- Run synthesis-heavy prompts FIRST. Their convergent verdict often invalidates 1–2 of the empirical-heavy prompts you were going to run.
+- Run empirical-heavy prompts ONLY after the synthesis verdict tells you which empirical questions still matter.
+- Archive prompts + responses together with `[UNVERIFIED]` tags from the start. The 2026-05-03 Synthoria bundle is the reference template: `phenome:docs/research/synthoria_pharma_value_2026-05-03/{prompts.md,response_*.md,README.md}`.
+
+---
+
 ## 2. Message Roles
 
 OpenAI defines a strict authority chain: `developer` > `user` > `assistant`.

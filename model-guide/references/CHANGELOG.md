@@ -2,6 +2,14 @@
 
 Track what changes with each model release so you know what to update.
 
+## 2026-05-03 -- GPT-5.5 Pro Deep Research two-phase pattern
+
+Added `references/PROMPTING_GPT.md` §1c documenting the two-phase pretraining-first prompt template for GPT-5.5 Pro Deep Research mode, plus a one-line variant entry in `SKILL.md` GPT-5.5 section.
+
+Trigger: 5-prompt × 8-response Synthoria pharma-value evaluation (2026-05-03, archived in `phenome:docs/research/synthoria_pharma_value_2026-05-03/`) showed Deep Research's pretrained synthesis is strong while its web-retrieved specifics are mixed-quality — multiple `[UNVERIFIED]` deal sizes, stale program eligibility, hallucinated contacts. The convergent pattern in recent agentic-search literature (arxiv:2601.08747, 2511.18743, 2512.06653, ReSearch EMNLP 2025) confirms the diagnosis: agents over-search and under-reason when prompts don't gate the decision.
+
+The new §1c gives a paste-ready Pass-1/Pass-2 template, a "when to use which mode" routing table, and a multi-prompt batch sequencing rule (run synthesis-heavy prompts first; their convergent verdict often invalidates 1–2 of the empirical prompts you were going to run).
+
 ## 2026-04-24 -- GPT-5.5 GA caching clarification
 
 OpenAI API changelog (2026-04-24) clarified post-GA behavior worth propagating:
