@@ -104,6 +104,7 @@ For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
 - GPT-5.5 (base) — API/llmx/Codex CLI, effort none→high. Default for programmatic use.
 - GPT-5.5 effort=xhigh — API/llmx, extended reasoning. Pro-lite. Timeouts at llmx's 900s cap.
 - GPT-5.5 Pro — ChatGPT Pro/Business/Enterprise + API at $30/$180 per MTok. **Same underlying weights** + parallel test-time compute. Gate to high-uncertainty × high-irreversibility decisions only (6x cost).
+- GPT-5.5 Pro **Deep Research mode** — separate ChatGPT Pro toggle. Autonomous web-search agent (80–160 searches, 5–15 min). Same weights, search-biased harness. Strong at synthesis from pretraining; over-searches and confabulates on post-cutoff specifics. **Use the two-phase pretraining-first template** — see `references/PROMPTING_GPT.md` §1c.
 - "Thinking" in ChatGPT web UI = effort=high (the default mode). Not a separate model.
 
 **Effort levels:** `none` (no reasoning, enables temperature/top_p), `minimal`, `low`, `medium`, `high` (default via llmx), `xhigh` (max compute).
