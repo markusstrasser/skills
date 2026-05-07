@@ -127,7 +127,7 @@ Your ranked list of the 5 most impactful changes, with testable verification cri
 What am I (Gemini) likely getting wrong? Where should you distrust my assessment?""",
     },
     "formal": {
-        "label": "GPT-5.4 (quantitative/formal)",
+        "label": "GPT-5.5 (quantitative/formal)",
         "profile": "formal_review",
         "prompt": """\
 <system>
@@ -155,7 +155,7 @@ Convert vague claims into falsifiable predictions with success criteria. If a cl
 Ranked by measurable impact. Each must have: (a) what, (b) why with quantitative justification, (c) how to verify with specific metrics.
 
 ## 6. Where I'm Likely Wrong
-What am I (GPT-5.4) probably getting wrong? Known biases to flag: overconfidence in fabricated specifics, overcautious scope-limiting, production-grade recommendations for personal projects.""",
+What am I (GPT-5.5) probably getting wrong? Known biases to flag: overconfidence in fabricated specifics, overcautious scope-limiting, production-grade recommendations for personal projects.""",
     },
     "domain": {
         "label": "Gemini Pro (domain correctness)",
@@ -481,9 +481,12 @@ def build_context(
 ) -> dict[str, ContextArtifact]:
     """Assemble shared context packet with goals/governance preamble.
 
-    Context sources (in order of precedence):
-      1. --context FILE — single pre-assembled context file
-      2. --context-files spec1 spec2 ... — auto-assembled from file:range specs
+    Context sources (additive, both may be supplied; at least one required):
+      1. --context FILE — pre-assembled context file (high priority, narrative)
+      2. --context-files spec1 spec2 ... — file:range excerpts (lower priority, auxiliary)
+
+    When both are supplied, --context becomes the "Provided Context" section and
+    --context-files become an additional "Context Files" section. Mutex relaxed 2026-05-07.
     """
     preamble_blocks, _ = build_review_preamble_blocks(project_dir)
     packet_sections = [PacketSection("Preamble", preamble_blocks)]
@@ -495,7 +498,7 @@ def build_context(
                 [TextBlock(str(context_file), context_file.read_text(), priority=400, drop_if_needed=False, metadata={"path": str(context_file)})],
             )
         )
-    elif context_file_specs:
+    if context_file_specs:
         file_blocks = []
         for spec_text in context_file_specs:
             spec = parse_file_spec(spec_text.strip())
@@ -517,7 +520,7 @@ def build_context(
                 )
             )
         packet_sections.append(PacketSection("Context Files", file_blocks))
-    else:
+    if not context_file and not context_file_specs:
         packet_sections.append(PacketSection("Provided Context", [TextBlock("Context", "", priority=10, drop_if_needed=True)]))
 
     token_limits = [
@@ -1162,7 +1165,7 @@ def verify_claims(
         return anchors
 
     # Extension-swap fallbacks — models frequently hallucinate these when
-    # citing data/config files. Order reflects observed frequency: GPT-5.4
+    # citing data/config files. Order reflects observed frequency: GPT-5.5
     # and Gemini both emit ``.js`` where ``.json`` was meant, and there's
     # a similar ``.yml`` ⇄ ``.yaml`` ambiguity. Known issue logged at
     # /Users/alien/.claude/skills/critique/SKILL.md § Known Issues
@@ -1176,15 +1179,55 @@ def verify_claims(
         ".jsx": (".tsx",),
     }
 
+    # Inflated HALLUCINATED rate (~30-40% in genomics reviews 2026-04-25/26)
+    # came from two resolver gaps:
+    #   1. rglob() walked .claude/worktrees/ and returned 4× duplicates for
+    #      every file → "ambiguous" → discarded.
+    #   2. Path-prefixed references like "scripts/controller_reconcile.py"
+    #      missed when the actual file is at scripts/orchestrator/
+    #      controller_reconcile.py — rglob with path-separator does
+    #      suffix-match, not basename-match.
+    # Fix: exclude cruft dirs from candidates; fall back to basename-only
+    # search when a path-prefixed reference fails.
+    _CRUFT_DIRS = (".claude/worktrees", ".claude/cache", ".git", "__pycache__",
+                   "node_modules", ".venv", "vendors", ".pytest_cache",
+                   ".ruff_cache", ".model-review", ".tasks", "node_modules",
+                   "build", "dist")
+
+    def _is_cruft(p: Path) -> bool:
+        s = p.as_posix()
+        return any(f"/{d}/" in s or s.endswith(f"/{d}") or s.startswith(f"{d}/")
+                   for d in _CRUFT_DIRS)
+
+    def _filtered_rglob(pattern: str) -> list[Path]:
+        return [p for p in project_dir.rglob(pattern) if not _is_cruft(p)]
+
+    _TEXT_VERIFY_SUFFIXES = {
+        ".cfg", ".clj", ".cljc", ".css", ".edn", ".html", ".js", ".json",
+        ".md", ".py", ".sh", ".sql", ".toml", ".ts", ".tsx", ".yaml", ".yml",
+    }
+
+    def _is_text_verifiable(path: Path) -> bool:
+        return path.suffix.lower() in _TEXT_VERIFY_SUFFIXES
+
     def _resolve_reference(filepath: str) -> tuple[str, Path | None, str]:
         exact_path = project_dir / filepath
         if exact_path.exists():
             return "exact", exact_path, filepath
-        candidates = list(project_dir.rglob(filepath))
+        candidates = _filtered_rglob(filepath)
         if len(candidates) == 1:
             return "basename", candidates[0], filepath
         if len(candidates) > 1:
             return "ambiguous", None, filepath
+
+        # Path-prefixed reference (e.g. "scripts/foo.py") missed because the
+        # file actually lives deeper (e.g. "scripts/orchestrator/foo.py").
+        # Fall back to basename-only search.
+        if "/" in filepath:
+            basename = filepath.rsplit("/", 1)[1]
+            base_candidates = _filtered_rglob(basename)
+            if len(base_candidates) == 1:
+                return "basename_prefix_drop", base_candidates[0], filepath
 
         # No direct hit — try extension-swap aliases before declaring missing.
         suffix = Path(filepath).suffix
@@ -1193,7 +1236,7 @@ def verify_claims(
             alt_exact = project_dir / alt_filepath
             if alt_exact.exists():
                 return "exact_extswap", alt_exact, alt_filepath
-            alt_candidates = list(project_dir.rglob(alt_filepath))
+            alt_candidates = _filtered_rglob(alt_filepath)
             if len(alt_candidates) == 1:
                 return "basename_extswap", alt_candidates[0], alt_filepath
 
@@ -1251,6 +1294,9 @@ def verify_claims(
             elif resolution == "ambiguous":
                 notes.append(f"{filepath} matched multiple files")
                 reference_results.append((resolution, Path(filepath), line_str))
+            elif not _is_text_verifiable(found_path):
+                notes.append(f"{display_path} resolved but is binary/non-text; skipped content anchors")
+                reference_results.append(("binary", found_path, line_str))
             else:
                 reference_results.append((resolution, found_path, line_str))
 
@@ -1262,10 +1308,10 @@ def verify_claims(
         line_corrected = False
         ambiguous_ref = any(resolution == "ambiguous" for resolution, _, _ in reference_results)
         for resolution, found_path, line_str in reference_results:
-            if resolution == "ambiguous":
+            if resolution in {"ambiguous", "binary"}:
                 continue
             try:
-                file_text = found_path.read_text()
+                file_text = found_path.read_text(encoding="utf-8", errors="replace")
                 file_lines = file_text.splitlines()
             except OSError:
                 notes.append(f"{found_path.relative_to(project_dir)} unreadable")
@@ -1364,11 +1410,13 @@ def main() -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=f"Presets: {', '.join(PRESETS.keys())}. Axes: {', '.join(AXES.keys())}.",
     )
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--context", type=Path, help="Context file for narrow review")
-    group.add_argument(
+    # Context flags are additive (2026-05-07): --context provides a primary pre-assembled
+    # narrative; --context-files appends auxiliary file excerpts. Either or both may be
+    # used; at least one is required.
+    parser.add_argument("--context", type=Path, help="Primary pre-assembled context file (narrative)")
+    parser.add_argument(
         "--context-files", nargs="+", metavar="FILE_SPEC",
-        help="Auto-assemble context from file:range specs (e.g., plan.md scripts/ir.py:86-110)",
+        help="Auxiliary file:range specs (e.g., plan.md scripts/ir.py:86-110). Additive with --context.",
     )
     parser.add_argument("--topic", required=True, help="Short topic label (used in output dir name)")
     parser.add_argument("--project", type=Path, help="Project dir for goals/governance doc discovery (default: cwd)")
@@ -1402,6 +1450,11 @@ def main() -> int:
     project_dir = args.project or Path.cwd()
     if not project_dir.is_dir():
         print(f"error: project dir {project_dir} not found", file=sys.stderr)
+        return 1
+
+    # At least one of --context / --context-files must be provided (mutex relaxed 2026-05-07)
+    if not args.context and not args.context_files:
+        print("error: at least one of --context or --context-files is required", file=sys.stderr)
         return 1
 
     if args.context and not args.context.exists():
