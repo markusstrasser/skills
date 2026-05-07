@@ -230,6 +230,44 @@ def _session_commit_range(repo: Path, session_id: str) -> tuple[str, str] | None
     return f"{oldest}~1", "HEAD"
 
 
+def _head_trailer_session_range(repo: Path) -> tuple[str, str, str] | None:
+    """Recover a session-id from HEAD's commit trailer and return
+    (base, head, trailer_session_id).
+
+    Robustness fallback: in long sessions the harness sometimes mints a new
+    session id mid-work, leaving ``.claude/current-session-id`` out of sync
+    with the ``Session-ID:`` trailers on the actual commits. The session id
+    in HEAD's body, however, is whatever was current at commit time and
+    matches at least the most recent group of commits made by this session.
+    Returning HEAD's trailer-id lets the regular session-range query
+    succeed when the file-based id has been clobbered.
+
+    Looks back up to 10 commits — covers most plan-close ranges and avoids
+    unbounded git-log calls.
+    """
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(repo), "log", "-n", "10", "--format=%H%x00%B%x01"],
+            stderr=subprocess.DEVNULL, text=True, timeout=5,
+        )
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return None
+    for entry in out.split("\x01"):
+        entry = entry.strip()
+        if not entry:
+            continue
+        sha, _, body = entry.partition("\x00")
+        for line in body.splitlines():
+            if line.startswith("Session-ID:"):
+                trailer_sid = line.split(":", 1)[1].strip()
+                if trailer_sid:
+                    range_ = _session_commit_range(repo, trailer_sid)
+                    if range_ is not None:
+                        return (range_[0], range_[1], trailer_sid)
+                break
+    return None
+
+
 def main() -> int:
     args = parse_args()
     repo = args.repo.resolve()
@@ -262,16 +300,28 @@ def main() -> int:
                 # uncommitted files bleeding in even as status context.
                 args.tracked_only = True
             else:
-                log_progress(
-                    f"session {session_id[:8]}… has no commits; falling back "
-                    "to worktree mode with --tracked-only (peer-agent dirt guard). "
-                    "Pass --tracked-only=false to include untracked."
-                )
-                # In multi-agent environments the current-session-id file can
-                # be clobbered by a peer, so the session ID we read may not
-                # match the commits we actually made. Default to tracked-only
-                # so .scratch/ and untracked peer files don't drown the packet.
-                args.tracked_only = True
+                # Robustness fallback: current-session-id may have been
+                # rolled by the harness or clobbered by a peer agent, so the
+                # session id we read can be out of sync with the trailers
+                # on the commits we actually made. Look at HEAD's trailer
+                # and use that session id instead.
+                head_range = _head_trailer_session_range(repo)
+                if head_range is not None:
+                    base, head, trailer_sid = head_range
+                    log_progress(
+                        f"current-session-id ({session_id[:8]}…) has no commits; "
+                        f"recovered range from HEAD trailer ({trailer_sid[:8]}…): "
+                        f"base={base} head={head}"
+                    )
+                    args.tracked_only = True
+                else:
+                    log_progress(
+                        f"session {session_id[:8]}… has no commits and HEAD has no "
+                        "Session-ID trailer; falling back to worktree mode with "
+                        "--tracked-only (peer-agent dirt guard). Pass --since "
+                        "<commit> to scope explicitly."
+                    )
+                    args.tracked_only = True
 
     packet = build_packet_model(
         repo,
