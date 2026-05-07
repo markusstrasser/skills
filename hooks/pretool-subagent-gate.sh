@@ -216,9 +216,13 @@ if [ -n "$PROMPT" ]; then
 fi
 
 # Check 8: Disjoint file paths — detect 2+ agents dispatched to same output file
+# Also writes promised paths to /tmp/claude-agent-paths-$PPID so the stop-hook
+# (stop-subagent-synthesis-gate.sh) can block stop when promised files do not exist.
+# Case-insensitive on leading verb (2026-05-07 fix: capital "Output to ..." was missed,
+# letting researchers claim "Memo finalized at <path>" without writing the file).
 if [ -n "$PROMPT" ]; then
     # Extract file paths from Write/output instructions in the prompt
-    OUT_PATH=$(echo "$PROMPT" | grep -oE '(Write|write|save|output).*(to|path)[^"'\'']*["'\''"]?([~/a-zA-Z0-9_./-]+\.(md|json|txt|py))' | grep -oE '[~/a-zA-Z0-9_./-]+\.(md|json|txt|py)' | head -1 || true)
+    OUT_PATH=$(echo "$PROMPT" | grep -oiE '(write|save|output).*(to|path)[^"'\'']*["'\''"]?([~/a-zA-Z0-9_./-]+\.(md|json|txt|py))' | grep -oE '[~/a-zA-Z0-9_./-]+\.(md|json|txt|py)' | head -1 || true)
     if [ -n "$OUT_PATH" ]; then
         DISPATCH_LOG="/tmp/claude-agent-paths-$PPID"
         if [ -f "$DISPATCH_LOG" ] && grep -qF "$OUT_PATH" "$DISPATCH_LOG" 2>/dev/null; then
