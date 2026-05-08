@@ -123,7 +123,9 @@ for f in research_files:
         content = fh.read()
     if not content.strip():
         continue  # Skip empty files (e.g., llmx -o placeholder before model finishes)
-    if not SOURCE_TAG.search(content):
+    # Strip HTML comments — invisible-to-reader provenance is guard evasion.
+    content_visible = re.sub(r'<!--.*?-->', '', content, flags=re.DOTALL)
+    if not SOURCE_TAG.search(content_visible):
         missing.append(f)
 
 if missing:
