@@ -35,6 +35,26 @@ CLAIM_RE = re.compile(
     r'|OR [0-9]|P[=<>]|HR\s*[=:]|RR\s*[=:]|CI\s*[=:]'
 )
 
+# Numeric quantitative claims that demand a checkable source, not training memory.
+# Matches: "30%", "20.5%", "$10B", "$1.2 billion", "5,000 units", "third largest",
+# market-share / revenue / count language.
+NUMERIC_CLAIM_RE = re.compile(
+    r'\b\d+\.?\d*\s*%'                      # percentages: 30%, 20.5%
+    r'|\$\s*\d+\.?\d*\s*[MBKmbk]?\b'        # dollar amounts: $10B, $1.2M
+    r'|\b\d+\.?\d*\s*(?:million|billion|trillion|thousand)\b'  # spelled magnitudes
+    r'|\b(?:first|second|third|fourth|fifth|top)\s*[- ]?(?:largest|biggest|leading)\b',
+    re.IGNORECASE,
+)
+
+# HTML comments are invisible in rendered markdown. Strip before checking
+# so [TAGS] inside <!-- ... --> don't satisfy provenance requirements.
+HTML_COMMENT_RE = re.compile(r'<!--.*?-->', re.DOTALL)
+
+
+def strip_invisible(text: str) -> str:
+    """Remove HTML comments — they don't render and shouldn't count as provenance."""
+    return HTML_COMMENT_RE.sub('', text)
+
 
 def extract_diff_content(hook_input: dict) -> str | None:
     """Extract the new/changed content from the hook input.
@@ -101,6 +121,34 @@ def check_training_data_cap(file_content: str) -> str | None:
     return None
 
 
+def check_training_data_on_numeric_claims(text: str) -> list[str]:
+    """Flag numeric/quantitative claims tagged with [TRAINING-DATA] only.
+
+    Specific numbers (market shares, revenues, ranks) sourced from training
+    memory are high-risk fabrication targets. They need a checkable citation
+    ([SOURCE:], [DATA], [CALC], or Admiralty grade), not just [TRAINING-DATA].
+
+    Same-line scope: a [TRAINING-DATA] tag covers numeric claims on its line
+    unless an explicit checkable tag also appears on that line.
+    """
+    errors: list[str] = []
+    checkable = re.compile(
+        r'\[SOURCE:|\[DATABASE:|\[DATA[\]:]|\[CALC[\]:]|\[QUOTE[\]:]|\[[A-F][1-6]\]'
+    )
+    for line in text.splitlines():
+        if '[TRAINING-DATA]' not in line:
+            continue
+        if not NUMERIC_CLAIM_RE.search(line):
+            continue
+        if checkable.search(line):
+            continue
+        excerpt = line.strip()[:120]
+        errors.append(
+            f"[TRAINING-DATA] on numeric claim without checkable source: \"{excerpt}\""
+        )
+    return errors
+
+
 def check_inference_has_premises(file_content: str) -> str | None:
     """Warn if file has [INFERENCE] but no [SOURCE] or [DATA] tags."""
     if not INFERENCE_RE.search(file_content):
@@ -131,10 +179,15 @@ def main():
         sys.exit(0)
 
     with open(fpath) as f:
-        file_content = f.read()
+        raw_file_content = f.read()
+
+    # Strip HTML comments before any checking — invisible-to-reader provenance
+    # tags are guard evasion, not real citation.
+    file_content = strip_invisible(raw_file_content)
 
     # --- Determine what to check for density ---
-    diff_content = extract_diff_content(hook_input)
+    raw_diff = extract_diff_content(hook_input)
+    diff_content = strip_invisible(raw_diff) if raw_diff is not None else None
     check_text = diff_content if diff_content is not None else file_content
 
     # If the diff is tiny (< 3 lines, likely a small edit), skip density check
@@ -168,13 +221,16 @@ def main():
     # --- Structural type checks (on diff content) ---
     struct_errors = check_structural_types(check_text)
 
+    # --- TRAINING-DATA on numeric claims (on diff content) ---
+    numeric_errors = check_training_data_on_numeric_claims(check_text)
+
     # --- TRAINING-DATA cap (on full file) ---
     training_warning = check_training_data_cap(file_content)
 
     # --- INFERENCE without premises (on full file) ---
     inference_warning = check_inference_has_premises(file_content)
 
-    all_issues = struct_errors
+    all_issues = struct_errors + numeric_errors
     if training_warning:
         all_issues.append(training_warning)
     if inference_warning:
@@ -182,7 +238,10 @@ def main():
 
     if all_issues:
         _emit(mode, fpath, all_issues)
-        # Structural issues are advisory even in block mode — only density blocks
+        # Numeric-claim [TRAINING-DATA] blocks in block mode (fabrication risk).
+        # Other structural issues remain advisory.
+        if mode == "block" and numeric_errors:
+            sys.exit(2)
         sys.exit(0)
 
     sys.exit(0)
@@ -194,7 +253,12 @@ def _emit(mode: str, fpath: str, issues: list[str]):
 
     issue_text = " | ".join(issues)
 
-    if mode == "block" and any("density" in i.lower() or "claim-bearing" in i.lower() for i in issues):
+    if mode == "block" and any(
+        "density" in i.lower()
+        or "claim-bearing" in i.lower()
+        or "training-data] on numeric" in i.lower()
+        for i in issues
+    ):
         print(f"BLOCKED: Provenance check failed for {fpath}", file=sys.stderr)
         for issue in issues:
             print(f"  - {issue}", file=sys.stderr)
