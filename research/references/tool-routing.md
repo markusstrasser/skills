@@ -33,6 +33,11 @@ Use whichever of these are available in the current project's `.mcp.json`:
 | `mcp__perplexity__perplexity_reason` | Chain-of-thought + web (Sonar Reasoning Pro) | Analytical "why" questions needing multi-step reasoning + evidence (~$0.05-0.15/call). |
 | `mcp__perplexity__perplexity_research` | Deep multi-source report (Sonar Deep Research) | Literature-survey-scale questions. Slow (~30s+), expensive (~$0.15-0.50/call). |
 | `mcp__scite__search_literature` | Citation-stance search (1.6B+ citations) | Disconfirmation, literature audits, checking if a claim is supported/contrasted. Returns Smart Citation snippets with stance. |
+| `mcp__scite__search_patents` | Patent family search | Prior art, IP landscape, competitor patents, inventor/assignee tracking. Pro plan. |
+| `mcp__scite__search_grants` | Grants search (NIH RePORTER, NSF, SBIR/STTR, Wellcome, EU) | Funder mapping, who's funded for what, award sizes. Pro plan. |
+| `mcp__scite__search_clinical_trials` | ClinicalTrials.gov search | Trial design, status, outcomes. Overlaps `biomcp`/`biomedical.clinical_trial_search` — prefer those for trial-only queries; reach for scite's variant when joining trials with literature/citations in one session. Pro plan. |
+| `mcp__scite__search_device510k` / `search_510k_summaries` | FDA 510(k) clearance metadata + full PDF text | DTC/LDT regulatory predicate work, substantial-equivalence reasoning, indications-for-use, predicate device discovery. **No equivalent elsewhere in the fleet.** Pro plan. |
+| `mcp__scite__search_mhra` | UK MHRA safety alerts + field safety notices | UK drug/device safety communications, recalls, regulatory guidance. **No equivalent elsewhere in the fleet.** Pro plan. |
 | `mcp__firecrawl__firecrawl_scrape` | JS-heavy page scraper | Financial dashboards, dynamic sites. Only if configured. |
 | `mcp__context7__*` | Library documentation | API/framework questions |
 | `mcp__parallel__parallel_task` | Deep web research with code-execution sandbox | Complex multi-step questions needing cross-referencing. Processor tiers: lite/core/ultra/ultra8x. 70-82% on DeepSearchQA. |
@@ -73,3 +78,11 @@ Combined's hallucination happened because it reasoned from training memory. When
 - **Consistency is flat.** Princeton (arXiv:2602.16666): 14 models, 18 months, r=0.02. Same task + same model + different run = different outcome.
 - **Documentation helps for novel knowledge, not known APIs.** Agent-Diff (arXiv:2602.11224): +19 pts for genuinely novel APIs, +3.4 for APIs in pre-training.
 - **Simpler beats complex under stress.** ReliabilityBench (arXiv:2601.06112): ReAct > Reflexion under perturbations.
+
+<!-- knowledge-index
+generated: 2026-05-09T21:03:34Z
+hash: acca39729cd7
+
+table_claims: 22
+
+end-knowledge-index -->

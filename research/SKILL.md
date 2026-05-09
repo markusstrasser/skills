@@ -39,6 +39,7 @@ If 3+ sessions active: keep questions shorter, batch ambiguous items.
 - **Recent papers (<6mo):** `web_search_advanced_exa` with `category: "research paper"` + date filter (S2 has no date filtering)
 - **Recent preprints:** `search_preprints` (bioRxiv/medRxiv, free, date-range filtering)
 - **Citation stance:** `search_literature` (scite) — 1.6B+ citations classified as supporting/contrasting/mentioning
+- **Patents / grants / FDA 510(k) / UK MHRA:** scite Pro — `search_patents`, `search_grants`, `search_device510k` + `search_510k_summaries`, `search_mhra`. No fleet equivalent for any of these; reach for 510(k)/MHRA on regulatory predicate work, patents for IP landscape, grants for funder mapping.
 - **Entity enrichment:** `web_search_advanced_exa` with `type: "deep"` + `outputSchema` — structured JSON with per-field citations, eliminates search->fetch->extract chains
 - **Database lookups (UniProt, gnomAD, ClinVar):** Exa/Brave websearch, NOT S2 (returns papers *about* databases, not the data). This is an empirical finding (EBF3 benchmark) — websearch found exact domain boundaries that academic tools missed.
 - **News/events:** `brave_news_search` (24h-7d), Exa with date filter for older
@@ -336,8 +337,8 @@ Never present inference as sourced fact. Never present training data as retrieve
 $ARGUMENTS
 
 <!-- knowledge-index
-generated: 2026-04-24T22:13:28Z
-hash: 1dee9535a3dc
+generated: 2026-05-09T21:03:49Z
+hash: 1a49a31bd124
 
 cross_refs: docs/research/*.md, research/*.md, research/adversarial-case-library.md
 sources: 1
