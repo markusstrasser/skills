@@ -107,7 +107,7 @@ For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
 - GPT-5.5 Pro **Deep Research mode** — separate ChatGPT Pro toggle. Autonomous web-search agent (80–160 searches, 5–15 min). Same weights, search-biased harness. Strong at synthesis from pretraining; over-searches and confabulates on post-cutoff specifics. **Use the two-phase pretraining-first template** — see `references/PROMPTING_GPT.md` §1c.
 - "Thinking" in ChatGPT web UI = effort=high (the default mode). Not a separate model.
 
-**Effort levels:** `none` (no reasoning, enables temperature/top_p), `minimal`, `low`, `medium`, `high` (default via llmx), `xhigh` (max compute).
+**Effort levels:** `none` (no reasoning, enables temperature/top_p), `minimal`, `low`, `medium` (default via llmx since 2026-05-06, lowered for cost), `high`, `xhigh` (max compute). Pass `-e high` / `-e xhigh` explicitly for intelligence-sensitive work (adversarial review, formal/quantitative analysis, GPQA-tier science).
 
 **Quick prompting tips** (thinking mode, high effort):
 - Do **NOT** use "think step by step" — hurts performance when thinking is on
@@ -119,7 +119,7 @@ For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
 - Use Responses API with `previous_response_id` for **reasoning persistence** across tool calls
 - **STATIC prefix (top) + DYNAMIC content (bottom)** for 90% cache discount
 - **Tool Search** for large tool sets — avoids dumping all tool definitions into prompt
-- **llmx defaults to `--reasoning-effort high`** for GPT-5 models automatically
+- **llmx defaults to `--reasoning-effort medium`** for GPT-5.5 (changed from high on 2026-05-06 for cost). Pass `-e high` or `-e xhigh` when the task needs deeper reasoning
 
 For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_GPT.md`.
 
