@@ -76,7 +76,11 @@ def count_tags(text: str) -> int:
 
 
 def count_claims(text: str) -> int:
-    return len(CLAIM_RE.findall(text))
+    # Strip TAG_RE matches first so dates inside tag brackets like
+    # `[A1: filed 2026-04-16]` or `[DATA: form4 2026-04-26]` don't double-count
+    # as claims. The tag itself satisfies the citation requirement; the date
+    # inside it is provenance, not a separate claim.
+    return len(CLAIM_RE.findall(TAG_RE.sub("", text)))
 
 
 def check_structural_types(text: str) -> list[str]:
