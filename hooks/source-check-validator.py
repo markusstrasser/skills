@@ -263,7 +263,13 @@ def _emit(mode: str, fpath: str, issues: list[str]):
         or "training-data] on numeric" in i.lower()
         for i in issues
     ):
-        print(f"BLOCKED: Provenance check failed for {fpath}", file=sys.stderr)
+        # NOTE: this runs in PostToolUse — the file is ALREADY written. Exit 2
+        # blocks the *next* tool call from the Claude harness but does NOT
+        # revert the write. The "POST-WRITE WARNING" framing makes that
+        # semantics explicit so agents don't waste cycles re-running an edit
+        # that already landed. To prevent the write, move this hook to
+        # PreToolUse and gate on proposed_content instead.
+        print(f"POST-WRITE WARNING: Provenance check failed for {fpath} (file already written; fix and re-edit)", file=sys.stderr)
         for issue in issues:
             print(f"  - {issue}", file=sys.stderr)
         print(
