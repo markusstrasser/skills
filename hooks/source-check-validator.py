@@ -18,7 +18,7 @@ import os
 TAG_RE = re.compile(
     r'\[(?:SOURCE|DATABASE|DATA|INFERENCE|SPEC|CALC|QUOTE|TRAINING-DATA|PREPRINT|FRONTIER|UNVERIFIED)'
     r'(?::?\s*[^\]]*)?\]'
-    r'|\[[A-F][1-6]\]'
+    r'|\[[A-F][1-6](?::\s*[^\]]*)?\]'
 )
 
 SOURCE_RE = re.compile(r'\[SOURCE:\s*([^\]]*)\]')
