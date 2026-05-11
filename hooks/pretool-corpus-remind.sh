@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# pretool-papers-store-remind.sh — Advisory: check ~/Projects/papers/ store
+# pretool-corpus-remind.sh — Advisory: check ~/Projects/corpus/ store
 # before fetching a paper from the web.
 #
 # PreToolUse hook on WebFetch, mcp__research__fetch_paper, mcp__research__save_paper,
 # and Bash commands invoking paper downloads. Advisory only (exit 0); prints
 # a one-line nudge if the URL/DOI/PMID resembles a paper identifier and the
-# agent hasn't already consulted papers_lookup this session.
+# agent hasn't already consulted corpus_lookup this session.
 #
 # Triggers exactly once per (session, identifier-prefix). Suppressible via
-# PAPERS_STORE_REMIND=0.
+# CORPUS_REMIND=0.
 
 set +e
 
 # Suppression
-if [ "${PAPERS_STORE_REMIND:-1}" = "0" ]; then
+if [ "${CORPUS_REMIND:-1}" = "0" ]; then
   exit 0
 fi
 
 # Session-scoped state — one reminder per identifier-prefix
 SESSION_ID="${CLAUDE_SESSION_ID:-default}"
-STATE_DIR="/tmp/papers-store-remind-${SESSION_ID}"
+STATE_DIR="/tmp/corpus-remind-${SESSION_ID}"
 mkdir -p "$STATE_DIR" 2>/dev/null
 
 already_reminded() { [ -f "$STATE_DIR/$1" ]; }
@@ -88,7 +88,7 @@ mark_reminded "$SAFE_IDENT"
 
 # Check if the paper is already in the local store — short-circuit the nudge
 # if it is, since the agent should obviously use it.
-STORE_ROOT="${PAPERS_STORE_ROOT:-$HOME/Projects/papers}"
+STORE_ROOT="${CORPUS_ROOT:-$HOME/Projects/corpus}"
 case "$IDENT" in
   pmid:*)
     PID="pmid_${IDENT#pmid:}"
@@ -101,14 +101,14 @@ case "$IDENT" in
 esac
 
 if [ -d "$STORE_ROOT/$PID" ]; then
-  echo "[papers] Already in canonical store: ~/Projects/papers/$PID/" >&2
-  echo "[papers]   Use: papers show $PID  (or papers_lookup MCP tool) instead of re-fetching." >&2
+  echo "[corpus] Already in canonical store: ~/Projects/corpus/$PID/" >&2
+  echo "[corpus]   Use: corpus show $PID  (or corpus_lookup MCP tool) instead of re-fetching." >&2
 else
-  echo "[papers] About to fetch $IDENT — local store doesn't have it yet (papers_lookup $IDENT)." >&2
-  echo "[papers]   After fetch, prefer: papers ingest --pdf <path> --doi $IDENT  (canonical store)." >&2
+  echo "[corpus] About to fetch $IDENT — local store doesn't have it yet (corpus_lookup $IDENT)." >&2
+  echo "[corpus]   After fetch, prefer: corpus ingest --pdf <path> --doi $IDENT  (canonical store)." >&2
 fi
 
 # Telemetry — log the trigger for ROI measurement
-~/Projects/skills/hooks/hook-trigger-log.sh "papers-store-remind" "advise" "fetch" 2>/dev/null || true
+~/Projects/skills/hooks/hook-trigger-log.sh "corpus-remind" "advise" "fetch" 2>/dev/null || true
 
 exit 0
