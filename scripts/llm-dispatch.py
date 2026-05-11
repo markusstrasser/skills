@@ -14,6 +14,15 @@ from shared.llm_dispatch import DispatchOverrides, STATUS_EXIT_CODES, dispatch
 
 
 def main() -> int:
+    # Stderr sentinel for diagnosing silent startup failures. If a caller uses
+    # `2>&1 | tail -N` with run_in_background and the .output is 0 bytes, that
+    # means we never got here (uv run failed, Python crashed before this line,
+    # or the background-task harness preempted the subprocess). If you see
+    # this line in the .output but no .start.json / .meta.json on disk, then
+    # Python ran but argparse / dispatch() died. Evidence:
+    # docs/audit/observe-gaps-2026-05-11/findings.md F1.
+    print("LLM_DISPATCH_STARTED", file=sys.stderr, flush=True)
+
     parser = argparse.ArgumentParser(description="Unified llmx Python dispatch wrapper for skills automation")
     parser.add_argument("--profile", required=True, help="Named dispatch profile")
     parser.add_argument("--output", required=True, type=Path, help="Output markdown/text artifact path")

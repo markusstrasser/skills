@@ -448,6 +448,22 @@ def dispatch(
     meta_path = meta_path or output_path.with_name(f"{output_path.stem}.meta.json")
     error_path = error_path or output_path.with_name(f"{output_path.stem}.error.json")
     parsed_path = parsed_path or (output_path.with_name(f"{output_path.stem}.parsed.json") if schema else None)
+    start_path = output_path.with_name(f"{output_path.stem}.start.json")
+
+    # Write start marker BEFORE any work so callers can distinguish
+    # "subprocess never ran" from "subprocess ran and failed inside dispatch."
+    # If meta.json is absent but start.json is present, dispatch entered but
+    # died (e.g. SIGKILL, OOM, interpreter crash) before writing telemetry.
+    # If both are absent the subprocess never reached dispatch() at all.
+    # Removed on successful or error-handled completion below.
+    # Evidence: docs/audit/observe-gaps-2026-05-11/findings.md F1.
+    _atomic_write_json(start_path, {
+        "started_at": started_at,
+        "requested_profile": profile,
+        "output_path": str(output_path),
+        "pid": os.getpid(),
+        "helper_version": HELPER_VERSION,
+    })
 
     try:
         profile_def, resolved = resolve_profile(profile, overrides)
@@ -469,6 +485,7 @@ def dispatch(
         _remove_if_exists(parsed_path)
         _atomic_write_json(meta_path, meta)
         _atomic_write_json(error_path, {"error_type": status, "error_message": message})
+        _remove_if_exists(start_path)
         return DispatchResult(
             status=status,
             retryable=False,
@@ -537,6 +554,7 @@ def dispatch(
         }
         _atomic_write_json(meta_path, meta)
         _atomic_write_json(error_path, error_payload)
+        _remove_if_exists(start_path)
         return DispatchResult(
             status=status,
             retryable=RETRYABLE_STATUSES[status],
@@ -647,6 +665,7 @@ def dispatch(
                 "api_only": call_kwargs["api_only"],
             }
         )
+        _remove_if_exists(start_path)
         return DispatchResult(
             status=status,
             retryable=RETRYABLE_STATUSES[status],
@@ -729,6 +748,7 @@ def dispatch(
                 "error_type": status,
             }
         )
+        _remove_if_exists(start_path)
         return DispatchResult(
             status=status,
             retryable=RETRYABLE_STATUSES[status],
