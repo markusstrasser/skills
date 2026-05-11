@@ -24,10 +24,19 @@ tables and include the source in parentheses when attribution matters — e.g.,
 "019d7aab (codex)" or "82777db1 (claude-code)". Do NOT invent, guess, or fabricate session IDs.
 If you cannot attribute a finding to a specific session, say "unattributed" rather than guessing.
 
-IMPORTANT: The attached coverage-digest.txt lists findings, hooks, and rules that ALREADY EXIST.
-Do NOT re-report patterns that match existing findings or are already enforced by active hooks.
-If you see a pattern that matches an existing finding, note it ONLY as a one-line recurrence
-with the session ID — do not re-explain the failure mode or re-propose the fix.
+IMPORTANT: The attached coverage-digest.txt lists findings, hooks, rules, AND project memory
+entries that ALREADY EXIST. Pay particular attention to the `## PROJECT MEMORY` section —
+those entries are SANCTIONED patterns the operator has chosen to keep. Examples:
+- `feedback_mcp_library_bypass.md` SANCTIONS importing an MCP server's library directly to
+  skirt spinning-detector hooks. Do not promote "agent bypassed hook via library import"
+  as a new candidate — it is documented and approved.
+- `feedback_check_modal_budget_before_launch.md` SANCTIONS pre-launch budget checks.
+
+Do NOT re-report patterns that match existing findings, active hooks, OR sanctioned memory.
+If you see a pattern that matches one of those, note it ONLY as a one-line recurrence with
+the session ID — do not re-explain the failure mode or re-propose the fix. If you suspect a
+memory entry has gone stale (e.g. references a deleted file), surface it as
+"audit existing memory entry for staleness: <name>" instead of as a new promotion candidate.
 
 ## PHASE 0: TRIAGE GATE
 
