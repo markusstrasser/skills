@@ -1,0 +1,140 @@
+---
+name: corpus
+description: "Canonical local store for source bytes + parses + citation graph + annotations. 'check corpus store', 'cite something', 'find contradicting citations', 'has any repo already seen this DOI'."
+user-invocable: true
+argument-hint: '[doi | pmid | paper_id | "stats"]'
+allowed-tools: [Bash, Read]
+effort: low
+---
+
+# corpus — Canonical Local Source Store
+
+A single content-addressed store at `~/Projects/corpus/` shared across
+genomics, phenome, research-mcp, agent-infra. Holds source bytes (PDFs, HTML, etc.)
++ parsed markdown + scite/openalex citation context + a DuckDB graph index
++ append-only annotations.
+Before fetching, parsing, or citing — **check here first**.
+
+The user manages this on their own machine; no auth, no remote, no
+multi-tenant. Source of truth at
+`~/Projects/agent-infra/scripts/corpus/`. Schema at
+`~/Projects/corpus/SCHEMA.md`.
+
+## When to use
+
+- **Before fetching a source by DOI/PMID** — `corpus stats` + paper_id derivation tells you if it's already on disk
+- **When citing something to support a claim** — `corpus cited-by` returns the actual supporting/contrasting snippets with paper IDs and CiTO stance, not just counts
+- **When checking for contradictions** — `corpus contradictions <id>` surfaces incoming citances flagged `cito:disagreesWith`, including any retracted-citing-paper signals
+- **Cross-repo discovery** — INDEX.json on each source records which repos (genomics/phenome/research-mcp/agent-infra) reference it, so "has any repo already done work against this source?" is a filesystem grep
+
+## CLI surface
+
+```bash
+uvx corpus stats                            # source count, total size, graph node/edge counts
+uvx corpus show <paper_id>                  # metadata + parsed paths + used_by
+uvx corpus ingest --pdf <path> --doi <doi>  # ingest a paper
+uvx corpus ingest --revise --pdf <new> --paper-id <id>  # archive old, ingest new revision
+
+# Graph queries (after maintain --rebuild-graph)
+uvx corpus cites <paper_id>                # outbound edges + snippets + stance
+uvx corpus cited-by <paper_id>             # inbound edges
+uvx corpus cited-by <paper_id> --stance contrasting
+uvx corpus contradictions <paper_id>       # cito:disagreesWith + retraction-flagged citers
+uvx corpus ego <paper_id> --depth 2        # N-hop neighbourhood
+uvx corpus path <a> <b>                    # shortest path
+uvx corpus similar <paper_id> --via co-citation | --via biblio-coupling
+
+# Collections + tables
+uvx corpus collection {list, new, add, diff}
+uvx corpus table --cols schema.yaml --paper-ids ...
+
+# Maintenance (operator-run, no cron)
+uvx corpus maintain --verify               # parsed.sha256 + pdf_sha256 drift detection
+uvx corpus maintain --rebuild-indexes      # rebuild INDEX.json.used_by across repos
+uvx corpus maintain --rebuild-citances [--paper-id <id> | --all]
+uvx corpus maintain --rebuild-graph        # rebuild graph.duckdb from per-source JSONL
+uvx corpus maintain --gc --after-rebuild --dry-run
+```
+
+## Identity rule
+
+`source_id` (paper-typed: `paper_id`) is **stable for the life of the source, including reissues**:
+
+| Source | `source_id` |
+|---|---|
+| has DOI | `doi_<slugified_doi>` (e.g. `doi_10_1097_fpc_0000000000000456`) |
+| has PMID, no DOI | `pmid_<pmid>` |
+| neither | `sha_<sha256[:16]>` |
+
+DOI collision check fails closed at ingest. Reissues are versions
+inside the same `source_id` directory — old PDF renamed to
+`paper.<old_sha_prefix>.pdf`, old parsed/ becomes `parsed.<old_parser_id>/`.
+
+## Per-source layout
+
+```
+~/Projects/corpus/<source_id>/
+  paper.pdf                       # current canonical PDF (paper-typed sources)
+  paper.<sha_prefix>.pdf          # prior revisions, archived
+  metadata.json                   # SINGLE authority — doi, pmid, title, sha, parser, revisions, fabio_class, wikidata_qid, openalex_id, contributions
+  parsed.<parser_id>/             # immutable per parser_id (Phase 1.5)
+    page.md
+    page_meta.json                # block bboxes — page anchors
+    _page_N_Figure_M.jpeg         # figure crops
+    parsed.sha256
+    parser.json                   # {parser_id, version, llm, config_md5, ts}
+  citation_context/
+    scite_response.json
+    openalex_response.json
+    pubmed_response.json
+    crossref_response.json
+    latest_event.json
+  citances_in.jsonl               # DERIVED — sources citing THIS source (CiTO stance + scite class + snippet + confidence)
+  citances_out.jsonl              # DERIVED — sources THIS source cites
+  references_resolved.json        # DERIVED — reference-string → (doi, pmid) cache
+  annotations.jsonl               # APPEND-ONLY — per-source observations from agents/operator (Phase 1)
+  INDEX.json                      # DERIVED cache — used_by: [{repo, source_id, claim_ids}, ...]
+```
+
+## Common workflows
+
+**Before citing a paper to support a claim:**
+```bash
+corpus show doi_10_1056_nejmoa0809171 --depth full  # see retraction status + contributions
+corpus cited-by doi_10_1056_nejmoa0809171 --stance contrasting  # is there counter-evidence?
+corpus contradictions doi_10_1056_nejmoa0809171  # flagged disagreements with provenance
+```
+
+**When research-mcp fetches a paper (already integrated):**
+```python
+from research_mcp.papers import download_paper, extract_text
+paper_id = download_paper("10.1101/2026.04.10.26350624")  # cache-hit instantaneous; else download+ingest
+text = extract_text(paper_id)  # prefers parsed/page.md → Gemini → PyMuPDF fallback
+```
+
+**Recording a personal observation about a source:**
+Append via `corpus_mcp.corpus_attest` (Phase 3+) or the corpus_core writer
+to `~/Projects/corpus/<source_id>/annotations.jsonl` (event-sourced; never edit).
+Use `kind: "contribution"` for ORKG-style structured key findings,
+`kind: "contradiction_flag"` for noticed disagreements,
+`kind: "note"` for general observations.
+
+## What this is NOT
+
+- Not a publishing target — RO-Crate / BagIt export is a Phase 8 option
+- Not a remote service — local store, single user
+- Not a backup — `corpus sync --from manifest.json` is best-effort upstream bootstrap; durable recovery is the operator's filesystem snapshot (Time Machine)
+- Not a Wikidata mirror — uses `wikidata_qid` as a cross-link, doesn't try to replicate
+- Not a SPARQL endpoint — DuckDB + CLI
+
+## Related skills
+
+- `research` — discovers papers via web search; once you have a DOI, ingest into the store
+- `bio-verify` — verifies hardcoded bio constants; the store can hold the supporting evidence
+
+## Vetoes
+
+- Do NOT propose Neo4j or other native graph DB — DuckDB validated by production scholarly graphs (OpenAlex 2.1B edges, S2AG 2.5B, OpenCitations RDF all use columnar/relational)
+- Do NOT propose per-repo source storage — the canonical store dedupes across all four repos
+- Do NOT propose Nanopublications as the primary format — TriG + RSA signing is wrong for a personal reading loop
+- Do NOT propose SPECTER2 embeddings as Phase 1 — defer; citation graph value comes first

@@ -2,9 +2,7 @@
 # pre-commit-no-large-binaries.sh — Reject PDFs and large binary artefacts.
 #
 # Rationale:
-#   - PDFs in git: rejected universally (see ~/Projects/agent-infra/.claude/
-#     plans/2026-05-11-shared-papers-store.md anti-patterns). Canonical store
-#     is ~/Projects/papers/.
+#   - PDFs in git: rejected universally. Canonical store is ~/Projects/corpus/.
 #   - Other large binary blobs (.docx, .pptx, .xlsx, .zip, .tar, .tar.gz,
 #     .tgz) are almost always a mistake; tracked over a small threshold.
 #
@@ -73,11 +71,8 @@ if (( ${#violations[@]} > 0 )); then
     echo "  $v" >&2
   done
   echo "" >&2
-  echo "PDFs do not belong in git. Canonical paper store:" >&2
-  echo "  ~/Projects/papers/" >&2
-  echo "" >&2
-  echo "See ~/Projects/agent-infra/.claude/plans/2026-05-11-shared-papers-store.md" >&2
-  echo "(anti-patterns: 'PDF in git. Period.')" >&2
+  echo "PDFs do not belong in git. Canonical corpus store:" >&2
+  echo "  ~/Projects/corpus/" >&2
   echo "" >&2
   echo "If this is a genuine exception (tiny test fixture, etc.), override:" >&2
   echo "  GIT_ALLOW_BINARIES=1 git commit ..." >&2
