@@ -15,6 +15,19 @@ CMD_CLEAN=$(echo "$CMD" | sed 's/^sleep [0-9]*[smh]* *&&//' | sed 's/^ *//')
 PATH_TARGET=$(echo "$CMD_CLEAN" | grep -oE '\b(wc|ls|head|tail|stat|cat|du)\b.*' | grep -oE '(/[^ |;>&]+)' | head -1)
 [ -z "$PATH_TARGET" ] && exit 0
 
+# Reject extraction artifacts that collide across DISTINCT file accesses:
+#   - shell-quoted slashes (/" or /$VAR" patterns)
+#   - paths ending in / (directory prefix with no leaf)
+#   - paths shorter than 12 chars (likely /tmp/x, /dev/null, fragments)
+#   - paths containing unexpanded $VAR
+# Without this, `cat "$MEM/$f"` for distinct $f values all collide on /$f"
+# and `ls ~/.claude/projects/` collides with all sub-path reads on /.claude/projects/.
+# Evidence: docs/audit/observe-gaps-2026-05-11/findings.md F2 — false-fire at 17x.
+case "$PATH_TARGET" in
+  *'"'|*'$'*|*/) exit 0 ;;
+esac
+[ "${#PATH_TARGET}" -lt 12 ] && exit 0
+
 # Scope tracker per session + fork context to avoid cross-subagent false positives
 # CLAUDE_AGENT_ID is set for subagents; fall back to PPID for main session
 _SCOPE="${CLAUDE_AGENT_ID:-${CLAUDE_SESSION_ID:-$PPID}}"
