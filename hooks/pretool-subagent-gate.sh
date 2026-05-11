@@ -240,11 +240,35 @@ fi
 # zero output — the transcript holds the work but nothing persists.
 # 2026-04-16 incident: general-purpose agent on HF OpenMed probe hit API limit
 # after 43 tool calls, returned status=completed with zero file output.
+# 2026-05-11 escalation: advisory fired 36 consecutive times in intel sessions
+# 4ef78841 + 1792c708 without behavior change. Promoted to BLOCK for substantial
+# non-worktree dispatches, mirroring Check 7's case logic. Advisory retained for
+# self-managing subtypes and short prompts.
 if [ -n "$PROMPT" ] && [ "${HAS_FILE_OUTPUT:-0}" -gt 0 ]; then
     HAS_EARLY_WRITE=$(echo "$PROMPT" | grep -ciE 'write.*(stub|scaffold|skeleton|draft|placeholder|empty).*(first|before|initially)|(first|before).*(tool|call|action|step).*write|write.*(before|prior to).*(search|probe|fetch|research)|initial.*(write|draft).*file|(scaffold|stub|placeholder).*(first|before)' || true)
     if [ "$HAS_EARLY_WRITE" -eq 0 ]; then
-        CHECK_IDS="${CHECK_IDS}10,"
-        WARNINGS="${WARNINGS}SUBAGENT WRITE-FIRST: Prompt specifies file output but doesn't instruct write-stub-first. Add: 'Your FIRST tool call MUST be Write with a PROBE IN PROGRESS stub at the output path. Then append findings incrementally.' Guards against API-limit / turn-exhaustion producing zero output. "
+        PROMPT_LEN=${#PROMPT}
+        HAS_WORKTREE=$(echo "$INPUT" | grep -c '"worktree"' || true)
+        STUB_FIX="Add to your prompt: 'Your FIRST tool call MUST be Write with a PROBE IN PROGRESS stub at the output path. Then append findings incrementally.' Guards against API-limit / turn-exhaustion producing zero output."
+        case "$STYPE" in
+            Explore|observe|claude-code-guide|statusline-setup|researcher)
+                CHECK_IDS="${CHECK_IDS}10,"
+                WARNINGS="${WARNINGS}SUBAGENT WRITE-FIRST: Prompt specifies file output but doesn't instruct write-stub-first. ${STUB_FIX} "
+                ;;
+            *)
+                if [ "$HAS_WORKTREE" -gt 0 ]; then
+                    CHECK_IDS="${CHECK_IDS}10,"
+                    WARNINGS="${WARNINGS}SUBAGENT WRITE-FIRST: Prompt specifies file output but doesn't instruct write-stub-first. ${STUB_FIX} (Advisory — worktree agent.) "
+                elif [ "$PROMPT_LEN" -gt 200 ]; then
+                    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "check=10 missing=write-stub-first" 2>/dev/null || true
+                    echo "{\"decision\": \"block\", \"reason\": \"SUBAGENT WRITE-FIRST REQUIRED: Prompt specifies file output but doesn't instruct write-stub-first. ${STUB_FIX}\"}"
+                    exit 2
+                else
+                    CHECK_IDS="${CHECK_IDS}10,"
+                    WARNINGS="${WARNINGS}SUBAGENT WRITE-FIRST: Prompt specifies file output but doesn't instruct write-stub-first. ${STUB_FIX} "
+                fi
+                ;;
+        esac
     fi
 fi
 
