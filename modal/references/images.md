@@ -179,6 +179,22 @@ def fit():
 
 Can still extend with other image methods after importing.
 
+### Inline Dockerfile Commands (with build_args, v1.4.2+)
+
+```python
+image = modal.Image.debian_slim().dockerfile_commands(
+    [
+        "ARG VERSION",
+        "ARG MODEL_REVISION",
+        "RUN echo $VERSION > /etc/app-version",
+        "ENV MODEL_REV=$MODEL_REVISION",
+    ],
+    build_args={"VERSION": "1.2.3", "MODEL_REVISION": "abc123"},
+)
+```
+
+`build_args` is equivalent to Docker's `--build-arg` and was added to `Image.dockerfile_commands()` in v1.4.2. Use it to parameterize otherwise-identical image builds (version pins, revision SHAs) instead of templating the command list in Python.
+
 ## Using Micromamba
 
 For coordinated installation of Python and system packages:
