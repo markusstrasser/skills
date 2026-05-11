@@ -131,9 +131,23 @@ sb.filesystem.write_text("/work/config.ini", "[section]\nkey=value")
 content = sb.filesystem.read_text("/work/output.txt")
 sb.filesystem.write_bytes("/work/model.bin", model_data)
 raw = sb.filesystem.read_bytes("/work/model.bin")
+
+# Directory ops (v1.4.2+) — replace Sandbox.mkdir / Sandbox.rm
+sb.filesystem.make_directory("/work/results")
+sb.filesystem.remove("/work/old_artifact")  # file or directory
 ```
 
-**Deprecation:** `modal.Sandbox.open()` and `modal.file_io.FileIO` are deprecated. Use `sb.filesystem.*` instead.
+**Deprecation:** `modal.Sandbox.open()` and `modal.file_io.FileIO` are deprecated. Use `sb.filesystem.*` instead. As of v1.4.2, `Sandbox.mkdir` and `Sandbox.rm` are also deprecated — use `filesystem.make_directory` / `filesystem.remove`.
+
+## Image Mount / Unmount (v1.4.2+)
+
+```python
+sb = modal.Sandbox.create(app=app)
+sb.mount_image(extra_image, "/opt/extra")    # overlay another Image at a path
+sb.unmount_image("/opt/extra")               # reveals the underlying sandbox fs again
+```
+
+Useful for swapping toolchains into a long-lived sandbox without rebuilding it.
 
 ## Container Logs
 

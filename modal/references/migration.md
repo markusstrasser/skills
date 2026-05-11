@@ -63,6 +63,56 @@ class Model:
 
 ## New Features (v1.4)
 
+### v1.4.2 (2026-04-16)
+
+**`modal app rollover`** — trigger redeployment of an App without changing code/config. Replaces running containers with fresh ones using the same deployment strategies as `modal deploy`:
+
+```bash
+modal app rollover my-app                       # --strategy=rolling (default)
+modal app rollover my-app --strategy=recreate   # terminate all old containers first
+```
+
+Use when: config-via-env-Secret rotated, base image rebuilt, you want to force a clean container set without touching the script.
+
+**`modal bootstrap`** — fetches deployable starter code for common AI apps (text generation, text-to-image, speech-to-text). Experimental.
+
+**Confirmation prompts on stop commands.** `modal app stop` and `modal container stop` now prompt before stopping. Pass `--yes` to skip — required for scripted/automated callers.
+
+```bash
+modal app stop my-app --yes
+modal container stop ct-abc123 --yes
+```
+
+**Stopped-App name resolution.** Several `modal app` subcommands (e.g. `modal app logs`) now map a name argument to a recently-stopped App that used that name. Lets you fetch logs from an App after it has been stopped without having to look up the ap-id.
+
+**Sandbox filesystem: `make_directory` / `remove`** — replace deprecated `Sandbox.mkdir` / `Sandbox.rm`.
+
+```python
+sb.filesystem.make_directory("/work/results")
+sb.filesystem.remove("/work/old_artifact")   # file or directory
+
+# DEPRECATED — do not use in new code:
+sb.mkdir("/work/results")
+sb.rm("/work/old_artifact")
+```
+
+**Sandbox `unmount_image(path)`** — removes a previously mounted Image from a path and reveals the underlying Sandbox filesystem there again. Pairs with `sb.mount_image(image, path)`.
+
+```python
+sb.mount_image(extra, "/opt/extra")
+# ... use ...
+sb.unmount_image("/opt/extra")               # underlying fs reappears at /opt/extra
+```
+
+**`Image.dockerfile_commands(build_args=...)`** — pass build args (equivalent to Docker `--build-arg`) to inline Dockerfile commands.
+
+```python
+image = modal.Image.debian_slim().dockerfile_commands(
+    ["ARG VERSION", "RUN echo $VERSION > /etc/app-version"],
+    build_args={"VERSION": "1.2.3"},
+)
+```
+
 ### CLI Log Overhaul (v1.4.0 -- BREAKING DEFAULT CHANGE)
 
 **`modal app logs` and `modal container logs` no longer follow (stream) by default.** They now show the most recent 100 entries and exit. You MUST pass `--follow` for the old streaming behavior.
