@@ -104,7 +104,7 @@ if not research_files:
 SOURCE_TAG = re.compile(
     # Explicit bracket-tagged provenance
     r'\[SOURCE:|\[DATABASE:|\[DATA[\]:]|\[INFERENCE[\]:]|\[TRAINING-DATA[\]:]|'
-    r'\[PREPRINT[\]:]|\[FRONTIER[\]:]|\[UNVERIFIED[\]:]|\[[A-F][1-6]\]|'
+    r'\[PREPRINT[\]:]|\[FRONTIER[\]:]|\[UNVERIFIED[\]:]|\[[A-F][1-6](?::[^\]]+)?\]|'
     # Equivalent identifier-bracket forms: [DOI:...], [PMID:...], [PMC######]
     r'\[DOI:\s*10\.\d{4,}|\[PMID:\s*\d+|\[PMC\d{4,}\]|'
     # Markdown links to canonical citation hosts count as provenance

@@ -43,7 +43,7 @@ if echo "$MSG" | grep -qE '\$[0-9]|[0-9]+%|[0-9]{4}-[0-9]{2}|billion|million|tri
 fi
 
 HAS_TAGS=false
-if echo "$MSG" | grep -qE '\[SOURCE:|\[DATA\]|\[INFERENCE\]|\[SPEC\]|\[CALC\]|\[QUOTE\]|\[TRAINING-DATA\]|\[PREPRINT\]|\[FRONTIER\]|\[UNVERIFIED\]|\[[A-F][1-6]\]|\[Exa\]|\[S2\]|\[PubMed\]'; then
+if echo "$MSG" | grep -qE '\[SOURCE:|\[DATA\]|\[INFERENCE\]|\[SPEC\]|\[CALC\]|\[QUOTE\]|\[TRAINING-DATA\]|\[PREPRINT\]|\[FRONTIER\]|\[UNVERIFIED\]|\[[A-F][1-6](:[^]]+)?\]|\[Exa\]|\[S2\]|\[PubMed\]'; then
     HAS_TAGS=true
 fi
 

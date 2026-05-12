@@ -137,7 +137,7 @@ def check_training_data_on_numeric_claims(text: str) -> list[str]:
     """
     errors: list[str] = []
     checkable = re.compile(
-        r'\[SOURCE:|\[DATABASE:|\[DATA[\]:]|\[CALC[\]:]|\[QUOTE[\]:]|\[[A-F][1-6]\]'
+        r'\[SOURCE:|\[DATABASE:|\[DATA[\]:]|\[CALC[\]:]|\[QUOTE[\]:]|\[[A-F][1-6](?::[^\]]+)?\]'
     )
     for line in text.splitlines():
         if '[TRAINING-DATA]' not in line:
@@ -158,7 +158,7 @@ def check_inference_has_premises(file_content: str) -> str | None:
     if not INFERENCE_RE.search(file_content):
         return None
 
-    has_source = SOURCE_RE.search(file_content) or re.search(r'\[[A-F][1-6]\]', file_content)
+    has_source = SOURCE_RE.search(file_content) or re.search(r'\[[A-F][1-6](?::[^\]]+)?\]', file_content)
     has_data = re.search(r'\[DATA', file_content) or re.search(r'\[DATABASE:', file_content)
 
     if not has_source and not has_data:
