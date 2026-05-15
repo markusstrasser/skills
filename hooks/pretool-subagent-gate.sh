@@ -245,7 +245,7 @@ fi
 # non-worktree dispatches, mirroring Check 7's case logic. Advisory retained for
 # self-managing subtypes and short prompts.
 if [ -n "$PROMPT" ] && [ "${HAS_FILE_OUTPUT:-0}" -gt 0 ]; then
-    HAS_EARLY_WRITE=$(echo "$PROMPT" | grep -ciE 'write.*(stub|scaffold|skeleton|draft|placeholder|empty).*(first|before|initially)|(first|before).*(tool|call|action|step).*write|write.*(before|prior to).*(search|probe|fetch|research)|initial.*(write|draft).*file|(scaffold|stub|placeholder).*(first|before)' || true)
+    HAS_EARLY_WRITE=$(echo "$PROMPT" | grep -ciE 'probe in progress|write.*(stub|scaffold|skeleton|draft|placeholder|empty).*(first|before|initially)|(first|before)[, ]+writ|(first|before).*(tool|call|action|step).*write|write.*(before|prior to).*(search|probe|fetch|research)|initial.*(write|draft).*file|(scaffold|stub|placeholder).*(first|before)|(begin|start) (by|with).*(writ|creat|scaffold)' || true)
     if [ "$HAS_EARLY_WRITE" -eq 0 ]; then
         PROMPT_LEN=${#PROMPT}
         HAS_WORKTREE=$(echo "$INPUT" | grep -c '"worktree"' || true)
