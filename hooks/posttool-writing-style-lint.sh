@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+# posttool-writing-style-lint.sh — Advisory: warn on writing-style violations in drafts.
+# Deploy as PostToolUse hook on Write|Edit.
+#
+# Two tiers based on path:
+#   OUTREACH (short-form correspondence): em-dashes, throat-clearers, formal sign-offs, banned vocab
+#   LONGFORM (essays, blog posts, content): banned vocab only
+#
+# Env (regex, alternation with |):
+#   WRITING_LINT_OUTREACH_PATHS — default: outbox/|drafts/|correspondence/|messages/|email/|outreach/|docs/outreach/
+#   WRITING_LINT_LONGFORM_PATHS — default: src/routes/.+\.svx$|src/lib/content/|content/|essays/|archive/.+\.svx$
+#
+# Exits 0 always. Warnings to stderr.
+# Skips files containing the marker `<!-- writing-lint:skip -->`.
+
+set -u
+
+INPUT=$(cat)
+FILE_PATH=$(echo "$INPUT" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("file_path",""))' 2>/dev/null)
+[[ -z "$FILE_PATH" ]] && exit 0
+[[ ! -f "$FILE_PATH" ]] && exit 0
+
+# Only markdown / svx / txt
+case "$FILE_PATH" in
+  *.md|*.svx|*.txt|*.eml) ;;
+  *) exit 0 ;;
+esac
+
+OUTREACH_PATHS="${WRITING_LINT_OUTREACH_PATHS:-outbox/|drafts/|correspondence/|messages/|email/|outreach/|docs/outreach/}"
+LONGFORM_PATHS="${WRITING_LINT_LONGFORM_PATHS:-src/routes/.+\.svx$|src/lib/content/|content/|essays/|archive/.+\.svx$}"
+
+TIER=""
+if echo "$FILE_PATH" | grep -qE "$OUTREACH_PATHS"; then
+  TIER="outreach"
+elif echo "$FILE_PATH" | grep -qE "$LONGFORM_PATHS"; then
+  TIER="longform"
+else
+  exit 0
+fi
+
+# Opt-out marker
+if grep -q '<!-- writing-lint:skip -->' "$FILE_PATH" 2>/dev/null; then
+  exit 0
+fi
+
+WARNINGS=()
+
+# Universal: banned corporate vocab (case-insensitive, word-boundary where sensible)
+# Use python for proper word-boundary matching across multiline files
+HITS=$(python3 - "$FILE_PATH" <<'PY' 2>/dev/null
+import re, sys
+path = sys.argv[1]
+try:
+    text = open(path, encoding='utf-8', errors='replace').read()
+except Exception:
+    sys.exit(0)
+
+banned = [
+    (r'\bdelve\b',                       "delve"),
+    (r'\bleverage\b',                    "leverage (verb)"),
+    (r'\bunpack\b',                      "unpack (corporate sense)"),
+    (r'\bshed light\b',                  "shed light"),
+    (r'\bdive deep\b',                   "dive deep"),
+    (r'\bcircle back\b',                 "circle back"),
+    (r'\btouch base\b',                  "touch base"),
+    (r'\bsynergy\b',                     "synergy"),
+    (r'\bstakeholder',                   "stakeholder(s)"),
+    (r'\bmoving forward\b',              "moving forward"),
+    (r'\bat the end of the day\b',       "at the end of the day"),
+    (r'\bneedless to say\b',             "needless to say"),
+    (r'\bit goes without saying\b',      "it goes without saying"),
+    (r'\bas discussed\b',                "as discussed"),
+    (r'\bper our conversation\b',        "per our conversation"),
+    (r'\btake this offline\b',           "take this offline"),
+    (r'\bI just wanted to follow up\b',  "I just wanted to follow up"),
+    (r'\babsolutely!',                   "absolutely!"),
+    (r'\bperfect!',                      "Perfect!"),
+]
+
+flags = re.IGNORECASE | re.MULTILINE
+hits = []
+for pat, label in banned:
+    matches = list(re.finditer(pat, text, flags))
+    if matches:
+        # report first occurrence with line number
+        m = matches[0]
+        line_no = text[:m.start()].count('\n') + 1
+        hits.append(f"L{line_no}: {label} ({len(matches)}×)")
+print("\n".join(hits))
+PY
+)
+
+if [[ -n "$HITS" ]]; then
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && WARNINGS+=("banned vocab: $line")
+    done <<< "$HITS"
+fi
+
+# Outreach-only checks
+if [[ "$TIER" == "outreach" ]]; then
+  OUTREACH_HITS=$(python3 - "$FILE_PATH" <<'PY' 2>/dev/null
+import re, sys
+path = sys.argv[1]
+try:
+    text = open(path, encoding='utf-8', errors='replace').read()
+except Exception:
+    sys.exit(0)
+
+checks = [
+    (r'—',                                                            "em-dash (use period or comma)"),
+    (r'\bI hope this (?:email |message )?finds you well\b',           "throat-clearing opener: 'I hope this finds you well'"),
+    (r'\bI wanted to reach out\b',                                    "throat-clearing opener: 'I wanted to reach out'"),
+    (r"\bI'?m writing to\b",                                          "throat-clearing opener: 'I'm writing to'"),
+    (r'\bJust checking in\b',                                         "throat-clearing opener: 'Just checking in'"),
+    (r'^Best regards,?\s*$',                                          "formal sign-off: 'Best regards' (use 'Markus' or 'best, Markus')"),
+    (r'^Kind regards,?\s*$',                                          "formal sign-off: 'Kind regards'"),
+    (r'^Warm regards,?\s*$',                                          "formal sign-off: 'Warm regards'"),
+    (r'^Sincerely,?\s*$',                                             "formal sign-off: 'Sincerely'"),
+    (r'^Thanks!?\s*$',                                                "formal sign-off: 'Thanks!' alone"),
+    (r"\bI'?m SO excited\b",                                          "performative enthusiasm: 'I'm SO excited'"),
+    (r'\babsolutely love\b',                                          "performative enthusiasm: 'absolutely love'"),
+    (r'\bLet me start by\b',                                          "signposting: 'Let me start by'"),
+    (r'\bFirst,.*\n.*\bThen,.*\n.*\bFinally,',                        "signposting: First/Then/Finally cadence"),
+]
+
+flags = re.IGNORECASE | re.MULTILINE
+hits = []
+for pat, label in checks:
+    matches = list(re.finditer(pat, text, flags))
+    if matches:
+        m = matches[0]
+        line_no = text[:m.start()].count('\n') + 1
+        hits.append(f"L{line_no}: {label}")
+
+# List-in-email heuristic: 3+ consecutive lines starting with `- ` or `1. ` etc.
+list_pat = re.compile(r'(?:^[-*]\s|^\d+[.)]\s).+(?:\n(?:[-*]\s|\d+[.)]\s).+){2,}', re.MULTILINE)
+m = list_pat.search(text)
+if m:
+    line_no = text[:m.start()].count('\n') + 1
+    hits.append(f"L{line_no}: bullet/numbered list (weave into prose for outreach)")
+
+print("\n".join(hits))
+PY
+)
+
+  if [[ -n "$OUTREACH_HITS" ]]; then
+      while IFS= read -r line; do
+          [[ -n "$line" ]] && WARNINGS+=("outreach: $line")
+      done <<< "$OUTREACH_HITS"
+  fi
+fi
+
+if [[ ${#WARNINGS[@]} -gt 0 ]]; then
+  # Trigger log if available
+  ~/Projects/skills/hooks/hook-trigger-log.sh "writing-style-lint" "advise" "$FILE_PATH" 2>/dev/null || true
+
+  echo "" >&2
+  echo "Writing-style lint ($TIER) on $(basename "$FILE_PATH"):" >&2
+  for w in "${WARNINGS[@]}"; do
+    echo "  ! $w" >&2
+  done
+  echo "  (skill: writing-style. silence with <!-- writing-lint:skip --> in file.)" >&2
+fi
+
+exit 0
