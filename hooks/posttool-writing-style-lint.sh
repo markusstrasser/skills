@@ -20,20 +20,24 @@ FILE_PATH=$(echo "$INPUT" | python3 -c 'import sys,json; d=json.load(sys.stdin);
 [[ -z "$FILE_PATH" ]] && exit 0
 [[ ! -f "$FILE_PATH" ]] && exit 0
 
-# Only markdown / svx / txt
+# Allow prose-bearing extensions. Data-prose tier (.ts/.tsx/.js/.jsx) covers
+# TS/JS data modules that embed reader-facing strings (e.g. reception.ts).
 case "$FILE_PATH" in
-  *.md|*.svx|*.txt|*.eml) ;;
+  *.md|*.svx|*.txt|*.eml|*.ts|*.tsx|*.js|*.jsx) ;;
   *) exit 0 ;;
 esac
 
 OUTREACH_PATHS="${WRITING_LINT_OUTREACH_PATHS:-outbox/|drafts/|correspondence/|messages/|email/|outreach/|docs/outreach/}"
 LONGFORM_PATHS="${WRITING_LINT_LONGFORM_PATHS:-src/routes/.+\.svx$|src/lib/content/|content/|essays/|archive/.+\.svx$}"
+DATA_PROSE_PATHS="${WRITING_LINT_DATA_PROSE_PATHS:-src/lib/data/.+\.(ts|tsx|js|jsx)$}"
 
 TIER=""
 if echo "$FILE_PATH" | grep -qE "$OUTREACH_PATHS"; then
   TIER="outreach"
 elif echo "$FILE_PATH" | grep -qE "$LONGFORM_PATHS"; then
   TIER="longform"
+elif echo "$FILE_PATH" | grep -qE "$DATA_PROSE_PATHS"; then
+  TIER="data-prose"
 else
   exit 0
 fi
@@ -94,6 +98,79 @@ if [[ -n "$HITS" ]]; then
     while IFS= read -r line; do
         [[ -n "$line" ]] && WARNINGS+=("banned vocab: $line")
     done <<< "$HITS"
+fi
+
+# Universal: structural slop patterns (X turns Y into Z, X makes Y look Z,
+# closing defensive negation, importance inflation). All tiers.
+STRUCT_HITS=$(python3 - "$FILE_PATH" <<'PY' 2>/dev/null
+import re, sys
+path = sys.argv[1]
+try:
+    text = open(path, encoding='utf-8', errors='replace').read()
+except Exception:
+    sys.exit(0)
+
+# For .ts/.tsx/.js/.jsx files, only scan inside string literals containing reader
+# prose. Heuristic: lines with `note:` or `body:` fields (covers reception.ts
+# shape). For other files, scan whole text.
+def extract_prose(text, path):
+    if not path.endswith(('.ts', '.tsx', '.js', '.jsx')):
+        return text
+    out = []
+    for line in text.splitlines(keepends=True):
+        s = line.strip()
+        if s.startswith(('note:', 'body:', 'title:', 'imageAlt:', 'note :', 'body :')):
+            out.append(line)
+        else:
+            out.append('\n')  # placeholder to preserve line numbers
+    return ''.join(out)
+
+scan_text = extract_prose(text, path)
+
+checks = [
+    # Editorial verbs: X (turns|moves|folds|gives|compresses) Y into Z
+    (r'\b(turns?|moves?|folds?|gives?|compresses?)\s+(?:the\s+|a\s+|his\s+|her\s+|its\s+)?\w+(?:\s+\w+){0,3}\s+into\b',
+     "editorial verb 'X into Y' (turns/moves/folds/gives/compresses ... into)"),
+    # Makes X look/seem/feel Y
+    (r'\bmakes?\s+(?:the\s+|a\s+|his\s+|her\s+|its\s+)?\w+(?:\s+\w+){0,2}\s+(?:look|seem|feel)\s+\w+',
+     "editorial verb 'makes X look Y'"),
+    # Closing defensive negation: ", not <word>" near end of sentence
+    (r',\s+not\s+[a-z]+\.["\']?\s*$',
+     "closing defensive negation 'X, not Y'"),
+    (r',\s+not\s+[a-z]+\.["\']?,?\s*\n',
+     "closing defensive negation 'X, not Y'"),
+    # Importance inflation
+    (r'\b(pivotal|crucial|vital|enduring|profound|stunning|breathtaking|groundbreaking|revolutionary|masterful|powerful|striking)\b',
+     "importance inflation"),
+    # Symbolic significance
+    (r'\b(testament to|hallmark of|continues to (?:captivate|inspire))\b',
+     "promotional warmth"),
+]
+
+flags = re.IGNORECASE | re.MULTILINE
+hits = []
+seen = set()
+for pat, label in checks:
+    for m in re.finditer(pat, scan_text, flags):
+        line_no = scan_text[:m.start()].count('\n') + 1
+        key = (line_no, label)
+        if key in seen:
+            continue
+        seen.add(key)
+        # First two occurrences per (line, label); aggregate counts elsewhere
+        hits.append(f"L{line_no}: {label} — '{m.group(0)[:50]}'")
+        if len(hits) >= 12:  # cap noise
+            break
+    if len(hits) >= 12:
+        break
+print("\n".join(hits))
+PY
+)
+
+if [[ -n "$STRUCT_HITS" ]]; then
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && WARNINGS+=("structural slop: $line")
+    done <<< "$STRUCT_HITS"
 fi
 
 # Outreach-only checks
