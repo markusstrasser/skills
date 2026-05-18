@@ -115,6 +115,27 @@ SOURCE_TAG = re.compile(
 )
 
 missing = []
+def _is_scaffold(text):
+    '''True if file body is structurally a scaffold — headers + placeholder
+    tokens ([PENDING]/[TODO]/[FILL ME]/[WIP]/[DRAFT]) and no substantive
+    prose claims. Researcher subagents often leave such stubs partly
+    written; they have no claims to cite yet, so the gate should not
+    blame the current session for them.'''
+    placeholder = re.compile(r'\[(PENDING|TODO|FILL\s*ME|WIP|DRAFT)\b', re.IGNORECASE)
+    substantive = 0
+    for line in text.split('\n'):
+        s = line.strip()
+        if not s: continue
+        if s.startswith('#'): continue
+        if s.startswith('---'): continue
+        if s.startswith('|'): continue
+        if s in ('-', '*', '+'): continue
+        if placeholder.search(s): continue
+        if re.match(r'^[-*+]\s*\[(PENDING|TODO|FILL\s*ME|WIP|DRAFT)', s, re.IGNORECASE):
+            continue
+        substantive += 1
+    return substantive == 0
+
 for f in research_files:
     fpath = os.path.join(cwd, f)
     if not os.path.isfile(fpath):
@@ -125,6 +146,10 @@ for f in research_files:
         continue  # Skip empty files (e.g., llmx -o placeholder before model finishes)
     # Strip HTML comments — invisible-to-reader provenance is guard evasion.
     content_visible = re.sub(r'<!--.*?-->', '', content, flags=re.DOTALL)
+    # Strip frontmatter — YAML metadata is not claim-bearing prose.
+    content_visible = re.sub(r'\A---\n.*?\n---\n', '', content_visible, flags=re.DOTALL)
+    if _is_scaffold(content_visible):
+        continue  # Scaffold-only: no real claims to cite yet.
     if not SOURCE_TAG.search(content_visible):
         missing.append(f)
 
