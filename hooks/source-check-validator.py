@@ -179,6 +179,18 @@ def main():
     except (json.JSONDecodeError, ValueError):
         sys.exit(0)
 
+    # PostToolUse cannot revert a write. Exit 2 in that context produces a
+    # misleading "blocking error" frame from Claude Code even though
+    # nothing was actually blocked. Downgrade block-mode to warn-mode
+    # whenever the payload indicates PostToolUse — the "POST-WRITE
+    # WARNING" stderr message remains, but exit 0 keeps the framing
+    # honest. (Authors who want a true block must wire this to
+    # PreToolUse, per the NOTE further down.)
+    if mode == "block":
+        event = hook_input.get("hook_event_name", "")
+        if event == "PostToolUse" or "tool_response" in hook_input:
+            mode = "warn"
+
     fpath = (
         hook_input.get("file_path", "")
         or hook_input.get("tool_input", {}).get("file_path", "")
