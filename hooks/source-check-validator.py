@@ -19,6 +19,10 @@ TAG_RE = re.compile(
     r'\[(?:SOURCE|DATABASE|DATA|INFERENCE|SPEC|CALC|QUOTE|TRAINING-DATA|PREPRINT|FRONTIER|UNVERIFIED)'
     r'(?::?\s*[^\]]*)?\]'
     r'|\[[A-F][1-6](?::\s*[^\]]*)?\]'
+    # Two-axis source-grade form: [citation_id=..., artifact=A1, claim=A1]
+    # See .claude/rules/conviction-template.md "Two-axis source-grade ontology".
+    r'|\[citation_id\s*=\s*[^,\]]+,\s*artifact\s*=\s*[A-F][1-6][^,\]]*,'
+    r'\s*claim\s*=\s*[A-F][1-6][^\]]*\]'
 )
 
 SOURCE_RE = re.compile(r'\[SOURCE:\s*([^\]]*)\]')
