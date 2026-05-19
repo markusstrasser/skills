@@ -78,6 +78,28 @@ These are **warning signs**, not banned words. A listed word in its literal or t
   - **Flag only when** the "transformation" is editorial framing of a static thing — the abstract noun ("the persuasion," "the speech," "the dagger") doesn't literally change; the writer is performing interpretation.
   - **Keep when** the transformation is literal — a real change of representation, medium, or state: "Kurosawa turns the three witches into a single Noh spirit" (it's a real substitution); "The compiler turns the IR into machine code" (literal pipeline); "Verdi turns the sleepwalking scene into an aria" (genuine medium change). If you can answer "what specifically changed?" with something concrete, the verb is doing real work.
 
+### UI Section Labels
+
+When a new section is being added to a page or document and every candidate name reads as AI prose, the label itself is the problem. Don't pick the least-bad abstract noun; drop the label and use a descriptive sentence instead.
+
+**Tells of an AI-prose section label:**
+
+- Abstract noun without object: "Echoes," "Resonances," "Reverberations," "Reflections," "Currents," "Tangents"
+- Spatial metaphor without referent: "Beyond," "Adjacent," "Periphery," "Margins," "Outside," "In the Wild"
+- Faux-elevated category: "Cultural ___," "Reception ___," "Critical ___," "Reverberations of ___"
+- Hedge-language: "Loosely related," "Tangentially," "Indirect," "Adjacent"
+- Generic UI: "Related," "See also," "Other ___," "More ___"
+
+**Tell of an AI-prose explanatory subtitle:** "Films that explore the relationship between scripture and modern storytelling…" — every clause is filler.
+
+**The fix:** replace the label with one concrete sentence above the content. Five-to-eight words. No abstract noun, no spatial metaphor, no hedge.
+
+Example (Matthew reader, 2026-05-19): I proposed "Near misses" for a section listing films that borrow biblical motifs without adapting them. The user invoked `/de-slop`. The resolution: drop the `<h2>` entirely, render the cards under one italic sentence — *"Films that reach past Matthew."* Five words. The thin top rule + the sentence is enough divider. The CSS class can still be a clean internal name (`.off-canon`); that's not user-facing.
+
+**When a label IS still right:** when there's a single-word, concrete, project-vocabulary term that already exists in the data. For example, `fit: 'Exact passage'` is project taxonomy; using that as a label is honest. Inventing a new abstract noun for a new section is not.
+
+**Litmus test:** read the proposed label aloud. If it sounds like a TED-talk subhead or a Medium-article H2, it's slop.
+
 ### Tone Tells
 
 - **Promotional register** — ad copy or press release tone in neutral writing
