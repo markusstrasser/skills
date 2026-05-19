@@ -10,7 +10,7 @@ effort: low
 
 Select the right frontier model for a task and prompt it correctly.
 
-**Models covered:** Claude Opus 4.7, Claude Sonnet 4.6, GPT-5.5, GPT-5.5 Pro, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3 Flash, Gemini 3.1 Flash-Lite, Grok 4.20 Reasoning.
+**Models covered:** Claude Opus 4.7, Claude Sonnet 4.6, GPT-5.5, GPT-5.5 Pro, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3.5 Flash, Gemini 3 Flash, Gemini 3.1 Flash-Lite, Grok 4.20 Reasoning.
 **Last updated:** 2026-04-24. See `${CLAUDE_SKILL_DIR}/references/CHANGELOG.md` for update history.
 **Benchmark note:** Numbers cited for Claude Opus are the published Opus 4.6 baseline. Opus 4.7 (released 2026-04-16) improves on most of these per Anthropic's announcement; specific 4.7 figures update on the next benchmark refresh.
 
@@ -136,6 +136,31 @@ For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_GPT.md`.
 - Good at: entity extraction from research papers, restructuring documents into schemas, summarization
 - **When to use over 5.4:** conversational tasks, schema extraction, anything that doesn't need deep reasoning
 - **When to use 5.4 instead:** math verification, formal analysis, outputs >16K tokens, computer use
+
+### Gemini 3.5 Flash -- "The Pro-Lite Workhorse"
+
+**Stable GA** of the Flash family, released May 2026. Sustained frontier-level intelligence at Flash latency. ~3× the price of `gemini-3-flash-preview` — positioned between Flash and Pro, not the cheap-Flash slot.
+
+**Strengths:** Agentic loops (sub-agent deployment, multi-step workflows, long-horizon tasks), rapid coding cycles, structured outputs. Same 1M / 65K context as Pro. Knowledge cutoff Jan 2025.
+
+**Weaknesses:** 3× cost vs base Flash makes it the wrong default for high-volume classification or mechanical extraction. Pro still wins on the hardest architectural / multi-file reasoning.
+
+**Quick prompting tips:**
+- llmx name: `gemini-3.5-flash` (stable) — preview alias `gemini-3-flash-preview` still resolves to the same family
+- Reasoning effort: `low/medium/high` (no `minimal`)
+- Search grounding: `--search` works (forces API fallback — CLI doesn't ground)
+- Temperature locked at 1.0 (thinking model)
+- **When to use over Pro:** critique cosigner where Pro is overkill, agentic loops needing Flash speed, mid-complexity reviews
+- **When to use 3 Flash (`gemini-3-flash-preview`) instead:** high-volume classification, mechanical audits, anything cost-sensitive
+- **When to use Pro instead:** hardest architectural review, deep multi-file synthesis, FrontierMath / GPQA-class reasoning
+
+```bash
+# Critique cosigner with web grounding
+llmx chat -m gemini-3.5-flash --search -f review.md -o critique.md "Pressure-test these claims"
+
+# Agentic loop (high reasoning)
+llmx chat -m gemini-3.5-flash -e high --max-tokens 65536 -f task.md -o out.md "..."
+```
 
 ### Gemini 3 Flash -- "The Budget Workhorse"
 

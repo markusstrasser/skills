@@ -7,8 +7,10 @@
 | Model | llmx name | Notes |
 |-------|-----------|-------|
 | Gemini 3.1 Pro | `gemini-3.1-pro-preview` | **Default Google model.** `google` prefers Gemini CLI when installed |
-| Gemini 3 Flash | `gemini-3-flash-preview` | Cheap. `-preview` required |
-| Gemini 3.1 Flash Image | `gemini-3.1-flash-image-preview` | No text-only 3.1 Flash yet |
+| Gemini 3.5 Flash | `gemini-3.5-flash` | **Stable GA** (May 2026) of the Flash family. ~3× Flash pricing — Pro-lite tier, agentic loops + critique cosigner. CLI free; API ~$1.50/$9 per MTok. |
+| Gemini 3 Flash | `gemini-3-flash-preview` | Cheap workhorse. `-preview` required. Use for high-volume classification, not when 3.5's reasoning is needed |
+| GPT Image 2 | `gpt-image-2` | Current SoTA image model. Default for `llmx image`; supports generation and edit/reference workflows |
+| Gemini 3 Pro Image | `gemini-3-pro-image-preview` | Available via `llmx image --provider google -m pro` |
 | GPT-5.3 Instant | `gpt-5.3-chat-latest` | Reasoning max: **medium only**. Auto-defaults |
 | GPT-5.5 | `gpt-5.5` | **Default OpenAI model.** 1M API context / 400K Codex. Pricing $5/$30 per MTok (batch/flex 50%, priority 2.5x). `openai` prefers Codex CLI when installed. API defaults reasoning to `high`; `xhigh` also supported. |
 | GPT-5.5 Pro | `gpt-5.5-pro` | Same weights as 5.5 + parallel test-time compute. $30/$180 per MTok. Also in ChatGPT Pro/Business/Enterprise. |
@@ -38,6 +40,7 @@
 | GPT-5.3 Chat | 128,000 | 16,384 | Smallest output cap — watch for truncation |
 | o4-mini | 200,000 | 100,000 | |
 | Gemini 3.1 Pro | 1,048,576 | 65,536 | Server default is 8K — always pass `--max-tokens 65536` |
+| Gemini 3.5 Flash | 1,048,576 | 65,536 | Same window as Pro; pass `--max-tokens 65536` for long outputs |
 | Gemini 3 Flash | 1,048,576 | 65,535 | |
 | Grok 4.20 Reasoning | 2,000,000 | 128,000 | **>200K input → 20× price tier** ($40/$120 per M). Chunk before crossing. |
 
@@ -51,6 +54,7 @@
 | GPT-5.2 | minimal, low, medium, high | high |
 | GPT-5-Codex | low, medium, high | high |
 | Gemini 3 Flash | low, medium, high | high (server-side, via `thinking_config`) |
+| Gemini 3.5 Flash | low, medium, high | high (server-side, via `thinking_config`) |
 | Gemini 3.x (Pro/Flash) | low, medium, high | high (server-side, via `thinking_config`) |
 | Grok 4.20 Reasoning | **NONE — passing `reasoning_effort` errors** | auto (model reasons internally) |
 | Grok 4.20 Multi-Agent | low, medium, high, xhigh — **selects agent count, not depth** (low/med→4 agents, high/xhigh→16) | -- |

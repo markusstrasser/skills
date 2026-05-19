@@ -40,6 +40,8 @@ Unless the user explicitly says compatibility matters, treat the target change a
 
 See `lenses/adversarial-review.md` for full dispatch methodology, axis descriptions, depth presets, per-model prompts, and known issues.
 
+**Cosigner routing.** Default pairing: Gemini 3.1 Pro + GPT-5.5 for full-weight adversarial pressure. When Pro is overkill (smaller reviews, agentic-loop critiques, structured-output cross-checks), substitute **Gemini 3.5 Flash** (`gemini-3.5-flash`) — stable GA, Pro-lite tier at ~3× Flash pricing, supports `--search` for grounded fact-checking. Do **not** substitute base `gemini-3-flash-preview` for adversarial work — it's the cheap-classification slot, not a critique cosigner.
+
 ### 1. Assemble Context
 
 Write review material to a single context file.
@@ -86,24 +88,24 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
 
 Set `timeout: 660000` on the Bash tool call. See `references/dispatch.md` for `--questions`, `--context-files`, depth presets, effort levels, and troubleshooting.
 
-**Model-specific prompting:** Before assembling context, consult `/model-guide` for per-model rules. Key: GPT-5.4 context should use XML `<doc>` tags, Gemini query goes at END. See `references/dispatch.md § Context Formatting` for the full checklist.
+**Model-specific prompting:** Before assembling context, consult `/model-guide` for per-model rules. Key: GPT-5.5 context should use XML `<doc>` tags, Gemini query goes at END. See `references/dispatch.md § Context Formatting` for the full checklist.
 
 **Effort levels:** Default `high` is correct for reviews. Use `xhigh` only for formal math verification. See `references/dispatch.md § Reasoning Effort Selection`.
 
-**GPT-only multi-query pattern:** For deep dives where you want multiple focused attack vectors, dispatch 2-3 GPT-5.4 `high` queries in parallel with different questions each, rather than one mega-query. More signal per unit time.
+**GPT-only multi-query pattern:** For deep dives where you want multiple focused attack vectors, dispatch 2-3 GPT-5.5 `high` queries in parallel with different questions each, rather than one mega-query. More signal per unit time.
 
 #### Depth Presets
 
 | Preset | Axes | When |
 |--------|------|------|
-| `standard` (default) | arch (Gemini) + formal (GPT-5.4) | Most reviews |
+| `standard` (default) | arch (Gemini) + formal (GPT-5.5) | Most reviews |
 | `--axes deep` | arch + formal + domain + mechanical | Structural changes, domain-dense |
 | `--axes full` | all 5 | Shared infra, clinical, high-stakes |
 
-User-facing presets are `standard`, `deep`, and `full`; each includes GPT-5.4.
+User-facing presets are `standard`, `deep`, and `full`; each includes GPT-5.5.
 Non-GPT axis sets are internal-only and rejected by the default CLI contract.
 
-**Genomics classification review** (monthly or after >10 commits to LR-engine/scoring): Use `--axes formal,domain`. GPT-5.4 found 11 conceptual/mathematical bugs for $6.54 — the only detector for incoherent Bayes.
+**Genomics classification review** (monthly or after >10 commits to LR-engine/scoring): Use `--axes formal,domain`. GPT-5.5 found 11 conceptual/mathematical bugs for $6.54 — the only detector for incoherent Bayes.
 
 ### 3. Read Both Outputs and Synthesize
 
@@ -221,7 +223,7 @@ See `lenses/plan-close-review.md` for full workflow, bug class table, and migrat
 
 Three independent lines of evidence:
 
-1. **Empirical (suspense accounts, 2026-04-07):** GPT-5.4 found 6 confirmed bugs in freshly committed code. All 74 canary tests and 11 IR invariants passed. The bugs were in new functions with zero test coverage.
+1. **Empirical (suspense accounts, 2026-04-07):** GPT-5.5 found 6 confirmed bugs in freshly committed code. All 74 canary tests and 11 IR invariants passed. The bugs were in new functions with zero test coverage.
 
 2. **Failure Mode 15 — Silent Semantic Failures** (MAS-FIRE, arXiv:2602.19843): Reasoning drift, wrong buckets, misleading diagnostics propagate without runtime exceptions.
 
@@ -272,13 +274,23 @@ pytest tests/test_<new>.py -x  # should PASS
 
 ## Known Issues
 <!-- Append-only. Session-analyst may suggest additions. -->
+- **[2026-04-25] Claude Code verifier auth split** — `claude --bare -p`
+  is the documented scripted/API-key path, but bare mode skips OAuth/keychain
+  reads and uses `ANTHROPIC_API_KEY` or an explicit `apiKeyHelper`. On this
+  machine the inherited API key path can fail with `Credit balance is too low`
+  even while the local Claude subscription auth works. For read-only Claude
+  Code verification from Codex/agent shells, prefer:
+  `uv run python3 ~/Projects/skills/scripts/claude-code-verify.py --repo "$(pwd)" --prompt-file prompt.md --output claude-review.md`.
+  The wrapper unsets `ANTHROPIC_API_KEY`, runs from a tiny temp cwd, passes the
+  prompt on stdin, and restricts tools to read-only inspection by default. Use
+  `--use-api-key` only when explicitly testing the API-key path.
 - **[2026-03-27] shared dispatch output — never use shell redirects (> file) for review artifacts; the shared review script writes directly to files. Shell redirects buffer until process exit, producing 0-byte files.**
-- **[2026-04-09] GPT-5.4 xhigh timeout — shared dispatch timeout is 300s by default; xhigh needs 900s. Set `--timeout 900` for xhigh, `--timeout 600` for high. Three parallel xhigh calls may hit rate limits — run sequentially or use high effort instead.**
+- **[2026-04-09] GPT-5.5 xhigh timeout — shared dispatch timeout is 300s by default; xhigh needs 900s. Set `--timeout 900` for xhigh, `--timeout 600` for high. Three parallel xhigh calls may hit rate limits — run sequentially or use high effort instead.**
 - **[2026-04-09] xhigh vs high for architectural review — marginal quality delta. High-effort adversarial review (4 min) found the sharpest insight across 6 reviews. xhigh (15 min each) had more words, similar signal density. Reserve xhigh for formal math only. For deep dives: 2-3 parallel high queries with focused questions > 1 xhigh mega-query.**
-- **[2026-04-09] Context formatting matters — GPT-5.4 performs better with XML `<doc>` tags around context sections. Gemini needs query at END, critical constraints at END. Consult /model-guide before assembling context for manual dispatch.**
-- **[2026-04-11] FIXED — Python version mismatch in `_bootstrap_llmx()`: when running model-review.py via `uv run` from a project whose venv Python differs from the llmx tool install's Python (e.g., phenome 3.12 vs llmx tool 3.13), the previous fallback used `glob.glob` to inject ANY available `python*/site-packages` from the llmx tool install into `sys.path`. Result: 3.13 compiled `.so` files (e.g. `pydantic_core._pydantic_core.cpython-313-darwin.so`) loaded into a 3.12 process, producing the cryptic `ModuleNotFoundError: No module named 'pydantic_core._pydantic_core'`. Fix in `shared/llm_dispatch.py` now matches Python `major.minor` exactly and raises a clear `ImportError` if no matching version is found. Workaround: run model-review.py via `/Users/alien/.local/share/uv/tools/llmx/bin/python3 .../model-review.py` (the llmx tool's own Python) — verified working with both Gemini + GPT-5.4 axes returning real output. Or `uv pip install llmx` in the current project venv.**
+- **[2026-04-09] Context formatting matters — GPT-5.5 performs better with XML `<doc>` tags around context sections. Gemini needs query at END, critical constraints at END. Consult /model-guide before assembling context for manual dispatch.**
+- **[2026-04-11] FIXED — Python version mismatch in `_bootstrap_llmx()`: when running model-review.py via `uv run` from a project whose venv Python differs from the llmx tool install's Python (e.g., phenome 3.12 vs llmx tool 3.13), the previous fallback used `glob.glob` to inject ANY available `python*/site-packages` from the llmx tool install into `sys.path`. Result: 3.13 compiled `.so` files (e.g. `pydantic_core._pydantic_core.cpython-313-darwin.so`) loaded into a 3.12 process, producing the cryptic `ModuleNotFoundError: No module named 'pydantic_core._pydantic_core'`. Fix in `shared/llm_dispatch.py` now matches Python `major.minor` exactly and raises a clear `ImportError` if no matching version is found. Workaround: run model-review.py via `/Users/alien/.local/share/uv/tools/llmx/bin/python3 .../model-review.py` (the llmx tool's own Python) — verified working with both Gemini + GPT-5.5 axes returning real output. Or `uv pip install llmx` in the current project venv.**
 - **[2026-04-13] --verify pass can hang on a single finding** — model-review.py's `--verify` pass verifies each extracted finding serially. If one verification call gets stuck on a network round-trip, the whole process goes quiet even though extraction + per-model outputs are already written. Symptom: `arch-output.md`, `formal-output.md`, and `formal-extraction.parsed.json` are present in `.model-review/<topic>-<hash>/` but no `verified-disposition.md`. The process is alive but using <1s CPU. Action: kill the hung process and work from the extracted findings directly (`formal-extraction.parsed.json` is already machine-readable). Don't wait — the timeout doesn't help when the hang is inside the verify loop.
 - **[2026-04-16] Never pipe `model-review.py` through `tail`** — stdout is full structured JSON (can be hundreds of lines). `| tail -40` silently drops the artifact paths and findings and keeps only closing braces. Read the artifacts from the review dir directly (`disposition.md`, `coverage.json`) or let the full stdout land in the shell. The script now prints a trailing `=== model-review summary ===` block that DOES survive tail truncation — if you must tail, tail ≥20 lines to catch it.
-- **[2026-04-16] HALLUCINATED rate inflated by anchor hallucination on config files** — both Gemini 3.1 Pro and GPT-5.4 will cite JSON config files with `.js` extension (e.g. `config/foo.js` when the real file is `config/foo.json`). The verifier correctly marks these anchors as "not found" and the finding gets HALLUCINATED, but the finding's SEMANTIC content may still be true. Example 2026-04-15: 18-finding review on genomics PRS plan, 10 flagged HALLUCINATED (56%); manual cross-check showed the semantic-hallucination rate was ~10% — the rest were `.js`-instead-of-`.json` anchor mistakes. Action: don't treat HALLUCINATED as "discard this finding" — re-check semantic content against the likely-intended file (swap `.js` → `.json`). Enhancement worth considering: fuzzy extension matching in `_resolve_reference` (model-review.py ~line 1099) for config/data file extensions.
+- **[2026-04-16] HALLUCINATED rate inflated by anchor hallucination on config files** — both Gemini 3.1 Pro and GPT-5.5 will cite JSON config files with `.js` extension (e.g. `config/foo.js` when the real file is `config/foo.json`). The verifier correctly marks these anchors as "not found" and the finding gets HALLUCINATED, but the finding's SEMANTIC content may still be true. Example 2026-04-15: 18-finding review on genomics PRS plan, 10 flagged HALLUCINATED (56%); manual cross-check showed the semantic-hallucination rate was ~10% — the rest were `.js`-instead-of-`.json` anchor mistakes. Action: don't treat HALLUCINATED as "discard this finding" — re-check semantic content against the likely-intended file (swap `.js` → `.json`). Enhancement worth considering: fuzzy extension matching in `_resolve_reference` (model-review.py ~line 1099) for config/data file extensions.
 
 $ARGUMENTS
