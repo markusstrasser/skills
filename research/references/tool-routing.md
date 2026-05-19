@@ -26,10 +26,10 @@ Use whichever of these are available in the current project's `.mcp.json`:
 | `mcp__exa__web_search_exa` | Semantic web search | Non-obvious connections, expert blogs, recent work. **Recency enum: `24h`, `week`, `month`, `year`, `any` only — NOT `365d`/`90d`/`180d`.** |
 | `mcp__exa__web_search_advanced_exa` | Advanced search (filters, deep, structured) | Entity enrichment, date-filtered research, domain-restricted search |
 | `mcp__exa__company_research_exa` | Company intelligence | Business/financial research |
-| `mcp__brave-search__brave_web_search` | Independent index search | Triangulation with Exa (different index) |
+| `mcp__brave-search__brave_web_search` | Independent web index, free tier | Serial fallback when Exa is silent or contested. Note: Exa+Brave agree on ~95% of verdicts at the verdict level (κ=0.708, N=60 2026-05-19) — triangulating both rarely buys new signal except on panel-attribution debates where Brave's `count: 5` widens the domain spread. |
 | `mcp__brave-search__brave_news_search` | Dedicated news search | Time-sensitive events (default 24h) |
 | `mcp__perplexity__perplexity_search` | Raw web search results (Search API) | URL discovery, cheap fact-checking (~$0.005/call). No AI synthesis — ranked results with snippets. |
-| `mcp__perplexity__perplexity_ask` | Grounded factual answer (Sonar Pro) | **Best for precise numbers** — exact figures, CIs, study-level data (~$0.01-0.05/call). Empirically 5-0 vs Exa `/answer` on genomics precision (Mar 2026). Use when you need the value, not just confirmation. |
+| `mcp__perplexity__perplexity_ask` | Grounded factual answer (Sonar Pro) | **Domain-dependent.** Empirically 5-0 vs Exa `/answer` on genomics precision (Mar 2026 N=5); BUT 30% precision on art-historical / scholar-attribution claims at N=60 (2026-05-19) — quibbles on framing rather than hallucinates. Cost ~$0.01-0.05/call. Use for biomedical precise-number claims; avoid for reception / attribution / scripture work where Exa or Brave are 80%+. Batch ergonomic safe at N≤10, risky at N≥25 (rubber-stamps user-supplied specifics). |
 | `mcp__perplexity__perplexity_reason` | Chain-of-thought + web (Sonar Reasoning Pro) | Analytical "why" questions needing multi-step reasoning + evidence (~$0.05-0.15/call). |
 | `mcp__perplexity__perplexity_research` | Deep multi-source report (Sonar Deep Research) | Literature-survey-scale questions. Slow (~30s+), expensive (~$0.15-0.50/call). |
 | `mcp__scite__search_literature` | Citation-stance search (1.6B+ citations) | Disconfirmation, literature audits, checking if a claim is supported/contrasted. Returns Smart Citation snippets with stance. |
@@ -72,6 +72,92 @@ Combined's hallucination happened because it reasoned from training memory. When
 
 **Limitation:** N=1 (genomics VUS), single model. Websearch may outperform academic in fast-moving fields where S2 indexing lags.
 
+## Cross-Source Verification Benchmark (N=60 stratified, 2026-05-19)
+
+Larger, statistically rigorous follow-up to the EBF3 N=1. **Domain: gospel-reception facts** (artwork provenance, cinema specifics, scripture cross-references, scholar attribution) — NOT genomics; routing may differ for biomedical claims.
+
+Method: 60 stratified claims × 4 engines × ground-truth grading (primary fetch + majority of independent indexes; Perplexity excluded as engine-under-evaluation). Wilson 95% CIs, McNemar pairwise, Cohen's κ between engines, inter-rater κ on the N=30 first half.
+
+### Per-engine precision
+
+| engine | strict precision | 95% CI | failure mode |
+|---|---|---|---|
+| Exa `web_search_exa` | **88.3%** | [77.8%, 94.2%] | rubber-stamps PARTIAL on attribution debates (~1 in 30); never false-strict |
+| Brave `brave_web_search` | 86.7% | [75.8%, 93.1%] | rate-limits on parallel; `count: 5` catches panel-level nuance Exa flattens |
+| Primary WebFetch (museum + Wikipedia) | 75.0%¹ | [61.2%, 85.1%] | 20% fetch failure at scale (museum URLs 403/404 — KHM, NG London, Met, Prado, AGO, Scuola San Rocco) |
+| Perplexity Sonar Pro `high` single | 75.0% | [62.8%, 84.2%] | quibbles on framing ("insufficient library" not "no library") — 30% on context-scholar stratum |
+| *Random-TRUE baseline* | *83.3%* | *—* | (sample is 83% TRUE-skewed; only Perplexity is reliably below baseline) |
+
+¹ Primary N=48 (12 fetch failures of 60); lenient precision 89.6%.
+
+**Statistical reality at N=60:**
+- Brave-vs-Exa CI overlap completely; McNemar p=1.00 (51 of 60 verdicts agree). The two are **statistically indistinguishable** at this N.
+- Perplexity-vs-Exa McNemar p=0.022 — the only pairwise comparison clearing p<0.05.
+- Inter-rater κ = 0.716 (substantial) on N=30 first half; no TRUE↔FALSE swaps, grader bias doesn't drive headlines.
+
+### Exa and Brave are NOT independent indexes (correction to prior routing claim)
+
+Cohen's κ on pairwise verdicts:
+
+| pair | κ | agreement |
+|---|---|---|
+| **Exa vs Brave** | **+0.708** | 95.0% — substantial; share most underlying evidence |
+| Perplexity vs Exa | +0.195 | 80.0% — slight |
+| Perplexity vs Brave | +0.173 | 78.3% — slight |
+| Exa vs Primary | +0.130 | 61.7% — slight |
+
+**Triangulating Exa + Brave buys very little new signal over either alone.** They agree on 57 of 60 verdicts; the divergences are valuable specifically for panel-attribution debates (e.g. Fra Angelico Bacio di Giuda, where Brave's deeper read caught that Baldovinetti contributed to 3 OTHER panels of the cycle, not this one). Use Exa as default; reserve Brave for serial fallback on contested attribution.
+
+### Per-stratum routing (N=10/cell, strict precision)
+
+| stratum | best engine | precision | notes |
+|---|---|---|---|
+| artwork-date | Exa or Brave | 100% [72, 100] | Primary degraded by 20% museum-URL fetch failures |
+| artwork-attribution | tied 70% | all engines ~70% | Brave qualitatively catches panel-nuance |
+| artwork-count | Exa | 80% [49, 94] | (N=30 Perplexity lead at 80% did NOT replicate at N=60) |
+| cinema-fact | Exa or Brave | 100% [72, 100] | Primary silent on dialogue |
+| scripture-greek | Exa or Brave | 100% [72, 100] | Primary URL often single-language Bible |
+| **context-scholar** | **anything but Perplexity** | Perp 30% [11, 60] vs others 75-80% | Only stratum where Perplexity is reliably worse |
+
+### Recommended routing (empirically supported, simpler than prior matrix)
+
+1. **Default: Exa `numResults: 3-5`** — ~95% of reception/scholar claims resolve in one call. Cost ~$0.005/call.
+2. **Tiebreaker: WebFetch Wikipedia-on-the-work** — when Exa snippets conflict or claim hinges on a single canonical page (Scrovegni wall, Contarelli installation date, Tenebrae responsory attribution). Prefer Wikipedia-on-the-work over museum URLs (the museum-URL fetch-failure rate is ~20% at scale).
+3. **Serial Brave fallback** — for panel-attribution debates where Brave's wider domain spread (`count: 5`) catches what Exa flattens. ~1 in 30 entries.
+4. **Image-vision Read** — only engine that catches wrong-file-in-place errors (image content vs caption claim drift). No web engine reads images. Confirmed unique value: 4 wrong-file catches in prior session (Polenov→Repin portrait, etc.).
+5. **Avoid Perplexity for context-scholar claims** — 30% precision (upper CI 60% vs others' lower bound 49%). Useful elsewhere but reliably worst here.
+
+### Batch-Perplexity ceiling
+
+- **N ≤ 10 claims/batch: safe** (in this study, 9/10 vs single 8/10; batch hedged correctly on the contested Allegri-Mozart memory claim where single said TRUE).
+- **N ≥ 25 claims/batch: risky** — rubber-stamps user-supplied numerical specifics (prior session: Tissot 365-gouaches claim returned TRUE in a 25-batch even though Brooklyn Museum page says 350).
+
+### Failure modes worth knowing
+
+- **Pretool burst-hook fires at ~30 consecutive Exa calls.** Interleave a Read every ~6-9 searches in subagent dispatch.
+- **Composer-attribution silent misdirection** — searching "Composer X Responsory Y" returns generic Tenebrae pages that don't disambiguate whether X actually set Y. Needs a separate targeted query (e.g. "Y composers"). Single case caught in N=60: subagent claimed Victoria didn't set "In Monte Oliveti"; Wikipedia 1585 list confirms he DID.
+- **Spatial-orientation claims invert silently in prose** — north/south wall, recto/verso, left/right of altar are exactly the class where confident-sounding generation gets it backwards. Always tiebreaker-fetch.
+- **Stylized-vs-literal interpretive claims** — "Antonello painted the Messina horizon from his own window" is the painterly reading; 2010 orographic studies place the view from Camaro hills. Strict literal verification flags this as PARTIAL; either is defensible depending on register.
+
+### Class-imbalance caveat (worth knowing for future benchmarks)
+
+Ground-truth distribution in this sample is ~83% TRUE — so the random-TRUE baseline (83.3%) sits inside every web-engine CI. Cannot strictly reject "always-TRUE = Exa" at p<0.05 at N=60. To get statistical separation between Exa/Brave/Primary:
+- Either oversample PARTIAL/FALSE ground-truth claims (a class-rebalanced N=60 with 20/20/20 distribution would move the baseline to 33%)
+- Or scale to N=200+ (CI half-width shrinks by ~√3 from N=60)
+
+For routing decisions the qualitative findings (per-stratum precision, kappa, failure modes) are more useful than the strict-precision rankings. The N=60 study makes engine routing decisions, not engine *rankings*.
+
+### Cost rollup for the benchmark itself
+
+| pass | calls | cost |
+|---|---|---|
+| N=30 5-engine sweep + IRR | ~280 | ~$2.80 |
+| N=30 → N=60 expansion | ~120 | ~$1.50 |
+| 232-entry residual fact-check (Part C) | ~143 | ~$1.95 |
+| **Total** | **~543** | **~$6.25** |
+
+Source data: `/Users/alien/Projects/publishing/research/2026-05-19-engine-reliability-metric.md` (CIs, McNemar tables, kappa) + `2026-05-19-engine-process-observations.md` (per-engine behavior + failure-mode catalogue) + `verifications.md` (per-claim ledger, 468 entries).
+
 ## Evidence Base: Agent Reliability
 
 - **Instructions alone ≠ reliability.** EoG (IBM, arXiv:2601.17915): perfect algorithm as prompt = 0% Majority@3 for 2/3 models. Architecture produces reliability.
@@ -80,9 +166,10 @@ Combined's hallucination happened because it reasoned from training memory. When
 - **Simpler beats complex under stress.** ReliabilityBench (arXiv:2601.06112): ReAct > Reflexion under perturbations.
 
 <!-- knowledge-index
-generated: 2026-05-09T21:03:34Z
-hash: acca39729cd7
+generated: 2026-05-19T10:34:27Z
+hash: 9589c5abe189
 
+cross_refs: research/2026-05-19-engine-reliability-metric.md
 table_claims: 22
 
 end-knowledge-index -->
