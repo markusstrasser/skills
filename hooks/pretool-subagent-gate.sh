@@ -169,6 +169,19 @@ elif [ "$COUNT" -ge 3 ]; then
     WARNINGS="${WARNINGS}SUBAGENT CASCADE (${COUNT}): 3+ consecutive Agent calls. Check if these are truly independent — sequential chains should run directly. Have you surfaced known limitations/ceilings of the current approach? "
 fi
 
+# Implementation-task heuristic — production-code/test writes, not synthesis
+# Used to downgrade Check 7 + Check 10 from BLOCK to advisory when the agent
+# is being told to write production files under e2e/, scripts/, src/,
+# packages/, tests/, or to create files with code-tree extensions. These
+# tasks are short-scoped (5-15 tool calls), not multi-source research, so
+# turn-budget / write-stub gates are misapplied. They produced 5+ false-
+# positive blocks in one session (2026-05-21) and were the user-cited
+# "subagent dispatch boilerplate" complaint.
+IS_IMPL_TASK=0
+if [ -n "$PROMPT" ]; then
+    IS_IMPL_TASK=$(echo "$PROMPT" | grep -ciE '(^|[[:space:]/`"'\''])\b(e2e|scripts|src|packages|tests?)/[A-Za-z0-9_./-]+|\.(ts|tsx|mjs|svelte|svx|py|sh|test\.[tj]sx?)\b' || true)
+fi
+
 # Check 7: Turn-budget / file-output instruction missing in dispatch prompt
 # BLOCKING for research-heavy agents (researcher, general-purpose, Plan, unset)
 # Advisory for Explore, observe (read-only or self-managed)
@@ -200,6 +213,11 @@ if [ -n "$PROMPT" ]; then
                 if [ "$HAS_WORKTREE" -gt 0 ]; then
                     CHECK_IDS="${CHECK_IDS}7,"
                     WARNINGS="${WARNINGS}SUBAGENT OUTPUT: Dispatch prompt missing ${MISSING}. (Advisory — worktree agent, likely implementation.) "
+                # Skip blocking for implementation tasks (writing production files
+                # under e2e/, scripts/, src/, etc. — short-scoped, not research)
+                elif [ "$IS_IMPL_TASK" -gt 0 ]; then
+                    CHECK_IDS="${CHECK_IDS}7,"
+                    WARNINGS="${WARNINGS}SUBAGENT OUTPUT: Dispatch prompt missing ${MISSING}. (Advisory — implementation task targeting source tree.) "
                 # Block if prompt is substantial (>200 chars = real research task)
                 elif [ "$PROMPT_LEN" -gt 200 ]; then
                     ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "check=7 missing=${MISSING}" 2>/dev/null || true
@@ -259,6 +277,9 @@ if [ -n "$PROMPT" ] && [ "${HAS_FILE_OUTPUT:-0}" -gt 0 ]; then
                 if [ "$HAS_WORKTREE" -gt 0 ]; then
                     CHECK_IDS="${CHECK_IDS}10,"
                     WARNINGS="${WARNINGS}SUBAGENT WRITE-FIRST: Prompt specifies file output but doesn't instruct write-stub-first. ${STUB_FIX} (Advisory — worktree agent.) "
+                elif [ "$IS_IMPL_TASK" -gt 0 ]; then
+                    CHECK_IDS="${CHECK_IDS}10,"
+                    WARNINGS="${WARNINGS}SUBAGENT WRITE-FIRST: Prompt specifies file output but doesn't instruct write-stub-first. ${STUB_FIX} (Advisory — implementation task; production files are the deliverable, not a synthesis memo.) "
                 elif [ "$PROMPT_LEN" -gt 200 ]; then
                     ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "check=10 missing=write-stub-first" 2>/dev/null || true
                     echo "{\"decision\": \"block\", \"reason\": \"SUBAGENT WRITE-FIRST REQUIRED: Prompt specifies file output but doesn't instruct write-stub-first. ${STUB_FIX}\"}"
