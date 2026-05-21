@@ -177,9 +177,23 @@ fi
 # turn-budget / write-stub gates are misapplied. They produced 5+ false-
 # positive blocks in one session (2026-05-21) and were the user-cited
 # "subagent dispatch boilerplate" complaint.
+#
+# Two-clause classifier (both required) so that a research prompt that
+# *mentions* paths/extensions ("Read all .ts files. Do not write anything.")
+# does NOT bypass the gates — only prompts that BOTH name a source-tree
+# path AND express write/create/edit intent qualify as implementation.
 IS_IMPL_TASK=0
 if [ -n "$PROMPT" ]; then
-    IS_IMPL_TASK=$(echo "$PROMPT" | grep -ciE '(^|[[:space:]/`"'\''])\b(e2e|scripts|src|packages|tests?)/[A-Za-z0-9_./-]+|\.(ts|tsx|mjs|svelte|svx|py|sh|test\.[tj]sx?)\b' || true)
+    HAS_PATH=$(echo "$PROMPT" | grep -ciE '(^|[[:space:]/`"'\''])\b(e2e|scripts|src|packages|tests?)/[A-Za-z0-9_./-]+|\.(ts|tsx|mjs|svelte|svx|py|sh|test\.[tj]sx?)\b' || true)
+    HAS_WRITE_INTENT=$(echo "$PROMPT" | grep -ciE '\b(write|create|add|edit|modify|patch|implement|fix|build|generate|emit|scaffold|introduce)\b' || true)
+    # Negation guard: "do not write" / "don't write" / "without writing" / "no
+    # writes" cancels the intent. Read-only research prompts that explicitly
+    # disclaim writes must NOT be classified as impl — that would let them
+    # bypass the synthesis-budget block they actually need.
+    NEGATED_WRITE=$(echo "$PROMPT" | grep -ciE '\b(do not|do[[:space:]]?n.?t|never|without|no)\s+(writ|creat|edit|modif|patch|implement|emit|scaffold|add)' || true)
+    if [ "$HAS_PATH" -gt 0 ] && [ "$HAS_WRITE_INTENT" -gt 0 ] && [ "$NEGATED_WRITE" -eq 0 ]; then
+        IS_IMPL_TASK=1
+    fi
 fi
 
 # Check 7: Turn-budget / file-output instruction missing in dispatch prompt
