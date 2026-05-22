@@ -63,6 +63,86 @@ class Model:
 
 ## New Features (v1.4)
 
+### v1.4.3 (2026-05-18)
+
+**Regional input routing (Public Beta).** Route Function inputs through `us-west`, `eu-west`, or `ap-south` instead of the default `us-east` for latency or data residency:
+
+```python
+@app.function(routing_region="eu-west")
+def handler(x): ...
+
+@app.cls(routing_region="ap-south")
+class Worker: ...
+```
+
+Constraints while in Beta:
+- `routing_region=` can only be set on **initial** deployment — not changed in a later redeploy.
+- Functions routed outside `us-east` can only be invoked via `.remote()` and `.map()` (no `.spawn`, no web endpoints).
+
+**`modal.Environment` object + RBAC CLI.** Programmatic Environment management plus expanded `modal environment` CLI for role-based access control configuration.
+
+**Dynamic Function configuration.** Override decorator settings at call site without redefining the Function:
+
+```python
+fn = modal.Function.from_name("app", "handler")
+fn.with_options(gpu="H100", timeout=3600).remote(x)
+fn.with_concurrency(max_inputs=8).remote(x)
+fn.with_batching(max_batch_size=32, wait_ms=50).remote(x)
+```
+
+**`Volume.with_mount_options()`** — per-mount read-only or sub-path scoping (more composable than `vol.read_only()`):
+
+```python
+vol = modal.Volume.from_name("shared")
+@app.function(volumes={
+    "/data": vol.with_mount_options(read_only=True, sub_path="/tenant_a"),
+})
+def reader(): ...
+```
+
+**Custom ephemeral App names.** `modal run --name my-run script.py`, `modal serve --name dev script.py`, or `App.run(name="...")`. Useful for distinguishing concurrent ephemeral apps in `modal app list`.
+
+**Sandbox filesystem additions** (see also `references/sandboxes.md`):
+- `sb.filesystem.list_files(path)` — replaces the alpha `Sandbox.ls`. Returns entries with metadata.
+- `sb.filesystem.stat(path)` — metadata for a single file/dir/symlink.
+
+**Sandbox network ACLs.**
+```python
+sb = modal.Sandbox.create(
+    app=app,
+    inbound_cidr_allowlist=["10.0.0.0/8", "192.168.1.0/24"],
+    outbound_cidr_allowlist=["0.0.0.0/0"],   # new
+)
+```
+`cidr_allowlist=` is **deprecated** — its scope was ambiguous. Use `inbound_cidr_allowlist=` explicitly.
+
+**Sandbox `tags=` at creation** — previously only available via `sandbox.set_tags()` after create.
+
+```python
+sb = modal.Sandbox.create(app=app, tags={"env": "dev", "owner": "alice"})
+```
+
+**Sandbox snapshot improvements.**
+- `sandbox.snapshot_filesystem()` is more reliable for large snapshots; supports `timeout=` longer than the old 55s ceiling.
+- The Image returned by `sandbox.snapshot_directory()` can now be passed as the root filesystem of a new Sandbox: `modal.Sandbox.create(image=snap, ...)`.
+
+**`Image.pipe()`** — compose reusable Image-builder steps without breaking the fluent chain:
+
+```python
+def with_cuda_toolchain(img: modal.Image) -> modal.Image:
+    return img.apt_install("build-essential").pip_install("torch")
+
+image = (
+    modal.Image.debian_slim()
+    .pipe(with_cuda_toolchain)
+    .add_local_python_source("my_pkg")
+)
+```
+
+**`Image.from_dockerfile(..., chmod=..., chown=...)`** flags now honored on `COPY` instructions inside the Dockerfile.
+
+**`modal shell` / `modal container exec`** — improved reliability and lower latency on connect.
+
 ### v1.4.2 (2026-04-16)
 
 **`modal app rollover`** — trigger redeployment of an App without changing code/config. Replaces running containers with fresh ones using the same deployment strategies as `modal deploy`:

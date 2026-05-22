@@ -4,7 +4,7 @@ description: "Modal serverless Python. Writing/debugging Modal scripts, deployin
 effort: low
 ---
 
-# Modal (v1.4.x, April 2026)
+# Modal (v1.4.x, May 2026 — latest v1.4.3)
 
 Use this skill for Modal as an operational system, not just an SDK reference.
 Start from the question, choose the truth surface, then reason about failure mode.
