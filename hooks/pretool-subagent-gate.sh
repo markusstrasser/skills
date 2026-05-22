@@ -94,20 +94,9 @@ except Exception:
 WARNINGS="${MEM_ADVISORY:-}"
 CHECK_IDS=""
 
-# Check 1: Suggestion/brainstorm pattern
-if echo "$DESC" | grep -qiE 'suggest|brainstorm|ideas for|what could be|improvements?$'; then
-    CHECK_IDS="${CHECK_IDS}1,"
-    WARNINGS="${WARNINGS}SUBAGENT BRAINSTORM: Description matches suggestion/brainstorm pattern. Subagents produce ungrounded output for open-ended prompts — consider working directly or using cross-model review instead. "
-fi
-
-# Check 2: Single-tool pattern (short description + direct-tool verb)
-DESC_LEN=${#DESC}
-if [ "$DESC_LEN" -lt 80 ]; then
-    if echo "$DESC" | grep -qiE '^(search|find|grep|read|check|look up|fetch|get) '; then
-        CHECK_IDS="${CHECK_IDS}2,"
-        WARNINGS="${WARNINGS}SUBAGENT OVERHEAD: Short description (${DESC_LEN} chars) matches a single-tool task. A direct Grep/Read/search call would be faster and cheaper than spawning a subagent. "
-    fi
-fi
+# Checks 1+2 removed 2026-05-22: brainstorm/single-tool advisory nags fired
+# constantly on legitimate dispatches without measurable behavior change.
+# 82 warns/3d, 0 blocks. Routing decisions (Checks 3+4) are the real signal.
 
 # Check 3: general-purpose when Explore would work
 if [ "$STYPE" = "general-purpose" ]; then
