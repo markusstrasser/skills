@@ -20,6 +20,9 @@ sandbox = modal.Sandbox.create(
     timeout=300,
     cpu=2.0,
     memory=4096,
+    tags={"env": "dev"},                         # v1.4.3+
+    inbound_cidr_allowlist=["10.0.0.0/8"],       # v1.4.3+ (replaces cidr_allowlist)
+    outbound_cidr_allowlist=["0.0.0.0/0"],       # v1.4.3+
 )
 ```
 
@@ -68,7 +71,18 @@ snapshot = sandbox.snapshot_directory("/work")
 # Mount snapshot in another sandbox
 sb2 = modal.Sandbox.create(app=app)
 sb2.mount_image(snapshot)
+
+# v1.4.3+: use snapshot as the new sandbox's root filesystem
+sb3 = modal.Sandbox.create(app=app, image=snapshot)
 ```
+
+### Filesystem snapshots (v1.4.3 reliability fixes)
+
+```python
+snap_image = sandbox.snapshot_filesystem(timeout=300)   # >55s now supported
+```
+
+Large snapshots are more reliable in v1.4.3; the previous 55s timeout ceiling was lifted.
 
 ## Lifecycle
 
@@ -135,6 +149,10 @@ raw = sb.filesystem.read_bytes("/work/model.bin")
 # Directory ops (v1.4.2+) — replace Sandbox.mkdir / Sandbox.rm
 sb.filesystem.make_directory("/work/results")
 sb.filesystem.remove("/work/old_artifact")  # file or directory
+
+# v1.4.3+: list + stat (list_files replaces the alpha Sandbox.ls)
+entries = sb.filesystem.list_files("/work")          # entries with metadata
+meta = sb.filesystem.stat("/work/results.json")      # single file/dir/symlink
 ```
 
 **Deprecation:** `modal.Sandbox.open()` and `modal.file_io.FileIO` are deprecated. Use `sb.filesystem.*` instead. As of v1.4.2, `Sandbox.mkdir` and `Sandbox.rm` are also deprecated — use `filesystem.make_directory` / `filesystem.remove`.
