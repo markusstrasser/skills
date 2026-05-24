@@ -40,7 +40,7 @@ Unless the user explicitly says compatibility matters, treat the target change a
 
 See `lenses/adversarial-review.md` for full dispatch methodology, axis descriptions, depth presets, per-model prompts, and known issues.
 
-**Cosigner routing.** Default pairing: Gemini 3.1 Pro + GPT-5.5 for full-weight adversarial pressure. When Pro is overkill (smaller reviews, agentic-loop critiques, structured-output cross-checks), substitute **Gemini 3.5 Flash** (`gemini-3.5-flash`) — stable GA, Pro-lite tier at ~3× Flash pricing, supports `--search` for grounded fact-checking. Do **not** substitute base `gemini-3-flash-preview` for adversarial work — it's the cheap-classification slot, not a critique cosigner.
+**Cosigner routing (inverted 2026-05-24 — operator empirical).** Default pairing: **Gemini 3.5 Flash + GPT-5.5** for full-weight adversarial pressure. `gemini-3.5-flash` (stable GA, ~3× Flash pricing, supports `--search` for grounded fact-checking) empirically outperforms `gemini-3.1-pro-preview` on critique/synthesis in this workflow. The Pro model is the runner-up — use only when its specific strengths (ARC-AGI-2, raw GPQA Diamond, video understanding) actually dominate the task; request it via `legacy_pro_review` profile or explicit `-m gemini-3.1-pro-preview`. Do **not** substitute base `gemini-3-flash-preview` for adversarial work — it's the cheap-classification slot, not a critique cosigner.
 
 ### 1. Assemble Context
 

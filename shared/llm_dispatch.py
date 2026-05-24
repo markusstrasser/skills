@@ -83,7 +83,10 @@ PROFILES: dict[str, DispatchProfile] = {
         name="deep_review",
         intent="Long-context structural critique and review",
         provider="google",
-        model="gemini-3.1-pro-preview",
+        # 2026-05-24: gemini-3.5-flash empirically outperforms
+        # gemini-3.1-pro-preview on critique/synthesis in this workflow.
+        # Pro stays available via the legacy_pro_review profile.
+        model="gemini-3.5-flash",
         timeout=300,
         reasoning_effort="high",
         input_token_limit=900000,
@@ -112,7 +115,9 @@ PROFILES: dict[str, DispatchProfile] = {
         name="search_grounded",
         intent="Search-backed answer synthesis",
         provider="google",
-        model="gemini-3.1-pro-preview",
+        # 2026-05-24: 3.5 Flash supports --search grounding and is the
+        # default cosigner; swapped for consistency with deep_review.
+        model="gemini-3.5-flash",
         timeout=300,
         search=True,
         input_token_limit=900000,
@@ -125,11 +130,25 @@ PROFILES: dict[str, DispatchProfile] = {
         timeout=120,
         input_token_limit=900000,
     ),
+    "legacy_pro_review": DispatchProfile(
+        # Pre-2026-05-24 default for deep_review. Kept available for
+        # tasks where Pro's specific strengths (ARC-AGI-2, GPQA Diamond,
+        # video understanding) actually dominate. For general adversarial
+        # critique/synthesis, prefer deep_review (gemini-3.5-flash).
+        name="legacy_pro_review",
+        intent="Pre-2026-05-24 Gemini Pro fallback for cases needing Pro-specific strengths",
+        provider="google",
+        model="gemini-3.1-pro-preview",
+        timeout=300,
+        reasoning_effort="high",
+        input_token_limit=900000,
+    ),
 }
 
 MODEL_TO_PROFILE = {
     "gemini-3-flash-preview": "fast_extract",
-    "gemini-3.1-pro-preview": "deep_review",
+    "gemini-3.5-flash": "deep_review",
+    "gemini-3.1-pro-preview": "legacy_pro_review",  # demoted 2026-05-24
     "gpt-5.5": "gpt_general",
 }
 

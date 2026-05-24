@@ -63,7 +63,7 @@ class ModelReviewDispatchTest(unittest.TestCase):
         self.assertGreater(result["formal"]["size"], 0)
         # Both models called
         models_called = {c["model"] for c in call_log}
-        self.assertIn("gemini-3.1-pro-preview", models_called)
+        self.assertIn("gemini-3.5-flash", models_called)
         self.assertIn("gpt-5.5", models_called)
 
     def test_dispatch_falls_back_after_gemini_rate_limit(self) -> None:
@@ -197,7 +197,7 @@ class CallLlmxTest(unittest.TestCase):
             out = Path(td) / "out.md"
             with patched_llmx_chat(exploding_chat):
                 result = model_review._call_llmx(
-                    provider="google", model="gemini-3.1-pro-preview",
+                    provider="google", model="gemini-3.5-flash",
                     context_path=ctx, prompt="test", output_path=out,
                     timeout=10,
                 )
@@ -243,7 +243,7 @@ class CallLlmxTest(unittest.TestCase):
             out = Path(td) / "out.md"
             with patched_llmx_chat(capture_chat):
                 model_review._call_llmx(
-                    provider="google", model="gemini-3.1-pro-preview",
+                    provider="google", model="gemini-3.5-flash",
                     context_path=ctx, prompt="test", output_path=out,
                     schema={"type": "object", "additionalProperties": False, "properties": {}},
                     timeout=10,
@@ -334,14 +334,14 @@ class ExtractionCoverageTest(unittest.TestCase):
                 "elapsed_seconds": 1.0,
                 "arch": {
                     "label": "Gemini (architecture/patterns)",
-                    "model": "gemini-3.1-pro-preview",
-                    "requested_model": "gemini-3.1-pro-preview",
+                    "model": "gemini-3.5-flash",
+                    "requested_model": "gemini-3.5-flash",
                     "exit_code": 0,
                     "size": 12,
                     "output": str(arch_output),
                 },
                 "formal": {
-                    "label": "GPT-5.4 (quantitative/formal)",
+                    "label": "GPT-5.5 (quantitative/formal)",
                     "model": "gpt-5.5",
                     "requested_model": "gpt-5.5",
                     "exit_code": 0,
