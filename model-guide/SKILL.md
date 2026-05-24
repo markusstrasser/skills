@@ -24,7 +24,7 @@ For long novelty sweeps and frontier-mapping work:
 
 Practical split:
 
-- `Gemini 3.1 Pro` or `GPT-5.5`: compress overlapping ideas, detect hidden operator structure, write synthesis memos
+- `Gemini 3.5 Flash` or `GPT-5.5`: compress overlapping ideas, detect hidden operator structure, write synthesis memos (2026-05-24: 3.5 Flash promoted over 3.1 Pro for synthesis)
 - `Gemini 3 Flash` or broad search tools: generate cheap perturbation passes and map candidate seams
 - `Claude` or the main orchestrator: decide what survives and what gets rejected
 
@@ -137,22 +137,24 @@ For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_GPT.md`.
 - **When to use over 5.4:** conversational tasks, schema extraction, anything that doesn't need deep reasoning
 - **When to use 5.4 instead:** math verification, formal analysis, outputs >16K tokens, computer use
 
-### Gemini 3.5 Flash -- "The Pro-Lite Workhorse"
+### Gemini 3.5 Flash -- "The Default Gemini" (promoted 2026-05-24)
 
 **Stable GA** of the Flash family, released May 2026. Sustained frontier-level intelligence at Flash latency. ~3× the price of `gemini-3-flash-preview` — positioned between Flash and Pro, not the cheap-Flash slot.
 
-**Strengths:** Agentic loops (sub-agent deployment, multi-step workflows, long-horizon tasks), rapid coding cycles, structured outputs. Same 1M / 65K context as Pro. Knowledge cutoff Jan 2025.
+**Empirically outperforms `gemini-3.1-pro-preview`** on critique/synthesis/agentic tasks in the operator's workflow (2026-05-24 update). Treat this as the default Gemini for adversarial review, synthesis, structured outputs, and agentic loops. Pro stays available as runner-up where its specific raw-benchmark wins matter (ARC-AGI-2, GPQA Diamond, video understanding).
 
-**Weaknesses:** 3× cost vs base Flash makes it the wrong default for high-volume classification or mechanical extraction. Pro still wins on the hardest architectural / multi-file reasoning.
+**Strengths:** Agentic loops (sub-agent deployment, multi-step workflows, long-horizon tasks), rapid coding cycles, structured outputs, adversarial critique. Same 1M / 65K context as Pro. Knowledge cutoff Jan 2025.
+
+**Weaknesses:** 3× cost vs base Flash makes it the wrong default for high-volume classification or mechanical extraction (use `gemini-3-flash-preview` for those). Pro still has the raw-benchmark edge on ARC-AGI-2 and video.
 
 **Quick prompting tips:**
 - llmx name: `gemini-3.5-flash` (stable) — preview alias `gemini-3-flash-preview` still resolves to the same family
 - Reasoning effort: `low/medium/high` (no `minimal`)
 - Search grounding: `--search` works (forces API fallback — CLI doesn't ground)
 - Temperature locked at 1.0 (thinking model)
-- **When to use over Pro:** critique cosigner where Pro is overkill, agentic loops needing Flash speed, mid-complexity reviews
+- **When to use as default:** critique cosigner, synthesis, agentic loops, structured outputs, mid-to-hard reviews
 - **When to use 3 Flash (`gemini-3-flash-preview`) instead:** high-volume classification, mechanical audits, anything cost-sensitive
-- **When to use Pro instead:** hardest architectural review, deep multi-file synthesis, FrontierMath / GPQA-class reasoning
+- **When to use Pro instead:** specifically benchmark-pinned ARC-AGI-2 / GPQA Diamond / video tasks
 
 ```bash
 # Critique cosigner with web grounding
