@@ -265,7 +265,7 @@ Read this list before dispatching a workup — it saves a round-trip per BLOCK:
 |---|---|---|---|
 | Bull thesis before adversarial sweep | ATOM/EOS.AX/IQE.L 2026-05-23 | `pretool-disqualification-required-gate.py` | `disqualification_sweep:` frontmatter block |
 | WATCHLIST as turn-budget fallback | ALAB 2026-05-10 (+48% in 14d) | `pretool-watchlist-completeness-gate.py` + `buy-workup-terminal-state.md` | `## Workup Completeness` attest OR convert to RESEARCH with `## P0 Fetches Queued` |
-| One-sided downside-only WATCHLIST trigger | ARM 2026-05-07 (+25.7% in 15d) | `pretool-asymmetric-falsifier-gate.py` (BLOCK 2026-05-24) | `## Bidirectional Falsifier` with both downside re-entry AND upside escalation |
+| One-sided downside-only WATCHLIST trigger | ARM 2026-05-07 (+25.7% in 15d); ALAB/ASTS/RKLB/PL cohort (+22–64% in 14d, 2026-05-24) | `pretool-asymmetric-falsifier-gate.py` — **BLOCK** mode as of 2026-05-24 (was WARN); subagent prompts must state this so the bidirectional falsifier is treated as required, not optional | `## Bidirectional Falsifier` with both downside re-entry AND upside escalation |
 | Stale conviction vs tape | 21-name cohort 2026-05-24 (+15–42%) | `pretool-conviction-divergence-gate.py` | `## Conviction Divergence Acknowledged` section |
 | AVOID/WATCHLIST without observable falsifier | (many) | `pretool-falsifier-required-gate.py` | concrete price / % / event / ISO date in falsifier section |
 | Sycophantic same-session conviction flip | (multiple) | `pretool-conviction-flip-gate.py` | `## Stable View` section on second flip |
@@ -275,7 +275,7 @@ Read this list before dispatching a workup — it saves a round-trip per BLOCK:
 | "ROW / international" claim without axis-definition quote | HLIT 2026-05-23 | `pretool-taxonomy-axis-gate.py` | inline-quote of filer's actual axis definition |
 | Third-party analyst forecast cited as `[A1]` | Patel IltB 2026-05-18 | `pretool-claim-propagation-gate.py` | `research/iltb/claim_resolution/<source>.md` first; two-axis citation form |
 | `[B2]` aggregator in primary-source-mechanism evidence box | (2026-05-10 finding #5) | `pretool-aggregator-in-load-bearing-section.py` | `[A1]` SEC / foreign-regulator filing for load-bearing claims |
-| Stale entity vs recent news | META 2026-05-15 layoff miss | `pretool-recent-news-scan-gate.py` | `## Recent News Scan` section with 30d WebSearch/Perplexity output |
+| Stale entity vs recent news | META 2026-05-15 layoff miss | `pretool-recent-news-scan-gate.py` | `## Recent News Scan` section with 30d WebSearch/Perplexity output — never copy a prior scan section verbatim; always write a fresh scan dated today (NVDA 2026-05-24 stale-date recurrence) |
 | Missing source-grade tag on factual claim line | (recurring) | `pretool-source-grade-line-linter.py` (shadow, 51 fires/14d) | inline `[A1]`-`[F6]` or `[DATA]` on factual claims |
 | Live blocker (Form 4 / CFPB / dilution / covenant) gone stale | (recurring) | `pretool-live-blocker-freshness-gate.py` | refresh evidence or remove the "live blocker" framing |
 | Falsifier trigger HIT without disposition | (recurring) | `pretool-falsifier-disposition-gate.py` | same-file `## Disposition` section explaining hold/flip/exit |
@@ -285,7 +285,7 @@ Read this list before dispatching a workup — it saves a round-trip per BLOCK:
 | PEG / forward-P/E on cyclical | (recurring) | (instruction-level) | through-cycle EPS / P/B / EV-Sales for cyclicals |
 | Stale analyst target from corporate action | POWL 2026-04-26 (3:1 split) | `data-freshness-corporate-actions.md` | refreshed target with cache-date inline citation |
 
-#### Known regex collision
+#### Known regex collisions and full-file scan behavior
 
 `pretool-disqualification-required-gate.py` `DEPLOYMENT_INTENT_RE` matches
 the bare word `starter`, which collides with the Near-Term Tape Risk section
@@ -294,6 +294,14 @@ bullet (2026-05-24 finding). Workaround: rename to "Exposure route (0% /
 option / waitlist / pullback)" until the regex is patched. Don't loop trying
 to satisfy both hooks with the literal word `starter` in a non-deployment-
 intent context.
+
+The gate scans the **full post-edit content**, not just the diff. A pre-
+existing "starter" or "deploy" token elsewhere in the file blocks unrelated
+section appends (SMTC 2026-05-24). When dispatching a subagent to append to
+an existing file, instruct it: if `disqualification_sweep:` frontmatter is
+absent and any of `{starter, deploy, size into, monday open}` appears
+anywhere in the file body, run `/disqualify TICKER` first or rename the
+pre-existing tokens before attempting any Edit.
 
 ### Divergence-acknowledgment pattern (5/24 standard)
 
@@ -335,7 +343,7 @@ they handle path discovery, frontmatter, and provenance correctly.
 
 ### Skills that gate or assist entity work
 
-- **`/disqualify TICKER`** — adversarial Phase 1 (mandatory before BUY/RESEARCH/WATCHLIST with sizing > 0)
+- **`/disqualify TICKER`** — adversarial Phase 1 (mandatory before BUY/RESEARCH/WATCHLIST with sizing > 0). Confirm the sweep includes named short-seller archives (Muddy Waters, Grizzly, Hindenburg, SCAS, Bonitas, Citron, Spruce Point, Wolfpack, J Capital, Culper); IQE.L/EOS.AX 2026-05-23 — Grizzly short report + ASIC penalty + going-concern note surfaced only on Round 4 because the first-pass sweep skipped the short-seller stream
 - **`/confirm TICKER`** — symmetric upside Phase 1 (before sizing up at ≤ 1.0%)
 - **`/asset-decision TICKER`** — full 7-phase orchestrator wrapping the above
 - **`/social-thread`** — pasted social/substack/reddit pipeline (8 steps incl. generator extraction)
