@@ -92,16 +92,21 @@ if [ "$STATUS" = "fail" ]; then
             DIAGNOSIS="Unclassified repeated failure. Last error: ${LAST_ERROR:0:120}. Try a fundamentally different approach or ask the user."
         fi
 
-        # Output JSON to stdout so agent actually sees the warning
-        MSG="BASH FAILURE LOOP: $COUNT consecutive failures. $DIAGNOSIS"
-        SAFE_MSG=$(echo "$MSG" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))' 2>/dev/null)
-        echo "{\"additionalContext\": ${SAFE_MSG}}"
+        # Write rejection reason to stderr — paired with continueOnBlock:true in
+        # ~/.claude/settings.json (CC v2.1.139+), this feeds the diagnosis back
+        # into the same turn instead of ending the turn.
+        echo "BASH FAILURE LOOP: $COUNT consecutive failures. $DIAGNOSIS" >&2
 
-        # Log trigger for ROI analysis
-        ~/Projects/skills/hooks/hook-trigger-log.sh "bash-failure-loop" "warn" "$COUNT failures: $LAST_ERROR" 2>/dev/null || true
+        # Log trigger for ROI analysis (now "block" not "warn")
+        ~/Projects/skills/hooks/hook-trigger-log.sh "bash-failure-loop" "block" "$COUNT failures: $LAST_ERROR" 2>/dev/null || true
 
-        # Reset so the warning fires again after another THRESHOLD failures
+        # Reset so the block fires again after another THRESHOLD failures
         echo "0" > "$COUNTER_FILE"
+
+        # Disable trap and exit 2 — PostToolUse exit-2 + continueOnBlock=true
+        # delivers stderr to the model in-turn. Probe target 2026-05-27.
+        trap - ERR
+        exit 2
     fi
 else
     # Success — reset counter and clear error flag
