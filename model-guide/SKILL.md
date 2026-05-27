@@ -76,6 +76,8 @@ For full benchmark tables, read `${CLAUDE_SKILL_DIR}/references/BENCHMARKS.md`.
 - **High-resolution images** — 4.7 reads up to 2576px. Full-res images use up to ~3× more image tokens. Remove scale-factor conversion on bounding-box coordinates; 4.7 returns 1:1 with actual pixels.
 - Add `"Avoid over-engineering"` for coding tasks -- Opus tends to over-abstract
 
+**Claude Code Fast mode:** As of Claude Code v2.1.142 (2026-05-14), `/fast` defaults to **Opus 4.7** (was Opus 4.6). Same underlying model as standard, faster output. Set `CLAUDE_CODE_OPUS_4_6_FAST_MODE_OVERRIDE=1` to pin Fast mode to Opus 4.6.
+
 For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
 
 ### Claude Sonnet 4.6 -- "The Workhorse"
