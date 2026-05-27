@@ -230,6 +230,31 @@ def _session_commit_range(repo: Path, session_id: str) -> tuple[str, str] | None
     return f"{oldest}~1", "HEAD"
 
 
+def _recent_commits_range(repo: Path, *, hours: int = 6) -> tuple[str, str] | None:
+    """Return (base, head) covering all commits within the last `hours`.
+
+    Used as a final fallback when neither the session-id file nor HEAD's
+    Session-ID trailer matches any commits. Catches the "plan-close-context
+    on a session that committed without trailers" case — the 2026-05-27
+    substrate session hit this for both intel and intel-harness because
+    intel-harness has no prepare-commit-msg hook.
+    """
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(repo), "log",
+             f"--since={hours} hours ago",
+             "--format=%H"],
+            stderr=subprocess.DEVNULL, text=True, timeout=5,
+        ).strip()
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return None
+    if not out:
+        return None
+    shas = out.splitlines()
+    oldest = shas[-1]
+    return f"{oldest}~1", "HEAD"
+
+
 def _head_trailer_session_range(repo: Path) -> tuple[str, str, str] | None:
     """Recover a session-id from HEAD's commit trailer and return
     (base, head, trailer_session_id).
@@ -315,13 +340,29 @@ def main() -> int:
                     )
                     args.tracked_only = True
                 else:
-                    log_progress(
-                        f"session {session_id[:8]}… has no commits and HEAD has no "
-                        "Session-ID trailer; falling back to worktree mode with "
-                        "--tracked-only (peer-agent dirt guard). Pass --since "
-                        "<commit> to scope explicitly."
-                    )
-                    args.tracked_only = True
+                    # Final fallback: time-window heuristic. If the worktree is
+                    # clean (commits landed) and recent commits exist, use the
+                    # earliest commit in the last 6h as the base. Catches the
+                    # common "build_plan_close_context.py on a freshly-committed
+                    # session" case — worktree mode would otherwise return
+                    # ~1 file (only the most recent uncommitted change).
+                    time_range = _recent_commits_range(repo, hours=6)
+                    if time_range is not None:
+                        base, head = time_range
+                        log_progress(
+                            f"session {session_id[:8]}… has no Session-ID-tagged "
+                            f"commits; using time-window fallback (last 6h): "
+                            f"base={base[:8]}… head={head}"
+                        )
+                        args.tracked_only = True
+                    else:
+                        log_progress(
+                            f"session {session_id[:8]}… has no commits and HEAD has no "
+                            "Session-ID trailer; falling back to worktree mode with "
+                            "--tracked-only (peer-agent dirt guard). Pass --since "
+                            "<commit> to scope explicitly."
+                        )
+                        args.tracked_only = True
 
     packet = build_packet_model(
         repo,

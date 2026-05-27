@@ -18,12 +18,24 @@ CMD_FIRST=$(echo "$CMD" | head -1)
 # - git add -A / --all / . — sweeps all changes
 # - git add -p — interactive staging shows hunks from all agents' modifications
 # - git checkout -- / git restore — destroys uncommitted changes
+# - git commit (bare, no --only / --amend / -i) — sweeps pre-staged files from
+#   other agents into this commit. The 2026-05-27 substrate session lost
+#   correct provenance on commit 486973e because Phase 1's agent ran bare
+#   `git commit` while Phase 5's files were already staged.
 if echo "$CMD_FIRST" | grep -qE '^\s*git\s+add\s+(-A|--all|-p|--patch|\.\s*$|\.\s*&&)'; then
     : # dangerous add — continue to check
 elif echo "$CMD_FIRST" | grep -qE '^\s*git\s+(checkout\s+--|restore\s)'; then
     : # destructive discard — continue to check
+elif echo "$CMD_FIRST" | grep -qE '^\s*git\s+(-C\s+\S+\s+)?commit\b'; then
+    # Allow safe forms that scope the commit explicitly:
+    #   --only <paths>, --include <paths>, --amend, -i (interactive), -p (patch)
+    # Bare `git commit` (no path scope) is dangerous in multi-agent mode.
+    if echo "$CMD" | grep -qE '\s(--only|--include|-o|--amend|-i|--interactive|-p|--patch)\b'; then
+        exit 0  # explicitly scoped — safe
+    fi
+    : # bare commit — continue to multi-agent check
 else
-    exit 0  # git commit, specific-file add, or non-git command — all safe
+    exit 0  # specific-file add, log/diff/status, or non-git command — all safe
 fi
 
 # Count claude processes
@@ -43,5 +55,5 @@ fi
 ~/Projects/skills/hooks/hook-trigger-log.sh "multiagent-commit" "block" \
     "procs=$CLAUDE_PROCS cmd=$(echo "$CMD" | head -c 60)" 2>/dev/null || true
 
-echo '{"decision": "block", "reason": "MULTI-AGENT SAFETY: '"$CLAUDE_PROCS"' claude processes active in main repo (not a worktree). Use git add <specific-files> (not -A/-p/.). For git checkout/restore (destructive): prefer Read + Edit to repair the file in place — you can recover the pre-corruption content from earlier tool results in this conversation. Only use git checkout/restore if you are certain no other agent has uncommitted work on those paths, AND in that case run \"git stash push -- <files>\" first so the discard is reversible."}'
+echo '{"decision": "block", "reason": "MULTI-AGENT SAFETY: '"$CLAUDE_PROCS"' claude processes active in main repo (not a worktree). For git add: use specific files (not -A/-p/.). For git commit: pass --only <files> (or --amend) so a parallel agent'\''s pre-staged files do not sweep into this commit (2026-05-27 substrate-session sweep on 486973e). For git checkout/restore (destructive): prefer Read + Edit to repair in place; if you must discard, run \"git stash push -- <files>\" first so it'\''s reversible."}'
 exit 2
