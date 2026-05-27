@@ -58,35 +58,57 @@ class CostTally:
         )
 
 
-def _load_dotenv_into_environ(env_file: Path) -> None:
-    """Minimal .env parser — populates os.environ if not already set."""
+def _load_dotenv_into_environ(env_file: Path, override: bool = False) -> None:
+    """Minimal .env parser.
+
+    Handles `export VAR=value` and `VAR="quoted value"` shell forms in
+    addition to bare `VAR=value`. When override=True, replaces values
+    already present in os.environ (use when the caller explicitly chose
+    this file and wants it to win over shell-pre-loaded values).
+    """
     if not env_file.exists():
         return
     for line in env_file.read_text().splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
+        if line.startswith("export "):
+            line = line[len("export ") :].lstrip()
         key, _, value = line.partition("=")
         key = key.strip()
-        if key and key not in os.environ:
-            os.environ[key] = value.strip()
+        value = value.strip()
+        if (len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"')):
+            value = value[1:-1]
+        if not key:
+            continue
+        if override or key not in os.environ:
+            os.environ[key] = value
 
 
-def load_token_from_dotenv(env_file: Path | str | None = None) -> None:
+def load_token_from_dotenv(
+    env_file: Path | str | None = None,
+    override: bool | None = None,
+) -> None:
     """Load X_API_BEARER_TOKEN from a .env file into os.environ.
 
-    Default search order (stops at first hit):
+    Default search order when env_file is None (stops at first hit):
       1. CWD/.env.local
       2. CWD/.env
       3. ~/.env
+
+    When env_file is given explicitly, defaults to override=True so the
+    explicitly-named file wins over any shell-pre-loaded stale value.
+    When searching defaults, override defaults to False (shell env wins).
     """
     if env_file is not None:
-        _load_dotenv_into_environ(Path(env_file))
+        do_override = True if override is None else override
+        _load_dotenv_into_environ(Path(env_file), override=do_override)
         return
-    if os.environ.get("X_API_BEARER_TOKEN"):
+    do_override = False if override is None else override
+    if not do_override and os.environ.get("X_API_BEARER_TOKEN"):
         return
     for candidate in (Path(".env.local"), Path(".env"), Path.home() / ".env"):
-        _load_dotenv_into_environ(candidate)
+        _load_dotenv_into_environ(candidate, override=do_override)
         if os.environ.get("X_API_BEARER_TOKEN"):
             return
 
