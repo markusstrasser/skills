@@ -97,7 +97,7 @@ PROFILES: dict[str, DispatchProfile] = {
         provider="openai",
         model="gpt-5.5",
         timeout=600,
-        reasoning_effort="high",
+        reasoning_effort="medium",
         max_tokens=32768,
         input_token_limit=120000,
     ),
