@@ -72,7 +72,7 @@ if [ -n "$MODEL" ]; then
     gemini-3.1-pro-preview|gemini-3-flash-preview|gemini-3.1-flash-image-preview) ;;
     gpt-5.5|gpt-5.5-pro|gpt-5.4|gpt-5.2|gpt-5.3-chat-latest|gpt-5-codex|o4-mini) ;;
     gemini-3.1-flash-lite-preview) ;;
-    claude-sonnet-4-6|claude-opus-4-6|claude-haiku-4-5) ;;
+    claude-sonnet-4-6|claude-opus-4-8|claude-haiku-4-5) ;;
     *gemini-3.1-pro*|*gemini-3-flash*) ;; # close enough variants
     *)
       # Catch common hallucinations
