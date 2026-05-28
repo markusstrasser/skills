@@ -46,9 +46,10 @@ Agent note: the repo hook blocks raw `llmx` chat-style Bash automation. The CLI 
 4. **Using `-o FILE`?** Never use `> file` shell redirects — they buffer until exit
 5. **No provider prefixes needed.** `gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`.
 6. **Know the transport triggers:** `google` prefers `gemini` CLI (free). Gemini falls back to API for: `--schema`, `--search`, `--stream`, `--max-tokens`. Codex CLI also falls back for `--search` and `--stream`, but can keep `--schema` via `codex exec --output-schema`. GPT goes direct to API unless you explicitly force `-p codex-cli`.
-7. **Hangs in agent context?** Claude Code's Bash tool pipes stdin without EOF. Fixed in current llmx (skips stdin when prompt provided).
-8. **Prompt is POSITIONAL, `-p` is PROVIDER.** `llmx chat -m gpt-5.5 -f context.md "Analyze this"` — prompt goes LAST as a bare string. `-p` means `--provider` (openai, google, codex-cli), NOT prompt. Using `-p "long text..."` sends the text as a provider name → "Unknown provider" error. Context goes in `-f`, system message in `-s`. Two `-f` flags with no positional prompt = model invents a task from context. (Evidence: 2026-04-05 — Gemini hallucinated; 2026-04-12 — 4 consecutive failures from `-p` misuse.)
-9. **For critical reviews, use one combined context file.** Multi-file `-f` has recurring failure modes with Gemini/CLI transport, including silently dropping earlier files. Pre-concatenate first, but preserve file boundaries in the combined file.
+7. **Claude subscription route?** Do not use `claude --bare`; it bypasses OAuth/keychain and forces API-key auth. Direct smoke: `env -u ANTHROPIC_API_KEY -u CLAUDE_API_KEY claude -p --permission-mode dontAsk --tools "" --output-format text "Reply with exactly OK."`. Through llmx, use `llmx chat -p anthropic --lite bare -m claude-opus-4-8 ...`; this maps to `claude-cli`, strips `ANTHROPIC_API_KEY`, and keeps the Claude Code subscription path. If you see "Credit balance is too low", you hit API-key billing, not local subscription auth. (Validated 2026-05-28: stripped-key `claude -p` returns on the sub, and BOTH `--model claude-opus-4-8` and `--model claude-opus-4-7` are selectable — useful for model A/Bs when the API key is out of credits.)
+8. **Hangs in agent context?** Claude Code's Bash tool pipes stdin without EOF. Fixed in current llmx (skips stdin when prompt provided).
+9. **Prompt is POSITIONAL, `-p` is PROVIDER.** `llmx chat -m gpt-5.5 -f context.md "Analyze this"` — prompt goes LAST as a bare string. `-p` means `--provider` (openai, google, codex-cli), NOT prompt. Using `-p "long text..."` sends the text as a provider name → "Unknown provider" error. Context goes in `-f`, system message in `-s`. Two `-f` flags with no positional prompt = model invents a task from context. (Evidence: 2026-04-05 — Gemini hallucinated; 2026-04-12 — 4 consecutive failures from `-p` misuse.)
+10. **For critical reviews, use one combined context file.** Multi-file `-f` has recurring failure modes with Gemini/CLI transport, including silently dropping earlier files. Pre-concatenate first, but preserve file boundaries in the combined file.
 
 ## When llmx Fails — Diagnose, Don't Downgrade
 
@@ -206,7 +207,7 @@ llmx chat -p xai "..."   # llmx default is still `grok-4`, superseded by 4.20 fa
 |----------|------------------|---------------------|
 | `google` | Gemini CLI (free) | `--schema`, `--search`, `--stream`, `--max-tokens` |
 | `openai` | OpenAI API | explicit `-p codex-cli` if you want Codex CLI instead |
-| `claude` | Claude CLI | v0.6.0+, non-nested contexts only |
+| `anthropic --lite bare` | Claude CLI subscription route | do not use `claude --bare`; `llmx -p claude` may not exist locally |
 
 Both CLIs ignore explicit `--reasoning-effort` — they use their own defaults. See [transport-routing.md](references/transport-routing.md) for CLI vs API decision table, context budget, piping patterns.
 
@@ -215,6 +216,33 @@ Both CLIs ignore explicit `--reasoning-effort` — they use their own defaults. 
 `-o FILE` captures the agent's **last text message only**. If the agent spends all turns on tool calls with no final text response, `-o` writes 0 bytes. Prompt **must** include: `"End with a COMPLETE markdown report as your final message."` Without this, ~50% produce empty output.
 
 See [codex-dispatch.md](references/codex-dispatch.md) for full parallel dispatch pattern, Brave contention, Perplexity quota.
+
+## Image Generation
+
+`llmx image` defaults to OpenAI GPT Image 2, the current OpenAI SoTA image model. Keep API keys server-side/terminal-side; never expose `OPENAI_API_KEY` in browser code.
+
+```bash
+# Text-to-image with GPT Image 2
+llmx image "a sharp editorial portrait, natural window light" -o portrait.png
+
+# Edit/reference workflow for haircut, beard, styling, etc.
+llmx image \
+  --input-image photobooth.jpg \
+  --quality high \
+  --size 1024x1536 \
+  -o textured-crop-beard.png \
+  "Realistic grooming preview of the same person. Preserve identity, face shape, skin texture, camera angle, lighting, clothing, and background. Change only the hairstyle to a textured crop and facial hair to a short boxed beard."
+
+# Multiple variants; output path becomes style_1.png, style_2.png, ...
+llmx image -i photobooth.jpg -n 4 -o style.png "same person, try a medium side part and light stubble"
+
+# Gemini image backend remains available explicitly
+llmx image --provider google -m pro -r 2K -a 16:9 "pixel art knight"
+```
+
+OpenAI options: `--input-image/-i` can be repeated for edits/reference images, `--size auto|1024x1024|1536x1024|1024x1536`, `--quality auto|low|medium|high`, `--format png|jpeg|webp`, `-n/--count`. `--input-fidelity high|low` is optional and only for image models that accept it; a live GPT Image 2 probe rejected that parameter.
+
+For personal style previews, prompts should explicitly preserve identity and only change grooming. Do not ask the model to reshape the face, change age, alter ethnicity, or beautify broadly unless that is the actual task.
 
 ## Subcommands
 
