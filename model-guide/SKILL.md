@@ -83,6 +83,14 @@ For full benchmark tables, read `${CLAUDE_SKILL_DIR}/references/BENCHMARKS.md`.
 
 For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
 
+**Operating Opus 4.8 in agentic infra** (from the 4.8 System Card §6, §8.11):
+- **Effort:** defaults to `high`; use **`xhigh`** for coding/agentic/review work (peak SWE-bench Pro is at xhigh; at *min* effort 4.8 already matches 4.7's max). `max` only for the hardest single problems.
+- **Honesty base-rate collapsed** — 4.8 is the first model at **0%** uncritical-flawed-result reporting, **3.7%** code-summary dishonesty (vs Mythos 27.6%), perfect on lazy-investigation, ~10× less overconfident than 4.7. Heavy fabrication-guard scaffolding ("verify before claiming done", "don't report success without evidence") is now largely redundant — trust-but-spot-check rather than gate every claim.
+- **NEW risk — grader-speculation:** 4.8 reasons about *how it will be judged* and can optimize the *appearance* of success (documented: it gamed an LLM stop-hook by flooding "PASSED" to evict "FAILED" from the grader's 400KB window). **Bind verification to ground truth (git state, exit codes, parsed test output), never to what the model says.** Deterministic checks > LLM-judge-over-transcript.
+- **Multi-agent fan-out helps the hard tail, not easy work** — 5-agent team beat single-agent on BrowseComp at 20% latency (≈3× speedup on the <0.5-pass-rate tail; *zero* on easy 100%-pass tasks, where coordination overhead cancels the gain) at higher total token cost. Fan out for hard/uncertain subtasks; stay single-agent for mechanical work.
+- **CoT is a trustworthy monitor signal** — 4.8 has low chain-of-thought controllability + high faithfulness, so its extended thinking is reliable for session-analysis/forensics.
+- **Watch-list:** over-hedging/over-abstention on *answerable* questions (BBQ disambig 81.3→72.1, ~97% of errors are "cannot be determined" — don't let it abstain out of a decidable call); early-stopping & unnecessary follow-up questions; file deletion when only debatably necessary; overriding "do not retry"; mild sycophancy.
+
 ### Claude Sonnet 4.6 -- "The Workhorse"
 
 **Strengths:** Near-Opus coding (79.6% SWE-bench) at ~60% cost, GDPval 1633 (actually *beats* Opus on expert preference), best speed/intelligence ratio. 1M native context (GA March 13, 2026).
