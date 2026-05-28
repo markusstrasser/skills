@@ -11,10 +11,36 @@ Gemini CLI and Codex CLI use flat subscription pricing — zero marginal cost pe
 ```bash
 llmx -p google "question"       # prefers Gemini CLI, falls back to API
 llmx -p openai "question"       # uses OpenAI API
-llmx -p claude "question"       # Claude CLI backend (v0.6.0+, non-nested contexts only)
+llmx -p anthropic --lite bare "question"  # Claude CLI subscription route
 llmx -p gemini-cli "question"   # force Gemini CLI transport
 llmx -p codex-cli "question"    # force Codex CLI transport
+llmx -p claude-cli "question"   # force Claude CLI transport, but only lite mode scrubs API-key env
 llmx -p xai "question"          # xAI API (OpenAI-compatible at https://api.x.ai/v1)
+```
+
+Provider names are install-dependent. On the local 2026-05-10 install,
+`llmx --list-providers` exposes `claude-cli`, not `claude`. For Claude Code
+subscription auth, prefer the logical route:
+
+```bash
+llmx chat -p anthropic --lite bare -m claude-opus-4-8 \
+  --timeout 120 -o /tmp/claude-smoke.txt \
+  "Reply with exactly OK."
+```
+
+`--lite bare` matters: the Claude adapter removes `ANTHROPIC_API_KEY` only in
+lite mode, so Claude Code uses OAuth/keychain subscription auth. Without lite,
+`llmx -p claude-cli ...` can inherit API-key env vars, hit Anthropic billing,
+then report `Credit balance is too low` even though direct Claude Code works.
+Do not confuse this with Claude Code's own `--bare` flag; `claude --bare`
+bypasses OAuth/keychain and forces API-key auth.
+
+Direct Claude Code smoke, bypassing API-key env:
+
+```bash
+env -u ANTHROPIC_API_KEY -u CLAUDE_API_KEY \
+  claude -p --permission-mode dontAsk --tools "" \
+  --output-format text "Reply with exactly OK."
 ```
 
 Falls back to API for:

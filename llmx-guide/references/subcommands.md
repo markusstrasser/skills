@@ -21,9 +21,22 @@ llmx research "topic" -o out.md # save output
 ## Image Generation
 
 ```bash
-llmx image "prompt" -o out.png       # Gemini 3 Pro Image
-llmx image "prompt" -r 2K -a 16:9    # resolution + aspect
+llmx image "prompt" -o out.png       # OpenAI GPT Image 2
+llmx image -i ref.jpg "prompt"       # GPT Image 2 edit/reference workflow
+llmx image "prompt" --provider google -m pro -r 2K -a 16:9
 llmx svg "prompt" -o out.svg         # SVG output
+```
+
+GPT Image 2 is the default because it is the current SoTA image model. For
+personal style previews, preserve identity explicitly and constrain the edit:
+
+```bash
+llmx image \
+  --input-image photobooth.jpg \
+  --quality high \
+  --size 1024x1536 \
+  -o textured-crop-beard.png \
+  "Realistic grooming preview of the same person. Preserve identity, face shape, skin texture, camera angle, lighting, clothing, and background. Change only the hairstyle to a textured crop and facial hair to a short boxed beard."
 ```
 
 ## Vision Analysis
