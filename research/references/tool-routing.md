@@ -132,6 +132,16 @@ Cohen's κ on pairwise verdicts:
 - **N ≤ 10 claims/batch: safe** (in this study, 9/10 vs single 8/10; batch hedged correctly on the contested Allegri-Mozart memory claim where single said TRUE).
 - **N ≥ 25 claims/batch: risky** — rubber-stamps user-supplied numerical specifics (prior session: Tissot 365-gouaches claim returned TRUE in a 25-batch even though Brooklyn Museum page says 350).
 
+### Perplexity cost discipline
+
+`sonar-deep-research` (`perplexity_research`) is the cost sink — not search/ask. On the May 2026 billing cycle it was **~87% of Perplexity spend** ($82 of $94; reasoning tokens alone $47, fan-out search queries $22), while all the demoted `sonar-pro` calls totalled ~$12. Rules:
+- **Never run `perplexity_research` at default `reasoning_effort`.** Set `medium` (or `low`); reserve `high` for questions that genuinely need it — reasoning tokens are the #1 line item.
+- **Deep research is opt-in for broad / unknown-scope only.** Focused questions → `search_papers`→`fetch_paper` or a targeted Exa search, not a deep-research call that fans out to 80–160 searches per invocation.
+- **Re-grade Perplexity Deep vs Exa Deep / Deep Max before defaulting either** — Exa Deep (~94% acc, ~11s) likely covers most of these cheaper.
+- Prefer the **async API** for any background / scheduled deep-research dispatch.
+
+Source: user Perplexity billing dashboard, 2026-05-28.
+
 ### Failure modes worth knowing
 
 - **Pretool burst-hook fires at ~30 consecutive Exa calls.** Interleave a Read every ~6-9 searches in subagent dispatch.
@@ -166,8 +176,8 @@ Source data: `/Users/alien/Projects/publishing/research/2026-05-19-engine-reliab
 - **Simpler beats complex under stress.** ReliabilityBench (arXiv:2601.06112): ReAct > Reflexion under perturbations.
 
 <!-- knowledge-index
-generated: 2026-05-19T10:34:27Z
-hash: 9589c5abe189
+generated: 2026-05-28T14:42:54Z
+hash: ec64f60dddde
 
 cross_refs: research/2026-05-19-engine-reliability-metric.md
 table_claims: 22
