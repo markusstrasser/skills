@@ -12,7 +12,7 @@ Select the right frontier model for a task and prompt it correctly.
 
 **Models covered:** Claude Opus 4.8, Claude Sonnet 4.6, GPT-5.5, GPT-5.5 Pro, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3.5 Flash, Gemini 3 Flash, Gemini 3.1 Flash-Lite, Grok 4.20 Reasoning.
 **Last updated:** 2026-05-28. See `${CLAUDE_SKILL_DIR}/references/CHANGELOG.md` for update history.
-**Benchmark note:** Numbers cited for Claude Opus are the published Opus 4.6 baseline. Opus 4.7 (2026-04-16) and Opus 4.8 (2026-05-28) improve on these per Anthropic's announcements; Opus 4.8 is the current default at unchanged pricing ($5/$25). Specific third-party 4.8 figures update on the next benchmark refresh — do not cite exact 4.8 benchmark numbers until then.
+**Benchmark note:** Official Opus 4.8 numbers are now published in the **Opus 4.8 System Card** (2026-05-28) — see `references/BENCHMARKS.md` Table 8.1.A for the full set (SWE-bench Verified 88.6, SWE-bench Pro 69.2, Terminal-Bench 2.1 74.6, OSWorld 83.4, GPQA Diamond 93.6, GDPval-AA 1890). System-card figures use adaptive thinking at **max** effort; the model defaults to `high`. Older inline matrix figures tagged to 4.7/4.6 are kept where the system card doesn't cover that benchmark. Opus 4.8 is the current default at unchanged pricing ($5/$25).
 
 ## Long-Horizon Research Routing
 
@@ -32,11 +32,11 @@ Practical split:
 
 | Task | Best Model | Why | Runner-up |
 |------|-----------|-----|-----------|
-| **Agentic coding** | GPT-5.5 (Codex) / Claude Opus 4.8 | GPT-5.5 Terminal-Bench 2.0 82.7% (vs Opus 69.4%), Expert-SWE 73.1% (vs 5.4's 68.5%). Opus still wins on SWE-bench Pro 64.3%. | Sonnet 4.6 (79.6% SWE-bench, ~60% cost) |
+| **Agentic coding** | Claude Opus 4.8 / GPT-5.5 (Codex) | Opus 4.8 SWE-bench Verified **88.6%**, SWE-bench Pro **69.2%**, FrontierSWE #1; Terminal-Bench 2.1 74.6% (GPT-5.5 78.2%, 83.4% on Codex harness). Pick Opus for SWE-bench/long-horizon, GPT-5.5 for terminal/Codex. | Sonnet 4.6 (79.6% SWE-bench, ~60% cost) |
 | **Fact-sensitive work** | Claude Opus 4.8 / Gemini 3.1 / GPT-5.5 | SimpleQA ~72% (tied); GPT-5.5 BrowseComp 84.4% beats 5.4's 82.7% | -- |
 | **Legal reasoning** | Claude Opus 4.8 | BigLaw 90.2% | -- |
-| **Professional analysis** | GPT-5.5 / Claude Opus 4.8 | GDPval 84.9% (5.5) vs 80.3% (Opus); Sonnet still leads on expert-preference Elo | Sonnet 4.6 (GDPval 1633) |
-| **Computer use / browsing** | GPT-5.5 / Claude Opus 4.8 | OSWorld-Verified 78.7% (5.5) vs 78.0% (Opus); GPT-5.5 also Tau2-bench Telecom 98.0% without prompt tuning | -- |
+| **Professional analysis** | Claude Opus 4.8 / GPT-5.5 | Opus 4.8 GDPval-AA **1890 Elo** (vs GPT-5.5 1769, Gemini 3.1 Pro 1314) — 4.8 now leads; HLE-with-tools 57.9% (#1) | GPT-5.5 |
+| **Computer use / browsing** | Claude Opus 4.8 / GPT-5.5 | Opus 4.8 OSWorld-Verified **83.4%** (vs GPT-5.5 78.7%, Gemini 3.1 Pro 76.2%); GPT-5.5 still strong on Tau2-bench Telecom 98.0% | -- |
 | **Hard math** | GPT-5.5 Pro / GPT-5.5 | FrontierMath Tier 4: 39.6% (Pro), 35.4% (base) vs 27.1% (5.4), 22.9% (Opus 4.7), 16.7% (Gemini 3.1 Pro) | Gemini 3.1 Pro (GPQA 94.3%) |
 | **Precise structured output** | GPT-5.5 | IFEval 95%+, native Structured Outputs + Tool Search; higher token efficiency than 5.4 | Claude (94%) |
 | **Vision / document OCR** | GPT-5.5 | DocVQA 95%+, native computer use; MMMU Pro with tools 83.2% | Gemini 3.1 Pro |
@@ -59,7 +59,7 @@ For full benchmark tables, read `${CLAUDE_SKILL_DIR}/references/BENCHMARKS.md`.
 
 ### Claude Opus 4.8 -- "The Investigator"
 
-**Strengths:** Agentic coding, professional analysis, legal reasoning, factual accuracy, computer use, long-form expert work, memory across sessions, high-resolution vision (2576px). 1M native context at standard pricing (no long-context premium). Builds on 4.7 with improvements across benchmarks. **Honesty/self-verification is the headline 4.8 gain** — ~4× less likely than 4.7 to let flaws in its own code pass unremarked, more likely to flag uncertainty, less likely to make unsupported claims. Alignment assessment: new highs on prosocial traits (user autonomy, acting in user's best interest); misaligned-behavior rates substantially below 4.7 and on par with Claude Mythos Preview.
+**Strengths:** Agentic coding, professional analysis, legal reasoning, factual accuracy, computer use, long-form expert work, memory across sessions, high-resolution vision (2576px). 1M native context at standard pricing (no long-context premium). System-card headline (max effort): SWE-bench Verified **88.6%**, SWE-bench Pro **69.2%**, FrontierSWE **#1**, OSWorld **83.4%**, GDPval-AA **1890 Elo**, GPQA Diamond 93.6% (a hair below 4.7's 94.2). **Honesty/self-verification is the headline 4.8 gain** — ~4× less likely than 4.7 to let flaws in its own code pass unremarked, more likely to flag uncertainty, less likely to make unsupported claims. Alignment assessment: new highs on prosocial traits (user autonomy, acting in user's best interest); misaligned-behavior rates substantially below 4.7 and on par with Claude Mythos Preview.
 **Weaknesses:** Most expensive ($5/$25, unchanged from 4.7), weaker abstract reasoning than Gemini, weaker raw math than GPT. Tokenizer carried over from 4.7 (1.0–1.35× more input tokens than Opus 4.6 for the same text) — re-baseline cost only if migrating from 4.6 or earlier.
 **Effort:** Defaults to **high** — Anthropic's judged best quality/UX balance; on coding it spends a similar token count to 4.7's default but performs better. `extra` (`xhigh` in Claude Code) and `max` spend more tokens for harder tasks — recommended for difficult tasks and long-running async workflows. Claude Code rate limits were raised to accommodate higher effort levels.
 **Fast mode:** 2.5× speed at $10/$50 per MTok — **3× cheaper than fast mode was for previous models** (2026-05-28).
