@@ -17,8 +17,15 @@ Anthropic released Claude Opus 4.8 (`claude-opus-4-8`), replacing Opus 4.7 as th
 - **Dynamic workflows** (Claude Code, research preview) — plan + hundreds of parallel subagents in one session, with verification before reporting back; targets codebase-scale migrations.
 - **Confirmed unchanged from 4.7** (no breaking API changes): 1M context default, 128K max output (300K via batch beta), Jan 2026 knowledge cutoff, adaptive-thinking-off-by-default, sampling-params/prefill → 400, 4.7 tokenizer, $5/$25 pricing.
 
+### Headline benchmarks (Opus 4.8 System Card §8, Table 8.1.A — adaptive thinking at MAX effort, avg 5 trials; full table in `references/BENCHMARKS.md`)
+- **Coding:** SWE-bench Verified **88.6** (4.7: 87.6), SWE-bench Pro **69.2** (4.7: 64.3), Multilingual **84.4**, Multimodal **38.4**; **FrontierSWE #1** (was #3); ProgramBench 79–88%.
+- **Agentic/terminal:** Terminal-Bench 2.1 74.6 (4.7: 66.1; GPT-5.5 78.2 / 83.4 Codex-harness); OSWorld-Verified **83.4** (beats GPT-5.5 78.7, Gemini 3.1 Pro 76.2); MCP-Atlas 82.2; AutomationBench **15.5**.
+- **Knowledge/pro:** GDPval-AA **1890 Elo** (4.7: 1753; GPT-5.5 1769) — Opus leads; HLE w/tools **57.9**; Finance Agent v2 53.9 (Gemini 3.5 Flash 57.9).
+- **Science/long-ctx:** GPQA Diamond 93.6 — **down** from 4.7's 94.2 and below Gemini 3.1 Pro 94.3 (the one regression, flagged honestly); GraphWalks 256K BFS **85.9** / Parents **99.3**.
+- Note: numbers are **max-effort**; default is `high`. Per §8.2, 4.8 at *minimum* effort matches 4.7's *max*-effort SWE-bench Pro peak.
+
 ### What was NOT changed in the skill (intentionally)
-- **No fabricated 4.8 benchmark numbers.** The announcement's benchmark table is an image (confirmed: the article text carries no per-benchmark figures, only a Terminal-Bench 2.1 footnote — GPT-5.5 Codex-harness 83.4%). SKILL.md/BENCHMARKS.md keep the Opus 4.6/4.7 measured baselines with a note that 4.8 improves. Update on next third-party benchmark refresh.
+- **Benchmark numbers sourced from the system card PDF, not fabricated.** The announcement webpage rendered the table as an image, but the 244-page System Card PDF (`cdn.sanity.io/.../c886650a….pdf`) has a clean text layer — extracted Table 8.1.A directly. Did NOT use the product page's customer-testimonial metrics ("84% Online-Mind2Web", "61% cheaper tokens") — those are third-party self-reports, not official benchmarks.
 - **Version-specific API constraints labeled `4.7+`** (adaptive-off, temperature/top_p/prefill → 400, `thinking.display` omitted default, 2576px vision, tokenizer): the migration guide confirms these carry forward into 4.8 unchanged, so the `4.7+` label is accurate, not a hedge.
 
 ### Mythos heads-up

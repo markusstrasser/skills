@@ -3,14 +3,43 @@
 **Last updated:** 2026-05-28
 **Sources:** Artificial Analysis, LLM Stats, SWE-bench.com, LMSYS Chatbot Arena, official docs (Anthropic, OpenAI, Google DeepMind).
 
-> **Note:** Claude Opus numbers reflect the Opus 4.6 measured baseline. Opus 4.7 (2026-04-16) and Opus 4.8 (2026-05-28, current default) match or exceed them per Anthropic's releases. The Opus column is **labeled 4.8** (the model you'd actually call) but the figures remain the 4.6 baseline until third-party benchmarks publish 4.8 numbers — do not cite these as measured 4.8 results.
+> **Note:** Official Opus 4.8 figures (Table 8.1.A directly below) are from the **Claude Opus 4.8 System Card** (2026-05-28). The older "Extended cross-model" table further down still carries **Opus 4.6-baseline** numbers for benchmarks the system card doesn't cover (MMLU, AIME, LiveCodeBench, Grok/GPT-5.4 comparisons) — those Opus cells are 4.6 unless they match a system-card row. Prefer Table 8.1.A for any Opus 4.8 claim.
 
-## Head-to-Head: Current Frontier
+## Claude Opus 4.8 — Official System Card Results (2026-05-28)
+
+Source: Claude Opus 4.8 System Card §8 (Table 8.1.A). **Config:** adaptive thinking at **max** effort, default sampling, averaged over 5 trials (25 for GPQA), context ≤1M. Competitor figures from their own system cards/leaderboards. Best-in-row **bold**. `—` = not reported by that vendor.
+
+| Evaluation | Opus 4.8 | Opus 4.7 | GPT-5.5 | Gemini 3.1 Pro | Measures |
+|-----------|:---:|:---:|:---:|:---:|----------|
+| **SWE-bench Verified** | **88.6** | 87.6 | — | 80.6 | Real-world coding |
+| **SWE-bench Pro** | **69.2** | 64.3 | 58.6 | 54.2 | Hard multi-file coding, no leakage |
+| **SWE-bench Multilingual** | **84.4** | 80.5 | — | — | Coding across 9 languages |
+| **SWE-bench Multimodal** | **38.4** | 34.5 | — | — | Coding w/ visual context |
+| **Terminal-Bench 2.1** | 74.6 | 66.1 | **78.2** | 70.3 | Terminal/CLI agentic tasks |
+| **BrowseComp** | 84.3 (single) / 88.5 (multi-agent) | 79.8 | 84.4 | 85.9 | Web browsing/research |
+| **Humanity's Last Exam** (no tools) | **49.8** | 46.9 | 41.4 | 44.4 | Frontier expert reasoning |
+| **Humanity's Last Exam** (with tools) | **57.9** | 54.7 | 52.2 | 51.4 | " |
+| **OSWorld-Verified** | **83.4** | 82.8 | 78.7 | 76.2 | Computer use |
+| **GPQA Diamond** | 93.6 | 94.2 | — | **94.3** | Graduate science (4.8 *down* vs 4.7) |
+| **ChartQAPro** (with tools) | **72.3** | 69.8 | — | — | Chart QA |
+| **ScreenSpot-Pro** (with tools) | **87.9** | 87.6 | — | — | UI grounding |
+| **Finance Agent v2** | 53.9 | 51.5 | 51.8 | 43.0 | Financial agentic work (Gemini 3.5 Flash: **57.9**) |
+| **GDPval-AA** | **1890** | 1753 | 1769 | 1314 | Expert professional work (Elo) |
+| **MCP-Atlas** | 82.2 | 79.1 | 75.3 | 78.2 | MCP tool use (Gemini 3.5 Flash: **83.6**) |
+| **AutomationBench** | **15.5** | 9.9 | 12.9 | 9.6 | Long-horizon automation (3.5 Flash: 14.5) |
+| **GraphWalks BFS 256K** | **85.9** | 76.9 | 73.7 | — | Long-context graph traversal |
+| **GraphWalks Parents 256K** | **99.3** | 93.6 | 90.1 | — | " |
+
+Prose-only results (system card §8.4–8.5): **FrontierSWE** — Opus 4.8 ranks **#1** on mean@5 (avg rank 2.74) and best@5 (2.26), up from 4.7's #3; all models at xhigh effort. **ProgramBench** — Opus 4.8 **79–88%** (1–5 episodes) vs 4.7's 71–84%.
+
+**Reading note:** these are **max-effort** numbers; the model *defaults* to `high`. Per §8.2 Fig, Opus 4.8 at *minimum* effort already matches Opus 4.7's *maximum*-effort SWE-bench Pro peak. GPQA Diamond is the one visible regression (93.6 vs 4.7's 94.2) — honest to flag, not hide.
+
+## Extended Cross-Model (Opus cells 4.6-baseline unless they match Table 8.1.A above)
 
 | Benchmark | Claude Opus 4.8 | Claude Sonnet 4.6 | GPT-5.4 | Gemini 3.1 Pro | Grok 4.20 Reasoning | Measures |
 |-----------|:---:|:---:|:---:|:---:|:---:|----------|
-| **SWE-bench Verified** | **80.8%** | 79.6% | 80.0% | 80.6% | 73.5% | Real-world coding |
-| **GPQA Diamond** | 91.3% | -- | 93.2% | **94.3%** | ~78.5% | Graduate science reasoning |
+| **SWE-bench Verified** | **88.6%** | 79.6% | 80.0% | 80.6% | 73.5% | Real-world coding (4.8 system-card) |
+| **GPQA Diamond** | 93.6% | -- | 93.2% | **94.3%** | ~78.5% | Graduate science reasoning (4.8 system-card) |
 | **AIME 2025** | ~95% | -- | **100%** | ~95% | -- | Competition math |
 | **MATH-500** | 93% | -- | **98%** | 91.1% | -- | Math problem solving |
 | **MMLU** | **92%** | -- | 88% | 85.9% | -- | Broad knowledge |
