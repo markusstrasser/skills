@@ -24,7 +24,7 @@ const client = new Anthropic({ apiKey: "your-api-key" });
 
 ```typescript
 const response = await client.messages.create({
-  model: "claude-opus-4-7",
+  model: "claude-opus-4-8",
   max_tokens: 1024,
   messages: [{ role: "user", content: "What is the capital of France?" }],
 });
@@ -37,7 +37,7 @@ console.log(response.content[0].text);
 
 ```typescript
 const response = await client.messages.create({
-  model: "claude-opus-4-7",
+  model: "claude-opus-4-8",
   max_tokens: 1024,
   system:
     "You are a helpful coding assistant. Always provide examples in Python.",
@@ -49,13 +49,13 @@ const response = await client.messages.create({
 
 ## Vision (Images)
 
-> **Opus 4.7 high-resolution support:** Images up to 2576px on the long edge (≈3.75 MP) are processed at full fidelity. Full-resolution images can use up to ~4,784 tokens each (up from ~1,600 on prior models) — re-budget `max_tokens` for image-heavy workloads, or downsample before sending if you don't need the extra detail. Pointing and bounding-box coordinates returned by 4.7 are 1:1 with actual image pixels; remove any scale-factor conversion from earlier versions.
+> **Opus 4.8 high-resolution support:** Images up to 2576px on the long edge (≈3.75 MP) are processed at full fidelity. Full-resolution images can use up to ~4,784 tokens each (up from ~1,600 on prior models) — re-budget `max_tokens` for image-heavy workloads, or downsample before sending if you don't need the extra detail. Pointing and bounding-box coordinates returned by 4.8 are 1:1 with actual image pixels; remove any scale-factor conversion from earlier versions.
 
 ### URL
 
 ```typescript
 const response = await client.messages.create({
-  model: "claude-opus-4-7",
+  model: "claude-opus-4-8",
   max_tokens: 1024,
   messages: [
     {
@@ -80,7 +80,7 @@ import fs from "fs";
 const imageData = fs.readFileSync("image.png").toString("base64");
 
 const response = await client.messages.create({
-  model: "claude-opus-4-7",
+  model: "claude-opus-4-8",
   max_tokens: 1024,
   messages: [
     {
@@ -107,7 +107,7 @@ Use top-level `cache_control` to automatically cache the last cacheable block in
 
 ```typescript
 const response = await client.messages.create({
-  model: "claude-opus-4-7",
+  model: "claude-opus-4-8",
   max_tokens: 1024,
   cache_control: { type: "ephemeral" }, // auto-caches the last cacheable block
   system: "You are an expert on this large document...",
@@ -121,7 +121,7 @@ For fine-grained control, add `cache_control` to specific content blocks:
 
 ```typescript
 const response = await client.messages.create({
-  model: "claude-opus-4-7",
+  model: "claude-opus-4-8",
   max_tokens: 1024,
   system: [
     {
@@ -135,7 +135,7 @@ const response = await client.messages.create({
 
 // With explicit TTL (time-to-live)
 const response2 = await client.messages.create({
-  model: "claude-opus-4-7",
+  model: "claude-opus-4-8",
   max_tokens: 1024,
   system: [
     {
@@ -152,14 +152,14 @@ const response2 = await client.messages.create({
 
 ## Extended Thinking
 
-Use `thinking: {type: "adaptive"}` on Opus 4.7 and Sonnet 4.6. Adaptive is OFF by default on Opus 4.7 — set it explicitly. `budget_tokens` returns a 400 error on Opus 4.7.
+Use `thinking: {type: "adaptive"}` on Opus 4.8 and Sonnet 4.6. Adaptive is OFF by default on Opus 4.8 — set it explicitly. `budget_tokens` returns a 400 error on Opus 4.8.
 
-`thinking.display` defaults to `"omitted"` on Opus 4.7 — thinking blocks appear but their `thinking` field is empty. Set `display: "summarized"` to restore visible reasoning progress in UIs.
+`thinking.display` defaults to `"omitted"` on Opus 4.8 — thinking blocks appear but their `thinking` field is empty. Set `display: "summarized"` to restore visible reasoning progress in UIs.
 
 ```typescript
-// Opus 4.7: adaptive thinking with visible summary
+// Opus 4.8: adaptive thinking with visible summary
 const response = await client.messages.create({
-  model: "claude-opus-4-7",
+  model: "claude-opus-4-8",
   max_tokens: 64000, // headroom for xhigh effort
   thinking: { type: "adaptive", display: "summarized" },
   output_config: { effort: "xhigh" }, // low | medium | high | xhigh | max
@@ -217,7 +217,7 @@ const messages: Anthropic.MessageParam[] = [
 ];
 
 const response = await client.messages.create({
-  model: "claude-opus-4-7",
+  model: "claude-opus-4-8",
   max_tokens: 1024,
   messages: messages,
 });
@@ -246,7 +246,7 @@ async function chat(userMessage: string): Promise<string> {
 
   const response = await client.beta.messages.create({
     betas: ["compact-2026-01-12"],
-    model: "claude-opus-4-7",
+    model: "claude-opus-4-8",
     max_tokens: 4096,
     messages,
     context_management: {
@@ -292,7 +292,7 @@ The `stop_reason` field in the response indicates why the model stopped generati
 ```typescript
 // Automatic caching (simplest — caches the last cacheable block)
 const response = await client.messages.create({
-  model: "claude-opus-4-7",
+  model: "claude-opus-4-8",
   max_tokens: 1024,
   cache_control: { type: "ephemeral" },
   system: largeDocumentText, // e.g., 50KB of context
@@ -307,7 +307,7 @@ const response = await client.messages.create({
 
 ```typescript
 const countResponse = await client.messages.countTokens({
-  model: "claude-opus-4-7",
+  model: "claude-opus-4-8",
   messages: messages,
   system: system,
 });

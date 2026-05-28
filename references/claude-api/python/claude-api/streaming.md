@@ -4,7 +4,7 @@
 
 ```python
 with client.messages.stream(
-    model="claude-opus-4-7",
+    model="claude-opus-4-8",
     max_tokens=1024,
     messages=[{"role": "user", "content": "Write a story"}]
 ) as stream:
@@ -16,7 +16,7 @@ with client.messages.stream(
 
 ```python
 async with async_client.messages.stream(
-    model="claude-opus-4-7",
+    model="claude-opus-4-8",
     max_tokens=1024,
     messages=[{"role": "user", "content": "Write a story"}]
 ) as stream:
@@ -30,11 +30,11 @@ async with async_client.messages.stream(
 
 Claude may return text, thinking blocks, or tool use. Handle each appropriately:
 
-> Set `thinking: {type: "adaptive"}` explicitly — adaptive is off by default on Opus 4.7. For visible streaming of reasoning, add `"display": "summarized"` (default is `"omitted"`, which emits empty thinking blocks).
+> Set `thinking: {type: "adaptive"}` explicitly — adaptive is off by default on Opus 4.8. For visible streaming of reasoning, add `"display": "summarized"` (default is `"omitted"`, which emits empty thinking blocks).
 
 ```python
 with client.messages.stream(
-    model="claude-opus-4-7",
+    model="claude-opus-4-8",
     max_tokens=16000,
     thinking={"type": "adaptive"},
     messages=[{"role": "user", "content": "Analyze this problem"}]
@@ -61,7 +61,7 @@ The Python tool runner currently returns complete messages. Use streaming for in
 
 ```python
 with client.messages.stream(
-    model="claude-opus-4-7",
+    model="claude-opus-4-8",
     max_tokens=4096,
     tools=tools,
     messages=messages
@@ -79,7 +79,7 @@ with client.messages.stream(
 
 ```python
 with client.messages.stream(
-    model="claude-opus-4-7",
+    model="claude-opus-4-8",
     max_tokens=1024,
     messages=[{"role": "user", "content": "Hello"}]
 ) as stream:
@@ -126,7 +126,7 @@ def stream_with_progress(client, **kwargs):
 ```python
 try:
     with client.messages.stream(
-        model="claude-opus-4-7",
+        model="claude-opus-4-8",
         max_tokens=1024,
         messages=[{"role": "user", "content": "Write a story"}]
     ) as stream:

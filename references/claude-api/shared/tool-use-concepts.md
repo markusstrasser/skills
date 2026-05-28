@@ -74,7 +74,7 @@ if response.stop_reason == "pause_turn":
     ]
     # Make another API request — server resumes automatically
     response = client.messages.create(
-        model="claude-opus-4-7", messages=messages, tools=tools
+        model="claude-opus-4-8", messages=messages, tools=tools
     )
 ```
 
@@ -258,7 +258,7 @@ Two features are available:
 - **JSON outputs** (`output_config.format`): Control Claude's response format
 - **Strict tool use** (`strict: true`): Guarantee valid tool parameter schemas
 
-**Supported models:** Claude Opus 4.7, Claude Sonnet 4.6, Claude Haiku 4.5.
+**Supported models:** Claude Opus 4.8, Claude Sonnet 4.6, Claude Haiku 4.5.
 
 > **Recommended:** Use `client.messages.parse()` which automatically validates responses against your schema. When using `messages.create()` directly, use `output_config: {format: {...}}`.
 
