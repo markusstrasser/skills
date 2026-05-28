@@ -18,7 +18,7 @@ curl https://api.anthropic.com/v1/messages \
   -H "x-api-key: $ANTHROPIC_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "claude-opus-4-7",
+    "model": "claude-opus-4-8",
     "max_tokens": 1024,
     "messages": [
       {"role": "user", "content": "What is the capital of France?"}
@@ -36,7 +36,7 @@ curl https://api.anthropic.com/v1/messages \
   -H "x-api-key: $ANTHROPIC_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "claude-opus-4-7",
+    "model": "claude-opus-4-8",
     "max_tokens": 1024,
     "stream": true,
     "messages": [{"role": "user", "content": "Write a haiku"}]
@@ -75,7 +75,7 @@ curl https://api.anthropic.com/v1/messages \
   -H "x-api-key: $ANTHROPIC_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "claude-opus-4-7",
+    "model": "claude-opus-4-8",
     "max_tokens": 1024,
     "tools": [{
       "name": "get_weather",
@@ -100,7 +100,7 @@ curl https://api.anthropic.com/v1/messages \
   -H "x-api-key: $ANTHROPIC_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "claude-opus-4-7",
+    "model": "claude-opus-4-8",
     "max_tokens": 1024,
     "tools": [{
       "name": "get_weather",
@@ -130,16 +130,16 @@ curl https://api.anthropic.com/v1/messages \
 
 ## Extended Thinking
 
-Use adaptive thinking on Opus 4.7 and Sonnet 4.6. Adaptive is OFF by default on Opus 4.7 — set it explicitly. `budget_tokens` returns a 400 error on Opus 4.7. `thinking.display` defaults to `"omitted"`; add `"display": "summarized"` to restore visible reasoning text.
+Use adaptive thinking on Opus 4.8 and Sonnet 4.6. Adaptive is OFF by default on Opus 4.8 — set it explicitly. `budget_tokens` returns a 400 error on Opus 4.8. `thinking.display` defaults to `"omitted"`; add `"display": "summarized"` to restore visible reasoning text.
 
 ```bash
-# Opus 4.7: adaptive thinking with visible summary
+# Opus 4.8: adaptive thinking with visible summary
 curl https://api.anthropic.com/v1/messages \
   -H "Content-Type: application/json" \
   -H "x-api-key: $ANTHROPIC_API_KEY" \
   -H "anthropic-version: 2023-06-01" \
   -d '{
-    "model": "claude-opus-4-7",
+    "model": "claude-opus-4-8",
     "max_tokens": 64000,
     "thinking": {
       "type": "adaptive",

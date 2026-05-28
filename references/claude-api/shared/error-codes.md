@@ -79,7 +79,7 @@ This file documents HTTP error codes returned by the Claude API, their common ca
 - Using deprecated model ID
 - Invalid API endpoint
 
-**Fix:** Use exact model IDs from the models documentation. You can use aliases (e.g., `claude-opus-4-7`).
+**Fix:** Use exact model IDs from the models documentation. You can use aliases (e.g., `claude-opus-4-8`).
 
 ---
 
@@ -100,7 +100,7 @@ This file documents HTTP error codes returned by the Claude API, their common ca
 Common parameter-validation 400s on current models:
 
 - `max_tokens` exceeds the model's limit
-- `temperature`, `top_p`, or `top_k` set to any non-default value (Opus 4.7 rejects sampling parameters — omit entirely; steer via prompting)
+- `temperature`, `top_p`, or `top_k` set to any non-default value (Opus 4.8 rejects sampling parameters — omit entirely; steer via prompting)
 - `thinking: {type: "enabled", budget_tokens: N}` (use `thinking: {type: "adaptive"}` with `output_config.effort`)
 - Assistant-message prefill (use `output_config.format` or system prompts)
 - Invalid tool definition schema
@@ -161,10 +161,10 @@ output_config: {effort: "xhigh"}
 
 | Mistake                                          | Error            | Fix                                                     |
 | ------------------------------------------------ | ---------------- | ------------------------------------------------------- |
-| `budget_tokens` on Opus 4.7                      | 400              | Use `thinking: {type: "adaptive"}` + `effort`           |
-| `temperature` / `top_p` / `top_k` on Opus 4.7    | 400              | Omit sampling parameters                                |
+| `budget_tokens` on Opus 4.8                      | 400              | Use `thinking: {type: "adaptive"}` + `effort`           |
+| `temperature` / `top_p` / `top_k` on Opus 4.8    | 400              | Omit sampling parameters                                |
 | Assistant-message prefill                        | 400              | Use `output_config.format` or system prompts            |
-| Typo in model ID                                 | 404              | Use valid model ID like `claude-opus-4-7`               |
+| Typo in model ID                                 | 404              | Use valid model ID like `claude-opus-4-8`               |
 | First message is `assistant`                     | 400              | First message must be `user`                            |
 | Consecutive same-role messages                   | 400              | Alternate `user` and `assistant`                        |
 | API key in code                                  | 401 (leaked key) | Use environment variable                                |

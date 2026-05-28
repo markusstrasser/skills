@@ -107,7 +107,7 @@ static class GetWeather implements Supplier<String> {
 
 BetaToolRunner toolRunner = client.beta().messages().toolRunner(
     MessageCreateParams.builder()
-        .model("claude-opus-4-7")
+        .model("claude-opus-4-8")
         .maxTokens(1024L)
         .addTool(GetWeather.class)
         .addUserMessage("What's the weather in San Francisco?")
