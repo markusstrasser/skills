@@ -287,13 +287,16 @@ Read this list before dispatching a workup — it saves a round-trip per BLOCK:
 
 #### Known regex collisions and full-file scan behavior
 
-`pretool-disqualification-required-gate.py` `DEPLOYMENT_INTENT_RE` matches
-the bare word `starter`, which collides with the Near-Term Tape Risk section
-template that uses "Starter / option / waitlist / 0% route:" as a route-label
-bullet (2026-05-24 finding). Workaround: rename to "Exposure route (0% /
-option / waitlist / pullback)" until the regex is patched. Don't loop trying
-to satisfy both hooks with the literal word `starter` in a non-deployment-
-intent context.
+`pretool-disqualification-required-gate.py` `DEPLOYMENT_INTENT_RE` historically
+matched the bare word `starter`, colliding with the Near-Term Tape Risk
+route-label "Starter / option / waitlist / 0% route:" (2026-05-24 finding).
+**FIXED:** the regex now uses `starter(?!\s*[/,(])`, which excludes the
+route-label form, AND the gate bypasses pure-coverage frontmatter
+(`sizing_pct: 0` + `trade_stance ∈ {TRACKING, NO_POSITION}`). The "Starter /
+…" label form no longer trips it, so the "Exposure route" rename workaround is
+no longer required (the rename remains harmless). Still avoid the literal
+phrase "starter position" / "starter add" in a NO_POSITION file — those forms
+(no `/,(` after `starter`) still match by design.
 
 The gate scans the **full post-edit content**, not just the diff. A pre-
 existing "starter" or "deploy" token elsewhere in the file blocks unrelated
