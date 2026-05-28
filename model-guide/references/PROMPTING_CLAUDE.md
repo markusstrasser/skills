@@ -1,8 +1,10 @@
 # Claude Prompting Guide
 
-Specific to Claude Opus 4.7 and Sonnet 4.6. Updated 2026-04-16.
+Specific to Claude Opus 4.8/4.7 and Sonnet 4.6. Updated 2026-05-28.
 
 **Sources:** Anthropic official docs (platform.claude.com/docs), Claude Code system prompt analysis.
+
+> **Opus 4.8 (current, 2026-05-28):** Builds on 4.7; the version-specific API behaviors below (adaptive thinking off by default, `temperature`/`top_p`/prefill → 400, `thinking.display` omitted default, fewer-tools-by-default, 2576px vision) were established in 4.7 and are treated as carried forward into 4.8 — re-verify against the 4.8 system card when parsed. **New in 4.8:** effort defaults to `high`; you can update instructions mid-run by inserting `system` entries into the `messages` array (no prompt-cache break, no user-turn detour); 4.8 is materially more honest (~4× less likely to let its own code flaws pass unremarked, flags uncertainty more readily).
 
 ---
 
@@ -137,8 +139,8 @@ the calls, make all independent calls in parallel.
 </use_parallel_tool_calls>
 ```
 
-### Opus 4.7: Fewer Tools by Default
-Opus 4.7 uses tools less often than prior Opus versions and relies more on reasoning. To increase tool usage, raise effort to `xhigh` — don't prompt-engineer around the default.
+### Opus 4.8/4.7: Fewer Tools by Default
+Opus 4.7+ uses tools less often than older Opus versions and relies more on reasoning. To increase tool usage, raise effort to `xhigh` — don't prompt-engineer around the default.
 
 ### Action vs. Suggestion
 Claude interprets "Can you suggest changes?" as a request for suggestions, not action.
@@ -175,7 +177,7 @@ Claude interprets "Can you suggest changes?" as a request for suggestions, not a
 
 | Model | Best For | Effort Setting |
 |-------|----------|---------------|
-| **Opus 4.7** | Agentic coding, large-scale migrations, deep research, extended autonomous work, highest reasoning, 128K output, 1M native context | `xhigh` for coding/agentic; `high` for most |
+| **Opus 4.8** | Agentic coding, large-scale migrations, deep research, extended autonomous work, highest reasoning, 128K output, 1M native context | `xhigh` for coding/agentic; defaults to `high` |
 | **Sonnet 4.6** | Tool-heavy workflows, most applications (best speed/intelligence ratio) | `medium` for most; `low` for high-volume |
 
 **Upgrade to Opus when:** large-scale code migrations, deep research, extended autonomous work, problems requiring highest reasoning quality, or when you need >64K output.
