@@ -2,6 +2,24 @@
 
 Track what changes with each model release so you know what to update.
 
+## 2026-05-28 -- Claude Opus 4.8 launch
+
+Anthropic released Claude Opus 4.8 (`claude-opus-4-8`), replacing Opus 4.7 as the default Anthropic model. Builds on 4.7 with improvements across coding/agentic/reasoning/knowledge benchmarks. **Pricing unchanged** from 4.7: $5/$25 per MTok standard; fast mode $10/$50 (now 3× cheaper than fast mode was for previous models, 2.5× output speed).
+
+### What's new (from the announcement; system card not yet parsed for API-surface deltas)
+- **Honesty / self-verification is the headline gain.** ~4× less likely than 4.7 to allow flaws in its own code to pass unremarked; more likely to flag uncertainty, less likely to make unsupported claims.
+- **Alignment:** new highs on prosocial traits (user autonomy, best-interest); misaligned-behavior rates substantially below 4.7, on par with Claude Mythos Preview.
+- **Effort defaults to `high`** (best quality/UX balance per Anthropic; ~same token spend as 4.7 default, better performance). `extra`/`xhigh`/`max` available for harder tasks and long async runs. Effort control now exposed in claude.ai + Cowork; Claude Code rate limits raised to accommodate.
+- **Messages API now accepts `system` entries inside the `messages` array** — update instructions/permissions/token-budgets/env context mid-run without breaking the prompt cache or routing through a user turn.
+- **Dynamic workflows** (Claude Code, research preview) — plan + hundreds of parallel subagents in one session, with verification before reporting back; targets codebase-scale migrations.
+
+### What was NOT changed in the skill (intentionally)
+- **No fabricated 4.8 benchmark numbers.** The announcement's benchmark table was an image we couldn't transcribe; specific third-party 4.8 figures are pending. SKILL.md/BENCHMARKS.md keep the Opus 4.6/4.7 measured baselines with a note that 4.8 improves. Update on next benchmark refresh.
+- **Version-specific API constraints relabeled `4.7+`** (adaptive-off-by-default, temperature/top_p/prefill → 400, `thinking.display` omitted default, 2576px vision, tokenizer). These were established in 4.7; treated as carried forward into 4.8 absent a parsed 4.8 system card. Re-verify when the card is reviewed.
+
+### Mythos heads-up
+- Project Glasswing: a Mythos-class model (above Opus) is in limited cybersecurity preview (`Claude Mythos Preview`), expected to reach general availability "in the coming weeks" pending cyber safeguards. Add a profile when it GAs.
+
 ## 2026-05-03 -- GPT-5.5 Pro Deep Research two-phase pattern
 
 Added `references/PROMPTING_GPT.md` §1c documenting the two-phase pretraining-first prompt template for GPT-5.5 Pro Deep Research mode, plus a one-line variant entry in `SKILL.md` GPT-5.5 section.
