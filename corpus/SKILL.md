@@ -56,6 +56,35 @@ uvx corpus maintain --rebuild-graph        # rebuild graph.duckdb from per-sourc
 uvx corpus maintain --gc --after-rebuild --dry-run
 ```
 
+## Parser selection (`--parser`)
+
+`corpus ingest` picks a default by source type; override with `--parser <name>`.
+Defaults: **papers/preprints → `mineru`**, non-paper PDFs → `pymupdf4llm`,
+web/blog/news → `trafilatura`. Opt-in parsers must be passed explicitly.
+
+| Parser | License | Output | Reach for it when |
+|---|---|---|---|
+| `mineru` *(default: papers)* | Apache-2.0+ | structured md (headings, tables, equations) | Default for papers/preprints. Structure is the deliverable. |
+| `pymupdf4llm` *(default: other PDFs)* | AGPL-3.0 | markdown (headings + tables) | Local-only structured extraction of born-digital docs. NOT server-side (AGPL). |
+| `trafilatura` *(default: web)* | Apache-2.0 | markdown | HTML/blog/news bytes. |
+| `marker` / `marker-modal` *(opt-in)* | GPL-3.0 | structured md + figure crops | Scanned / figure-heavy / equation-dense papers. `marker-modal` runs on Modal T4 (see global `marker-modal-default.md`); local `marker` has Mac MPS bugs. |
+| `liteparse` *(opt-in)* | Apache-2.0 | **flat text only** | Fast bulk text recall, **office docs** (.docx/.pptx/.xlsx), when an **Apache license** is required, or as a **scan-vs-digital preflight**. |
+| `gemini-flash-lite` *(opt-in)* | cloud LLM | markdown | Last-resort fallback for PDFs every local parser fails. |
+
+**Do NOT use `liteparse` for papers you need *structured*.** It emits a flat
+character stream — zero headings, zero tables, no reading order. Bake-off on 6
+corpus papers (2026-05-28): liteparse is ~100–300× faster (0.1–0.5s vs 12–42s)
+and recovers ~30–45% more raw characters, but `pymupdf4llm`/`mineru` recover
+9–32 headings and up to 108 table rows per paper that liteparse drops entirely.
+More characters ≠ better — liteparse's surplus is partly running
+headers/page-numbers, not structure. For papers → markdown → chunking/claims,
+structure wins; liteparse is for the niches above, not paper bodies.
+
+**Preflight pattern** (route scanned PDFs to the expensive path cheaply):
+liteparse returns `extras.has_text_layer` — `False` means no extractable text
+(scanned/image PDF) ⇒ send it to `mineru`/`marker-modal`, don't waste a flat-text
+pass. Install: `pip install liteparse` (corpus extra `liteparse`).
+
 ## Identity rule
 
 `source_id` (paper-typed: `paper_id`) is **stable for the life of the source, including reissues**:
