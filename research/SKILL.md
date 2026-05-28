@@ -46,7 +46,7 @@ If 3+ sessions active: keep questions shorter, batch ambiguous items.
 - **URL discovery / cheap search:** `perplexity_search` (~$0.005/call) — raw ranked results without AI synthesis. Comparable to Brave.
 - **Triangulation:** Exa + Brave (confirmed independent indexes). Perplexity is NOT independent (uses same underlying indexes).
 - **Deep "why" analysis:** `perplexity_reason` (~$0.05-0.15/call) — chain-of-thought with web grounding. Only for analytical questions needing reasoning + evidence.
-- **Comprehensive surveys:** `perplexity_research` (~$0.15-0.50/call, slow 30s+) — multi-source deep research. Reserve for literature-survey-scale questions.
+- **Comprehensive surveys:** `perplexity_research` (~$0.15-0.50/call, slow 30s+) — multi-source deep research. Reserve for literature-survey-scale questions. **Cost discipline:** it was ~87% of Perplexity spend in May 2026 — always pass `reasoning_effort: medium` (or `low`), never default `high`; opt-in for broad scope only; re-grade vs Exa Deep first. See `references/tool-routing.md` §Perplexity cost discipline.
 - **Autonomous deep research:** `deep_research` (~$2-5/call, 2-10min async) — Gemini Deep Research agent conducts 80-160 web searches autonomously. Use when the question is broad/unknown-scope, needs multi-source synthesis, and you have time. Returns a full report with inline citations. Overkill for focused questions — use the paper pipeline or perplexity_research instead.
 - **Complex multi-step web research:** `parallel_task` (core ~$0.05/call, ultra ~$0.30-$2.40/call) — Parallel Task API. Code-execution sandbox keeps intermediate data out of context. Best for causal-chain questions requiring cross-referencing across multiple web sources (e.g., "find co-authors across 3 institutions, then check which joined a federal committee"). Processor tiers: lite ($0.005) for simple lookups, core ($0.05) default, ultra+ ($0.30-$2.40) for hard multi-step. 70-82% on DeepSearchQA (vs GPT-5.4 63%, Opus 58%). Latency: 10-60s. Use `parallel_search` for quick web-grounded lookups as alternative to `verify_claim`.
 
@@ -337,8 +337,8 @@ Never present inference as sourced fact. Never present training data as retrieve
 $ARGUMENTS
 
 <!-- knowledge-index
-generated: 2026-05-09T21:03:49Z
-hash: 1a49a31bd124
+generated: 2026-05-28T14:43:18Z
+hash: d31d44d01b5b
 
 cross_refs: docs/research/*.md, research/*.md, research/adversarial-case-library.md
 sources: 1
