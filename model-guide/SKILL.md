@@ -12,7 +12,7 @@ Select the right frontier model for a task and prompt it correctly.
 
 **Models covered:** Claude Opus 4.8, Claude Sonnet 4.6, GPT-5.5, GPT-5.5 Pro, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3.5 Flash, Gemini 3 Flash, Gemini 3.1 Flash-Lite, Grok 4.20 Reasoning.
 **Last updated:** 2026-05-28. See `${CLAUDE_SKILL_DIR}/references/CHANGELOG.md` for update history.
-**Benchmark note:** Official Opus 4.8 numbers are now published in the **Opus 4.8 System Card** (2026-05-28) — see `references/BENCHMARKS.md` Table 8.1.A for the full set (SWE-bench Verified 88.6, SWE-bench Pro 69.2, Terminal-Bench 2.1 74.6, OSWorld 83.4, GPQA Diamond 93.6, GDPval-AA 1890). System-card figures use adaptive thinking at **max** effort; the model defaults to `high`. Older inline matrix figures tagged to 4.7/4.6 are kept where the system card doesn't cover that benchmark. Opus 4.8 is the current default at unchanged pricing ($5/$25).
+**Benchmark note:** Official Opus 4.8 numbers are now published in the **Opus 4.8 System Card** (2026-05-28) — see `references/BENCHMARKS.md` Table 8.1.A for the full set (SWE-bench Verified 88.6, SWE-bench Pro 69.2, Terminal-Bench 2.1 74.6, OSWorld 83.4, GPQA Diamond 93.6, GDPval-AA 1890). Full verbatim system-card text: `references/opus-4-8-system-card.md` (also indexed in the corpus as `sha_70c4ccf25e6a119e`). System-card figures use adaptive thinking at **max** effort; the model defaults to `high`. Older inline matrix figures tagged to 4.7/4.6 are kept where the system card doesn't cover that benchmark. Opus 4.8 is the current default at unchanged pricing ($5/$25).
 
 ## Long-Horizon Research Routing
 
