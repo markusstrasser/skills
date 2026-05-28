@@ -26,6 +26,7 @@ Anthropic released Claude Opus 4.8 (`claude-opus-4-8`), replacing Opus 4.7 as th
 
 ### What was NOT changed in the skill (intentionally)
 - **Benchmark numbers sourced from the system card PDF, not fabricated.** The announcement webpage rendered the table as an image, but the 244-page System Card PDF (`cdn.sanity.io/.../c886650a….pdf`) has a clean text layer — extracted Table 8.1.A directly. Did NOT use the product page's customer-testimonial metrics ("84% Online-Mind2Web", "61% cheaper tokens") — those are third-party self-reports, not official benchmarks.
+- **Full verbatim system-card text vendored** to `references/opus-4-8-system-card.md` (3,234 lines, lightly cleaned of parser artifacts; figures referenced not embedded). Also indexed in the corpus as `sha_70c4ccf25e6a119e` for semantic search. Provenance header preserved; do not hand-edit numbers.
 - **Version-specific API constraints labeled `4.7+`** (adaptive-off, temperature/top_p/prefill → 400, `thinking.display` omitted default, 2576px vision, tokenizer): the migration guide confirms these carry forward into 4.8 unchanged, so the `4.7+` label is accurate, not a hedge.
 
 ### Mythos heads-up
