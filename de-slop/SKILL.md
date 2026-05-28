@@ -20,6 +20,34 @@ Accept input as:
 3. **Git diff** — `git diff HEAD~3` or similar; analyze only added/modified lines
 4. **No input** — check recent uncommitted changes: `git diff --staged` then `git diff`
 
+## Empirical Check (Pangram)
+
+The taxonomy below is heuristic — it tells you *why* prose reads as AI. Pangram is a trained classifier that gives an empirical *score* (0–1) for whether text is AI-generated, AI-assisted, or human. Run it to anchor your judgment in a second, independent signal before you start flagging by hand. The two disagree usefully: heuristics catch human-written slop the classifier passes; the classifier catches AI text that dodges the vocabulary lists.
+
+Tool (stdlib, no deps, available wherever this skill is linked):
+
+```bash
+# whole document — overall verdict + flagged segments with char ranges
+python3 ~/Projects/skills/de-slop/scripts/pangram.py -f draft.md
+
+# check phrases/paragraphs individually — one score per chunk
+python3 ~/Projects/skills/de-slop/scripts/pangram.py -f essay.md --split paragraph
+python3 ~/Projects/skills/de-slop/scripts/pangram.py --split line < snippet.txt
+
+# inline text, raw JSON, or as a gate (exit 2 on AI/AI-Assisted/Mixed)
+python3 ~/Projects/skills/de-slop/scripts/pangram.py "text to check"
+python3 ~/Projects/skills/de-slop/scripts/pangram.py -f draft.md --json
+python3 ~/Projects/skills/de-slop/scripts/pangram.py -f draft.md --fail-on-ai
+```
+
+How to use the score:
+- **`--split paragraph`** localizes the problem — it surfaces *which* paragraphs read as AI, so you focus the hand-pass there instead of re-reading the whole piece.
+- A high Pangram score is corroboration, not a verdict to relay verbatim — still quote specific patterns from the taxonomy. The user wants to know *what to fix*, and "Pangram says 0.99" is not actionable.
+- A low score on prose that *feels* sloppy is itself a finding: it's likely human-written mean-regression, which the classifier won't flag but the taxonomy will. Trust the taxonomy here.
+- Each chunk sent is one API request (consumes credits). Don't `--split line` a 500-line file casually; paragraph granularity is usually enough.
+
+Key lives in `PANGRAM_API_KEY` (auto-loaded from `~/.env`). If the script reports `401`, the key is missing or out of credits.
+
 ## When to Use a Different Skill
 
 This skill is for **voice-agnostic prose quality**: research memos, blog posts, essays, decision journals, documentation, any place where slop is the failure mode but no specific authorial voice is being enforced.
