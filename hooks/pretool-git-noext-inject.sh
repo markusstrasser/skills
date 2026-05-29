@@ -18,7 +18,7 @@ trap 'exit 0' ERR
 
 INPUT=$(cat)
 
-python3 - "$INPUT" <<'PY'
+OUT=$(python3 - "$INPUT" <<'PY'
 import sys, json, shlex
 
 try:
@@ -86,4 +86,7 @@ print(json.dumps({
     }
 }))
 PY
+)
+
+[ -n "$OUT" ] && printf '%s\n' "$OUT"
 exit 0
