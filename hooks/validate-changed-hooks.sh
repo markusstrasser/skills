@@ -42,35 +42,51 @@ CHECKED=0
 
 for f in "${STAGED[@]}"; do
     is_hook_path "$f" || continue
+    blob=$(git show ":$f" 2>/dev/null) || continue
+    [ -z "$blob" ] && continue
+
+    # Determine the checker by extension, falling back to the shebang so that
+    # EXTENSIONLESS hooks (e.g. `.githooks/pre-commit` itself) are still checked.
+    # Order matters: python before zsh before bash/sh; zsh before sh ("zsh"
+    # contains "sh").
+    kind=""
     case "$f" in
-        *.sh|*.bash)
-            CHECKED=$((CHECKED + 1))
-            if ! git show ":$f" 2>/dev/null | bash -n 2>/tmp/_hookchk.$$; then
-                echo "BLOCKED: $f has a shell syntax error:"
-                sed 's/^/    /' /tmp/_hookchk.$$ 2>/dev/null | head -8
-                FAILED=1
-            fi
+        *.sh|*.bash) kind=sh ;;
+        *.zsh) kind=zsh ;;
+        *.py) kind=py ;;
+        *)
+            first=$(printf '%s' "$blob" | head -1)
+            case "$first" in
+                "#!"*python*) kind=py ;;
+                "#!"*zsh*) kind=zsh ;;
+                "#!"*bash*|"#!"*sh*) kind=sh ;;
+            esac
             ;;
-        *.zsh)
-            CHECKED=$((CHECKED + 1))
-            CHECKER="bash -n"
-            command -v zsh >/dev/null 2>&1 && CHECKER="zsh -n"
-            if ! git show ":$f" 2>/dev/null | $CHECKER 2>/tmp/_hookchk.$$; then
-                echo "BLOCKED: $f has a shell syntax error:"
-                sed 's/^/    /' /tmp/_hookchk.$$ 2>/dev/null | head -8
-                FAILED=1
-            fi
-            ;;
-        *.py)
-            CHECKED=$((CHECKED + 1))
-            if ! git show ":$f" 2>/dev/null | python3 -c \
-                'import sys; compile(sys.stdin.read(), sys.argv[1], "exec")' "$f" 2>/tmp/_hookchk.$$; then
-                echo "BLOCKED: $f has a Python syntax error:"
-                sed 's/^/    /' /tmp/_hookchk.$$ 2>/dev/null | head -8
-                FAILED=1
+    esac
+    [ -z "$kind" ] && continue  # not a recognized script — not our concern
+
+    CHECKED=$((CHECKED + 1))
+    err=""
+    case "$kind" in
+        sh)  printf '%s\n' "$blob" | bash -n 2>/tmp/_hookchk.$$ || err=1 ;;
+        py)  printf '%s\n' "$blob" | python3 -c \
+                'import sys; compile(sys.stdin.read(), sys.argv[1], "exec")' "$f" 2>/tmp/_hookchk.$$ || err=1 ;;
+        zsh)
+            # Do NOT bash -n a zsh script — bash grammar false-blocks valid zsh.
+            # Skip (don't block) when zsh is unavailable.
+            if command -v zsh >/dev/null 2>&1; then
+                printf '%s\n' "$blob" | zsh -n 2>/tmp/_hookchk.$$ || err=1
+            else
+                echo "  (skip $f — zsh not installed; cannot safely syntax-check zsh)"
+                CHECKED=$((CHECKED - 1))
             fi
             ;;
     esac
+    if [ -n "$err" ]; then
+        echo "BLOCKED: $f has a $kind syntax error:"
+        sed 's/^/    /' /tmp/_hookchk.$$ 2>/dev/null | head -8
+        FAILED=1
+    fi
 done
 
 rm -f /tmp/_hookchk.$$ 2>/dev/null
