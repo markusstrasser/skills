@@ -73,4 +73,10 @@ if any(offends(s) for s in segments):
 sys.exit(0)
 PY
 rc=$?
+# Log blocks for ROI / false-positive analysis. The BLOCK message itself was
+# already written to stderr by the Python block (preserved for re-prompting).
+if [ "$rc" -eq 2 ]; then
+    _cmd=$(printf '%s' "$INPUT" | python3 -c "import sys,json;print(((json.load(sys.stdin).get('tool_input',{}) or {}).get('command','') or '')[:80])" 2>/dev/null)
+    ~/Projects/skills/hooks/hook-trigger-log.sh "git-add-all-guard" "block" "$_cmd" 2>/dev/null || true
+fi
 exit $rc

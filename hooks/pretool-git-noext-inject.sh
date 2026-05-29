@@ -87,6 +87,10 @@ print(json.dumps({
 }))
 PY
 )
-
-[ -n "$OUT" ] && printf '%s\n' "$OUT"
+# Re-emit the rewrite JSON (consumed by Claude Code) and log the trigger so
+# the guard accrues ROI telemetry like the rest of the hook fleet.
+if [ -n "$OUT" ]; then
+    printf '%s\n' "$OUT"
+    ~/Projects/skills/hooks/hook-trigger-log.sh "git-noext-inject" "rewrite" "git diff/show/log" 2>/dev/null || true
+fi
 exit 0
