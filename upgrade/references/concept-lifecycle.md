@@ -9,7 +9,7 @@ Concepts are tracked entities that persist across file renames, merges, and dele
 A concept is a cluster of related commits sharing a scope tag, touching overlapping files, or referencing the same improvement-log finding. Examples:
 - `dup-read-detection` — research memo → session-analyst detection rule → hook → promoted to block
 - `finding-triage-db` — script → DB → retired (full lifecycle, short-lived)
-- `knowledge-substrate` — MCP server → retired, replaced by hook + propagate-correction.py
+- `knowledge-substrate` — MCP server → retired, replaced by hook + propagate-correction.py → both retired 2026-05-29 (cache + correction-sweep pipeline removed; tracing now `just propagate`/`scan-corrections`). Full RESEARCH→…→RETIRED arc.
 
 ## Lifecycle States
 
