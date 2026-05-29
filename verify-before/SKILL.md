@@ -1,8 +1,8 @@
 ---
 name: verify-before
-description: "Probe before acting, check status before claiming. Modes: probe (validate on tiny slice), status (query live ground truth). Use for 'dry run', 'verify', 'check status', before expensive pipelines or worked/crashed claims."
+description: "Probe before acting, check status before claiming, predict before seeing outcomes. Modes: probe (validate on tiny slice), status (query live ground truth), preregister (lock prediction + decision rule before an experiment/eval reveals its result). Use for 'dry run', 'verify', 'check status', 'pre-register', before expensive pipelines, worked/crashed claims, or experiments/benchmarks."
 user-invocable: true
-argument-hint: "[probe|status] [target]"
+argument-hint: "[probe|status|preregister] [target]"
 allowed-tools: [Read, Glob, Grep, Bash, Write]
 effort: medium
 ---
@@ -19,7 +19,10 @@ Counters two failure modes observed across phenome/genomics sessions:
    ("uptime 90m" when it's 10m, "job running fine" when it's crash-looping).
    The fix is fetching structured ground truth and citing it.
 
-Two modes, same principle: **do not claim or commit before verifying.**
+Three modes, same principle: **do not claim, commit, or rationalize before
+verifying.** `probe` verifies the mechanism before you spend compute; `status`
+verifies the state before you claim; `preregister` verifies your prediction was
+fixed before you saw the outcome.
 
 ---
 
@@ -112,6 +115,87 @@ Example:
 
 ---
 
+## Mode: preregister
+
+Lock a prediction and a decision rule **before the experiment, eval, or analysis
+reveals its outcome** — so a confirmatory claim can't be retrofitted to whatever
+the result happened to be.
+
+### The failure this guards (HARKing / post-hoc rationalization)
+
+The other two modes act *before spending* and *before claiming*. This one acts
+*before seeing*. The gap is real and recurring in this system:
+
+- Agent saw a result ("you used Gemini 2.5"), rationalized it post-hoc, and
+  deployed a global hook instead of checking runlogs (improvement-log 2026-04).
+- Agent acknowledged a shared-infra change needed approval, then rationalized a
+  bypass after the fact. Outcome first, justification after.
+
+The constitution already pre-registers tests for *governance* changes ("check
+via /observe after 2 weeks; test: zero reverts in 14 days"). This mode extends
+the same discipline to *experiments and evals* — the place it's currently
+missing.
+
+### The rule
+
+> NO CONFIRMATORY CLAIM WITHOUT A PRE-REGISTERED PREDICTION FIRST.
+> Anything analyzed after the outcome was visible is **exploratory** — label it
+> so, and never relabel it confirmatory.
+
+### When it fires
+
+Reach for `preregister` before, not after:
+- a compute-heavy experimental run (>~10 min, the constitution's Operational
+  Rule 6 threshold) whose point is to confirm/refute a hypothesis;
+- a benchmark / eval / A-B comparison where you have a stake in the direction
+  (new hook "reduces failures", new model "is better", refactor "is faster");
+- any analysis where you could be tempted to call the result a success after
+  seeing which way it broke.
+
+Skip it for: pure exploration with no claim attached, mechanism probes (use
+`probe`), and runs where no directional prediction exists yet.
+
+### Phases
+
+**1. Write the registration (before touching outcomes).** Smallest useful form:
+
+```markdown
+# Prereg: <topic> — <date>
+- **Hypothesis:** <null> vs <directional alternative>
+- **Exact procedure:** model/script, dataset/slice, metric, inclusion rules.
+  Enough that a second agent could run it identically.
+- **Prediction:** direction + rough magnitude ("≥30% fewer ≥5-failure streaks").
+- **Decision rule:** the exact threshold that counts as confirm vs disconfirm
+  ("confirmed iff streaks drop ≥20% AND no new false-positive class appears").
+- **Stopping / N:** fixed sample / run count. No optional stopping — don't keep
+  running until it looks good.
+- **Falsifiability check:** name a concrete result that would DISCONFIRM it.
+  If you can't, the hypothesis isn't testable — fix it before running.
+- **Secondary / exploratory:** anything not above is exploratory, listed here.
+```
+
+**2. Freeze it in git.** Commit to `decisions/preregistrations/YYYY-MM-DD-<topic>.md`
+(meta) or the project's equivalent. The commit timestamp is the external proof
+the prediction preceded the result — that's the whole enforcement mechanism, so
+commit *before* you run, not in the same batch as the results.
+
+**3. Run exactly what was registered.** Deviations are allowed but must be noted
+and move the affected claim to exploratory.
+
+**4. Report against the decision rule.** State confirm/disconfirm by the
+pre-committed threshold. Don't move the goalpost to the number you got.
+
+### Enforcement honesty
+
+This mode is **instruction-tier**, like `probe` and `status` — the git timestamp
+is the only hard artifact. Per Constitution Principle 1, instructions shift the
+intercept, not the slope. The hookable upgrade (deferred, gate on recurrence):
+a PreToolUse gate on long Modal/eval dispatches that refuses to launch unless a
+prereg file for the topic was committed in the last N commits. Build that only
+if post-hoc-rationalization recurs after this mode ships.
+
+---
+
 ## When NOT to use
 
 - Trivial local scripts (<1 min, no remote state, no shared output path).
@@ -132,3 +216,11 @@ Example:
   status claims corrected by the user.
 - Global CLAUDE.md rule #8 "Probe before build" — previously text-only, now
   encoded as a skill with tool-backed checklists.
+- `preregister` mode: pattern extracted from K-Dense-AI/science-superpowers
+  (2026-05-29), which centers a pre-registration discipline for research agents.
+  We took only the temporal-lock kernel (predict + decision rule before outcome)
+  and grafted it onto this skill rather than adopting the framework — its
+  auto-trigger skill architecture overlaps the Autobrowse graduation mechanism
+  vetoed 2026-05-28, and its enforcement is the same instruction-tier as ours.
+  Failure mode it guards (post-hoc rationalization) is documented in
+  improvement-log.md (Gemini-2.5 hook deploy; shared-infra bypass).
