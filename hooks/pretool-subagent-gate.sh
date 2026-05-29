@@ -225,7 +225,7 @@ if [ -n "$PROMPT" ]; then
                 elif [ "$PROMPT_LEN" -gt 200 ]; then
                     ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "check=7 missing=${MISSING}" 2>/dev/null || true
                     SAFE_MISSING=$(echo "$MISSING" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))' 2>/dev/null)
-                    echo "{\"decision\": \"block\", \"reason\": \"SYNTHESIS BUDGET REQUIRED: Dispatch prompt missing ${MISSING}. Add to your prompt: 'Stop searching at 70% of turns and write synthesis to a file. Return the file path.' This prevents subagent turn exhaustion (6+ confirmed incidents, 30 min recovery each).\"}"
+                    echo "{\"decision\": \"block\", \"reason\": \"SYNTHESIS BUDGET REQUIRED: Dispatch prompt missing ${MISSING}. Add ALL of these so ONE retry clears every subagent gate (turn-budget AND write-stub-first are separate gates that otherwise bounce sequentially): (1) 'Stop searching at 70% of turns and write synthesis to a file. Return the file path.' (2) 'Your FIRST tool call MUST be Write a PROBE IN PROGRESS stub at the output path, then append findings incrementally.' Prevents turn exhaustion AND API-limit zero-output (6+ incidents, 30 min recovery each).\"}"
                     exit 2
                 else
                     CHECK_IDS="${CHECK_IDS}7,"
