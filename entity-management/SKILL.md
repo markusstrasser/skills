@@ -57,6 +57,12 @@ Use this path only in the `intel` repo.
 - Find existing files before creating anything. Valid paths are:
   - `analysis/entities/{TICKER}.md`
   - `analysis/entities/{TICKER}/index.md`
+- **In the intel repo, run `uvx python3 tools/entity_exists.py "<ticker or name>"` FIRST.**
+  It resolves ticker / name-form / `alt_tickers` / frontmatter-`name` across the
+  mixed-convention corpus (e.g. `SKHYNIX.md` carries `ticker: 000660.KS`). A
+  single-form grep like `000660` misses name-form files and risks a duplicate
+  (the SK Hynix near-miss, 2026-05-28). Exit 0 = exists (UPDATE it); exit 1 =
+  safe to create.
 - If `tools/lib/entity_paths.py` exists, use tooling that imports it for flat
   and folder-form discovery. Any migration to folder form must update or verify
   discovery tooling in the same slice; tools that glob only
