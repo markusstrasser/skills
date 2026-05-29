@@ -144,6 +144,38 @@ def fit_knn():
 
 Can pull from Docker Hub, Nvidia NGC, AWS ECR, GitHub ghcr.io.
 
+#### Gotcha: official tool images often FAIL as Modal *function* images
+
+`from_registry` requires a Modal-detectable Python in the image. Many official
+vendor/tool images (e.g. `ghcr.io/pgscatalog/*`, bioinformatics CLIs, plink2) either:
+
+- **ship no detectable Python** -> `ConflictError: unable to determine the version of
+  Python installed in the Image`, **or**
+- **ship Python at a non-standard layout** -> adding `add_python="3.x"` collides:
+  `ln: failed to create symbolic link '/usr/local/bin/python': File exists`.
+
+Either crashes the whole `modal run` at build time. **Default: don't use the vendor
+image as the function image — build `debian_slim(python_version=...)` and pip/binary-
+install the tool yourself:**
+
+```python
+score_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("unzip", "wget")
+    .run_commands("wget -q <tool-binary>.zip -O /tmp/t.zip && unzip -o /tmp/t.zip -d /usr/local/bin/")
+    .pip_install("the-python-tool==X.Y")
+)
+```
+
+Dependency conflicts between co-installed tools are **per-image**: give the one
+conflicting tool its OWN image (e.g. pgscatalog.calc needs pandas>=2.2, fraposa-pgsc
+<2.0 -> separate images), passing each step its own `image=`; everything else
+co-installs in one. (This is also how nf-core-style pipelines isolate processes.)
+
+Reserve `from_registry` for images explicitly built as Python app bases, and pair it
+with a build-time probe — `image.build(app)` catches the python-detection failure with
+no GPU cost (see "MANDATORY: Test Before Deploying").
+
 ### From Private Registry
 
 Use Modal Secrets for authentication:
