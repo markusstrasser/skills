@@ -10,17 +10,22 @@ Date injection: `$(date +%Y-%m-%d)` in every system prompt.
 
 ## Initial Generation (Step 2)
 
-**With external dispatch (and not `--no-llmx`):** Dispatch to an external model for parallel volume while you also generate your own set.
+**Diversity comes from one self-aware generator, not from a crowd of parallel ones.** Recent controlled studies are consistent: under matched prompts a **single agent emitting many outputs in one pass beats parallel multi-agent fan-out on semantic diversity** — parallel agents can't see each other and converge on overlapping ideas, while a serial generator conditions on its own history to avoid redundancy (Single-Agent > MAS, openreview ZQVnJXLMkR, 2026). Closed-loop multi-LLM setups go further and **semantically collapse**, and 12 intervention strategies failed to stop it (arxiv 2605.17193). So:
+
+- **Default to Multi-Output single-agent** for the generation pass: one model, `$N_IDEAS` responses in a single inference, each conditioned on the ones before. External dispatch is for **volume and availability only** — it is mildly diversity-*negative*, not a diversity mechanism. Don't add dispatch rounds expecting more diversity.
+- **Keep any dispatch group small, and do NOT use expert/authority personas in generation.** "Senior scientist"/expert framing *suppresses* semantic diversity; independent/junior framing explores broader, and larger/denser groups accelerate premature convergence (paradox of expertise, openreview YL4alzSQIl, 2026). Preserve independence and disagreement.
+
+**With external dispatch (and not `--no-llmx`):** Dispatch for additional volume while you also generate your own set. Use the verbalized-sampling + stratification framing below.
 
 ```bash
 cat > "$BRAINSTORM_DIR/external-generation.prompt.md" <<'EOF'
 <system>
-Generate approaches to the design space below. Maximize breadth — $N_IDEAS genuinely different approaches, not variations on a theme. No feasibility filtering yet. It is $(date +%Y-%m-%d).
+First, name 4–6 broad, mutually distant semantic DIRECTIONS the solution could take (directions, not ideas). Then generate $N_IDEAS genuinely different approaches that fill those directions — and give a probability/confidence for each approach. Report the distribution; do not pre-rank or filter. No feasibility filtering yet. Do NOT adopt an expert/authority persona. It is $(date +%Y-%m-%d).
 </system>
 
 [Design space + constraints + user-provided seeds if any]
 
-For each approach: one paragraph on the mechanism and why it differs from the others.
+For each approach: which direction it fills, one paragraph on the mechanism, why it differs from the others, and its probability.
 EOF
 
 uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
