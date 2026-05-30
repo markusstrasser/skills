@@ -17,7 +17,9 @@ allowed-tools:
 
 You are orchestrating divergent ideation. The goal is ideas that escape the default attractor basin — the high-probability outputs that any model (including you) produces first.
 
-**Core mechanism:** Systematic perturbation of the search space (denial, domain forcing, constraint inversion), not model diversity. Models trained on similar data converge on similar ideas regardless of vendor. The prompting structure does the work.
+**Core mechanism:** Systematic perturbation, not model diversity. Models trained on similar data converge on similar ideas regardless of vendor — the prompting structure does the work. Perturbation operates on two independent dimensions, and you use both:
+- **Content-space perturbation** — denial cascade, domain forcing, constraint inversion. Moves *where* in idea-space you look.
+- **Output-distribution perturbation** — verbalized sampling (Step 2). Relieves the typicality pressure alignment bakes in, surfacing the low-probability tail. Independent of content; composes with every content-space axis. (Verbalized Sampling, Zhang et al., ICML 2026: +1.6–2.1× diversity, training-free, and *more capable models benefit more* — so it's always-on here, not a toggle.)
 
 **This skill is DIVERGENT only.** It produces candidate space and coverage artifacts, not final selections or implementation plans. For convergent critique, use `/model-review`.
 
@@ -37,7 +39,7 @@ This skill is **GENERATIVE**, not analytical. It produces ideas that did not exi
 
 **If you find yourself running `rg`/`grep`/`sed`/`wc` or polling files in this skill:** STOP. You are violating the contract. Re-enter divergent mode: write 5 raw ideas as conversation text, then continue from Step 3. This is not optional and is not advisory.
 
-**Why this gate exists:** Codex/GPT-5.4 with the multi-MCP execution harness defaulted to `rg`/`sed` filtering loops in 8/8 automated brainstorm sessions on 2026-04-18 (genomics), ignoring the skill body entirely. HAIExplore v2 (arxiv 2512.18388, April 2026): execution-first interfaces cause premature convergence and design fixation. Architecture beats instructions — this section is the architecture.
+**Why this gate exists:** Codex/GPT-5.4 with the multi-MCP execution harness defaulted to `rg`/`sed` filtering loops in 8/8 automated brainstorm sessions on 2026-04-18 (genomics), ignoring the skill body entirely. HAIExplore v2 (arxiv 2512.18388, April 2026): execution-first interfaces cause premature convergence and design fixation. ReDNA (Beyond One Path, arxiv 2605.28465, May 2026) independently re-derives the fix: separating unconstrained divergent generation from convergent selection beats prior methods, and frontier LLMs under "immediate convergence pressure" fall into action fixation — exactly this failure. Architecture beats instructions — this section is the architecture.
 
 **Late-stage warning:** When a frontier is mature, this skill should produce fewer, sharper ideas, not preserve the same idea count with weaker variants. One strong perturbation survivor is enough. If forced-domain rounds only yield reframings, stop and hand back to convergent filtering.
 
@@ -85,9 +87,13 @@ State clearly: the question, current approach (if any), hard constraints vs soft
 
 ### Step 2: Initial Generation
 
-**In-conversation first, dispatch second.** Generate `$N_IDEAS` approaches as plain text in the conversation BEFORE launching any external dispatch. The Mode Discipline gate above requires this — at least 5 candidate ideas must exist as conversation text before any non-packet tool call. Cast wide — no evaluation yet. Optimize for volume and diversity over individual brilliance. More seeds = more raw material for perturbation. If user included seed ideas, diversify from there.
+**In-conversation first, dispatch second.** Generate `$N_IDEAS` approaches as plain text in the conversation BEFORE launching any external dispatch. The Mode Discipline gate above requires this — at least 5 candidate ideas must exist as conversation text before any non-packet tool call. No evaluation yet. Optimize for volume and diversity over individual brilliance. More seeds = more raw material for perturbation. If user included seed ideas, diversify from there.
 
-With external dispatch: AFTER your own in-conversation set exists, dispatch a parallel external pass for additional volume. See `references/llmx-dispatch.md` for prompt payloads and artifact contracts. **Do not poll** the dispatch output file — wait for the explicit completion signal (process exit, marker file), then read once.
+**Don't cast wide blindly — stratify, then verbalize.** Two structural moves replace undirected breadth (both are training-free and measured to beat naive generation):
+1. **Semantic-direction stratification.** First, in one planning pass, name 4–6 *broad, mutually distant semantic directions* the solution could take (not ideas yet — directions). Then generate ideas to fill each direction. Pre-partitioning the space beats casting wide and deduping after, on the diversity–quality–compute frontier (Anchorless Diversification, arxiv 2605.30150, May 2026). Record the directions; they seed the `domain_row`/paradigm columns later.
+2. **Verbalized sampling.** Frame the generation request as a *distribution*: "give me N genuinely different approaches **and your probability/confidence for each**." Asking for the distribution — not the single best answer — relieves typicality pressure and surfaces the low-probability tail (+1.6–2.1× diversity, ICML 2026). Keep the probabilities in the raw artifact; they are NOT a ranking signal (this is divergent mode — see the coverage≠quality caveat in synthesis-templates).
+
+With external dispatch: AFTER your own in-conversation set exists, dispatch a parallel external pass **for volume/availability only — not for diversity**. Parallel fan-out is mildly diversity-*negative* (agents converge on overlapping ideas); a single self-conditioning generator producing many outputs is the diversity mechanism. See `references/llmx-dispatch.md` for the Multi-Output default, persona constraints, and prompt payloads. **Do not poll** the dispatch output file — wait for the explicit completion signal (process exit, marker file), then read once.
 
 ### Step 3: Perturbation Rounds (The Core Mechanism)
 
@@ -155,7 +161,8 @@ Don't auto-implement — divergent ideas need convergent validation first.
 - **Skipping coverage artifacts.** If you cannot name the matrix cells you covered, you do not yet know what was actually explored.
 - **Using brainstorm as a decision memo.** It produces candidate space plus coverage, not the final call.
 - **Synthesizing without extracting.** Drops ideas silently. Always extract first.
-- **Treating model choice as the diversity mechanism.** The prompting structure (denial, domains, inversions) produces divergence. Model choice is for volume and availability.
+- **Treating model choice (or parallel multi-agent fan-out) as the diversity mechanism.** The prompting structure (stratification, verbalized sampling, denial, domains, inversions) produces divergence. Parallel agents converge and closed loops semantically collapse — model/agent count is for volume and availability only.
+- **Using expert/authority personas during generation.** "Senior scientist" framing suppresses semantic diversity. Generate with independent/neutral framing; bring expertise in at the convergent (`/model-review`) stage.
 
 ## Reference Files
 
