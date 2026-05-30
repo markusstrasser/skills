@@ -14,6 +14,8 @@ Pick distant domains, not adjacent ones — the discomfort is the mechanism.
 Pick one from each row. Record the row label in `matrix.json` as `domain_row`. If `--domains`
 is specified, use those instead and still preserve the closest row or mark `domain_row: "custom"`.
 
+**Why span rows (don't trim breadth):** model creativity is *jagged* — which forced domain "unlocks" a useful analogy is model- and prompt-specific and unpredictable (SciAidanBench, arxiv 2605.10574, 2026). Spanning distant rows hedges the jagged profile; collapsing to one row gambles on a strength the model may not have here.
+
 ## Knowledge Injection (before perturbation)
 
 Query 2-3 tangential domain examples via Exa (if available) to expand the solution space before running perturbation rounds. E.g., if brainstorming about memory architectures, search for how biology, common law, or supply chain logistics handles memory/persistence. Feed retrieved examples as context into the perturbation rounds. This primes the search space with real-world mechanisms that denial alone might not surface.

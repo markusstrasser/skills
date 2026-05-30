@@ -1,6 +1,8 @@
 <!-- Reference file for brainstorm skill. Loaded on demand. -->
 # Synthesis & Extraction Templates
 
+> **Coverage ≠ quality.** The matrix/coverage counts measure *how much of the space was explored*, not how good the ideas are. Don't read a high cell count or wide `domain_row_coverage` as a quality signal, and don't treat verbalized-sampling probabilities from Step 2 as a ranking. Creativity dimensions don't transfer — strong novelty/diversity coverage does not predict ideation value, and no automated test reliably predicts ideation quality (Assessing LLM Creativity, arxiv 2605.13450; CreativityPrism, 2026). Quality judgment is the convergent step's job (`/model-review`), not this skill's.
+
 ## Coverage Matrix (Step 3.5)
 
 Use this after perturbation and before extraction/synthesis. `matrix.json` is the coverage
