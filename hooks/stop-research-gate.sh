@@ -153,6 +153,35 @@ for f in research_files:
     if not SOURCE_TAG.search(content_visible):
         missing.append(f)
 
+# Concurrent-agent safety: a flagged file may belong to a CONCURRENT session that
+# created it AFTER our session-start baseline (the baseline only excludes files
+# dirty at OUR start). Attribute positively via the per-session write-manifest
+# (/tmp/session-touched-<id>.txt, written by posttool-session-touched-log.sh):
+#   - untagged research we WROTE (in manifest)  -> BLOCK (our discipline, intact).
+#   - flagged files NOT in our manifest         -> WARN only (peer or uncaptured;
+#       never silent-pass, never false-block a peer's in-flight work).
+#   - manifest MISSING/empty                     -> fall back to BLOCK ALL (today's
+#       safe floor; this change is never weaker than the pre-fix behavior).
+if missing:
+    touched = set()
+    for _sid in (data.get('session_id', ''), session_id):
+        if not _sid:
+            continue
+        try:
+            with open(f'/tmp/session-touched-{_sid}.txt') as _fh:
+                touched |= {ln.strip() for ln in _fh if ln.strip()}
+        except OSError:
+            pass
+    if touched:
+        peer = [f for f in missing if f not in touched]
+        missing = [f for f in missing if f in touched]
+        if peer:
+            print('NOTE: untagged research files NOT written by this session '
+                  '(concurrent peer or uncaptured) — NOT blocking; tag in their own session:',
+                  file=sys.stderr)
+            for f in peer:
+                print(f'  ~ {f}', file=sys.stderr)
+
 if missing:
     import subprocess as _sp
     _sp.run([os.path.expanduser('~/Projects/skills/hooks/hook-trigger-log.sh'),
