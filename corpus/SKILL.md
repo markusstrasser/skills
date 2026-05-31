@@ -142,11 +142,19 @@ text = extract_text(paper_id)  # prefers parsed/page.md → Gemini → PyMuPDF f
 ```
 
 **Recording a personal observation about a source:**
-Append via `corpus_mcp.corpus_attest` (Phase 3+) or the corpus_core writer
-to `~/Projects/corpus/<source_id>/annotations.jsonl` (event-sourced; never edit).
-Use `kind: "contribution"` for ORKG-style structured key findings,
+Use the `corpus annotate` CLI (`corpus annotate --source-id <id> --repo <r>
+--actor-type cli --actor-id <urn> --scope <s> ...`). It routes through
+`corpus_core.annotate` — the SOLE writer — and appends to
+`~/Projects/corpus/<source_id>/annotations.jsonl` (event-sourced; never edit
+by hand). Use `kind: "contribution"` for ORKG-style structured key findings,
 `kind: "contradiction_flag"` for noticed disagreements,
 `kind: "note"` for general observations.
+
+There is no `corpus_attest` MCP tool: substrate v2 retired the agent-facing
+write path. Substantive repo assertions (verdicts/certs/contradictions) are
+attested automatically by each repo's mutation gateway via a transactional
+outbox; standalone observations use the CLI above. See
+`agent-infra/decisions/2026-05-26-cross-attestation-substrate-v2.md`.
 
 ## What this is NOT
 
