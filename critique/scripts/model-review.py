@@ -234,6 +234,21 @@ GEMINI_RATE_LIMIT_MARKERS = (
     "overloaded",
     "429",
 )
+# GPT API-key path can hit billing exhaustion / quota while the ChatGPT
+# subscription (codex-cli, $0) works fine (see ~/.claude/rules/llmx-routing.md).
+# On these, fall back to the subscription transport so a paid-API outage never
+# silently degrades a review to single-model. Fires ONLY on failure.
+GPT_QUOTA_MARKERS = (
+    "insufficient_quota",
+    "quota",
+    "billing",
+    "credit",
+    "payment required",
+    "exhausted balance",
+    "429",
+    "rate limit",
+    "rate-limit",
+)
 
 
 class ContextArtifact(NamedTuple):
@@ -470,6 +485,45 @@ def rerun_axis_with_flash(
     )
 
 
+def rerun_gpt_axis_via_subscription(
+    axis: str,
+    model: str,
+    review_dir: Path,
+    ctx_file: Path | ContextArtifact,
+    prompt: str,
+) -> dict:
+    """Retry a GPT axis that hit API billing/quota via the ChatGPT SUBSCRIPTION
+    transport (llmx CLI `--lite bare` -> codex-cli, $0). The default dispatch uses
+    api_only=True (metered API); when that path is billing-exhausted, the paid-API
+    outage would otherwise silently degrade the review to single-model. Subprocess
+    (not the in-process llmx.api) because `--lite` is a CLI-only route. Fires only
+    on failure; bounded by a timeout — if it also fails we are no worse off."""
+    import subprocess
+
+    out_path = review_dir / f"{axis}-output.md"
+    print(
+        f"warning: {axis} GPT API billing/quota failure; retrying once via ChatGPT "
+        f"subscription (llmx --lite bare, $0)",
+        file=sys.stderr,
+    )
+    cmd = [
+        "llmx", "chat", "-m", model, "--lite", "bare", "-e", "high",
+        "-f", str(context_content_path(ctx_file)), "-o", str(out_path), prompt,
+    ]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=660)
+        size = out_path.stat().st_size if out_path.exists() else 0
+        ok = r.returncode == 0 and size > 0
+        return {
+            "exit_code": 0 if ok else 1,
+            "size": size,
+            "latency": 0,
+            "error": None if ok else (r.stderr or "subscription retry produced no output")[:500],
+        }
+    except Exception as e:  # noqa: BLE001 — fallback must never raise into the axis loop
+        return {"exit_code": 1, "size": 0, "latency": 0, "error": f"subscription retry failed: {str(e)[:300]}"}
+
+
 def build_context(
     review_dir: Path,
     project_dir: Path,
@@ -640,6 +694,29 @@ def dispatch(
             entry.pop("stderr", None)
             if flash_result.get("error"):
                 entry["stderr"] = flash_result["error"]
+
+        # GPT API billing/quota fallback to ChatGPT subscription (codex-cli, $0).
+        # Mirrors the Gemini-Pro->Flash fallback above; fires only on failure so the
+        # common path is untouched. Prevents a paid-API outage from silently
+        # degrading a touches-everything review to single-model (happened 2026-05-31).
+        elif (
+            profile_def.provider == "openai"
+            and result["exit_code"] != 0
+            and result.get("error")
+            and any(m in result["error"].lower() for m in GPT_QUOTA_MARKERS)
+        ):
+            entry["fallback_from"] = profile_def.model
+            entry["fallback_reason"] = "gpt_api_quota"
+            entry["initial_exit_code"] = result["exit_code"]
+            sub_result = rerun_gpt_axis_via_subscription(
+                axis, profile_def.model, review_dir, ctx_files[axis], prompts[axis],
+            )
+            entry["model"] = f"{profile_def.model} (subscription)"
+            entry["exit_code"] = sub_result["exit_code"]
+            entry["size"] = sub_result["size"]
+            entry.pop("stderr", None)
+            if sub_result.get("error"):
+                entry["stderr"] = sub_result["error"]
 
         if entry["size"] == 0:
             entry["failure_reason"] = "empty_output"
