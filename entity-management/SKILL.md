@@ -377,9 +377,11 @@ they handle path discovery, frontmatter, and provenance correctly.
 - **`intelligence`** — `resolve_entity`, `search_entities`, `find_connections`,
   `get_dossier`, `flag_anomalies`.
 - **`corpus`** — local scientific corpus store (`corpus_lookup`,
-  `corpus_attest`, `corpus_ingest`). Per substrate-v1 attestation flow, when
-  recording a claim/verdict make two calls: repo-local `record_verdict` THEN
-  `corpus_attest`.
+  `corpus_graph_query`, `corpus_annotations_query`, `corpus_ingest`,
+  `corpus_dashboard`). Read-only for annotations. Attestation is automatic:
+  each repo's mutation gateway emits to corpus via a transactional outbox when
+  a verdict/cert/contradiction is written — no agent ritual. (The old v1
+  `record_verdict` + `corpus_attest` two-call flow is retired.)
 - **`research`** — Semantic Scholar paper discovery, claim verification,
   preprint surveillance, deep research.
 - **`brave-search` / `exa` / `perplexity`** — web search tiers. Default to
