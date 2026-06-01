@@ -265,7 +265,20 @@ For misses or near-misses, append the durable admission-failure row with
 ### Failure-mode replay surface
 
 The hook fleet enforces these on Write/Edit to `analysis/entities/*.md`.
-Read this list before dispatching a workup — it saves a round-trip per BLOCK:
+Read this list before dispatching a workup — it saves a round-trip per BLOCK.
+
+**Before any entity write, run the gauntlet in ONE pass** instead of discovering
+blocks one Write at a time (the 2026-06-01 5-bounce session). Draft to a temp
+file, then:
+
+```bash
+uvx --with pyyaml python3 tools/preflight_entity_write.py \
+    --file analysis/entities/TICKER.md --content-file /tmp/draft_TICKER.md
+```
+
+It auto-discovers and runs every live gate below from `settings.json` (so it can
+never drift from the fleet) and returns the complete missing-list. Exit 0 =
+clears the gauntlet. See `docs/entity-write-gauntlet.md`.
 
 | Failure mode | Triggering incident | Hook / rule | What the file must include |
 |---|---|---|---|
