@@ -91,6 +91,23 @@ except Exception:
 
 [ -z "$DESC" ] && exit 0
 
+# Self-managing exemption (generalizes the hardcoded researcher/Explore exemption):
+# if the dispatched subagent_type has an agent DEFINITION that already embeds the
+# output discipline (70%-stop / write-stub-first / return-path), the caller need
+# not re-type the preamble in every dispatch prompt — re-requiring it is the
+# documented "subagent dispatch boilerplate" tax. Add the discipline to an agent's
+# .claude/agents/<type>.md → it is automatically exempt from the Check-7/Check-10
+# BLOCK below (it stays advisory). Works in any repo; no hardcoded agent names.
+AGENT_DEF_DISCIPLINED=0
+if [ -n "$STYPE" ]; then
+    for _adef in "$PWD/.claude/agents/$STYPE.md" "$HOME/.claude/agents/$STYPE.md"; do
+        if [ -f "$_adef" ] && grep -qiE '70%|write.*stub|stub.*first|skeleton-first|return.*(file )?path|probe in progress' "$_adef"; then
+            AGENT_DEF_DISCIPLINED=1
+            break
+        fi
+    done
+fi
+
 WARNINGS="${MEM_ADVISORY:-}"
 CHECK_IDS=""
 
@@ -221,6 +238,10 @@ if [ -n "$PROMPT" ]; then
                 elif [ "$IS_IMPL_TASK" -gt 0 ]; then
                     CHECK_IDS="${CHECK_IDS}7,"
                     WARNINGS="${WARNINGS}SUBAGENT OUTPUT: Dispatch prompt missing ${MISSING}. (Advisory — implementation task targeting source tree.) "
+                # Self-managing: the agent's own definition embeds the discipline.
+                elif [ "$AGENT_DEF_DISCIPLINED" -gt 0 ]; then
+                    CHECK_IDS="${CHECK_IDS}7,"
+                    WARNINGS="${WARNINGS}SUBAGENT OUTPUT: Dispatch prompt missing ${MISSING}. (Advisory — ${STYPE} agent-def already embeds the output discipline.) "
                 # Block if prompt is substantial (>200 chars = real research task)
                 elif [ "$PROMPT_LEN" -gt 200 ]; then
                     ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "check=7 missing=${MISSING}" 2>/dev/null || true
@@ -283,6 +304,9 @@ if [ -n "$PROMPT" ] && [ "${HAS_FILE_OUTPUT:-0}" -gt 0 ]; then
                 elif [ "$IS_IMPL_TASK" -gt 0 ]; then
                     CHECK_IDS="${CHECK_IDS}10,"
                     WARNINGS="${WARNINGS}SUBAGENT WRITE-FIRST: Prompt specifies file output but doesn't instruct write-stub-first. ${STUB_FIX} (Advisory — implementation task; production files are the deliverable, not a synthesis memo.) "
+                elif [ "$AGENT_DEF_DISCIPLINED" -gt 0 ]; then
+                    CHECK_IDS="${CHECK_IDS}10,"
+                    WARNINGS="${WARNINGS}SUBAGENT WRITE-FIRST: Prompt specifies file output but doesn't instruct write-stub-first. ${STUB_FIX} (Advisory — ${STYPE} agent-def already embeds the discipline.) "
                 elif [ "$PROMPT_LEN" -gt 200 ]; then
                     ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "check=10 missing=write-stub-first" 2>/dev/null || true
                     echo "{\"decision\": \"block\", \"reason\": \"SUBAGENT WRITE-FIRST REQUIRED: Prompt specifies file output but doesn't instruct write-stub-first. ${STUB_FIX}\"}"
