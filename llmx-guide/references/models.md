@@ -6,8 +6,8 @@
 
 | Model | llmx name | Notes |
 |-------|-----------|-------|
-| Gemini 3.1 Pro | `gemini-3.1-pro-preview` | **Default Google model.** `google` prefers Gemini CLI when installed |
-| Gemini 3.5 Flash | `gemini-3.5-flash` | **Stable GA** (May 2026) of the Flash family. ~3× Flash pricing — Pro-lite tier, agentic loops + critique cosigner. CLI free; API ~$1.50/$9 per MTok. |
+| Gemini 3.1 Pro | `gemini-3.1-pro-preview` | Runner-up Gemini (demoted from default 2026-05-24) — use only where its strengths dominate: ARC-AGI-2, raw GPQA Diamond, video. Paid API; the free Gemini CLI transport was retired 2026-05-31. |
+| Gemini 3.5 Flash | `gemini-3.5-flash` | **Default Gemini for critique/synthesis** (promoted over 3.1 Pro 2026-05-24). Stable GA (May 2026). ~3× Flash pricing — Pro-lite tier. Paid API only (~$1.50/$9 per MTok; `--flex` = 50% off) — free Gemini CLI retired 2026-05-31. |
 | Gemini 3 Flash | `gemini-3-flash-preview` | Cheap workhorse. `-preview` required. Use for high-volume classification, not when 3.5's reasoning is needed |
 | GPT Image 2 | `gpt-image-2` | Current SoTA image model. Default for `llmx image`; supports generation and edit/reference workflows |
 | Gemini 3 Pro Image | `gemini-3-pro-image-preview` | Available via `llmx image --provider google -m pro` |
