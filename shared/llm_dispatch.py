@@ -111,6 +111,21 @@ PROFILES: dict[str, DispatchProfile] = {
         max_tokens=16384,
         input_token_limit=120000,
     ),
+    "mechanical_review": DispatchProfile(
+        # Mechanical/lint axis (deep/full presets). gpt-5.5 at LOW effort:
+        # the job is fast pattern-spotting (stale refs, naming, dup), not
+        # reasoning. Repointed off gemini-3-flash-preview on 2026-06-01 — that
+        # model measured ~42-67% hallucination as a critique axis, poisoning
+        # exactly the high-stakes deep/full reviews where mechanical runs.
+        name="mechanical_review",
+        intent="Low-effort GPT mechanical/lint audit",
+        provider="openai",
+        model="gpt-5.5",
+        timeout=300,
+        reasoning_effort="low",
+        max_tokens=16384,
+        input_token_limit=120000,
+    ),
     "search_grounded": DispatchProfile(
         name="search_grounded",
         intent="Search-backed answer synthesis",

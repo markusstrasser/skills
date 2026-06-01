@@ -158,7 +158,7 @@ Ranked by measurable impact. Each must have: (a) what, (b) why with quantitative
 What am I (GPT-5.5) probably getting wrong? Known biases to flag: overconfidence in fabricated specifics, overcautious scope-limiting, production-grade recommendations for personal projects.""",
     },
     "domain": {
-        "label": "Gemini Pro (domain correctness)",
+        "label": "Gemini (domain correctness)",
         "profile": "deep_review",
         "prompt": """\
 <system>
@@ -179,8 +179,8 @@ For each domain-specific claim in the reviewed material:
 Flag any URLs, API endpoints, or version numbers that should be probed before implementation.""",
     },
     "mechanical": {
-        "label": "Gemini Flash (mechanical audit)",
-        "profile": "fast_extract",
+        "label": "GPT-5.5 (mechanical audit)",
+        "profile": "mechanical_review",
         "prompt": """\
 <system>
 Mechanical audit only. No analysis, no recommendations. Fast and precise.
@@ -195,7 +195,7 @@ Find in the reviewed material:
 Output as a flat numbered list. One issue per line.""",
     },
     "alternatives": {
-        "label": "Gemini Pro (alternative approaches)",
+        "label": "Gemini (alternative approaches)",
         "profile": "deep_review",
         "prompt": """\
 <system>
