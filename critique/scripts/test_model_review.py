@@ -71,12 +71,12 @@ class ModelReviewDispatchTest(unittest.TestCase):
 
         def mock_chat(**kwargs):
             model = kwargs.get("model", "")
-            if model == model_review.GEMINI_PRO_MODEL and call_count["arch"] == 0:
+            if model == model_review.GEMINI_PRIMARY_MODEL and call_count["arch"] == 0:
                 call_count["arch"] += 1
                 raise Exception("503 resource_exhausted")
-            if model == model_review.GEMINI_FLASH_MODEL:
+            if model == model_review.GEMINI_FALLBACK_MODEL:
                 resp = MagicMock()
-                resp.content = "flash fallback"
+                resp.content = "fallback output"
                 resp.latency = 0.5
                 return resp
             resp = MagicMock()
@@ -93,8 +93,8 @@ class ModelReviewDispatchTest(unittest.TestCase):
                 has_governance=False,
             )
 
-        # arch should have fallen back to Flash
-        self.assertEqual(result["arch"]["model"], model_review.GEMINI_FLASH_MODEL)
+        # arch should have fallen back to the runner-up critique model (3.1-Pro)
+        self.assertEqual(result["arch"]["model"], model_review.GEMINI_FALLBACK_MODEL)
         self.assertEqual(result["arch"]["fallback_reason"], "gemini_rate_limit")
         self.assertGreater(result["arch"]["size"], 0)
         # formal should succeed normally
