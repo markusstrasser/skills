@@ -139,7 +139,11 @@ class ModelReviewDispatchTest(unittest.TestCase):
 
         fp1, fp2 = _fp(f1), _fp(f2)
         jaccard = len(fp1 & fp2) / len(fp1 | fp2)
-        self.assertGreater(jaccard, 0.3, f"Expected Jaccard > 0.3, got {jaccard:.2f}")
+        threshold = model_review.CROSS_MODEL_JACCARD_THRESHOLD
+        self.assertGreater(
+            jaccard, threshold,
+            f"Expected Jaccard > {threshold} (production merge threshold), got {jaccard:.2f}",
+        )
 
 
 class SchemaTransformTest(unittest.TestCase):
