@@ -272,11 +272,11 @@ Read this list before dispatching a workup — it saves a round-trip per BLOCK:
 | Bull thesis before adversarial sweep | ATOM/EOS.AX/IQE.L 2026-05-23 | `pretool-disqualification-required-gate.py` | `disqualification_sweep:` frontmatter block |
 | WATCHLIST as turn-budget fallback | ALAB 2026-05-10 (+48% in 14d) | `pretool-watchlist-completeness-gate.py` + `buy-workup-terminal-state.md` | `## Workup Completeness` attest OR convert to RESEARCH with `## P0 Fetches Queued` |
 | One-sided downside-only WATCHLIST trigger | ARM 2026-05-07 (+25.7% in 15d); ALAB/ASTS/RKLB/PL cohort (+22–64% in 14d, 2026-05-24) | `pretool-asymmetric-falsifier-gate.py` — **BLOCK** mode as of 2026-05-24 (was WARN); subagent prompts must state this so the bidirectional falsifier is treated as required, not optional | `## Bidirectional Falsifier` with both downside re-entry AND upside escalation |
-| Stale conviction vs tape | 21-name cohort 2026-05-24 (+15–42%) | `pretool-conviction-divergence-gate.py` | `## Conviction Divergence Acknowledged` section |
+| Stale conviction vs tape | 21-name cohort 2026-05-24 (+15–42%) | `/divergence-update` skill + `tools/coverage_gap_scanner.py` (divergence scan) — no pretool hook | `## Conviction Divergence Acknowledged` section |
 | AVOID/WATCHLIST without observable falsifier | (many) | `pretool-falsifier-required-gate.py` | concrete price / % / event / ISO date in falsifier section |
-| Sycophantic same-session conviction flip | (multiple) | `pretool-conviction-flip-gate.py` | `## Stable View` section on second flip |
+| Sycophantic same-session conviction flip | (multiple) | `pretool-unevidenced-flip-gate.py` (persisted unevidenced flips); in-chat same-session flips are instruction-level only per `.claude/rules/stance-stability.md` (`pretool-conviction-flip-gate.py` was never built — archived) | `## Stable View` section on second flip |
 | Probability-weighted scenario tables / `E[X]` math | SNDK folder 2026-05-25, ARM 2026-05-22 | `pretool-evidence-quality-gate.py` | prose scenarios + bidirectional falsifier + plain operator call |
-| AI-compute bear thesis with no denominator mechanism | ARM 2026-05-22 | `pretool-ai-compute-bear-mechanism-gate.py` | named denominator attack (agent ROI plateau, energy ceiling, named customer substitution, regulatory cap, etc.) |
+| AI-compute bear thesis with no denominator mechanism | ARM 2026-05-22 | instruction-level (the `pretool-ai-compute-bear-mechanism-gate.py` shadow hook was removed; discipline now lives in the workup, not a gate) | named denominator attack (agent ROI plateau, energy ceiling, named customer substitution, regulatory cap, etc.) |
 | Supplier-class file with no anchor-customer capex check | HLIT 2026-05-23 | `pretool-anchor-customer-capex-trajectory-gate.py` | `anchor_customer_capex_trajectory:` frontmatter (or override section) |
 | "ROW / international" claim without axis-definition quote | HLIT 2026-05-23 | `pretool-taxonomy-axis-gate.py` | inline-quote of filer's actual axis definition |
 | Third-party analyst forecast cited as `[A1]` | Patel IltB 2026-05-18 | `pretool-claim-propagation-gate.py` | `research/iltb/claim_resolution/<source>.md` first; two-axis citation form |
@@ -364,7 +364,7 @@ they handle path discovery, frontmatter, and provenance correctly.
 
 ### MCP servers (`.mcp.json`)
 
-- **`duckdb`** — read-only SQL against `intel.duckdb` (~478 views). Always
+- **`duckdb`** — read-only SQL against `intel.duckdb` (~590 views). Always
   `DESCRIBE table_name` before first query — column landmines exist even in
   documented tables.
 - **`fmp`** — real-time quotes, profiles, financials. Rate limit: 4 quotes
