@@ -138,6 +138,8 @@ The first two are convergence on whether something is a problem — verifiable, 
 | Single-source, unverified | Investigate before acting |
 | Contradicts what you see in the code | Discard |
 
+**Do not rank by the `confidence` field.** Model self-reported confidence is uncalibrated: median 0.89 across 16.5K findings, but only ~40% of anchorable findings verify against the code, and per-model the figure ranges 25–50% — confidence does not predict whether a finding is real (per-model disposition audit, 2026-06-01). Rank by convergence + code-verification only. The extractor uses `confidence` solely as a last-resort sort tiebreaker (after cross-model agreement and severity) and bumps it +0.2 when a finding is independently confirmed by both models; that derived signal is fine, the raw model number is not.
+
 **Before implementing:** Ask yourself two questions:
 1. Where do you disagree with the models? ("Nowhere" is valid.)
 2. What context did you have that they didn't?
