@@ -265,13 +265,15 @@ class AxisResolutionTest(unittest.TestCase):
             model_review.resolve_axes("simple")
 
     def test_non_gpt_axis_sets_are_rejected(self) -> None:
+        # arch/domain/alternatives are the Gemini-backed axes (mechanical is now
+        # GPT-backed, gpt-5.5 @ low effort).
         with self.assertRaisesRegex(ValueError, "GPT-backed axis"):
-            model_review.resolve_axes("arch,domain,mechanical")
+            model_review.resolve_axes("arch,domain,alternatives")
 
     def test_internal_non_gpt_axis_sets_can_opt_in(self) -> None:
         self.assertEqual(
-            model_review.resolve_axes("arch,domain,mechanical", allow_non_gpt=True),
-            ["arch", "domain", "mechanical"],
+            model_review.resolve_axes("arch,domain,alternatives", allow_non_gpt=True),
+            ["arch", "domain", "alternatives"],
         )
 
 
@@ -700,7 +702,7 @@ class ModelReviewMainTest(unittest.TestCase):
                     "--context", str(context_path),
                     "--topic", "non-gpt",
                     "--project", str(project_dir),
-                    "--axes", "arch,domain,mechanical",
+                    "--axes", "arch,domain,alternatives",
                 ]):
                     rc = model_review.main()
             finally:
