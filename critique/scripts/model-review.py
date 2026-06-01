@@ -223,8 +223,15 @@ PRESETS = {
     "full": ["arch", "formal", "domain", "mechanical", "alternatives"],
 }
 
-GEMINI_PRO_MODEL = dispatch_core.PROFILES["deep_review"].model
-GEMINI_FLASH_MODEL = dispatch_core.PROFILES["fast_extract"].model
+# Primary Gemini critique axis (deep_review = gemini-3.5-flash since 2026-05-24).
+GEMINI_PRIMARY_MODEL = dispatch_core.PROFILES["deep_review"].model
+# Rate-limit fallback target. Must stay an adversarial-grade critique model:
+# legacy_pro_review = gemini-3.1-pro-preview (~25% hallucination, documented
+# runner-up). NOT fast_extract/gemini-3-flash-preview — that is the cheap
+# classification slot and measured ~42% hallucination on critique work
+# (per-model disposition audit over 7,055 verified findings, 2026-06-01), so
+# degrading to it silently poisons the review instead of preserving signal.
+GEMINI_FALLBACK_MODEL = dispatch_core.PROFILES["legacy_pro_review"].model
 COVERAGE_SCHEMA_VERSION = "review-coverage.v1"
 GEMINI_RATE_LIMIT_MARKERS = (
     "503",
@@ -460,23 +467,25 @@ def collect_dispatch_failures(
     return failures
 
 
-def rerun_axis_with_flash(
+def rerun_axis_with_fallback(
     axis: str,
     axis_def: dict[str, object],
     review_dir: Path,
     ctx_file: Path | ContextArtifact,
     prompt: str,
 ) -> dict:
-    """Retry a failed Gemini Pro axis with Gemini Flash."""
+    """Retry the rate-limited primary Gemini axis with the runner-up critique
+    model (gemini-3.1-pro-preview), NOT the cheap classification model."""
     out_path = review_dir / f"{axis}-output.md"
     print(
-        f"warning: {axis} hit Gemini Pro rate limits; retrying once with Gemini Flash",
+        f"warning: {axis} hit Gemini rate limits; retrying once with the runner-up "
+        f"critique model ({GEMINI_FALLBACK_MODEL})",
         file=sys.stderr,
     )
     api_kwargs = dict(axis_def.get("api_kwargs") or {})  # type: ignore[arg-type]
     return _call_llmx(
         provider="google",
-        model=GEMINI_FLASH_MODEL,
+        model=GEMINI_FALLBACK_MODEL,
         context_path=context_content_path(ctx_file),
         context_manifest_path=context_manifest_path(ctx_file),
         prompt=prompt,
@@ -673,9 +682,10 @@ def dispatch(
         if result.get("error"):
             entry["stderr"] = result["error"]
 
-        # Gemini Pro fallback to Flash on rate limit
+        # Primary Gemini axis rate-limited -> retry once with the runner-up
+        # critique model (3.1-Pro), not the cheap classification model.
         if (
-            profile_def.model == GEMINI_PRO_MODEL
+            profile_def.model == GEMINI_PRIMARY_MODEL
             and result["exit_code"] != 0
             and result.get("error")
             and any(m in result["error"].lower() for m in GEMINI_RATE_LIMIT_MARKERS)
@@ -683,17 +693,17 @@ def dispatch(
             entry["fallback_from"] = profile_def.model
             entry["fallback_reason"] = "gemini_rate_limit"
             entry["initial_exit_code"] = result["exit_code"]
-            flash_result = rerun_axis_with_flash(
+            fallback_result = rerun_axis_with_fallback(
                 axis, axis_def, review_dir, ctx_files[axis], prompts[axis],
             )
-            entry["model"] = GEMINI_FLASH_MODEL
-            entry["exit_code"] = flash_result["exit_code"]
-            entry["size"] = flash_result["size"]
-            if flash_result.get("latency"):
-                entry["latency"] = flash_result["latency"]
+            entry["model"] = GEMINI_FALLBACK_MODEL
+            entry["exit_code"] = fallback_result["exit_code"]
+            entry["size"] = fallback_result["size"]
+            if fallback_result.get("latency"):
+                entry["latency"] = fallback_result["latency"]
             entry.pop("stderr", None)
-            if flash_result.get("error"):
-                entry["stderr"] = flash_result["error"]
+            if fallback_result.get("error"):
+                entry["stderr"] = fallback_result["error"]
 
         # GPT API billing/quota fallback to ChatGPT subscription (codex-cli, $0).
         # Mirrors the Gemini-Pro->Flash fallback above; fires only on failure so the
