@@ -167,7 +167,15 @@ for f in research_files:
 #       safe floor; this change is never weaker than the pre-fix behavior).
 if missing:
     touched = set()
-    for _sid in (data.get('session_id', ''), session_id):
+    # Attribute via the hook-authoritative session_id ONLY. The file-derived
+    # session_id (cwd/.claude/current-session-id) is a SHARED repo file that
+    # CONCURRENT sessions clobber; unioning its manifest pulls a PEER session's
+    # touched files into `touched` and mis-blocks their untagged in-flight
+    # research as ours. Fall back to the file-derived id only when the hook
+    # input lacks session_id (e.g. headless). Confirmed clobber 2026-06-01:
+    # current-session-id pointed at a peer; 4 of its files blocked our stop.
+    _attrib_sid = data.get('session_id', '') or session_id
+    for _sid in ([_attrib_sid] if _attrib_sid else []):
         if not _sid:
             continue
         try:
