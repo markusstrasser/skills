@@ -21,6 +21,7 @@ Required: `SKILL.md` with YAML frontmatter (`name`, `description`). Description 
 - Keep `SKILL.md` focused. Move reference material to companion files (DOMAINS.md, REFERENCE.md).
 - Use `allowed-tools` in frontmatter for read-only skills.
 - Test: start Claude Code and ask questions matching your trigger words.
+- **Wrapping an external HTTP API?** Follow `references/api-skill-conventions.md` (required `--limit`, file/structured output, error-body-in-exception, in-code rate limiting). Adapted from google-deepmind/science-skills.
 
 ## Conventions
 
