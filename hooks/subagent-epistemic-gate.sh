@@ -53,9 +53,15 @@ except Exception:
     print("MSG_LEN=0")
 ' 2>/dev/null)"
 
-# Skip code-focused subagents where provenance tags are irrelevant
+# Skip subagents where the last_assistant_message check doesn't apply:
+#   - Explore/Plan/etc: code-focused, provenance tags irrelevant.
+#   - workflow-subagent: Workflow agent() results return through the runtime /
+#     StructuredOutput channel, NOT the final text message, so this gate saw
+#     ~90% "zero output" (137/day) on agents that SUCCEEDED. The parent reviews
+#     the workflow's return value; a per-internal-agent recovery nudge is wrong.
+#     (2026-06-01: verified false-positive via ~/.claude/subagent-log.jsonl.)
 case "$AGENT_TYPE" in
-    Explore|Plan|statusline-setup|claude-code-guide|observe)
+    Explore|Plan|statusline-setup|claude-code-guide|observe|workflow-subagent)
         exit 0
         ;;
 esac
