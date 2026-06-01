@@ -7,6 +7,17 @@ set -euo pipefail
 
 GENERATE_SCRIPT="$HOME/Projects/skills/hooks/generate-overview.sh"
 MAX_AGE_DAYS=7
+# Surface failures instead of swallowing them. The old `2>/dev/null || true`
+# discarded BOTH the error text and the exit code, which is how a generator
+# payload-overflow froze intel's overview for a month with no signal (2026-06-01).
+LOG="$HOME/.cache/overview-staleness-cron.log"
+mkdir -p "$(dirname "$LOG")"
+regen() {  # regen <project_dir> — log stderr + a failure marker; never abort the loop
+  local pd="$1"
+  if ! "$GENERATE_SCRIPT" --auto --project-root "$pd" >>"$LOG" 2>&1; then
+    echo "[$(date '+%Y-%m-%dT%H:%M:%S')] OVERVIEW REGEN FAILED for $pd (see above)" >>"$LOG"
+  fi
+}
 
 # Projects to check (add more as they opt in)
 PROJECTS=(
@@ -40,7 +51,7 @@ for project_dir in "${PROJECTS[@]}"; do
 
   if [[ -z "$marker" ]]; then
     cd "$project_dir"
-    "$GENERATE_SCRIPT" --auto --project-root "$project_dir" 2>/dev/null || true
+    regen "$project_dir"
     continue
   fi
 
@@ -59,6 +70,6 @@ for project_dir in "${PROJECTS[@]}"; do
   marker_hash=$(cat "$marker")
   cd "$project_dir"
   if ! git diff --quiet "$marker_hash"..HEAD 2>/dev/null; then
-    "$GENERATE_SCRIPT" --auto --project-root "$project_dir" 2>/dev/null || true
+    regen "$project_dir"
   fi
 done
