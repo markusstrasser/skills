@@ -16,7 +16,7 @@ fi
 
 # git diff without --stat/--name-only/--name-status
 if [ -z "$SUGGESTION" ] && echo "$CMD" | grep -qE '\bgit\s+diff\b'; then
-    echo "$CMD" | grep -qE -- '--stat|--name-only|--name-status' || SUGGESTION="Consider 'git diff --stat' or '--name-only' for shorter output"
+    echo "$CMD" | grep -qE -- '--stat|--name-only|--name-status|--check|--quiet|--exit-code|--numstat|--shortstat' || SUGGESTION="Consider 'git diff --stat' or '--name-only' for shorter output"
 fi
 
 # git log without --oneline/--format/--pretty
