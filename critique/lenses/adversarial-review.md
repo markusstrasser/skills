@@ -6,11 +6,11 @@
 
 | Axis | Model | What it checks | When to include |
 |------|-------|---------------|-----------------|
-| `arch` | Gemini 3.1 Pro | Patterns, architecture, cross-reference, principles alignment | Always (default) |
-| `formal` | GPT-5.4 (high reasoning) | Math, logic, cost-benefit, testable predictions, quantified principles coverage | Always (default) |
-| `domain` | Gemini 3.1 Pro | Domain fact correctness — citations, API endpoints, schemas, biological claims, numbers | Domain-dense plans; skip for pure code reviews |
-| `mechanical` | Gemini Flash | Stale refs, wrong paths, naming inconsistencies, duplicated content | Large codebases; include grep results — Flash hallucinates about fixed state (~13%) |
-| `alternatives` | Kimi K2.5 | 3-5 genuinely different approaches with different mechanisms | Architecture decisions; SEPARATE from convergent review (never mix critique + brainstorm) |
+| `arch` | Gemini 3.5-flash | Patterns, architecture, cross-reference, principles alignment | Always (default) |
+| `formal` | GPT-5.5 (high reasoning) | Math, logic, cost-benefit, testable predictions, quantified principles coverage | Always (default) |
+| `domain` | Gemini 3.5-flash | Domain fact correctness — citations, API endpoints, schemas, biological claims, numbers | Domain-dense plans; skip for pure code reviews |
+| `mechanical` | GPT-5.5 (low reasoning) | Stale refs, wrong paths, naming inconsistencies, duplicated content | Large codebases; include grep results |
+| `alternatives` | Gemini 3.5-flash | 3-5 genuinely different approaches with different mechanisms | Architecture decisions; SEPARATE from convergent review (never mix critique + brainstorm) |
 
 ## Depth Presets
 
@@ -21,7 +21,7 @@
 | `full` | all 5 | User-facing; shared infra, clinical, high-stakes | ~$6-10 |
 
 Classify by blast radius, not file count. `standard` is the default.
-The user-facing presets are `standard`, `deep`, and `full`; each includes GPT-5.4.
+The user-facing presets are `standard`, `deep`, and `full`; each includes GPT-5.5.
 Gemini-only passes are internal-only and should not be documented to users as review presets.
 
 ## Per-Model Prompts
@@ -38,7 +38,7 @@ Required sections:
 5. Goals & Principles Alignment — violations and well-served principles (or internal consistency if no GOALS.md)
 6. Blind Spots In My Own Analysis — where to distrust Gemini
 
-### GPT-5.4 — Quantitative/Formal Analysis (formal axis)
+### GPT-5.5 — Quantitative/Formal Analysis (formal axis)
 
 System: Quantitative and formal ONLY. Other reviewers handle qualitative. Precise, show reasoning. Agent-built codebase. Budget ~2000 words, tables, source-graded claims.
 
@@ -48,17 +48,17 @@ Required sections:
 3. Testable Predictions — falsifiable predictions with success criteria
 4. Goals & Principles Alignment (Quantified) — per-principle coverage 0-100%, gaps, fixes
 5. My Top 5 Recommendations — measurable impact, quantitative justification, verification metrics
-6. Where I'm Likely Wrong — GPT-5.4 known biases: confident fabrication, overcautious scope-limiting, production-grade creep
+6. Where I'm Likely Wrong — GPT-5.5 known biases: confident fabrication, overcautious scope-limiting, production-grade creep
 
-### Gemini Pro — Domain Correctness (domain axis)
+### Gemini 3.5-flash — Domain Correctness (domain axis)
 
 System: Domain-specific claim verification only. Per-claim verdict: CORRECT / WRONG / UNVERIFIABLE. Flag URLs, API endpoints, version numbers needing probes. Budget ~1500 words.
 
-### Gemini Flash — Mechanical Audit (mechanical axis)
+### GPT-5.5 — Mechanical Audit (mechanical axis)
 
-System: Mechanical audit only, no analysis. Find: stale refs, inconsistent naming, missing cross-refs, duplicates, wrong paths. Flat numbered list.
+System: Mechanical audit only, no analysis. Find: stale refs, inconsistent naming, missing cross-refs, duplicates, wrong paths. Flat numbered list. Runs at low reasoning effort (pattern-spotting, not reasoning).
 
-### Kimi K2.5 — Alternative Approaches (alternatives axis)
+### Gemini 3.5-flash — Alternative Approaches (alternatives axis)
 
 System: Generate 3-5 genuinely different approaches (different mechanisms, not variations). Per approach: core mechanism, advantages, disadvantages, maintenance burden. Do NOT critique the existing plan.
 
@@ -91,10 +91,9 @@ Set `timeout: 660000` on the Bash tool call (11 min). The script fires all queri
 ### Model Selection Contract
 
 ```
-Gemini Pro:  architecture / pattern pass
-GPT-5.4:     quantitative / formal pass
-Flash:       fallback or extraction-only pass
-Kimi K2.5:   alternatives-only pass when configured
+Gemini 3.5-flash:  arch / domain / alternatives passes
+GPT-5.5:           formal pass + mechanical pass (low effort)
+3.1-Pro:           fallback when 3.5-flash rate-limits
 ```
 
 The shared dispatch layer owns providers, transport, retries, and timeout
@@ -105,7 +104,7 @@ coverage artifacts instead of teaching transport-specific debugging here.
 
 ### Gemini Rate Limit Fallback
 
-Script auto-detects Gemini Pro 503/rate-limit (exit 3 or stderr markers). On first failure, retries that axis with Flash. All subsequent Gemini Pro axes in the same dispatch also fall back to Flash (session-level). GPT axes are unaffected.
+Script auto-detects a Gemini 503/rate-limit on the primary axis (gemini-3.5-flash, exit 3 or stderr markers) and retries that axis once with the runner-up critique model (gemini-3.1-pro-preview) — NOT the cheap classification model, which measured ~42% hallucination as a critique axis. If the fallback also rate-limits, the axis fails cleanly (recorded in coverage.json). GPT axes are unaffected.
 
 ### Uncalibrated Threshold Flagging
 
@@ -113,9 +112,9 @@ Automatic with `--extract`: the script tags numeric thresholds (e.g., `>=20% AUP
 
 ## Known Issues
 
-- **Gemini Pro:** Production-pattern bias (enterprise for personal), self-recommendation (Google services), instruction dropping in long context
-- **GPT-5.4:** Confident fabrication (invents numbers/paths), overcautious scope, production-grade creep
-- **Flash/GPT-5.3:** Shallow analysis (extraction only), recency bias. Never use for architectural judgment.
+- **Gemini (3.5-flash):** Production-pattern bias (enterprise for personal), self-recommendation (Google services), instruction dropping in long context
+- **GPT-5.5:** Confident fabrication (invents numbers/paths), overcautious scope, production-grade creep
+- **gemini-3-flash-preview / GPT-5.3:** Shallow analysis, ~42% hallucination as a critique axis. The cheap classification tier — never a cosigner. This is why `mechanical` moved to GPT-5.5 and the rate-limit fallback moved to 3.1-Pro. (Distinct from gemini-3.5-flash, the clean primary cosigner.)
 - **Correlated errors:** ~60% shared wrong answers when both err (Kim ICML 2025, pre-reasoning). Never same-family reviewer + synthesizer.
 - **Self-preference:** 74.9% demographic parity bias (Wataoka NeurIPS 2024). Different-family synthesis.
 - **Debate = martingale:** Sequential discussion has no correctness improvement (Choi 2025). Independent parallel reviews only.
