@@ -24,7 +24,7 @@ Branch on these, don't parse stderr:
 
 ## Additional stderr Signals
 
-- Transport switch: `[llmx:TRANSPORT] gemini-cli → google-api (max_tokens not supported by CLI)`
+- Transport switch: `[llmx:TRANSPORT] codex-cli → openai-api (--search not supported by CLI)` (Gemini has no CLI since 2026-05-31; switches now only affect Codex CLI)
 - Truncation warning: `[llmx:WARN] output may be truncated`
 - Model suggestion: `"gemini-3.1-pro not found; did you mean gemini-3.1-pro-preview?"`
 
