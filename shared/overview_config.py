@@ -4,6 +4,11 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 
+# Default model for overview generation (code-structure summarization — a
+# cheap, high-volume job, so the cheap tier is correct). Single source of truth
+# for both the live path (per-project config) and the cross-project batch path.
+DEFAULT_OVERVIEW_MODEL = "gemini-3-flash-preview"
+
 
 @dataclass(frozen=True)
 class OverviewConfig:
@@ -32,7 +37,7 @@ def read_overview_config(project_root: Path) -> OverviewConfig:
     conf_file = project_root / ".claude" / "overview.conf"
     config: dict[str, str] = {
         "OVERVIEW_TYPES": "source",
-        "OVERVIEW_MODEL": "gemini-3-flash-preview",
+        "OVERVIEW_MODEL": DEFAULT_OVERVIEW_MODEL,
         "OVERVIEW_OUTPUT_DIR": ".claude/overviews",
         "OVERVIEW_PROMPT_DIR": str((Path.home() / "Projects" / "skills" / "hooks" / "overview-prompts")),
         "OVERVIEW_EXCLUDE": "",

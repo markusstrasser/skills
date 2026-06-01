@@ -19,7 +19,7 @@ from shared.context_packet import BudgetPolicy, ContextPacket, PacketSection, So
 from shared.context_renderers import write_packet_artifact
 from shared.git_context import run_git
 from shared.llm_dispatch import DispatchProfile, dispatch, map_model_to_profile, profile_input_budget, PROFILES
-from shared.overview_config import OverviewConfig, read_overview_config
+from shared.overview_config import DEFAULT_OVERVIEW_MODEL, OverviewConfig, read_overview_config
 from shared.repomix_source import build_include_pattern, capture_repomix_to_file
 
 
@@ -280,7 +280,10 @@ def live_mode(args: argparse.Namespace) -> int:
 
 
 def batch_submit_command(jsonl_file: Path, *, wait: bool, output_file: Path | None = None) -> list[str]:
-    command = ["uv", "run", "llmx", "batch", "submit", str(jsonl_file), "-m", "gemini-3.1-pro-preview"]
+    # Batch submits one model for all projects (the JSONL carries only key+prompt,
+    # no per-request model), so use the overview default — matching the live path —
+    # instead of a hardcoded 3.1-Pro that ignored config and contradicted the manifest.
+    command = ["uv", "run", "llmx", "batch", "submit", str(jsonl_file), "-m", DEFAULT_OVERVIEW_MODEL]
     if wait:
         command.append("--wait")
     if output_file is not None:
