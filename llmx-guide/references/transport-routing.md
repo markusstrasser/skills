@@ -2,18 +2,17 @@
 
 # Transport Routing & CLI Details
 
-## CLI-First Usage (Subscription Pricing)
+## CLI vs API by Provider
 
-Gemini CLI and Codex CLI use flat subscription pricing — zero marginal cost per query. Prefer them for routine tasks.
+> **Gemini moved to the paid API on 2026-05-31** — the free Gemini CLI tier was retired (Antigravity migration). Gemini-CLI specifics in the sections below are **historical**; for Gemini, use the paid API with `--flex` (50% off non-interactive). The **Codex CLI** (GPT) and **Claude CLI** (`--lite bare`) remain subscription/flat-priced — prefer those for routine GPT/Claude work. (The `agy` CLI is Gemini's interactive replacement but can't pin a model in headless `-p` mode, so it is not an llmx transport.)
 
 ### CLI Backends
 
 ```bash
-llmx -p google "question"       # prefers Gemini CLI, falls back to API
+llmx -p google "question"       # paid Gemini API (free CLI retired 2026-05-31); add --flex for 50% off
 llmx -p openai "question"       # uses OpenAI API
 llmx -p anthropic --lite bare "question"  # Claude CLI subscription route
-llmx -p gemini-cli "question"   # force Gemini CLI transport
-llmx -p codex-cli "question"    # force Codex CLI transport
+llmx -p codex-cli "question"    # force Codex CLI transport (subscription)
 llmx -p claude-cli "question"   # force Claude CLI transport, but only lite mode scrubs API-key env
 llmx -p xai "question"          # xAI API (OpenAI-compatible at https://api.x.ai/v1)
 ```
@@ -103,11 +102,11 @@ Neither CLI truncates user input (verified from source code). Input goes directl
 
 **Tested:** 80KB code batches via both CLIs work reliably. 200KB causes timeouts on thinking models.
 
-**What forces API transport** (costs money): `--max-tokens`, `--stream`, `--search`. For Gemini, avoid `--stream` unless CLI rate-limited — without it, calls route through CLI (free). Hang bug on thinking models fixed in gemini-cli 0.32.1+.
+**What forces API transport** (Codex CLI): `--max-tokens`, `--stream`, `--search`. Gemini always uses the paid API now (no CLI), so those flags are native there — add `--flex` for 50% off non-interactive dispatch.
 
 ### Gemini API Service Tiers
 
-When API transport is needed (or CLI free tier is restricted), select the tier via `service_tier`:
+For Gemini API dispatch, select the service tier:
 
 | Tier | Discount | Latency | Use case |
 |------|----------|---------|----------|
@@ -120,7 +119,7 @@ When API transport is needed (or CLI free tier is restricted), select the tier v
 
 **Implicit caching** auto-enabled on Gemini 2.5+. Repeated system prompts get cache hits automatically — no explicit cache setup needed for our pattern of skill preambles + varying user content.
 
-**Note:** llmx does not yet support `service_tier` — would need implementation when/if CLI free tier is restricted.
+**llmx supports Flex via `--flex`** (wired 2026-05-31, llmx@3fc3553) — 50% off, synchronous, best-effort latency. Use it for non-interactive Gemini dispatch (cron reviews, background research); pair with `--fallback` for resilience.
 
 ### Piping Context Files
 
@@ -130,7 +129,7 @@ For critical review flows, prefer **one combined context file** over multiple
 `-f` inputs. Multi-file `-f` has recurring loss/truncation issues in real use.
 
 ```bash
-# Code review with project context (Gemini CLI, free)
+# Code review with project context (Gemini paid API; add --flex for 50% off)
 llmx -p google -f .claude/overviews/source-overview.md "Review the error handling in the orchestrator pipeline"
 
 # Architecture question (OpenAI API by default) — combine first for reliability
