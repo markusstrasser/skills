@@ -186,6 +186,25 @@ def generate_one(
         print(f"  dirs: {', '.join(dirs)}")
         return 0
 
+    # The tooling overview is an INVENTORY (hooks/skills/agents/MCP) — ground-truth
+    # data, not something to summarize. Generate it deterministically: cannot drift,
+    # overflow the model budget, cost anything, or hallucinate. (The source overview
+    # is a code-architecture narrative and stays on the LLM path below.)
+    if overview_type == "tooling":
+        from shared.deterministic_tooling import build_tooling_overview
+
+        body = build_tooling_overview(project_root)
+        write_overview_output(
+            output_file=output_file,
+            markdown_body=body,
+            commit_hash=commit_hash,
+            profile_name="deterministic",
+            model="deterministic",
+        )
+        write_marker(project_root, overview_type, commit_hash)
+        print(f"[{overview_type}] Done (deterministic) → {output_file} (marker: {commit_hash[:7]})")
+        return 0
+
     payload = build_overview_packet(
         project_root,
         config,
