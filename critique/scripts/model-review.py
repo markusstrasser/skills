@@ -233,6 +233,15 @@ GEMINI_PRIMARY_MODEL = dispatch_core.PROFILES["deep_review"].model
 # degrading to it silently poisons the review instead of preserving signal.
 GEMINI_FALLBACK_MODEL = dispatch_core.PROFILES["legacy_pro_review"].model
 COVERAGE_SCHEMA_VERSION = "review-coverage.v1"
+# Cross-model dedup threshold (keyword-set Jaccard). Lowered 0.3 -> 0.25 on
+# 2026-06-01: at 0.3 only 0.9% of GPT findings matched a Gemini finding, and a
+# manual eyeball of the 0.25-0.3 band showed it was full of genuine same-issue
+# pairs worded differently ("Invalid Wilson intervals on dependent splits" vs
+# "Wilson intervals too narrow if holdout folds are correlated"). 0.25 ~triples
+# recovered agreements (0.9%->2.5%); going to 0.2 adds recall but more borderline
+# merges. Same-file overlap is NOT used as a merge signal — 99% of same-file
+# cross-axis pairs are different problems in a shared file (dedup_probe, 2026-06-01).
+CROSS_MODEL_JACCARD_THRESHOLD = 0.25
 GEMINI_RATE_LIMIT_MARKERS = (
     "503",
     "rate limit",
@@ -1044,10 +1053,10 @@ def extract_claims(
             f["source_model"] = source_model
             f["source_label"] = source_label
             fp = _fingerprint(f)
-            # Check for overlap with existing findings (Jaccard > 0.3)
+            # Check for overlap with existing findings (keyword Jaccard).
             matched = False
             for existing_fp, existing in seen:
-                if len(fp & existing_fp) > 0 and len(fp & existing_fp) / len(fp | existing_fp) > 0.3:
+                if len(fp & existing_fp) > 0 and len(fp & existing_fp) / len(fp | existing_fp) > CROSS_MODEL_JACCARD_THRESHOLD:
                     existing.setdefault("also_found_by", []).append(source_label)
                     existing["cross_model"] = True
                     existing["confidence"] = min(1.0, existing.get("confidence", 0.5) + 0.2)
