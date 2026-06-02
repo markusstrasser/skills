@@ -36,14 +36,23 @@ plans_dir = os.path.join(cwd, ".claude", "plans")
 if not os.path.isdir(plans_dir):
     sys.exit(0)
 
-# Find plans modified during this session
+# Find the plans for THIS session. PRIMARY: filename carries the session-id prefix
+# (.claude/plans/{session_id[:8]}-{slug}.md) — race-immune. FALLBACK: modified
+# after the current-session-id file mtime (legacy; under-detects when a peer
+# agent overwrites that SHARED file). See memory stop_hook_session_id_concurrency_race.
 sid_path = os.path.join(cwd, ".claude", "current-session-id")
-if not os.path.isfile(sid_path):
+sid_prefix = (data.get("session_id") or "")[:8]
+has_mtime = os.path.isfile(sid_path)
+if not has_mtime and not sid_prefix:
     sys.exit(0)
-session_start = os.path.getmtime(sid_path)
+session_start = os.path.getmtime(sid_path) if has_mtime else float("inf")
 
 plans = glob.glob(os.path.join(plans_dir, "*.md"))
-recent = [(p, os.path.getmtime(p)) for p in plans if os.path.getmtime(p) > session_start]
+def _belongs(p):
+    if sid_prefix and os.path.basename(p).startswith(sid_prefix):
+        return True
+    return has_mtime and os.path.getmtime(p) > session_start
+recent = [(p, os.path.getmtime(p)) for p in plans if _belongs(p)]
 if not recent:
     sys.exit(0)
 

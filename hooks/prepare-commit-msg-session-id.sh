@@ -12,14 +12,24 @@ COMMIT_SOURCE="$2"  # message, template, merge, squash, commit (amend)
 # Skip if Session-ID already in message
 grep -q "^Session-ID:" "$COMMIT_MSG_FILE" && exit 0
 
-# Find session ID: project-level first, then global
+# Find session ID. PREFER the per-process env var $CLAUDE_SESSION_ID: it is
+# race-immune. .claude/current-session-id is a SINGLE file shared by every
+# concurrent agent in the project, so a peer overwriting it between this agent's
+# work and its commit would stamp the commit with the PEER's id (mis-attributed
+# provenance). The env var belongs to this committing process and no peer can
+# change it. Fall back to project-level then global file when the var is unset.
 SID=""
-for sid_path in ".claude/current-session-id" "$HOME/.claude/current-session-id"; do
-    if [ -f "$sid_path" ]; then
-        SID=$(cat "$sid_path" 2>/dev/null | tr -d '[:space:]')
-        [ -n "$SID" ] && break
-    fi
-done
+if [ -n "$CLAUDE_SESSION_ID" ]; then
+    SID=$(printf '%s' "$CLAUDE_SESSION_ID" | tr -d '[:space:]')
+fi
+if [ -z "$SID" ]; then
+    for sid_path in ".claude/current-session-id" "$HOME/.claude/current-session-id"; do
+        if [ -f "$sid_path" ]; then
+            SID=$(cat "$sid_path" 2>/dev/null | tr -d '[:space:]')
+            [ -n "$SID" ] && break
+        fi
+    done
+fi
 
 # No session ID found — skip silently
 [ -z "$SID" ] && exit 0
