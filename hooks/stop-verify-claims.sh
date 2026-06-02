@@ -80,50 +80,77 @@ if match:
         match = None
 if match:
     try:
-        sid_path = os.path.join(cwd, ".claude", "current-session-id")
-        if os.path.isfile(sid_path):
-            session_start = int(os.path.getmtime(sid_path))
-            repos_to_check = [cwd]
-            # Collect candidate repo paths mentioned in the message. The agent
-            # may refer to a sibling repo via `git -C <path>` OR more loosely as
-            # `~/Projects/<name>` or an absolute path. We gather all candidates
-            # and later filter to those that are real git repos.
-            candidates = []
-            for m in re.finditer(r"git\s+-C\s+(?:\"([^\"]+)\"|(\S+))", msg):
-                candidates.append(m.group(1) or m.group(2))
-            # Home-relative paths: ~/foo, ~/foo/bar (stop at whitespace or backtick)
-            for m in re.finditer(r"~/[\w\-./]+", msg):
-                candidates.append(m.group(0))
-            # Absolute paths under common project roots
-            for m in re.finditer(r"/Users/[\w\-./]+", msg):
-                candidates.append(m.group(0))
-            for raw in candidates:
-                p = os.path.expanduser(raw.rstrip(".,;:)`"))
-                # Walk up to find a .git dir so sub-paths still resolve to the repo root
-                probe = p
-                for _ in range(6):
-                    if os.path.isdir(os.path.join(probe, ".git")):
-                        if probe not in repos_to_check:
-                            repos_to_check.append(probe)
-                        break
-                    parent = os.path.dirname(probe)
-                    if not parent or parent == probe:
-                        break
-                    probe = parent
+        import time
+        sid = (data.get("session_id") or "").strip()
+        repos_to_check = [cwd]
+        # Collect candidate repo paths mentioned in the message. The agent
+        # may refer to a sibling repo via `git -C <path>` OR more loosely as
+        # `~/Projects/<name>` or an absolute path. We gather all candidates
+        # and later filter to those that are real git repos.
+        candidates = []
+        for m in re.finditer(r"git\s+-C\s+(?:\"([^\"]+)\"|(\S+))", msg):
+            candidates.append(m.group(1) or m.group(2))
+        # Home-relative paths: ~/foo, ~/foo/bar (stop at whitespace or backtick)
+        for m in re.finditer(r"~/[\w\-./]+", msg):
+            candidates.append(m.group(0))
+        # Absolute paths under common project roots
+        for m in re.finditer(r"/Users/[\w\-./]+", msg):
+            candidates.append(m.group(0))
+        for raw in candidates:
+            p = os.path.expanduser(raw.rstrip(".,;:)`"))
+            # Walk up to find a .git dir so sub-paths still resolve to the repo root
+            probe = p
+            for _ in range(6):
+                if os.path.isdir(os.path.join(probe, ".git")):
+                    if probe not in repos_to_check:
+                        repos_to_check.append(probe)
+                    break
+                parent = os.path.dirname(probe)
+                if not parent or parent == probe:
+                    break
+                probe = parent
 
-            verified = False
+        verified = False
+        # PRIMARY: match the commits from THIS session by the Session-ID trailer
+        # that the prepare-commit-msg hook bakes into every commit. This is IMMUNE
+        # to a concurrent agent overwriting .claude/current-session-id in the same
+        # project. The old approach used getmtime(current-session-id) as the
+        # git-log --since window and false-negatived whenever a peer agent reset
+        # that shared file mtime to now, which excludes the older commits this very
+        # session made. (Incident: intel 2026-06-02, 4 concurrent sessions on main.)
+        if sid:
             for repo in repos_to_check:
                 if not os.path.isdir(os.path.join(repo, ".git")):
                     continue
                 r = subprocess.run(
-                    ["git", "log", "--since", str(session_start), "--format=%H"],
+                    ["git", "log", "-F", "--grep", sid, "--format=%H", "-n", "20"],
                     cwd=repo, capture_output=True, text=True, timeout=5,
                 )
                 if r.returncode == 0 and r.stdout.strip():
                     verified = True
                     break
-            if not verified:
-                problems.append("Claims commits but no commits found in this session")
+
+        # FALLBACK: no session_id in payload, or commits carry no trailer
+        # (e.g. --no-verify). Use a window a concurrent sid-file overwrite cannot
+        # shrink: the WIDER of a 6h lookback and the sid-file mtime.
+        if not verified:
+            since = int(time.time()) - 6 * 3600
+            sid_path = os.path.join(cwd, ".claude", "current-session-id")
+            if os.path.isfile(sid_path):
+                since = min(since, int(os.path.getmtime(sid_path)))
+            for repo in repos_to_check:
+                if not os.path.isdir(os.path.join(repo, ".git")):
+                    continue
+                r = subprocess.run(
+                    ["git", "log", "--since", str(since), "--format=%H"],
+                    cwd=repo, capture_output=True, text=True, timeout=5,
+                )
+                if r.returncode == 0 and r.stdout.strip():
+                    verified = True
+                    break
+
+        if not verified:
+            problems.append("Claims commits but no commits found in this session")
     except Exception:
         pass
 
