@@ -56,7 +56,7 @@ def write_data():
     vol.commit()  # Make changes visible to other containers
 ```
 
-**Background commits**: Modal automatically commits Volume changes every few seconds and on container shutdown.
+**Background commits**: Modal automatically commits Volume changes every few seconds and on *graceful* container shutdown (normal return or handled exception). They do NOT fire on a SIGKILL — workspace budget-kill, OOM, or hard preemption lose everything written since the last explicit `vol.commit()`. See SKILL.md → "Budget kills".
 
 ### Reloads
 
@@ -186,13 +186,15 @@ def inference(model_id: str):
 Save checkpoints during long training jobs:
 
 ```python
+from pathlib import Path
+
 volume = modal.Volume.from_name("checkpoints")
-VOL_PATH = "/vol"
+VOL_PATH = Path("/vol")   # Path, not str — VOL_PATH / "model" below needs it
 
 @app.function(
     gpu="A10G",
     timeout=2*60*60,  # 2 hours
-    volumes={VOL_PATH: volume}
+    volumes={str(VOL_PATH): volume},   # mount keys are strings
 )
 def finetune():
     from transformers import Seq2SeqTrainer, Seq2SeqTrainingArguments
@@ -207,7 +209,7 @@ def finetune():
     trainer.train()
 ```
 
-Background commits ensure checkpoints persist even if training is interrupted.
+Background commits persist checkpoints across *graceful* interruptions (normal stop, code exception) — but they do NOT fire on a SIGKILL. Workspace budget-kill, OOM, and ungraceful preemption lose everything since the last commit, so `save_steps` alone is not durable against a hard kill; pair it with explicit `vol.commit()` at step boundaries (see "Commit-and-Checkpoint Pattern" below).
 
 ## Commit-and-Checkpoint Pattern for Long Jobs
 

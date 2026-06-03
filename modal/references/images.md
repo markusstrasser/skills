@@ -103,6 +103,36 @@ image = (
 )
 ```
 
+### Baking large HuggingFace weights — use `hf_transfer`
+
+`run_function(download_models, ...)` above caches weights to a Volume, but the
+default `huggingface_hub` downloader is single-threaded and **stalls on large
+safetensors** (you see `Fetching N files: 20%` freeze for tens of minutes). For
+any multi-GB model, install `hf_transfer` (Rust, parallel/chunked) and bake the
+weights into the image LAYER so every cold-start loads locally — no per-container
+re-download:
+
+```python
+_BAKE = (
+    "HF_HUB_ENABLE_HF_TRANSFER=1 python -c \""
+    "import huggingface_hub as h; "
+    "[h.snapshot_download(repo_id=r, max_workers=8) for r in REPOS]\""
+)
+image = (
+    modal.Image.debian_slim()
+    .pip_install("huggingface_hub", "hf_transfer")
+    .run_commands(_BAKE)   # volatile layer LAST — see debugging.md build probe
+)
+```
+
+`HF_HUB_ENABLE_HF_TRANSFER=1` is the switch; without it `hf_transfer` installs
+but goes unused. Prefer `run_commands` inline-python over `run_function` for the
+bake when the bake body would otherwise import your local modules — `run_function`
+imports the defining script inside the build container and trips on local-only
+imports (`ModuleNotFoundError`). Baking into the image (vs a Volume cache) makes
+cold-start instant and removes the download from the hot path entirely.
+(genomics flashzoi: 50-min cold-download stall → <55 s cold.)
+
 ## Adding Local Files
 
 ### Add Files or Directories
