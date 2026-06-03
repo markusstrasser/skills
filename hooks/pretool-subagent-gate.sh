@@ -202,16 +202,32 @@ if [ -n "$PROMPT" ]; then
     fi
 fi
 
-# Check 7: Turn-budget / file-output instruction missing in dispatch prompt
+# Check 7: File-output instruction missing in dispatch prompt
 # BLOCKING for research-heavy agents (researcher, general-purpose, Plan, unset)
 # Advisory for Explore, observe (read-only or self-managed)
 if [ -n "$PROMPT" ]; then
     HAS_TURN_BUDGET=$(echo "$PROMPT" | grep -ciE '(stop|halt|synthesize|write).*(70%|turn|budget|before running out)|max.*(turn|epoch)|epoch.*boundar' || true)
     HAS_FILE_OUTPUT=$(echo "$PROMPT" | grep -ciE '(write|save|output).*(file|path|memo|artifact)' || true)
-    if [ "$HAS_TURN_BUDGET" -eq 0 ] || [ "$HAS_FILE_OUTPUT" -eq 0 ]; then
-        MISSING=""
-        [ "$HAS_TURN_BUDGET" -eq 0 ] && MISSING="turn-budget instruction (stop at 70% and synthesize)"
-        [ "$HAS_FILE_OUTPUT" -eq 0 ] && MISSING="${MISSING:+$MISSING + }file-output instruction (write results to a file)"
+
+    # Turn-budget is ADVISORY-ONLY as of 2026-06-03 (was a blocking trigger).
+    # The "stop at 70% and synthesize" self-instruction is deprecated: the
+    # subagent_usage rule documents it as failed 5+ times ("instructions buried
+    # under search momentum"), replaced by parent-controlled CORAL epochs.
+    # Blocking on it forced callers to inject a known-ineffective phrase just to
+    # clear the gate — 220/328 subagent-gate blocks over 30d were exactly this.
+    # The harness also now returns the subagent's final message to the parent at
+    # maxTurns (verified via claude-code-guide 2026-06-03), so turn-exhaustion is
+    # no longer silent. Only file-output (durability) still blocks below — the
+    # write-stub gate (Check 10) guards mid-run process death, which is NOT
+    # confirmed fixed and which subagents won't self-mitigate (they don't write
+    # files unless told).
+    if [ "$HAS_TURN_BUDGET" -eq 0 ]; then
+        CHECK_IDS="${CHECK_IDS}7,"
+        WARNINGS="${WARNINGS}SUBAGENT TURN-BUDGET (advisory): no turn-budget note in prompt. Prefer parent-controlled epochs — review the subagent's returned output and re-dispatch with refined scope if gaps remain — over a 'stop at 70%' self-instruction. "
+    fi
+
+    if [ "$HAS_FILE_OUTPUT" -eq 0 ]; then
+        MISSING="file-output instruction (write results to a file)"
 
         # Block research-heavy agents; advise read-only ones
         PROMPT_LEN=${#PROMPT}
@@ -245,8 +261,7 @@ if [ -n "$PROMPT" ]; then
                 # Block if prompt is substantial (>200 chars = real research task)
                 elif [ "$PROMPT_LEN" -gt 200 ]; then
                     ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "check=7 missing=${MISSING}" 2>/dev/null || true
-                    SAFE_MISSING=$(echo "$MISSING" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))' 2>/dev/null)
-                    echo "{\"decision\": \"block\", \"reason\": \"SYNTHESIS BUDGET REQUIRED: Dispatch prompt missing ${MISSING}. Add ALL of these so ONE retry clears every subagent gate (turn-budget AND write-stub-first are separate gates that otherwise bounce sequentially): (1) 'Stop searching at 70% of turns and write synthesis to a file. Return the file path.' (2) 'Your FIRST tool call MUST be Write a PROBE IN PROGRESS stub at the output path, then append findings incrementally.' Prevents turn exhaustion AND API-limit zero-output (6+ incidents, 30 min recovery each).\"}"
+                    echo "{\"decision\": \"block\", \"reason\": \"FILE-OUTPUT REQUIRED: Dispatch prompt missing ${MISSING}. Add: 'Write results to a file at <path> and return the file path. Your FIRST tool call MUST be Write a PROBE IN PROGRESS stub at that path, then append findings incrementally.' This clears both the file-output and write-stub (Check 10) gates in one retry. Guards against API-limit / mid-run death producing zero persisted output (subagents do not write files unless told).\"}"
                     exit 2
                 else
                     CHECK_IDS="${CHECK_IDS}7,"
