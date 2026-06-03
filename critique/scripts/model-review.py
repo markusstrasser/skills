@@ -1429,10 +1429,21 @@ def verify_claims(
                 file_text = found_path.read_text(encoding="utf-8", errors="replace")
                 file_lines = file_text.splitlines()
             except OSError:
-                notes.append(f"{found_path.relative_to(project_dir)} unreadable")
+                try:
+                    _disp = str(found_path.relative_to(project_dir))
+                except ValueError:
+                    _disp = str(found_path)  # sibling-root/absolute path
+                notes.append(f"{_disp} unreadable")
                 continue
 
-            relative_display = str(found_path.relative_to(project_dir))
+            # found_path may live under a --sibling-root (cross-repo packet), not
+            # project_dir — relative_to(project_dir) raises ValueError for it. Guard
+            # and fall back to the absolute path (rule #11; the --sibling-roots verify
+            # crash, 2026-06-03).
+            try:
+                relative_display = str(found_path.relative_to(project_dir))
+            except ValueError:
+                relative_display = str(found_path)
             if line_str:
                 line_num = int(line_str)
                 if line_num > len(file_lines):
