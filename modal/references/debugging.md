@@ -61,6 +61,25 @@ with modal.enable_output():
     image.build(app)  # Blocks until build completes. Fails fast on bad deps.
 ```
 
+### Debug a BUILD problem with the build probe, never a GPU run
+
+When the failing thing is the IMAGE (dep install, model bake, download stall,
+CUDA/ABI), debug it with `image.build(app)` above — **not** a full GPU run. A
+GPU run to diagnose a build is a 30–50 min loop (compile + download + GPU
+queue) before you learn anything; the build probe fails in minutes on the real
+error, no GPU billed.
+
+- **Read the build log at ~minute 2, not minute 50.** A frozen byte counter
+  (`Fetching 5 files: 20%` not advancing) IS the diagnosis — a stalled
+  large-file download, not "slow."
+- **Heavy layers (flash-attn compile, big apt trees) are cached** — only the
+  changed layer re-runs. Put the volatile layer (model bake) LAST so an edit
+  doesn't re-pay the whole build.
+- A hand-rolled `image.build(app)` needs
+  `app = modal.App.lookup(name, create_if_missing=True)` — building against a
+  bare imported `app` raises `InvalidError: App has not been initialized`.
+- Only spend a GPU once the build probe proves the image good.
+
 ## Sandbox-as-REPL Workflow
 
 Use Sandboxes programmatically to validate images before deploying. This replaces the
@@ -128,17 +147,21 @@ sb.reload_volumes()           # Refresh mounted volumes (v1.0.5+)
 ```
 
 ## Programmatic Output Control
+
+Output is OFF by default — the SDK stays quiet unless you opt in. Wrap work in
+`modal.enable_output()` to surface logs, object-creation status, and map progress:
+
 ```python
-with modal.enable_output():
-    # Shows logs, object creation status, map progress
+with modal.enable_output():   # no args on v1.4.x — a plain context manager
     with app.run():
         fn.remote()
-
-# Suppress progress bars
-from modal import output_manager
-output_manager.set_quiet_mode(True)
-output_manager.set_timestamps(True)
 ```
+
+There is **no public quiet-mode / timestamp setter** on v1.4.x. The old
+`modal.output_manager` singleton (`set_quiet_mode()` / `set_timestamps()`) is
+gone — `from modal import output_manager` raises `AttributeError`. The manager
+now lives at the private `modal._output.manager` and is not a stable API. To
+stay quiet, simply don't enter `enable_output()`.
 
 ## Subprocess Visibility
 
