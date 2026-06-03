@@ -1137,6 +1137,7 @@ def verify_claims(
     review_dir: Path,
     disposition_path: str,
     project_dir: Path,
+    sibling_roots: list[Path] | None = None,
 ) -> str:
     """Verify extracted claims against the actual codebase.
 
@@ -1147,6 +1148,7 @@ def verify_claims(
 
     Returns path to verified-disposition.md.
     """
+    sibling_roots = sibling_roots or []
     disposition_text = Path(disposition_path).read_text()
 
     def _parse_disposition_claims() -> list[dict[str, object]]:
@@ -1295,8 +1297,8 @@ def verify_claims(
         return any(f"/{d}/" in s or s.endswith(f"/{d}") or s.startswith(f"{d}/")
                    for d in _CRUFT_DIRS)
 
-    def _filtered_rglob(pattern: str) -> list[Path]:
-        return [p for p in project_dir.rglob(pattern) if not _is_cruft(p)]
+    def _filtered_rglob(pattern: str, root: Path | None = None) -> list[Path]:
+        return [p for p in (root or project_dir).rglob(pattern) if not _is_cruft(p)]
 
     _TEXT_VERIFY_SUFFIXES = {
         ".cfg", ".clj", ".cljc", ".css", ".edn", ".html", ".js", ".json",
@@ -1335,6 +1337,23 @@ def verify_claims(
             alt_candidates = _filtered_rglob(alt_filepath)
             if len(alt_candidates) == 1:
                 return "basename_extswap", alt_candidates[0], alt_filepath
+
+        # Cross-repo: the referenced file may live in a SIBLING repo (e.g. a
+        # genomics<->phenome bridge review where half the diff is in phenome).
+        # Resolving only against project_dir marks every sibling-repo anchor
+        # HALLUCINATED — the dominant false negative on cross-repo packets (a
+        # 5-axis bridge review hit 50.8% "hallucinated", burying 2 real bugs).
+        # Roots are passed explicitly via --sibling-roots (no auto-scan cost).
+        for root in sibling_roots:
+            if (root / filepath).exists():
+                return "exact_sibling", root / filepath, filepath
+        if sibling_roots:
+            basename = filepath.rsplit("/", 1)[1] if "/" in filepath else filepath
+            sib_hits: list[Path] = []
+            for root in sibling_roots:
+                sib_hits.extend(_filtered_rglob(basename, root))
+            if len(sib_hits) == 1:
+                return "basename_sibling", sib_hits[0], filepath
 
         return "missing", None, filepath
 
@@ -1517,6 +1536,12 @@ def main() -> int:
     parser.add_argument("--topic", required=True, help="Short topic label (used in output dir name)")
     parser.add_argument("--project", type=Path, help="Project dir for goals/governance doc discovery (default: cwd)")
     parser.add_argument(
+        "--sibling-roots", type=Path, nargs="*", default=[],
+        help="Additional repo roots to resolve cross-repo anchors against (e.g. "
+             "~/Projects/phenome for a bridge review). Without this, findings that "
+             "cite files in a sibling repo are marked HALLUCINATED.",
+    )
+    parser.add_argument(
         "--axes", default="standard",
         help="Comma-separated axes or preset name (standard, deep, full). Default: standard",
     )
@@ -1629,7 +1654,10 @@ def main() -> int:
 
             # Optional verification phase
             if args.verify:
-                verified_path = verify_claims(review_dir, disposition_path, project_dir)
+                verified_path = verify_claims(
+                    review_dir, disposition_path, project_dir,
+                    sibling_roots=args.sibling_roots,
+                )
                 result["verified_disposition"] = verified_path
                 print(f"Verified disposition written to {verified_path}", file=sys.stderr)
 
