@@ -3,15 +3,24 @@
 # PreToolUse:Agent command hook.
 #
 # BLOCKING checks (exit 2):
-# 0. Memory pressure — blocks on actual system memory (vm_stat) + hard process ceiling
+# 0.  Memory pressure — blocks on actual system memory (vm_stat) + hard process ceiling
+# 7.  File-output missing — substantial non-exempt research dispatch with no
+#     file-output instruction (durability; subagents don't self-persist files)
+# 10. Write-stub-first missing — file-output dispatch that doesn't write a stub
+#     first (guards mid-run process death → zero persisted output; failure mode
+#     still open upstream, anthropics/claude-code#47936)
 #
 # Advisory checks (exit 0 + additionalContext):
-# 1. Suggestion/brainstorm pattern in description
-# 2. Single-tool pattern (short description matching direct-tool verbs)
-# 3. general-purpose when Explore would work
-# 4. Research task routed to general-purpose
-# 5. File-edit intent via subagent (should use Edit/Write directly)
-# 6. Delegation cascade (3+ consecutive Agent calls, with known-limitations prompt)
+# 3.  general-purpose when Explore would work
+# 4.  Research task routed to general-purpose instead of researcher
+# 5.  File-edit intent via subagent (should use Edit/Write directly)
+# 6.  Delegation cascade (3+ consecutive Agent calls)
+# 7'. Turn-budget note absent (advisory since 2026-06-03 — deprecated CORAL
+#     self-instruction; harness now returns final message at maxTurns)
+# 8.  Output-path collision across concurrent dispatches
+# 9.  genomics: write_json_atomic guidance
+#
+# Checks 1+2 (brainstorm / single-tool nags) removed 2026-05-22 — pure noise.
 
 # ERR trap only for advisory checks — blocking checks handle their own errors
 INPUT=$(cat)
@@ -206,7 +215,8 @@ fi
 # BLOCKING for research-heavy agents (researcher, general-purpose, Plan, unset)
 # Advisory for Explore, observe (read-only or self-managed)
 if [ -n "$PROMPT" ]; then
-    HAS_TURN_BUDGET=$(echo "$PROMPT" | grep -ciE '(stop|halt|synthesize|write).*(70%|turn|budget|before running out)|max.*(turn|epoch)|epoch.*boundar' || true)
+    # \bturn\b avoids matching "return the path" as a turn-budget instruction.
+    HAS_TURN_BUDGET=$(echo "$PROMPT" | grep -ciE '(stop|halt|synthesize|write).*(70%|\bturn\b|budget|before running out)|max.*(\bturn\b|epoch)|epoch.*boundar' || true)
     HAS_FILE_OUTPUT=$(echo "$PROMPT" | grep -ciE '(write|save|output).*(file|path|memo|artifact)' || true)
 
     # Turn-budget is ADVISORY-ONLY as of 2026-06-03 (was a blocking trigger).
