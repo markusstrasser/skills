@@ -73,6 +73,15 @@ For each source type, glob within the date window, read each file, extract actio
 **2d. Suggest-Skill Outputs** (`artifacts/suggest-skill/`):
 - Extract skill candidates with frequency, ROI estimate, proposed name.
 
+**2e. Reflect-loop Quarantine** (`~/.claude/reflect-quarantine/*.jsonl`):
+- The learning loop's deep pass (`just reflect-classify` in agent-infra) emits FM-routed
+  enforcer/mint proposals here (status `pending`), each tied to a failure-mode dossier with a
+  falsifiable verifier sketch (axis: reach/capability/knowledge/taste). These are already
+  deduped against the FM taxonomy and arrive pre-generalized (merge-before-mint), so prefer
+  them over raw signals. Enforcers are report-only canaries until a human flips them active.
+  Run `just reflect-review` for the ranked view. Do NOT auto-apply — promote into the harvest
+  ranking for human disposition only.
+
 ### Phase 3: Harvest Unstructured Signals
 
 **3a. User `#f` Feedback** -- highest signal, ground-truth corrections:

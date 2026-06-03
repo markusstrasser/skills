@@ -50,3 +50,17 @@ Only promote when all three pass. Write non-promoted results to `digest.md` and 
 Wire correction output into existing analytics:
 - `uv run python3 "${OBSERVE_PROJECT_ROOT:-$HOME/Projects/agent-infra}/scripts/hook-outcome-correlator.py"` -- join with hook telemetry
 - Compare extracted corrections against hook trigger logs to find gaps
+
+## Step C6: Reflect loop (FM-spine — automated)
+
+Correction + omission signals are ALSO captured automatically at session end by
+the zero-API `sessionend-reflect-capture` hook → `~/.claude/reflect-capture.jsonl`
+(test bed: intel, agent-infra). The deep pass `just reflect-classify` (agent-infra,
+deterministic/$0; `--llm` for $0 claude -p enrichment) clusters those signals,
+classifies them against the failure-mode taxonomy (`scripts/fm.py`,
+`agent-failure-modes.md`) under a **merge-before-mint** invariant, and routes each
+to the cheapest enforcer. It **auto-records** evidence to existing FM dossiers and
+**quarantines** new-FM mints + enforcer proposals for the human (auto-record-never-
+auto-apply). This is the generalization layer that turns one-off corrections into
+FM dossiers — `--corrections` here is the manual/triage view of the same signals.
+See `agent-infra/.claude/plans/4d40085a-recursive-session-learning-loop.md`.
