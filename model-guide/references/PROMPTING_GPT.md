@@ -1,454 +1,151 @@
 # GPT-5.5 Prompting Guide
 
-Covers GPT-5.5 with thinking (high effort). Updated 2026-04-24. GPT-5.5 understands task intent earlier than prior GPT-5.x — remove scaffolding like "plan before acting" / "check your work" / "iterate until done" from existing prompts; 5.5 does this natively and the instructions hurt more than help.
+**Last updated:** 2026-06-06
+**Scope:** GPT-5.5 and GPT-5.5 Pro.
 
-**Sources:** OpenAI official docs (developers.openai.com), GPT-5.5 announcement + system card (2026-04-23).
+## Use GPT-5.5 For
 
----
+- Codex and terminal-heavy implementation.
+- Structured outputs and strict tool schemas.
+- Document, spreadsheet, and slide generation inside OpenAI/Codex workflows.
+- Long-context retrieval where OpenAI-reported MRCR performance matters.
+- Professional execution where the task shape is clear and source material is available.
 
-## 1. Thinking Mode -- The Default
+## Use GPT-5.5 Pro For
 
-GPT-5.5 with thinking enabled at high effort is the version that hits the frontier benchmarks (MATH 98%, AIME 100%, DocVQA 95%). Always use thinking mode for non-trivial work.
+Use Pro only when the task is worth the cost:
 
-### `none` Effort — Non-Thinking Mode
+- Hard quantitative derivation.
+- Calibration math or Bayesian chains.
+- Formal proof or precise data-analysis reasoning.
+- Final review of decisions that are expensive to undo.
+- Scientific/technical reasoning over provided data where extra test-time compute is likely to matter.
 
-Setting `reasoning.effort: "none"` disables internal reasoning entirely. This is the **only** way to use `temperature`, `top_p`, and `logprobs` — these parameters are unavailable at any other effort level.
+Do not use Pro for ordinary coding, broad web research, simple classification, or current-fact lookup.
 
-```bash
-llmx -m gpt-5.5 --reasoning-effort none --temperature 0.9 "creative writing prompt"
+## Model And API Facts
+
+| Variant | What differs | Price | Context | Max output |
+|---|---|---:|---:|---:|
+| `gpt-5.5` | Base reasoning model | $5/M input, $0.50/M cached input, $30/M output | 1.05M | 128K |
+| `gpt-5.5-pro` | Same underlying model plus parallel test-time compute | $30/M input, no listed cached discount, $180/M output | 1.05M | 128K |
+
+Both list a Dec 1 2025 knowledge cutoff in OpenAI's model comparison docs. Both support Responses, Chat Completions, Batch, streaming, function calling, structured outputs, and image input.
+
+## Prompting Rules
+
+### Do Less Prompt Theater
+
+Do not use:
+
+```text
+Think step by step.
+Plan before acting.
+Check your work.
+Iterate until done.
 ```
 
-Use `none` for: creative generation needing temperature control, logprob analysis, classification where reasoning overhead isn't worth it.
+GPT-5.5 already reasons internally. Over-scaffolding spends tokens on obeying your process text instead of solving the problem.
 
-### Critical Rules
+Use:
 
-**Do NOT use chain-of-thought prompting** ("think step by step") -- the model reasons internally. Explicit CoT scaffolding **hurts performance** when thinking is on.
-
-**DO:**
-- Keep prompts simple and direct -- the model does the heavy reasoning internally
-- Use delimiters (markdown, XML) for structure
-- Start with zero-shot; add few-shot only if needed
-- Let the model allocate its own reasoning budget
-
-**DO NOT:**
-- Ask it to "explain your reasoning" or "show your work"
-- Prescribe step-by-step plans -- the model's internal reasoning exceeds what you'd prescribe
-- Over-engineer prompts with CoT scaffolding or "think carefully" instructions
-
-### Effort Levels
-
-```python
-# Direct API
-response = client.responses.create(
-    model="gpt-5.5",
-    reasoning={"effort": "high"},  # none, minimal, low, medium, high, xhigh
-    input=[...]
-)
+```text
+Task: ...
+Inputs: ...
+Constraints: ...
+Output format: ...
+Verification: ...
 ```
 
-```bash
-# Via llmx (our unified CLI) -- defaults to high effort for GPT-5 models
-llmx -m gpt-5.5 "complex query"                                    # Defaults to --reasoning-effort high
-llmx -m gpt-5.5 --reasoning-effort high --stream "complex query"    # Explicit (same result)
-llmx -m gpt-5.5 --reasoning-effort low "simple query"               # Override for speed/cost
+### Hydrate With Real Data
+
+GPT-5.5 and Pro are strongest when the prompt contains the actual code, logs, JSON, metrics, or evidence.
+
+Bad:
+
+```text
+Audit my variant scoring method.
 ```
 
-| Effort | Use When | llmx auto-timeout |
-|--------|----------|:-:|
-| `xhigh` | Maximum compute — hardest problems, Pro-lite behavior. **Domain-heavy prompts (PGx, clinical) can exceed 15 min and timeout at llmx's 900s cap.** Use ChatGPT Pro for those. Pure math xhigh fits in ~8 min. | 900s (15 min, hard max) |
-| `high` | Complex reasoning, math, analysis, coding -- **use this for serious work** | 600s (10 min) |
-| `medium` | Balanced cost/quality for moderate tasks | 300s (5 min) |
-| `low` | Moderate queries, cost-sensitive | 120s |
-| `minimal` | Simple queries, high-volume, latency-sensitive | 120s |
-| `none` | No reasoning — enables temperature/top_p/logprobs | 120s |
+Good:
 
-### Reasoning Persistence
-
-Use the Responses API with `store: true` and pass `previous_response_id`. This preserves internal reasoning state across tool calls, directly improving accuracy on multi-step tasks. The Chat Completions API does NOT preserve reasoning items, increasing token usage and reducing quality.
-
-### `phase` Parameter (Responses API)
-
-For multi-step agentic tasks, set `phase` on assistant messages to prevent early stopping:
-- `"commentary"` — intermediate updates, preambles before tool calls
-- `"final_answer"` — completed response
-
-Without `phase`, the model may treat intermediate commentary as a final answer and stop prematurely. Important for pipelines with tool call sequences.
-
-### CoT Controllability (System Card, March 2026)
-
-GPT-5.5 Thinking has **near-zero CoT controllability**: only 0.2% of 50k-character reasoning chains can be steered by user instructions (e.g., avoiding keywords, formatting constraints on the chain). This means:
-- You **cannot** control what the model thinks about via prompting
-- Don't waste prompt space trying to shape the reasoning chain — shape the *output* instead
-- This is a safety property (low obfuscation ability) but also a practical constraint
-
-CoT **monitorability** is lower than GPT-5 Thinking overall, but near-100% for detecting agentic misalignment. Safety monitors reading the CoT can still catch problematic reasoning.
-
-### Markdown in Thinking Mode
-
-Thinking mode **disables markdown by default**. To re-enable, add as the first line of your developer message:
-
+```text
+Here is the scoring function, current distribution, parameter ranges, and failing cases.
+Find mathematical or implementation errors. Show derivations for every numerical claim.
 ```
+
+### Use Strict Schemas
+
+For function calling, set `strict: true` and make parameters precise. Do not rely on prose to enforce schema shape.
+
+### Use XML-Style Document Packets
+
+```xml
+<doc id="policy" title="Policy">
+...
+</doc>
+<doc id="log" title="Failure log">
+...
+</doc>
+```
+
+The format is easier for the model to segment than raw concatenated prose or deeply nested JSON.
+
+### Preserve Reasoning State
+
+Use the Responses API with stored state and `previous_response_id` for multi-turn tool loops. Chat Completions-style reconstruction loses reasoning items and can increase token usage.
+
+### Cache Deliberately
+
+Put static instructions and tool descriptions first, dynamic task material later. GPT-5.5 pricing rewards cached input, but only if your prefix is stable.
+
+### Re-enable Formatting
+
+When using thinking mode and Markdown matters, put this at the top of the developer message:
+
+```text
 Formatting re-enabled
 ```
 
----
+## Pro Prompt Pattern
 
-## 1b. GPT-5.5 Pro vs Thinking vs xhigh — What's Actually Different
+```text
+Task: Derive/check ...
 
-**Same weights, different compute ceilings.** All three are the same model:
+Data:
+[exact values, code, logs, or tables]
 
-| Variant | Access | Reasoning budget | Pricing (in/out per MTok) | Timeout |
-|---------|--------|-----------------|--------------------------|---------|
-| `gpt-5.5` effort=high | API, llmx, Codex CLI | Standard reasoning | $5/$30 per MTok (batch/flex 50%, priority 2.5x) | ~10 min |
-| `gpt-5.5` effort=xhigh | API, llmx | Extended reasoning | $5/$30 | ~15 min (llmx hard cap 900s) |
-| `gpt-5.5-pro` | ChatGPT Pro/Business/Enterprise + API | Maximum reasoning + parallel test-time compute (same weights) | $30/$180 per MTok (API) or subscription ($200/mo) | Minutes to tens of minutes |
-| GPT-5.5 Thinking | ChatGPT web UI | Same as effort=high (default) | Subscription | N/A |
+Constraints:
+- ...
+- ...
 
-**The only real difference is how long the model is allowed to think.** `xhigh` on base is "Pro-lite" — same extended reasoning, but capped by API timeout. Pro can think for 10+ minutes on a single request with no ceiling. ChatGPT "Thinking" in the web UI is just `effort=high` as the default mode.
-
-**When does extra thinking time matter?** From our 59 Q&A eval:
-- Pure math (Bayesian derivations, HWE calculations): `xhigh` via llmx is sufficient (~8 min). Zero errors.
-- Domain-heavy prompts (PGx risk models, clinical decision trees): exceeded llmx's 900s cap. Had to use ChatGPT Pro web UI.
-- We did NOT A/B test the same prompt at high vs xhigh vs Pro, so we can't confirm that Pro's extra compute produces measurably better answers vs xhigh. The zero-math-error result was all Pro — it might hold at xhigh too.
-
-**Practical rule:** Start with `effort=high` (default). Escalate to `xhigh` if the answer feels incomplete or the reasoning chain was truncated. Use ChatGPT Pro web UI for prompts that need >15 min reasoning (multi-domain clinical synthesis, architectural audits with >10K lines of context).
-
-### When to Use Pro
-
-Pro is justified when the problem has **all three** of:
-1. **Multi-step quantitative reasoning** where intermediate errors compound (Bayesian chains, coupled equations, formal proofs)
-2. **Verification matters** — you'll check the answer, and a wrong answer has consequences
-3. **Not solvable by search** — the answer requires derivation, not lookup
-
-Concrete examples from our genomics eval (2026-03-22, 21 claims verified):
-- Bayesian posterior computation with calibrated likelihood ratios (zero errors across 100+ claims)
-- Catching planted numerical traps (coordinate normalization, sign errors)
-- Adversarial self-review of its own classification (found PP2/LR14 overclaim)
-- Multi-step PK fold-change derivations across drug-gene interactions
-
-### When NOT to Use Pro
-
-- **Coding tasks** — base GPT-5.5 (or Claude) is sufficient; Pro's extra reasoning doesn't help linear code generation
-- **Literature search/synthesis** — reasoning depth doesn't help fact retrieval (still ~28% hallucination on SimpleQA)
-- **Simple classification** — diminishing returns; high effort on base model is equivalent
-- **Any task where you won't verify the output** — Pro's value is precision, which only matters if consumed precisely
-
-### Pro Prompting
-
-Same as base GPT-5.5, plus:
-- **Keep prompts simple and direct** — Pro's reasoning handles complexity internally. Over-structured prompts waste the reasoning budget on parsing your instructions instead of solving the problem.
-- **Include real data, not descriptions** — Pro reasons over exact numbers. "AM=0.976, GPN=-9.6" beats "high AlphaMissense, strong conservation."
-- **End with "Show all derivations. I will verify every intermediate step."** — this focuses the reasoning on precision, which is Pro's comparative advantage.
-- **Use Responses API with background mode** — requests can take 2-5 minutes. Set `reasoning.effort: "xhigh"` for maximum depth.
-- **Budget: `max_completion_tokens: 32768+`** — Pro generates long reasoning chains. 4096 + xhigh effort = 0 output tokens.
-
-### Pro vs Opus for Adversarial Review
-
-Our eval showed GPT-5.5 Pro is **better than Opus at adversarial self-review** — it found mathematical overclaims in its own TP53 classification (PP2 removal dropped posterior from 0.90→0.81, uncalibrated LR14→4.33 dropped to 0.74). Opus tends to be more agreeable with its own outputs. Use Pro for auditing quantitative code, scoring functions, and calibration math.
-
-### Empirical Prompting Patterns (75 Q&A pairs, 6 rounds, 2026-03-22→28)
-
-Corpus: `.scratch/gpt54pro-r{1..6}-qa-*.md` in genomics repo.
-
-**What worked (Round 3: 69% implementation rate):**
-
-1. **Data-hydrated prompts dominate.** Paste actual pipeline output (JSON, scores, variant data), then ask "what's wrong?" Round 3 pasted 516 LOC of `variant_priority_score.py` → found 5 real bugs. Round 1 asked abstract classification questions → 10% implementation rate. The data IS the prompt.
-
-2. **"Derive from first principles" beats "look up the answer."** Asking GPT to derive EUR DPD deficiency prevalence from allele frequencies + Hardy-Weinberg produced exact, verifiable numbers. Asking it to look up CPIC guidelines produced hallucinated citation details. Zero math errors across 100+ quantitative claims, but ~28% hallucination on fact lookup.
-
-3. **Adversarial framing extracts the most.** "Find bugs in this code" and "what's wrong with this classification" outperform "review this" or "what do you think?" The model responds to adversarial pressure with precision; it responds to open-ended asks with balanced hedging.
-
-4. **One derivation per prompt, not surveys.** Focused prompts asking for a single risk model produced 3.5 quant claims/prompt. Architecture-dump megaprompts produced 2.2. Dense > broad.
-
-5. **"Show all derivations. I will verify every intermediate step."** This sentence at the end consistently forced full working, not just conclusions. Without it, Pro often stated results without showing the chain.
-
-6. **"Design X from scratch" > "what's wrong with X."** (R6 finding, 2026-03-28.) Rounds 1-5 asked Pro to audit existing pipeline math — found 14 bugs total (good). Round 6 asked Pro to *design* replacement methods from first principles — found 3 bugs, 7 theoretical bounds, AND produced implementable formulas (concordance-only discount, coalescent ROH estimator, VOI-based triage, stratified FDR null). The design prompts produced higher-impact findings because Pro's extended reasoning explores solution spaces, not just verifies existing ones. Use audit prompts when you suspect specific bugs; use design prompts when you need the correct method and don't trust the current one.
-
-7. **Include the current data distribution.** (R6 finding.) "244 variants → 122 NEEDS_REVIEW, 55 LIKELY_BENIGN, 54 ARTIFACT, 13 BENIGN" let Pro derive that the condition FDR was at null level (z=-0.14) and that 35 T1 variants exceed any 30-variant review budget. Without real counts, Pro gives parametric answers that need separate calibration.
-
-8. **Include boundary conditions from the actual code.** (R6 finding.) "T_max = 5.86 + 2.77 = 8.63 from listed AM/SpliceAI ranges" let Pro derive the exact minimum discount factor for monotonicity (d ≥ 0.7335). Without T_max, Pro gives d ≥ 1 - c_min/T_max as a formula — correct but not actionable until you plug in your own ranges.
-
-9. **Pro corrects prompt assumptions.** (R6 finding.) Pro corrected 5 errors in our prompt setup: n_eff for "10-50%" range (19.17 not 8.6), stroke 10yr risk (3.2% not 5.2% under our stated logistic model), AM=0.95 is in the 1.46 bin not 5.86, minimax regret is degenerate (need expected regret instead), raw tool correlations don't determine I(Y;T_1,...,T_8). These corrections are often more valuable than the answers to the questions asked.
-
-**What failed:**
-
-1. **Prompts without code/data.** Round 3 prompt 09a sent an adversarial audit request without pasting the code. GPT correctly refused — but the lesson is that Pro needs material to reason over. Abstract "audit my approach" prompts get abstract answers.
-
-2. **Citation-dependent prompts.** Any prompt requiring specific paper citations (PMID, author+year+journal) gets fabricated details. The facts are often correct; the citations are invented. Always verify PMIDs. (Confirmed: "correct proof on wrong object" — real finding, fake source.)
-
-3. **Framing sensitivity for classification.** Same TP53 variant got LP in one framing, VUS in another (Round 1). The evidence didn't change — the prompt framing did. Never use GPT for final classification. Use it for derivation, then classify yourself.
-
-4. **Search-enabled prompts for database lookups.** Round 4 enabled web search, which found CPIC coverage gaps — but also returned stale/wrong tool version info. Search helps for "what exists?" but not for "what's the current version of X?"
-
-**Prompt templates:**
-
-*Audit prompt (find bugs in existing math):*
-```
-Here is [actual code + config, 100-500 lines]:
-[paste]
-
-Current data distribution: [paste real counts, e.g. "244 variants → 122 NEEDS_REVIEW"]
-
-Questions (show all working):
-1. [Specific quantitative question with boundary conditions from the code]
-2. [Ask for the proof/derivation, not just the answer]
+Show all derivations. I will verify every intermediate step.
+Return final answer plus a table of assumptions, formulas, and computed values.
 ```
 
-*Design prompt (derive correct method from scratch):*
-```
-A pipeline does [X]. Here is the exact architecture:
-[paste code + config + real numbers]
-
-Current distribution: [paste real counts]
-Known parameter ranges: [paste from code, e.g. "T_max = 5.86 + 2.77 = 8.63"]
-
-Design [replacement method] from first principles. Show all working.
-Constraints: [monotonicity, calibration, backward compatibility, etc.]
-```
-
-Design prompts produce higher-impact findings than audit prompts (R6 vs R1-R5). Use audit when you suspect specific bugs; use design when you need the correct method.
-
-### llmx Usage
-
-```bash
-# Pro is NOT available via API or llmx — ChatGPT Pro web UI only ($200/mo subscription).
-# For API, xhigh on base model is the closest:
-llmx -m gpt-5.5 --reasoning-effort xhigh --timeout 900 --stream "complex query"
-
-# For domain-heavy prompts that exceed 15 min: use ChatGPT Pro web UI.
-# Copy-paste the prompt; Pro has no practical time ceiling.
-```
-
----
-
-## 1c. Deep Research Mode — Two-Phase Pattern
-
-**Deep Research** is a separate ChatGPT Pro mode (toggle in the composer) that runs an autonomous web-search agent: 80–160 searches, 5–15 min wall-clock, returns a long report with footnoted citations. It is NOT the same as standard Pro reasoning. Same underlying weights, different harness — the harness is biased toward search.
-
-### The failure mode
-
-Deep Research **over-searches by default and under-reasons.** Cross-domain finding from agentic-search literature (Sep–Dec 2025): when prompts don't gate the retrieve-vs-think decision, models burn budget on URL retrieval even when pretraining contains the answer. References: arxiv:2601.08747 ("To Retrieve or To Think?"), arxiv:2511.18743 (RhinoInsight gating), arxiv:2512.06653 (LightSearcher), ReSearch (EMNLP 2025). Same pattern as Cao et al. 2026 finding that BM25/embedding retrieval HURTS coding agent performance by 40.5% when the agent already has grep.
-
-Empirical confirmation from a 5-prompt × 8-response Synthoria pharma-value evaluation (2026-05-03, archived in `phenome:docs/research/synthoria_pharma_value_2026-05-03/`): the **frames** Deep Research returned (verdicts, rankings, narratives, comparable transactions known by mid-2025) were strong and convergent across runs. The **specifics** Deep Research surfaced via web search (post-cutoff deal sizes, current pricing pages, named contacts) were mixed — several hallucinated, several stale, all required `[UNVERIFIED]` tagging. The model's strongest work was its pretrained reasoning; the weakest work was its URL retrieval.
-
-### What Deep Research is good at vs not
-
-| Strong | Weak / dangerously confabulating |
-|---|---|
-| Market structure, business archetypes, deal patterns | Specific recent deal $ amounts post-cutoff |
-| Causal chains, regulatory framework synthesis | Current pricing pages, current eligibility rules |
-| Comparable transactions known by training cutoff | Named contacts at companies (often stale or invented) |
-| Strategy synthesis across 8–15 sources | Very recent (last 6 months) news |
-| Adversarial steelmanning when prompted | Open-ended "find everything" — produces low-signal URL stew |
-
-### The two-phase template
-
-For Deep Research prompts where the answer depends mostly on synthesis (strategy, market analysis, business model evaluation, technical landscape mapping):
-
-```
-PASS 1 — PRETRAINING-FIRST SYNTHESIS (no web search this pass)
-
-[Operator + question + relevant prior context]
-
-Use only your pretraining knowledge for this pass. Do NOT search the web yet.
-
-Tag every claim:
-- [TRAINED]            — known from pretraining, high confidence
-- [TRAINED-APPROX]     — recall a number but unsure of magnitude
-- [PRETRAINING-UNKNOWN] — don't know, flagged for verification
-- [POST-CUTOFF]        — happened after my training and I cannot answer
-
-Produce the full structural answer (frame, ranking, narrative, comparables-
-from-memory). At the end, list the 5–10 specific facts your conclusion most
-depends on that are tagged [TRAINED-APPROX] or [PRETRAINING-UNKNOWN]. These
-are the verification queue for Pass 2.
-
-PASS 2 — TARGETED VERIFICATION (web search this pass)
-
-For each item in the Pass-1 verification queue, run one focused web search.
-Update the Pass 1 conclusion ONLY if a verification result contradicts a
-load-bearing claim. Do NOT broaden the search beyond the queue. Do NOT
-regenerate the frame.
-
-Output:
-- Pass 1 conclusion (unchanged frame)
-- Verification table: claim → source → verdict (CONFIRMED / WRONG / NOT FOUND)
-- Diff: which Pass 1 conclusions changed and why
-```
-
-This roughly halves wall-clock time, avoids URL-stew compute waste, and lets the model's strongest work (pretrained synthesis) get a clean unconstrained pass before being asked to fact-check itself.
-
-### When to use which mode
-
-| Prompt type | Use |
-|---|---|
-| Strategy / market structure / business archetype synthesis | Two-phase (Pass 1 + Pass 2) |
-| Adversarial review of a plan or document | Standard Pro reasoning (no Deep Research) — search adds noise |
-| Quantitative derivation (Bayesian, formal proofs) | Standard Pro reasoning (no Deep Research) |
-| Account-list / contact-list / current-news mapping | Deep Research, web-first, **cap search budget** ("max 30 searches; return what you have plus an honest 'incomplete' if budget exhausts") |
-| Mixed (half synthesis, half empirical) | Two-phase, but Pass 2 is wider (current conferences, recent funding rounds) |
-| Verifying a specific number or fact | Single-pass with `verify_claim` (Exa /answer) — Deep Research is overkill |
-
-### Sequencing within a multi-prompt batch
-
-For multi-prompt research bundles (5+ Deep Research prompts on related questions):
-- Run synthesis-heavy prompts FIRST. Their convergent verdict often invalidates 1–2 of the empirical-heavy prompts you were going to run.
-- Run empirical-heavy prompts ONLY after the synthesis verdict tells you which empirical questions still matter.
-- Archive prompts + responses together with `[UNVERIFIED]` tags from the start. The 2026-05-03 Synthoria bundle is the reference template: `phenome:docs/research/synthoria_pharma_value_2026-05-03/{prompts.md,response_*.md,README.md}`.
-
----
-
-## 2. Message Roles
-
-OpenAI defines a strict authority chain: `developer` > `user` > `assistant`.
-
-- The `developer` message (formerly "system message") carries highest priority
-- Do NOT use both `developer` and `system` in the same request
-- Think of developer and user messages like a function and its arguments
-
-**Recommended developer message structure:**
-1. Identity and communication style
-2. Instructions, rules, function-calling guidance
-3. Examples (input/output pairs)
-4. Context and reference data (near end)
-
----
-
-## 3. Structured Outputs & JSON
-
-GPT-5.5 has the best native structured output support of any frontier model.
-
-### The Hierarchy
-
-| Method | Schema Enforced | Use When |
-|--------|:-:|----------|
-| **Structured Outputs** (`response_format`) | Guaranteed | Final-step extraction, no back-and-forth |
-| **Function Calling** (`strict: true`) | Guaranteed | External API calls, model chooses among tools |
-| **JSON Mode** | Valid JSON only | **Not recommended** -- always prefer Structured Outputs |
-
-### Key Rules
-
-- **Always enable `strict: true`** -- requires `additionalProperties: false`
-- **Structured Outputs is incompatible with parallel function calls.** Set `parallel_tool_calls: false`
-- Use Pydantic (Python) or Zod (JavaScript) for schema definitions
-- Prevents schema violations but NOT value errors -- add examples for semantic correctness
-- Use `anyOf` for union types; all fields must be required (use nullable instead of optional)
-
----
-
-## 4. Long Context (1M tokens)
-
-### Document Formatting
-
-Use **XML format** for multiple documents (best performing with GPT-5.5 thinking):
-```xml
-<doc id='1' title='Annual Report'>Content here</doc>
-<doc id='2' title='Competitor Analysis'>Content here</doc>
-```
-
-- JSON performs **poorly** for large document sets
-- Pipe-delimited (`ID|TITLE|CONTENT`) is a solid alternative
-- For maximum thoroughness, place key instructions at **both beginning and end** of the prompt
-
----
-
-## 5. Hallucination -- The #1 Risk
-
-GPT-5.5 has **~72% SimpleQA** (inferred from OpenAI's "33% fewer claim errors vs 5.2") -- significantly improved from 5.2's 58%, now roughly tied with Claude/Gemini. Still a ~28% error rate on factual questions.
-
-**The improvement:** GPT-5.5 closed most of the hallucination gap. But it still rarely refuses to answer — it will **confidently fabricate** rather than say "I don't know." Web search remains the most impactful mitigation.
-
-### With Thinking Enabled
-- Medical cases (HealthBench): 1.6% error rate vs GPT-4o's 15.8% -- thinking helps enormously for *reasoning over* provided facts
-- SimpleQA improved to ~72% -- both reasoning and factual recall improved in 5.4
-- GPT-5.5 is OpenAI's most factual model to date, but ~28% error rate remains
-
-### Mitigation Techniques
-
-1. **Enable web search** for fact-sensitive queries -- drops error to ~5%. This is the single most impactful mitigation.
-2. **Ask for citations inline** -- forces two errors to hallucinate (fact + fabricated citation)
-3. **Provide grounding context** -- the closer source material is to the desired answer, the less it invents
-4. **Give an "out":** `"Respond with 'not found' if the answer isn't present in the documents"`
-5. **Use Structured Outputs** with mandatory fields for confidence/source
-6. **Cross-validate** with Claude or Gemini for fact-sensitive claims (all three now ~72% SimpleQA)
-
----
-
-## 6. Prompt Caching (Up to 90% Input Cost Reduction)
-
-### How It Works
-- **Automatic** -- no code changes required
-- Minimum **1,024 tokens** to activate
-- Matches in **128-token blocks** -- exact prefix match until first mismatch
-- Reduces latency up to 80%, input costs up to 90%
-
-### Maximize Cache Hits
-
-**STATIC PREFIX (top) -> DYNAMIC CONTENT (bottom)**
-
-1. Developer message, instructions, tool definitions, examples, schemas at **top**
-2. User-specific, variable content at **bottom**
-3. **Never put timestamps or request IDs early** -- invalidates cache
-4. Images, tool definitions, schemas all cacheable but must be **identical**
-
-### `prompt_cache_key` Parameter
-- Improved one customer's hit rate from 60% to 87%
-- Keep each prefix + key combo under ~15 requests/minute
-
-### Cache Retention
-
-| Type | Duration | GPT-5.4 | GPT-5.5 |
-|------|----------|:-------:|:-------:|
-| In-Memory | 5-10 min idle, max 1 hour | yes | **NO** |
-| Extended (24h) | Up to 24 hours | yes | yes (only path) |
-
-**GPT-5.5 caching gotcha (per OpenAI 2026-04-24):** GPT-5.5 supports *only* extended prompt caching — in-memory caching is not available. If your workload depended on the default in-memory cache (short-lived prefixes, no opt-in), you must enable extended retention to see any cache hits at all on 5.5. Verify via `usage.prompt_tokens_details.cached_tokens` after migration.
-
-Monitor: check `usage.prompt_tokens_details.cached_tokens` in API response.
-
----
-
-## 7. Tool / Function Calling
-
-- Write **detailed, specific** function descriptions -- clear descriptions scored **6% higher** than verbose alternatives
-- Flatten deeply nested parameter structures -- flat schemas reduce parsing errors
-- Under ~100 tools and ~20 arguments per tool is in-distribution
-- Add: `"Do NOT promise to call a function later. If required, emit it now."` -- GPT thinking mode may defer tool calls otherwise
-- Use `strict: true` for reliable schema adherence
-- With thinking enabled and Responses API, reasoning persistence significantly improves tool selection across multi-step workflows
-
----
-
-## 8. Vision
-
-GPT-5.5 with thinking is **best-in-class for document understanding**:
-- DocVQA: 95% (best of any frontier model)
-- ScreenSpot-Pro: 86.3% (best UI element detection)
-
-| Detail Setting | Tokens | Use Case |
-|---------------|:------:|----------|
-| `low` | 85 fixed | Quick classification, cost optimization |
-| `high` | 170 + 129/tile | OCR, fine detail, small text |
-| `auto` (default) | Model decides | General use |
-
-- Max input: 50 MB, 10 images per call
-- For text in images: spell out tricky names letter by letter
-- Video and audio input supported natively
-
----
-
-## 9. Key Differences from Claude/Gemini
-
-| Aspect | GPT-5.5 (thinking) | Claude 4.6 | Gemini 3.1 |
-|--------|---------|-----------|-----------|
-| Structured Outputs | Native, guaranteed | Tool_use workaround | Via function calling |
-| Prompt caching | Automatic, 90% off | Manual markers | Automatic, 75% off |
-| Thinking control | `reasoning.effort` (none/low/med/high/xhigh) | `output_config.effort` (low-max) | `thinkingLevel` (minimal-high) |
-| CoT prompting | **Hurts** when thinking on | Helps (`<thinking>` tags) | Replace with thinkingLevel |
-| Reasoning persistence | `previous_response_id` | Adaptive interleaved | Thought signatures |
-| Hallucination | ~72% SimpleQA (tied) | Best tied (72%) | Best tied (72.1%) |
-| Refusal rate | Almost never refuses (2%) | More selective | More selective |
-| Math | **Best** (MATH 98%, AIME 100%) | 93% | 91.1% |
-| Vision/OCR | **Best** (DocVQA 95%) | Good (93%) | Good |
-| Medical reasoning | **Best** (1.6% HealthBench error) | Good | Good |
-| Web search grounding | Available (SimpleQA -> 95.1%) | Not available | Google Search native |
+Pro needs exact material. It is not a substitute for retrieval.
+
+## System-Card Lessons
+
+- GPT-5.5 understands task intent earlier, asks for less guidance, uses tools more effectively, and keeps going longer than earlier models.
+- Destructive-action behavior improved, but the model still needs worktree safeguards. OpenAI reports destructive-action avoidance 0.90, perfect reversion 0.52, user-work preservation 0.57.
+- Factuality improved but remains insufficient for source-grade claims: in flagged factual-error cases, claims were 23% more likely correct, but response-level factual errors fell only 3%.
+- Coding-agent resampling found slightly more low-severity misalignment than GPT-5.4 Thinking, including taking credit for pre-existing work, ignoring constraints, and acting when the user only asked a question. Spell out action permissions.
+- CoT controllability is very low. OpenAI reports 0.2% control success for 50K-character CoTs. Do not try to micromanage hidden reasoning.
+- Apollo found no deferred-subversion sandbagging, but GPT-5.5 lied about completing an impossible coding task in 29% of samples. Impossible-task harnesses need deterministic checks.
+- GPT-5.5 is High capability for bio/chem and High but below Critical for cybersecurity. Cyber prompts need policy-aware routing and source/tool boundaries.
+
+## Verification Checklist
+
+- [ ] Current facts come from sources or tools, not model recall.
+- [ ] Tool use and code changes are checked against actual logs and git state.
+- [ ] Pre-existing work/user changes are preserved.
+- [ ] "Done" claims are backed by tests or parsed artifacts.
+- [ ] Pro outputs have every decisive calculation rechecked.
+
+## Sources
+
+- `https://openai.com/index/introducing-gpt-5-5/`
+- `https://deploymentsafety.openai.com/gpt-5-5/gpt-5-5.pdf`
+- `https://openai.com/api/pricing/`
+- `https://developers.openai.com/api/docs/models/compare`

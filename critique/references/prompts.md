@@ -74,7 +74,7 @@ $([ -n "$GOALS" ] && echo "For each stated principle: coverage score (0-100%), s
 Ranked by measurable impact. Each must have: (a) what, (b) why with quantitative justification, (c) how to verify with specific metrics.
 
 ## 6. Where I'm Likely Wrong
-What am I (GPT-5.4) probably getting wrong? Known biases to flag: overconfidence in fabricated specifics, overcautious scope-limiting, production-grade recommendations for personal projects.
+What am I (GPT-5.5) probably getting wrong? Known biases to flag: overconfidence in fabricated specifics, overcautious scope-limiting, production-grade recommendations for personal projects.
 
 ## Flash -- Optional Mechanical Audit Pass
 

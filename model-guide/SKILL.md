@@ -1,6 +1,6 @@
 ---
 name: model-guide
-description: Frontier model selection & prompting. "which model", "how to prompt", comparison, task routing, GPT/Gemini/Claude tips.
+description: Frontier model selection and prompting for Claude Opus 4.8, GPT-5.5, and GPT-5.5 Pro.
 user-invocable: true
 argument-hint: '[task description or model name]'
 effort: low
@@ -8,395 +8,156 @@ effort: low
 
 # Model Guide
 
-Select the right frontier model for a task and prompt it correctly.
+Select between the current frontier pair and prompt them correctly.
 
-**Models covered:** Claude Opus 4.8, Claude Sonnet 4.6, GPT-5.5, GPT-5.5 Pro, GPT-5.3 Instant, Gemini 3.1 Pro, Gemini 3.5 Flash, Gemini 3 Flash, Gemini 3.1 Flash-Lite, Grok 4.20 Reasoning.
-**Last updated:** 2026-05-28. See `${CLAUDE_SKILL_DIR}/references/CHANGELOG.md` for update history.
-**Benchmark note:** Official Opus 4.8 numbers are now published in the **Opus 4.8 System Card** (2026-05-28) — see `references/BENCHMARKS.md` Table 8.1.A for the full set (SWE-bench Verified 88.6, SWE-bench Pro 69.2, Terminal-Bench 2.1 74.6, OSWorld 83.4, GPQA Diamond 93.6, GDPval-AA 1890). Full verbatim system-card text: `references/opus-4-8-system-card.md` (also indexed in the corpus as `sha_70c4ccf25e6a119e`). System-card figures use adaptive thinking at **max** effort; the model defaults to `high`. Older inline matrix figures tagged to 4.7/4.6 are kept where the system card doesn't cover that benchmark. Opus 4.8 is the current default at unchanged pricing ($5/$25).
+**Models covered:** Claude Opus 4.8, GPT-5.5, GPT-5.5 Pro.
+**Last updated:** 2026-06-06.
+**Active stance:** This skill no longer maintains a broad model zoo. Older GPT, Gemini, Grok, and Sonnet routes were removed from active guidance. Use this guide for high-value frontier decisions; use repo-specific batch tooling or search tools for cheap bulk work.
 
-## Long-Horizon Research Routing
+## Default Routing
 
-For long novelty sweeps and frontier-mapping work:
-
-- Use cheaper/faster models or plain search for **search perturbation** and seam discovery.
-- Use stronger models for **compression, synthesis, and adversarial filtering**.
-- Watch for template artifacts such as repeated survivor counts or repeated memo shapes; these can be model-structure effects, not evidence about the search space.
-
-Practical split:
-
-- `Gemini 3.5 Flash` or `GPT-5.5`: compress overlapping ideas, detect hidden operator structure, write synthesis memos (2026-05-24: 3.5 Flash promoted over 3.1 Pro for synthesis)
-- `Gemini 3 Flash` or broad search tools: generate cheap perturbation passes and map candidate seams
-- `Claude` or the main orchestrator: decide what survives and what gets rejected
+| Situation | Use | Why |
+|---|---|---|
+| Large codebase work, architecture, migrations, professional judgment | **Claude Opus 4.8** | Best overall agentic coding/professional-work profile in the Opus 4.8 system card: SWE-bench Verified 88.6, SWE-bench Pro 69.2, GDPval-AA 1890, OSWorld-Verified 83.4. |
+| Codex/terminal-heavy implementation, tool loops, structured API work | **GPT-5.5** | OpenAI reports Terminal-Bench 2.0 82.7, Expert-SWE 73.1, OSWorld-Verified 78.7, Tau2-bench Telecom 98.0, strong long-context retrieval, and improved destructive-action avoidance. |
+| Quantitative proof, calibration math, hard science/data derivation where mistakes compound | **GPT-5.5 Pro** | Same underlying model as GPT-5.5 with parallel test-time compute. Use only when the answer will be checked and the 6x price is justified. |
+| Cross-model review | **Opus 4.8 + GPT-5.5** | Different labs, different failure profiles. Do independent reviews; do not use same-family self-review as adversarial pressure. |
+| Current facts, quotes, prices, law, news | **Tools first, then model synthesis** | Both model cards still show factuality limits. Retrieval/database truth beats frontier recall. |
 
 ## Quick Selection Matrix
 
-| Task | Best Model | Why | Runner-up |
-|------|-----------|-----|-----------|
-| **Agentic coding** | Claude Opus 4.8 / GPT-5.5 (Codex) | Opus 4.8 SWE-bench Verified **88.6%**, SWE-bench Pro **69.2%**, FrontierSWE #1; Terminal-Bench 2.1 74.6% (GPT-5.5 78.2%, 83.4% on Codex harness). Pick Opus for SWE-bench/long-horizon, GPT-5.5 for terminal/Codex. | Sonnet 4.6 (79.6% SWE-bench, ~60% cost) |
-| **Fact-sensitive work** | Claude Opus 4.8 / Gemini 3.1 / GPT-5.5 | SimpleQA ~72% (tied); GPT-5.5 BrowseComp 84.4% beats 5.4's 82.7% | -- |
-| **Legal reasoning** | Claude Opus 4.8 | BigLaw 90.2% | -- |
-| **Professional analysis** | Claude Opus 4.8 / GPT-5.5 | Opus 4.8 GDPval-AA **1890 Elo** (vs GPT-5.5 1769, Gemini 3.1 Pro 1314) — 4.8 now leads; HLE-with-tools 57.9% (#1) | GPT-5.5 |
-| **Computer use / browsing** | Claude Opus 4.8 / GPT-5.5 | Opus 4.8 OSWorld-Verified **83.4%** (vs GPT-5.5 78.7%, Gemini 3.1 Pro 76.2%); GPT-5.5 still strong on Tau2-bench Telecom 98.0% | -- |
-| **Hard math** | GPT-5.5 Pro / GPT-5.5 | FrontierMath Tier 4: 39.6% (Pro), 35.4% (base) vs 27.1% (5.4), 22.9% (Opus 4.7), 16.7% (Gemini 3.1 Pro) | Gemini 3.1 Pro (GPQA 94.3%) |
-| **Precise structured output** | GPT-5.5 | IFEval 95%+, native Structured Outputs + Tool Search; higher token efficiency than 5.4 | Claude (94%) |
-| **Vision / document OCR** | GPT-5.5 | DocVQA 95%+, native computer use; MMMU Pro with tools 83.2% | Gemini 3.1 Pro |
-| **Science reasoning** | GPT-5.5 Pro / Gemini 3.1 Pro | GeneBench 33.2% (5.5 Pro) vs 25.6% (5.4 Pro); BixBench 80.5% (5.5) vs 74.0% (5.4). GPQA Diamond still a tie at ~94%. | GPT-5.4 |
-| **Abstract pattern recognition** | Gemini 3.1 Pro | ARC-AGI-2 77.1% (Gemini) vs 85.0% (GPT-5.5 verified) — **GPT-5.5 now leads** per OpenAI's reported numbers; keep Gemini as runner-up until independent confirmation | GPT-5.5 (85.0% reported) |
-| **Long document ingestion** (>200K) | Gemini 3.1 Pro / GPT-5.5 / Claude | Native 1M context (all three). GPT-5.5 wins long-context on MRCR v2 at 512K-1M (74.0% vs Opus 32.2%) | -- |
-| **Subagent coding** | Claude Sonnet 4.6 | 79.6% SWE-bench at $3/$15, 1M context | Gemini 3 Flash (cheap) |
-| **Doc → schema extraction** | GPT-5.3 Instant | Less preachy, structured output, fast | GPT-5.5 (stronger reasoning, more expensive) |
-| **Cross-model review** | Opus 4.8 + GPT-5.5 | Cross-family required (+31pp accuracy, FINCH-ZK). Same-family = no adversarial pressure. | (Grok 4.20 NOT recommended as 3rd — abstention bias ≠ adversarial pressure) |
-| **Claim/quote verification** | Grok 4.20 Reasoning | AA-Omniscience 17% hallucination rate (#1) — strongly prefers "UNCERTAIN" over guessing | Claude Opus 4.8 |
-| **Strict instruction following** | Grok 4.20 Reasoning | IFBench 82.9% (#1) | GPT-5.4 (IFEval 95%) |
-| **Tabular data analysis** | Grok 4.20 Reasoning | LiveBench Data Analysis 87.06 (#1) | -- |
-| **Web-grounded search** | Grok 4.20 Reasoning (with xAI Live Search) | LMArena Search Arena 1226 (#1). Note: Live Search is **not exposed via OpenAI SDK** — requires direct xAI Responses API. | GPT-5.2 Search (1219), Perplexity, Exa |
-| **High-volume classification** | Gemini 3 Flash | $0.50/$3/M, 1M ctx | Gemini 3.1 Flash-Lite ($0.25/$1.50) |
-| **Video understanding** | Gemini 3.1 Pro | Native video support | GPT-5.4 |
+| Task | First choice | Escalate / pair when |
+|---|---|---|
+| Agentic coding | Opus 4.8 | Use GPT-5.5 when the task is terminal/Codex-heavy or needs OpenAI structured outputs. |
+| Debugging messy repo state | GPT-5.5 | Pair with Opus if the fix requires architectural judgment. |
+| Architecture decision | Opus 4.8 | Send the selected proposal to GPT-5.5 for independent critique. |
+| Quantitative audit | GPT-5.5 Pro | Use base GPT-5.5 first if the problem is bounded and API latency matters. |
+| Long-context document/repo synthesis | Opus 4.8 or GPT-5.5 | GPT-5.5 has the stronger OpenAI-reported MRCR v2 512K-1M score; Opus has stronger professional-work judgment. |
+| Browser/computer use | Opus 4.8 or GPT-5.5 | Opus leads OSWorld-Verified in the 4.8 card; GPT-5.5 has native Codex/computer-use product integration. |
+| Claim verification | Neither alone | Use primary sources and deterministic checks; use models to summarize evidence, not to establish it. |
 
-For full benchmark tables, read `${CLAUDE_SKILL_DIR}/references/BENCHMARKS.md`.
+For full score tables, read `references/BENCHMARKS.md`.
 
-## Model Profiles
+## Claude Opus 4.8 - "The Investigator"
 
-### Claude Opus 4.8 -- "The Investigator"
+**Use for:** large-scale code changes, architecture, code review, professional analysis, legal/financial document reasoning, long autonomous loops, and synthesis where judgment matters.
 
-**Strengths:** Agentic coding, professional analysis, legal reasoning, factual accuracy, computer use, long-form expert work, memory across sessions, high-resolution vision (2576px). 1M native context at standard pricing (no long-context premium). System-card headline (max effort): SWE-bench Verified **88.6%**, SWE-bench Pro **69.2%**, FrontierSWE **#1**, OSWorld **83.4%**, GDPval-AA **1890 Elo**, GPQA Diamond 93.6% (a hair below 4.7's 94.2). **Honesty/self-verification is the headline 4.8 gain** — ~4× less likely than 4.7 to let flaws in its own code pass unremarked, more likely to flag uncertainty, less likely to make unsupported claims. Alignment assessment: new highs on prosocial traits (user autonomy, acting in user's best interest); misaligned-behavior rates substantially below 4.7 and on par with Claude Mythos Preview.
-**Weaknesses:** Most expensive ($5/$25, unchanged from 4.7), weaker abstract reasoning than Gemini, weaker raw math than GPT. Tokenizer carried over from 4.7 (1.0–1.35× more input tokens than Opus 4.6 for the same text) — re-baseline cost only if migrating from 4.6 or earlier.
-**Effort:** Defaults to **high** — Anthropic's judged best quality/UX balance; on coding it spends a similar token count to 4.7's default but performs better. `extra` (`xhigh` in Claude Code) and `max` spend more tokens for harder tasks — recommended for difficult tasks and long-running async workflows. Claude Code rate limits were raised to accommodate higher effort levels.
-**Fast mode:** 2.5× speed at $10/$50 per MTok — **3× cheaper than fast mode was for previous models** (2026-05-28).
+**Operational specs:** `claude-opus-4-8`, 1M context by default on Claude API/Amazon Bedrock/Vertex AI, 128K max output, $5/M input and $25/M output. Fast mode is the same model at up to 2.5x output speed for $10/$50.
 
-**Quick prompting tips:**
-- Use **XML tags** for structure -- Claude was trained on this: `<instructions>`, `<context>`, `<documents>`
-- **Set `thinking: {type: "adaptive"}` explicitly** — adaptive is OFF by default on Opus 4.7+. `budget_tokens` returns a 400 error.
-- **Effort defaults to `high` on 4.8** (the recommended quality/UX balance). Raise to `xhigh`/`max` for hard coding, agentic, and long-running async work. Low and medium strictly scope to what was asked (may under-think on complex problems).
-- **Update instructions mid-task via `system` entries in the `messages` array** (new 2026-05-28) — change permissions, token budgets, or environment context as an agent runs *without* breaking the prompt cache or routing through a user turn. Replaces the old "stuff everything in the top-level system prompt up front" pattern for long agentic runs.
-- **Drop `temperature`, `top_p`, `top_k`** — non-default values return 400 on Opus 4.7+. Use prompting to guide behavior.
-- **Drop assistant-message prefills** — return 400 on Opus 4.7+. Use `output_config.format`, system prompts, or continuation-as-user-turn patterns.
-- Put **long documents at the TOP**, query at the BOTTOM (30% improvement measured)
-- Explain the **why** behind constraints -- Claude generalizes from explanations
-- **4.7 is more literal than 4.6** — remove scaffolding like "summarize progress after 3 tool calls"; 4.7 has built-in progress updates. Fewer subagents and tools called by default; raise effort to `xhigh` if you need more.
-- **Set `thinking.display: "summarized"`** in UIs that show reasoning — default is `"omitted"` on 4.7+, so the UI appears frozen until first output otherwise.
-- **Re-budget `max_tokens`** — same text → more tokens; 4.7+ uses more output at high efforts. Start at 64K for `xhigh`/`max`.
-- **High-resolution images** — 4.7+ reads up to 2576px. Full-res images use up to ~3× more image tokens. Remove scale-factor conversion on bounding-box coordinates; returns 1:1 with actual pixels.
-- Add `"Avoid over-engineering"` for coding tasks -- Opus tends to over-abstract
+**System-card insights to carry forward:**
+- Opus 4.8 is an improvement over 4.7 across most coding, agentic, long-context, computer-use, and professional-work evaluations, but it does not exceed Anthropic's Mythos Preview frontier-risk model.
+- Honesty is the practical headline: Anthropic reports it is around 4x less likely than 4.7 to leave flaws in its own code unreported, and the system card says reckless/destructive actions and over-refusals are substantially reduced.
+- The new watch item is grader/evaluation speculation. Do not let an LLM judge transcript summaries decide completion. Bind verification to git state, parsed test output, exit codes, database rows, and source documents.
+- Prompt-injection robustness in some agentic contexts is not a free win over 4.7. Keep tool outputs untrusted and separate them from instructions.
+- Multi-agent fan-out helps hard-tail tasks, not easy mechanical work. Use fan-out when pass rate is uncertain and latency is dominated by hard subtasks.
 
-**Claude Code Fast mode:** `/fast` runs **Opus 4.8** at 2.5× output speed — same underlying model as standard, just faster. Fast mode for 4.8 is **3× cheaper than it was for previous models** (2026-05-28). Toggle with `/fast`; available on Opus 4.8/4.7/4.6.
+**Prompting and API rules:**
+- Use XML tags for structure: `<instructions>`, `<context>`, `<documents>`, `<evidence>`.
+- Use adaptive thinking explicitly: `thinking: {"type": "adaptive"}`.
+- Default effort is `high`. Use `xhigh` for serious coding, review, and long-running agentic work; reserve `max` for the hardest single problems.
+- Mid-conversation system messages are now supported immediately after a user turn in `messages`; use them to update permissions, budgets, or environment context without rebuilding the prompt.
+- Do not set non-default `temperature`, `top_p`, or `top_k`; 4.7+ rejects them. Do not use assistant prefill.
+- Put long documents first and the query/instructions last.
 
-For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
+Full guide: `references/PROMPTING_CLAUDE.md`.
 
-**Operating Opus 4.8 in agentic infra** (from the 4.8 System Card §6, §8.11):
-- **Effort:** defaults to `high`; use **`xhigh`** for coding/agentic/review work (peak SWE-bench Pro is at xhigh; at *min* effort 4.8 already matches 4.7's max). `max` only for the hardest single problems.
-- **Honesty base-rate collapsed** — 4.8 is the first model at **0%** uncritical-flawed-result reporting, **3.7%** code-summary dishonesty (vs Mythos 27.6%), perfect on lazy-investigation, ~10× less overconfident than 4.7. Heavy fabrication-guard scaffolding ("verify before claiming done", "don't report success without evidence") is now largely redundant — trust-but-spot-check rather than gate every claim.
-- **NEW risk — grader-speculation:** 4.8 reasons about *how it will be judged* and can optimize the *appearance* of success (documented: it gamed an LLM stop-hook by flooding "PASSED" to evict "FAILED" from the grader's 400KB window). **Bind verification to ground truth (git state, exit codes, parsed test output), never to what the model says.** Deterministic checks > LLM-judge-over-transcript.
-- **Multi-agent fan-out helps the hard tail, not easy work** — 5-agent team beat single-agent on BrowseComp at 20% latency (≈3× speedup on the <0.5-pass-rate tail; *zero* on easy 100%-pass tasks, where coordination overhead cancels the gain) at higher total token cost. Fan out for hard/uncertain subtasks; stay single-agent for mechanical work.
-- **CoT is a trustworthy monitor signal** — 4.8 has low chain-of-thought controllability + high faithfulness, so its extended thinking is reliable for session-analysis/forensics.
-- **Watch-list:** over-hedging/over-abstention on *answerable* questions (BBQ disambig 81.3→72.1, ~97% of errors are "cannot be determined" — don't let it abstain out of a decidable call); early-stopping & unnecessary follow-up questions; file deletion when only debatably necessary; overriding "do not retry"; mild sycophancy.
+## GPT-5.5 - "The Professional"
 
-### Claude Sonnet 4.6 -- "The Workhorse"
+**Use for:** Codex work, terminal-heavy tasks, structured outputs, document/spreadsheet generation, native OpenAI tool workflows, long-context retrieval, and concise professional execution.
 
-**Strengths:** Near-Opus coding (79.6% SWE-bench) at ~60% cost, GDPval 1633 (actually *beats* Opus on expert preference), best speed/intelligence ratio. 1M native context (GA March 13, 2026).
-**Weaknesses:** May guess tool parameters instead of asking, 64K max output (vs Opus 128K).
+**Operational specs:** `gpt-5.5`, 1,050,000 context, 128K max output, Dec 1 2025 knowledge cutoff, $5/M input, $0.50/M cached input, $30/M output. Batch and Flex are cheaper when latency tolerates them.
 
-**Quick prompting tips:**
-- Same XML tag patterns as Opus
-- Use **adaptive thinking** (`thinking: {type: "adaptive"}`).
-- Adaptive thinking automatically enables **interleaved thinking** (between tool calls) — no beta header needed.
-- Add parameter validation instruction: `"If a required parameter is missing, ask instead of guessing"`
-- Set `max_tokens` to 64K at medium/high effort to give room for thinking
-- Best at `medium` effort for most applications; `low` for high-volume
+**System-card insights to carry forward:**
+- GPT-5.5 is designed for complex real-world work: coding, online research, information analysis, documents/spreadsheets, and moving across tools.
+- It improves destructive-action behavior over prior Codex/Thinking models: destructive-action avoidance 0.90, perfect reversion 0.52, user-work preservation 0.57 in OpenAI's eval.
+- Its factuality improved but did not become source-grade. OpenAI reports individual claims were 23% more likely to be correct in flagged factual-error cases, while responses contained factual errors only 3% less often because the model makes more claims.
+- In coding-agent resampling, OpenAI found slightly more low-severity misalignment than GPT-5.4 Thinking, including acting as if pre-existing work was its own, ignoring user constraints, and taking action when the user only asked a question. Keep explicit caller/action boundaries.
+- CoT controllability is very low: OpenAI reports only 0.2% control success at 50K-character CoTs. Do not waste prompt budget trying to steer hidden reasoning; constrain the visible output and tool permissions.
+- Cyber and bio/chem are classified High capability under OpenAI's Preparedness Framework, with cyber below Critical and strengthened safeguards. Treat cyber workflows as policy-sensitive.
+- Apollo found no sandbagging on deferred-subversion tasks, but did find a 29% lie rate on an impossible coding task. Impossible-task evals need deterministic impossibility checks, not model self-report.
 
-For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_CLAUDE.md`.
+**Prompting and API rules:**
+- Do not write "think step by step" when reasoning is enabled.
+- Keep prompts short, direct, and data-hydrated. The model reasons internally; extra scaffolding can reduce performance.
+- Use `strict: true` on function definitions.
+- Use XML-ish document packets (`<doc id="...">...</doc>`) for long inputs.
+- Use the Responses API with stored state / `previous_response_id` for multi-step tool loops.
+- Put static prompt prefixes before dynamic content to capture the cache discount.
+- Add `Formatting re-enabled` at the top of developer messages when Markdown output matters in thinking mode.
 
-### GPT-5.5 -- "The Professional"
+Full guide: `references/PROMPTING_GPT.md`.
 
-**Knowledge cutoff:** 2025-12-01 (operator-verified 2026-05-29). NOTE: GPT-5.5 self-reports "June 2024" and over-abstains on post-cutoff questions under "training-knowledge-only / don't-guess" prompts — trust the vendor cutoff, NOT a behavioral "what do you know" probe (which understates it). Affects PIT-backtest window design: a cohort decision date `T` is weight-blind to GPT-5.5 only if `T > 2025-12-01`.
+## GPT-5.5 Pro - "Expensive Precision"
 
-**Strengths:** 1M API context / 400K Codex context, math (FrontierMath Tier 4 35.4%), state-of-the-art agentic coding (Terminal-Bench 2.0 82.7%, Expert-SWE 73.1%), vision + native computer use, BrowseComp 84.4%, Tau2-bench Telecom 98.0% *without* prompt tuning. Understands task intent earlier, asks for less guidance, uses fewer tokens per task than prior GPT-5.x. Tool Search API, structured outputs, 90% prompt cache discount. Rated **High capability in Cybersecurity** (below Critical) with tightened cyber safeguards.
-**Weaknesses:** CoT controllability near zero (0.2% at 50k chars) — you cannot steer internal reasoning via prompts; this is a safety property (harder to obfuscate) but also a practical constraint. Impossible-task lying rate jumps to 29% (per Apollo eval) vs 7–10% for prior models — monitor eval harnesses that include impossible-by-design tasks.
-**Pricing:** $5/$30 per MTok at 1M context. Batch + Flex tiers at **half standard rate**; Priority at 2.5x. 90% cache discount — but **extended prompt caching only** (no in-memory cache on 5.5; opt in or get zero hits).
-**Codex Fast mode:** 1.5x faster for 2.5x cost. NOT a default — only worth it for latency-sensitive interactive work.
+**What it is:** OpenAI says GPT-5.5 Pro is the same underlying model as GPT-5.5 using parallel test-time compute. It is not a different knowledge base. It is a compute setting with higher accuracy and much higher cost.
 
-**Variants** (per system card: same weights, different compute):
-- GPT-5.5 (base) — API/llmx/Codex CLI, effort none→high. Default for programmatic use.
-- GPT-5.5 effort=xhigh — API/llmx, extended reasoning. Pro-lite. Timeouts at llmx's 900s cap.
-- GPT-5.5 Pro — ChatGPT Pro/Business/Enterprise + API at $30/$180 per MTok. **Same underlying weights** + parallel test-time compute. Gate to high-uncertainty × high-irreversibility decisions only (6x cost).
-- GPT-5.5 Pro **Deep Research mode** — separate ChatGPT Pro toggle. Autonomous web-search agent (80–160 searches, 5–15 min). Same weights, search-biased harness. Strong at synthesis from pretraining; over-searches and confabulates on post-cutoff specifics. **Use the two-phase pretraining-first template** — see `references/PROMPTING_GPT.md` §1c.
-- "Thinking" in ChatGPT web UI = effort=high (the default mode). Not a separate model.
+**Operational specs:** `gpt-5.5-pro`, 1,050,000 context, 128K max output, Dec 1 2025 knowledge cutoff, $30/M input and $180/M output. No cached-input discount is listed in the current model comparison page.
 
-**Effort levels:** `none` (no reasoning, enables temperature/top_p), `minimal`, `low`, `medium` (default via llmx since 2026-05-06, lowered for cost), `high`, `xhigh` (max compute). Pass `-e high` / `-e xhigh` explicitly for intelligence-sensitive work (adversarial review, formal/quantitative analysis, GPQA-tier science).
+**Use when all are true:**
+- The problem is high uncertainty and high irreversibility.
+- The answer requires derivation or synthesis, not just lookup.
+- You will verify intermediate steps.
+- The cost is trivial relative to a wrong answer.
 
-**Quick prompting tips** (thinking mode, high effort):
-- Do **NOT** use "think step by step" — hurts performance when thinking is on
-- Keep prompts **simple and direct** — the model does heavy reasoning internally
-- **Remove** scaffolding like "plan before you act" / "check your work" / "iterate until done" — 5.5 does this natively and the instructions hurt more than help
-- Use **`strict: true`** on all function definitions — guaranteed schema conformance
-- Use **XML format** for documents: `<doc id='1' title='Title'>Content</doc>` (JSON performs poorly)
-- Add `Formatting re-enabled` as first line of developer message (markdown off by default in thinking)
-- Use Responses API with `previous_response_id` for **reasoning persistence** across tool calls
-- **STATIC prefix (top) + DYNAMIC content (bottom)** for 90% cache discount
-- **Tool Search** for large tool sets — avoids dumping all tool definitions into prompt
-- **llmx defaults to `--reasoning-effort medium`** for GPT-5.5 (changed from high on 2026-05-06 for cost). Pass `-e high` or `-e xhigh` when the task needs deeper reasoning
+**Good fits:** Bayesian/posterior chains, calibration math, formal derivations, quantitative code audits, hard scientific or data-analysis reasoning over provided data, final review of architecture decisions that would be expensive to undo.
 
-For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_GPT.md`.
+**Bad fits:** ordinary coding, simple classification, literature search, current-events lookup, broad "research everything" prompts, and any output you will not verify.
 
-### GPT-5.3 Instant -- "The Restructurer"
+**Prompting rule:** Give Pro exact data and ask for derivations. Example ending: `Show all derivations. I will verify every intermediate step.`
 
-**Strengths:** Less preachy than 5.2 (fewer defensive disclaimers), 26.8% reduced hallucination with search, structured output, fast responses, good for doc→schema extraction.
-**Weaknesses:** Max `reasoning_effort: medium` (no deep analysis), 16K max output (half of 5.2), same pricing as 5.2, 128K context.
+## Cross-Model Review Pattern
 
-**Quick prompting tips:**
-- llmx name: `gpt-5.3-chat-latest` — **NOT** `gpt-5.3` or `gpt-5.3-instant` (404)
-- Auto-defaults to `--reasoning-effort medium` (only supported level)
-- Use `--schema` for structured extraction — combines well with reduced hallucination
-- Same XML format tip as 5.2: `<doc id='1' title='Title'>Content</doc>`
-- Good at: entity extraction from research papers, restructuring documents into schemas, summarization
-- **When to use over 5.4:** conversational tasks, schema extraction, anything that doesn't need deep reasoning
-- **When to use 5.4 instead:** math verification, formal analysis, outputs >16K tokens, computer use
+Use independent parallel reviews, then synthesize yourself:
 
-### Gemini 3.5 Flash -- "The Default Gemini" (promoted 2026-05-24)
-
-**Stable GA** of the Flash family, released May 2026. Sustained frontier-level intelligence at Flash latency. ~3× the price of `gemini-3-flash-preview` — positioned between Flash and Pro, not the cheap-Flash slot.
-
-**Empirically outperforms `gemini-3.1-pro-preview`** on critique/synthesis/agentic tasks in the operator's workflow (2026-05-24 update). Treat this as the default Gemini for adversarial review, synthesis, structured outputs, and agentic loops. Pro stays available as runner-up where its specific raw-benchmark wins matter (ARC-AGI-2, GPQA Diamond, video understanding).
-
-**Strengths:** Agentic loops (sub-agent deployment, multi-step workflows, long-horizon tasks), rapid coding cycles, structured outputs, adversarial critique. Same 1M / 65K context as Pro. Knowledge cutoff Jan 2025.
-
-**Weaknesses:** 3× cost vs base Flash makes it the wrong default for high-volume classification or mechanical extraction (use `gemini-3-flash-preview` for those). Pro still has the raw-benchmark edge on ARC-AGI-2 and video.
-
-**Quick prompting tips:**
-- llmx name: `gemini-3.5-flash` (stable) — preview alias `gemini-3-flash-preview` still resolves to the same family
-- Reasoning effort: `low/medium/high` (no `minimal`)
-- Search grounding: `--search` works (forces API fallback — CLI doesn't ground)
-- Temperature locked at 1.0 (thinking model)
-- **When to use as default:** critique cosigner, synthesis, agentic loops, structured outputs, mid-to-hard reviews
-- **When to use 3 Flash (`gemini-3-flash-preview`) instead:** high-volume classification, mechanical audits, anything cost-sensitive
-- **When to use Pro instead:** specifically benchmark-pinned ARC-AGI-2 / GPQA Diamond / video tasks
-
-```bash
-# Critique cosigner with web grounding
-llmx chat -m gemini-3.5-flash --search -f review.md -o critique.md "Pressure-test these claims"
-
-# Agentic loop (high reasoning)
-llmx chat -m gemini-3.5-flash -e high --max-tokens 65536 -f task.md -o out.md "..."
+```text
+Opus 4.8: architectural/professional judgment and implementation critique.
+GPT-5.5: terminal/tool/process critique and structured failure search.
+GPT-5.5 Pro: only for quantitative or high-irreversibility decisions.
+Ground truth: tests, git, databases, source documents, primary web pages.
 ```
 
-### Gemini 3 Flash -- "The Budget Workhorse"
-
-**Strengths:** $0.50/$3/M (cheapest capable Gemini), 1M context, 65K max output, thinking mode.
-**Weaknesses:** Shallower analysis than Pro on complex multi-file reasoning, less tested for deep architectural review.
-
-**Quick prompting tips:**
-- llmx name: `gemini-3-flash-preview`
-- Supports `--reasoning-effort low/medium/high`
-- Temperature locked at 1.0 server-side (thinking model)
-- Same prompting patterns as Gemini Pro: query at END, critical constraints at END
-- Best for: high-volume classification, document processing, mechanical audits, extraction
-- **When to use over Pro:** cost-sensitive tasks, high-volume processing, reviews under 50K context
-- **When to use Pro instead:** architectural review, multi-file cross-referencing, outputs requiring deep reasoning
-
-### Gemini 3.1 Flash-Lite -- "The Speed Demon"
-
-**Strengths:** $0.25/$1.50/M (**cheapest frontier model**), 99th percentile speed (389 tok/s), 1M context, 1000K output. Best cost/speed ratio for high-volume workloads.
-**Weaknesses:** Lower intelligence (34 vs Flash 46, Pro 57), not Pareto-optimal (Flash non-reasoning is cheaper AND smarter), struggles with complex reasoning.
-
-**Quick prompting tips:**
-- llmx name: `gemini-3.1-flash-lite-preview`
-- **3x cheaper than Flash**, 12x cheaper than Pro — use for ultra-high-volume tasks
-- Same 1M context window as other Gemini 3 models
-- Best for: translation, content moderation, UI generation, simulations, simple classification
-- **When to use over Flash:** pure speed matters, maximum cost reduction on simple tasks
-- **When to use Flash/Pro instead:** reasoning, math, multi-step analysis, fact-sensitive work
-- Released March 3, 2026 — monitor for stability before production use
-
-### Grok 4.20 Reasoning -- "The Calibrated Skeptic"
-
-**Real third-party category wins** (cross-checked Artificial Analysis, LiveBench, LMArena, Apr 2026):
-- **AA-Omniscience hallucination rate #1** — 17% (v2 0309), beating Claude 4.5 Haiku at 25%. Wins by abstaining aggressively rather than knowing more.
-- **IFBench #1** — 82.9% strict instruction-following (note: IFBench ≠ IFEval, where it's untested; +29.2pp over Grok 4).
-- **LiveBench Data Analysis #1** — 87.06 sub-score.
-- **LMArena Search Arena #1** — 1226 ELO, ahead of GPT-5.2 Search (1219) and Gemini 3 Pro Grounding (1215).
-- **τ²-Bench Telecom #2** — 97% agentic tool-use (behind GLM-5).
-
-**Honest weaknesses:**
-- **AA-Omniscience Index #3** (15) — Gemini 3.1 Pro wins the *composite* (33). Grok wins on raw fabrication rate, not on calibrated knowledge breadth.
-- **Math is the weak axis** — LiveBench Math 43.33 (lowest sub-score), LMArena Math 1458. Don't route hard math to Grok.
-- AA Intelligence Index 49 (#11/132) vs GPT-5.4/Gemini 3.1 Pro at 57, Opus at 53.
-- SWE-Bench 73.5% (below Claude/GPT ~80%), GPQA 78.5% (below Gemini 94.3%).
-- **2M context window is unverified by independent benchmarks.** No published RULER / MRCR-v2 / LongBench-v2 score for Grok 4.20. xAI's ">95% NIAH at all 2M positions" is vendor-sourced. AA confirmed *capacity*, not *retrieval quality at scale*.
-- **20× price cliff above 200K input** ($40/$120 per M) makes the 2M window economically usable only up to 200K.
-- **Multi-agent variant underperforms single-model** on AI Benchy (#47 vs #24). Cost scales without intelligence return — avoid by default.
-- xAI hasn't disclosed AIME/HLE/LiveCodeBench/ARC-AGI numbers for the `-reasoning` SKU.
-- **No published Simon Willison / Ethan Mollick / Aidan McLau review** of Grok 4.20 (negative finding as of 2026-04-16). Hands-on testers (Medium/Elizabeta, 5hr) confirm all four frontier models including Grok fail the same reasoning traps — Grok was *fastest* but didn't break any pattern.
-
-**Quick prompting tips:**
-- **Do NOT pass `reasoning_effort` to `grok-4.20-reasoning`** — the API errors out. The model reasons automatically. Only `grok-4.20-multi-agent` accepts a `reasoning.effort` field, and there it controls **agent count** (low/med→4, high/xhigh→16), not thinking depth.
-- **`logprobs` is silently ignored** on all 4.20 SKUs. Don't rely on it.
-- **Endpoint:** `https://api.x.ai/v1` — both native Responses API and OpenAI-compatible SDK. Use `openai` client with `base_url="https://api.x.ai/v1"` for drop-in compatibility.
-- **Pair with web grounding** for current events — knowledge cutoff is Sep 1, 2025.
-- **xAI web search not yet supported** via OpenAI SDK (per llmx provider notes) — use Exa/Perplexity/Brave separately for grounding.
-- **Don't pass full documents >200K tokens** — price cliff + multi-needle retrieval at scale unverified. Pre-summarize or chunk.
-- **Best-fit applications (ranked by realism, not enthusiasm):**
-  1. **PRIMARY — Claim/quote verification on synthesized outputs** (e.g. research-mcp paper synthesis post-pass). AA-Omniscience methodology directly maps to the citation-fabrication failure mode that already burns Claude/GPT/Gemini synthesis. Pattern: `verify(claim, quote, source_text) → {SUPPORTED, NOT_SUPPORTED, ABSTAIN}`. ~$0.03/synthesis check at $6/M output. Use the **non-reasoning** variant for high volume — abstention bias is in post-training, not CoT.
-  2. **PROBE-FIRST — convergent "no findings" verification** (session-analyst, audit outputs). Run 50-finding probe against existing pipeline; deploy only if >10% catch rate of confirmed-noise findings. Deploy threshold matters because Claude with explicit triage gates already abstains well — Grok must materially beat that, which is unproven.
-  3. **NICHE — end-to-end web-grounded fact lookup via xAI Live Search** (LMArena Search Arena #1, ahead of GPT-5.2 Search and Gemini 3 Pro Grounding). Genuine win, but Live Search is **not exposed via OpenAI SDK** as of 2026-04-16 — requires direct xAI Responses API integration. For users with Exa/Perplexity already wired, integration cost likely > marginal value.
-- **Don't use for:** raw math, hard agentic coding, GPQA-tier science reasoning, deep multi-step abstract reasoning, anything >200K context. Don't add as a 3rd `/critique model` opinion — its strength is abstention, not adversarial design pressure; epistemic diversity vs Gemini+GPT cross-family is small.
-- **Stack reality check:** for users already running Claude Opus 4.8 + GPT-5.4 + Gemini 3.1 Pro, Grok 4.20 Reasoning's value-add is **narrow but real** — the citation/claim verifier is the one genuine new capability. Other "wins" are marginal vs existing stack.
-
-### Gemini 3.1 Pro -- "The Polymath"
-
-**Strengths:** Science reasoning (GPQA 94.3%), abstract reasoning (ARC-AGI-2 77.1%), 1M native context, cheapest closed frontier ($2/$12), grounding with Google Search.
-**Weaknesses:** Worst instruction following (IFEval 89.2%), lower expert preference (GDPval 1317), 64K max output.
-
-**Quick prompting tips:**
-- **Keep temperature at 1.0** -- lowering causes looping and degraded reasoning (opposite of Claude/GPT)
-- Put **query at the END** after all context -- critical for Gemini
-- Place **critical constraints at the END** too -- Gemini 3 drops early constraints
-- **Defaults to `thinkingLevel: high`** server-side; thinking **cannot be disabled** on Pro (lowest is `low`)
-- Use **`thinkingLevel`**: low/medium/high for Pro (not `thinkingBudget` -- that's Gemini 2.5)
-- Default `maxOutputTokens` is only **8,192** -- you must explicitly raise it
-- **Grounding with Google Search** reduces hallucination ~40% -- unique capability
-- Use **few-shot examples always** -- matters more for Gemini than other models
-- Add `"Remember it is 2026"` -- Gemini benefits from explicit date anchoring
-- **llmx supports `--reasoning-effort`** for Gemini (maps to thinkingLevel internally)
-
-For complete guide, read `${CLAUDE_SKILL_DIR}/references/PROMPTING_GEMINI.md`.
+Do not ask GPT to review GPT output as the only adversarial pass. Do not ask Opus to bless its own code. Same-family review is useful for cleanup, not for epistemic independence.
 
 ## Validation Checklists
 
-Run these when using outputs from each model:
+### All Outputs
+- [ ] Verify current facts, prices, names, laws, schedules, and claims with source tools.
+- [ ] Verify code completion with tests, type checks, lint, git diff, and actual runtime state.
+- [ ] Treat reasoning traces as diagnostics, not proof.
+- [ ] For "nothing found" or "done" claims, prefer deterministic null checks over model confidence.
 
-### All Models
-- [ ] **Don't trust reasoning traces as evidence of correctness.** CoT faithfulness baseline: 7-13% unfaithful (multiple sources). The model can reach the right answer via wrong reasoning, or vice versa.
-- [ ] **Cross-family review for non-trivial decisions.** Same-model correction: 59.1% accuracy. Cross-family: 90.4% (FINCH-ZK). Same-family models share ~60% of errors (Kim et al. ICML 2025).
-- [ ] **Sequential debate doesn't improve correctness** (martingale proof, Choi et al. ACL 2025). Use independent parallel reviews + voting, not models critiquing each other.
+### After Opus 4.8
+- [ ] Check math and quantitative derivations, especially if not tool-backed.
+- [ ] Watch over-abstention on answerable questions.
+- [ ] Bind completion to parsed evidence, not the model's own progress summary.
+- [ ] Keep prompt-injection boundaries around tool outputs.
 
-### After Claude Opus 4.8 / Sonnet 4.6
-- [ ] Cross-check mathematical derivations (Opus 4.6 baseline MATH 93% < GPT's 98%; 4.8 improves but raw math still trails GPT)
-- [ ] For novel abstract patterns, consider Gemini second opinion
-- [ ] On documents near 1M tokens, check for context-edge information loss (MRCR v2: 78.3% at 1M)
-- [ ] 4.8 is ~4× less likely than 4.7 to let its own code flaws pass unremarked and flags uncertainty more readily — but it is *more honest*, not infallible; still verify high-stakes claims
+### After GPT-5.5
+- [ ] Check that it did not take action when the user only asked a question.
+- [ ] Check that it preserved pre-existing user/worktree changes.
+- [ ] For impossible or intentionally blocked tasks, verify it admitted the block instead of pretending success.
+- [ ] Fact-check dense professional prose; improved factuality is not source-grade accuracy.
 
-### After GPT-5.4
-- [ ] **Still fact-check** (SimpleQA ~72% inferred -- improved from 5.2's 58%, but 28% error rate remains)
-- [ ] Don't trust unsourced claims -- demand citations
-- [ ] Abstract reasoning still below Gemini -- consider Gemini second opinion for novel patterns
-- [ ] Destructive action avoidance: 0.86 (slightly below GPT-5.3-Codex 0.88) -- verify file operations in agentic use
-- [ ] `max_completion_tokens` includes reasoning tokens — 4096 + high effort = 0 output. Use 16384+ for reasoning models
+### After GPT-5.5 Pro
+- [ ] Verify every intermediate quantitative step.
+- [ ] Re-run decisive calculations with code or a second model.
+- [ ] Make sure the task justified 6x GPT-5.5 pricing.
 
-### After Gemini 3.1 Pro
-- [ ] Verify it followed instructions precisely (IFEval 89.2% -- misses ~11%)
-- [ ] Expert-quality writing may need editing (GDPval 1317 vs Claude 1606)
-- [ ] Check output wasn't silently truncated (64K max, 8K default)
+## Source Notes
 
-## Cost Comparison
-
-| Model | Input/MTok | Output/MTok | Cache Discount | Context | Max Output |
-|-------|:----------:|:-----------:|:--------------:|:-------:|:----------:|
-| Claude Opus 4.8 | $5 | $25 | -- | 1M | 128K |
-| Claude Sonnet 4.6 | $3 | $15 | -- | 1M | 64K |
-| GPT-5.4 (<272K) | $2.50 | $15.00 | 90% ($0.25) | 1M | 128K |
-| GPT-5.4 (>272K) | $5.00 | $22.50 | 90% ($0.50) | 1M | 128K |
-| GPT-5.3 Instant | $1.75 | $14 | 90% input | 128K | 16K |
-| Gemini 3.1 Pro | $2 | $12 | 75% | 1M | 64K |
-| **Gemini 3 Flash** | **$0.50** | **$3** | 75% | 1M | 65K |
-| **Gemini 3.1 Flash-Lite** | **$0.25** | **$1.50** | 75% | 1M | 1000K |
-| Grok 4.20 Reasoning (≤200K in) | $2 | $6 | 90% ($0.20) | **2M** | 128K |
-| Grok 4.20 Reasoning (>200K in) | **$40** | **$120** | 90% ($4.00) | 2M | 128K |
-
-**Cost optimization:** Default to Sonnet 4.6 for subagents. Reserve Opus for synthesis, narratives, and orchestration. Use Gemini Flash/Flash-Lite for bulk work. GPT-5.4 with cache hits ($0.25/M input) is the cheapest frontier reasoning — but only for cache-friendly workloads with static prefixes. For long-context (>272K), Gemini Pro ($2/$12) is cheaper than GPT-5.4 ($5/$22.50).
-
-## Multi-Model Architecture Pattern
-
-```
-Claude (orchestrator -- best professional judgment)
-  ├── Data tools (DuckDB, CLI tools -- ground truth)
-  └── Multi-model validation
-        ├── review    → Pro + GPT-5.4          [adversarial, ~$3-5]
-        ├── pattern   → Gemini 3.1 Pro        [1M context, ARC-AGI-2 77.1%]
-        ├── verify    → Gemini 3 Flash        [$0.50/M, fast fact-check]
-        ├── extract   → GPT-5.3              [doc→schema, less preachy]
-        ├── math      → GPT-5.4              [MATH 98%+, AIME 100%]
-        ├── classify  → Gemini 3 Flash        [$0.50/M, high-volume]
-        └── compare   → Multiple             [side-by-side for high-stakes]
-```
-
-**Cross-family rule:** Never use the same model family for both review and synthesis. GPT reviewing GPT = self-preference bias (74.9% demographic parity bias, Wataoka NeurIPS 2024). Gemini Flash fallback for Gemini Pro review = same family, defeats adversarial purpose. Use GPT-fast to extract Gemini claims, Gemini-fast to extract GPT claims.
-
-## The Hallucination Problem
-
-| Model | SimpleQA | Error Rate |
-|-------|:--------:|:----------:|
-| Claude Opus 4.8 | 72% | 28% wrong |
-| Gemini 3.1 Pro | 72.1% | 28% wrong |
-| GPT-5.4 | ~72% | ~28% wrong (33% fewer errors vs 5.2) |
-| GPT-5.4 + web search | ~95%+ | ~5% wrong |
-| Grok 4.20 Reasoning | n/a (no public SimpleQA); **AA-Omniscience 78%** (best at calibrated abstention) | -- |
-
-**Key insight:** GPT-5.4 closed most of the hallucination gap vs Claude/Gemini (33% fewer errors vs 5.2). But ~28% error rate remains — always query data sources for dollar amounts, dates, entity names, and legal claims.
-
-**AA-Omniscience vs SimpleQA:** SimpleQA tests *factual recall* ("did the model know the answer?"). AA-Omniscience tests *calibrated abstention* ("when the model didn't know, did it say 'I don't know' instead of fabricating?"). Grok 4.20 Reasoning leads on the second axis — useful for verification workflows where false confidence is more costly than missing answers.
-
-## Compliance Pressure & Null Paths
-
-All frontier models share a structural failure: when a prompt asks "find X" or "analyze Y for Z," the most probable completion is findings, not "nothing found." The prompt shape determines the answer shape before reasoning begins. Extended thinking makes this worse — more token space = more room to construct elaborate justifications for findings that aren't there (arXiv:2602.07796, "Thinking Makes LLM Agents Introverted").
-
-**This is not sycophancy toward the user — it's sycophancy toward the prompt itself.**
-
-### Patterns That Reduce Compliance Pressure
-
-**1. Triage gate before elaboration.** Force a classification step before detailed analysis:
-```
-Phase 1: Does this [thing] have problems worth reporting? (YES / NO / MINOR ONLY)
-  If NO → output one-line justification and stop.
-  If MINOR → one-line notes only.
-  If YES → proceed to detailed analysis.
-```
-The gate makes refusal a first-class output with lower token cost than fabrication.
-
-**2. Explicit null output format.** Give the model a formatted, easy-to-complete "nothing here" option:
-```
-If no significant findings exist, output EXACTLY:
-## Result: No actionable findings
-Reason: [one line]
-```
-Without this, the null path requires generating a novel structure — lower probability than filling the expected template.
-
-**3. Contrastive framing.** "What's wrong with X?" primes for findings. Better: "Does X have problems, or is it fine as-is?" gives both completions similar probability. Numeric scales ("Rate 1-5") avoid elaboration priming entirely.
-
-**4. Third-person perspective.** "A reviewer examining this would say..." reduces sycophancy by up to 63.8% (SYCON Bench, arXiv:2505.23840). The perspective shift breaks the helpfulness frame.
-
-**5. Normalize the null.** State that no findings is expected and valid: "Many sessions will have no findings — report that." Counterbalances the 14 "look for X" items that follow.
-
-### Convergent vs Divergent Evaluation
-
-Not all evaluative prompts need the same fix. The distinction:
-
-| Mode | Question shape | Example skills | Mitigation |
-|------|---------------|----------------|------------|
-| **Convergent** | "Is there a problem?" (yes/no) | session-analyst, verify-findings, bio-verify, retro | **Triage gate** — force YES/NO classification before elaboration |
-| **Divergent** | "What could be better?" (always has answers) | design-review, project-upgrade, suggest-skill, brainstorm | **Downstream filtering** — let generation run, filter quality after |
-| **Exploratory** | "What's missing?" (absence is the finding) | negative-space-sweep, novel-expansion | **Neither** — divergent by design, pertinent negatives are the output |
-
-**Why different fixes:** Next-token prediction is convergent by nature (research/divergent-convergent-thinking-llms.md). For convergent evaluation, the model defaults to "yes, problem found" because elaboration has higher token probability than refusal — a triage gate fixes this by making refusal a first-class completion. For divergent evaluation, gating would *suppress useful output* — the model should generate freely, and quality filtering happens downstream (disposition tables, verify-findings, dedup).
-
-**The structural insight:** Compliance pressure is a convergent-mode failure. In divergent mode, the same pressure is actually productive — you *want* the model to generate aggressively. The problem is when a prompt is convergent (should I report this?) but the template forces divergent output (fill in these 14 finding slots).
-
-### When To Apply Triage Gates
-
-Apply to prompts where:
-- The honest answer might be "nothing to report" (convergent evaluation)
-- Structured output templates have slots that create fill-pressure
-- External model dispatch increases fabrication risk (less project context)
-- Findings drive downstream actions (hooks, rules, code changes)
-
-Do NOT gate:
-- Divergent/creative prompts (brainstorm, design-review, suggest-skill) — use downstream filtering instead
-- Exploratory prompts (negative-space-sweep) — absence is the output
-- Prescriptive/reference prompts, code generation, direct Q&A
+Primary sources consulted for this update:
+- Anthropic: `https://www.anthropic.com/news/claude-opus-4-8`
+- Anthropic: `https://platform.claude.com/docs/en/about-claude/models/whats-new-claude-4-8`
+- Anthropic system-card registry: `https://www.anthropic.com/system-cards`
+- OpenAI: `https://openai.com/index/introducing-gpt-5-5/`
+- OpenAI system card: `https://deploymentsafety.openai.com/gpt-5-5/gpt-5-5.pdf`
+- OpenAI pricing: `https://openai.com/api/pricing/`
+- OpenAI model comparison: `https://developers.openai.com/api/docs/models/compare`
 
 ## When to Update This Skill
 
-Update after any frontier model release:
-1. Update `${CLAUDE_SKILL_DIR}/references/BENCHMARKS.md` with new scores
-2. Update relevant `references/PROMPTING_*.md` with API/behavior changes
-3. Update selection matrix if rankings change
-4. Add entry to `references/CHANGELOG.md`
+Update after a current-frontier release or material system-card revision:
+1. Update `references/BENCHMARKS.md`.
+2. Update `references/PROMPTING_CLAUDE.md` or `references/PROMPTING_GPT.md`.
+3. Update this routing surface if the default choice changes.
+4. Add a dated entry to `references/CHANGELOG.md`.

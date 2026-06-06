@@ -1,115 +1,64 @@
 # Frontier Model Benchmarks
 
-**Last updated:** 2026-05-28
-**Sources:** Artificial Analysis, LLM Stats, SWE-bench.com, LMSYS Chatbot Arena, official docs (Anthropic, OpenAI, Google DeepMind).
+**Last updated:** 2026-06-06
+**Active scope:** Claude Opus 4.8, GPT-5.5, GPT-5.5 Pro.
 
-> **Note:** Official Opus 4.8 figures (Table 8.1.A directly below) are from the **Claude Opus 4.8 System Card** (2026-05-28). The older "Extended cross-model" table further down still carries **Opus 4.6-baseline** numbers for benchmarks the system card doesn't cover (MMLU, AIME, LiveCodeBench, Grok/GPT-5.4 comparisons) — those Opus cells are 4.6 unless they match a system-card row. Prefer Table 8.1.A for any Opus 4.8 claim.
+Older GPT/Gemini/Grok/Sonnet routing rows were removed from the active benchmark surface. Historical comparisons remain only where a vendor used them as a baseline.
 
-## Claude Opus 4.8 — Official System Card Results (2026-05-28)
+## Headline Routing Scores
 
-Source: Claude Opus 4.8 System Card §8 (Table 8.1.A). **Config:** adaptive thinking at **max** effort, default sampling, averaged over 5 trials (25 for GPQA), context ≤1M. Competitor figures from their own system cards/leaderboards. Best-in-row **bold**. `—` = not reported by that vendor.
+| Evaluation | Opus 4.8 | GPT-5.5 | GPT-5.5 Pro | Routing read |
+|---|---:|---:|---:|---|
+| SWE-bench Verified | **88.6** | - | - | Opus for benchmarked GitHub issue resolution. |
+| SWE-bench Pro | **69.2** | 58.6 | - | Opus leads on the harder public SWE benchmark. |
+| Terminal-Bench 2.0 / 2.1 | 74.6 (2.1) | **82.7** (2.0) | - | GPT-5.5 for terminal/Codex-heavy work; versions differ. |
+| Expert-SWE | - | **73.1** | - | OpenAI internal long-horizon coding signal. |
+| GDPval / GDPval-AA | **1890 Elo** (AA) | 84.9 wins/ties | 82.3 wins/ties | Opus leads on AA Elo; GPT-5.5 is strong on OpenAI's wins/ties table. |
+| OSWorld-Verified | **83.4** | 78.7 | - | Opus leads direct computer-use benchmark. |
+| BrowseComp | 84.3 single / 88.5 multi-agent | 84.4 | **90.1** | Pro helps tool/search-heavy hard questions; base tie is close. |
+| FrontierMath Tier 4 | - | 35.4 | **39.6** | Pro for hard quantitative work. |
+| GeneBench | - | 25.0 | **33.2** | Pro is the strongest listed OpenAI science-analysis variant. |
+| BixBench | - | **80.5** | - | GPT-5.5 for quantified biology benchmark where reported. |
+| GPQA Diamond | 93.6 | 93.6 | - | Tie on reported base numbers; use tools/source reading for real science work. |
+| HLE no tools | **49.8** | 41.4 | 43.1 | Opus for unaided expert reasoning. |
+| HLE with tools | **57.9** | 52.2 | 57.2 | Opus slight lead; Pro close when tool use is allowed. |
+| MCP-Atlas | **82.2** | 75.3 | - | Opus for MCP-heavy tool use. |
+| AutomationBench | **15.5** | 12.9 | - | Opus for long-horizon automation. |
+| Tau2-bench Telecom | - | **98.0** | - | GPT-5.5 for customer-service style tool workflows. |
+| MRCR v2 8-needle 512K-1M | 32.2 (reported for Opus 4.7/4.6 comparison) | **74.0** | - | GPT-5.5 for OpenAI-reported long-context retrieval. |
+| ARC-AGI-2 verified | - | **85.0** | - | GPT-5.5 for OpenAI-reported abstract reasoning. |
 
-| Evaluation | Opus 4.8 | Opus 4.7 | GPT-5.5 | Gemini 3.1 Pro | Measures |
-|-----------|:---:|:---:|:---:|:---:|----------|
-| **SWE-bench Verified** | **88.6** | 87.6 | — | 80.6 | Real-world coding |
-| **SWE-bench Pro** | **69.2** | 64.3 | 58.6 | 54.2 | Hard multi-file coding, no leakage |
-| **SWE-bench Multilingual** | **84.4** | 80.5 | — | — | Coding across 9 languages |
-| **SWE-bench Multimodal** | **38.4** | 34.5 | — | — | Coding w/ visual context |
-| **Terminal-Bench 2.1** | 74.6 | 66.1 | **78.2** | 70.3 | Terminal/CLI agentic tasks |
-| **BrowseComp** | 84.3 (single) / 88.5 (multi-agent) | 79.8 | 84.4 | 85.9 | Web browsing/research |
-| **Humanity's Last Exam** (no tools) | **49.8** | 46.9 | 41.4 | 44.4 | Frontier expert reasoning |
-| **Humanity's Last Exam** (with tools) | **57.9** | 54.7 | 52.2 | 51.4 | " |
-| **OSWorld-Verified** | **83.4** | 82.8 | 78.7 | 76.2 | Computer use |
-| **GPQA Diamond** | 93.6 | 94.2 | — | **94.3** | Graduate science (4.8 *down* vs 4.7) |
-| **ChartQAPro** (with tools) | **72.3** | 69.8 | — | — | Chart QA |
-| **ScreenSpot-Pro** (with tools) | **87.9** | 87.6 | — | — | UI grounding |
-| **Finance Agent v2** | 53.9 | 51.5 | 51.8 | 43.0 | Financial agentic work (Gemini 3.5 Flash: **57.9**) |
-| **GDPval-AA** | **1890** | 1753 | 1769 | 1314 | Expert professional work (Elo) |
-| **MCP-Atlas** | 82.2 | 79.1 | 75.3 | 78.2 | MCP tool use (Gemini 3.5 Flash: **83.6**) |
-| **AutomationBench** | **15.5** | 9.9 | 12.9 | 9.6 | Long-horizon automation (3.5 Flash: 14.5) |
-| **GraphWalks BFS 256K** | **85.9** | 76.9 | 73.7 | — | Long-context graph traversal |
-| **GraphWalks Parents 256K** | **99.3** | 93.6 | 90.1 | — | " |
+**Reading cautions:**
+- Opus 4.8 scores are from the Anthropic system card, generally with adaptive thinking at max effort. Production default is `high`.
+- OpenAI notes GPT evals on the announcement page were run with reasoning effort set to `xhigh` in a research environment; production ChatGPT/API may differ.
+- GPT-5.5 Pro is not a separate training run. OpenAI describes it as the same underlying model using parallel test-time compute, with separate evals where extra compute may change risks or safeguards.
+- Do not compare Opus Terminal-Bench 2.1 directly to GPT Terminal-Bench 2.0 without noting harness/version differences. Anthropic also notes GPT-5.5's Codex CLI harness score is 83.4.
 
-Prose-only results (system card §8.4–8.5): **FrontierSWE** — Opus 4.8 ranks **#1** on mean@5 (avg rank 2.74) and best@5 (2.26), up from 4.7's #3; all models at xhigh effort. **ProgramBench** — Opus 4.8 **79–88%** (1–5 episodes) vs 4.7's 71–84%.
+## Specs And Pricing
 
-**Reading note:** these are **max-effort** numbers; the model *defaults* to `high`. Per §8.2 Fig, Opus 4.8 at *minimum* effort already matches Opus 4.7's *maximum*-effort SWE-bench Pro peak. GPQA Diamond is the one visible regression (93.6 vs 4.7's 94.2) — honest to flag, not hide.
+| Model | Input/MTok | Cached input/MTok | Output/MTok | Context | Max output | Knowledge cutoff | Notes |
+|---|---:|---:|---:|---:|---:|---|---|
+| Claude Opus 4.8 | $5.00 | - | $25.00 | 1M | 128K | Jan 2026 | Fast mode: $10/$50, up to 2.5x output speed. |
+| GPT-5.5 | $5.00 | $0.50 | $30.00 | 1.05M | 128K | Dec 1 2025 | Batch/Flex available; Priority costs more. |
+| GPT-5.5 Pro | $30.00 | - | $180.00 | 1.05M | 128K | Dec 1 2025 | Same weights plus parallel test-time compute. |
 
-## Extended Cross-Model (Opus cells 4.6-baseline unless they match Table 8.1.A above)
+## Model-Card Behavior Signals
 
-| Benchmark | Claude Opus 4.8 | Claude Sonnet 4.6 | GPT-5.4 | Gemini 3.1 Pro | Grok 4.20 Reasoning | Measures |
-|-----------|:---:|:---:|:---:|:---:|:---:|----------|
-| **SWE-bench Verified** | **88.6%** | 79.6% | 80.0% | 80.6% | 73.5% | Real-world coding (4.8 system-card) |
-| **GPQA Diamond** | 93.6% | -- | 93.2% | **94.3%** | ~78.5% | Graduate science reasoning (4.8 system-card) |
-| **AIME 2025** | ~95% | -- | **100%** | ~95% | -- | Competition math |
-| **MATH-500** | 93% | -- | **98%** | 91.1% | -- | Math problem solving |
-| **MMLU** | **92%** | -- | 88% | 85.9% | -- | Broad knowledge |
-| **MMLU-Pro** | 82% | -- | 83% | **89.5%** | -- | Hard multi-domain reasoning |
-| **HumanEval** | **95%** | -- | **95%** | 84.1% | -- | Code generation |
-| **LiveCodeBench** | 76% | -- | **80%** | 73% | -- | Up-to-date coding |
-| **IFEval** | 94% | -- | **95%** | 89.2% | -- | Instruction following |
-| **IFBench (AA)** | -- | -- | -- | -- | **82.9%** (#1) | Strict instruction-following (AA's IFBench, +29.2pp over Grok 4) |
-| **SimpleQA** | **72%** | -- | ~72% | **72.1%** | -- | Factual accuracy |
-| **AA-Omniscience Hallucination Rate** *(lower better)* | -- | -- | -- | -- | **17%** (#1) | Fabrication rate when answering (Grok 4.20 v2 0309) |
-| **AA-Omniscience Index** *(composite, accuracy + abstention)* | -- | -- | -- | **33** (#1) | 15 (#3) | Knows what it knows AND what it doesn't |
-| **AA Intelligence Index v4.0** | 53 | -- | **57** | **57** | 49 (#11/132) | Composite intelligence |
-| **LiveBench Data Analysis** | -- | -- | 78.56 | -- | **87.06** (#1) | Tabular/data analysis sub-bench |
-| **LiveBench Math** | -- | -- | 47.46 | -- | **43.33** (weak) | Confirms Math weakness — lowest sub-score on LiveBench |
-| **LiveBench Overall** *(2026-01-08)* | -- | **68.19** | 67.54 | -- | 67.96 (#2) | Composite |
-| **τ²-Bench Telecom** | -- | -- | -- | -- | **97%** (#2) | Agentic tool-use (behind GLM-5) |
-| **LMArena Search Arena** | -- | -- | 1219 | 1215 | **1226** (#1) | Web-grounded search ranking (Feb 2026) |
-| **LMArena Coding ELO** | -- | -- | -- | -- | 1524 | Above its overall ELO (1490) |
-| **ARC-AGI-2** | 68.8% | -- | 52.9% | **77.1%** | -- | Novel abstract reasoning |
-| **Terminal-Bench 2.0** | 65.4% | -- | 60% | **68.5%** | -- | Terminal/CLI tasks |
-| **GDPval-AA Elo** | 1606 | **1633** | -- | 1317 | -- | Expert preference |
-| **BigLaw Bench** | **90.2%** | -- | -- | -- | -- | Legal reasoning |
-| **OSWorld** | **72.7%** | -- | -- | -- | -- | Computer use |
-| **BrowseComp** | 84.0% | -- | -- | **85.9%** | -- | Web browsing |
-| **HLE (with tools)** | **53.1%** | -- | 45% | 51.4% | -- | Humanity's Last Exam |
-| **Chatbot Arena** | #4-8 | -- | #5-6 | **#1** | -- | User preference |
-| **Arena: Coding** | **#1** | -- | #3 | #4 | -- | Coding preference |
+| Signal | Opus 4.8 | GPT-5.5 | Operational consequence |
+|---|---|---|---|
+| Honesty / factuality | Around 4x less likely than Opus 4.7 to leave flaws in its own code unreported; lower incorrect-rate on several factual benchmarks mainly via abstention. | Individual claims 23% more likely correct in flagged factual-error cases; response-level error only 3% lower because it makes more claims. | Still verify. Opus can be trusted slightly more as a monitor; GPT still needs source grounding. |
+| Destructive actions | Reckless and destructive actions substantially reduced vs prior Opus releases. | Destructive-action avoidance 0.90; perfect reversion 0.52; user-work preserved 0.57. | Both improved, neither replaces git/test safeguards. |
+| Agentic misalignment | Improved over 4.7 on most alignment measures; watch grader speculation/evaluation awareness. | Slightly more low-severity misalignment than 5.4 Thinking in coding-agent resampling; no novel severe misalignment found. | Bind agents to ground truth and explicit action permissions. |
+| Prompt injection | Some agentic-context robustness weaker than Opus 4.7 before safeguards; deployed safeguards close much of the gap. | Connector prompt-injection score 0.963 vs 0.998 for 5.4 Thinking. | Treat tool outputs as hostile. Do not mix retrieved text with instructions. |
+| CoT monitorability | Low CoT controllability and broadly monitorable extended thinking; preliminary caveat that visible CoT may not catch all grader awareness. | Comparable CoT monitorability to GPT-5 reasoning models; 0.2% CoT controllability at 50K chars. | Reasoning traces are diagnostic, not proof. Use deterministic verification. |
+| Safety preparedness | Does not advance Anthropic's capability frontier beyond Mythos Preview; catastrophic risk low with mitigations. | High bio/chem and High cybersecurity below Critical; AI self-improvement below High. | Cyber/bio workflows need policy-aware routing and sources. |
+| Impossible-task behavior | Main watch item is appearance-of-success / grader speculation. | Apollo reports 29% lying rate on an impossible coding task. | Build impossibility checks into eval harnesses. |
 
-> **Grok 4.20 Reasoning — read with care:**
-> - **Hallucination rate** (17%, #1) is its standout — the AA-Omniscience methodology rewards "I don't know" and penalizes guessing, so Grok wins by abstaining aggressively. **AA-Omniscience Index** (composite) puts Grok at #3 (15) behind Gemini 3.1 Pro (#1, 33), which both knows more *and* abstains well.
-> - **2M context unverified by third parties.** No published independent RULER / MRCR-v2 / LongBench-v2 score for Grok 4.20 specifically — Awesome Agents leaderboard explicitly lists Grok 4 Fast (2M) with all retrieval scores as dashes. The xAI ">95% NIAH at all 2M positions" claim is vendor-sourced. AA confirmed *capacity*, not *retrieval quality at scale*. Combined with the 20× price cliff above 200K, treat 2M as marketing for now.
-> - **Multi-agent variant underperforms single-model** on AI Benchy (#47 vs #24, agent-wars.com 2026-03-13). Cost scales with agent count without intelligence return.
-> - **Math is the weak axis** (LiveBench 43.33, LMArena 1458). Don't route hard math to Grok.
-> - xAI did not separately disclose AIME/MATH/MMLU/HumanEval/LiveCodeBench/ARC-AGI/HLE numbers for the `-reasoning` SKU; published Grok 4 base figures don't transfer cleanly.
+## Sources
 
-## Pricing
-
-| Model | Input/MTok | Output/MTok | Cache Discount | Context | Max Output |
-|-------|:----------:|:-----------:|:--------------:|:-------:|:----------:|
-| Claude Opus 4.8 | $5.00 | $25.00 | -- | 1M | 128K |
-| Claude Sonnet 4.6 | $3.00 | $15.00 | -- | 1M | 64K |
-| GPT-5.4 (<272K) | $2.50 | $15.00 | 90% ($0.25) | 1M | 128K |
-| GPT-5.4 (>272K) | $5.00 | $22.50 | 90% ($0.50) | 1M | 128K |
-| GPT-5.3 Instant | $1.75 | $14.00 | 90% input | 128K | 16K |
-| Gemini 3.1 Pro | $2.00 | $12.00 | 75% | 1M | 64K |
-| Gemini 3 Flash | $0.50 | $3.00 | 75% | 1M | 65K |
-| Gemini 3.1 Flash-Lite | $0.25 | $1.50 | 75% | 1M | 1000K |
-| Grok 4.20 Reasoning (≤200K in) | $2.00 | $6.00 | 90% ($0.20) | **2M** | 128K |
-| Grok 4.20 Reasoning (>200K in) | **$40.00** | **$120.00** | 90% ($4.00) | 2M | 128K |
-
-> **Grok long-context cliff:** crossing 200K input tokens triggers a 20× price tier — `2M context` is technically available but operationally usable only up to 200K unless cost is irrelevant. Plan to chunk or summarize before exceeding 200K.
-
-## Category Winners
-
-| Category | Winner | Score | Key Gap |
-|----------|--------|:-----:|---------|
-| Agentic coding | Claude Opus 4.8 | 80.8% SWE-bench | +0.2pp over Gemini |
-| Expert preference | Claude Sonnet 4.6 | 1633 GDPval | +27 over Opus, +316 over Gemini |
-| Factual accuracy | Tie: Claude / Gemini / GPT-5.4 | ~72% SimpleQA | All within 0.1pp |
-| Math | GPT-5.4 | 98% MATH, 100% AIME | +5pp over Claude |
-| Science reasoning | Gemini 3.1 Pro | 94.3% GPQA | +1.1pp over GPT |
-| Abstract reasoning | Gemini 3.1 Pro | 77.1% ARC-AGI-2 | +8.3pp over Claude |
-| Instruction following | GPT-5.4 | 95% IFEval | +1pp over Claude |
-| Legal reasoning | Claude Opus 4.8 | 90.2% BigLaw | No competition |
-| Computer use | Claude Opus 4.8 | 72.7% OSWorld | No competition |
-| Long context | Gemini 3.1 Pro / GPT-5.4 / Claude | 1M native (all) | Claude: MRCR v2 78.3% at 1M |
-| Cost efficiency | Gemini 3.1 Flash-Lite | $0.25/$1.50 | Cheapest frontier model |
-| **Hallucination rate (raw)** | Grok 4.20 Reasoning v2 | **17%** AA-Omniscience hallucination rate | Lowest fabrication rate — wins by abstaining aggressively |
-| **Calibrated knowledge (composite)** | Gemini 3.1 Pro | **33** AA-Omniscience Index | Knows more *and* abstains well — Grok #3 |
-| Strict instruction following | Grok 4.20 Reasoning | **82.9%** IFBench (#1) | +29.2pp over Grok 4 — strongest single-version improvement |
-| Tabular / data analysis | Grok 4.20 Reasoning | **87.06** LiveBench Data Analysis | Sub-bench lead |
-| Web-grounded search | Grok 4.20 Reasoning | **1226** LMArena Search Arena | #1 ahead of GPT-5.2 Search (1219) and Gemini 3 Pro Grounding (1215) |
-| Agentic tool-use | GLM-5 | -- | Grok 4.20 #2 at 97% τ²-Bench Telecom |
+- Anthropic system-card registry: `https://www.anthropic.com/system-cards`
+- Anthropic launch/API notes: `https://www.anthropic.com/news/claude-opus-4-8`, `https://platform.claude.com/docs/en/about-claude/models/whats-new-claude-4-8`
+- Local vendored Opus card: `references/opus-4-8-system-card.md`
+- OpenAI launch: `https://openai.com/index/introducing-gpt-5-5/`
+- OpenAI system card: `https://deploymentsafety.openai.com/gpt-5-5/gpt-5-5.pdf`
+- OpenAI pricing/model docs: `https://openai.com/api/pricing/`, `https://developers.openai.com/api/docs/models/compare`
