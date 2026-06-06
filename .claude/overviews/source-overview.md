@@ -1,76 +1,77 @@
-<!-- Generated: 2026-04-12T23:51:56Z | git: 757c45a | model: gemini-3-flash-preview -->
+<!-- Generated: 2026-06-03T19:05:40Z | git: 5f44068 | model: gemini-3-flash-preview -->
 
 <!-- INDEX
-[SCRIPT] add-mcp.sh — adds MCP servers to project configuration via presets
-[SCRIPT] advisory-wrapper.sh — converts blocking hooks into advisory-only logging hooks
-[SCRIPT] agent-coord.py — coordinates multiple concurrent Claude sessions via a shared status file
-[SCRIPT] append-skill-memento.sh — appends known issues to skill documentation
-[SCRIPT] commit-check-parse.py — validates git commit message formatting and trailers
-[SCRIPT] generate-overview.sh — entry point for codebase overview generation
-[SCRIPT] hook-trigger-log.sh — unified telemetry logger for all hook events
-[SCRIPT] permission-denied-retry.sh — auto-retries safe tool calls incorrectly denied by Claude
-[SCRIPT] posttool_research_reformat.py — cleans and truncates noisy research/search tool outputs
-[SCRIPT] precompact-extract.py — extracts epistemic content (hedging, decisions) before context compaction
-[SCRIPT] source-check-validator.py — validates provenance tags and source density in research files
-[MODULE] source-check-haiku.py — uses Claude Haiku to semantically rate source coverage
-[FLOW] tool_output → hook-trigger-log.sh → ~/.claude/hook-triggers.jsonl — telemetry flow
-[FLOW] transcript → precompact-extract.py → .claude/checkpoint.md — handoff state preservation
-[LIB] jq — used for robust JSON manipulation in shell scripts
-[LIB] pyright — used for static type checking in Python hooks
+[SCRIPT] hooks/agent-coord.py — Coordinates multiple Claude sessions via a shared status file to avoid work conflicts.
+[SCRIPT] hooks/add-mcp.sh — CLI tool to add MCP server presets (exa, svelte, etc.) to project configuration.
+[SCRIPT] hooks/generate-overview.sh — Entry point for regenerating codebase overviews using LLM-based analysis.
+[SCRIPT] hooks/posttool_research_reformat.py — Rewrites noisy research/search MCP outputs to preserve context window.
+[SCRIPT] hooks/source-check-validator.py — Validates structural provenance tags ([SOURCE], [DATA]) in research documents.
+[SCRIPT] hooks/precompact-extract.py — Extracts epistemic content (hedging, decisions) before session compaction.
+[HOOK] pretool-subagent-gate.sh — Blocks/advises on subagent dispatch based on memory pressure and output discipline.
+[HOOK] stop-research-gate.sh — Blocks session termination if research files lack required provenance citations.
+[HOOK] pretool-llmx-guard.sh — Blocks invalid model names, forbidden flags, and chat-style CLI automation for llmx.
+[HOOK] posttool-bash-failure-loop.sh — Detects consecutive Bash failures and injects targeted diagnostic advice.
+[HOOK] stop-plan-gate.sh — Unified gate verifying plan status and executing ```verify block acceptance criteria.
+[HOOK] pretool-git-add-all-guard.sh — Blocks dangerous global git commands (add -A, add .) to prevent artifact leakage.
+[FLOW] tool_output → archive → reformatted_output — Research MCP results are archived raw and summarized for the LLM.
+[FLOW] session_transcript → checkpoint.md — Epistemic state is extracted during compaction to prevent context loss.
+[LIB] jq — Used for robust JSON parsing and manipulation in shell scripts.
+[LIB] pyright — External static type checker used for regression detection in Python edits.
 -->
 
 ### Code inventory
 
-#### Hook Infrastructure & Telemetry
-These scripts manage the execution and monitoring of the hook system itself.
-* `hook-trigger-log.sh`: The central telemetry sink. It logs every hook firing (warn, block, allow) to a unified JSONL file for ROI analysis.
-* `advisory-wrapper.sh`: A utility that wraps any blocking hook, allowing it to run but converting a "block" decision into an "allow" with an advisory message.
-* `permission-log.sh`: Specifically tracks `PermissionRequest` and `PermissionDenied` events to measure agent autonomy.
+#### Agent Coordination & Session Management
+* `hooks/agent-coord.py`: Manages `.claude/agent-work.md` to track active PIDs and file locks across concurrent sessions.
+* `hooks/kimi-session-start.sh`: Persists session IDs for Kimi CLI integration.
+* `hooks/prepare-commit-msg-session-id.sh`: Automatically appends `Session-ID` trailers to git commits for provenance tracking.
+* `hooks/agent-coord.py`: CLI entry points: `status`, `register`, `check`, `deregister`.
 
-#### Git & Governance Automation
-Scripts that enforce project standards during the commit and development lifecycle.
-* `pretool-commit-check.sh` / `commit-check-parse.py`: Enforces a specific commit format: `[scope] Verb — why`, and suggests trailers like `Evidence:` or `Session-ID:`.
-* `stop-uncommitted-warn.sh`: Automatically stages and commits session changes at session end to prevent work loss.
-* `pretool-ast-precommit.sh`: Validates Python syntax in staged files before allowing a commit.
-* `prepare-commit-msg-session-id.sh`: Automatically appends the current session ID to git commit trailers.
+#### Research & Epistemic Governance
+* `hooks/posttool_research_reformat.py`: Intercepts large MCP outputs (Exa, PubMed) and reformats them into structured summaries.
+* `hooks/source-check-validator.py`: Enforces tag density and structural validity of citations like `[SOURCE: url]` or `[A1]`.
+* `hooks/source-check-haiku.py`: Uses a sub-model to semantically rate source coverage in research memos.
+* `hooks/postwrite-source-check.sh`: Trigger for validating provenance on files in `docs/` or `research/` paths.
 
-#### Epistemic & Research Guardrails
-A large group of scripts dedicated to maintaining high standards for factual claims and research quality.
-* `postwrite-source-check.sh` / `source-check-validator.py`: Validates "provenance tags" (e.g., `[SOURCE: url]`, `[DATA]`, `[INFERENCE]`) in research markdown files.
-* `posttool-research-reformat.sh` / `posttool_research_reformat.py`: Intercepts noisy MCP outputs (like full research papers or search results), archives the raw text, and presents a cleaned summary to the agent.
-* `subagent-epistemic-gate.sh`: Inspects subagent outputs for factual claims, warning if they lack citations.
-* `postwrite-frontier-timeliness.sh`: Warns if the agent cites older AI models (e.g., GPT-4, Claude 3.5) without a "pre-frontier" disclaimer.
+#### Automation & Tooling Guards
+* `hooks/pretool-subagent-gate.sh`: Monitors system memory and enforces "write-stub-first" discipline for subagents.
+* `hooks/pretool-llmx-guard.sh`: Validates `llmx` CLI calls, blocking forbidden models (Gemini 2.5) and unbuffered redirects.
+* `hooks/pretool-git-add-all-guard.sh`: Prevents accidental staging of scratch files by blocking `git add .` and `git add -A`.
+* `hooks/pretool-bash-loop-guard.sh`: Blocks multiline shell loops that cause `zsh` parse errors in the Claude harness.
 
-#### Session & Subagent Management
-Tools for managing the state and behavior of Claude sessions and subagents.
-* `agent-coord.py`: Manages `.claude/agent-work.md` to prevent multiple agents from editing the same files simultaneously.
-* `precompact-log.sh` / `precompact-extract.py`: Runs before Claude compacts its context window. It extracts "epistemic content" (uncertainties, negative results, decisions) into a `checkpoint.md` file so they aren't lost in the summary.
-* `pretool-subagent-gate.sh`: Prevents "agent recursion" or runaway spawning by checking system memory and process counts.
-* `stop-plan-gate.sh`: Blocks session termination if a plan's `verify` block (acceptance criteria) fails.
+#### Verification & Quality Control
+* `hooks/stop-plan-gate.sh`: Executes shell commands found in ````verify```` blocks within plan files to gate session completion.
+* `hooks/posttool-pyright-check.sh`: Runs `pyright` on edited Python files and reports only *newly introduced* errors.
+* `hooks/pretool-ast-precommit.sh`: Validates Python syntax in staged `.py` and inline `.sh` blocks before allowing a commit.
+* `hooks/stop-verify-claims.sh`: Checks final assistant messages against `git log` to ensure "I committed" claims are true.
 
-#### Tool-Specific Guards
-Utilities that prevent common errors with specific CLI tools or MCPs.
-* `pretool-llmx-guard.sh`: Prevents common mistakes with the `llmx` CLI, such as using forbidden models or hallucinated flags.
-* `pretool-bash-loop-guard.sh`: Blocks multiline shell loops that typically cause Zsh parse errors in the agent environment.
-* `pretool-duckdb-quote-guard.sh`: Catches the common DuckDB error of using double quotes for string literals.
+#### Telemetry & Logging
+* `hooks/hook-trigger-log.sh`: Centralized logger for all hook actions (block/warn/allow) into `~/.claude/hook-triggers.jsonl`.
+* `hooks/posttool-failure-log.sh`: Classifies and logs tool errors (timeout, permission, syntax) for ROI analysis.
+* `hooks/sessionend-log.sh`: Generates "flight receipts" including cost, duration, and context usage at session end.
 
 ### Data flow
 
-1.  **Telemetry Flow**: Most hooks pipe their decisions into `hook-trigger-log.sh`, which appends to `~/.claude/hook-triggers.jsonl`. This provides a global audit trail of agent behavior and hook effectiveness.
-2.  **Compaction Recovery**: When a session hits the context limit, `precompact-extract.py` reads the session transcript, extracts key sentences (questions, hedged claims, decisions), and writes them to `.claude/checkpoint.md`.
-3.  **Research Archiving**: `posttool_research_reformat.py` takes raw tool results, hashes them, and saves the full content to `~/.claude/tool-output-archive/` while returning a truncated version to the agent's active context.
-4.  **Session Coordination**: `agent-coord.py` reads and writes to `.claude/agent-work.md`, using file locking (`fcntl`) to ensure atomic updates across different terminal sessions.
+1.  **Tool Execution**: When a tool (Bash, Read, MCP) is called, `PreToolUse` hooks (like `pretool-llmx-guard.sh`) validate or rewrite the input.
+2.  **Output Processing**: `PostToolUse` hooks (like `posttool_research_reformat.py`) intercept the result. Raw data is moved to `~/.claude/tool-output-archive/`, and a reformatted summary is returned to the agent.
+3.  **State Persistence**: Throughout the session, `posttool-session-touched-log.sh` tracks which files were modified.
+4.  **Compaction**: When the context window fills, `precompact-log.sh` triggers `precompact-extract.py` to pull "epistemic content" (decisions, open questions) into `.claude/checkpoint.md`.
+5.  **Session Close**: `Stop` hooks (like `stop-research-gate.sh`) verify the state of the filesystem and git log. If valid, `sessionend-log.sh` writes a final receipt to `~/.claude/session-receipts.jsonl`.
 
 ### Key abstractions
 
-*   **Provenance Tags**: A shared vocabulary used across 5+ files (e.g., `source-check-validator.py`, `pretool-source-remind.sh`) to label the origin of information: `[SOURCE]`, `[DATA]`, `[INFERENCE]`, `[TRAINING-DATA]`, and NATO Admiralty grades (`[A1]-[F6]`).
-*   **Advisory vs. Blocking**: A pattern where hooks return a JSON object with a `decision` of either `allow` (with `additionalContext`) or `block` (with a `reason`).
-*   **Session State Files**: Many hooks use `/tmp/claude-*-${PPID}` or `.claude/current-session-id` to maintain state across multiple tool calls within a single session.
+*   **Provenance Tags**: A shared vocabulary (`[SOURCE]`, `[DATA]`, `[INFERENCE]`, `[A1-F6]`) used across 5+ files to mark the origin of factual claims.
+*   **Advisory Wrapper**: The pattern of converting blocking hooks to non-blocking via `advisory-wrapper.sh`, logging the "block" but allowing the tool to proceed with `additionalContext`.
+*   **Session State Tracking**: Use of `/tmp/claude-*-${PPID}` or `${CLAUDE_SESSION_ID}` to maintain state (like search burst counts or unverified scripts) across discrete tool calls.
+*   **Shadow Mode**: A pattern (seen in `stop-progress-check.sh` and `stop-unsupported-completion.sh`) where hooks log "would-fire" events to JSONL for precision testing without affecting the agent.
 
 ### Dependencies
 
-*   **jq**: Used extensively for parsing and generating JSON in shell-based hooks.
-*   **pyright**: Invoked by `posttool-pyright-check.sh` to provide immediate feedback on Python code changes.
-*   **uv**: Used to run Python scripts with managed dependencies (e.g., `llm-dispatch.py`, `sessions.py`).
-*   **git**: The primary source of truth for file changes, commit history, and session baselines.
-*   **vm_stat**: Used on macOS to monitor memory pressure before spawning subagents.
+| Library | Usage |
+| :--- | :--- |
+| `jq` | Primary engine for parsing and rewriting hook JSON payloads in shell scripts. |
+| `uv` | Used to run Python-based scripts and validators with managed dependencies. |
+| `pyright` | Static type checking for Python regression detection. |
+| `anthropic-sdk` | (Via `urllib` in `source-check-haiku.py`) Used for semantic review of research quality. |
+| `git` | Extensively used for state verification, diffing, and provenance (git notes). |
+| `duckdb` | Referenced in guards to prevent double-quote string literal errors. |
