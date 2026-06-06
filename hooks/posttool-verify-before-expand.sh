@@ -37,8 +37,9 @@ print(json.load(sys.stdin).get('tool_input', {}).get('file_path', ''))
       PREV=$(cat "$STATE_FILE")
       if [ -n "$PREV" ] && [ "$PREV" != "$FILE_PATH" ]; then
         BASENAME=$(basename "$PREV")
-        echo "⚠️  ${BASENAME} was written but never run."
-        echo "   Run and verify its output before writing more scripts."
+        MSG="${BASENAME} was written but never run. Run and verify its output before writing more scripts."
+        SAFE_MSG=$(printf '%s' "$MSG" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null)
+        [ -n "$SAFE_MSG" ] && echo "{\"additionalContext\": ${SAFE_MSG}}"
       fi
     fi
 
