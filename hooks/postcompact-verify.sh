@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 # postcompact-verify.sh — PostCompact hook.
-# Logs compaction metadata and injects post-compaction recovery context.
+# Logs compaction metadata. No recovery context injection: current agents
+# handle post-compaction re-orientation well enough, and repeated advisory
+# text adds more friction than signal.
 # Always exits 0 (advisory only).
 
 trap 'exit 0' ERR
+
+if [ "${CODEX_HOOK_COMPAT_SMOKE:-0}" = "1" ]; then
+    exit 0
+fi
 
 LOG_FILE="$HOME/.claude/compact-log.jsonl"
 INPUT=$(cat)
@@ -37,26 +43,6 @@ log_entry = {
 log_path = os.path.expanduser("~/.claude/compact-log.jsonl")
 with open(log_path, "a") as f:
     f.write(json.dumps(log_entry) + "\n")
-
-# Emit additionalContext for recovery
-checkpoint_path = os.path.join(cwd, ".claude", "checkpoint.md") if cwd else ""
-has_checkpoint = os.path.isfile(checkpoint_path) if checkpoint_path else False
-
-context = "POST-COMPACTION RECOVERY:\n"
-context += "1. Run `git log --oneline -10` to verify any claimed completed work actually exists.\n"
-context += "2. Compaction summaries can hallucinate completed work — trust git, not the summary.\n"
-if has_checkpoint:
-    context += f"3. Read {checkpoint_path} for pre-compaction state and pending tasks.\n"
-else:
-    context += "3. No checkpoint.md found — reconstruct state from git log and file state.\n"
-context += "4. Do NOT ask the user for context — re-orient from checkpoint + git state.\n"
-
-output = {"additionalContext": context}
-print(json.dumps(output))
 ' 2>/dev/null)
-
-if [[ -n "$METADATA" ]]; then
-    echo "$METADATA"
-fi
 
 exit 0
