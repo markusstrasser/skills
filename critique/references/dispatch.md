@@ -48,7 +48,7 @@ contract rather than duplicating provider flags in skill docs.
 
 Relevant profiles:
 - `deep_review` for Gemini pattern review
-- `formal_review` for GPT-5.4 reasoning
+- `formal_review` for GPT-5.5 reasoning
 - `fast_extract` for mechanical extraction
 
 The script writes these artifacts:
@@ -85,7 +85,7 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
 Before assembling context, check `/model-guide` for per-model prompting rules.
 Key points:
 
-- GPT-5.4 context should use XML `<doc id="..." title="...">` tags for document sections
+- GPT-5.5 context should use XML `<doc id="..." title="...">` tags for document sections
 - Gemini does better when the question and constraints come last
 - Keep prompts direct; the shared review script handles the rest
 
@@ -94,4 +94,4 @@ Key points:
 Use `--extract` for normal user-facing reviews. Use `--extract --verify` for
 plan-close packets or any review that needs an auditable coverage trail with
 checked references. The user-facing presets are `standard`, `deep`, and `full`;
-each includes GPT-5.4. Non-GPT axis sets are internal-only.
+each includes GPT-5.5. Non-GPT axis sets are internal-only.
