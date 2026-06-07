@@ -50,6 +50,18 @@ if echo "$CMD" | grep -q '\.json' && echo "$CMD" | grep -qE '(^|[[:space:]])(jq|
     TRIGGERED+=("json-query")
 fi
 
+# Stale-local-mirror trap: reading a LOCAL results-tree JSON (data/.../results/.../*.json)
+# via shell parsing. That tree is authority rank #4 — it diverges from the Modal volume
+# across reruns. A 2-month-stale local review_packets.json once produced a false
+# "all DL scores null" finding (2026-06-08, feedback_stale_local_review_packets_false_null).
+if echo "$CMD" | grep -qE 'data/[^[:space:]"'"'"']*results/[^[:space:]"'"'"']*\.json' \
+    && echo "$CMD" | grep -qE '(^|[[:space:]])(jq|cat|sed|head|tail|python|python3)([[:space:]]|$)' \
+    && ! seen "local-results-mirror"; then
+    remember "local-results-mirror"
+    MESSAGES+=('Reading a LOCAL `data/.../results/.../*.json` mirror (authority rank #4) — it DIVERGES from the Modal volume across reruns; a 2-month-stale local review_packets.json caused a false "all DL scores null" finding (2026-06-08). Verify via `mcp__genomics__query_json` (sample + relative path), which reads Modal volume truth, before treating values as authoritative.')
+    TRIGGERED+=("local-results-mirror")
+fi
+
 [ "${#MESSAGES[@]}" -gt 0 ] || exit 0
 
 ~/Projects/skills/hooks/hook-trigger-log.sh "genomics-mcp-routing" "remind" "$(IFS=,; echo "${TRIGGERED[*]}")" 2>/dev/null || true
