@@ -69,8 +69,13 @@ def wired_hooks() -> set[str]:
 # Hooks whose payload has NO tool_input envelope — top-level field reads are correct.
 # Stop / SessionEnd / SubagentStop / SessionStart / UserPromptSubmit receive a
 # different shape (transcript/message/session fields at top level).
-NO_TOOLINPUT_PREFIX = ("stop-", "sessionend-", "sessionstart-", "session-start-",
-                       "subagent-", "userprompt-", "precompact-", "postcompact-")
+NO_TOOLINPUT_TOKENS = ("stop", "sessionend", "sessionstart", "session-start",
+                       "subagent", "userprompt", "precompact", "postcompact")
+
+
+def has_no_toolinput(name: str) -> bool:
+    """True if this hook's event carries no tool_input (token appears in name)."""
+    return any(tok in name for tok in NO_TOOLINPUT_TOKENS)
 
 
 def extracts_tool_field(code: str) -> str | None:
@@ -84,9 +89,8 @@ def extracts_tool_field(code: str) -> str | None:
     return None
 
 
-def lint_file(path: Path) -> list[str]:
-    name = path.name
-    src = path.read_text()
+def lint_code(name: str, src: str) -> list[str]:
+    """Lint a hook's source (file contents or an inline settings command)."""
     code = "\n".join(ln for ln in src.splitlines() if not ln.lstrip().startswith("#"))
     viol: list[str] = []
 
@@ -102,7 +106,7 @@ def lint_file(path: Path) -> list[str]:
     # Top-level extraction: only meaningful for tool-input-bearing events.
     # The clean signal: the hook reads a tool field but NEVER references
     # `tool_input` — i.e. it parses the envelope's wrong level.
-    if not name.startswith(NO_TOOLINPUT_PREFIX):
+    if not has_no_toolinput(name):
         field = extracts_tool_field(code)
         if field and "tool_input" not in code:
             viol.append(
@@ -111,28 +115,72 @@ def lint_file(path: Path) -> list[str]:
     return viol
 
 
+def lint_file(path: Path) -> list[str]:
+    return lint_code(path.name, path.read_text())
+
+
+def scan_inline_settings() -> dict[str, list[str]]:
+    """Lint INLINE command hooks (not file paths) in every settings.json /
+    codex hooks.json — the surface the per-file lint misses."""
+    results: dict[str, list[str]] = {}
+    files = [HOME / ".claude/settings.json", HOME / ".codex/hooks.json"]
+    files += [Path(p) for p in glob.glob(str(HOME / "Projects/*/.claude/settings.json"))]
+    for s in files:
+        try:
+            cfg = json.loads(s.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        hooks = cfg.get("hooks", {})
+        for event, blocks in (hooks.items() if isinstance(hooks, dict) else []):
+            for bi, blk in enumerate(blocks if isinstance(blocks, list) else []):
+                for hi, h in enumerate(blk.get("hooks", []) if isinstance(blk, dict) else []):
+                    cmd = h.get("command", "") if isinstance(h, dict) else ""
+                    # Only INLINE commands — a bare path is a script file (linted elsewhere).
+                    if not cmd or "\n" not in cmd and "CLAUDE_TOOL" not in cmd and " " not in cmd.strip():
+                        continue
+                    if cmd.strip().startswith("/") or cmd.strip().startswith("~") or cmd.strip().startswith("."):
+                        if "CLAUDE_TOOL" not in cmd:  # plain script path
+                            continue
+                    label = f"{s.name}:{event}[{bi}.{hi}]"
+                    v = lint_code(f"inline-{event.lower()}-{label}", cmd)
+                    if v:
+                        results[label] = v
+    return results
+
+
+def per_project_hooks() -> list[str]:
+    return sorted(glob.glob(str(HOME / "Projects/*/.claude/hooks/*.sh")))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--all", action="store_true", help="lint every *.sh, not just wired")
+    ap.add_argument("--surfaces", action="store_true",
+                    help="cross-surface scan: skills + per-project hooks + inline settings")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("files", nargs="*", help="specific hook files to lint (for pre-commit gates)")
     args = ap.parse_args()
 
     if args.files:
         targets = [f for f in args.files if f.endswith(".sh")]
+    elif args.surfaces:
+        targets = sorted(glob.glob(str(HOOKS_DIR / "*.sh"))) + per_project_hooks()
     else:
         targets = sorted(glob.glob(str(HOOKS_DIR / "*.sh")))
     wired = wired_hooks()
     results: dict[str, list[str]] = {}
     for t in targets:
         name = os.path.basename(t)
-        if not args.files and not args.all and name not in wired:
+        if not args.files and not args.all and not args.surfaces and name not in wired:
             continue
         if not Path(t).exists():
             continue
         v = lint_file(Path(t))
         if v:
-            results[name] = v
+            results[name if not args.surfaces else t.replace(str(HOME), "~")] = v
+
+    if args.surfaces:
+        results.update(scan_inline_settings())
 
     if args.json:
         print(json.dumps(results, indent=2))
