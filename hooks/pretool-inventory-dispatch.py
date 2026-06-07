@@ -16,16 +16,15 @@ Contract (Claude Code 2.1.x, see lint_hook_input_contract.py):
   - Advisory ONLY: emits hookSpecificOutput.additionalContext, never blocks.
   - Fails OPEN: any error -> exit 0 with no output.
 
-Cross-tool: fires under BOTH Claude and Codex. Codex 0.137 runs PreToolUse for
-all function tools (not shell-only) and maps its subagent tool `spawn_agent` to
-the Claude-style `Agent` matcher via a built-in alias (codex source:
-core/src/tools/hook_names.rs `spawn_agent()` -> matcher_aliases ["Agent"];
-registry.rs dispatch_any -> run_pre_tool_use_hooks @ tag rust-v0.137.0). So the
-`Agent` matcher this hook is wired under selects `spawn_agent` on Codex with no
-translation needed. (The bundled migrate-to-codex differences.md still says
-"PreToolUse = shell only" — that is STALE, pre-PR #23757 / 2026-05-23. Verified
-against the shipped Rust at the installed tag.) Output dialect is reshaped for
-Codex by codex_hook_shim.py.
+Claude: fires on the `Agent` (Task/subagent dispatch) tool. Codex: firing is
+UNVERIFIED — do not assume this protects Codex sessions. Codex 0.137 source defines
+a `spawn_agent`->`Agent` matcher alias, but an empirical probe (2026-06-07) could
+NOT confirm any file-edit/Agent PreToolUse hook actually fires under `codex exec`
+(only shell/Bash fired, non-deterministically); `--dangerously-bypass-approvals-
+and-sandbox` disables hooks entirely, and hooks are gated by positional trust state
+in config.toml that the parity sync doesn't generate. Full record:
+agent-infra decisions/2026-06-02-codex-cli-project-parity.md §FINAL. Treat as a
+Claude-effective advisory; Codex coverage is best-effort/unverified.
 
 v1 signal: git log subjects in cwd (recent commits == "completed work"; this repo
 family auto-commits per task, so finished work is in the log). agentlogs FTS is a
@@ -37,8 +36,8 @@ for a synchronous pre-dispatch hook. Measure v1 first (Constitution Principle 3)
 # goal: stop research/exploration subagents from re-deriving already-completed
 #       work on a topic (the twice-failed "inventory before dispatch" instruction)
 # verifier: null  # not yet capability-testable; on generative backlog
-# blast_radius: shared  # global ~/.claude/settings.json; fires on Claude (Agent)
-#               and Codex 0.137 (spawn_agent via built-in Agent matcher alias)
+# blast_radius: shared  # global ~/.claude/settings.json; Claude-effective.
+#               Codex firing unverified (see decision doc §FINAL)
 from __future__ import annotations
 
 import json
