@@ -16,12 +16,26 @@ Contract (Claude Code 2.1.x, see lint_hook_input_contract.py):
   - Advisory ONLY: emits hookSpecificOutput.additionalContext, never blocks.
   - Fails OPEN: any error -> exit 0 with no output.
 
+CLAUDE-ONLY by Codex's design: Codex 0.137 runs PreToolUse for shell commands
+ONLY (authoritative: ~/.codex/.../migrate-to-codex/references/differences.md, and
+agent-infra decisions/2026-06-02-codex-cli-project-parity.md §Codex hook firing
+matrix). Codex's subagent tool is `spawn_agent`, but no PreToolUse fires for it —
+so this hook is inert (harmless no-op) under Codex, not a portability bug. There
+is no pre-dispatch hook point in Codex; the inventory-before-dispatch capability
+is Claude-only until Codex extends PreToolUse beyond shell.
+
 v1 signal: git log subjects in cwd (recent commits == "completed work"; this repo
 family auto-commits per task, so finished work is in the log). agentlogs FTS is a
 DEFERRED v2 enrichment — a single term matched 34k events in the 11GB index, so it
 needs query-scoping (recent-run + task-message scope) before it's low-noise enough
 for a synchronous pre-dispatch hook. Measure v1 first (Constitution Principle 3).
 """
+# Gov-ID: hook:inventory-before-dispatch
+# goal: stop research/exploration subagents from re-deriving already-completed
+#       work on a topic (the twice-failed "inventory before dispatch" instruction)
+# verifier: null  # not yet capability-testable; on generative backlog
+# blast_radius: shared  # wired in global ~/.claude/settings.json (Claude only;
+#               inert under Codex 0.137 — PreToolUse is shell-only)
 from __future__ import annotations
 
 import json
