@@ -40,7 +40,10 @@ FIELDS = ("command", "file_path", "skill", "args", "content", "new_string",
           "query", "search_query", "prompt", "url", "claim", "path", "description")
 
 # bare $CLAUDE_TOOL_INPUT with no stdin fallback anywhere in the file
-BARE_ENV = re.compile(r'\$\{?CLAUDE_TOOL_(INPUT|NAME)\b')
+# Shell `$CLAUDE_TOOL_INPUT` and Python `os.environ[...CLAUDE_TOOL_INPUT...]`
+BARE_ENV = re.compile(r'\$\{?CLAUDE_TOOL_(INPUT|NAME)\b'
+                      r'|environ(\.get)?\(\s*[\'"]CLAUDE_TOOL_(INPUT|NAME)'
+                      r'|environ\[\s*[\'"]CLAUDE_TOOL_(INPUT|NAME)')
 ENV_FALLBACK = re.compile(r'CLAUDE_TOOL_INPUT:-\s*\$\(cat\)')
 STDIN_READ = re.compile(r'=\s*\$\(cat\)|json\.load\(sys\.stdin\)|sys\.stdin\.read\(\)|</dev/stdin')
 
@@ -106,7 +109,12 @@ def lint_code(name: str, src: str) -> list[str]:
     # Top-level extraction: only meaningful for tool-input-bearing events.
     # The clean signal: the hook reads a tool field but NEVER references
     # `tool_input` — i.e. it parses the envelope's wrong level.
-    if not has_no_toolinput(name):
+    # Top-level field extraction: reliable for SHELL hooks (a bare .get('command')
+    # almost always means tool input). Python hooks do real data processing —
+    # obj.get('url')/.get('content') on a NON-envelope object is common — so the
+    # heuristic over-matches there. The precise env-var check above still covers
+    # .py; field-level extraction is shell-only to stay false-positive-free.
+    if not name.endswith(".py") and not has_no_toolinput(name):
         field = extracts_tool_field(code)
         if field and "tool_input" not in code:
             viol.append(
@@ -148,8 +156,25 @@ def scan_inline_settings() -> dict[str, list[str]]:
     return results
 
 
+def _hook_files(base: str) -> list[str]:
+    """Hook scripts (.sh + .py) under a glob base, excluding tests/backups."""
+    out = []
+    for ext in ("*.sh", "*.py"):
+        for f in glob.glob(f"{base}/{ext}"):
+            bn = os.path.basename(f)
+            if bn.startswith("test_") or bn.endswith("_test.py") or ".bak" in bn:
+                continue
+            if bn == "lint_hook_input_contract.py":
+                continue
+            out.append(f)
+    return sorted(out)
+
+
 def per_project_hooks() -> list[str]:
-    return sorted(glob.glob(str(HOME / "Projects/*/.claude/hooks/*.sh")))
+    res = []
+    for d in glob.glob(str(HOME / "Projects/*/.claude/hooks")):
+        res += _hook_files(d)
+    return sorted(res)
 
 
 def main() -> int:
@@ -162,11 +187,11 @@ def main() -> int:
     args = ap.parse_args()
 
     if args.files:
-        targets = [f for f in args.files if f.endswith(".sh")]
+        targets = [f for f in args.files if f.endswith((".sh", ".py"))]
     elif args.surfaces:
-        targets = sorted(glob.glob(str(HOOKS_DIR / "*.sh"))) + per_project_hooks()
+        targets = _hook_files(str(HOOKS_DIR)) + per_project_hooks()
     else:
-        targets = sorted(glob.glob(str(HOOKS_DIR / "*.sh")))
+        targets = _hook_files(str(HOOKS_DIR))
     wired = wired_hooks()
     results: dict[str, list[str]] = {}
     for t in targets:
