@@ -16,13 +16,16 @@ Contract (Claude Code 2.1.x, see lint_hook_input_contract.py):
   - Advisory ONLY: emits hookSpecificOutput.additionalContext, never blocks.
   - Fails OPEN: any error -> exit 0 with no output.
 
-CLAUDE-ONLY by Codex's design: Codex 0.137 runs PreToolUse for shell commands
-ONLY (authoritative: ~/.codex/.../migrate-to-codex/references/differences.md, and
-agent-infra decisions/2026-06-02-codex-cli-project-parity.md §Codex hook firing
-matrix). Codex's subagent tool is `spawn_agent`, but no PreToolUse fires for it —
-so this hook is inert (harmless no-op) under Codex, not a portability bug. There
-is no pre-dispatch hook point in Codex; the inventory-before-dispatch capability
-is Claude-only until Codex extends PreToolUse beyond shell.
+Cross-tool: fires under BOTH Claude and Codex. Codex 0.137 runs PreToolUse for
+all function tools (not shell-only) and maps its subagent tool `spawn_agent` to
+the Claude-style `Agent` matcher via a built-in alias (codex source:
+core/src/tools/hook_names.rs `spawn_agent()` -> matcher_aliases ["Agent"];
+registry.rs dispatch_any -> run_pre_tool_use_hooks @ tag rust-v0.137.0). So the
+`Agent` matcher this hook is wired under selects `spawn_agent` on Codex with no
+translation needed. (The bundled migrate-to-codex differences.md still says
+"PreToolUse = shell only" — that is STALE, pre-PR #23757 / 2026-05-23. Verified
+against the shipped Rust at the installed tag.) Output dialect is reshaped for
+Codex by codex_hook_shim.py.
 
 v1 signal: git log subjects in cwd (recent commits == "completed work"; this repo
 family auto-commits per task, so finished work is in the log). agentlogs FTS is a
@@ -34,8 +37,8 @@ for a synchronous pre-dispatch hook. Measure v1 first (Constitution Principle 3)
 # goal: stop research/exploration subagents from re-deriving already-completed
 #       work on a topic (the twice-failed "inventory before dispatch" instruction)
 # verifier: null  # not yet capability-testable; on generative backlog
-# blast_radius: shared  # wired in global ~/.claude/settings.json (Claude only;
-#               inert under Codex 0.137 — PreToolUse is shell-only)
+# blast_radius: shared  # global ~/.claude/settings.json; fires on Claude (Agent)
+#               and Codex 0.137 (spawn_agent via built-in Agent matcher alias)
 from __future__ import annotations
 
 import json
