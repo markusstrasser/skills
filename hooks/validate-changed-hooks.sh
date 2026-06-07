@@ -91,10 +91,37 @@ done
 
 rm -f /tmp/_hookchk.$$ 2>/dev/null
 
+# ── Input-contract gate ──────────────────────────────────────────────────
+# Tool input arrives on stdin as the full envelope; fields live under
+# .tool_input. CLAUDE_TOOL_* env vars are unset under Claude Code. A hook that
+# reads $CLAUDE_TOOL_INPUT or extracts top-level .command is silently dead — the
+# 2026-06-07 audit found 15 such fleet-wide guards (incl. bash-loop / append-only
+# / llmx). This gate blocks new occurrences. Lints STAGED content.
+CONTRACT_LINT="$(dirname "$0")/lint_hook_input_contract.py"
+if [ -f "$CONTRACT_LINT" ]; then
+    _ctmp=$(mktemp -d)
+    _cfiles=()
+    for f in "${STAGED[@]}"; do
+        case "$f" in *.sh|*.bash) ;; *) continue ;; esac
+        is_hook_path "$f" || continue
+        git show ":$f" > "$_ctmp/$(basename "$f")" 2>/dev/null || continue
+        _cfiles+=("$_ctmp/$(basename "$f")")
+    done
+    if [ "${#_cfiles[@]}" -gt 0 ] && ! _cout=$(python3 "$CONTRACT_LINT" "${_cfiles[@]}" 2>&1); then
+        echo "$_cout"
+        echo ""
+        echo "BLOCKED: a staged hook violates the Claude/Codex input contract."
+        echo "Read input from stdin (INPUT=\"\${CLAUDE_TOOL_INPUT:-\$(cat)}\") and extract"
+        echo "tool fields from .tool_input.<field>, not the top level."
+        FAILED=1
+    fi
+    rm -rf "$_ctmp"
+fi
+
 if [ "$FAILED" -ne 0 ]; then
     echo ""
-    echo "A staged hook does not parse. Fix it before committing — a broken shared"
-    echo "hook blocks tool calls across every active session."
+    echo "A staged hook is broken (syntax or input-contract). Fix it before committing —"
+    echo "a broken shared hook blocks or silently disables tool handling across sessions."
     exit 1
 fi
 
