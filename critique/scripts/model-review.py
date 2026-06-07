@@ -225,13 +225,21 @@ PRESETS = {
 
 # Primary Gemini critique axis (deep_review = gemini-3.5-flash since 2026-05-24).
 GEMINI_PRIMARY_MODEL = dispatch_core.PROFILES["deep_review"].model
-# Rate-limit fallback target. Must stay an adversarial-grade critique model:
-# legacy_pro_review = gemini-3.1-pro-preview (~25% hallucination, documented
-# runner-up). NOT fast_extract/gemini-3-flash-preview — that is the cheap
-# classification slot and measured ~42% hallucination on critique work
-# (per-model disposition audit over 7,055 verified findings, 2026-06-01), so
-# degrading to it silently poisons the review instead of preserving signal.
-GEMINI_FALLBACK_MODEL = dispatch_core.PROFILES["legacy_pro_review"].model
+# Rate-limit fallback target for the Gemini (arch) axis. When gemini-3.5-flash
+# rate-limits, retry the axis on gpt-5.5 — the rule-sanctioned move ("after a
+# Gemini rate-limit, switch to GPT or Flash"; llmx transport-routing) and an
+# adversarial-grade model. Tradeoff: this collapses the arch+formal pair to GPT
+# for that one review (degraded cross-model diversity), accepted because it is
+# rare and beats the alternatives — gemini-3.1-pro-preview was RETIRED from
+# automation 2026-06-07 (same-provider, so it shares 3.5-flash's outage, and is
+# the ~25%-hallucination runner-up); gemini-3-flash-preview is the cheap
+# classification slot (~42% hallucination on critique work, per-model
+# disposition audit 2026-06-01). A Claude model is deliberately NOT used: the
+# author under review is Claude, so a Claude fallback would reintroduce the
+# same-model martingale this skill exists to avoid. 3.1-pro stays available for
+# explicit manual use via the legacy_pro_review profile (its ARC-AGI-2 / GPQA /
+# video niches) — it just never auto-fires now.
+GEMINI_FALLBACK_MODEL = dispatch_core.PROFILES["gpt_general"].model
 COVERAGE_SCHEMA_VERSION = "review-coverage.v1"
 # Cross-model dedup threshold (keyword-set Jaccard). Lowered 0.3 -> 0.25 on
 # 2026-06-01: at 0.3 only 0.9% of GPT findings matched a Gemini finding, and a
@@ -483,12 +491,13 @@ def rerun_axis_with_fallback(
     ctx_file: Path | ContextArtifact,
     prompt: str,
 ) -> dict:
-    """Retry the rate-limited primary Gemini axis with the runner-up critique
-    model (gemini-3.1-pro-preview), NOT the cheap classification model."""
+    """Retry the rate-limited primary Gemini (arch) axis on the cross-provider
+    adversarial fallback (gpt-5.5 since 2026-06-07; 3.1-pro retired from
+    automation). Collapses the pair to GPT for this review, but rare + reliable."""
     out_path = review_dir / f"{axis}-output.md"
     print(
-        f"warning: {axis} hit Gemini rate limits; retrying once with the runner-up "
-        f"critique model ({GEMINI_FALLBACK_MODEL})",
+        f"warning: {axis} hit Gemini rate limits; retrying once on the "
+        f"cross-provider fallback ({GEMINI_FALLBACK_MODEL})",
         file=sys.stderr,
     )
     api_kwargs = dict(axis_def.get("api_kwargs") or {})  # type: ignore[arg-type]
