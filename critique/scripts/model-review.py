@@ -252,6 +252,7 @@ COVERAGE_SCHEMA_VERSION = "review-coverage.v1"
 CROSS_MODEL_JACCARD_THRESHOLD = 0.25
 GEMINI_RATE_LIMIT_MARKERS = (
     "503",
+    "unavailable",  # Flex-tier load-shed can surface as bare "UNAVAILABLE"
     "rate limit",
     "rate-limit",
     "resource_exhausted",
