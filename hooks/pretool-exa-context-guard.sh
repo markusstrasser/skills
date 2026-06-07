@@ -8,14 +8,14 @@
 
 trap 'exit 0' ERR
 
-INPUT="$CLAUDE_TOOL_INPUT"
+INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
 
 # Parse with Python — check for contextMaxCharacters and includeDomains
-RESULT=$(echo "$INPUT" | python3 -c "
+RESULT=$(printf '%s' "$INPUT" | python3 -c "
 import sys, json
 try:
     d = json.load(sys.stdin)
-    tool_input = d if isinstance(d, dict) else d.get('tool_input', {})
+    tool_input = d.get('tool_input', d) if isinstance(d, dict) else {}
     has_context_limit = 'contextMaxCharacters' in tool_input
     has_domain_filter = bool(tool_input.get('includeDomains'))
     has_category = bool(tool_input.get('category'))
@@ -31,7 +31,7 @@ except:
 " 2>/dev/null)
 
 if [ "$RESULT" = "WARN" ]; then
-    echo '{"decision": "allow", "additionalContext": "⚠ Exa broad query without contextMaxCharacters — results may exceed 100K chars and get saved to a temp file you cannot use. Add contextMaxCharacters: 2000-3000 for broad searches. Only omit for narrow/domain-filtered queries."}'
+    echo '{"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "⚠ Exa broad query without contextMaxCharacters — results may exceed 100K chars and get saved to a temp file you cannot use. Add contextMaxCharacters: 2000-3000 for broad searches. Only omit for narrow/domain-filtered queries."}}'
 fi
 
 exit 0

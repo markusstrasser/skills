@@ -8,21 +8,24 @@ set -euo pipefail
 LOGFILE="$HOME/.claude/skill-triggers.jsonl"
 STARTFILE="/tmp/claude-skill-start-$$"
 
+# Read stdin once; fall back to env var (Codex sets CLAUDE_TOOL_INPUT)
+INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
+
 # Extract skill name from tool input
-SKILL=$(echo "$CLAUDE_TOOL_INPUT" | python3 -c "
+SKILL=$(printf '%s' "$INPUT" | python3 -c "
 import sys, json
 try:
     d = json.load(sys.stdin)
-    print(d.get('skill', 'unknown'))
+    print((d.get('tool_input', d) or {}).get('skill', 'unknown'))
 except:
     print('unknown')
 " 2>/dev/null)
 
-ARGS=$(echo "$CLAUDE_TOOL_INPUT" | python3 -c "
+ARGS=$(printf '%s' "$INPUT" | python3 -c "
 import sys, json
 try:
     d = json.load(sys.stdin)
-    print(d.get('args', ''))
+    print((d.get('tool_input', d) or {}).get('args', ''))
 except:
     print('')
 " 2>/dev/null)
@@ -31,7 +34,7 @@ except:
 MODE=$(echo "$ARGS" | awk '{print $1}')
 
 TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-SESSION="${CLAUDE_SESSION_ID:-unknown}"
+SESSION="${CLAUDE_CODE_SESSION_ID:-${CLAUDE_SESSION_ID:-unknown}}"
 PROJECT=$(basename "${CLAUDE_CWD:-$(pwd)}")
 
 # Calculate duration (macOS date lacks %N — fallback gracefully)
@@ -45,9 +48,19 @@ if [ -f "$STARTFILE" ]; then
     rm -f "$STARTFILE"
 fi
 
-# Check if tool result indicates error
+# Check if tool result indicates error.
+# Claude delivers the result under .tool_response/.error in the stdin envelope;
+# Codex sets CLAUDE_TOOL_RESULT. Check both.
+RESULT=$(printf '%s' "$INPUT" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print(json.dumps(d.get('tool_response', '')) + ' ' + str(d.get('error', '')))
+except:
+    print('')
+" 2>/dev/null)
 EXIT_CODE=0
-if echo "${CLAUDE_TOOL_RESULT:-}" | grep -qi "error\|failed\|exception"; then
+if echo "${RESULT} ${CLAUDE_TOOL_RESULT:-}" | grep -qi "error\|failed\|exception"; then
     EXIT_CODE=1
 fi
 

@@ -7,7 +7,9 @@ trap 'exit 0' ERR
 INPUT=$(cat)
 CMD=$(echo "$INPUT" | python3 -c "
 import sys,json
-try: print(json.load(sys.stdin).get('command',''))
+try:
+    _d = json.load(sys.stdin)
+    print((_d.get('tool_input', _d) or {}).get('command',''))
 except: sys.exit(0)
 " 2>/dev/null)
 [ -z "$CMD" ] && exit 0

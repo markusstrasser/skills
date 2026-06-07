@@ -41,7 +41,7 @@ if [ "$TOOL_NAME" = "Write" ]; then
 import sys, json
 try:
     d = json.load(sys.stdin)
-    print(d.get('content', '').count(chr(10)))
+    print((d.get('tool_input', d) or {}).get('content', '').count(chr(10)))
 except:
     print(0)
 " 2>/dev/null)
@@ -59,8 +59,9 @@ if [ "$TOOL_NAME" = "Edit" ]; then
     RESULT=$(echo "$INPUT" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
-old = d.get('old_string', '')
-new = d.get('new_string', '')
+ti = d.get('tool_input', d) or {}
+old = ti.get('old_string', '')
+new = ti.get('new_string', '')
 if len(new.strip()) < len(old.strip()) and old.strip() not in new:
     print('block')
 else:
