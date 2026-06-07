@@ -444,7 +444,7 @@ def classify_error(exc: Exception) -> tuple[str, str]:
         return "timeout", message
     if any(marker in lowered for marker in ("timed out", "timeout", "deadline exceeded")):
         return "timeout", message
-    if any(marker in lowered for marker in ("rate limit", "rate-limit", "resource_exhausted", "429", "too many requests", "overloaded")):
+    if any(marker in lowered for marker in ("rate limit", "rate-limit", "resource_exhausted", "429", "too many requests", "overloaded", "503", "unavailable")):
         return "rate_limit", message
     if any(marker in lowered for marker in ("insufficient_quota", "quota", "billing", "credit", "payment required", "exhausted balance")):
         return "quota", message
@@ -620,6 +620,15 @@ def dispatch(
     }
     if response_format is not None:
         call_kwargs["response_format"] = response_format
+
+    # Opt-in Flex tier: 50% off, best-effort/variable latency (1–15 min, sheds
+    # load with 503s). Gated by the LLMX_FLEX env so ONLY a background/cron caller
+    # that explicitly exports it ever flexes — never an interactive or agent-path
+    # call (which would block on the variable latency). Google API path only
+    # (service_tier is a Gemini param; ignored elsewhere). A Flex 503 is caught by
+    # the rate-limit fallback (classify_error + the caller's rate-limit markers).
+    if profile_def.provider == "google" and os.environ.get("LLMX_FLEX", "").strip().lower() in ("1", "true", "yes"):
+        call_kwargs["service_tier"] = "flex"
 
     try:
         response = llmx_chat(**call_kwargs)
