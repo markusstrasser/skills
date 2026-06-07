@@ -28,8 +28,19 @@ if [ $# -ge 2 ]; then
         fi
     done
     TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    printf '{"ts":"%s","hook":"%s","action":"%s","detail":"%s","project":"%s","session":"%s","tool":"%s"}\n' \
-        "$TS" "$HOOK_NAME" "$ACTION" "$DETAIL" "$PROJECT" "$SESSION" "${CLAUDE_TOOL_NAME:-}" >> "$LOG_FILE" 2>/dev/null
+    # Build the record via json.dumps — a raw printf "%s" of $DETAIL injected
+    # unescaped newlines/quotes and produced 800+ broken JSONL lines that crashed
+    # the telemetry report. Pass fields through the environment (no shell-quoting).
+    _HT_TS="$TS" _HT_HOOK="$HOOK_NAME" _HT_ACTION="$ACTION" _HT_DETAIL="$DETAIL" \
+    _HT_PROJECT="$PROJECT" _HT_SESSION="$SESSION" _HT_TOOL="${CLAUDE_TOOL_NAME:-}" \
+    python3 -c "
+import os, json
+print(json.dumps({
+    'ts': os.environ['_HT_TS'], 'hook': os.environ['_HT_HOOK'],
+    'action': os.environ['_HT_ACTION'], 'detail': os.environ['_HT_DETAIL'],
+    'project': os.environ['_HT_PROJECT'], 'session': os.environ['_HT_SESSION'],
+    'tool': os.environ['_HT_TOOL'],
+}))" >> "$LOG_FILE" 2>/dev/null
     exit 0
 fi
 
