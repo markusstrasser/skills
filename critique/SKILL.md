@@ -42,6 +42,8 @@ See `lenses/adversarial-review.md` for full dispatch methodology, axis descripti
 
 **Cosigner routing (inverted 2026-05-24 — operator empirical).** Default pairing: **Gemini 3.5 Flash + GPT-5.5** for full-weight adversarial pressure. `gemini-3.5-flash` (stable GA, ~3× Flash pricing, supports `--search` for grounded fact-checking) empirically outperforms `gemini-3.1-pro-preview` on critique/synthesis in this workflow. The Pro model is the runner-up — use only when its specific strengths (ARC-AGI-2, raw GPQA Diamond, video understanding) actually dominate the task; request it via `legacy_pro_review` profile or explicit `-m gemini-3.1-pro-preview`. Do **not** substitute base `gemini-3-flash-preview` for adversarial work — it's the cheap-classification slot, not a critique cosigner.
 
+**Opt-in third cosigner — Claude Opus 4.8 (`claude` axis).** For a genuinely third training family, add the `claude` axis: `/critique model --axes arch,formal,claude`. It dispatches `claude-opus-4-8` via llmx's `anthropic-direct` provider (direct Anthropic API, not OpenRouter). Deliberately NOT in `standard`/`deep`/`full` presets — request it explicitly, and always alongside a GPT axis (axis-resolution requires ≥1 GPT-backed axis, so `--axes claude` alone is rejected by design). Use when cross-family diversity is worth the Opus cost; for routine reviews the Gemini+GPT pairing is the default.
+
 ### 1. Assemble Context
 
 Write review material to a single context file.

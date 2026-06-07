@@ -214,9 +214,42 @@ Generate 3-5 genuinely different approaches to the same problem. For each:
 
 Do NOT critique the existing plan — generate alternatives. Different mechanisms, not tweaks.""",
     },
+    "claude": {
+        "label": "Claude Opus 4.8 (third-family adversarial)",
+        "profile": "claude_review",
+        "prompt": """\
+<system>
+You are reviewing as an independent third cosigner from a different model family than the other reviewers (Gemini, GPT). Your value is a distinct failure-mode profile — find what they would miss, not what they'd agree on. Be concrete, reference specific code/config/claims. No platitudes. It is {date}.
+Budget: ~2000 words. Dense tables and lists over prose.
+</system>
+
+{question}
+
+RESPOND WITH EXACTLY THESE SECTIONS:
+
+## 1. Strengths and Weaknesses
+What holds up, what doesn't. Reference actual code/config. Be specific about both errors and what's correct.
+
+## 2. What Was Missed
+Patterns, problems, or opportunities not identified. Cite files, line ranges, gaps.
+
+## 3. Better Approaches
+For each: Agree (with refinements), Disagree (with alternative), or Upgrade (better version).
+
+## 4. What I'd Prioritize Differently
+Ranked list of the 5 most impactful changes, each with a testable verification criterion.
+
+## 5. Goals & Principles Alignment
+{principles_instruction}
+
+## 6. Blind Spots In My Own Analysis
+What am I (Claude) likely getting wrong? Where should you distrust my assessment?""",
+    },
 }
 
-# Presets map a single name to a list of axes
+# Presets map a single name to a list of axes.
+# `claude` (opt-in third-family cosigner) is intentionally NOT in any preset —
+# request it explicitly: `--axes arch,formal,claude` or `--axes claude`.
 PRESETS = {
     "standard": ["arch", "formal"],
     "deep": ["arch", "formal", "domain", "mechanical"],
