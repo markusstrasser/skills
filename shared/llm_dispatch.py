@@ -158,6 +158,22 @@ PROFILES: dict[str, DispatchProfile] = {
         reasoning_effort="high",
         input_token_limit=900000,
     ),
+    "claude_review": DispatchProfile(
+        # Opt-in third cosigner: Claude Opus 4.8 via the direct Anthropic API
+        # (llmx provider `anthropic-direct`). NOT in the default Gemini+GPT
+        # pairing — request explicitly with `--axes claude` (or add to an axis
+        # list). A genuinely third training family for adversarial diversity.
+        # Note: opus-4-8 deprecates `temperature` and reasoning_effort on the
+        # compat endpoint; llmx omits temperature for anthropic-direct, and we
+        # leave reasoning_effort=None here so it's never sent.
+        name="claude_review",
+        intent="Direct-Anthropic Claude Opus 4.8 adversarial review (opt-in cosigner)",
+        provider="anthropic-direct",
+        model="claude-opus-4-8",
+        timeout=600,
+        max_tokens=16384,
+        input_token_limit=200000,
+    ),
 }
 
 MODEL_TO_PROFILE = {
@@ -165,6 +181,7 @@ MODEL_TO_PROFILE = {
     "gemini-3.5-flash": "deep_review",
     "gemini-3.1-pro-preview": "legacy_pro_review",  # demoted 2026-05-24
     "gpt-5.5": "gpt_general",
+    "claude-opus-4-8": "claude_review",
 }
 
 
