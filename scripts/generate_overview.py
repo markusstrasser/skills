@@ -146,6 +146,20 @@ def metadata_line(*, commit_hash: str, profile_name: str, model: str) -> str:
     )
 
 
+def _existing_body(output_file: Path) -> str | None:
+    """Return the existing file's body with any leading metadata header stripped,
+    normalized to the same `rstrip()+"\\n"` form the writer emits — or None."""
+    try:
+        text = output_file.read_text()
+    except OSError:
+        return None
+    if text.startswith("<!-- Generated:"):
+        nl = text.find("\n")
+        if nl != -1:
+            text = text[nl + 1 :].lstrip("\n")
+    return (text.rstrip() + "\n") if text.strip() else None
+
+
 def write_overview_output(
     *,
     output_file: Path,
@@ -154,7 +168,14 @@ def write_overview_output(
     profile_name: str,
     model: str,
 ) -> None:
-    rendered = metadata_line(commit_hash=commit_hash, profile_name=profile_name, model=model) + "\n\n" + markdown_body.rstrip() + "\n"
+    body = markdown_body.rstrip() + "\n"
+    # Idempotent: if the body is byte-identical to what's on disk, don't rewrite.
+    # The metadata header carries a volatile timestamp + commit SHA, so an
+    # unconditional write churns the file (and the git tree) on every daily regen
+    # even when the underlying inventory hasn't changed. Skip the no-op write.
+    if _existing_body(output_file) == body:
+        return
+    rendered = metadata_line(commit_hash=commit_hash, profile_name=profile_name, model=model) + "\n\n" + body
     atomic_write_text(output_file, rendered)
 
 
