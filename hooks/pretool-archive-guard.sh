@@ -24,7 +24,7 @@ COMMAND=$(echo "$INPUT" | python3 -c "
 import sys, json
 try:
     d = json.load(sys.stdin)
-    print(d.get('command', ''))
+    print((d.get('tool_input', d) or {}).get('command', ''))
 except:
     print('')
 " 2>/dev/null)

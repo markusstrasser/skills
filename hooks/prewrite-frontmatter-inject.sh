@@ -5,12 +5,15 @@
 
 trap 'exit 0' ERR
 
-# Quick path check from env var (fastest possible exit for non-eligible files)
-FPATH=$(echo "$CLAUDE_TOOL_INPUT" | python3 -c "
+# Read stdin once; fall back to env var (Codex sets CLAUDE_TOOL_INPUT)
+INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
+
+# Quick path check (fastest possible exit for non-eligible files)
+FPATH=$(printf '%s' "$INPUT" | python3 -c "
 import sys, json
 try:
     d = json.loads(sys.stdin.read())
-    print(d.get('file_path', ''))
+    print((d.get('tool_input', d) or {}).get('file_path', ''))
 except: pass
 " 2>/dev/null)
 
@@ -23,7 +26,7 @@ echo "$FPATH" | grep -qE '(analysis/entities|docs/research|docs/entities|researc
 [ -f "$FPATH" ] && exit 0
 
 # Check if the content already has frontmatter
-echo "$CLAUDE_TOOL_INPUT" | grep -q '"---\\n' && exit 0
+printf '%s' "$INPUT" | grep -q '"---\\n' && exit 0
 
 # Determine project from path
 if echo "$FPATH" | grep -q "Projects/intel"; then

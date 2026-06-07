@@ -13,9 +13,9 @@ CMD=$(echo "$INPUT" | python3 -c "
 import sys, json
 try:
     d = json.load(sys.stdin)
-    # Check tool_result for commit confirmation, or command for git commit
-    cmd = d.get('command', '')
-    result = str(d.get('tool_result', d.get('stdout', '')))
+    # Check tool_response for commit confirmation, or command for git commit
+    cmd = (d.get('tool_input', d) or {}).get('command', '')
+    result = str(d.get('tool_response', d.get('tool_result', d.get('stdout', ''))))
     if 'git commit' in cmd or ('create mode' in result and 'insertions' in result):
         print('commit')
     else:

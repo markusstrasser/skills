@@ -7,21 +7,30 @@
 
 set -euo pipefail
 
+# Read tool input from stdin (Claude Code sets no CLAUDE_TOOL_* env vars)
+INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
+
+# Derive tool_name from the input envelope
+TOOL_NAME=$(printf '%s' "$INPUT" | python3 -c "
+import json, sys
+try:
+    print(json.load(sys.stdin).get('tool_name',''))
+except:
+    print('')
+" 2>/dev/null)
+
 # Only fire on Write/Edit to .py files
-TOOL_NAME="${CLAUDE_TOOL_NAME:-}"
 if [[ "$TOOL_NAME" != "Write" && "$TOOL_NAME" != "Edit" ]]; then
     exit 0
 fi
 
-# Read tool input from stdin
-INPUT=$(cat)
-
 # Check if the content targets a .py file
-FILE_PATH=$(echo "$INPUT" | python3 -c "
+FILE_PATH=$(printf '%s' "$INPUT" | python3 -c "
 import json, sys
 try:
     d = json.load(sys.stdin)
-    print(d.get('file_path', d.get('path', '')))
+    ti = d.get('tool_input', d) or {}
+    print(ti.get('file_path', ti.get('path', '')))
 except:
     print('')
 " 2>/dev/null)
@@ -31,12 +40,13 @@ if [[ "$FILE_PATH" != *.py ]]; then
 fi
 
 # Get the content being written/edited
-CONTENT=$(echo "$INPUT" | python3 -c "
+CONTENT=$(printf '%s' "$INPUT" | python3 -c "
 import json, sys
 try:
     d = json.load(sys.stdin)
+    ti = d.get('tool_input', d) or {}
     # For Write, check content; for Edit, check new_string
-    print(d.get('content', d.get('new_string', '')))
+    print(ti.get('content', ti.get('new_string', '')))
 except:
     print('')
 " 2>/dev/null)

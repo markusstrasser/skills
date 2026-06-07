@@ -17,8 +17,10 @@ remind() {
   fi
 }
 
-INPUT="$CLAUDE_TOOL_INPUT"
-TOOL="$CLAUDE_TOOL_NAME"
+INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
+TOOL=$(printf '%s' "$INPUT" | python3 -c 'import sys,json
+try: print(json.load(sys.stdin).get("tool_name",""))
+except: print("")' 2>/dev/null)
 
 # Extract command for Bash tools, query for search tools, file path for Write/Edit
 CMD=""
@@ -26,14 +28,14 @@ QUERY=""
 FPATH=""
 IS_SEARCH_TOOL=false
 if [ "$TOOL" = "Bash" ]; then
-  CMD=$(echo "$INPUT" | jq -r '.command // empty' 2>/dev/null)
+  CMD=$(echo "$INPUT" | jq -r '(.tool_input.command // .command // empty)' 2>/dev/null)
 elif echo "$TOOL" | grep -qE 'mcp__exa|mcp__research|mcp__paper-search|mcp__brave-search|mcp__firecrawl|mcp__perplexity|WebSearch|WebFetch'; then
-  QUERY=$(echo "$INPUT" | jq -r '(.query // .search_query // .prompt // .url // .claim // "") | ascii_downcase' 2>/dev/null)
+  QUERY=$(echo "$INPUT" | jq -r '(.tool_input.query // .tool_input.search_query // .tool_input.prompt // .tool_input.url // .tool_input.claim // .query // .search_query // .prompt // .url // .claim // "") | ascii_downcase' 2>/dev/null)
   IS_SEARCH_TOOL=true
 elif [ "$TOOL" = "Write" ] || [ "$TOOL" = "Edit" ]; then
-  FPATH=$(echo "$INPUT" | jq -r '.file_path // empty' 2>/dev/null)
+  FPATH=$(echo "$INPUT" | jq -r '(.tool_input.file_path // .file_path // empty)' 2>/dev/null)
   # Also grab content for Write, new_string for Edit
-  CONTENT=$(echo "$INPUT" | jq -r '(.content // .new_string // "") | .[0:2000]' 2>/dev/null)
+  CONTENT=$(echo "$INPUT" | jq -r '(.tool_input.content // .tool_input.new_string // .content // .new_string // "") | .[0:2000]' 2>/dev/null)
 fi
 
 # --- Counter-based triggers (fires after N occurrences, not on first) ---
