@@ -16,6 +16,7 @@ cross-referenced, what data categories accessed.
 
 import json
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -110,7 +111,14 @@ def save_session_state(session_id: str, state: dict):
 def main():
     t0 = time.monotonic()
 
-    tool_name = os.environ.get("CLAUDE_TOOL_NAME", "")
+    # Claude Code passes the envelope on stdin and sets no CLAUDE_TOOL_NAME;
+    # Codex sets the env var. Read stdin first, fall back to the env var.
+    try:
+        payload = json.load(sys.stdin)
+    except Exception:
+        payload = {}
+    tool_name = (payload.get("tool_name") if isinstance(payload, dict) else "") \
+        or os.environ.get("CLAUDE_TOOL_NAME", "")
     if not tool_name:
         return
 
