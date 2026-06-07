@@ -2,10 +2,13 @@
 # PreToolUse:Bash — catch common llmx dispatch mistakes
 # Advisory (exit 0) for warnings, BLOCK (exit 2) for Gemini 2.5 and invalid flags
 
-if [ "$CLAUDE_TOOL_NAME" != "Bash" ]; then exit 0; fi
+INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
+TOOL=$(printf '%s' "$INPUT" | python3 -c 'import sys,json
+try: print(json.load(sys.stdin).get("tool_name",""))
+except: print("")' 2>/dev/null)
+if [ -n "$TOOL" ] && [ "$TOOL" != "Bash" ]; then exit 0; fi
 
-INPUT="$CLAUDE_TOOL_INPUT"
-CMD=$(echo "$INPUT" | jq -r '.command // empty' 2>/dev/null)
+CMD=$(echo "$INPUT" | jq -r '(.tool_input.command // .command // empty)' 2>/dev/null)
 [ -z "$CMD" ] && exit 0
 
 # Only check commands that invoke llmx
@@ -49,11 +52,11 @@ fi
 # Known valid long flags (from `llmx chat --help`):
 # --model --provider --temperature --reasoning-effort --stream --no-stream
 # --compare --providers --timeout --debug --json --list-providers --no-thinking
-# --use-old --fast --search --system --file --schema --max-tokens --output --fallback
+# --use-old --fast --search --system --file --schema --max-tokens --output --fallback --flex
 INVALID_FLAGS=""
 for flag in $(echo "$CMD" | grep -oE -- '--[a-z][-a-z]*' | sort -u); do
   case "$flag" in
-    --model|--timeout|--max-tokens|--reasoning-effort|--fallback) ;;
+    --model|--timeout|--max-tokens|--reasoning-effort|--fallback|--flex) ;;
     --stream|--schema|--search|--output|--fast|--use-old|--no-thinking|--debug) ;;
     --provider|--providers|--no-stream|--mini|--help|--version) ;;
     --compare|--json|--temperature|--system|--file|--list-providers) ;;
