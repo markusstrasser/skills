@@ -12,6 +12,12 @@ effort: medium
 
 Unified diagnostic workflow. Four lenses on the same transcript data, each answering a different question.
 
+> **Retrospective + error-oriented by design.** Observe learns from what *happened*
+> (anti-patterns, corrections, wasted supervision). It is structurally blind to
+> friction that never fails — ambient latency/cost, manual repetition, and tools you
+> have never tried (you can't retro your way to an unused capability). For that class
+> of order-of-magnitude win, use the prospective, frontier-scanning twin: **`/leverage`**.
+
 ## Current Environment
 `!echo "Date: $(date +%Y-%m-%d) | CWD: $(basename $PWD) | Transcripts: $(ls ~/.claude/projects/ | wc -l | tr -d ' ') project dirs"`
 
