@@ -32,8 +32,10 @@ If 3+ sessions active: keep questions shorter, batch ambiguous items.
 
 ## Tool Routing
 
+> **Default web-research backend: Exa, then Brave** (operator routing pref, 2026-06-09). **Perplexity is downranked to fallback** — reach for it only for the narrow exact-number case below, and expect quota flakiness (recurrent 401s). Reason: in live sessions Perplexity quota-exhausts unpredictably and is NOT an independent index; Exa + Brave are the durable, independently-indexed pair. Don't open with Perplexity. (This is a default-ordering change, not a capability claim — the genomics exact-number edge below still holds where it applies.)
+
 **Quick routing by need:**
-- **Factual lookup (need the number):** `perplexity_ask` (~$0.01-0.05/call) — returns exact figures with CIs, assembly versions, study-level breakdowns. Best when you need precise values, not just confirmation. Empirically outperformed Exa `/answer` 5-0 on genomics factual questions (exact bp counts, odds ratios, gene counts, protein sizes).
+- **Factual lookup (need the number):** **Exa first** — `web_search_advanced_exa` (or `verify_claim` for a specific value), then Brave. Fall back to `perplexity_ask` (~$0.01-0.05/call) ONLY for exact numeric lookups (bp counts, odds ratios, gene/protein sizes) where it empirically beat Exa `/answer` 5-0 on the genomics eval — and only after Exa/Brave came up short. Default to Exa otherwise.
 - **Factual verification (have the number, need to check it):** `verify_claim` (Exa /answer, ~$0.005/call, cached 7d) — confirms or denies a specific claim. Cheaper but less precise — says "supported" without giving the exact value. Best for checking numbers you already have.
 - **Academic papers:** `search_papers` (S2, 220M+) for discovery -> `fetch_paper` + `read_paper` before citing
 - **Recent papers (<6mo):** `web_search_advanced_exa` with `category: "research paper"` + date filter (S2 has no date filtering)
@@ -43,7 +45,7 @@ If 3+ sessions active: keep questions shorter, batch ambiguous items.
 - **Entity enrichment:** `web_search_advanced_exa` with `type: "deep"` + `outputSchema` — structured JSON with per-field citations, eliminates search->fetch->extract chains
 - **Database lookups (UniProt, gnomAD, ClinVar):** Exa/Brave websearch, NOT S2 (returns papers *about* databases, not the data). This is an empirical finding (EBF3 benchmark) — websearch found exact domain boundaries that academic tools missed.
 - **News/events:** `brave_news_search` (24h-7d), Exa with date filter for older
-- **URL discovery / cheap search:** `perplexity_search` (~$0.005/call) — raw ranked results without AI synthesis. Comparable to Brave.
+- **URL discovery / cheap search:** **Brave or Exa first**; `perplexity_search` (~$0.005/call) is a fallback only (raw ranked results, comparable to Brave but quota-flaky).
 - **Triangulation:** Exa + Brave (confirmed independent indexes). Perplexity is NOT independent (uses same underlying indexes).
 - **Deep "why" analysis:** `perplexity_reason` (~$0.05-0.15/call) — chain-of-thought with web grounding. Only for analytical questions needing reasoning + evidence.
 - **Comprehensive surveys:** `perplexity_research` (~$0.15-0.50/call, slow 30s+) — multi-source deep research. Reserve for literature-survey-scale questions. **Cost discipline:** it was ~87% of Perplexity spend in May 2026 — always pass `reasoning_effort: medium` (or `low`), never default `high`; opt-in for broad scope only; re-grade vs Exa Deep first. See `references/tool-routing.md` §Perplexity cost discipline.
