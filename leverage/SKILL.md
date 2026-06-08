@@ -92,7 +92,14 @@ and verification skills together into a *measured, shipped* win:
    session overturned three claims — parallel linting was 1.4x not 8x; the named
    "fix" for the slow outlier did nothing; a "drop-in" checker flooded warnings).
    Report honest factors — a measured 1.4x and a measured 30x both beat an asserted
-   100x.
+   100x. **Size the win at the SESSION level, not the per-run level:** a per-run
+   factor (e.g. testmon 31-77x per full-suite run) is not the impact — multiply by
+   `frequency × blocking-fraction × where-the-time-concentrates` from agentlogs. The
+   testmon win shrank from "31-77x faster testing" to "collapse the 2.5% slow-run
+   tail + correct auto-scope" once measured (99.3% blocking, but 77% of runs already
+   <5s). Quoting the per-run number as a session number is the overclaim this step
+   exists to catch. Worked example:
+   `agent-infra/research/2026-06-08-honest-factor-testmon-case-study.md`.
 8. **Consumption-gate + ratchet.** Ship only what has a *named consumer* (skip the
    rest with reasons). Then ratchet/architect the win so the system can't silently
    regress (a recipe, a default, a gate, a baseline that can only improve).
