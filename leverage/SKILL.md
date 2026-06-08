@@ -60,9 +60,10 @@ and verification skills together into a *measured, shipped* win:
    (in the founding case "the consumer is an agent" deleted half the candidates:
    notebooks, TUI debuggers, watch-mode are human-only). Score everything later
    against the consumer's real constraint.
-2. **Discover the axes — `/brainstorm`.** Constraint inversion / denial cascade over
-   the five axes above. Output: which dimension(s) have the biggest gap here, not a
-   premature "make it faster."
+2. **Discover the axes — hand off to `/brainstorm`.** It owns the divergent
+   technique; leverage owns only the target. Run it to generate candidate dimensions
+   of radical improvement, map its output onto the five axes above, and pick where
+   the gap is biggest — not a premature "make it faster."
 3. **Measure the current state on the chosen axis.** Quantify *before* you can
    recognize a 10x. Faster → `agentlogs query tool_latency`, `/usr/bin/time`. Better
    → run the eval. More → "we don't do this at all." Simpler → count the moving
@@ -102,12 +103,39 @@ ratchet* — the rigor that turns an idea into a verified order-of-magnitude cha
   and never acting on it — the consumption-over-autonomy disease, turned inward.
 - **Plan-without-pilot.** Quoting an improvement you never measured.
 
-## Composes with
+## Dependencies (this is an orchestrator over primitives — a soft dependency)
 
-`/observe` (retrospective, error-oriented twin), `/brainstorm` (step 2 axis discovery
-+ step 5 option generation), `/research` + `/deep-research` (step 5 frontier scan),
-`/critique model` (step 6), `/verify-before` (step 3 probe / step 7 preregister),
-`/sweep` + `/upgrade` (drift and bug audits — different axes again).
+`/leverage` does not reimplement ideation, research, review, or verification — it
+sequences the primitives that already do those, and owns only what they don't (the
+blind-spot frame, the five axes, measure-the-floor, pilot-correction, ratchet). The
+dependency is **soft and agent-mediated**: these aren't function calls, they're
+hand-offs the running agent performs by reading this file. Two rules keep that
+healthy:
+
+- **Reference by capability, not internals.** Step 2 needs "divergent axis
+  generation," which `/brainstorm` provides; if brainstorm's techniques change,
+  leverage still works. Don't re-teach a primitive's method inline — hand off to it.
+- **Keep the orchestrator thin.** If a step is doing a primitive's job, delete it and
+  hand off. If you're tempted to copy brainstorm's perturbations or critique's axes
+  in here, that's drift — link, don't duplicate.
+
+| Step | Primitive | What leverage adds on top |
+|------|-----------|---------------------------|
+| 2 discover axes / 5 options | `/brainstorm` | the five-axis taxonomy + "pick the biggest gap" |
+| 5 frontier scan | `/research`, `/deep-research`, subagent fan-out | currency-verify + maintenance-gate + consumer-reframe |
+| 6 review | `/critique model` | runs it on the *proposal*, buckets the findings |
+| 3 / 7 measure | `/verify-before` | the floor, and "let measurement correct the plan" |
+| — twin | `/observe` | the retrospective, error-oriented counterpart |
+
+**Failure modes of the soft dependency:** *step-skipping* (agent free-associates
+axes instead of handing off to brainstorm — the dep silently doesn't fire) and
+*duplication drift* (the orchestrator re-states a primitive's method). Both are
+caught by the two rules above. Do **not** merge leverage into brainstorm/observe:
+each has standalone value (pure ideation; pure retro; the measured-win loop), and one
+mega-skill-with-modes would bloat all three.
+
+(`/sweep` and `/upgrade` are adjacent but orthogonal — drift and bug audits, not
+leverage's axes.)
 
 ## Output
 
