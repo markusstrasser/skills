@@ -9,7 +9,7 @@ effort: medium
 
 # Improve
 
-The action arm of the diagnostic loop. Four modes: harvest cross-artifact findings, suggest new skills from usage patterns, maintain infrastructure quality, or run orchestrator ticks.
+The action arm of the diagnostic loop. Three modes: harvest cross-artifact findings, suggest new skills from usage patterns, or maintain infrastructure quality.
 
 ## Modes
 
@@ -18,9 +18,13 @@ The action arm of the diagnostic loop. Four modes: harvest cross-artifact findin
 | `harvest` | Cross-artifact gathering, dedup, ranked output | no | `--days 3 --focus all` |
 | `suggest` | Detect repeated workflows, propose skill/MCP candidates | no | `--sessions 10` |
 | `maintain` | Quality checks, finding implementation, routine rotation | `/loop 15m` | (none) |
-| `tick` | Single orchestrator tick, queue status | `/loop 5m` | (none) |
 
 **Default (no mode):** Run harvest with defaults, show top 5, implement top confirmed finding.
+
+> The `tick` mode (single orchestrator tick) was removed 2026-06-08 — the orchestrator
+> (`scripts/orchestrator.py` + launchd schedule) was eradicated 2026-06-07. `maintain`'s
+> orchestrator-coupled steps (Live-State orchestrator query, P0 Orchestrator Failures,
+> P1 Queue Dispatch) are likewise dead; treat them as no-ops until removed.
 
 Parse mode from first positional argument in `$ARGUMENTS`. Remaining args pass through to the mode.
 
@@ -123,14 +127,33 @@ For each harvested item:
 
 ### Phase 5: Rank
 
-```
-priority = recurrence_count x severity_weight x novelty_bonus
-```
+Two rankings, because harvest does two jobs (gather NEW + drain OLD):
+
+**New items** — `priority = recurrence_count x severity_weight x novelty_bonus`
 - `severity_weight`: high=3, medium=2, low=1
 - `recurrence_count`: distinct sources mentioning this theme (1-6)
 - `novelty_bonus`: 1.5 if completely new, 1.0 if reinforcing unimplemented, 0.5 if tangential
 
-Sort descending.
+**Old open items (the drain)** — `priority = leverage x staleness`, where leverage is the
+size of the win if fixed (10-100x friction removed, a whole failure class closed, dead-infra
+eradicated) and staleness is age-of-open. This is NOT recurrence×severity — the highest-leverage
+infra fixes are often single-source (one human finding at session end), so the new-item formula
+buries them. Rank the drain by what's worth fixing × how long it's been rotting, not by how many
+artifacts re-mentioned it.
+
+**Before ranking the drain, classify the open backlog by stream (do this every run):**
+- **Behavioral findings** (TOKEN WASTE, SYCOPHANCY, MISSING PUSHBACK, REASONING-ACTION MISMATCH,
+  OVER-ENGINEERING, CAPABILITY ABANDONMENT…) are an append-only calibration ledger. Their consumer
+  is recurrence→rule promotion, NOT per-item implementation. They can never be `[x]`. Do NOT count
+  them as "open actionable work" — that inflates the backlog into a false panic number (measured
+  2026-06-08: 92 of 129 "open" were behavioral; only ~8 were actionable-and-valid). When a rule has
+  shipped covering a behavioral class, bulk-mark its contributors `[>]` superseded-by rule:X.
+- **Moot items** — subject was deleted/eradicated (e.g. orchestrator items after 2026-06-07). Mark
+  `[~] retired — subject no longer exists`. These are free drain.
+- **Actionable infra/tooling/architecture** — the only stream that should carry `[ ]`/`[x]` and the
+  only one "drain the backlog" applies to. Usually a small number once decluttered.
+
+Sort each ranking descending.
 
 ### Phase 6: Output
 
@@ -389,28 +412,6 @@ Task fails: log error, skip this tick, don't retry same task consecutively. Suba
 7. Idempotent -- check action log and git log before acting.
 8. Ultrathink for implementation.
 9. Classify before acting.
-
----
-
-## Mode: tick
-
-Run one orchestrator tick and report status. Designed for `/loop 5m /tick`.
-
-### Execute
-
-```bash
-uv run python3 ~/Projects/agent-infra/scripts/orchestrator.py tick 2>&1
-```
-
-### Status
-
-```bash
-uv run python3 ~/Projects/agent-infra/scripts/orchestrator.py status 2>&1 | head -30
-```
-
-### Report
-
-One paragraph: what ran (if anything), what's next in queue, any failures. If nothing pending, say so and stop.
 
 ---
 
