@@ -36,16 +36,20 @@ Cross-artifact improvement harvester. Reads recent analysis artifacts, user feed
 
 **You consume artifacts. You don't produce analysis.** Session-analyst, design-review, retro, and suggest-skill produce the raw findings. You aggregate, deduplicate, rank, and surface what fell through the cracks.
 
-**This is the DRAIN, and draining is the bottleneck.** `improvement-log` runs a large open
-backlog (~140 `[ ]` vs ~190 done) — the system captures findings faster than it consumes
-them (generation-without-consumption, the cross-cutting disease, turned on the loop itself).
-So harvest's job is not only to gather *new* findings but to **pull the oldest/highest-leverage
-OPEN entries forward for disposition** — every run should close or escalate some `[ ]`, not just
-append. Rank by leverage × staleness, not recency. Run on a cadence (weekly) so the backlog
-shrinks. Two finding classes to weight: **agent self-process anti-patterns** (from `/observe`
-retro item 6 — re-guessing before measuring, fix-spirals, `--no-verify` escape-hatching; these
-recur silently because no error fires) and **dead-infra / generation-without-consumption** (a
-generator with no consumer; telemetry collected and never read).
+**Harvest does two jobs: gather NEW, and drain the actionable OPEN queue.** A prior framing
+("~140 open vs ~190 done, consumption is the bottleneck, drain harder") was built on a
+**miscounted denominator** (F1, 2026-06-08): ~92 of the 131 "open" items were behavioral
+calibration-ledger entries mistagged `[ ]` — they can never be `[x]` (their consumer is
+recurrence→rule promotion, not a build), plus ~13 referenced eradicated infra. The real
+actionable-open queue was ~23, not 140. **So the first move every run is to classify the
+stream (below), THEN drain only the genuinely-actionable residue.** Draining is real but small;
+the bigger lever is keeping the streams separate at entry (gov-id.md `[obs]` vs `[ ]`) so the
+count stays honest. Rank the drain by leverage × staleness, not recurrence. Run on a cadence
+(weekly). Two actionable classes to weight when they DO appear: **agent self-process
+anti-patterns** (re-guessing before measuring, fix-spirals, `--no-verify` escape-hatching —
+these recur silently because no error fires; log them `[obs]` unless there's a concrete guard to
+build) and **dead-infra / generation-without-consumption** (a generator with no consumer —
+genuinely `[ ]` actionable: delete it or wire it).
 
 ### Phase 0: Parse & Setup
 

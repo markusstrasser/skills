@@ -184,8 +184,19 @@ Write the operator summary to `digest.md`. Only write `improvement-log.md` entri
 - **Failure mode:** [link to agent-failure-modes.md category, or "NEW"]
 - **Proposed fix:** [hook | skill | rule | CLAUDE.md change | architectural]
 - **Root cause:** [system-design | agent-capability | task-specification | skill-router | skill-weakness | skill-execution | skill-coverage]
-- **Status:** [ ] proposed
+- **Status:** [ ] proposed   ← ONLY for an actionable infra/tooling/architecture build
 ```
+
+**Two-stream status discipline (F1, see `agent-infra/.claude/rules/gov-id.md`).** Pick the glyph
+by what the finding *is*, not by habit:
+- **Behavioral observation** (TOKEN WASTE, SYCOPHANCY, MISSING PUSHBACK, REASONING-ACTION MISMATCH,
+  OVER-ENGINEERING, CAPABILITY ABANDONMENT…) → **`[obs]`**, never `[ ]`. It's an append-only
+  calibration-ledger entry whose consumer is recurrence→rule promotion, not a per-item build. A
+  behavioral finding tagged `[ ]` inflates the actionable-open count into a panic number — the
+  exact bug this fixed (131 "open" → 33 real, 2026-06-08).
+- **Actionable infra/tooling/architecture** (a concrete hook/lint/script/rule to build) → `[ ]` proposed.
+- When a finding is behavioral AND spawns a concrete build, write the `[obs]` ledger entry for the
+  pattern and a separate `[ ]` entry for the build.
 
 ### Corrections Mode (`--corrections`)
 
@@ -342,13 +353,15 @@ If `--days 7+`, compare against previous runs:
 
 End-of-session retrospective. LOCAL analysis only -- no Gemini dispatch. Classification in `lenses/retro-reflection.md`.
 
-**CAPTURE, don't fix.** The goal is to *append* findings to `improvement-log.md` as `[ ]`
-proposals — NOT to implement fixes in the moment. Fixing at session end is the fix-spiral
-trap (observed: ~15 turns lost optimizing one script at a session tail by guessing instead
-of measuring). Fixes are batched and human-dispositioned by `/improve harvest` + `maintain`,
-which is also the **drain** for the open backlog (consumption lags capture — the log runs
-~140 open vs ~190 done, so the constraint is draining, not capturing more). Capture sharp,
-stop, let the drain act.
+**CAPTURE, don't fix.** The goal is to *append* findings to `improvement-log.md` — NOT to
+implement fixes in the moment. Fixing at session end is the fix-spiral trap (observed: ~15 turns
+lost optimizing one script at a session tail by guessing instead of measuring). Tag by stream
+(F1): **behavioral observations → `[obs]`** (calibration ledger), **actionable infra builds →
+`[ ]`** (the drain queue). Do NOT default everything to `[ ]` — most retro findings are behavioral
+`[obs]` and tagging them `[ ]` is what inflated the "open backlog" into a false panic number
+(131→33 once corrected, 2026-06-08; the real actionable queue was always small). Actionable `[ ]`
+items are batched and human-dispositioned by `/improve harvest` + `maintain`. Capture sharp, tag
+the right stream, stop, let the drain act.
 
 ### Phase 0: Idempotency Check
 
