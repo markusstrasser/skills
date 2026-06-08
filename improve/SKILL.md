@@ -32,6 +32,17 @@ Cross-artifact improvement harvester. Reads recent analysis artifacts, user feed
 
 **You consume artifacts. You don't produce analysis.** Session-analyst, design-review, retro, and suggest-skill produce the raw findings. You aggregate, deduplicate, rank, and surface what fell through the cracks.
 
+**This is the DRAIN, and draining is the bottleneck.** `improvement-log` runs a large open
+backlog (~140 `[ ]` vs ~190 done) — the system captures findings faster than it consumes
+them (generation-without-consumption, the cross-cutting disease, turned on the loop itself).
+So harvest's job is not only to gather *new* findings but to **pull the oldest/highest-leverage
+OPEN entries forward for disposition** — every run should close or escalate some `[ ]`, not just
+append. Rank by leverage × staleness, not recency. Run on a cadence (weekly) so the backlog
+shrinks. Two finding classes to weight: **agent self-process anti-patterns** (from `/observe`
+retro item 6 — re-guessing before measuring, fix-spirals, `--no-verify` escape-hatching; these
+recur silently because no error fires) and **dead-infra / generation-without-consumption** (a
+generator with no consumer; telemetry collected and never read).
+
 ### Phase 0: Parse & Setup
 
 Parse from `$ARGUMENTS`:
