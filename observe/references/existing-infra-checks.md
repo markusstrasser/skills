@@ -22,9 +22,12 @@ tail -50 "$OBSERVE_PROJECT_ROOT/improvement-log.md"
 # Active pipelines
 ls "$OBSERVE_PROJECT_ROOT/pipelines/"
 
-# Session-retro findings DB — check if pattern is already tracked
-uv run python3 "$OBSERVE_PROJECT_ROOT/scripts/finding-triage.py" list --all 2>/dev/null | head -30
+# Findings / patterns are tracked inline in the improvement-log (the
+# finding-triage.py + pattern-maintenance.py DBs were retired — see
+# vetoed-decisions.md). Grep the log for the pattern before proposing it:
+grep -in "<pattern keyword>" "$OBSERVE_PROJECT_ROOT/improvement-log.md" | head -30
 
-# Pattern status — check what's already addressed
-uv run python3 "$OBSERVE_PROJECT_ROOT/scripts/pattern-maintenance.py" status 2>/dev/null | head -30
+# Orphaned generators already flagged (don't propose deleting what the ratchet
+# already surfaces):
+just -f "$OBSERVE_PROJECT_ROOT/justfile" orphan-check 2>/dev/null | head -20
 ```
