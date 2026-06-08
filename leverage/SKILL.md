@@ -60,10 +60,19 @@ and verification skills together into a *measured, shipped* win:
    (in the founding case "the consumer is an agent" deleted half the candidates:
    notebooks, TUI debuggers, watch-mode are human-only). Score everything later
    against the consumer's real constraint.
-2. **Discover the axes — hand off to `/brainstorm`.** It owns the divergent
-   technique; leverage owns only the target. Run it to generate candidate dimensions
-   of radical improvement, map its output onto the five axes above, and pick where
-   the gap is biggest — not a premature "make it faster."
+2. **Discover the axes — calibrate divergence to the surface's maturity.** The
+   load-bearing move is "don't assume the axis," not "always run the full apparatus."
+   - **Novel / unmeasured surface** → hand off to `/brainstorm` (it owns the divergent
+     technique; leverage owns only the target). Map its output onto the five axes.
+   - **Mature / already-measured surface** → a lightweight pass over the five axes as
+     a *checklist* is enough; the full perturbation matrix is disproportionate tax
+     (validated dogfooding intel — the denial round "ban building a tool" earned its
+     keep, the rest didn't). This is the Constitution's divergence-budget rule
+     (uncertainty × irreversibility) applied to the hunt itself.
+   Either way the output is the same: which dimension has the biggest gap — not a
+   premature "make it faster." NB the axes overlap in practice (a win is often
+   "unnecessary" + "better" + "faster" at once); they exist to *break the anchor*,
+   not to classify cleanly — don't agonize over the label.
 3. **Measure the current state on the chosen axis.** Quantify *before* you can
    recognize a 10x. Faster → `agentlogs query tool_latency`, `/usr/bin/time`. Better
    → run the eval. More → "we don't do this at all." Simpler → count the moving
