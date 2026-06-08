@@ -342,7 +342,13 @@ If `--days 7+`, compare against previous runs:
 
 End-of-session retrospective. LOCAL analysis only -- no Gemini dispatch. Classification in `lenses/retro-reflection.md`.
 
-The goal is error correction -- turning observations into hooks, rules, or architectural fixes.
+**CAPTURE, don't fix.** The goal is to *append* findings to `improvement-log.md` as `[ ]`
+proposals — NOT to implement fixes in the moment. Fixing at session end is the fix-spiral
+trap (observed: ~15 turns lost optimizing one script at a session tail by guessing instead
+of measuring). Fixes are batched and human-dispositioned by `/improve harvest` + `maintain`,
+which is also the **drain** for the open backlog (consumption lags capture — the log runs
+~140 open vs ~190 done, so the constraint is draining, not capturing more). Capture sharp,
+stop, let the drain act.
 
 ### Phase 0: Idempotency Check
 
@@ -363,6 +369,7 @@ Scan THIS session for concrete events:
 3. **Wasted work**: code written then deleted, searches that found nothing, repeated attempts
 4. **Environment friction**: missing dependencies, wrong paths, permission errors, hook blocks, API rate limits
 5. **Time sinks**: disproportionate turns relative to value delivered
+6. **Agent self-process anti-patterns** (the lens nothing else captures — be honest about your OWN failures, not just the environment's): guessing/asserting a cause before measuring it (e.g. re-trying a fix 3× before profiling); fix-spirals (compounding edits chasing a moving target); thrash loops (repeated failed tool calls on the same target); `--no-verify` / guard-bypass as an escape hatch; long edit-churn on one file; collapsing a general ask to a narrow case (over-narrowing). Much of this is deterministic from agentlogs — repeated identical failed `tool_calls`, `--no-verify` in commit args, N edits to one path — so mine it, don't just introspect.
 
 ### Phase 2: Classification
 
