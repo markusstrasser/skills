@@ -1,9 +1,24 @@
-# Claude Opus 4.8 Prompting Guide
+# Claude Fable 5 & Opus 4.8 Prompting Guide
 
-**Last updated:** 2026-06-06
-**Scope:** Claude Opus 4.8 only.
+**Last updated:** 2026-06-09
+**Scope:** Claude Fable 5 (primary) and Claude Opus 4.8 (fallback).
 
-## Use Opus 4.8 For
+## Fable 5 vs Opus 4.8 — when to reach for which
+
+- **Fable 5** (`claude-fable-5`): hardest/longest/most-ambiguous work — multi-day autonomous runs, codebase-scale migrations, first-shot complex systems, dense-image vision, parallel-subagent orchestration. 2× the price; summarized thinking only; classifiers refuse cyber/bio/reasoning-extraction and fall back to Opus 4.8.
+- **Opus 4.8** (`claude-opus-4-8`): the Fable fallback target, plus deliberate routing of routine/cost-sensitive work, security/cyber/biology tasks (which Fable refuses anyway), and anything needing raw chain-of-thought. Half the price; slightly more careful on self-report honesty.
+
+## Fable 5 specifics (read before migrating from Opus)
+
+- Adaptive thinking is **always on and the only mode** — no `disabled`, no thinking budgets.
+- **Raw CoT is never returned.** `thinking.display` defaults to `"omitted"`; use `"summarized"` for readable summaries. Never instruct the model to recite/echo/explain its reasoning as response text — it trips the `reasoning_extraction` classifier and silently falls back to Opus 4.8. Read the structured `thinking` blocks instead.
+- **Steer with brief instructions, not enumerations.** Instruction-following is strong enough that one short instruction beats listing each behavior. Prior-model skills are often *too* prescriptive and can degrade Fable output — trim them.
+- **Longer turns by default** at higher effort (minutes per request, hours for autonomous runs). Raise client timeouts; check in asynchronously rather than blocking.
+- **Ground progress claims** (`audit each claim against a tool result from this session`) — Fable regresses slightly vs Opus 4.8 on self-report honesty.
+- **Don't surface context/token countdowns** — they trigger premature handoff/summarize behavior.
+- Lower effort on Fable often exceeds prior-model `xhigh`. Default `high`; `xhigh` for capability-sensitive work.
+
+## Use these models for
 
 - Architecture and codebase-scale migrations.
 - Long-running autonomous coding and review.
@@ -13,6 +28,17 @@
 ## API Defaults And Constraints
 
 ```python
+# Fable 5 (primary): adaptive thinking only, summarized output, fall back to Opus 4.8 on refusal
+client.messages.create(
+    model="claude-fable-5",
+    max_tokens=64000,
+    thinking={"type": "adaptive", "display": "summarized"},
+    output_config={"effort": "high"},   # lower effort still strong; raise to xhigh/max for hard work
+    # fallbacks=["claude-opus-4-8"],     # beta: server-side fallback on stop_reason:"refusal"
+    messages=[...],
+)
+
+# Opus 4.8 (fallback / raw-CoT / cost-sensitive)
 client.messages.create(
     model="claude-opus-4-8",
     max_tokens=64000,
