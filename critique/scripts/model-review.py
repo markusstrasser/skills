@@ -40,6 +40,7 @@ def _reexec_under_llmx_python_if_needed() -> None:
     # hand. Re-exec transparently under the llmx tool's own Python instead.
     try:
         import llmx  # type: ignore  # noqa: F401
+
         return
     except ImportError:
         pass
@@ -58,7 +59,13 @@ _reexec_under_llmx_python_if_needed()
 
 import shared.llm_dispatch as dispatch_core
 from shared.context_budget import enforce_budget
-from shared.context_packet import BudgetPolicy, ContextPacket, FileBlock, PacketSection, TextBlock
+from shared.context_packet import (
+    BudgetPolicy,
+    ContextPacket,
+    FileBlock,
+    PacketSection,
+    TextBlock,
+)
 from shared.context_preamble import build_review_preamble_blocks, find_governance
 from shared.context_renderers import write_packet_artifact
 from shared.file_specs import parse_file_spec, read_file_excerpt
@@ -75,17 +82,53 @@ FINDING_SCHEMA = {
                 "properties": {
                     "category": {
                         "type": "string",
-                        "enum": ["bug", "logic", "architecture", "missing", "performance", "security", "style", "principles"],
+                        "enum": [
+                            "bug",
+                            "logic",
+                            "architecture",
+                            "missing",
+                            "performance",
+                            "security",
+                            "style",
+                            "principles",
+                        ],
                     },
-                    "severity": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
+                    "severity": {
+                        "type": "string",
+                        "enum": ["critical", "high", "medium", "low"],
+                    },
                     "title": {"type": "string", "description": "One-line summary"},
-                    "description": {"type": "string", "description": "Detailed explanation with evidence"},
-                    "file": {"type": "string", "description": "File path if cited, empty if architectural"},
-                    "line": {"type": "integer", "description": "Line number if cited, 0 if N/A"},
-                    "fix": {"type": "string", "description": "Proposed fix, empty if unclear"},
-                    "confidence": {"type": "number", "description": "0.0-1.0 confidence in this finding"},
+                    "description": {
+                        "type": "string",
+                        "description": "Detailed explanation with evidence",
+                    },
+                    "file": {
+                        "type": "string",
+                        "description": "File path if cited, empty if architectural",
+                    },
+                    "line": {
+                        "type": "integer",
+                        "description": "Line number if cited, 0 if N/A",
+                    },
+                    "fix": {
+                        "type": "string",
+                        "description": "Proposed fix, empty if unclear",
+                    },
+                    "confidence": {
+                        "type": "number",
+                        "description": "0.0-1.0 confidence in this finding",
+                    },
                 },
-                "required": ["category", "severity", "title", "description", "file", "line", "fix", "confidence"],
+                "required": [
+                    "category",
+                    "severity",
+                    "title",
+                    "description",
+                    "file",
+                    "line",
+                    "fix",
+                    "confidence",
+                ],
             },
         },
     },
@@ -330,7 +373,9 @@ def axis_uses_gpt(axis_name: str) -> bool:
 def resolve_axes(raw_axes: str, *, allow_non_gpt: bool = False) -> list[str]:
     axes_text = raw_axes.strip()
     if axes_text == "simple":
-        raise ValueError("the `simple` preset was removed; use `standard` for the GPT-inclusive default")
+        raise ValueError(
+            "the `simple` preset was removed; use `standard` for the GPT-inclusive default"
+        )
 
     if axes_text in PRESETS:
         axis_names = PRESETS[axes_text]
@@ -344,7 +389,9 @@ def resolve_axes(raw_axes: str, *, allow_non_gpt: bool = False) -> list[str]:
                 f"unknown axis '{unknown_axes[0]}'. Available: {', '.join(sorted(AXES.keys()))}"
             )
 
-    if not allow_non_gpt and not any(axis_uses_gpt(axis_name) for axis_name in axis_names):
+    if not allow_non_gpt and not any(
+        axis_uses_gpt(axis_name) for axis_name in axis_names
+    ):
         raise ValueError(
             "review requires at least one GPT-backed axis; add `formal` or use `standard`, `deep`, or `full`"
         )
@@ -363,8 +410,18 @@ def slugify(text: str, max_len: int = 40) -> str:
 # "looks good to me" synthesis because the model has no attack surface. Two
 # genomics sessions on 2026-04-16 dispatched with `"close"` and got weak output.
 _UNDERSPECIFIED_PROMPTS = {
-    "close", "review", "verify", "check", "model", "deep", "full",
-    "standard", "model-review", "critique", "audit", "fix",
+    "close",
+    "review",
+    "verify",
+    "check",
+    "model",
+    "deep",
+    "full",
+    "standard",
+    "model-review",
+    "critique",
+    "audit",
+    "fix",
 }
 
 
@@ -461,7 +518,11 @@ def _call_llmx(
         for key in ("timeout", "reasoning_effort", "max_tokens", "search"):
             if key in kwargs and kwargs[key] is not None:
                 override_payload[key] = kwargs[key]
-        overrides = dispatch_core.DispatchOverrides(**override_payload) if override_payload else None
+        overrides = (
+            dispatch_core.DispatchOverrides(**override_payload)
+            if override_payload
+            else None
+        )
         result = dispatch_core.dispatch(
             profile=profile,
             prompt=prompt,
@@ -510,7 +571,9 @@ def collect_dispatch_failures(
             continue
         entry = dict(info)
         entry["axis"] = axis
-        entry["context"] = str(context_content_path(ctx_files[axis])) if axis in ctx_files else ""
+        entry["context"] = (
+            str(context_content_path(ctx_files[axis])) if axis in ctx_files else ""
+        )
         entry["failure_reason"] = (
             "nonzero_exit" if int(entry.get("exit_code", 0)) != 0 else "empty_output"
         )
@@ -568,8 +631,19 @@ def rerun_gpt_axis_via_subscription(
         file=sys.stderr,
     )
     cmd = [
-        "llmx", "chat", "-m", model, "--lite", "bare", "-e", "high",
-        "-f", str(context_content_path(ctx_file)), "-o", str(out_path), prompt,
+        "llmx",
+        "chat",
+        "-m",
+        model,
+        "--lite",
+        "bare",
+        "-e",
+        "high",
+        "-f",
+        str(context_content_path(ctx_file)),
+        "-o",
+        str(out_path),
+        prompt,
     ]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=660)
@@ -579,10 +653,17 @@ def rerun_gpt_axis_via_subscription(
             "exit_code": 0 if ok else 1,
             "size": size,
             "latency": 0,
-            "error": None if ok else (r.stderr or "subscription retry produced no output")[:500],
+            "error": None
+            if ok
+            else (r.stderr or "subscription retry produced no output")[:500],
         }
     except Exception as e:  # noqa: BLE001 — fallback must never raise into the axis loop
-        return {"exit_code": 1, "size": 0, "latency": 0, "error": f"subscription retry failed: {str(e)[:300]}"}
+        return {
+            "exit_code": 1,
+            "size": 0,
+            "latency": 0,
+            "error": f"subscription retry failed: {str(e)[:300]}",
+        }
 
 
 def build_context(
@@ -610,14 +691,24 @@ def build_context(
         packet_sections.append(
             PacketSection(
                 "Provided Context",
-                [TextBlock(str(context_file), context_file.read_text(), priority=400, drop_if_needed=False, metadata={"path": str(context_file)})],
+                [
+                    TextBlock(
+                        str(context_file),
+                        context_file.read_text(),
+                        priority=400,
+                        drop_if_needed=False,
+                        metadata={"path": str(context_file)},
+                    )
+                ],
             )
         )
     if context_file_specs:
         file_blocks = []
         for spec_text in context_file_specs:
             spec = parse_file_spec(spec_text.strip())
-            excerpt, truncated, omission_reason = read_file_excerpt(spec, max_chars=None)
+            excerpt, truncated, omission_reason = read_file_excerpt(
+                spec, max_chars=None
+            )
             metadata: dict[str, object] = {}
             if omission_reason:
                 metadata["omission_reason"] = omission_reason
@@ -636,14 +727,26 @@ def build_context(
             )
         packet_sections.append(PacketSection("Context Files", file_blocks))
     if not context_file and not context_file_specs:
-        packet_sections.append(PacketSection("Provided Context", [TextBlock("Context", "", priority=10, drop_if_needed=True)]))
+        packet_sections.append(
+            PacketSection(
+                "Provided Context",
+                [TextBlock("Context", "", priority=10, drop_if_needed=True)],
+            )
+        )
 
     token_limits = [
         dispatch_core.profile_input_budget(AXES[axis]["profile"])["input_token_limit"]
         for axis in axis_names
-        if dispatch_core.profile_input_budget(AXES[axis]["profile"])["input_token_limit"] is not None
+        if dispatch_core.profile_input_budget(AXES[axis]["profile"])[
+            "input_token_limit"
+        ]
+        is not None
     ]
-    budget_limit = budget_limit_override if budget_limit_override is not None else (min(token_limits) if token_limits else 120000)
+    budget_limit = (
+        budget_limit_override
+        if budget_limit_override is not None
+        else (min(token_limits) if token_limits else 120000)
+    )
     packet = ContextPacket(
         title="Model Review Context Packet",
         sections=packet_sections,
@@ -668,7 +771,10 @@ def build_context(
             f"({artifact.token_estimate} tokens est.) may be large",
             file=sys.stderr,
         )
-    return {axis: ContextArtifact(content_path=content_path, manifest_path=manifest_path) for axis in axis_names}
+    return {
+        axis: ContextArtifact(content_path=content_path, manifest_path=manifest_path)
+        for axis in axis_names
+    }
 
 
 def dispatch(
@@ -746,7 +852,11 @@ def dispatch(
             entry["fallback_reason"] = "gemini_rate_limit"
             entry["initial_exit_code"] = result["exit_code"]
             fallback_result = rerun_axis_with_fallback(
-                axis, axis_def, review_dir, ctx_files[axis], prompts[axis],
+                axis,
+                axis_def,
+                review_dir,
+                ctx_files[axis],
+                prompts[axis],
             )
             entry["model"] = GEMINI_FALLBACK_MODEL
             entry["exit_code"] = fallback_result["exit_code"]
@@ -771,7 +881,11 @@ def dispatch(
             entry["fallback_reason"] = "gpt_api_quota"
             entry["initial_exit_code"] = result["exit_code"]
             sub_result = rerun_gpt_axis_via_subscription(
-                axis, profile_def.model, review_dir, ctx_files[axis], prompts[axis],
+                axis,
+                profile_def.model,
+                review_dir,
+                ctx_files[axis],
+                prompts[axis],
             )
             entry["model"] = f"{profile_def.model} (subscription)"
             entry["exit_code"] = sub_result["exit_code"]
@@ -786,7 +900,11 @@ def dispatch(
         return axis, entry
 
     # Parallel dispatch via threads
-    results: dict = {"review_dir": str(review_dir), "axes": axis_names, "queries": len(axis_names)}
+    results: dict = {
+        "review_dir": str(review_dir),
+        "axes": axis_names,
+        "queries": len(axis_names),
+    }
     with ThreadPoolExecutor(max_workers=len(axis_names)) as pool:
         futures = {pool.submit(_run_axis, axis): axis for axis in axis_names}
         try:
@@ -799,8 +917,12 @@ def dispatch(
                 if axis not in results:
                     results[axis] = {
                         "label": AXES[axis]["label"],
-                        "requested_model": dispatch_core.PROFILES[str(AXES[axis]["profile"])].model,
-                        "model": dispatch_core.PROFILES[str(AXES[axis]["profile"])].model,
+                        "requested_model": dispatch_core.PROFILES[
+                            str(AXES[axis]["profile"])
+                        ].model,
+                        "model": dispatch_core.PROFILES[
+                            str(AXES[axis]["profile"])
+                        ].model,
                         "exit_code": 1,
                         "output": str(review_dir / f"{axis}-output.md"),
                         "size": 0,
@@ -862,13 +984,24 @@ def write_coverage_artifact(
     dispatch_axes: list[dict[str, object]] = []
 
     if dispatch_result is not None:
-        requested_axes = [str(axis) for axis in dispatch_result.get("axes", []) if isinstance(axis, str)]
+        requested_axes = [
+            str(axis)
+            for axis in dispatch_result.get("axes", [])
+            if isinstance(axis, str)
+        ]
         if not requested_axes:
             requested_axes = [
                 axis
                 for axis, info in dispatch_result.items()
                 if axis
-                not in {"review_dir", "axes", "queries", "elapsed_seconds", "dispatch_failures", "failed_axes"}
+                not in {
+                    "review_dir",
+                    "axes",
+                    "queries",
+                    "elapsed_seconds",
+                    "dispatch_failures",
+                    "failed_axes",
+                }
                 and isinstance(info, dict)
             ]
         dispatch_axes = [
@@ -901,10 +1034,13 @@ def write_coverage_artifact(
     payload["artifacts"].update(
         {
             "shared_context": _review_artifact_path(review_dir, "shared-context.md"),
-            "shared_context_manifest": _review_artifact_path(review_dir, "shared-context.manifest.json"),
+            "shared_context_manifest": _review_artifact_path(
+                review_dir, "shared-context.manifest.json"
+            ),
             "findings": _review_artifact_path(review_dir, "findings.json"),
             "disposition": disposition_path or payload["artifacts"].get("disposition"),
-            "verified_disposition": verified_disposition_path or payload["artifacts"].get("verified_disposition"),
+            "verified_disposition": verified_disposition_path
+            or payload["artifacts"].get("verified_disposition"),
         }
     )
 
@@ -916,10 +1052,16 @@ def write_coverage_artifact(
             "elapsed_seconds": dispatch_result.get("elapsed_seconds"),
         }
 
-    if extraction_tasks is not None or axis_findings is not None or merged_findings is not None:
+    if (
+        extraction_tasks is not None
+        or axis_findings is not None
+        or merged_findings is not None
+    ):
         usable_axes = [axis for axis, _, _ in (extraction_tasks or [])]
         usable_axis_count = len(usable_axes)
-        findings_before_dedup = sum(len(findings) for findings in (axis_findings or {}).values())
+        findings_before_dedup = sum(
+            len(findings) for findings in (axis_findings or {}).values()
+        )
         payload["extraction"] = {
             "enabled": True,
             "usable_axes": usable_axes,
@@ -934,7 +1076,9 @@ def write_coverage_artifact(
             "findings_by_axis": {
                 axis: len(findings) for axis, findings in (axis_findings or {}).items()
             },
-            "coverage_ratio": round(len(axis_findings or {}) / usable_axis_count, 3) if usable_axis_count else 0.0,
+            "coverage_ratio": round(len(axis_findings or {}) / usable_axis_count, 3)
+            if usable_axis_count
+            else 0.0,
         }
 
     if verification_summary is not None:
@@ -1042,7 +1186,10 @@ def extract_claims(
             schema=FINDING_SCHEMA,
         )
         if result["exit_code"] != 0:
-            print(f"warning: extraction for {axis} failed: {result.get('error', 'unknown')}", file=sys.stderr)
+            print(
+                f"warning: extraction for {axis} failed: {result.get('error', 'unknown')}",
+                file=sys.stderr,
+            )
             return axis, None
         if result["size"] > 0:
             try:
@@ -1054,7 +1201,10 @@ def extract_claims(
                 data = json.loads(raw)
                 return axis, data.get("findings", [])
             except (json.JSONDecodeError, KeyError) as e:
-                print(f"warning: extraction for {axis} returned invalid JSON: {e}", file=sys.stderr)
+                print(
+                    f"warning: extraction for {axis} returned invalid JSON: {e}",
+                    file=sys.stderr,
+                )
                 # Fall back to raw text
                 return axis, None
         print(f"warning: extraction for {axis} produced empty output", file=sys.stderr)
@@ -1080,10 +1230,25 @@ def extract_claims(
     # Merge findings across axes — keyword overlap for cross-model dedup
     def _fingerprint(f: dict) -> set[str]:
         """Extract significant keywords for fuzzy matching."""
-        text = f"{f.get('title', '')} {f.get('file', '')} {f.get('description', '')[:200]}"
+        text = (
+            f"{f.get('title', '')} {f.get('file', '')} {f.get('description', '')[:200]}"
+        )
         words = set(re.findall(r"[a-z_]{4,}", text.lower()))
         # Remove common stop-words that inflate false matches
-        words -= {"this", "that", "with", "from", "should", "could", "would", "does", "have", "will", "also", "been"}
+        words -= {
+            "this",
+            "that",
+            "with",
+            "from",
+            "should",
+            "could",
+            "would",
+            "does",
+            "have",
+            "will",
+            "also",
+            "been",
+        }
         return words
 
     merged_findings: list[dict] = []
@@ -1099,10 +1264,16 @@ def extract_claims(
             # Check for overlap with existing findings (keyword Jaccard).
             matched = False
             for existing_fp, existing in seen:
-                if len(fp & existing_fp) > 0 and len(fp & existing_fp) / len(fp | existing_fp) > CROSS_MODEL_JACCARD_THRESHOLD:
+                if (
+                    len(fp & existing_fp) > 0
+                    and len(fp & existing_fp) / len(fp | existing_fp)
+                    > CROSS_MODEL_JACCARD_THRESHOLD
+                ):
                     existing.setdefault("also_found_by", []).append(source_label)
                     existing["cross_model"] = True
-                    existing["confidence"] = min(1.0, existing.get("confidence", 0.5) + 0.2)
+                    existing["confidence"] = min(
+                        1.0, existing.get("confidence", 0.5) + 0.2
+                    )
                     matched = True
                     break
             if not matched:
@@ -1111,11 +1282,13 @@ def extract_claims(
 
     # Sort: cross-model agreements first, then by severity, then confidence
     severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-    merged_findings.sort(key=lambda f: (
-        0 if f.get("cross_model") else 1,
-        severity_order.get(f.get("severity", "low"), 3),
-        -(f.get("confidence", 0)),
-    ))
+    merged_findings.sort(
+        key=lambda f: (
+            0 if f.get("cross_model") else 1,
+            severity_order.get(f.get("severity", "low"), 3),
+            -(f.get("confidence", 0)),
+        )
+    )
 
     # Renumber
     for i, f in enumerate(merged_findings, 1):
@@ -1123,7 +1296,9 @@ def extract_claims(
 
     # Write structured JSON
     structured_path = review_dir / "findings.json"
-    structured_path.write_text(json.dumps({"findings": merged_findings}, indent=2) + "\n")
+    structured_path.write_text(
+        json.dumps({"findings": merged_findings}, indent=2) + "\n"
+    )
 
     # Write human-readable disposition
     extractions: list[str] = []
@@ -1257,9 +1432,9 @@ def verify_claims(
             body_lines = [
                 title,
                 f"Description: {description}" if description else "",
-                f"File: {file_path}:{line_number}" if file_path and isinstance(line_number, int) and line_number > 0 else (
-                    f"File: {file_path}" if file_path else ""
-                ),
+                f"File: {file_path}:{line_number}"
+                if file_path and isinstance(line_number, int) and line_number > 0
+                else (f"File: {file_path}" if file_path else ""),
                 f"Fix: {fix_text}" if fix_text else "",
             ]
             structured_claims.append(
@@ -1287,9 +1462,25 @@ def verify_claims(
             re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*[A-Z][A-Za-z0-9_]*)\b"),
         ]
         generic = {
-            "review", "finding", "findings", "description", "category", "confidence",
-            "source", "file", "fix", "error", "warning", "coverage", "json", "path",
-            "model", "script", "line", "claim", "claims",
+            "review",
+            "finding",
+            "findings",
+            "description",
+            "category",
+            "confidence",
+            "source",
+            "file",
+            "fix",
+            "error",
+            "warning",
+            "coverage",
+            "json",
+            "path",
+            "model",
+            "script",
+            "line",
+            "claim",
+            "claims",
         }
         for text in texts:
             for pattern in patterns:
@@ -1330,22 +1521,51 @@ def verify_claims(
     #      suffix-match, not basename-match.
     # Fix: exclude cruft dirs from candidates; fall back to basename-only
     # search when a path-prefixed reference fails.
-    _CRUFT_DIRS = (".claude/worktrees", ".claude/cache", ".git", "__pycache__",
-                   "node_modules", ".venv", "vendors", ".pytest_cache",
-                   ".ruff_cache", ".model-review", ".tasks", "node_modules",
-                   "build", "dist")
+    _CRUFT_DIRS = (
+        ".claude/worktrees",
+        ".claude/cache",
+        ".git",
+        "__pycache__",
+        "node_modules",
+        ".venv",
+        "vendors",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".model-review",
+        ".tasks",
+        "node_modules",
+        "build",
+        "dist",
+    )
 
     def _is_cruft(p: Path) -> bool:
         s = p.as_posix()
-        return any(f"/{d}/" in s or s.endswith(f"/{d}") or s.startswith(f"{d}/")
-                   for d in _CRUFT_DIRS)
+        return any(
+            f"/{d}/" in s or s.endswith(f"/{d}") or s.startswith(f"{d}/")
+            for d in _CRUFT_DIRS
+        )
 
     def _filtered_rglob(pattern: str, root: Path | None = None) -> list[Path]:
         return [p for p in (root or project_dir).rglob(pattern) if not _is_cruft(p)]
 
     _TEXT_VERIFY_SUFFIXES = {
-        ".cfg", ".clj", ".cljc", ".css", ".edn", ".html", ".js", ".json",
-        ".md", ".py", ".sh", ".sql", ".toml", ".ts", ".tsx", ".yaml", ".yml",
+        ".cfg",
+        ".clj",
+        ".cljc",
+        ".css",
+        ".edn",
+        ".html",
+        ".js",
+        ".json",
+        ".md",
+        ".py",
+        ".sh",
+        ".sql",
+        ".toml",
+        ".ts",
+        ".tsx",
+        ".yaml",
+        ".yml",
     }
 
     def _is_text_verifiable(path: Path) -> bool:
@@ -1373,7 +1593,9 @@ def verify_claims(
         # No direct hit — try extension-swap aliases before declaring missing.
         suffix = Path(filepath).suffix
         for alt_ext in _FUZZY_EXT_ALIASES.get(suffix, ()):
-            alt_filepath = filepath[: -len(suffix)] + alt_ext if suffix else filepath + alt_ext
+            alt_filepath = (
+                filepath[: -len(suffix)] + alt_ext if suffix else filepath + alt_ext
+            )
             alt_exact = project_dir / alt_filepath
             if alt_exact.exists():
                 return "exact_extswap", alt_exact, alt_filepath
@@ -1398,9 +1620,49 @@ def verify_claims(
             if len(sib_hits) == 1:
                 return "basename_sibling", sib_hits[0], filepath
 
+        # Code-SYMBOL reference cited as if it were a file (e.g.
+        # "GenomeObserver.observe()", "_VcfRecord", "parse_variant_key()").
+        # These are not files, so every branch above misses and the finding gets
+        # marked HALLUCINATED — the 3rd anchor-inflation class (after .js/.json
+        # ext-swap and cross-repo siblings). A 38%-"hallucinated" genomics close
+        # was really ~10%; the rest were real findings citing real symbols.
+        # Resolve by grepping source for the definition.
+        sym = filepath.strip()
+        if sym.endswith("()"):
+            sym = sym[:-2]
+        if Path(sym).suffix.lower() not in _TEXT_VERIFY_SUFFIXES and re.fullmatch(
+            r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*", sym
+        ):
+            leaf = sym.rsplit(".", 1)[-1]
+            def_re = re.compile(
+                r"^[ \t]*(?:async\s+def|def|class)\s+" + re.escape(leaf) + r"\b", re.M
+            )
+            sym_hits: list[Path] = []
+            for root in (project_dir, *sibling_roots):
+                for ext in ("*.py", "*.ts", "*.tsx", "*.js"):
+                    for p in root.rglob(ext):
+                        if _is_cruft(p):
+                            continue
+                        try:
+                            if def_re.search(
+                                p.read_text(encoding="utf-8", errors="ignore")
+                            ):
+                                sym_hits.append(p)
+                        except OSError:
+                            continue
+                if sym_hits:
+                    break
+            if sym_hits:
+                # Any definition hit means the symbol is real (not a hallucinated
+                # file). Multiple hits → pick the first; the goal is "this citation
+                # is grounded," not pinpointing one of N overloads.
+                return "symbol_def", sym_hits[0], filepath
+
         return "missing", None, filepath
 
-    claims: list[dict[str, object]] = _parse_structured_claims() or _parse_disposition_claims()
+    claims: list[dict[str, object]] = (
+        _parse_structured_claims() or _parse_disposition_claims()
+    )
 
     if not claims:
         print("No numbered claims found in disposition.", file=sys.stderr)
@@ -1418,11 +1680,15 @@ def verify_claims(
         structured_line = int(claim.get("line", 0) or 0)
         file_refs = []
         if structured_file:
-            file_refs.append((structured_file, str(structured_line) if structured_line > 0 else ""))
-        file_refs.extend(re.findall(
-            r"`?([a-zA-Z_][\w/.-]*\.(?:py|js|ts|md|sh|json|yaml|yml|toml|cfg|sql|html|css|clj|cljc|edn))(?::(\d+))?`?",
-            body_text,
-        ))
+            file_refs.append(
+                (structured_file, str(structured_line) if structured_line > 0 else "")
+            )
+        file_refs.extend(
+            re.findall(
+                r"`?([a-zA-Z_][\w/.-]*\.(?:py|js|ts|md|sh|json|yaml|yml|toml|cfg|sql|html|css|clj|cljc|edn))(?::(\d+))?`?",
+                body_text,
+            )
+        )
         deduped_refs: list[tuple[str, str]] = []
         seen_refs: set[tuple[str, str]] = set()
         for filepath, line_str in file_refs:
@@ -1433,7 +1699,13 @@ def verify_claims(
         file_refs = deduped_refs
 
         if not file_refs:
-            verified.append({**claim, "verdict": verdict, "notes": "no file references or structured file anchors"})
+            verified.append(
+                {
+                    **claim,
+                    "verdict": verdict,
+                    "notes": "no file references or structured file anchors",
+                }
+            )
             continue
 
         claim_anchors = _extract_code_anchors(
@@ -1453,7 +1725,9 @@ def verify_claims(
                 notes.append(f"{filepath} matched multiple files")
                 reference_results.append((resolution, Path(filepath), line_str))
             elif not _is_text_verifiable(found_path):
-                notes.append(f"{display_path} resolved but is binary/non-text; skipped content anchors")
+                notes.append(
+                    f"{display_path} resolved but is binary/non-text; skipped content anchors"
+                )
                 reference_results.append(("binary", found_path, line_str))
             else:
                 reference_results.append((resolution, found_path, line_str))
@@ -1464,9 +1738,17 @@ def verify_claims(
 
         anchor_confirmed = False
         line_corrected = False
-        ambiguous_ref = any(resolution == "ambiguous" for resolution, _, _ in reference_results)
+        ambiguous_ref = any(
+            resolution == "ambiguous" for resolution, _, _ in reference_results
+        )
         for resolution, found_path, line_str in reference_results:
             if resolution in {"ambiguous", "binary"}:
+                continue
+            if resolution == "symbol_def":
+                # The reference was a code symbol, not a file:line. We confirmed its
+                # definition exists in found_path — that IS the grounding. The model's
+                # "line" for a symbol citation is meaningless, so don't line-match.
+                anchor_confirmed = True
                 continue
             try:
                 file_text = found_path.read_text(encoding="utf-8", errors="replace")
@@ -1491,23 +1773,35 @@ def verify_claims(
                 line_num = int(line_str)
                 if line_num > len(file_lines):
                     line_corrected = True
-                    notes.append(f"{relative_display}:{line_num} beyond EOF ({len(file_lines)} lines)")
+                    notes.append(
+                        f"{relative_display}:{line_num} beyond EOF ({len(file_lines)} lines)"
+                    )
                 else:
                     start = max(0, line_num - 4)
                     end = min(len(file_lines), line_num + 3)
                     window = "\n".join(file_lines[start:end]).lower()
-                    matched = [anchor for anchor in claim_anchors if anchor.lower() in window]
+                    matched = [
+                        anchor for anchor in claim_anchors if anchor.lower() in window
+                    ]
                     if matched:
                         anchor_confirmed = True
-                        notes.append(f"{relative_display}:{line_num} anchors {', '.join(sorted(set(matched)))}")
+                        notes.append(
+                            f"{relative_display}:{line_num} anchors {', '.join(sorted(set(matched)))}"
+                        )
                     else:
                         notes.append(f"{relative_display}:{line_num} readable")
             else:
                 file_text_lower = file_text.lower()
-                matched = [anchor for anchor in claim_anchors if anchor.lower() in file_text_lower]
+                matched = [
+                    anchor
+                    for anchor in claim_anchors
+                    if anchor.lower() in file_text_lower
+                ]
                 if matched:
                     anchor_confirmed = True
-                    notes.append(f"{relative_display} anchors {', '.join(sorted(set(matched)))}")
+                    notes.append(
+                        f"{relative_display} anchors {', '.join(sorted(set(matched)))}"
+                    )
                 else:
                     notes.append(f"{relative_display} exists")
 
@@ -1537,7 +1831,9 @@ def verify_claims(
         "hallucinated_count": hallucinated,
         "inconclusive_count": inconclusive,
         "unverifiable_count": inconclusive,
-        "hallucination_rate": round(hallucinated / len(verified), 3) if verified else 0.0,
+        "hallucination_rate": round(hallucinated / len(verified), 3)
+        if verified
+        else 0.0,
     }
 
     # Write verified disposition
@@ -1556,7 +1852,9 @@ def verify_claims(
     for v in verified:
         claim_text = str(v["text"])
         claim_short = claim_text[:80] + ("..." if len(claim_text) > 80 else "")
-        lines_out.append(f"| {v['num']} | {v['verdict']} | {claim_short} | {v.get('notes', '')} |")
+        lines_out.append(
+            f"| {v['num']} | {v['verdict']} | {claim_short} | {v.get('notes', '')} |"
+        )
     lines_out.append("")
 
     out_path.write_text("\n".join(lines_out) + "\n")
@@ -1582,21 +1880,35 @@ def main() -> int:
     # Context flags are additive (2026-05-07): --context provides a primary pre-assembled
     # narrative; --context-files appends auxiliary file excerpts. Either or both may be
     # used; at least one is required.
-    parser.add_argument("--context", type=Path, help="Primary pre-assembled context file (narrative)")
     parser.add_argument(
-        "--context-files", nargs="+", metavar="FILE_SPEC",
+        "--context", type=Path, help="Primary pre-assembled context file (narrative)"
+    )
+    parser.add_argument(
+        "--context-files",
+        nargs="+",
+        metavar="FILE_SPEC",
         help="Auxiliary file:range specs (e.g., plan.md scripts/ir.py:86-110). Additive with --context.",
     )
-    parser.add_argument("--topic", required=True, help="Short topic label (used in output dir name)")
-    parser.add_argument("--project", type=Path, help="Project dir for goals/governance doc discovery (default: cwd)")
     parser.add_argument(
-        "--sibling-roots", type=Path, nargs="*", default=[],
-        help="Additional repo roots to resolve cross-repo anchors against (e.g. "
-             "~/Projects/phenome for a bridge review). Without this, findings that "
-             "cite files in a sibling repo are marked HALLUCINATED.",
+        "--topic", required=True, help="Short topic label (used in output dir name)"
     )
     parser.add_argument(
-        "--axes", default="standard",
+        "--project",
+        type=Path,
+        help="Project dir for goals/governance doc discovery (default: cwd)",
+    )
+    parser.add_argument(
+        "--sibling-roots",
+        type=Path,
+        nargs="*",
+        default=[],
+        help="Additional repo roots to resolve cross-repo anchors against (e.g. "
+        "~/Projects/phenome for a bridge review). Without this, findings that "
+        "cite files in a sibling repo are marked HALLUCINATED.",
+    )
+    parser.add_argument(
+        "--axes",
+        default="standard",
         help="Comma-separated axes or preset name (standard, deep, full). Default: standard",
     )
     parser.add_argument("--allow-non-gpt", action="store_true", help=argparse.SUPPRESS)
@@ -1607,15 +1919,18 @@ def main() -> int:
         help="Enable extraction. Enabled by default for user-facing reviews; use --no-extract for debugging-only runs.",
     )
     parser.add_argument(
-        "--verify", action="store_true",
+        "--verify",
+        action="store_true",
         help="After extraction, verify cited files/symbols exist. Implies --extract.",
     )
     parser.add_argument(
-        "--questions", type=Path,
+        "--questions",
+        type=Path,
         help="JSON file mapping axis names to custom questions (overrides positional question per-axis)",
     )
     parser.add_argument(
-        "question", nargs="?",
+        "question",
+        nargs="?",
         default="Review this for logical gaps, missed edge cases, and principles alignment.",
         help="Review question for all models",
     )
@@ -1629,7 +1944,10 @@ def main() -> int:
 
     # At least one of --context / --context-files must be provided (mutex relaxed 2026-05-07)
     if not args.context and not args.context_files:
-        print("error: at least one of --context or --context-files is required", file=sys.stderr)
+        print(
+            "error: at least one of --context or --context-files is required",
+            file=sys.stderr,
+        )
         return 1
 
     if args.context and not args.context.exists():
@@ -1649,7 +1967,10 @@ def main() -> int:
 
     args.question = _rewrite_underspecified_prompt(args.question, args.topic)
 
-    print(f"Dispatching {len(axis_names)} queries: {', '.join(axis_names)}", file=sys.stderr)
+    print(
+        f"Dispatching {len(axis_names)} queries: {', '.join(axis_names)}",
+        file=sys.stderr,
+    )
 
     # Create output directory
     slug = slugify(args.topic)
@@ -1659,7 +1980,10 @@ def main() -> int:
 
     # Assemble context
     ctx_files = build_context(
-        review_dir, project_dir, args.context, axis_names,
+        review_dir,
+        project_dir,
+        args.context,
+        axis_names,
         context_file_specs=args.context_files,
     )
 
@@ -1674,11 +1998,21 @@ def main() -> int:
         try:
             question_overrides = json.loads(args.questions.read_text())
         except (OSError, json.JSONDecodeError) as exc:
-            print(f"error: invalid questions file {args.questions}: {exc}", file=sys.stderr)
+            print(
+                f"error: invalid questions file {args.questions}: {exc}",
+                file=sys.stderr,
+            )
             return 1
 
     # Dispatch and wait
-    result = dispatch(review_dir, ctx_files, axis_names, args.question, bool(governance_path), question_overrides)
+    result = dispatch(
+        review_dir,
+        ctx_files,
+        axis_names,
+        args.question,
+        bool(governance_path),
+        question_overrides,
+    )
     failures = collect_dispatch_failures(result, ctx_files)
     if failures:
         failure_path = review_dir / "dispatch-failures.json"
@@ -1709,11 +2043,15 @@ def main() -> int:
             # Optional verification phase
             if args.verify:
                 verified_path = verify_claims(
-                    review_dir, disposition_path, project_dir,
+                    review_dir,
+                    disposition_path,
+                    project_dir,
                     sibling_roots=args.sibling_roots,
                 )
                 result["verified_disposition"] = verified_path
-                print(f"Verified disposition written to {verified_path}", file=sys.stderr)
+                print(
+                    f"Verified disposition written to {verified_path}", file=sys.stderr
+                )
 
     print(json.dumps(result, indent=2))
 
