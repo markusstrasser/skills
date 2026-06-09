@@ -1,38 +1,40 @@
 # Frontier Model Benchmarks
 
-**Last updated:** 2026-06-06
-**Active scope:** Claude Opus 4.8, GPT-5.5, GPT-5.5 Pro.
+**Last updated:** 2026-06-09
+**Active scope:** Claude Fable 5, Claude Opus 4.8, GPT-5.5, GPT-5.5 Pro.
 
-Older GPT/Gemini/Grok/Sonnet routing rows were removed from the active benchmark surface. Historical comparisons remain only where a vendor used them as a baseline.
+Older GPT/Gemini/Grok/Sonnet routing rows were removed from the active benchmark surface. Historical comparisons remain only where a vendor used them as a baseline. Fable 5 numbers are the GA-configuration scores (production safety classifiers on, fallback to Opus 4.8 where they fire); the unsafeguarded Mythos 5 scores a touch higher on classifier-adjacent rows.
 
 ## Headline Routing Scores
 
-| Evaluation | Opus 4.8 | GPT-5.5 | GPT-5.5 Pro | Routing read |
-|---|---:|---:|---:|---|
-| SWE-bench Verified | **88.6** | - | - | Opus for benchmarked GitHub issue resolution. |
-| SWE-bench Pro | **69.2** | 58.6 | - | Opus leads on the harder public SWE benchmark. |
-| Terminal-Bench 2.0 / 2.1 | 74.6 (2.1) | **82.7** (2.0) | - | GPT-5.5 for terminal/Codex-heavy work; versions differ. |
-| Expert-SWE | - | **73.1** | - | OpenAI internal long-horizon coding signal. |
-| GDPval / GDPval-AA | **1890 Elo** (AA) | 84.9 wins/ties | 82.3 wins/ties | Opus leads on AA Elo; GPT-5.5 is strong on OpenAI's wins/ties table. |
-| OSWorld-Verified | **83.4** | 78.7 | - | Opus leads direct computer-use benchmark. |
-| BrowseComp | 84.3 single / 88.5 multi-agent | 84.4 | **90.1** | Pro helps tool/search-heavy hard questions; base tie is close. |
-| FrontierMath Tier 4 | - | 35.4 | **39.6** | Pro for hard quantitative work. |
-| GeneBench | - | 25.0 | **33.2** | Pro is the strongest listed OpenAI science-analysis variant. |
-| BixBench | - | **80.5** | - | GPT-5.5 for quantified biology benchmark where reported. |
-| GPQA Diamond | 93.6 | 93.6 | - | Tie on reported base numbers; use tools/source reading for real science work. |
-| HLE no tools | **49.8** | 41.4 | 43.1 | Opus for unaided expert reasoning. |
-| HLE with tools | **57.9** | 52.2 | 57.2 | Opus slight lead; Pro close when tool use is allowed. |
-| MCP-Atlas | **82.2** | 75.3 | - | Opus for MCP-heavy tool use. |
-| AutomationBench | **15.5** | 12.9 | - | Opus for long-horizon automation. |
-| Tau2-bench Telecom | - | **98.0** | - | GPT-5.5 for customer-service style tool workflows. |
-| MRCR v2 8-needle 512K-1M | 32.2 (reported for Opus 4.7/4.6 comparison) | **74.0** | - | GPT-5.5 for OpenAI-reported long-context retrieval. |
-| ARC-AGI-2 verified | - | **85.0** | - | GPT-5.5 for OpenAI-reported abstract reasoning. |
+| Evaluation | Fable 5 | Opus 4.8 | GPT-5.5 | GPT-5.5 Pro | Routing read |
+|---|---:|---:|---:|---:|---|
+| SWE-bench Verified | **95** | 88.6 | - | - | Fable for benchmarked GitHub issue resolution (Mythos 95.5). |
+| SWE-bench Pro | **80** | 69.2 | 58.6 | - | Fable leads the harder public SWE benchmark by ~11 over Opus (Mythos 80.3). |
+| Terminal-Bench 2.1 | **84.3** | 74.6 | 82.7 (2.0) | - | Fable leads; GPT-5.5's Codex-CLI harness is 83.4. Mythos 88.0. |
+| FrontierCode (Diamond) | **29.3** | 13.4 | 5.7 | - | Fable more than doubles Opus on Cognition's merge-quality bench. |
+| GDPval-AA (Elo) | **1932** | 1890 | 1769 | - | Fable leads professional-work Elo. |
+| OSWorld-Verified | **85.0** | 83.4 | 78.7 | - | Fable ties Mythos (85.0); vision-SOTA with native bash+crop. |
+| BrowseComp | - | 84.3 single / 88.5 multi | 84.4 | **90.1** | Mythos multi-agent 93.3; Pro strong on hard search. |
+| HLE no tools | 59.0 (Mythos) | 49.8 | 41.4 | 43.1 | Fable n/p; Mythos 59.0 leads unaided expert reasoning. |
+| HLE with tools | 64.5 (Mythos) | 57.9 | 52.2 | 57.2 | Mythos Preview 64.7 still top; Opus for the Claude-side number. |
+| CharXiv Reasoning (w/tools) | 93.5 (Mythos) | 89.9 | - | - | Fable-class vision reasoning. |
+| ArxivMath | 78.5 (Mythos) | 71.8 | 71.5 | 64.8 | Mythos 78.5 leads. |
+| CritPt | 28.6 (Mythos) | 20.9 | 27.1 | 17.7 | Mythos 28.6 leads physics reasoning. |
+| FrontierMath Tier 4 | - | - | 35.4 | **39.6** | Pro for hard quantitative work. |
+| GPQA Diamond | - | 93.6 | 93.6 | - | Use tools/source reading for real science work. |
+| MCP-Atlas | - | **82.2** | 75.3 | - | Opus for MCP-heavy tool use. |
+| AutomationBench | **17.4** (Fable) | 15.5 | 12.9 | - | Fable for long-horizon automation. |
+| Tau2-bench Telecom | - | - | **98.0** | - | GPT-5.5 for customer-service style tool workflows. |
+| MRCR v2 8-needle 512K-1M | - | 32.2 (4.7/4.6) | **74.0** | - | GPT-5.5 for OpenAI-reported long-context retrieval. |
+| ARC-AGI-2 verified | - | - | **85.0** | - | GPT-5.5 for OpenAI-reported abstract reasoning. |
 
 **Reading cautions:**
-- Opus 4.8 scores are from the Anthropic system card, generally with adaptive thinking at max effort. Production default is `high`.
-- OpenAI notes GPT evals on the announcement page were run with reasoning effort set to `xhigh` in a research environment; production ChatGPT/API may differ.
-- GPT-5.5 Pro is not a separate training run. OpenAI describes it as the same underlying model using parallel test-time compute, with separate evals where extra compute may change risks or safeguards.
-- Do not compare Opus Terminal-Bench 2.1 directly to GPT Terminal-Bench 2.0 without noting harness/version differences. Anthropic also notes GPT-5.5's Codex CLI harness score is 83.4.
+- Fable 5 / Opus 4.8 scores are from the Anthropic system cards, generally with adaptive thinking at max effort. Production default is `high`; on Fable, lower effort often exceeds prior-model `xhigh`.
+- Several Claude-side rows report the **Mythos 5** number (marked) because Fable was not separately published or its classifiers depress the GA score. Mythos 5 = same weights, classifiers lifted, Glasswing-only — treat its scores as the capability ceiling, Fable's as the production floor.
+- OpenAI notes GPT evals on the announcement page were run at reasoning effort `xhigh` in a research environment; production may differ.
+- GPT-5.5 Pro is the same underlying model using parallel test-time compute, with separate evals where extra compute may change risks or safeguards.
+- Do not compare Terminal-Bench versions (2.0 vs 2.1) without noting harness differences.
 
 ## Specs And Pricing
 
