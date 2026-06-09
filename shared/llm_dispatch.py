@@ -15,7 +15,9 @@ from typing import Any, Callable
 
 
 HELPER_VERSION = "2026-04-10-v1"
-DEFAULT_TELEMETRY_PATH = Path(__file__).resolve().parents[1] / ".claude" / "telemetry" / "llm-dispatch.jsonl"
+DEFAULT_TELEMETRY_PATH = (
+    Path(__file__).resolve().parents[1] / ".claude" / "telemetry" / "llm-dispatch.jsonl"
+)
 
 STATUS_EXIT_CODES = {
     "ok": 0,
@@ -97,7 +99,10 @@ PROFILES: dict[str, DispatchProfile] = {
         provider="openai",
         model="gpt-5.5",
         timeout=600,
-        reasoning_effort="medium",
+        # 2026-06-10: formal is the GPT reasoning axis for reviews — operator
+        # policy is "medium most cases, high for deep/formal". `gpt_general`
+        # (general dispatch, "most cases") stays medium; mechanical stays low.
+        reasoning_effort="high",
         max_tokens=32768,
         input_token_limit=120000,
     ),
@@ -193,11 +198,7 @@ class DispatchOverrides:
     search: bool | None = None
 
     def as_dict(self) -> dict[str, Any]:
-        return {
-            key: value
-            for key, value in asdict(self).items()
-            if value is not None
-        }
+        return {key: value for key, value in asdict(self).items() if value is not None}
 
 
 @dataclass
@@ -246,7 +247,9 @@ def _strip_markdown_fences(text: str) -> str:
 
 def _atomic_write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with NamedTemporaryFile("w", dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False) as handle:
+    with NamedTemporaryFile(
+        "w", dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False
+    ) as handle:
         handle.write(content)
         temp_name = handle.name
     os.replace(temp_name, path)
@@ -303,6 +306,7 @@ def _bootstrap_llmx() -> tuple[Callable[..., Any], str]:
     llmx_chat: Callable[..., Any] | None = None
     try:
         from llmx.api import chat as _llmx_chat  # type: ignore
+
         llmx_chat = _llmx_chat
     except ImportError:
         # Phase 2: fall back to the uv tool install. CRITICAL: must match the
@@ -328,7 +332,9 @@ def _bootstrap_llmx() -> tuple[Callable[..., Any], str]:
         matching_site = Path.home() / ".local/share/uv/tools/llmx/lib" / py_ver / "site-packages"
         if not matching_site.is_dir():
             tool_root = Path.home() / ".local/share/uv/tools/llmx/lib"
-            installed_pys = sorted(p.name for p in tool_root.glob("python*")) if tool_root.is_dir() else []
+            installed_pys = (
+                sorted(p.name for p in tool_root.glob("python*")) if tool_root.is_dir() else []
+            )
             raise ImportError(
                 f"llmx not importable in current Python ({py_ver}). "
                 f"The llmx uv tool install at {tool_root} has versions: "
@@ -340,9 +346,11 @@ def _bootstrap_llmx() -> tuple[Callable[..., Any], str]:
         # Add the site-packages dir. Also process .pth files (editable installs
         # use _llmx.pth → ~/Projects/llmx/; sys.path.insert alone ignores .pth).
         import site
+
         site.addsitedir(str(matching_site))
         try:
             from llmx.api import chat as _llmx_chat_2  # type: ignore
+
             llmx_chat = _llmx_chat_2
         except ImportError as exc:
             raise ImportError(
@@ -424,7 +432,9 @@ def map_model_to_profile(model: str) -> str:
     return MODEL_TO_PROFILE[model]
 
 
-def resolve_profile(profile_name: str, overrides: DispatchOverrides | None = None) -> tuple[DispatchProfile, dict[str, Any]]:
+def resolve_profile(
+    profile_name: str, overrides: DispatchOverrides | None = None
+) -> tuple[DispatchProfile, dict[str, Any]]:
     if profile_name not in PROFILES:
         raise ValueError(f"unknown profile '{profile_name}'")
     profile = PROFILES[profile_name]
@@ -461,9 +471,31 @@ def classify_error(exc: Exception) -> tuple[str, str]:
         return "timeout", message
     if any(marker in lowered for marker in ("timed out", "timeout", "deadline exceeded")):
         return "timeout", message
-    if any(marker in lowered for marker in ("rate limit", "rate-limit", "resource_exhausted", "429", "too many requests", "overloaded", "503", "unavailable")):
+    if any(
+        marker in lowered
+        for marker in (
+            "rate limit",
+            "rate-limit",
+            "resource_exhausted",
+            "429",
+            "too many requests",
+            "overloaded",
+            "503",
+            "unavailable",
+        )
+    ):
         return "rate_limit", message
-    if any(marker in lowered for marker in ("insufficient_quota", "quota", "billing", "credit", "payment required", "exhausted balance")):
+    if any(
+        marker in lowered
+        for marker in (
+            "insufficient_quota",
+            "quota",
+            "billing",
+            "credit",
+            "payment required",
+            "exhausted balance",
+        )
+    ):
         return "quota", message
     if any(marker in lowered for marker in ("schema", "response_format", "additionalproperties")):
         return "schema_error", message
@@ -498,7 +530,9 @@ def dispatch(
     prompt_sha256 = _sha256(prompt)
     meta_path = meta_path or output_path.with_name(f"{output_path.stem}.meta.json")
     error_path = error_path or output_path.with_name(f"{output_path.stem}.error.json")
-    parsed_path = parsed_path or (output_path.with_name(f"{output_path.stem}.parsed.json") if schema else None)
+    parsed_path = parsed_path or (
+        output_path.with_name(f"{output_path.stem}.parsed.json") if schema else None
+    )
     start_path = output_path.with_name(f"{output_path.stem}.start.json")
 
     # Write start marker BEFORE any work so callers can distinguish
@@ -508,13 +542,16 @@ def dispatch(
     # If both are absent the subprocess never reached dispatch() at all.
     # Removed on successful or error-handled completion below.
     # Evidence: docs/audit/observe-gaps-2026-05-11/findings.md F1.
-    _atomic_write_json(start_path, {
-        "started_at": started_at,
-        "requested_profile": profile,
-        "output_path": str(output_path),
-        "pid": os.getpid(),
-        "helper_version": HELPER_VERSION,
-    })
+    _atomic_write_json(
+        start_path,
+        {
+            "started_at": started_at,
+            "requested_profile": profile,
+            "output_path": str(output_path),
+            "pid": os.getpid(),
+            "helper_version": HELPER_VERSION,
+        },
+    )
 
     try:
         profile_def, resolved = resolve_profile(profile, overrides)
@@ -556,7 +593,11 @@ def dispatch(
             error_message=message,
         )
 
-    context_body = context_text if context_text is not None else (context_path.read_text() if context_path else "")
+    context_body = (
+        context_text
+        if context_text is not None
+        else (context_path.read_text() if context_path else "")
+    )
     context_sha256 = _sha256(context_body)
     context_manifest = None
     if context_manifest_path is not None:
@@ -644,7 +685,11 @@ def dispatch(
     # call (which would block on the variable latency). Google API path only
     # (service_tier is a Gemini param; ignored elsewhere). A Flex 503 is caught by
     # the rate-limit fallback (classify_error + the caller's rate-limit markers).
-    if profile_def.provider == "google" and os.environ.get("LLMX_FLEX", "").strip().lower() in ("1", "true", "yes"):
+    if profile_def.provider == "google" and os.environ.get("LLMX_FLEX", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    ):
         call_kwargs["service_tier"] = "flex"
 
     try:
