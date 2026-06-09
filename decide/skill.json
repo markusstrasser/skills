@@ -1,0 +1,44 @@
+{
+  "name": "decide",
+  "kind": "orchestrator",
+  "intent_class": "decision",
+  "summary": "Consequential architecture/design/strategy decision arc — diverge, settle principle, ground, escalating cross-model critique, capture — with anti-sycophancy and completeness discipline.",
+  "entrypoint": {
+    "type": "skill_doc",
+    "path": "decide/SKILL.md"
+  },
+  "modes": {
+    "default": {
+      "intent_class": "decision",
+      "requires_packet": false,
+      "requires_gpt": true,
+      "artifacts": [
+        "docs/decisions/NNNN-<slug>.md",
+        ".claude/plans/<session>-<slug>.md",
+        "docs/decisions/deferred-and-open.md",
+        "glossary"
+      ]
+    },
+    "quick": {
+      "intent_class": "decision",
+      "requires_packet": false,
+      "requires_gpt": true,
+      "artifacts": [
+        "docs/decisions/NNNN-<slug>.md",
+        ".claude/plans/<session>-<slug>.md"
+      ]
+    }
+  },
+  "composes": [
+    "brainstorm",
+    "critique"
+  ],
+  "follow_on": [
+    "execute"
+  ],
+  "references": [
+    "decide/SKILL.md",
+    "decide/references/checklists.md",
+    "decide/references/templates.md"
+  ]
+}
