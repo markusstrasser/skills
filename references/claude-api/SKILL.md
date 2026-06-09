@@ -13,7 +13,11 @@ This skill helps you build LLM-powered applications with Claude. Choose the righ
 
 Unless the user requests otherwise:
 
-Use Claude Opus 4.8 via the exact model string `claude-opus-4-8` (current default, released 2026-05-28; replaces 4.7 at unchanged $5/$25 pricing). Set `thinking: {type: "adaptive"}` explicitly when you want thinking — adaptive is off by default on Opus 4.8. Effort **defaults to `high`** on 4.8; set `output_config: {effort: "xhigh"}` for coding and agentic tasks and `max` for the hardest problems. Default to streaming for any request that may involve long input, long output, or high `max_tokens` — it prevents hitting request timeouts. Use the SDK's `.get_final_message()` / `.finalMessage()` helper to get the complete response if you don't need to handle individual stream events.
+Use Claude Opus 4.8 via the exact model string `claude-opus-4-8` (the app-building default: $5/$25, raw chain-of-thought available, no offensive-content classifiers to route around). Set `thinking: {type: "adaptive"}` explicitly when you want thinking — adaptive is off by default on Opus 4.8. Effort **defaults to `high`** on 4.8; set `output_config: {effort: "xhigh"}` for coding and agentic tasks and `max` for the hardest problems. Default to streaming for any request that may involve long input, long output, or high `max_tokens` — it prevents hitting request timeouts. Use the SDK's `.get_final_message()` / `.finalMessage()` helper to get the complete response if you don't need to handle individual stream events.
+
+> **When to reach for Claude Fable 5** (`claude-fable-5`, released 2026-06-09 — Anthropic's most capable widely-released model): the hardest, longest-running, most-ambiguous workloads (multi-day autonomous agents, codebase-scale migrations, first-shot complex systems, dense-image vision). It is **2× the price** ($10/$50), and differs from Opus 4.8 at the API level — see the Fable 5 note below. For most app-building, Opus 4.8 remains the right default; opt into Fable 5 deliberately when the task is at the top of your difficulty range, and **keep Opus 4.8 as the fallback** (Fable's safety classifiers refuse offensive-cyber / bio-life-sciences / reasoning-extraction requests with `stop_reason: "refusal"`, and you retry those on Opus 4.8).
+>
+> **Claude Fable 5 API differences (read before using it):** adaptive thinking is **always on and the only mode** (no `disabled`, no `budget_tokens`, no `task_budget` thinking budgets beyond the beta task-budgets header); **raw CoT is never returned** — `thinking.display` is `"omitted"` by default, set `"summarized"` for summaries, and **never instruct the model to echo/explain its reasoning as response text** (trips the `reasoning_extraction` classifier → refusal/fallback). Effort low→max, default `high` (lower effort often exceeds prior-model `xhigh`). Turns run longer by default — raise client timeouts and stream. Use the `fallbacks` param (beta) or SDK middleware to auto-retry refusals on `claude-opus-4-8`. Covered Model: 30-day retention, no zero-data-retention.
 
 > **Opus 4.8 migration note** (verified against the official 4.7→4.8 [migration guide](https://platform.claude.com/docs/en/about-claude/models/migration-guide#migrating-from-claude-opus-47)). **There are no breaking API changes from Opus 4.7** — 4.8 supports the same feature set. The version-specific behaviors documented below all carry over from 4.7 *unchanged*: `budget_tokens`/`temperature`/`top_p`/`top_k` → 400, assistant-prefill → 400, adaptive-thinking-off-by-default, `thinking.display: "omitted"` default, the 4.7 tokenizer (1.0–1.35× more tokens than 4.6), fewer-tools-by-default, 2576px vision. (The sampling/extended-thinking/tokenizer breaking changes belong to the *4.6→4.7* step — if you're already on 4.7 they need no further action.)
 >
@@ -141,15 +145,18 @@ Everything goes through `POST /v1/messages`. Tools and output constraints are fe
 
 ---
 
-## Current Models (cached: 2026-04-16)
+## Current Models (cached: 2026-06-09)
 
-| Model             | Model ID            | Context        | Input $/1M | Output $/1M |
-| ----------------- | ------------------- | -------------- | ---------- | ----------- |
-| Claude Opus 4.8   | `claude-opus-4-8`   | 1M             | $5.00      | $25.00      |
-| Claude Sonnet 4.6 | `claude-sonnet-4-6` | 200K (1M beta) | $3.00      | $15.00      |
-| Claude Haiku 4.5  | `claude-haiku-4-5`  | 200K           | $1.00      | $5.00       |
+| Model             | Model ID            | Context        | Input $/1M | Output $/1M | Notes |
+| ----------------- | ------------------- | -------------- | ---------- | ----------- | ----- |
+| Claude Fable 5    | `claude-fable-5`    | 1M             | $10.00     | $50.00      | Most capable; adaptive-only, summarized-CoT-only, safety classifiers → fallback to Opus 4.8. |
+| Claude Opus 4.8   | `claude-opus-4-8`   | 1M             | $5.00      | $25.00      | App-building default. |
+| Claude Sonnet 4.6 | `claude-sonnet-4-6` | 200K (1M beta) | $3.00      | $15.00      | |
+| Claude Haiku 4.5  | `claude-haiku-4-5`  | 200K           | $1.00      | $5.00       | |
 
-**ALWAYS use `claude-opus-4-8` unless the user explicitly names a different model.** Never downgrade for cost — that's the user's decision, not yours.
+`claude-mythos-5` (same weights as Fable 5, classifiers lifted) exists but is Project-Glasswing-only — not generally callable.
+
+**Default to `claude-opus-4-8` for app-building unless the user names another model or the task is at the top of your difficulty range (then `claude-fable-5`, with Opus 4.8 as the fallback).** Never downgrade for cost on the user's behalf — that's their decision, not yours.
 
 **Use only the exact model ID strings from the table above.** Do not append date suffixes. If the user requests a model not in the table, read `shared/models.md` or WebFetch the Anthropic Models Overview — do not construct an ID yourself.
 
