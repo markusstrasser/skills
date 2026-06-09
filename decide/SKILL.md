@@ -1,0 +1,139 @@
+---
+name: decide
+description: Architecture/design/strategy decision arc — diverge → settle the principle → ground in code → escalating cross-model critique → capture. Use for CONSEQUENTIAL, hard-to-reverse decisions (new system, schema, breaking refactor, tech choice, strategic direction with >1-session reversal cost). Composes /brainstorm + /critique with anti-sycophancy + completeness discipline. NOT for trivial choices, single-step reviews (use /critique), or pure ideation (use /brainstorm).
+argument-hint: "[--quick] the consequential decision to make"
+effort: high
+allowed-tools:
+  - Bash
+  - Read
+  - Glob
+  - Grep
+  - Write
+  - Edit
+  - Task
+  - Skill
+---
+
+# Decision Arc
+
+You are orchestrating a consequential architecture/design/strategy decision to a durable, hardened
+conclusion. The deliverable is not an answer — it's a **decision that survived adversarial pressure
+without reversal, captured so it can't be lost or re-litigated.**
+
+This skill exists because `/brainstorm` is only the diverge step and `/critique` is only one
+convergent step. The value here is the **glue between them** — the discipline that stops a decision
+from sycophantically drifting. agent-infra's `agent-failure-modes.md` repeatedly names this surface
+as the missing *"decision-point gate."* This is it.
+
+## When to use (scope gate — read FIRST)
+
+ALL must hold (same bar as the plan-review-gate):
+- Consequential and **hard to reverse** (>1 session to undo if wrong).
+- New system / schema / breaking refactor / new dependency or pattern / strategic direction.
+- Multiple genuinely-different approaches exist.
+
+**Do NOT use for:** trivial or single-correct-answer choices (just decide + mention it) · a single
+diff/plan review (use `/critique`) · pure ideation with no decision to commit (use `/brainstorm`) ·
+bug fixes / routine implementation.
+
+If the scope gate fails, say so and stop. Over-applying this is its own failure mode (toxic
+proactivity, FM14).
+
+## The arc (six phases — each phase's OUTPUT gates the next)
+
+### Phase 0 — Frame & find the axis
+Do NOT jump to a plan or an answer. First:
+- **List the hidden assumptions explicitly** (Contract 3). What is being taken for granted?
+- **Find the real decision axis.** The first framing is usually wrong. (Canonical example: the real
+  axis was "verify vs synthesize," not "personal vs general.") State it in one sentence.
+- Engage the user as the authority on their own constraints; ground in prior work, prior decisions
+  (`git log`, ADRs, `docs/decisions/`, vetoed-decisions). **Inventory before dispatch** — has this
+  been decided/built already?
+
+Output: the framing, the axis, the assumption list. Get a read from the user before diverging.
+
+### Phase 1 — Diverge → `/brainstorm`
+Generate 5+ genuinely-different *mechanisms* (not variations) before converging. First idea = the
+hivemind attractor (Pre-Build #7). Invoke `/brainstorm` on the framed axis. Output: ranked directions.
+
+### Phase 2 — Settle the principle BEFORE the plan
+This ordering is load-bearing. Write the **ADR (the *why* / the governing thesis) first**, then the
+plan. Pinning the principle first is what stops the plan from drifting under later pressure.
+- ADR → `docs/decisions/NNNN-<slug>.md` (template in `references/templates.md`).
+- Record the rejected alternatives in the ADR so they're not re-proposed.
+
+Output: the ADR + the invariants the decision must preserve.
+
+### Phase 3 — Ground & plan
+- **Read the code before planning** (read-before-plan). Plans written from memory diverge within days.
+- **Probe every join/fact the plan asserts** (probe-the-join): inline the literal `git grep`/SQL that
+  proves the join site or fact exists. Plan-writers invent joins that look right but don't exist.
+- Write the plan with probes embedded → `.claude/plans/<session>-<slug>.md`.
+
+Output: a plan grounded in *verified* facts, not assumptions.
+
+### Phase 4 — Escalating adversarial, closed-loop → `/critique model`
+Rounds: **standard → deep (`--axes deep`) → confidence pass.** Cross-model (Gemini + GPT), never
+same-model (FM11 peer-review theater). After EACH round, the two non-negotiable checkpoints:
+
+1. **Verify-before-fold.** Grep every model claim against the actual code before folding. Model
+   line-numbers and symbol names lie; the critique verifier inflates "hallucinated." Trust convergence
+   + code-verification, never the confidence field. (FM15 silent-semantic; FM5 error-amplification —
+   you are the orchestrator-mediated verification step.)
+2. **Disagree-self-check.** Per finding: HOLD or FLIP — and if FLIP, **name the new fact that drives
+   it.** "The model said it with conviction" is not a fact. Sycophantic flips dressed as reasoning are
+   the failure this catches (FM7). Run the checklist in `references/disagree-self-check.md`.
+
+Fold verified findings; record what you HELD against and why. Closed-loop iteration neutralizes >40%
+of faults that linear workflows miss (FM15). See `references/critique-loop.md`.
+
+### Phase 5 — Completeness & capture
+- **Mechanically verify** every decision/input landed in a durable doc (Post-Synthesis Completeness
+  Check). Don't assert completeness — check it. (This is where orphaned memos and untriaged options
+  hide.) Checklist in `references/completeness-and-capture.md`.
+- Emit the **artifact contract** (below).
+
+## Success criterion (state this loudly — it's the most-gotten-wrong part)
+
+Success is **zero architecture reversals across the escalating rounds** — NOT a toothless final
+critique. A critique that finds *nothing* means you over-specified into implementation. The signal of
+a sound decision is that each round only resolves one level *deeper* (WHATs → HOWs), never overturns
+the spine.
+
+**Stop condition:** when rounds stop producing reversals and only produce implementation-HOWs, the
+decision is closed. Those HOWs become the first build tasks — hand off, don't keep critiquing.
+
+## Discipline checkpoints (the glue — this is what makes it more than two skills)
+
+| Contract | Guards against (agent-infra FM) |
+|---|---|
+| List assumptions before analysis | Contract 3 (hidden-assumption) |
+| Principle before plan | reasoning drift downstream (FM15) |
+| Probe-before-assert; read-before-plan | phantom joins / stale plans |
+| Cross-model, not same-model peer | FM11 peer-review theater |
+| Orchestrator-mediated verify-before-fold | FM5 amplification, FM15 silent-semantic |
+| Disagree-self-check (name the new fact) | FM7 post-hoc rationalization, sycophantic flips |
+| Completeness-before-done; deferred tracker | dropped decisions, re-litigation |
+| Reversal-count, not finding-count, is the metric | over-specification mistaken for rigor |
+
+## Artifact contract (the durable output — nothing lost, nothing re-litigable)
+
+- **ADR** → `docs/decisions/NNNN-<slug>.md` — the principle, the why, the rejected alternatives.
+- **Plan** → `.claude/plans/<session>-<slug>.md` — the what/sequence, with inline probes + per-phase
+  end-states + a named first vertical slice.
+- **Deferred/open/rejected tracker** → `docs/decisions/deferred-and-open.md` (or per-project) — every
+  decision + open fork + deferred item + rejected option + the critique audit trail. So nothing is
+  lost and nothing is re-proposed.
+- **Vocabulary glossary** — one canonical term per concept, once the semantics are clear.
+
+Templates for all four: `references/templates.md`.
+
+## `--quick`
+For a consequential-but-smaller decision: Phase 0 → 1 (inline, skip the full /brainstorm fan-out) →
+2 (lightweight ADR) → 4 (one standard `/critique` round) → 5. Keep the disagree-self-check and the
+completeness check — those are never optional.
+
+## Honest limitation
+This skill encodes one operator's process (n=1 origin). After 2-3 real uses, run `/observe` or
+session-analyst over its transcripts and tune the checklists against what actually recurs — not what
+the author guessed would.
