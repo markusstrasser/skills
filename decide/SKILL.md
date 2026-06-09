@@ -2,7 +2,6 @@
 name: decide
 description: Architecture/design/strategy decision arc — diverge → settle the principle → ground in code → escalating cross-model critique → capture. Use for CONSEQUENTIAL, hard-to-reverse decisions (new system, schema, breaking refactor, tech choice, strategic direction with >1-session reversal cost). Composes /brainstorm + /critique with anti-sycophancy + completeness discipline. NOT for trivial choices, single-step reviews (use /critique), or pure ideation (use /brainstorm).
 argument-hint: "[--quick] the consequential decision to make"
-effort: high
 allowed-tools:
   - Bash
   - Read

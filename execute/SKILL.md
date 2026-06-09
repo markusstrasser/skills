@@ -2,7 +2,6 @@
 name: execute
 description: Execute an approved plan to done WITH hygiene — phase-gated, probe-before-build, verify-before-claim, granular commits, worktree-isolated parallel subagents, and INLINE tooling-building (build the missing tool/hook DURING execution, not at session-end). Runs the disagree-self-check on divergence and /critique close at the end. Use after /decide or on any approved plan file. NOT for exploration/decisions (use /decide) or one-off edits.
 argument-hint: "[--slice P0-P2] [--from PHASE] <plan path>"
-effort: high
 allowed-tools:
   - Bash
   - Read
