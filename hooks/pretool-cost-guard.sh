@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# pretool-cost-guard.sh — Guard against expensive API calls based on daily spend.
-# PreToolUse:Bash hook. Warns at $50/day, blocks at $100/day.
-# Reads cumulative spend from ~/.claude/session-receipts.jsonl.
+# pretool-cost-guard.sh — Guard against expensive *discretionary API* calls.
+# PreToolUse:Bash hook. Warns at $500/day, blocks at $1000/day.
+# Reads cumulative spend from ~/.claude/session-receipts.jsonl, EXCLUDING
+# Claude Code session-telemetry rows (subscription session cost is NOT metered
+# API spend — those rows carry `transcript_lines`/`harness_hash` and their
+# estimated cost_usd is large and irrelevant to this guard; counting them
+# misfired the block at ~$1.9K/day of pure session cost — 2026-06-09).
 
 trap 'exit 0' ERR
 INPUT=$(cat)
@@ -24,7 +28,10 @@ total=0.0
 for l in open('$RECEIPTS'):
   try:
     r=json.loads(l)
-    if r.get('ts','').startswith('$TODAY'): total+=float(r.get('cost_usd',0))
+    if not r.get('ts','').startswith('$TODAY'): continue
+    # Skip Claude Code session-telemetry receipts (subscription, not API spend).
+    if 'transcript_lines' in r or 'harness_hash' in r: continue
+    total+=float(r.get('cost_usd',0))
   except: pass
 print(f'{total:.2f}')
 " 2>/dev/null)
