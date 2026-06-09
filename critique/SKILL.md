@@ -44,6 +44,8 @@ See `lenses/adversarial-review.md` for full dispatch methodology, axis descripti
 
 **Opt-in third cosigner — Claude Opus 4.8 (`claude` axis).** For a genuinely third training family, add the `claude` axis: `/critique model --axes arch,formal,claude`. It dispatches `claude-opus-4-8` via llmx's `anthropic-direct` provider (direct Anthropic API, not OpenRouter). Deliberately NOT in `standard`/`deep`/`full` presets — request it explicitly, and always alongside a GPT axis (axis-resolution requires ≥1 GPT-backed axis, so `--axes claude` alone is rejected by design). Use when cross-family diversity is worth the Opus cost; for routine reviews the Gemini+GPT pairing is the default.
 
+> **The Claude review axis stays on Opus 4.8 — do not switch it to Fable 5.** A reviewer wants cross-lab diversity and raw reasoning, not raw capability: Fable 5 costs 2×, returns only summarized CoT, and adversarial-review prompts that ask the model to "explain your analysis / show your reasoning" can trip Fable's `reasoning_extraction` classifier → silent fallback to Opus 4.8 anyway. Opus 4.8 is the correct, cheaper Claude cosigner. (Fable 5 is the right pick for *doing* hard work — see `/model-guide` — not for reviewing it here.)
+
 ### 1. Assemble Context
 
 Write review material to a single context file.
