@@ -1,0 +1,33 @@
+{
+  "name": "execute",
+  "kind": "orchestrator",
+  "intent_class": "execution",
+  "summary": "Execute an approved plan to verified-done with hygiene — phase-gated, probe/verify/commit discipline, worktree-isolated parallel subagents, inline tooling-building, disagree-self-check on divergence, /critique close.",
+  "entrypoint": {
+    "type": "skill_doc",
+    "path": "execute/SKILL.md"
+  },
+  "modes": {
+    "default": {
+      "intent_class": "execution",
+      "requires_packet": false,
+      "requires_gpt": false,
+      "artifacts": [
+        "committed code matching per-phase end-states",
+        "inline tooling built during execution",
+        "critique-close findings"
+      ]
+    }
+  },
+  "composes": [
+    "critique",
+    "research"
+  ],
+  "follow_on": [
+    "observe"
+  ],
+  "references": [
+    "execute/SKILL.md",
+    "decide/references/checklists.md"
+  ]
+}
