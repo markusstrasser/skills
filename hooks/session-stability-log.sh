@@ -45,8 +45,15 @@ line = {
 
 path = os.path.expanduser("~/.claude/session-stability.jsonl")
 try:
-    with open(path, "a") as fh:
-        fh.write(json.dumps(line) + "\n")
+    # 0600: the line carries cwd paths (possibly sensitive project/sample names)
+    # and session ids — keep it owner-only. Set on create AND every write so a
+    # pre-existing loose-perm file gets tightened.
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    try:
+        os.chmod(path, 0o600)
+        os.write(fd, (json.dumps(line) + "\n").encode("utf-8"))
+    finally:
+        os.close(fd)
 except Exception:
     pass
 ' 2>/dev/null
