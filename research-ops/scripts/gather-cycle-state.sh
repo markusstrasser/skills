@@ -9,14 +9,15 @@ set +e
 PROJECT_ROOT="${1:-${PROJECT_ROOT:-$(pwd)}}"
 PROJECT_NAME=$(basename "$PROJECT_ROOT")
 CYCLE_FILE="$PROJECT_ROOT/CYCLE.md"
+QUEUE_DIR="$PROJECT_ROOT/queue"
+DECISIONS_DIR="$PROJECT_ROOT/decisions-pending"
 HASH_FILE=~/.claude/research-cycle-state-hash-${PROJECT_NAME}.txt
-ORCH_DB=~/.claude/orchestrator.db
 
 # --- Noop detection ---
 GIT_HASH=$(cd "$PROJECT_ROOT" && git log --oneline -1 2>/dev/null || echo "na")
 CYCLE_HASH=$(test -f "$CYCLE_FILE" && md5 < "$CYCLE_FILE" 2>/dev/null || echo "na")
-ORCH_HASH=$(sqlite3 "$ORCH_DB" "SELECT count(*),group_concat(status) FROM tasks WHERE project='$PROJECT_NAME' AND status IN ('pending','running','failed','blocked') ORDER BY id" 2>/dev/null || echo "na")
-CURRENT_HASH="${GIT_HASH}|${CYCLE_HASH}|${ORCH_HASH}"
+QUEUE_HASH=$(ls "$QUEUE_DIR" "$DECISIONS_DIR" 2>/dev/null | md5 2>/dev/null || echo "na")
+CURRENT_HASH="${GIT_HASH}|${CYCLE_HASH}|${QUEUE_HASH}"
 
 PREV_HASH=$(cat "$HASH_FILE" 2>/dev/null || echo "")
 echo "$CURRENT_HASH" > "$HASH_FILE"
@@ -30,32 +31,24 @@ fi
 echo "=== PROJECT: $PROJECT_NAME ==="
 echo "Root: $PROJECT_ROOT"
 
-# --- Cycle file state ---
+# --- Bus state (queue + decisions-pending) ---
 echo ""
-echo "=== CYCLE STATE ==="
-if [[ -f "$CYCLE_FILE" ]]; then
-    # Extract current phase and queue counts
-    PHASE=$(grep -m1 '^## Phase:' "$CYCLE_FILE" 2>/dev/null | sed 's/## Phase: //' || echo "unknown")
-    QUEUE_PENDING=$(grep -c '^\- \[ \]' "$CYCLE_FILE" 2>/dev/null || echo "0")
-    QUEUE_DONE=$(grep -c '^\- \[x\]' "$CYCLE_FILE" 2>/dev/null || echo "0")
-    DISCOVERIES=$(grep -c '^\- \[NEW\]' "$CYCLE_FILE" 2>/dev/null || echo "0")
-    echo "Phase: $PHASE"
-    echo "Queue: $QUEUE_PENDING pending, $QUEUE_DONE done"
-    echo "New discoveries: $DISCOVERIES"
-    # Show queue items awaiting human
-    echo "--- Awaiting approval ---"
-    grep '^\- \[ \] APPROVE' "$CYCLE_FILE" 2>/dev/null | head -5 || echo "(none)"
+echo "=== BUS STATE ==="
+if [[ -d "$QUEUE_DIR" ]]; then
+    UNUSED=$(ls "$QUEUE_DIR"/QUEUE_*.md 2>/dev/null | grep -cv '\.consumed\.' || echo "0")
+    CONSUMED=$(ls "$QUEUE_DIR"/*.consumed.md 2>/dev/null | wc -l | tr -d ' ')
+    echo "queue/: $UNUSED unused proposals, $CONSUMED consumed"
+    ls "$QUEUE_DIR"/QUEUE_*.md 2>/dev/null | grep -v '\.consumed\.' | head -5 | while read -r f; do
+        echo "  - $(basename "$f"): $(head -1 "$f" 2>/dev/null | sed 's/^#* *//' | cut -c1-60)"
+    done
 else
-    echo "(no CYCLE.md — first run)"
+    echo "queue/: (none — Dreamer has not run, or first run)"
 fi
-
-# --- Orchestrator tasks for this project ---
-echo ""
-echo "=== ORCHESTRATOR (${PROJECT_NAME}) ==="
-if [[ -f "$ORCH_DB" ]]; then
-    sqlite3 "$ORCH_DB" "SELECT id, pipeline, status, substr(prompt,1,60) FROM tasks WHERE project='$PROJECT_NAME' AND status NOT IN ('done','done_with_denials') ORDER BY id DESC LIMIT 5" 2>/dev/null || echo "(no tasks)"
+if [[ -d "$DECISIONS_DIR" ]]; then
+    DPEND=$(ls "$DECISIONS_DIR"/*.md 2>/dev/null | wc -l | tr -d ' ')
+    echo "decisions-pending/: $DPEND awaiting human greenlight"
 else
-    echo "(orchestrator DB not found)"
+    echo "decisions-pending/: (none)"
 fi
 
 # --- Recent git activity ---

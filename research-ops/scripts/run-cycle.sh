@@ -4,7 +4,8 @@
 # dispatch helper instead of raw llmx CLI subprocess dispatch.
 #
 # Usage: run-cycle.sh [project_dir]
-#   Or from Claude Code: ! ~/Projects/skills/research-cycle/scripts/run-cycle.sh
+#   Or from Claude Code: ! ~/Projects/skills/research-ops/scripts/run-cycle.sh
+# This is the Lane-A (Generate) rate-limited fallback only — see SKILL.md.
 
 set -euo pipefail
 
@@ -102,6 +103,6 @@ PROMPT_EOF
     rm -f "$cycle_context" "$cycle_output" "$cycle_meta" "$cycle_error"
 else
     echo "Normal mode: running via Claude skill"
-    echo "Use /research cycle in your Claude session instead."
-    echo "(This script is for rate-limited fallback only)"
+    echo "Use /research-ops cycle in your Claude session instead."
+    echo "(This script is the Lane-A rate-limited fallback only)"
 fi

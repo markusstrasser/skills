@@ -22,230 +22,145 @@ Operator-initiated research workflows. For one-shot research questions, use `/re
 
 # Mode: cycle
 
-You run on `/loop`. Each tick you read state, pick the next phase, and execute it — via subagent (preferred, fresh context) or inline (if memory-constrained). **Never ask for input.** The human steers by editing CYCLE.md between ticks.
+Two lanes split by the **verifier boundary** (constitution: verifier-conditioned autonomy):
+
+- **Generate (Dreamer)** — unattended idea-generation. Discover, gap-analyze, brainstorm, cross-model critique → write *buildable proposals* to `queue/` and *human-gated questions* to `decisions-pending/`. **Never executes.** Safe to run while you sleep because it only produces reversible drafts for a yes/no. This is the "wake up to N ideas, say yes/no" endgame.
+- **Execute (attended)** — plan, review, execute, verify the greenlit queue items. The partial verifier (you + cross-model + `verify_claim`) sits here, so this lane is **attended** — run it via `/loop` in an open session, or by hand.
+
+> **Live reference: hutter `OUTER-LOOP.md`.** hutter runs the *same* two-role shape (Grinder/Dreamer + git bus) and it's the proven, live instance (ledger updated daily). The one difference is the verifier: hutter has a **clean** bit-exact gate (regime 1), so its Grinder auto-ratchets unsupervised. Research domains are **partial-verifier** (regime 2) — synthesis/gap/discovery have no ground truth — so here the unattended lane *generates only*; execution stays attended. Do **not** port hutter's auto-ratchet, parking-lot, or pre-registered-ΔS machinery: those need a clean metric, and faking one is the vetoed `session_quality` trap.
+
+## Scheduling primitives (verified 2026-06-08, OUTER-LOOP.md)
+
+| Primitive | Survives reboot? | Unattended? | Quota | Use for |
+|---|---|---|---|---|
+| `/loop [int] <cmd>` | No (restores on `--resume` ≤7 d) | No — needs session open | local, ~free | the **attended Execute lane** |
+| `/schedule` (Routine) | **Yes — cloud** | **Yes** | counts vs ~15 routines/24 h | the **unattended Generate lane** (Dreamer), model = Opus 4.8 |
+| launchd plist | Yes (local only) | only while Mac awake | zero | local state-gathering, not LLM work |
+
+`/loop` is for babysitting an open session; `/schedule` is the only primitive that runs the Dreamer while you sleep. The old "run all six phases unsupervised on `/loop 15m`" design is **retired** — it needed a babysat session *and* auto-executed unverified work (worst of both), which is why every project's CYCLE.md went stale.
 
 ## Live State
 
 !`bash ${CLAUDE_SKILL_DIR}/scripts/gather-cycle-state.sh "$(pwd)" 2>&1 | head -80`
 
-## Rate Limit Detection
+---
 
-Before each tick, check rate limit status:
-```bash
-CLAUDE_PROCS=$(pgrep claude 2>/dev/null | wc -l | tr -d ' ')
+## Lane A — Generate (Dreamer)
+
+The unattended generator. Runs as a `/schedule` Routine (full) or `/loop /research-ops cycle` in an open Opus session (minimal). Each fire:
+
+1. `git pull`. Read `queue/` depth, `decisions-pending/`, the Live State improvement signals, and recent git log.
+2. **Decide if there is work.** Queue healthy (≥8 unused proposals) AND no fresh improvement signals → write one `noop` line to `CYCLE.md` log, `git push` if changed, **stop**. Do not manufacture work.
+3. **Discover + gap-analyze.** Search for new developments (lead with Exa for tools/releases, `search_preprints` for papers; `/research dispatch` for deep sweeps). Compare against git log + research memos — skip anything already known. Read improvement signals from Live State; prioritize `STEER` signals. If discover returns empty, run `/brainstorm` on the project domain. SWE quality gaps belong to `/maintain` — don't duplicate.
+4. **Write proposals to `queue/`.** Append ≤8 concrete, buildable, ONE-change proposals — each with: the change, files it touches, rationale tied to evidence, and how to verify it. These are *candidates*, not approvals.
+5. **Human-gated items → `decisions-pending/`.** Anything in the "never autonomous" set (classification thresholds with clinical implications, validated clinical logic, new verification tooling, GOALS.md direction) goes here as a written question — never into `queue/`. For these, run `/critique model` cross-lab (Gemini 3.5 Flash + Opus, a *different* lab than the generator) and write recommendation + dissent + the open question. Do NOT greenlight.
+6. `git commit + push` (`queue/`, `decisions-pending/`, `CYCLE.md` log). Keep output small. Never ask whether to continue.
+
+**WIP caps:** ≤8 unused queue proposals (skip discover above that); ≤3 undispositioned discoveries. **Turn budget:** stop searching at 70% of turns and synthesize. **Recitation:** recite key evidence before drawing conclusions.
+
+### The Dreamer Routine prompt (paste into `/schedule`, model Opus 4.8, ~daily)
+
+Parameterize `{PROJECT}` / `{ROOT}`; hutter's filled-in version is the worked example in `hutter/OUTER-LOOP.md`.
+
+```
+<role>You are the Dreamer for {PROJECT}. You GENERATE buildable research/improvement
+proposals; you never execute them. Read-only on the project; write-only to queue/ and
+decisions-pending/. Discovery/synthesis here has no clean verifier, so you produce
+reversible drafts for a human yes/no — you never ship.</role>
+
+<on_each_fire>
+1. cd {ROOT}; git pull. Read queue/ depth, decisions-pending/, recent git log (-15),
+   and improvement signals (run scripts/gather-cycle-state.sh {ROOT}).
+2. If queue ≥8 unused AND no fresh STEER/quality signal AND decisions-pending/ empty:
+   write one noop line to CYCLE.md, git push if changed, STOP. Don't manufacture work.
+3. Discover + gap-analyze: Exa/search_preprints for new developments; /research dispatch
+   for deep sweeps; /brainstorm if discover is empty. Skip anything in git log / research
+   memos. Prioritize STEER signals. SWE quality → /maintain's lane, skip.
+4. Append ≤8 buildable ONE-change proposals to queue/QUEUE_NNN.md — each: change, files,
+   evidence-tied rationale, verification method. Candidates, not approvals.
+5. "Never autonomous" items (clinical thresholds, validated logic, new verifier tooling,
+   GOALS direction) → decisions-pending/ as a written question. Run /critique model
+   cross-lab (Gemini 3.5 Flash + Opus) and write recommendation + dissent + open question.
+   Do NOT greenlight.
+6. git commit + push (queue/, decisions-pending/, CYCLE.md). Keep output small.
+   You are bounded and unattended — do the work and STOP. Never ask whether to continue.
+</on_each_fire>
 ```
 
-**If rate-limited (CLAUDE_PROCS >= 6):** Route LLM-heavy phases (discover, gap-analyze, plan) through the shared dispatch helper instead of Claude subagents:
-- Use `uv run python3 ~/Projects/skills/scripts/llm-dispatch.py --profile cheap_tick ...` for discover/gap-analyze (shared artifact contract, no raw CLI dispatch)
-- Use `model-review.py` for review (already routes through llmx)
-- Execute and verify phases use tools, not LLM reasoning — run inline regardless
-- Write `[rate-limited: used shared dispatch]` tag in CYCLE.md log entries for tracking
+Cap fires ≤6/day (well under the ~15 routines/24 h ceiling).
 
-**If not rate-limited:** Normal operation (Claude subagents preferred).
+---
 
-## Each Tick
+## Lane B — Execute (attended)
 
-If "NO STATE CHANGE" -> one-line noop, stop.
+Run when you're at the desk (`/loop /research-ops cycle` in an open session, or by hand). This lane drains the queue the human greenlit. **Verify before execute** — never start a new execution with an unverified prior change.
 
-Otherwise, pick the highest-priority phase and run it. **Chain phases** if confident — don't wait for the next tick when the next phase has no blockers. Stop chaining when: rate-limited, context is heavy (>60% used), or the next phase needs external data you don't have yet.
+### Phase priority (first match wins)
 
-### Phase Priority (first match wins)
+1. **Recent execution without verification** → verify.
+2. **Greenlit items in `queue/`** → execute. The human greenlights by leaving a proposal in `queue/` (remove to block, reorder to prioritize).
+3. **A queue proposal needs a plan/review before it's safe** → plan + review.
 
-1. **Recent execution without verification** -> run verify (always verify before executing more)
-2. **Items in queue** (CYCLE.md `## Queue`) -> run execute. The queue IS the approval — items land there via human steering or gap-analyze. No `[x] APPROVE` gate needed.
-3. **Active plan not yet reviewed** -> run review (probe claims + cross-model via `model-review.py`)
-4. **Gaps exist without plan** -> run plan phase (write plan for top gap)
-5. **Discoveries exist without gap analysis** -> run gap-analyze
-6. **Verification done without improve** -> run improve (includes retro + archival)
-7. **Nothing pending** -> run discover (includes brainstorm if discover returns empty)
+### Plan + Review
 
-### Running a Phase
+**Plan:** Read the top greenlit proposal. Check `artifacts/failed-experiments/` for prior attempts on the same subsystem — if found, include "Previously tried: {summary}. Failed: {reason}" so you don't repeat it. Write files-to-change, what changes, verification method.
 
-**Route by task type, not line count:**
-- Docstring, config, research_only field changes -> **inline** (fast, reliable)
-- Logic changes, even 1-line -> **subagent** (fresh context for reasoning about consequences)
-- If subagent returns empty (no edit), retry inline once
-
-**Subagent dispatch (normal mode):**
-```
-Agent(
-  prompt="[phase prompt with project context]",
-  subagent_type="general-purpose",
-  description="research-cycle: [phase]",
-  mode="bypassPermissions"
-)
-```
-
-**Shared dispatch (rate-limited mode):** For discover/gap-analyze/plan phases, write the phase prompt to a temp file and dispatch via the wrapper:
-```bash
-cat > /tmp/cycle-phase-prompt.md << 'EOF'
-[phase prompt with project context]
-EOF
-uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
-  --profile cheap_tick \
-  --context /tmp/cycle-phase-prompt.md \
-  --prompt "[phase instruction]" \
-  --output /tmp/cycle-phase-output.md \
-  --meta /tmp/cycle-phase-meta.json \
-  --error-output /tmp/cycle-phase-error.json
-# Read output, inspect meta/error artifacts on failure, apply to CYCLE.md, commit
-```
-For phases needing tool use (discover with Exa/S2), work inline with MCP tools but skip subagent delegation.
-
-**Fallback priority:** subagent (fresh context) -> shared dispatch (rate-limited) -> inline (memory-constrained + rate-limited).
-
-Each phase prompt must include:
-- Project root path and name
-- Current CYCLE.md content (relevant sections only)
-- "Write results back to CYCLE.md. Commit if files changed. Do NOT ask for input."
-- **Turn budget:** "Stop searching at 70% of your turns and synthesize. Do NOT exhaust all turns on searching."
-- **Recitation:** "Before drawing conclusions, recite the key evidence you're working with."
-
-### Phase Prompts
-
-**Discover:** Search for new information relevant to this project. Lead with Exa (more reliable for tools/releases), then search_preprints for papers. For deep audit sweeps, invoke `/research dispatch`. Compare against git log and research memos. Write findings to CYCLE.md `## Discoveries` as `- [NEW] ...`. Skip anything already known. Commit. Stop searching at 70% of turns and write up. **If nothing found:** invoke `/brainstorm` on the project domain inline. Write ideas to DECISIONS.md as informational context (not approval items). One phase total — brainstorm is part of discover.
-
-**Gap-analyze:** Read CYCLE.md discoveries + improvement signals (from Live State `IMPROVEMENT SIGNALS` section) + project state (CLAUDE.md, git log, research index). Two gap sources: (1) discoveries from discover phase, (2) improvement signals — prioritize `STEER` signals (human steering load) alongside quality/reliability signals. SWE quality gaps (code bugs, freshness, refactoring) are handled by `/maintain` in the separate SWE quality lane — don't duplicate that work here. Write prioritized gaps to `## Gaps`. Classify each: autonomous (reversible, existing pattern) or needs-approval. Commit.
-
-**Plan:** Read top gap from `## Gaps` (skip any marked `FAILED` within cooldown). **Before planning:** check `artifacts/failed-experiments/` for prior attempts on the same subsystem — if found, include "Previously tried: {plan_summary}. Failed because: {failure_reason}" in the plan context so the LLM avoids repeating the same approach. Write implementation plan to `## Active Plan`: files to change, what changes, verification method. Add to `## Queue` for execution. Commit.
-
-**Review:** Three steps — blind assessment, probe, then cross-model review:
-1. **Blind first-pass:** Read the plan WITHOUT re-reading the gap-analyze output. Form an independent assessment of whether the plan addresses the right problem and has the right approach. Write your assessment. THEN compare to the gap-analyze output and note divergences. This breaks confirmation bias (SycEval baseline: 58% fold rate without structural mitigation).
-2. **Probe external claims inline:** If the plan references any URL, API endpoint, or version number, HTTP-probe it directly. This catches 404s and HTML-instead-of-API before wasting a review cycle (caught 2 bugs in 6 cycles).
-3. **Cross-model review via script:** Write the plan to a temp file, then dispatch:
+**Review** — three steps:
+1. **Blind first-pass:** read the plan WITHOUT re-reading the proposal's framing; form an independent assessment, THEN compare and note divergence (breaks confirmation bias — SycEval 58% fold rate without structural mitigation).
+2. **Probe external claims inline:** HTTP-probe any URL / API / version the plan cites before trusting it.
+3. **Cross-model review** (skip for trivial docstring/config tweaks):
 ```bash
 uv run python3 ~/Projects/skills/critique/scripts/model-review.py \
-  --context /tmp/cycle-plan.md \
-  --topic "research-cycle-G{N}" \
-  --axes standard \
-  --project "$(pwd)" \
-  "Review this plan for wrong assumptions, missing steps, and anything that could break existing functionality"
+  --context /tmp/cycle-plan.md --topic "research-cycle-{N}" \
+  --axes standard --project "$(pwd)" \
+  "Review for wrong assumptions, missing steps, anything that breaks existing functionality"
 ```
-Route `--axes` by stakes: `standard` for autonomous/low-risk, `deep` for needs-approval, `full` for structural changes. Skip cross-model entirely for trivial changes (docstring fixes, config tweaks).
-Read the output files, apply verified findings to plan. If critical issues, move plan back to gaps. **On model-review failure:** check exit code + stderr before retrying. Classify: auth (retry), rate-limit (fall back to other model), timeout (reduce context), schema error (fix input). Do NOT blindly retry the same model (FM24). Commit.
+Route `--axes` by stakes (standard / deep / full). On failure, classify before retrying (auth→retry, rate-limit→other model, timeout→shrink context); never blind-retry the same model.
 
-**Execute:** Read reviewed plan. Implement it — the queue is the approval, no `[x]` gate. **Before executing:** note current HEAD SHA. After implementation, commit. **Reflect inline** (1-3 lines under the done entry): what was easier/harder than planned, did plan assumptions hold, anything to carry forward. Move item from Active Plan to `## Autonomous (done)` with date + reflection. Mark corresponding gap entry with `~~done~~` prefix.
+### Execute + Verify
 
-**Verify:** Check most recent item in `## Autonomous (done)`. Two verification tracks depending on output type:
+**Execute:** Note HEAD SHA. Implement. Commit. Reflect 1-3 lines (what was easier/harder, did assumptions hold). Mark the queue proposal consumed.
 
-**Track A — Infrastructure changes** (code, config, hooks, scripts): Run relevant tests, check file existence, compare with known-good data. Same as before.
+**Verify** — two tracks:
+- **Track A — infra** (code/config/hooks/scripts): run tests, check file existence, compare to known-good.
+- **Track B — research output** (`research/*.md` produced/modified): extract 3-5 falsifiable claims (numbers, dates, named entities, causal assertions), call `verify_claim` on each, record verdicts. **FAIL** = any claim contradicted >0.7 confidence → revert flow. **WARN** = insufficient → `decisions-pending/`, don't block.
 
-**Track B — Research output** (executed item produced or modified `research/*.md`): Run factual claim verification:
-1. Extract 3-5 key factual claims from the output (specific numbers, dates, named entities, causal assertions — not opinions or interpretations)
-2. For each claim, call `verify_claim` MCP tool
-3. Record verdicts in `## Verification Results`:
-   ```
-   [DATE] **[item]:** claim verification (N claims checked)
-   - "Claim text" -> supported (0.85) PASS
-   - "Claim text" -> insufficient (0.4) WARN
-   - "Claim text" -> contradicted (0.9) FAIL
-   ```
-4. **FAIL threshold:** Any claim "contradicted" with confidence >0.7 -> trigger revert flow below
-5. **WARN threshold:** "insufficient" verdicts -> append to DECISIONS.md for human review, don't block
-6. If all claims supported or insufficient with low confidence -> PASS
+**If verification fails:** archive before reverting (`git format-patch HEAD~1 -o artifacts/failed-experiments/` + JSON sidecar per `~/Projects/agent-infra/schemas/gap-fingerprint.json`), then `git revert HEAD` (not reset), mark the proposal `FAILED: {reason}` (skip 2 cycles), write to `decisions-pending/`.
 
-For both tracks, write results to `## Verification Results`. **If verification fails:**
-1. **Archive the failed attempt** before reverting (DGM-H variant preservation):
-   ```bash
-   mkdir -p artifacts/failed-experiments
-   git format-patch HEAD~1 -o artifacts/failed-experiments/
-   ```
-   Write a JSON sidecar `artifacts/failed-experiments/{gap-id}-{date}.json` with gap fingerprint schema: `{gap_id, repo, subsystem, failure_mode, mechanism_tags, base_commit, failing_metric, plan_summary, failure_reason, date, patch_file}`. Schema at `~/Projects/agent-infra/schemas/gap-fingerprint.json`.
-2. Run `git revert HEAD` (preserves history, unlike reset).
-3. Mark the gap as `FAILED: {reason}` — skip it for 2 cycles.
-4. Write failure to DECISIONS.md for human triage.
-**TTL:** During improve phase archival, prune `artifacts/failed-experiments/` entries >90 days old that were never retrieved by a plan phase.
+## The bus = git files
 
-**Improve:** Three parts — retro + archival + proposals.
-1. **Retro (structured):** Classify this cycle's events using retro categories: WRONG_ASSUMPTION, TOOL_MISUSE, SEARCH_WASTE, TOKEN_WASTE, BUILD_THEN_UNDO. Write structured findings to `## Cycle Retro` in CYCLE.md. Also write JSON to `~/Projects/agent-infra/artifacts/session-retro/{date}-cycle.json` for the improvement pipeline.
-2. **Archival:** Move entries older than 2 cycles from `## Autonomous (done)`, `## Verification Results`, and `## Cycle Retro` to `CYCLE-archive.md`. Keep CYCLE.md under 200 lines.
-3. **Proposals:** Write tool/process improvement proposals to `## Tool Improvements (proposed)`. For structural improvements, write to `~/.claude/steward-proposals/`. For things needing human input, append to `DECISIONS.md` (informational — no approval checkboxes). NEVER implement tool changes directly — propose only. Commit.
+| File/dir | Dreamer (Lane A) | Execute (Lane B) / human |
+|---|---|---|
+| `queue/QUEUE_NNN.md` | appends buildable proposals | drains greenlit items; human blocks by removing |
+| `decisions-pending/*.md` | appends human-gated questions + cross-lab synthesis | human reads, greenlights into `queue/` |
+| `CYCLE.md` | one-line fire log + rolling state board | reads; human steers via notes |
+| `artifacts/failed-experiments/` | — | archived patches + fingerprints (prune >90 d) |
 
-### Queue Management
+Git is the durable, mergeable, auditable substrate (native-patterns). Separate `queue/` files avoid the merge conflicts a shared `CYCLE.md` queue caused. If Dreamer (cloud Routine) and Execute (local) are on different hosts, the Routine `git pull`s at fire start and `git push`es at end.
 
-- **The queue IS the approval.** Items in `## Queue` are ready to execute. No `[x] APPROVE` mechanism — the human steers by adding/removing/reordering items in the queue between ticks.
-- Human removes items from queue to block them. Human adds items to queue to request them.
-- **Auto-defer:** Queue items that fail execution twice auto-move to `## Deferred` with failure reason.
+`/maintain` owns the separate SWE quality lane (`MAINTAIN.md`) — this skill doesn't touch it.
 
-### WIP Caps
+## Rate-limit fallback
 
-- Max 3 undispositioned discoveries
-- Max 1 active plan
-- Discovery skips if 3+ undispositioned discoveries exist
-
-### Autonomy Boundary
-
-- **Autonomous (most things):** refactoring, architecture, integration, infrastructure, database refreshes, config tweaks, `research_only` additions, new scripts, test runs, verification, removing dead code, consolidating duplicates, wiring new stages. Given enough context, the model outperforms the human on how-to-build decisions.
-- **Human steers what-to-build:** which analyses matter personally, which clinical decisions to encode, GOALS.md direction. The human expresses this by editing CYCLE.md queue between ticks.
-- **Never autonomous:** changing classification thresholds with clinical implications, modifying validated clinical logic, deploying new verification tools (propose only — recursive hallucination trap)
-
-### Human Steering via CYCLE.md
-
-The human edits CYCLE.md between ticks:
-- Add items to `## Queue` to request work
-- Remove items from `## Queue` to block them
-- Delete discoveries or gaps to dismiss them
-- Add notes under gaps to redirect approach
-- Add `## Priority: ...` to override phase selection
-
-The skill reads CYCLE.md fresh each tick. Human edits take effect on the next tick.
-
-## Shared Files (coordination with human)
-
-| File | Owner | Others | Purpose |
-|------|-------|--------|---------|
-| `CYCLE.md` | research-cycle | human steers | Growth state + approval queue |
-| `CYCLE-archive.md` | research-cycle (improve phase) | human reads | Completed items, old retros |
-| `DECISIONS.md` | any skill appends | human reads | Informational: questions, ideas, proposals. NO approval checkboxes. |
-
-Note: `/maintain` owns the separate SWE quality lane (`MAINTAIN.md`). research-cycle does not read or write maintenance state.
-
-**DECISIONS.md convention** (append-only, informational — no approvals here):
-```markdown
-### [skill-name] Title (date)
-Context, question, or idea for human consideration.
-No [x] checkboxes — approvals go to CYCLE.md ## Queue only.
+Before a Lane-A fire, `CLAUDE_PROCS=$(pgrep claude | wc -l)`. If ≥6, route discover/gap-analyze through the shared dispatch helper instead of Claude subagents:
+```bash
+uv run python3 ~/Projects/skills/scripts/llm-dispatch.py --profile cheap_tick \
+  --context /tmp/cycle-phase.md --prompt "[instruction]" --output /tmp/cycle-out.md \
+  --meta /tmp/cycle-meta.json --error-output /tmp/cycle-err.json
 ```
+`model-review.py` already routes through llmx. Tag `[rate-limited]` in the CYCLE.md log.
 
-## Skill Invocations
+## Minimal vs full
 
-| Situation | Invoke | Why |
-|-----------|--------|-----|
-| Deep audit sweep (SWE quality) | `/improve maintain` owns this lane | Use `/research dispatch` directly for growth-adjacent audits only |
-| Plan review (non-trivial) | `/critique model` via script | Cross-model adversarial — same-model can't catch own blind spots |
-| Discover returns empty | `/brainstorm` inline | Divergent ideation -> ideas to DECISIONS.md (informational) |
-| Need literature depth on a paper | `/research query` | Deep paper analysis with epistemic rigor |
-| Improve phase (every cycle) | retro classification framework | Structured findings -> JSON for improvement pipeline |
-| Domain claim verification | `/bio-verify` or biomedical MCP | Tool-backed evidence, not model reasoning |
-| External tool/version check | `/trending-scout` (meta only) | Agent ecosystem scans — not for domain projects |
+- **Minimal (start here):** Lane B attended; Lane A run **manually** (`/loop /research-ops cycle` in an open Opus session at the desk). Zero Routine quota.
+- **Full:** Lane A as a `/schedule` Routine refilling `queue/` + triaging `decisions-pending/` while you sleep (~daily). Promote minimal → full only once the queue demonstrably empties for lack of fresh ideas — not before (demand-gated, per OUTER-LOOP.md).
 
-## Error Recovery
+## Operating rules
 
-If any phase fails with an error (script crash, tool denied, MCP timeout):
-1. Log the error to CYCLE.md `## Errors`
-2. Skip the phase for this tick
-3. Don't retry the same failing phase more than once consecutively
-4. Write the error to DECISIONS.md for human triage
-5. Continue to the next tick
-
-## Instrumentation (append to MAINTENANCE.log each improve phase)
-
-Log these counters for measurement:
-- `orphan_rate`: approved items not acted on within 2 ticks
-- `duplicate_rate`: same discovery/gap appearing twice
-- `swe_lane_items`: items in MAINTAIN.md (tracked by /maintain, not research-cycle)
-- `review_catch_rate`: issues caught in review
-- `verify_fail_rate`: execute -> verify failures
-- `cycle_latency`: ticks from discovery to shipped item
-
-## Operating Rules
-
-1. **Never ask for input.** Write questions to DECISIONS.md (informational) and move on.
-2. **Chain confidently, stop when blocked.** Run multiple phases in one tick if the next phase has no external blockers. Stop when: rate-limited, context heavy (>60%), waiting on external data/downloads, or hit a "never autonomous" boundary.
-3. **Report in 1-3 lines.** Phase run, outcome, what's next. No preamble.
-4. **Budget awareness.** Track cumulative cost in CYCLE.md header. Warn at $15/day.
-5. **Idempotent.** Check git log and CYCLE.md before acting. Don't redo completed work.
-6. **Verify before execute.** Never start a new execution with an unverified prior change.
+1. **Never ask for input** in either lane. Lane A writes questions to `decisions-pending/`; Lane B surfaces them to the human at the desk.
+2. **Lane A generates, never executes.** Lane B executes only greenlit items, only attended, verify-before-execute.
+3. **Report in 1-3 lines:** phase, outcome, what's next.
+4. **Idempotent:** check git log + queue before acting; don't redo completed work.
 
 ---
 
