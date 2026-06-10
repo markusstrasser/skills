@@ -43,6 +43,15 @@ Two lanes split by the **verifier boundary** (constitution: verifier-conditioned
 
 !`bash ${CLAUDE_SKILL_DIR}/scripts/gather-cycle-state.sh "$(pwd)" 2>&1 | head -80`
 
+## Which lane runs this fire
+
+One invocation of `/research-ops cycle` picks ONE lane from the Bus State above (first match wins):
+
+1. **Greenlit items in `queue/` AND you are attended** (interactive session / `/loop`, not an unattended Routine) → **Lane B (Execute)**. Drain the queue.
+2. **Otherwise** → **Lane A (Generate)**. Refill `queue/` + triage `decisions-pending/`.
+
+A `/schedule` Routine ALWAYS runs Lane A — it is unattended, so it must never execute (no clean verifier). Lane B only ever runs when a human is at the desk. If "NO STATE CHANGE" → one-line noop, stop.
+
 ---
 
 ## Lane A — Generate (Dreamer)
