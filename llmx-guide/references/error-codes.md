@@ -12,7 +12,7 @@ Branch on these, don't parse stderr:
 | 1 | General error | Read stderr for details |
 | 2 | API key missing/invalid | Check env vars |
 | 3 | Rate limit (429/503, transient) | Wait, or add `--stream` (API transport has separate capacity from CLI) |
-| 4 | Timeout | Increase `--timeout` (default auto-scales with effort: high→600s, xhigh→1200s; cap 1800s), or add `--stream` |
+| 4 | Timeout | Set `--timeout` explicitly (1800-3600 for xhigh; default 300s, auto-scaled to 600/1200 for high/xhigh as a net; ceiling 3600s), or add `--stream` |
 | 5 | Model error (context too large, bad params) | Fix request |
 | 6 | **Quota/billing exhausted** (permanent) | Top up billing. NOT transient — retries won't help |
 
