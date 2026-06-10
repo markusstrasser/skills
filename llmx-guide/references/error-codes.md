@@ -12,7 +12,7 @@ Branch on these, don't parse stderr:
 | 1 | General error | Read stderr for details |
 | 2 | API key missing/invalid | Check env vars |
 | 3 | Rate limit (429/503, transient) | Wait, or add `--stream` (API transport has separate capacity from CLI) |
-| 4 | Timeout | Increase `--timeout`, or add `--stream` for API transport |
+| 4 | Timeout | Increase `--timeout` (default auto-scales with effort: high→600s, xhigh→1200s; cap 1800s), or add `--stream` |
 | 5 | Model error (context too large, bad params) | Fix request |
 | 6 | **Quota/billing exhausted** (permanent) | Top up billing. NOT transient — retries won't help |
 
@@ -31,6 +31,16 @@ Branch on these, don't parse stderr:
 ## `--fallback MODEL`
 
 Exists but **not recommended**. Silent model switching masks failures. If you asked for Pro, you should get Pro or an error. If CLI rate-limited, use `--stream` (forces API transport) rather than `--fallback` (switches to a weaker model).
+
+## Session-Level Fallback Rules
+
+- **Gemini 503/rate-limit:** after the FIRST 503 from a Gemini model, switch to GPT or Flash for the remaining calls in the session. Don't retry the same Gemini model — 4 confirmed incidents of 4-6 wasted retries before fallback.
+- Exit 6 (billing) is permanent — never retry; exit 3 is transient.
+
+## Cost / Usage Diagnostics
+
+- Every API-transport call appends one record to `~/.claude/llmx-usage.jsonl` (model, effort, prompt/completion/reasoning/cached tokens, latency, caller). CLI-transport calls have null tokens. Use `jq` for ad-hoc cost rollups. Override path with `LLMX_USAGE_LOG=`.
+- llmx is editable-installed (`uv tool install --editable`) — source changes in `~/Projects/llmx/` propagate to the `llmx` command instantly, no reinstall.
 
 ## Python Error Handling Pattern
 
