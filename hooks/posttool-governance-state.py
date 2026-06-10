@@ -27,23 +27,36 @@ STATE_DIR = Path("~/.claude/governance-sessions").expanduser()
 TOOL_CATEGORIES = {
     # Financial data — highest risk per AgentDrift
     "financial": [
-        "mcp__yahoo", "mcp__alpha", "mcp__polygon", "mcp__fmp",
-        "mcp__sec", "mcp__edgar",
+        "mcp__yahoo",
+        "mcp__alpha",
+        "mcp__polygon",
+        "mcp__fmp",
+        "mcp__sec",
+        "mcp__edgar",
     ],
     # Research/search — medium risk (hallucinated citations)
     "research": [
-        "mcp__research__search_papers", "mcp__research__fetch_paper",
-        "mcp__research__read_paper", "mcp__research__ask_papers",
-        "mcp__research__verify_claim", "mcp__research__prepare_evidence",
+        "mcp__research__search_papers",
+        "mcp__research__fetch_paper",
+        "mcp__research__read_paper",
+        "mcp__research__ask_papers",
+        "mcp__research__verify_claim",
+        "mcp__research__prepare_evidence",
         "mcp__scite__search_literature",
     ],
     "websearch": [
-        "mcp__exa__web_search_exa", "mcp__exa__web_search_advanced_exa",
-        "mcp__brave-search__brave_web_search", "mcp__brave-search__brave_news_search",
-        "mcp__perplexity__perplexity_search", "mcp__perplexity__perplexity_ask",
-        "mcp__perplexity__perplexity_reason", "mcp__perplexity__perplexity_research",
-        "mcp__firecrawl__firecrawl_scrape", "mcp__firecrawl__firecrawl_search",
-        "WebSearch", "WebFetch",
+        "mcp__exa__web_search_exa",
+        "mcp__exa__web_search_advanced_exa",
+        "mcp__brave-search__brave_web_search",
+        "mcp__brave-search__brave_news_search",
+        "mcp__perplexity__perplexity_search",
+        "mcp__perplexity__perplexity_ask",
+        "mcp__perplexity__perplexity_reason",
+        "mcp__perplexity__perplexity_research",
+        "mcp__firecrawl__firecrawl_scrape",
+        "mcp__firecrawl__firecrawl_search",
+        "WebSearch",
+        "WebFetch",
     ],
     # External actions — tracked for path-dependent policies
     "external": [
@@ -56,7 +69,8 @@ TOOL_CATEGORIES = {
     "write": ["Write", "Edit"],
     # Browser automation
     "browser": [
-        "mcp__claude-in-chrome__navigate", "mcp__claude-in-chrome__form_input",
+        "mcp__claude-in-chrome__navigate",
+        "mcp__claude-in-chrome__form_input",
         "mcp__claude-in-chrome__javascript_tool",
     ],
 }
@@ -73,8 +87,23 @@ def categorize_tool(tool_name: str) -> list[str]:
     return cats
 
 
-def get_session_id() -> str:
-    """Read session ID from file or generate fallback."""
+def get_session_id(payload: dict | None = None) -> str:
+    """Resolve the session id, preferring race-immune per-invocation sources.
+
+    The Claude Code hook stdin envelope carries the true per-session id and the
+    $CLAUDE_SESSION_ID env var belongs to this process. .claude/current-session-id
+    is a single file every concurrent agent overwrites, so reading it under peer
+    load attributes this hook's per-session governance STATE to a PEER's id
+    (cross-contamination of the {session_id}.json state file). File is the
+    last-resort fallback only (headless inputs that lack a stdin session_id).
+    """
+    if isinstance(payload, dict):
+        sid = (payload.get("session_id") or "").strip()
+        if sid:
+            return sid[:8]
+    env_sid = (os.environ.get("CLAUDE_SESSION_ID") or "").strip()
+    if env_sid:
+        return env_sid[:8]
     sid_file = Path(".claude/current-session-id")
     if sid_file.exists():
         return sid_file.read_text().strip()[:8]
@@ -117,12 +146,13 @@ def main():
         payload = json.load(sys.stdin)
     except Exception:
         payload = {}
-    tool_name = (payload.get("tool_name") if isinstance(payload, dict) else "") \
-        or os.environ.get("CLAUDE_TOOL_NAME", "")
+    tool_name = (payload.get("tool_name") if isinstance(payload, dict) else "") or os.environ.get(
+        "CLAUDE_TOOL_NAME", ""
+    )
     if not tool_name:
         return
 
-    session_id = get_session_id()
+    session_id = get_session_id(payload)
     state = load_session_state(session_id)
 
     # Update state vector

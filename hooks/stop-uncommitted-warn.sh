@@ -52,12 +52,19 @@ all_changes = sorted(set(f for f in all_changes if f.strip()))
 if not all_changes:
     sys.exit(0)
 
-# Delta-based filtering: exclude files dirty at session start
-session_id_file = os.path.join(cwd, ".claude", "current-session-id")
+# Delta-based filtering: exclude files dirty at session start. Resolve the session
+# id stdin-first (per-invocation, race-immune); .claude/current-session-id is a
+# single shared file a concurrent agent overwrites, so it is the last-resort
+# fallback only (missing/wrong key degrades safely to "warn about everything").
+session_id = (data.get("session_id") or "").strip()
+if not session_id:
+    try:
+        with open(os.path.join(cwd, ".claude", "current-session-id")) as f:
+            session_id = f.read().strip()
+    except (OSError, FileNotFoundError):
+        pass
 baseline_files = set()
 try:
-    with open(session_id_file) as f:
-        session_id = f.read().strip()
     with open(f"/tmp/session-baseline-{session_id}.txt") as f:
         for line in f:
             name = line[3:].rstrip("\n")
