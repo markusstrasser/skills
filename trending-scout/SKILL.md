@@ -34,7 +34,7 @@ Before searching, load the known landscape so you can filter against it.
 
 3. **Check vendor-versions baseline** — run `uv run python3 ${CLAUDE_SKILL_DIR}/scripts/vendor-versions.py` for current SDK/CLI versions. This catches version bumps that searches might miss.
 
-4. **Read tracked agent entities** — glob `analysis/agent-entities/*.md` in meta. Each file has `last_refreshed` frontmatter and a structured Current State section (version, pricing, context window, transport). Treat these as the canonical per-entity baseline — they are refreshed out-of-band by the `agent-entity-refresh` pipeline (weekly Mon 06:00). If an entity file is >14 days stale, note it in the search log; the scan should not substitute for the refresh pipeline but should flag stale entities back to the pipeline. See `decisions/2026-04-10-agent-entity-surveillance.md` for the architecture rationale.
+4. **Read tracked agent entities** — glob `analysis/agent-entities/*.md` in meta. Each file has `last_refreshed` frontmatter and a structured Current State section (version, pricing, context window, transport). Treat these as the canonical per-entity baseline. **Scout runs are the sole refresher** — the `agent-entity-refresh` pipeline died with the orchestrator (eradicated 2026-06-07; files sat as unpopulated seeds until the 2026-06-11 scout populated them). Update entity files per Phase 3 whenever the scan covers their vendor; note any entity the scan did NOT cover in the search log. See `decisions/2026-04-10-agent-entity-surveillance.md` for the original architecture rationale.
 
 5. **Note the time window** — default is "since last scout memo date" or "past 7 days" if no prior memo exists.
 
