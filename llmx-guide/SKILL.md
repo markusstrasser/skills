@@ -28,7 +28,7 @@ Use this skill when:
 ## Before You Call llmx — Checklist
 
 1. **Model name correct?** Hyphens not dots (`claude-sonnet-4-6` not `claude-sonnet-4.6`)
-2. **Timeout.** Wall-clock default auto-scales with EFFECTIVE reasoning effort since 2026-06-10 (llmx@d89db12): `high` → 600s, `xhigh` → 1200s; explicit `--timeout` wins; hard cap **1800s**. If dispatching from an agent shell, the outer shell timeout must exceed llmx's (Claude Code Bash caps at 600000 ms foreground — use `run_in_background` for high/xhigh dispatch).
+2. **Timeout — set `--timeout` explicitly for reasoning runs; don't trust the default.** `--timeout` was always in `--help`; the 300s default is what kills flag-less xhigh calls (burned two exit-4s learning this). xhigh runs 30-45 min → pass `--timeout 1800`-`3600`. A default now auto-scales by effort (high→600s, xhigh→1200s) as a safety net, but it's a floor, not the lever. Ceiling 3600s. From Claude Code the outer Bash caps at 600000 ms foreground — **use `run_in_background` for any high/xhigh dispatch** and read the `-o` file after.
 3. **Using `shell=True`?** Don't — parentheses in prompts break it. Use list args + `input=`
 4. **Using `-o FILE`?** Never use `> file` shell redirects — they buffer until exit
 5. **No provider prefixes needed.** `gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`.
@@ -87,9 +87,9 @@ adversarial review.
 
 ### 2. GPT-5.x Timeouts
 
-GPT-5.5 with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning. Default timeout auto-scales with effective effort (300s base, `high` → 600s, `xhigh` → 1200s; llmx@d89db12); hard cap **1800s** via explicit `--timeout`. If a task would exceed that, chunk it, stream, or switch to an async/batch path. Do not punt operational work to a GUI tool.
+GPT-5.5 with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning. Set `--timeout` explicitly (1800-3600 for xhigh); the auto-scaled default (high→600s, xhigh→1200s) is a safety net, ceiling 3600s. Past an hour, chunk it or switch to async/batch. Do not punt operational work to a GUI tool.
 
-**`max_completion_tokens` includes reasoning tokens.** If you set `--max-tokens 4096` on GPT-5.5 with reasoning, the model may exhaust the budget on thinking. Use 16K+ for reasoning models.
+**`--max-tokens` is now the VISIBLE-OUTPUT budget on OpenAI reasoning models** (llmx@fcd585d, 2026-06-11). llmx adds effort-scaled reasoning headroom on top (minimal 4K … xhigh 64K), so reasoning can no longer starve output — `--max-tokens 4096` on xhigh used to return 0 bytes (reasoning ate it all); now it yields up to 4K of visible text with reasoning given its own room. `max_completion_tokens` is a ceiling, not a reservation — the headroom is free unless used. If reasoning STILL exhausts everything, llmx raises a `ModelError` citing the reasoning-token count instead of silently returning empty.
 
 ### 3. Output Capture — Use `-o FILE`, Never `> file`
 

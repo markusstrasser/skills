@@ -48,7 +48,7 @@ Dispatch parallel searches across sources and categories. Use subagents for para
 |----------|-----------|-------------|--------|
 | **Anthropic** | "Anthropic Claude changelog" + date filter | "Claude Code release notes OR changelog" | WebFetch changelog + SDK releases (see Anthropic deep-check below) |
 | **OpenAI** | "OpenAI Codex CLI changelog" + date filter | "OpenAI API changelog OR SDK release" | Check github.com/openai releases |
-| **Google** | "Gemini CLI changelog release" + date filter | "Gemini API update OR google-genai SDK" | Check github.com/google-gemini releases |
+| **Google** | "Gemini API OR google-genai SDK release" + date filter | "Gemini API update OR Antigravity agy CLI" | Check github.com/google-gemini releases (free Gemini CLI retired 2026-05-31 → Antigravity `agy`) |
 | **Frameworks** | "AI agent framework" + date filter | "agent framework release 2026" | Check github trending |
 | **MCP** | "MCP server model context protocol" + date filter | "new MCP server" | Check github.com/modelcontextprotocol |
 | **Repos/Lists** | "awesome AI agents" + date filter | "trending AI repos github" | GitHub trending via Exa site filter |
