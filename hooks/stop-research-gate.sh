@@ -108,6 +108,38 @@ research_files = [
 if not research_files:
     sys.exit(0)
 
+# Peer-commit attribution (2026-06-10): the base_sha diff includes commits made
+# by CONCURRENT sessions DURING this session — the baseline-dirty exclusion only
+# covers session-START state. A file that is CLEAN in the working tree and whose
+# last commit carries a Session-ID trailer (prepare-commit-msg appends it) of a
+# DIFFERENT session is a peer's committed work — skip it. Conservative on
+# unknowns: missing trailer / unknown session / dirty file -> keep checking
+# (a positive two-sided mismatch is required to skip). Second documented
+# false-positive class for session-id races (2026-06-02 stop-verify-claims,
+# 2026-06-10 filesearch-vs-emb peer memo).
+try:
+    r3 = subprocess.run(['git', 'status', '--porcelain'], cwd=cwd, capture_output=True, text=True, timeout=5)
+    worktree_dirty = {l[3:].split(' -> ')[-1] for l in r3.stdout.splitlines() if l.strip()}
+except Exception:
+    worktree_dirty = None  # unknown -> keep everything (fail closed)
+
+if worktree_dirty is not None and session_id:
+    def _peer_committed(path):
+        if path in worktree_dirty:
+            return False  # my (or someone's) live edit — cannot attribute, keep
+        try:
+            r = subprocess.run(
+                ['git', 'log', '-1', '--format=%(trailers:key=Session-ID,valueonly)', '--', path],
+                cwd=cwd, capture_output=True, text=True, timeout=5)
+            committed_sid = next((s.strip() for s in r.stdout.splitlines() if s.strip()), '')
+        except Exception:
+            return False
+        return bool(committed_sid) and committed_sid != session_id
+    research_files = [f for f in research_files if not _peer_committed(f)]
+
+if not research_files:
+    sys.exit(0)
+
 # Check each research file for source tags
 SOURCE_TAG = re.compile(
     # Explicit bracket-tagged provenance
