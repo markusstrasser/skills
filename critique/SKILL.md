@@ -44,7 +44,15 @@ See `lenses/adversarial-review.md` for full dispatch methodology, axis descripti
 
 **Opt-in third cosigner — Claude Opus 4.8 (`claude` axis).** For a genuinely third training family, add the `claude` axis: `/critique model --axes arch,formal,claude`. It dispatches `claude-opus-4-8` via llmx's `anthropic-direct` provider (direct Anthropic API, not OpenRouter). Deliberately NOT in `standard`/`deep`/`full` presets — request it explicitly, and always alongside a GPT axis (axis-resolution requires ≥1 GPT-backed axis, so `--axes claude` alone is rejected by design). Use when cross-family diversity is worth the Opus cost; for routine reviews the Gemini+GPT pairing is the default.
 
-> **The Claude review axis stays on Opus 4.8 — do not switch it to Fable 5.** A reviewer wants cross-lab diversity and raw reasoning, not raw capability: Fable 5 costs 2×, returns only summarized CoT, and adversarial-review prompts that ask the model to "explain your analysis / show your reasoning" can trip Fable's `reasoning_extraction` classifier → silent fallback to Opus 4.8 anyway. Opus 4.8 is the correct, cheaper Claude cosigner. (Fable 5 is the right pick for *doing* hard work — see `/model-guide` — not for reviewing it here.)
+> **The llmx-transport Claude axis stays on Opus 4.8 — do not switch *that* axis to Fable 5.** Over llmx, Fable costs 2×, returns only summarized CoT, and review prompts that say "explain your analysis / show your reasoning" trip Fable's `reasoning_extraction` classifier → silent fallback to Opus 4.8 anyway (and the `anthropic-direct` llmx key may be billing-exhausted for Fable entirely — exit 6). So for the script-dispatched `claude` axis, Opus 4.8 is correct + cheaper. This is a *transport* limit, not a verdict on Fable's review ability.
+
+**Opt-in fourth axis — Fable 5 via SUBAGENT (`fable-subagent`), for critical subparts only.** The ONLY working path to Fable's raw reasoning is the **Agent tool** (`Agent(model:"fable")`, subscription auth) — NOT llmx (billing-dead + downshifts). `model-review.py` is a subprocess and cannot spawn subagents, so this axis is **orchestrator-driven**: the agent running `/critique` dispatches a Fable subagent *alongside* the script and merges its findings into synthesis. Use it sparingly — only on the **critical subparts** of a session (a load-bearing migration, an identity/correctness invariant, a security-sensitive diff), where Fable's edge over Flash/GPT is real (measured 2026-06-10: obscure domain knowledge, multi-hop/split reasoning). Dispatch RESPONSE-ONLY (read-only tools, return findings text; do NOT ask it to "show reasoning" — keep the prompt verdict-shaped to avoid the classifier trip even on the subagent path). Pattern:
+> ```
+> Agent(subagent_type="general-purpose", model="fable", prompt=
+>   "Review THIS change for correctness/security bugs. Write findings to <path> and return them. "
+>   "Read-only. Return a list of findings: SEVERITY | claim | file:line | why-real. No reasoning prose.")
+> ```
+> Then fact-check its findings against code exactly like the Gemini/GPT axes (same trust ranking: convergence + code-verification, not self-confidence). Fable findings that converge with Gemini/GPT are the strongest signal; Fable-only findings on a critical subpart are worth verifying. For routine reviews, skip it — Gemini+GPT is the default.
 
 ### 1. Assemble Context
 
