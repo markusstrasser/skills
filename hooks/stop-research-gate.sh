@@ -32,14 +32,22 @@ research_pattern = os.environ.get('RESEARCH_PATHS', 'docs/research/|analysis/|do
 exclude_pattern = os.environ.get('EXCLUDE_PATTERN', r'MEMORY\.md|CLAUDE\.md|maintenance-checklist\.md|improvement-log\.md|README\.md')
 
 # Session-scoped diff: only check files modified THIS session, not pre-existing dirty files.
-# Read session ID from .claude/current-session-id, then load base SHA and dirty baseline from /tmp/.
+# Resolve the session id the SAME way the attribution path below does: prefer the
+# hook-authoritative stdin session_id (per-invocation, race-immune). The file
+# .claude/current-session-id is shared by every concurrent agent — under clobber it
+# points at a peer's baseline (confirmed 2026-06-01). File is a last-resort fallback
+# for headless inputs that lack a stdin session_id; a wrong/missing key degrades
+# safely to base_sha='HEAD' (check everything).
 base_sha = 'HEAD'
-session_id = ''
+session_id = (data.get('session_id') or '').strip()
+if not session_id:
+    try:
+        with open(os.path.join(cwd, '.claude', 'current-session-id')) as f:
+            session_id = f.read().strip()
+    except (OSError, FileNotFoundError):
+        pass
 baseline_dirty = set()
 try:
-    sid_path = os.path.join(cwd, '.claude', 'current-session-id')
-    with open(sid_path) as f:
-        session_id = f.read().strip()
     with open(f'/tmp/session-base-sha-{session_id}.txt') as f:
         base_sha = f.read().strip()
 except (OSError, FileNotFoundError):
