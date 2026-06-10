@@ -284,14 +284,13 @@ Unified quality agent. Run with `/loop 15m`. Each tick: check state hash, pick O
 
 !`bash -c '
 HASH_FILE=~/.claude/maintain-state-hash.txt
-ORCH_HASH=$(sqlite3 ~/.claude/orchestrator.db "SELECT count(*),group_concat(status) FROM tasks WHERE status IN (\"failed\",\"blocked\",\"pending\") ORDER BY id" 2>/dev/null || echo "na")
 RECEIPT_HASH=$(tail -3 ~/.claude/session-receipts.jsonl 2>/dev/null | md5 || echo "na")
 FINDING_HASH=$(grep -c "Status:\*\* \[ \]" ~/Projects/agent-infra/improvement-log.md 2>/dev/null || echo "0")
 MAINTAIN_HASH=$(md5 < "$(pwd)/MAINTAIN.md" 2>/dev/null || echo "na")
 PROPOSAL_HASH=$(ls -la ~/.claude/steward-proposals/ 2>/dev/null | md5 || echo "na")
 DB_HASH=$(for db in ClinVar gnomAD PharmCAT CPIC; do f=$(find "$(pwd)/databases/" -iname "*${db}*" -type f 2>/dev/null | head -1); [ -n "$f" ] && stat -f%m "$f" 2>/dev/null; done | md5 || echo "na")
 GIT_HASH=$(for p in meta intel selve genomics; do cd ~/Projects/$p 2>/dev/null && git log --oneline -1 2>/dev/null; done | md5 || echo "na")
-CURRENT_HASH="${ORCH_HASH}|${RECEIPT_HASH}|${FINDING_HASH}|${MAINTAIN_HASH}|${PROPOSAL_HASH}|${DB_HASH}|${GIT_HASH}"
+CURRENT_HASH="${RECEIPT_HASH}|${FINDING_HASH}|${MAINTAIN_HASH}|${PROPOSAL_HASH}|${DB_HASH}|${GIT_HASH}"
 PREV_HASH=$(cat "$HASH_FILE" 2>/dev/null || echo "")
 echo "$CURRENT_HASH" > "$HASH_FILE"
 if [ "$CURRENT_HASH" = "$PREV_HASH" ]; then
@@ -299,8 +298,7 @@ if [ "$CURRENT_HASH" = "$PREV_HASH" ]; then
   echo "{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%S)\",\"action\":\"noop\",\"target\":\"state-unchanged\",\"result\":\"ok\",\"detail\":\"hash match\"}" >> "$(pwd)/maintenance-actions.jsonl" 2>/dev/null
   exit 0
 fi
-echo "=== ORCHESTRATOR ==="; cd ~/Projects/agent-infra && uv run python3 scripts/orchestrator.py status 2>/dev/null || echo "(unavailable)"
-echo ""; echo "=== RECENT SESSIONS ==="; tail -8 ~/.claude/session-receipts.jsonl 2>/dev/null | python3 -c "
+echo "=== RECENT SESSIONS ==="; tail -8 ~/.claude/session-receipts.jsonl 2>/dev/null | python3 -c "
 import sys,json
 for line in sys.stdin:
   try:

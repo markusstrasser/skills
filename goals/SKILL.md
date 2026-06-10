@@ -53,7 +53,7 @@ The report reveals the **live system's contradictions** — not just files disag
 
 The corrections ARE the goals — or at least, the delta between stated goals and real ones. Every correction is the user steering the system toward what they actually want.
 
-Works across Claude Code, Codex, and Gemini sessions (all stored in runlogs.db).
+Works across Claude Code, Codex, and Gemini sessions (all indexed in `~/.claude/agentlogs.db`; query via `uv run agentlogs`).
 
 ## Phase 1: Reconnaissance
 
