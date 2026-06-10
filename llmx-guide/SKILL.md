@@ -177,6 +177,15 @@ subprocess.run(['llmx', '--provider', 'google'], input=prompt, capture_output=Tr
 
 See [models.md](references/models.md) for full model table, token limits, and reasoning effort values.
 
+### 5.5. Fable 5 Is Not Reachable Via llmx — Use the Agent Subagent Path
+
+`claude-fable-5` over llmx is effectively dead for programmatic use (verified 2026-06-10):
+- **Billing-exhausted on `anthropic-direct`** — returns 402 / **exit 6** (permanent, don't retry).
+- **Ignores `--reasoning-effort`** — llmx logs *"claude-fable-5 does not support --reasoning-effort (ignoring)"*. There is **no max-vs-high dial** for Fable; it runs fixed internal reasoning (unlike GPT-5.x which honors `-e`).
+- **Downshifts to Opus 4.8** — review/analysis prompts that ask it to "explain reasoning / show your analysis" trip the `reasoning_extraction` classifier → silent fallback to Opus 4.8.
+
+**The only working Fable path is the Claude Code Agent tool** (`Agent(model:"fable")`), which uses subscription/session auth, not the llmx API key. It worked reliably for bounded adjudication (2026-06-10: 7/7 correct, ~70K tok / ~40s each). Keep the prompt **verdict-shaped / response-only** (don't ask for "reasoning prose") to avoid the classifier trip even on the subagent path. So: for Fable, reach for a subagent, not llmx. For llmx Claude work, use `claude-opus-4-8` (subscription via `--lite bare`, see checklist item 7).
+
 ### 6. Grok 4.20 Reasoning — Three Footguns
 
 Use `-p xai` (env: `XAI_API_KEY` or `GROK_API_KEY`). xAI is OpenAI-SDK-compatible at `https://api.x.ai/v1`.
