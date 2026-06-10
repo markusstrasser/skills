@@ -367,7 +367,7 @@ if [ -n "$WARNINGS" ]; then
     ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "warn" "checks=${CHECK_IDS%,} ${WARNINGS:0:80}" 2>/dev/null || true
     # JSON-safe the warnings
     SAFE_WARN=$(echo "$WARNINGS" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))' 2>/dev/null)
-    echo "{\"additionalContext\": ${SAFE_WARN}}"
+    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"additionalContext\": ${SAFE_WARN}}}"
 fi
 
 exit 0
