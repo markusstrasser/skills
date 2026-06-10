@@ -29,15 +29,20 @@ Two lanes split by the **verifier boundary** (constitution: verifier-conditioned
 
 > **Live reference: hutter `OUTER-LOOP.md`.** hutter runs the *same* two-role shape (Grinder/Dreamer + git bus) and it's the proven, live instance (ledger updated daily). The one difference is the verifier: hutter has a **clean** bit-exact gate (regime 1), so its Grinder auto-ratchets unsupervised. Research domains are **partial-verifier** (regime 2) — synthesis/gap/discovery have no ground truth — so here the unattended lane *generates only*; execution stays attended. Do **not** port hutter's auto-ratchet, parking-lot, or pre-registered-ΔS machinery: those need a clean metric, and faking one is the vetoed `session_quality` trap.
 
-## Scheduling primitives (verified 2026-06-08, OUTER-LOOP.md)
+## Scheduling primitives (corrected 2026-06-11)
 
-| Primitive | Survives reboot? | Unattended? | Quota | Use for |
+| Primitive | Reads LOCAL state? | Unattended? | Quota | Use for |
 |---|---|---|---|---|
-| `/loop [int] <cmd>` | No (restores on `--resume` ≤7 d) | No — needs session open | local, ~free | the **attended Execute lane** |
-| `/schedule` (Routine) | **Yes — cloud** | **Yes** | counts vs ~15 routines/24 h | the **unattended Generate lane** (Dreamer), model = Opus 4.8 |
-| launchd plist | Yes (local only) | only while Mac awake | zero | local state-gathering, not LLM work |
+| `/loop [int] <cmd>` | Yes (current session) | No — needs session open | local, ~free | the **attended Execute lane**, and minimal-mode manual Generate |
+| **launchd plist** → `claude -p "/research-ops cycle"` | **Yes** | **Yes (while Mac awake)** | **zero** | the **unattended Generate lane for LOCAL projects** (hutter, etc.) |
+| `/schedule` (cloud Routine) | **NO — cloud checkout of ONE GitHub repo** | Yes (survives reboot) | counts vs ~15 routines/24 h, min 1 h interval | Generate lane ONLY when the project + skill + state are all committed to a GitHub repo and the work is repo-native |
 
-`/loop` is for babysitting an open session; `/schedule` is the only primitive that runs the Dreamer while you sleep. The old "run all six phases unsupervised on `/loop 15m`" design is **retired** — it needed a babysat session *and* auto-executed unverified work (worst of both), which is why every project's CYCLE.md went stale.
+**`/schedule` is a CLOUD agent, not a local scheduler.** It clones one GitHub repo into a sandbox and cannot see local files, the local `queue/`, `ledger.db`, `gather-cycle-state.sh`, MCP state, or env. Its "prompt" is just `job_config.ccr.events[0].data.message.content` (a string — you can put `/research-ops cycle` there), but the skill and the project state must live *inside the cloned repo* for that to resolve. So:
+
+- **Local project with local state (hutter — no GitHub remote):** `/schedule` literally cannot reach it. Use **launchd** (zero-quota, local) or `/loop`.
+- **GitHub-resident project, skill committed into that repo, repo-native work:** `/schedule` fits. Default cloud model is `claude-sonnet-4-6`; request Opus if the generation warrants it.
+
+`/loop` is for babysitting an open session. The old "run all six phases unsupervised on `/loop 15m`" design is **retired** — it needed a babysat session *and* auto-executed unverified work (worst of both), which is why every project's CYCLE.md went stale.
 
 ## Live State
 
@@ -56,7 +61,7 @@ A `/schedule` Routine ALWAYS runs Lane A — it is unattended, so it must never 
 
 ## Lane A — Generate (Dreamer)
 
-The unattended generator. Runs as a `/schedule` Routine (full) or `/loop /research-ops cycle` in an open Opus session (minimal). Each fire:
+The unattended generator. Runs as a **launchd job** (`claude -p "/research-ops cycle"`) for local projects, a `/schedule` cloud Routine only for GitHub-resident ones, or `/loop /research-ops cycle` in an open session (minimal/manual). Each fire:
 
 1. `git pull`. Read `queue/` depth, `decisions-pending/`, the Live State improvement signals, and recent git log.
 2. **Decide if there is work.** Queue healthy (≥8 unused proposals) AND no fresh improvement signals → write one `noop` line to `CYCLE.md` log, `git push` if changed, **stop**. Do not manufacture work.
@@ -67,9 +72,9 @@ The unattended generator. Runs as a `/schedule` Routine (full) or `/loop /resear
 
 **WIP caps:** ≤8 unused queue proposals (skip discover above that); ≤3 undispositioned discoveries. **Turn budget:** stop searching at 70% of turns and synthesize. **Recitation:** recite key evidence before drawing conclusions.
 
-### The Dreamer Routine prompt (paste into `/schedule`, model Opus 4.8, ~daily)
+### The Dreamer prompt
 
-Parameterize `{PROJECT}` / `{ROOT}`; hutter's filled-in version is the worked example in `hutter/OUTER-LOOP.md`.
+For a **launchd / `claude -p`** local job, the prompt is just the string `/research-ops cycle` — the skill's lane logic (above) handles everything, so the prose block below is unnecessary. For a `/schedule` **cloud** Routine you must spell it out because the cloud agent starts with zero context and a different repo checkout; parameterize `{PROJECT}` / `{ROOT}` and ensure the skill + state are committed to the cloned repo:
 
 ```
 <role>You are the Dreamer for {PROJECT}. You GENERATE buildable research/improvement
@@ -161,8 +166,8 @@ uv run python3 ~/Projects/skills/scripts/llm-dispatch.py --profile cheap_tick \
 
 ## Minimal vs full
 
-- **Minimal (start here):** Lane B attended; Lane A run **manually** (`/loop /research-ops cycle` in an open Opus session at the desk). Zero Routine quota.
-- **Full:** Lane A as a `/schedule` Routine refilling `queue/` + triaging `decisions-pending/` while you sleep (~daily). Promote minimal → full only once the queue demonstrably empties for lack of fresh ideas — not before (demand-gated, per OUTER-LOOP.md).
+- **Minimal (start here):** Lane B attended; Lane A run **manually** (`/loop /research-ops cycle` in an open session at the desk). Zero quota.
+- **Full:** Lane A unattended — **launchd** (`claude -p "/research-ops cycle"`) for local projects, or a `/schedule` cloud Routine for GitHub-resident ones — refilling `queue/` + triaging `decisions-pending/` (~daily). Promote minimal → full only once the queue demonstrably empties for lack of fresh ideas — not before (demand-gated, per OUTER-LOOP.md).
 
 ## Operating rules
 
