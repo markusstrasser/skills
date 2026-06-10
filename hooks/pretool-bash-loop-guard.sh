@@ -21,9 +21,27 @@ except:
 
 # Check for multiline for/while/until/if blocks (the #1 zsh parse error pattern)
 # Pattern: line ending with 'do' or 'then', followed by a newline, indicates multiline loop
+# Heredoc bodies are stripped first: they are opaque to the shell parser, so
+# content like '(do\n' inside a <<'EOF' python/EDN payload cannot be a shell
+# control structure (false positive observed 2026-06-10, session e24a68d3).
 if echo "$CMD" | python3 -c "
 import sys, re
 cmd = sys.stdin.read()
+
+def strip_heredocs(s):
+    out, skip_until = [], None
+    for ln in s.split('\n'):
+        if skip_until is not None:
+            if ln.strip() == skip_until:
+                skip_until = None
+            continue
+        m = re.search(r'<<-?\s*([\'\"]?)(\w+)\1', ln)
+        out.append(ln)
+        if m:
+            skip_until = m.group(2)
+    return '\n'.join(out)
+
+cmd = strip_heredocs(cmd)
 # Detect: 'do\n' or 'then\n' followed by content before 'done'/'fi'
 # This catches multiline loops but NOT single-line ones
 has_multiline = bool(re.search(r'\b(do|then)\s*\n', cmd))
