@@ -13,9 +13,10 @@ blocked them was deleted 2026-06 — "validation belongs in the tool" — and
 llmx now auto-corrects the common footguns: deprecated/guessed model names
 upgrade with a warning, `-p` prose misuse gets an explanatory error, and
 wall-clock timeout scales with reasoning effort). For profile-based dispatch
-with a context manifest, `~/Projects/skills/scripts/llm-dispatch.py` exists,
-but it is optional — usage data shows direct CLI and per-project scripts
-dominate by ~250:1.
+with a context manifest, `~/Projects/skills/scripts/llm-dispatch.py` exists —
+it is the dispatch layer behind the research-ops/observe/sweep skill cycles
+(`run-cycle.sh`), not a general recommendation; direct CLI and per-project
+scripts dominate ad-hoc usage by ~250:1.
 
 Use this skill when:
 - writing or reviewing code that calls `llmx` or `llmx.api.chat()`
