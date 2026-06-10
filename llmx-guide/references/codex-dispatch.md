@@ -63,3 +63,7 @@ git add docs/audit/codex-*.md
 - 6 parallel agents: works but Perplexity quota depletes fast
 - Output success rate: ~70% with the "COMPLETE report as final message" prompt instruction, ~30% without it
 - Bash tool timeout: set `timeout: 600000` (10 min) — agents need 3-5 min each with MCP startup
+
+**Diagnostics — `codex doctor`** (Codex 0.131+): runtime/auth/network/config check. Run it before debugging llmx codex-cli failures manually.
+
+**Codex 0.134+ (2026-05-26):** `--profile` is the primary profile selector; read-only MCP servers get parallel tool calls. `--lite bare`/`--lite research` still use the `~/.codex-{bare,research}` profile dirs — after a Codex upgrade, verify nothing routes through unexpected user-config plugins. Don't hand-edit `~/.codex-*/config.toml`; codex rewrites it on launch.

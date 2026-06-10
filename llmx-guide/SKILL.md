@@ -36,6 +36,8 @@ Use this skill when:
 8. **Hangs in agent context?** Claude Code's Bash tool pipes stdin without EOF. Fixed in current llmx (skips stdin when prompt provided).
 9. **Prompt is POSITIONAL in `llmx chat`, `-p` is PROVIDER.** `llmx chat -m gpt-5.5 -f context.md "Analyze this"` — prompt goes LAST as a bare string. `-p` means `--provider` (openai, google, codex-cli), NOT prompt; misuse now returns an explanatory error (llmx@4859217). Context goes in `-f`, system message in `-s`. Two `-f` flags with no positional prompt = model invents a task from context. **CAUTION: `llmx vision` is the opposite — there `-p`/`--prompt` IS the prompt.** The flag meaning differs per subcommand. (Evidence: 2026-04-05 — Gemini hallucinated; 2026-04-12 — 4 consecutive failures from `-p` misuse.)
 10. **For critical reviews, use one combined context file.** Multi-file `-f` has recurring failure modes with Gemini, including silently dropping earlier files. Pre-concatenate first, but preserve file boundaries in the combined file.
+11. **`--schema` for OpenAI needs `"additionalProperties": false`** on EVERY object node — strict structured output rejects the schema with HTTP 400 otherwise. Gemini/Anthropic don't require it, but schema files travel across providers, so always include it. (Evidence: 2026-04-17 `repair_quote.schema.json` failed first call batch.)
+12. **Don't pass `"$(cat large_file.txt)"` as the positional prompt** — it can exceed shell arg limits or confuse Click's parser. Use `-f` for file content.
 
 ## When llmx Fails — Diagnose, Don't Downgrade
 
@@ -201,7 +203,7 @@ llmx chat -p xai "..."   # llmx default is still `grok-4`, superseded by 4.20 fa
 | `openai` | OpenAI API | explicit `-p codex-cli` if you want Codex CLI instead |
 | `anthropic --lite bare` | Claude CLI subscription route | do not use `claude --bare`; `llmx -p claude` may not exist locally |
 
-The Codex CLI ignores explicit `--reasoning-effort` (uses its own default); the Gemini API honors it. See [transport-routing.md](references/transport-routing.md) for CLI vs API decision table, context budget, piping patterns.
+The Codex CLI ignores explicit `--reasoning-effort` (uses its own default); the Gemini API honors it. **GPT `--search` is a silent no-op:** `llmx chat -m gpt-5.5 --search` warns "requires search-specific models" and proceeds WITHOUT search — use `llmx research`, or Exa/Brave/Perplexity for web-grounded queries. See [transport-routing.md](references/transport-routing.md) for CLI vs API decision table, context budget, piping patterns.
 
 ## Codex `-o` Gotcha (Parallel Dispatch)
 
