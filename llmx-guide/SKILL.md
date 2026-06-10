@@ -8,47 +8,33 @@ effort: medium
 
 # llmx Quick Reference
 
-Most agents should not call `llmx` directly for normal repo automation. Use the shared wrapper first:
-
-```bash
-uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
-  --profile fast_extract \
-  --context context.md \
-  --prompt "Analyze this" \
-  --output result.md
-```
-
-If the context was built by the shared packet layer, pass its manifest too:
-
-```bash
-uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
-  --profile fast_extract \
-  --context context.md \
-  --context-manifest context.manifest.json \
-  --prompt "Analyze this" \
-  --output result.md
-```
+Direct `llmx` calls from Bash are the normal path (the old guard hook that
+blocked them was deleted 2026-06 — "validation belongs in the tool" — and
+llmx now auto-corrects the common footguns: deprecated/guessed model names
+upgrade with a warning, `-p` prose misuse gets an explanatory error, and
+wall-clock timeout scales with reasoning effort). For profile-based dispatch
+with a context manifest, `~/Projects/skills/scripts/llm-dispatch.py` exists,
+but it is optional — usage data shows direct CLI and per-project scripts
+dominate by ~250:1.
 
 Use this skill when:
-- debugging shared dispatch failures
-- writing or reviewing low-level code that calls `llmx.api.chat()`
-- doing manual terminal work where raw CLI transport matters
-
-Agent note: the repo hook blocks raw `llmx` chat-style Bash automation. The CLI examples below are for manual terminal debugging or maintainer reference, not for normal agent execution through the Bash tool.
+- writing or reviewing code that calls `llmx` or `llmx.api.chat()`
+- debugging a failed dispatch (exit codes, transport, truncation)
+- choosing a model/provider/effort for a task
 
 > Detail files in `references/`: [models.md](references/models.md) | [error-codes.md](references/error-codes.md) | [transport-routing.md](references/transport-routing.md) | [codex-dispatch.md](references/codex-dispatch.md) | [subcommands.md](references/subcommands.md)
 
 ## Before You Call llmx — Checklist
 
 1. **Model name correct?** Hyphens not dots (`claude-sonnet-4-6` not `claude-sonnet-4.6`)
-2. **Timeout set?** Reasoning models need `--timeout 600` or `--stream`. Max allowed: **900s**. If dispatching from an agent shell, set the outer shell timeout above this (for Claude Code, use at least `1200000` ms).
+2. **Timeout.** Wall-clock default auto-scales with EFFECTIVE reasoning effort since 2026-06-10 (llmx@d89db12): `high` → 600s, `xhigh` → 1200s; explicit `--timeout` wins; hard cap **1800s**. If dispatching from an agent shell, the outer shell timeout must exceed llmx's (Claude Code Bash caps at 600000 ms foreground — use `run_in_background` for high/xhigh dispatch).
 3. **Using `shell=True`?** Don't — parentheses in prompts break it. Use list args + `input=`
 4. **Using `-o FILE`?** Never use `> file` shell redirects — they buffer until exit
 5. **No provider prefixes needed.** `gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`.
 6. **Know the transport triggers:** Gemini always goes direct to the paid API (the free `gemini` CLI was retired 2026-05-31; `--schema`/`--search`/`--max-tokens` all work natively — add `--flex` for 50% off non-interactive dispatch). Codex CLI still falls back to API for `--search` and `--stream`, but can keep `--schema` via `codex exec --output-schema`. GPT goes direct to API unless you explicitly force `-p codex-cli`.
 7. **Claude subscription route?** Do not use `claude --bare`; it bypasses OAuth/keychain and forces API-key auth. Direct smoke: `env -u ANTHROPIC_API_KEY -u CLAUDE_API_KEY claude -p --permission-mode dontAsk --tools "" --output-format text "Reply with exactly OK."`. Through llmx, use `llmx chat -p anthropic --lite bare -m claude-opus-4-8 ...`; this maps to `claude-cli`, strips `ANTHROPIC_API_KEY`, and keeps the Claude Code subscription path. If you see "Credit balance is too low", you hit API-key billing, not local subscription auth. (Validated 2026-05-28: stripped-key `claude -p` returns on the sub, and BOTH `--model claude-opus-4-8` and `--model claude-opus-4-7` are selectable — useful for model A/Bs when the API key is out of credits.)
 8. **Hangs in agent context?** Claude Code's Bash tool pipes stdin without EOF. Fixed in current llmx (skips stdin when prompt provided).
-9. **Prompt is POSITIONAL, `-p` is PROVIDER.** `llmx chat -m gpt-5.5 -f context.md "Analyze this"` — prompt goes LAST as a bare string. `-p` means `--provider` (openai, google, codex-cli), NOT prompt. Using `-p "long text..."` sends the text as a provider name → "Unknown provider" error. Context goes in `-f`, system message in `-s`. Two `-f` flags with no positional prompt = model invents a task from context. (Evidence: 2026-04-05 — Gemini hallucinated; 2026-04-12 — 4 consecutive failures from `-p` misuse.)
+9. **Prompt is POSITIONAL in `llmx chat`, `-p` is PROVIDER.** `llmx chat -m gpt-5.5 -f context.md "Analyze this"` — prompt goes LAST as a bare string. `-p` means `--provider` (openai, google, codex-cli), NOT prompt; misuse now returns an explanatory error (llmx@4859217). Context goes in `-f`, system message in `-s`. Two `-f` flags with no positional prompt = model invents a task from context. **CAUTION: `llmx vision` is the opposite — there `-p`/`--prompt` IS the prompt.** The flag meaning differs per subcommand. (Evidence: 2026-04-05 — Gemini hallucinated; 2026-04-12 — 4 consecutive failures from `-p` misuse.)
 10. **For critical reviews, use one combined context file.** Multi-file `-f` has recurring failure modes with Gemini, including silently dropping earlier files. Pre-concatenate first, but preserve file boundaries in the combined file.
 
 ## When llmx Fails — Diagnose, Don't Downgrade
@@ -98,7 +84,7 @@ adversarial review.
 
 ### 2. GPT-5.x Timeouts
 
-GPT-5.5 with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning. Default timeout: 300s. Max: **900s** (hard cap). GPT-5.5 xhigh on domain-heavy prompts can exceed 900s; for those, chunk the task, stream, or switch to an async/batch path if available. Do not punt operational work to a GUI tool.
+GPT-5.5 with reasoning burns time BEFORE producing output. Non-streaming holds the connection idle during reasoning. Default timeout auto-scales with effective effort (300s base, `high` → 600s, `xhigh` → 1200s; llmx@d89db12); hard cap **1800s** via explicit `--timeout`. If a task would exceed that, chunk it, stream, or switch to an async/batch path. Do not punt operational work to a GUI tool.
 
 **`max_completion_tokens` includes reasoning tokens.** If you set `--max-tokens 4096` on GPT-5.5 with reasoning, the model may exhaust the budget on thinking. Use 16K+ for reasoning models.
 
@@ -169,8 +155,8 @@ subprocess.run(['llmx', '--provider', 'google'], input=prompt, capture_output=Tr
 
 ### 5. Model Name 404 Traps
 
-- `gemini-3-flash` -- missing `-preview`
-- `gemini-flash-3` -- wrong order
+- `gemini-3-pro`, `gemini-3-flash`, `gemini-3.1-pro` -- now auto-upgrade to the current `-preview` names with a warning (llmx@4859217; `gemini-3-pro` alone caused 10 indexed 404s before)
+- `gemini-flash-3` -- wrong order, still 404s
 - `gpt-5.3` -- needs `-chat-latest` suffix
 - `claude-sonnet-4.6` -- dots, needs hyphens
 - `grok-4.20-reasoning` -- needs full `-0309-` snapshot suffix: `grok-4.20-0309-reasoning`. Not in llmx's `_RECOMMENDED_MODELS` — pass full name explicitly via `-m`.
