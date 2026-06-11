@@ -95,11 +95,29 @@ Answer in writing (they become PREREGISTRATION.md fields):
    public-lifted`. Public items contaminate candidates AND judge memory. `authored-fresh`
    means the *exact text* is novel — NOT that the topic is; general-science/medical content is
    in every model's training data even when your composition isn't, so don't over-claim
-   contamination-freeness. *If cases/queries are LLM-generated:* the generator is a hidden
-   variable — a generator from a candidate's model family inflates that candidate (its paraphrase
-   distribution aligns with the sibling's representation space). Use ≥2 neutral-family generators,
-   temp 0, persisted fixtures; report a generator effect. (Evidence: bio_embedding_bakeoff —
-   gemini-flash queries gave the gemini embedder pooled P=0.97; neutral GPT queries → a tie.)
+   contamination-freeness.
+   - **Same-family confound — at EVERY model touchpoint, not just the generator.** General rule:
+     *any model that helps produce or score the eval's relevance signal must be neutral to all
+     candidates* (share no lab/family). Three touchpoints, all real:
+     - **Generator** (LLM-written cases/queries): a candidate-sibling generator inflates that candidate
+       (its paraphrase distribution aligns with the sibling's representation space). ≥2 neutral-family
+       generators, temp 0, persisted fixtures, report a generator effect. (Evidence: bio_embedding_bakeoff
+       v1 — gemini-flash queries gave the gemini embedder pooled P=0.97; neutral GPT → a tie.)
+     - **Judge** (LLM-graded relevance): never grade with a candidate's sibling family. **Blinding to
+       model identity does NOT protect you** — the bias rides the *content* of the grades (a sibling
+       judge rates the candidate's neighbors relevant via shared representation space), not the label.
+       ≥2 neutral families, report inter-judge κ, anchor with a human spot-check. (v2: GPT+Claude
+       judges, never Gemini, κ=0.669.)
+     - **Reranker / fusion in a consumer lane**: a reranker from a candidate's family can't be the
+       *deciding* lane — decide on the model-agnostic (raw cosine) lane, treat the production rerank as
+       a diagnostic. (v2: production reranker is gte-family → the gte-vs-gemini2 switch is decided on the
+       isolation lane. Mechanical nuance: a *text* cross-encoder scores blind to the retriever so its
+       scoring origin-bias is ~0, but its notion of relevance still shares a lab — it informs, doesn't gate.)
+   - **Cheap pre-screen before building an embedder bakeoff at all:** embed the corpus with both
+     candidates, run a handful of queries through the *production* stack, measure top-10 overlap. **>~0.85
+     ⇒ the swap is immaterial — don't build the full graded eval.** (v2 measured 0.89: through hybrid+rerank
+     the two embedders returned ~9 of the same 10 docs. The full eval confirmed HOLD, but the overlap screen
+     predicts "switching changes ~1 in 10" in minutes — run it at the §0 gate.)
 6. **Invariant ambition** — what mechanism-level claim could this eval produce that
    survives a config swap? If only a local verdict is possible, fine — say so up front.
 
