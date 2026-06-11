@@ -70,6 +70,7 @@ Historical anchors are canonical cases [TRAINING-DATA]; verify specifics before 
 30. **Reviewer-direction asymmetry.** Hostile audits only for uncongenial conclusions. Mirror-test pattern: audit your own work against the *specific* failure list you just compiled for an adversary — generic "be rigorous" finds nothing; a named list found 4 real hits in one session. → *Run the same-intensity audit on the congenial result (blind first-pass; steel-man both).*
 31. **Publication/replication base rates.** Most published effects shrink on replication (Ioannidis 2005; OSC 2015 [TRAINING-DATA]). → *Citation-stance checks (scite contrast); one paper is a hypothesis, not a finding.*
 32. **Unlabeled adversarial artifacts.** One-sided briefs are legitimate only when labeled. → *Every artifact states its mode: estimate, bound, screen, or brief.*
+33. **Unanchored derived series.** A parsed/derived time series regressed on without checking it against a single externally published value. Evidence: research-repo OHSS parser carried fiscal-index dates AND an agency-block overwrite (series was ports-only, ~5x low) for 7 weeks across 3 ladder claims — one anchor check (Dec 2023 SWB ≈ 302K) caught both in minutes, and the headline finding reversed (2026-06-11 decision record). → *Before the first regression on any built series: verify one known published value, and eyeball one known event (a peak, a collapse) at its calendar date.*
 
 ## Mechanically checkable subset (hook candidates on recurrence)
 
