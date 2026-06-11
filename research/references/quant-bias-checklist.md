@@ -11,6 +11,8 @@ Origin: 2026-06-11 mirror test of the Cato $14.5T fiscal-study criticisms agains
 
 **The compressed rule:** every load-bearing number carries its **ledger, unit, base, window justification, gross-or-net status, and measurement-vs-model-output label** — and when several constructions are defensible, the *range across constructions* is the headline, never the favorite endpoint.
 
+**Minimum viable claim** (the object the 32 items inspect): a claim is viable when a stranger, author absent, can (1) **re-derive it** — referent operationally defined, relation + value + unit + base, derivation tagged `measurement|model|inference` with source pointer or regenerating command, assumption stack named if model — and (2) **kill it** — scope stated (ledger, window, population, regime) so in-scope counterexamples count, plus a named defeater (the observation or check that would falsify/supersede). For reuse add a load rating (grade) and lifecycle identity (id, asserted-at, status — substrate `claim.v1` already carries exactly this half). Tier escalation: descriptive = base tuple; causal adds identifying variation + rival-channel status; welfare/policy adds welfare weights or [FRAMING-SENSITIVE]. Most audit failures are a claim missing its tier's field — a descriptive claim wearing causal clothes, a welfare verdict hiding its weights.
+
 Historical anchors are canonical cases [TRAINING-DATA]; verify specifics before citing externally.
 
 ## A. Ledger & framing
