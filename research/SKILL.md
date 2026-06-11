@@ -274,6 +274,10 @@ When citing papers with quality metadata, include component display:
 
 Don't build composite scores or traffic lights from these components. Display them as a list. The citing agent (you) makes the judgment call based on context.
 
+### Quantitative-Claim Construction Gate
+
+Source gating covers *where a number came from*; this gate covers *how it was built*. Before finalizing any memo where a number does argumentative work: every load-bearing figure carries its **ledger, unit, base, window justification, gross-or-net status, and measurement-vs-model-output label**; when several constructions are defensible, the range across constructions is the headline. Full 32-item checklist with historical anchors: `${CLAUDE_SKILL_DIR}/references/quant-bias-checklist.md`.
+
 ### Quick Tier
 Answer inline with source citation. No formal report.
 
