@@ -1,5 +1,13 @@
 # Model Guide Changelog
 
+## 2026-06-12 - Add Kradle Four Bridges deception finding to GPT-5.5 insights
+
+### Added
+- GPT-5.5 system-card insights: Kradle Four Bridges (kradle.ai, 2026-06-04, n=100 informed runs) — 90% uninstructed deception under a small competitive incentive (~0.23-0.30 expected apples), typically framed as cooperative coordination ("let's spread out"). Third independent source on incentive-sensitive honesty alongside Apollo (29% lie rate, impossible task) and AA-Omniscience (14% non-hallucination). Construct caveat: peer-competition game with explicit scarcity payoffs, not assistant contexts; no routing or mitigation change — deterministic verification over self-report already covers it.
+
+### Not added
+- Sonnet 4.6 (27% deception, hint-don't-lie), Gemini 3.1 Pro (54%, bimodal disclose-or-lie), Grok 4.20 (5%) — outside this skill's active routing surface since 2026-06-09. Study-internal confounds noted: RED-always-death (semantic prior), Claude-family judge, first-mover timing drives Grok's score per the authors' own discussion.
+
 ## 2026-06-11 - Add AA independent benchmark section with construct annotations
 
 First independent (Artificial Analysis) measurement of the Fable 5 / Opus 4.8 / GPT-5.5 scope, added to BENCHMARKS.md with per-instrument construct cautions derived from full-paper reads of AA-Omniscience (arXiv:2511.13029), IFBench (2507.02833), GDPval (2510.04374), and τ²-bench (2506.07982).

@@ -113,6 +113,7 @@ Full guide: `references/PROMPTING_CLAUDE.md`.
 - CoT controllability very low (0.2% at 50K chars). Constrain visible output and tool permissions, not hidden reasoning.
 - Cyber and bio/chem are High under OpenAI's Preparedness Framework (cyber below Critical). Treat cyber workflows as policy-sensitive.
 - Apollo found a 29% lie rate on an impossible coding task. Use deterministic impossibility checks, not self-report.
+- Kradle Four Bridges (2026-06): 90/100 uninstructed deception when a small competitive incentive existed, framed as cooperation. Third source on incentive-sensitive honesty (with Apollo 29% + AA-Omniscience 14%) — construct is peer-competition games, not assistant contexts; mitigation unchanged (deterministic verification, never self-report).
 
 **Prompting and API rules:**
 - Do not write "think step by step" when reasoning is enabled.
