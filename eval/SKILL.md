@@ -76,6 +76,16 @@ If the question is settled (extraction models, SaC routing, retrieval backend, j
 panels...), the answer is the DECISIONS.md row — don't re-run it. New evidence that a
 verdict is stale → re-open via a new run, never by editing the old verdict.
 
+**Also check the external prior art — for the DESIGN, even when the rates are stale.** A 2-minute
+search (Exa/Perplexity for the named bias/benchmark + arXiv) tells you (a) whether a benchmark
+already exists (don't reinvent — `JudgeBiasBench`, the SPB PIR/Null-PIR framework, etc. existed and
+we nearly rebuilt them) and (b) **the controls the field already knows you need**. "Measure the live
+model, papers lag the frontier" (frontier-timeliness rule) licenses re-measuring the *rate* on
+current models — it does NOT license skipping the literature's *method*. Papers lag on rates but
+LEAD on confounds: the controlled design (length-ratio control, truncation control, quality-matched
+neighborhoods) is scale-independent and transfers. Skipping it is how you repeat a confound the field
+solved two years ago (see the verbosity egg in Anti-patterns).
+
 ## Phase 1 — Design (the questions that decide if the eval should exist)
 
 Answer in writing (they become PREREGISTRATION.md fields):
@@ -118,18 +128,21 @@ Answer in writing (they become PREREGISTRATION.md fields):
      ⇒ the swap is immaterial — don't build the full graded eval.** (v2 measured 0.89: through hybrid+rerank
      the two embedders returned ~9 of the same 10 docs. The full eval confirmed HOLD, but the overlap screen
      predicts "switching changes ~1 in 10" in minutes — run it at the §0 gate.)
-   - **Measured frontier judge bias (2026-06-11, not from papers — papers test last-gen models).**
-     Probe the LIVE judges, don't cite studies on GPT-4o-era models. On GPT-5.5 / Gemini-3.5-flash /
-     Opus-4.8 / Fable-5: **position/order bias is SOLVED** (0 position-locks over 66 presentations,
-     incl. ambiguous ties) — stop spending order-swap/position-debias on frontier judges. But
-     **verbosity bias PERSISTS and inverts by lab**: OpenAI + Google judges prefer padded sycophantic
-     filler 8–9/10; Anthropic judges (Opus/Fable) prefer concise 9–10/10. So (a) **length is the live
-     Goodhart vector** for GPT/Gemini judges — normalize length or judge a length-controlled rewrite
-     before ranking; (b) **use a cross-lab judge panel** so the style bias partially cancels and shows
-     as honest low-κ disagreement — a *same-lab* panel agrees confidently on a style-biased ranking
-     (and any Bradley-Terry/Elo SE on it is false precision). Re-run the probe
-     (`evals/bio_embedding_bakeoff/judge_bias_probe.py`) when new judges ship. Refutes tournament-mcp's
-     "all models prefer concise" — wrong in direction on current frontier.
+   - **Frontier judge bias (current, measured + reconciled with prior art).** *Established:*
+     **position/order bias is solved** on frontier judges (our probe: 0 position-locks over 66
+     presentations incl. ambiguous pairs; corroborated by `arXiv:2604.23178` position ≤0.04, "style is
+     the dominant bias"). Stop spending order-swap/position-debias on frontier judges. *Established
+     (use it):* **same-lab judges share a style signature → a same-lab panel is ~1 effective vote and
+     any Bradley-Terry/Elo SE on it is false precision** — use a **cross-lab panel**, read disagreement
+     as signal (`arXiv:2601.05114`: judges self-consistent but disagree — "measuring different
+     things"). Self-preference is real and quality-controllable to measure (`arXiv:2604.22891`
+     PIR-vs-Null-PIR framework, `2604.06996` GPT-5/Claude-4.5). *RETRACTED — cautionary tale:* our n=5
+     probe found GPT/Gemini "prefer padded filler 8–9/10"; a controlled-ratio study (`2604.23178`,
+     n=825, truncation controls) found the **opposite** — frontier judges penalize filler and reward
+     genuine completeness. Our "verbosity bias" was a **length-RATIO artifact** (3–4× padding), not a
+     length preference. **Lesson: see "controlling *a* confound, not *the* confound" in Anti-patterns.**
+     Re-run the probe (`evals/bio_embedding_bakeoff/judge_bias_probe.py`) when judges ship — but with
+     controls (length ratio ≤2×, truncation controls to separate filler from genuine completeness).
 6. **Invariant ambition** — what mechanism-level claim could this eval produce that
    survives a config swap? If only a local verdict is possible, fine — say so up front.
 
@@ -211,3 +224,17 @@ empty. Report gaps as a table; fix all confirmed gaps, not top-N.
   (bio_embedding_bakeoff: 23/48 golds outranked by *relevant* siblings; verdict inconclusive)
 - Trusting aggregate metrics without reading one failure; over-obfuscated riddle-queries that beat
   the keyword baseline but don't match the real query distribution
+- **Controlling *a* confound, not *the* confound** (judge-bias probe, 2026-06-12 — the egg). A
+  manipulation probe must hold ALL-BUT-ONE variable constant between its two conditions. Our "verbose
+  vs concise" answers differed on *two* axes — sycophantic framing AND raw length ratio (3–4×) — so a
+  preference could not be attributed to "verbosity." We checked one confound (reasoning effort, it
+  held) and called it robust; the confound that actually drove it (length ratio) we never isolated. A
+  controlled-ratio study (`arXiv:2604.23178`) with truncation controls found the opposite. **Before
+  claiming "X causes the preference," list everything that differs between your two conditions; if ≥2
+  differ, you cannot attribute the effect. Large effect size at small N is NOT robustness — it can be
+  100% one uncontrolled confound.**
+- **A "quick probe" that becomes a claim must retroactively pass this whole gate.** The moment a
+  throwaway measurement starts feeling publishable / decision-grade, STOP and run it through Phase 0
+  (prior art) + Phase 1 (controls) + `just power` *before* the claim, not after. We ran the embedder
+  eval with full rigor but treated the judge probe as "just measuring" — and it produced a contested
+  result. Rigor is triggered by how the result will be USED, not by what you called the script.
