@@ -28,13 +28,25 @@ BENCHMARKS.md already states. Both already exist in the wild; don't collapse the
 | **Question** | which model/engine/config? settle once | does my pipeline still produce correct output? |
 | **Cadence** | run once, record verdict | run every dev loop / in CI |
 | **Coupling** | low — reads prompts/data, owns no internals | high — tied to repo hooks/schema/pipeline |
-| **Home** | `~/Projects/evals` via `just new-eval` | in-repo (`phenome/eval`, `phenome/tests/evals`, `genomics/benchmarks`) |
+| **Home** | `~/Projects/evals` via `just new-eval` | the repo's own eval home (below) |
 | **Verdict** | DECISIONS.md row + production change | pass/fail gate in the suite |
 
-Examples that already follow this: `evals/extraction_bakeoff` benchmarks phenome's
-*and* intel's extract prompts **from inside evals/** (reaches in for the prompt files);
-phenome's `tests/evals/epistemics/*.yaml` + `hook_mutation.py` and genomics'
-`benchmarks/kg_vs_live.py` + `claim_bench` stay **in-repo** — they gate repo dev.
+**Each repo already has its own eval home — use it; do NOT funnel everything to evals/.**
+The evals repo is specifically for *cross-cutting* model/engine/tooling-selection that spans
+repos or is about generic agent infra. Domain and strategy benchmarks stay home:
+
+| Repo | In-repo eval home | What goes there |
+|---|---|---|
+| **intel** | `~/Projects/intel-harness/` (backtest substrate; `bin/eval_proposed_rule.py`, walk-forward) | strategy/rule/thesis validation — has its own ruler-validity gate (`benchmark_validity()`). **NOT** evals/. |
+| **genomics** | `benchmarks/` + `benchmark_catalog.py` + GIAB baseline + QA-gate AUPRC/AUROC thresholds | variant-calling accuracy, scoring-tool gates, latency |
+| **phenome** | `eval/` (researcher-eval) + `tests/evals/epistemics/*.yaml` + `hook_mutation.py` | search/RAG quality, epistemic behavioral/calibration cases |
+| **any** | `~/Projects/evals` via `just new-eval` | "which extraction model / search engine / retrieval backend" — cross-repo, settle-once |
+
+So: `evals/extraction_bakeoff` benchmarks intel's *and* phenome's extract prompts from inside
+evals/ (cross-cutting model choice), but an intel strategy backtest goes to intel-harness and a
+genomics variant-accuracy check stays in `genomics/benchmarks`. The `/eval` **discipline**
+(pre-registration, power, blind judges, invariant-claim split) applies in all of these homes
+regardless of location.
 
 **Tooling — NO symlinks for code.** The house pattern for shared Python is a package
 in `substrate/packages/<pkg>` consumed via `path = "../substrate/packages/<pkg>",
