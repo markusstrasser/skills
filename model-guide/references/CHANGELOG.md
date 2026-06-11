@@ -1,5 +1,24 @@
 # Model Guide Changelog
 
+## 2026-06-11 - Add AA independent benchmark section with construct annotations
+
+First independent (Artificial Analysis) measurement of the Fable 5 / Opus 4.8 / GPT-5.5 scope, added to BENCHMARKS.md with per-instrument construct cautions derived from full-paper reads of AA-Omniscience (arXiv:2511.13029), IFBench (2507.02833), GDPval (2510.04374), and τ²-bench (2506.07982).
+
+### Added
+- BENCHMARKS.md "Independent Measurement" section: per-eval table + calibration trust table (non-hallucination: Fable 45 / Opus 64 / GPT-5.5 14, measured despite an explicit abstention prompt).
+- Quantified hallucination priors in the SKILL.md validation checklists (Fable, Opus, GPT-5.5).
+- Quick Selection Matrix row for letter-exact output constraints: schema/validator enforcement first; Claude family measurably weakest at prose-mode mechanical compliance (IFBench, with construct caveat — majority adversarial-synthetic constraints that trade against answer quality).
+- Independent confirmation line under Fable system-card insights (honesty regression vs Opus now two-source: system card + AA-Omniscience).
+
+### Changed
+- τ²-Telecom routing read retired (saturated at the user-simulator ~6% noise floor; Fable 99 ≥ GPT-5.5 94); negative screen only.
+- GDPval-AA row annotated: single Gemini 3.1 Pro blind-pairwise judge; original human–human agreement 71%; small Elo gaps are judge noise.
+- CritPt: AA independently measures GPT-5.5 Pro at 31 (#1), contradicting the vendor-sourced 17.7.
+
+### Sources checked
+- artificialanalysis.ai leaderboard (2026-06-11 snapshot, spot-checked live) + intelligence-benchmarking methodology page.
+- Full-paper reads via research-mcp; analysis memo: `agent-infra/research/2026-06-11-aa-benchmark-instrument-validity.md`.
+
 ## 2026-06-09 - Add Claude Fable 5 as primary frontier Claude; Opus 4.8 becomes the fallback
 
 Fable 5 / Mythos 5 launched 2026-06-09. Restructured the Claude side of the guide around the new routing pair.

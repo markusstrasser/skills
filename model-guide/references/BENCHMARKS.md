@@ -13,19 +13,19 @@ Older GPT/Gemini/Grok/Sonnet routing rows were removed from the active benchmark
 | SWE-bench Pro | **80** | 69.2 | 58.6 | - | Fable leads the harder public SWE benchmark by ~11 over Opus (Mythos 80.3). |
 | Terminal-Bench 2.1 | **84.3** | 74.6 | 82.7 (2.0) | - | Fable leads; GPT-5.5's Codex-CLI harness is 83.4. Mythos 88.0. |
 | FrontierCode (Diamond) | **29.3** | 13.4 | 5.7 | - | Fable more than doubles Opus on Cognition's merge-quality bench. |
-| GDPval-AA (Elo) | **1932** | 1890 | 1769 | - | Fable leads professional-work Elo. |
+| GDPval-AA (Elo) | **1932** | 1890 | 1769 | - | Fable leads professional-work Elo. Construct: single Gemini 3.1 Pro blind-pairwise judge (see AA section below) — the ~160 gap to GPT-5.5 is real; the 42 Fable-Opus gap is within judge noise. |
 | OSWorld-Verified | **85.0** | 83.4 | 78.7 | - | Fable ties Mythos (85.0); vision-SOTA with native bash+crop. |
 | BrowseComp | - | 84.3 single / 88.5 multi | 84.4 | **90.1** | Mythos multi-agent 93.3; Pro strong on hard search. |
 | HLE no tools | 59.0 (Mythos) | 49.8 | 41.4 | 43.1 | Fable n/p; Mythos 59.0 leads unaided expert reasoning. |
 | HLE with tools | 64.5 (Mythos) | 57.9 | 52.2 | 57.2 | Mythos Preview 64.7 still top; Opus for the Claude-side number. |
 | CharXiv Reasoning (w/tools) | 93.5 (Mythos) | 89.9 | - | - | Fable-class vision reasoning. |
 | ArxivMath | 78.5 (Mythos) | 71.8 | 71.5 | 64.8 | Mythos 78.5 leads. |
-| CritPt | 28.6 (Mythos) | 20.9 | 27.1 | 17.7 | Mythos 28.6 leads physics reasoning. |
+| CritPt | 28.6 (Mythos) | 20.9 | 27.1 | 17.7 | Vendor-sourced Pro 17.7 is contradicted by AA's independent run (Pro **31, #1**; see AA section) — Pro stays the pick for hardest physics/quant. |
 | FrontierMath Tier 4 | - | - | 35.4 | **39.6** | Pro for hard quantitative work. |
 | GPQA Diamond | - | 93.6 | 93.6 | - | Use tools/source reading for real science work. |
 | MCP-Atlas | - | **82.2** | 75.3 | - | Opus for MCP-heavy tool use. |
 | AutomationBench | **17.4** (Fable) | 15.5 | 12.9 | - | Fable for long-horizon automation. |
-| Tau2-bench Telecom | - | - | **98.0** | - | GPT-5.5 for customer-service style tool workflows. |
+| Tau2-bench Telecom | - | - | **98.0** | - | Stale routing read — AA measures Fable 99 / Opus 94 / GPT-5.5 94: saturated at the benchmark's noise floor; negative screen only (see AA section). |
 | MRCR v2 8-needle 512K-1M | - | 32.2 (4.7/4.6) | **74.0** | - | GPT-5.5 for OpenAI-reported long-context retrieval. |
 | ARC-AGI-2 verified | - | - | **85.0** | - | GPT-5.5 for OpenAI-reported abstract reasoning. |
 
@@ -35,6 +35,29 @@ Older GPT/Gemini/Grok/Sonnet routing rows were removed from the active benchmark
 - OpenAI notes GPT evals on the announcement page were run at reasoning effort `xhigh` in a research environment; production may differ.
 - GPT-5.5 Pro is the same underlying model using parallel test-time compute, with separate evals where extra compute may change risks or safeguards.
 - Do not compare Terminal-Bench versions (2.0 vs 2.1) without noting harness differences.
+
+## Independent Measurement — Artificial Analysis (2026-06-11)
+
+First independent, same-harness, cross-lab measurement of the active scope (everything above is vendor-reported). Configs: Fable 5 is measured as "(with fallback)" — the GA system including Opus 4.8 answering classifier-refused items; Claude models at max effort, GPT-5.5 at xhigh. Instrument constructs verified by full-paper reads: `agent-infra/research/2026-06-11-aa-benchmark-instrument-validity.md`.
+
+| Evaluation | Fable 5 | Opus 4.8 | GPT-5.5 | What the instrument measures (construct caution) |
+|---|---:|---:|---:|---|
+| AA Intelligence Index v4 | **64.9** | 61.4 | 60.2 | Composite; heaviest component (GDPval-AA, 16.7%) is an LLM-preference Elo. Screen, not verifier — route on per-eval rows. |
+| GDPval-AA win Elo | **1932** | 1890 | 1769 | One-shot, fully-specified knowledge-work deliverables in AA's generic Stirrup harness, judged by a single Gemini 3.1 Pro blind-pairwise (Bradley-Terry). Original GDPval human–human grader agreement is only 71%, so the construct is taste-adjacent even before the LLM judge. Cross-lab judge for the Claude result (it ranks its own family 18th). |
+| Terminal-Bench Hard | **63** | 58 | 61 | 44 hard tasks in a generic Terminus-2 scaffold — model capability, not product-harness performance (see Coding Agent Index row). |
+| τ²-Bench Telecom | 99 | 94 | 94 | Dual-control (the user holds device tools; agent diagnoses + instructs) with deterministic state-assertion verification — good construct, but the 94–99 frontier band sits at the user-simulator's ~6% critical-error noise floor. Saturated; only low scores carry signal (Sonnet 4.6: 76, Haiku 4.5: 55 = real dual-control discipline gaps). |
+| AA-LCR (long context) | 70 | 68 | **74** | 100 questions over ~100K-token document sets. 68–74 is a parity band; independently backs the GPT-5.5 long-context row above. |
+| AA-Omniscience accuracy | **61** | 47 | 57 | Closed-book recall of expert-hard long-tail facts. Questions are GPT-5-generated — wording bias, if any, favors GPT, so Fable's lead is conservative. |
+| AA-Omniscience non-hallucination | 45 | **64** | 14 | Of not-fully-correct answers, the share that were abstentions rather than confident fabrications — measured DESPITE an explicit "better to say you don't know" instruction. Rankings transfer; absolute rates are long-tail-specific. |
+| IFBench | 63 | 62 | 76 | Generalization to unseen, majority adversarial-synthetic output constraints (every-Nth-word-Japanese, prime-length-words). Tracks RLVR constraint-training, which measurably trades against answer quality (7.0→6.4 judge score in the IFBench paper). NOT operational instruction-following; enforce formats architecturally regardless of model. |
+| Humanity's Last Exam | **53** | 46 | 44 | AA's no-tools run; fills the Fable gap the vendor left (card published Mythos-only 59). |
+| SciCode | **60** | 53 | 56 | Research-paper-derived scientific coding subproblems. |
+| CritPt | 29 | 21 | 27 | GPT-5.5 Pro: **31 (#1)** — contradicts the vendor 17.7 above; independent backing for Pro on hardest physics/quant derivation. |
+| Coding Agent Index | n/a | **77** (Claude Code, max) | 65 (Codex, xhigh) | The only public harness×model benchmark. Same-model swings across harnesses are large (Gemini 3.1 Pro: 54 on TB-Hard standalone, dead-last in Gemini CLI) — the harness dominates. Fable 5 not yet listed. |
+
+**Trust ordering inverts capability ordering.** Fable 5 is #1 on knowledge accuracy and #13 on calibration (45% non-hallucination); GPT-5.5 is #3/#19 (14%). Of commonly-routed models: Haiku 4.5 74%, Opus 4.8 64%, Sonnet 4.6 54%, Gemini 3.1 Pro 50%, Gemini 3.5 Flash 39%, GPT-5.4 mini 10%, DeepSeek V4 4–6% (negative Omniscience Index — more wrong than right when answering; never use for unsourced facts). This quantifies the cosign-to-primary policy: a wrong unsourced factual specific from GPT-5.5 is ~6× more likely to be a confident fabrication than an admitted unknown.
+
+Provenance: artificialanalysis.ai leaderboard snapshot 2026-06-11, spot-checked against the live site (Fable OI 40 / acc 61%, Opus OI 27, GPT-5.5 acc 57% — match); Omniscience columns internally validated (accuracy − confabulated share reproduces the published index ±1). Instruments: arXiv:2511.13029 (AA-Omniscience), arXiv:2507.02833 (IFBench), arXiv:2510.04374 (GDPval), arXiv:2506.07982 (τ²-bench).
 
 ## Specs And Pricing
 

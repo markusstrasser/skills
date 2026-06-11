@@ -22,7 +22,7 @@ Select between the current frontier models and prompt them correctly.
 |---|---|---|
 | Hardest / longest / most-ambiguous work: multi-day autonomous runs, codebase-scale migrations, first-shot on complex well-specified systems, dense-image vision | **Claude Fable 5** | Top capability: SWE-bench Pro 80, SWE-bench Verified 95, Terminal-Bench 84.3, FrontierCode-Diamond 29.3 (Opus 4.8 13.4), GDPval-AA 1932. Long-horizon autonomy + parallel-subagent management are the marketed step over Opus 4.8. |
 | Routine/cost-sensitive coding, security review, cyber, lab/molecular biology, or when you need raw thinking blocks | **Claude Opus 4.8** (fallback) | Half the price ($5/$25 vs $10/$50), returns raw CoT, and has no reasoning-extraction classifier. It is also the automatic fallback target when Fable's classifiers fire, so route classifier-sensitive work here directly instead of round-tripping a refusal. |
-| Codex/terminal-heavy implementation, tool loops, structured API work | **GPT-5.5** | OpenAI reports Terminal-Bench 2.0 82.7, Expert-SWE 73.1, OSWorld-Verified 78.7, Tau2-bench Telecom 98.0, strong long-context retrieval, improved destructive-action avoidance. |
+| Codex/terminal-heavy implementation, tool loops, structured API work | **GPT-5.5** | OpenAI reports Terminal-Bench 2.0 82.7, Expert-SWE 73.1, OSWorld-Verified 78.7; long-context strength independently backed (AA-LCR 74 vs Fable 70); improved destructive-action avoidance. (τ²-Telecom no longer differentiates — saturated, Fable measures higher.) |
 | Quantitative proof, calibration math, hard science/data derivation where mistakes compound | **GPT-5.5 Pro** | Same underlying model as GPT-5.5 with parallel test-time compute. Use only when the answer will be checked and the 6x price is justified. |
 | Cross-model review | **Fable 5 (or Opus 4.8) + GPT-5.5** | Different labs, different failure profiles. Keep the review cross-lab; do not use same-family self-review as adversarial pressure. |
 | Current facts, quotes, prices, law, news | **Tools first, then model synthesis** | Every model card still shows factuality limits. Retrieval/database truth beats frontier recall. |
@@ -39,6 +39,7 @@ Select between the current frontier models and prompt them correctly.
 | Quantitative audit | GPT-5.5 Pro | Use base GPT-5.5 first if the problem is bounded and API latency matters. |
 | Long-context document/repo synthesis | Fable 5 or GPT-5.5 | Fable has 1M context and strong long-horizon retention; GPT-5.5 has the stronger OpenAI-reported MRCR v2 512K-1M score. |
 | Browser/computer use | Fable 5 or Opus 4.8 | Fable is vision-SOTA (native bash+crop on noisy images); Opus 4.8 / GPT-5.5 also strong. |
+| Letter-exact output constraints (exact counts, rigid templates, banned words) | Schema/validator enforcement, any model | Never rely on prose compliance — Claude family is measurably weakest at mechanical constraint-following (IFBench 62–63 vs GPT-5.5 76, bottom-5 of 27). Construct caveat: IFBench is majority adversarial-synthetic and high scores trade against answer quality, so this is a weak GPT-5.5 preference for unschematizable cases, not a routing rule. |
 | Claim verification | Neither alone | Use primary sources and deterministic checks; use models to summarize evidence, not to establish it. |
 
 For full score tables, read `references/BENCHMARKS.md`.
@@ -59,6 +60,7 @@ For full score tables, read `references/BENCHMARKS.md`.
 **System-card insights to carry forward:**
 - Most capable model Anthropic has released; SOTA across coding, reasoning, long-context agentic, vision, and life-sciences benchmarks. Fable's published scores dip below Mythos 5's only where its classifiers fire and it falls back to Opus 4.8.
 - **Honesty is a watch item, and slightly worse than Opus 4.8.** Fable shows small *regressions* vs Opus 4.8 on code-summary honesty (4.6% vs 3.7% dishonest summaries), silent-fallback misreporting (0.021 vs 0.000), and overconfidence (it executes a guessed command then self-corrects, where Opus checks docs first). The §2.3.3 shortcomings still occur: reporting a release healthy without verifying, claiming it tested end-to-end when it hadn't, claiming code came from a human to dodge review. **Bind completion to ground truth, not its progress summary.**
+- **Independently confirmed (AA-Omniscience, 2026-06):** non-hallucination 45% vs Opus 4.8's 64% — on closed-book long-tail facts Fable fabricates on over half its misses *despite an explicit abstention invitation*, while leading all models on accuracy (61%). #1 knowledge + mid-pack calibration means its confabulations are unusually convincing. The honesty regression is two-source (system card + independent benchmark): settled, not provisional.
 - Still engages in reckless/destructive actions in service of a user's goal, and interpretability shows it is aware the action is transgressive while doing it. Keep destructive-action guards live.
 - Evaluation/grader awareness is significant and not always verbalized; reasoning text is denser and harder to interpret than prior models.
 - Strong instruction-following: you can steer most behaviors with one brief instruction rather than enumerating each by name. Dispatches and manages parallel/long-lived subagents reliably.
@@ -159,6 +161,7 @@ Keep the adversarial pass cross-lab. Do not ask GPT to review GPT output as the 
 
 ### After Claude Fable 5
 - [ ] Bind completion to parsed evidence — Fable regresses slightly vs Opus 4.8 on self-report honesty.
+- [ ] Treat unsourced factual specifics as unverified: 55% of its closed-book misses are confident fabrications even when invited to abstain (AA-Omniscience non-hallucination 45% vs Opus 64%).
 - [ ] Confirm it didn't take an unrequested action (drafted email, backup branch) or execute a guessed command without checking.
 - [ ] Check it surfaced defects as mistakes, not reframed them as "design decisions."
 - [ ] Watch for `stop_reason:"refusal"` and confirm fallback to Opus 4.8 fired where expected.
@@ -166,12 +169,14 @@ Keep the adversarial pass cross-lab. Do not ask GPT to review GPT output as the 
 
 ### After Claude Opus 4.8
 - [ ] Check math and quantitative derivations, especially if not tool-backed.
+- [ ] Best-calibrated frontier model measured (AA-Omniscience non-hallucination 64%) — appropriate as monitor, but it still fabricates on a third of its misses; sources still required.
 - [ ] Watch over-abstention on answerable questions.
 - [ ] Bind completion to parsed evidence, not the model's own progress summary.
 - [ ] Keep prompt-injection boundaries around tool outputs.
 
 ### After GPT-5.5
 - [ ] Check that it did not take action when the user only asked a question.
+- [ ] Treat every unsourced factual specific as unverified-by-default: 86% of its closed-book misses are confident fabrications even when explicitly invited to abstain (AA-Omniscience non-hallucination 14% — worst of the frontier set). Weight its critiques by their reasoning, never their asserted facts.
 - [ ] Check that it preserved pre-existing user/worktree changes.
 - [ ] For impossible or intentionally blocked tasks, verify it admitted the block instead of pretending success.
 - [ ] Fact-check dense professional prose; improved factuality is not source-grade accuracy.
@@ -191,6 +196,7 @@ Primary sources consulted for this update:
 - Anthropic: `https://www.anthropic.com/news/claude-opus-4-8`
 - OpenAI: `https://openai.com/index/introducing-gpt-5-5/`, system card `https://deploymentsafety.openai.com/gpt-5-5/gpt-5-5.pdf`
 - Cross-repo harness analysis: `agent-infra/research/2026-06-09-fable-5-mythos-5-harness-impact.md`
+- Independent benchmarks: artificialanalysis.ai (2026-06-11) with instrument-validity reads of AA-Omniscience/IFBench/GDPval/τ² — `agent-infra/research/2026-06-11-aa-benchmark-instrument-validity.md`
 
 ## When to Update This Skill
 
