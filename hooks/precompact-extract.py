@@ -290,6 +290,18 @@ def main():
     checkpoint_dir = os.path.join(cwd, ".claude")
     os.makedirs(checkpoint_dir, exist_ok=True)
     checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.md")
+    # CLOBBER GUARD (hutter 2026-06-11: autogen overwrote a CURATED checkpoint twice in one
+    # day — both times a session had to git-restore it). If checkpoint.md is git-TRACKED,
+    # it is a curated handoff doc owned by the project: write the autogen NEXT TO it instead
+    # of over it. Untracked checkpoint.md keeps the original overwrite behavior.
+    try:
+        tracked = subprocess.run(
+            ["git", "-C", cwd, "ls-files", "--error-unmatch", ".claude/checkpoint.md"],
+            capture_output=True, timeout=5).returncode == 0
+    except Exception:
+        tracked = False
+    if tracked:
+        checkpoint_path = os.path.join(checkpoint_dir, "checkpoint-autogen.md")
 
     ts = datetime.now().strftime("%Y-%m-%d %H:%M")
     has_epistemic = any(buckets.values()) or user_corrections or last_substantial_block
