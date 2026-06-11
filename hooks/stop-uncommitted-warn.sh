@@ -91,7 +91,12 @@ try:
     dirs = sorted(set(f.split("/")[0] if "/" in f else "." for f in new_changes))
     scope = dirs[0] if len(dirs) == 1 else "multi"
     n = len(new_changes)
-    msg = f"[{scope}] Auto-commit {n} file{\"s\" if n != 1 else \"\"} at session end"
+    # NB: this whole program lives in a bash single-quoted string — no single
+    # quotes allowed, and backslash-escaped quotes inside f-string expressions
+    # are a SyntaxError (this exact idiom kept the hook silently dead until
+    # 2026-06-11; the fail-open trap + 2>/dev/null hid it). Precompute plurals.
+    plural = "s" if n != 1 else ""
+    msg = f"[{scope}] Auto-commit {n} file{plural} at session end"
     body_lines = new_changes[:10]
     if len(new_changes) > 10:
         body_lines.append(f"... and {len(new_changes) - 10} more")
@@ -103,11 +108,15 @@ try:
         cwd=cwd, capture_output=True, text=True, timeout=15
     )
     if result.returncode == 0:
-        # Auto-commit succeeded — allow stop
+        # Auto-commit succeeded. decision:"allow" + top-level additionalContext
+        # was never a valid Stop shape — the FYI was silently dropped. The nested
+        # hookSpecificOutput channel (>=2.1.163) actually reaches the agent.
         pre_msg = f" ({pre_existing} pre-existing excluded)" if pre_existing else ""
         output = {
-            "decision": "allow",
-            "additionalContext": f"Auto-committed {n} session file{\"s\" if n != 1 else \"\"}{pre_msg}.",
+            "hookSpecificOutput": {
+                "hookEventName": "Stop",
+                "additionalContext": f"Auto-committed {n} session file{plural}{pre_msg}. No action needed unless the commit grouping is wrong.",
+            },
         }
         print(json.dumps(output))
         sys.exit(0)
@@ -122,8 +131,9 @@ except Exception:
 
 changes = "\n".join(new_changes)
 n = len(new_changes)
+plural = "s" if n != 1 else ""
 pre_msg = f" ({pre_existing} pre-existing excluded)" if pre_existing else ""
-prompt = f"""AUTO-COMMIT FAILED — {n} uncommitted file{"s" if n != 1 else ""}{pre_msg}:
+prompt = f"""AUTO-COMMIT FAILED — {n} uncommitted file{plural}{pre_msg}:
 {changes[:500]}
 
 Commit these changes with granular semantic commits before stopping.
