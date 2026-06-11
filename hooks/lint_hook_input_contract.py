@@ -50,6 +50,16 @@ STDIN_READ = re.compile(r'=\s*\$\(cat\)|json\.load\(sys\.stdin\)|sys\.stdin\.rea
 # python top-level extraction: .get('command'...) NOT chained off tool_input
 PY_TOPLEVEL = re.compile(
     r"""(?<!tool_input)(?<!tool_input\}\)) *\.get\(\s*['"](%s)['"]""" % "|".join(FIELDS))
+
+# Embedded `python3 -c '<program>'` blocks in shell hooks. A SyntaxError here
+# is a SILENTLY dead hook: the standard wrapper (trap exit-0 + 2>/dev/null)
+# swallows the crash and the hook no-ops forever. Found live 2026-06-11:
+# stop-uncommitted-warn's auto-commit never ran once — {\"s\" if ...} backslash
+# escapes inside f-string expressions are invalid in every Python version.
+# The word may be spliced: 'A'\''B' means A'B — match the full splice chain,
+# then collapse '\'' back to a literal quote before compiling.
+EMBEDDED_PY = re.compile(r"python3?\s+-c\s+'([^']*(?:'\\''[^']*)*)'")
+SPLICE = "'\\''"
 # jq top-level: .command / .file_path (not .tool_input.command)
 JQ_TOPLEVEL = re.compile(r"""jq[^\n]*['"][^'"]*(?<!tool_input)\.(%s)\b""" % "|".join(FIELDS))
 
@@ -120,6 +130,21 @@ def lint_code(name: str, src: str) -> list[str]:
             viol.append(
                 f"reads .{field} but never references tool_input — field lives under "
                 f".tool_input.{field} (Claude stdin is the full envelope)")
+
+    # Compile embedded python -c blocks (raw src — comment-stripping would
+    # mangle python strings). Multi-line blocks only: one-liners with a
+    # syntax-looking error are usually '\'' quote-splicing artifacts.
+    if not name.endswith(".py"):
+        for m in EMBEDDED_PY.finditer(src):
+            prog = m.group(1).replace(SPLICE, "'")
+            if prog.count("\n") < 2:
+                continue
+            try:
+                compile(prog, name, "exec")
+            except SyntaxError as e:
+                viol.append(
+                    f"embedded python -c block is a SyntaxError (line {e.lineno}: "
+                    f"{e.msg}) — hook is silently dead under fail-open")
     return viol
 
 
