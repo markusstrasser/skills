@@ -74,6 +74,49 @@ except (OSError, FileNotFoundError):
     pass  # No baseline = warn about everything
 
 new_changes = [f for f in all_changes if f not in baseline_files]
+
+# Multi-agent attribution: a sibling agent editing a file mid-session makes it
+# dirty AFTER this baseline, so the delta above wrongly claims it. Drop files a
+# DIFFERENT session ledger owns that this one does not — the same per-session
+# Edit/Write ledger commit-mine reads (.claude/sessions/<id>.touched-files).
+# Sibling edits stay with them; files this session itself edited, and its
+# unclaimed subprocess outputs (a regenerated golden lives in no ledger), are
+# kept. No session id or no sessions dir falls back to current behavior.
+if session_id:
+    my_touched = set()
+    other_touched = set()
+    sessions_dir = os.path.join(cwd, ".claude", "sessions")
+    try:
+        ledger_entries = os.listdir(sessions_dir)
+    except OSError:
+        ledger_entries = []
+    for entry in ledger_entries:
+        if not entry.endswith(".touched-files"):
+            continue
+        owner_sid = entry[: -len(".touched-files")]
+        owned = set()
+        try:
+            with open(os.path.join(sessions_dir, entry)) as fh:
+                for raw_line in fh:
+                    rel = raw_line.strip()
+                    if not rel:
+                        continue
+                    if os.path.isabs(rel):
+                        try:
+                            rel = os.path.relpath(rel, cwd)
+                        except ValueError:
+                            continue
+                    owned.add(rel)
+        except OSError:
+            continue
+        if owner_sid == session_id:
+            my_touched |= owned
+        else:
+            other_touched |= owned
+    foreign = other_touched - my_touched
+    if foreign:
+        new_changes = [f for f in new_changes if f not in foreign]
+
 pre_existing = len(all_changes) - len(new_changes)
 
 if not new_changes:
@@ -111,7 +154,7 @@ try:
         # Auto-commit succeeded. decision:"allow" + top-level additionalContext
         # was never a valid Stop shape — the FYI was silently dropped. The nested
         # hookSpecificOutput channel (>=2.1.163) actually reaches the agent.
-        pre_msg = f" ({pre_existing} pre-existing excluded)" if pre_existing else ""
+        pre_msg = f" ({pre_existing} pre-existing/other-session excluded)" if pre_existing else ""
         output = {
             "hookSpecificOutput": {
                 "hookEventName": "Stop",
