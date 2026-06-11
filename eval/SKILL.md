@@ -118,6 +118,18 @@ Answer in writing (they become PREREGISTRATION.md fields):
      ⇒ the swap is immaterial — don't build the full graded eval.** (v2 measured 0.89: through hybrid+rerank
      the two embedders returned ~9 of the same 10 docs. The full eval confirmed HOLD, but the overlap screen
      predicts "switching changes ~1 in 10" in minutes — run it at the §0 gate.)
+   - **Measured frontier judge bias (2026-06-11, not from papers — papers test last-gen models).**
+     Probe the LIVE judges, don't cite studies on GPT-4o-era models. On GPT-5.5 / Gemini-3.5-flash /
+     Opus-4.8 / Fable-5: **position/order bias is SOLVED** (0 position-locks over 66 presentations,
+     incl. ambiguous ties) — stop spending order-swap/position-debias on frontier judges. But
+     **verbosity bias PERSISTS and inverts by lab**: OpenAI + Google judges prefer padded sycophantic
+     filler 8–9/10; Anthropic judges (Opus/Fable) prefer concise 9–10/10. So (a) **length is the live
+     Goodhart vector** for GPT/Gemini judges — normalize length or judge a length-controlled rewrite
+     before ranking; (b) **use a cross-lab judge panel** so the style bias partially cancels and shows
+     as honest low-κ disagreement — a *same-lab* panel agrees confidently on a style-biased ranking
+     (and any Bradley-Terry/Elo SE on it is false precision). Re-run the probe
+     (`evals/bio_embedding_bakeoff/judge_bias_probe.py`) when new judges ship. Refutes tournament-mcp's
+     "all models prefer concise" — wrong in direction on current frontier.
 6. **Invariant ambition** — what mechanism-level claim could this eval produce that
    survives a config swap? If only a local verdict is possible, fine — say so up front.
 
