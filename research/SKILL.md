@@ -25,7 +25,7 @@ Research with the rigor of an investigative journalist, not a search engine. Eve
 **Session awareness:** `!cat ~/.claude/active-agents.json 2>/dev/null | python3 -c "import sys,json,time; entries=json.load(sys.stdin); active=[e for e in entries if time.time()-e.get('started_at',0)<7200]; print(f'{len(active)} active sessions') if len(active)>=3 else None" 2>/dev/null`
 If 3+ sessions active: keep questions shorter, batch ambiguous items.
 
-**Companion skills:** `epistemics` for bio/medical/scientific claims. `source-grading` for investigation/OSINT (Admiralty grades).
+**Companion skills:** `epistemics` for bio/medical/scientific claims. `source-grading` for investigation/OSINT (Admiralty grades). `eval` when findings imply a model/engine/config/quality *comparison* should be measured — research surfaces the question and the methodology literature; `/eval` designs the benchmark (pre-registration, power, blind judges). Hand off; don't run the benchmark inside a research session.
 **Project routing:** Check `.claude/rules/research-depth.md` if it exists.
 **Domain gotchas:** Read `${CLAUDE_SKILL_DIR}/DOMAINS.md` when the domain applies.
 **No arguments?** If invoked without a question, check `schemas/open_questions.md` or `.claude/rules/research-depth.md` for open research items, or ask the user.
