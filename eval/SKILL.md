@@ -86,10 +86,20 @@ Answer in writing (they become PREREGISTRATION.md fields):
 3. **Verifier regime** — deterministic ground truth (substring, recall@k, exact answer)
    or judged? Deterministic PRIMARY decides; judges corroborate. A model-as-judge proxy
    does not make taste work verifiable (constitution: bad eval is worse than none).
+   *For retrieval/ranking:* is there exactly ONE relevant item per query, or can the corpus
+   hold co-relevant siblings? One-gold recall@k is valid only in the former; topically-dense
+   corpora need graded multi-doc relevance, or recall@k scores label noise (see Phase 3).
 4. **Criterion over pipeline** — rubric/criterion design explains ~9× more judge-reliability
    variance than scoring architecture. Spend the hour on the rubric, not on a fancier panel.
 5. **Contamination plan** — per-item provenance: `authored-fresh | post-cutoff |
-   public-lifted`. Public items contaminate candidates AND judge memory.
+   public-lifted`. Public items contaminate candidates AND judge memory. `authored-fresh`
+   means the *exact text* is novel — NOT that the topic is; general-science/medical content is
+   in every model's training data even when your composition isn't, so don't over-claim
+   contamination-freeness. *If cases/queries are LLM-generated:* the generator is a hidden
+   variable — a generator from a candidate's model family inflates that candidate (its paraphrase
+   distribution aligns with the sibling's representation space). Use ≥2 neutral-family generators,
+   temp 0, persisted fixtures; report a generator effect. (Evidence: bio_embedding_bakeoff —
+   gemini-flash queries gave the gemini embedder pooled P=0.97; neutral GPT queries → a tie.)
 6. **Invariant ambition** — what mechanism-level claim could this eval produce that
    survives a config swap? If only a local verdict is possible, fine — say so up front.
 
@@ -109,6 +119,25 @@ detection 68%→9% at scale).
 `uv run python3 <slug>/run.py --probe` on ≤10 items. Required: a trivial-pass baseline
 score AND one case that separates candidates. Both flat → fix cases, not N. (Evidence:
 File-Search-vs-emb "parity" was title-matching softballs; discriminating rerun: 8/10 vs 4/10.)
+
+**The probe is NECESSARY, NOT SUFFICIENT — eyeball misses + check gold validity.** A low
+trivial-baseline rules out lexical leakage; it does not rule out label noise or
+over-obfuscation. Before trusting ANY recall/nDCG/accuracy number:
+- **Eyeball ≥10 actual misses** — read the query, the gold, and *what scored above the gold*.
+  If the higher-ranked items are plausibly co-relevant/correct, your label is wrong: you are
+  scoring **label noise as model failure** (and can penalize the BETTER system, which clusters
+  co-relevant items). Cheapest validity check there is; the most-skipped. Watching aggregate
+  ranks is NOT this — look at *what beat the gold*.
+- **Single-gold → graded relevance on topically-dense corpora.** One-gold recall@k is valid only
+  if exactly one item is relevant per query. If the corpus has sibling/overlapping items
+  (multiple docs on a topic, near-dupes), collect a relevance *set* (LLM-judge the top-k union +
+  human spot-check), score graded nDCG/MAP. A verdict that flips across analyst choices
+  (generator, pool, window) is the tell that label noise ≫ signal.
+- **Don't over-obfuscate to beat the baseline.** Aggressive keyword-stripping can push queries
+  into unrealistic riddles that test abstraction, not retrieval — match the real query distribution.
+(Evidence: bio_embedding_bakeoff 2026-06-11 — kw-baseline 0/12 looked rigorous, but **23/48
+queries had the gold outranked by co-relevant sibling memos**; the single-gold recall@5 verdict
+was *inconclusive*, surfaced only by eyeballing misses post-hoc — `audit_label_noise.py`.)
 
 ## Phase 4 — Run + stats (evalcore does the discipline)
 
@@ -134,9 +163,10 @@ File-Search-vs-emb "parity" was title-matching softballs; discriminating rerun: 
 
 Given an existing eval dir: check each phase artifact exists and bites — prereg committed
 before results (`git log --follow`), power declaration matches N, probe evidence present,
-judge payloads blind (grep for candidate names in judge prompts/payload builders),
-per-stratum tables, DECISIONS.md row, §6b filled or explicitly empty. Report gaps as a
-table; fix all confirmed gaps, not top-N.
+**misses eyeballed** (what outranks the gold, not just aggregate ranks) + **single-gold
+validity** on dense corpora, judge payloads blind (grep for candidate names in judge
+prompts/payload builders), per-stratum tables, DECISIONS.md row, §6b filled or explicitly
+empty. Report gaps as a table; fix all confirmed gaps, not top-N.
 
 ## Anti-patterns (each one vetoed or observed here)
 
@@ -147,3 +177,7 @@ table; fix all confirmed gaps, not top-N.
 - N chosen by vibes — run `just power` and declare the regime
 - Eval with no consumer; verdict that never reaches DECISIONS.md or production
 - LLM re-audit of gold labels; editing a prereg decision rule after results exist
+- Single-gold recall@k on a corpus with co-relevant siblings — scores label noise as model skill
+  (bio_embedding_bakeoff: 23/48 golds outranked by *relevant* siblings; verdict inconclusive)
+- Trusting aggregate metrics without reading one failure; over-obfuscated riddle-queries that beat
+  the keyword baseline but don't match the real query distribution
