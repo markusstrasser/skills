@@ -68,7 +68,9 @@ if [ -n "$MISSING" ]; then
     COUNT=$(echo -e "$MISSING" | grep -c '\S' || true)
     MSG="Knowledge index missing on $COUNT file(s):$MISSING\nConsider adding knowledge-index annotations before committing."
     ESCAPED=$(echo -e "$MSG" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))' 2>/dev/null)
-    echo "{\"additionalContext\": ${ESCAPED}}"
+    # Nested shape required: top-level additionalContext is ignored on Stop
+    # (it never reached the agent until 2.1.163's hookSpecificOutput channel).
+    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"Stop\", \"additionalContext\": ${ESCAPED}}}"
 fi
 
 # Always allow stop (advisory, not blocking — amendment A1)

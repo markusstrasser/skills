@@ -245,9 +245,22 @@ if missing:
     print('[TRAINING-DATA], [PREPRINT], [FRONTIER], [UNVERIFIED], or Admiralty [A1]-[F6].', file=sys.stderr)
     sys.exit(2)
 
-# Soft reminder: files have tags, but check quality
-print('Research files have source tags. CHECKLIST: (1) Did you fetch primary sources '
-      'or only use training data? (2) Did you search for contradictory evidence? '
-      '(3) Are all claims source-graded?', file=sys.stderr)
+# Soft reminder: files have tags, but check quality. Delivered as
+# hookSpecificOutput.additionalContext (>=2.1.163) so the AGENT sees it —
+# stderr on exit 0 never reached the agent (the checklist was theater).
+# additionalContext continues the turn, so emit ONCE per session: a per-stop
+# checklist would tax every research-session stop with an extra turn.
+marker = f'/tmp/research-checklist-shown-{session_id}.txt' if session_id else ''
+if marker and not os.path.exists(marker):
+    try:
+        open(marker, 'w').close()
+    except OSError:
+        pass
+    print(json.dumps({'hookSpecificOutput': {'hookEventName': 'Stop', 'additionalContext':
+        'Research files modified this session (source tags present). Self-check before finishing: '
+        '(1) Did you fetch primary sources or only use training data? '
+        '(2) Did you search for contradictory evidence? '
+        '(3) Are all claims source-graded? '
+        'If all three hold, no action needed.'}}))
 sys.exit(0)
 "
