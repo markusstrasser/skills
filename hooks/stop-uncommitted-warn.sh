@@ -139,12 +139,12 @@ try:
     # are a SyntaxError (this exact idiom kept the hook silently dead until
     # 2026-06-11; the fail-open trap + 2>/dev/null hid it). Precompute plurals.
     plural = "s" if n != 1 else ""
-    msg = f"[{scope}] Auto-commit {n} file{plural} at session end"
+    msg = f"[wip] Auto-checkpoint {n} file{plural} ({scope}) at session end"
     body_lines = new_changes[:10]
     if len(new_changes) > 10:
         body_lines.append(f"... and {len(new_changes) - 10} more")
     body = "\n".join(body_lines)
-    full_msg = f"{msg}\n\n{body}"
+    full_msg = f"{msg}\n\n{body}\n\nUngated checkpoint: no compile/test ran. Squash into a real commit before building on it."
 
     result = subprocess.run(
         ["git", "commit", "-m", full_msg],
@@ -158,7 +158,7 @@ try:
         output = {
             "hookSpecificOutput": {
                 "hookEventName": "Stop",
-                "additionalContext": f"Auto-committed {n} session file{plural}{pre_msg}. No action needed unless the commit grouping is wrong.",
+                "additionalContext": f"Auto-checkpointed {n} session file{plural}{pre_msg} as a [wip] commit. UNGATED (no compile/test ran) and it may have captured in-flight subagent work — if so, squash it into the real commit when that work completes; otherwise amend the message when convenient.",
             },
         }
         print(json.dumps(output))
