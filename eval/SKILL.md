@@ -18,6 +18,42 @@ softball cases that can't discriminate, judges that see candidate names, N too s
 the claimed conclusion, golds nobody verified, results with no consumer. Every phase below
 exists because one of those happened here.
 
+## Where does this benchmark live? (phenome / genomics / intel agents read this first)
+
+Two regimes — route by **cadence + entanglement + publishability**, the same rule
+BENCHMARKS.md already states. Both already exist in the wild; don't collapse them.
+
+| | Decision-grade bakeoff | Repo-coupled regression eval |
+|---|---|---|
+| **Question** | which model/engine/config? settle once | does my pipeline still produce correct output? |
+| **Cadence** | run once, record verdict | run every dev loop / in CI |
+| **Coupling** | low — reads prompts/data, owns no internals | high — tied to repo hooks/schema/pipeline |
+| **Home** | `~/Projects/evals` via `just new-eval` | in-repo (`phenome/eval`, `phenome/tests/evals`, `genomics/benchmarks`) |
+| **Verdict** | DECISIONS.md row + production change | pass/fail gate in the suite |
+
+Examples that already follow this: `evals/extraction_bakeoff` benchmarks phenome's
+*and* intel's extract prompts **from inside evals/** (reaches in for the prompt files);
+phenome's `tests/evals/epistemics/*.yaml` + `hook_mutation.py` and genomics'
+`benchmarks/kg_vs_live.py` + `claim_bench` stay **in-repo** — they gate repo dev.
+
+**Tooling — NO symlinks for code.** The house pattern for shared Python is a package
+in `substrate/packages/<pkg>` consumed via `path = "../substrate/packages/<pkg>",
+editable = true` (how corpus-core / corpus-testing reach phenome+genomics). Symlinks
+are only for data dirs and the AGENTS.md/GEMINI.md→CLAUDE.md doc mirrors.
+
+- **evals-repo bakeoffs** get `evalcore` + scaffold + prereg guard for free.
+- **in-repo evals** today: the conventions are portable without the package — the
+  `/eval` skill loads in every project, and the templates are readable. Use your
+  repo's existing test infra; do **not** copy evalcore's code in or symlink to it.
+- **evalcore as a shared dep is NOT wired yet, on purpose.** Proven-common bar
+  (vetoed-decisions): zero consumers in phenome/genomics, no stats reimplemented
+  there — wiring it now is the speculative extraction the veto forbids.
+  **Promotion trigger (propose + human sign-off — shared infra):** when a SECOND
+  repo's in-repo eval genuinely needs Wilson/blind-judge/power, lift `evalcore`
+  from `evals/evalcore/` → `substrate/packages/evalcore/` (next to corpus-testing);
+  evals/ and the repo then both depend on it via the editable path dep. Until that
+  second real consumer exists, it stays in evals/.
+
 ## Phase 0 — Dedup (before designing anything)
 
 ```bash
