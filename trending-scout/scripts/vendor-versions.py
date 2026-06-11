@@ -14,7 +14,6 @@ Usage:
 import argparse
 import json
 import subprocess
-import sys
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -84,7 +83,8 @@ CHECKS = [
     ("Claude Code", "anthropic", npm_latest, ("@anthropic-ai/claude-code",)),
     ("Anthropic Python SDK", "anthropic", pypi_latest, ("anthropic",)),
     ("Anthropic TS SDK", "anthropic", npm_latest, ("@anthropic-ai/sdk",)),
-    ("Claude Agent SDK", "anthropic", pypi_latest, ("claude-agent-sdk",)),
+    ("Claude Agent SDK (py)", "anthropic", pypi_latest, ("claude-agent-sdk",)),
+    ("Claude Agent SDK (ts)", "anthropic", npm_latest, ("@anthropic-ai/claude-agent-sdk",)),
     ("MCP Python SDK", "anthropic", pypi_latest, ("mcp",)),
     ("MCP TS SDK", "anthropic", npm_latest, ("@modelcontextprotocol/sdk",)),
     # OpenAI
