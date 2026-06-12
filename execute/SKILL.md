@@ -65,8 +65,12 @@ For each phase in the slice, in order:
    - **ungated design REVIEW** (verdict on EXISTING structure: cosign/critique an architecture, audit a
      schema, grade a memo) → Fable effort-low — measured ≈ effort-high on critique quality (4/4 cosigns,
      0 false anchors, 2 novel proposals) at **0.34× tokens** (anim-workbench effort-architecture eval,
-     n=1 screening). The savings buy a SECOND diverse reviewer, which beats one deep one (lanes
-     measurably find different findings).
+     n=1 screening). Corroborated cross-model 2026-06-12: **Opus-low** (`llmx --lite bare -e low`, $0)
+     matched Opus-default (Agent tool) on a code-promotion review and produced the sharpest finding —
+     review→low holds for Opus, not just Fable. The savings buy a SECOND reviewer: make it **cross-LAB**
+     (GPT-5.5), not same-family (same-family = cleanup, not adversarial pressure), and **ground its facts**
+     — a MiniMax-M3 cross-lab pass that day verified at ~25% precision with confident HIGH-severity
+     fabrications. Weight a cross-lab reviewer's reasoning, never its asserted facts.
    - **ungated design SYNTHESIS** (novel structure, open design hole, no oracle) → frontier model,
      effort HIGH — the FIRST measured effort-quality separation (low missed the orthogonal factoring
      high shipped; folded the dimensions and lost a composition the design existed for)
@@ -77,7 +81,10 @@ For each phase in the slice, in order:
    weak gate" is the worst quadrant — and "Opus is token-efficient so cheaper" was REJECTED (~2.4× the
    premium buys spec fidelity, not efficiency). A downgraded executor's brief MUST carry exact verification
    commands + cleanup directives — low effort skips only *self-initiated* checking, so the brief does the
-   initiating. The Agent tool exposes only `model:`; per-dispatch effort needs headless `claude -p --effort`.
+   initiating. The Agent tool exposes only `model:` → its dispatches silently run **DEFAULT** effort; per-dispatch
+   effort needs headless `claude -p --model <m> --effort low` OR `llmx --lite bare -m <m> -e low` (both
+   $0 subscription via claude-cli transport; the effort dial verified to land 2026-06-12 —
+   `effective_reasoning_effort: low` in the llmx stderr).
    **Every headless brief MUST include "DO NOT use the Agent tool — run everything yourself in the main
    loop":** subagent shells sandbox-block build tools (bun/node TTY-approval wall), and a headless arm that
    delegates to subagents enters a dispatch→blocked→redispatch doom-loop (measured: 146 subagents/40 min,
