@@ -1,16 +1,52 @@
 ---
 name: modal
-description: "Modal serverless Python. Writing/debugging Modal scripts, deploying, or choosing GPU/resource configs. v1.0–v1.4.x API."
+description: "Modal serverless Python. Writing/debugging Modal scripts, deploying, or choosing GPU/resource configs. v1.0–v1.5.x API."
 effort: low
 ---
 
-# Modal (v1.4.x, May 2026 — latest v1.4.3)
+# Modal (v1.5.x, June 2026 — latest v1.5.0)
 
 Use this skill for Modal as an operational system, not just an SDK reference.
 Start from the question, choose the truth surface, then reason about failure mode.
 
 Shared status contract:
 `references/status-reconciliation.md`
+
+## v1.5.0 (2026-06-09) — what changed
+
+New capability (additive):
+- **Named Images** — `Image.publish("{name}:{tag}")` registers a built Image;
+  `Image.from_name(...)` references it by name and **never triggers a build**
+  (lookup succeeds or raises `NotFoundError`). Decouples image builds from app
+  deploy and shares one canonical Image across many apps. CLI: `modal image names`.
+  Use it for a published canonical base (e.g. a bio/CUDA base shared by dozens of
+  unrelated stages) + reproducibility pinning (record the `name:tag` a run used).
+- **Function version-pinning** — `version=` on `Function.from_name()` /
+  `Cls.from_name()` pins all inputs (and transitive same-app invocations) to ONE
+  function version, even after a later redeploy. The fix for "a mid-run redeploy
+  shifted inputs onto incompatible new code." Pin at run start for cross-function
+  workflows that must stay consistent.
+- **Sandbox `outbound_domain_allowlist=[...]`** on `Sandbox.create()` — block
+  outbound connections outside the allowlist (denials logged). Sandbox-only.
+- **`modal skills` CLI** — `modal skills install` / `update` ships Modal's own
+  foundational agent skill. Worth comparing/merging with this skill, not a replacement.
+- **`modal.Workspace`** — `workspace.members.list()` (more coming).
+- **`sandbox.filesystem.watch()`** — replaces the deprecated alpha `Sandbox.watch()`.
+
+Breaking changes (audit before upgrading from 1.4.x):
+- **`modal ... --json` keys are now normalized** (lowercased, non-alphanumeric →
+  underscore). ANY parser reading `--json` by camelCase/raw key breaks. This is
+  the upgrade gotcha most likely to bite — grep for `--json` consumers first.
+- **Removed `Volume.delete()` / `.create_deployed()`** (and peers on other storage
+  objects) → use `.objects.delete()` / `.objects.create()`.
+- **Sandbox snapshots**: `snapshot_filesystem()` / `snapshot_directory()` now
+  default `ttl=30*24*3600` (was: persist forever) — pass `ttl=None` for old
+  behavior. `snapshot_directory()` gained `timeout=` (default 55s) → raises
+  `TimeoutError`; pass a long timeout for old wait-forever behavior.
+
+Most environments still run 1.4.x (the rest of this skill targets 1.0–1.4.x);
+these notes are forward-looking. On a 1.4→1.5 bump, the `--json`-key audit is the
+one non-optional step.
 
 ## Workflow
 
@@ -410,3 +446,15 @@ Detailed docs in `references/`:
 - `attribution.md` -- question/source/status/spend reporting pattern
 - `sandboxes.md` -- creation, exec, snapshots, named sandboxes
 - `examples.md` -- end-to-end code examples
+
+## Deploy gotchas (2026-06-10, imagegen)
+
+- **Zombie containers serve old code after redeploy.** A warm container from the
+  previous version can keep receiving `Cls.from_name` calls (3 identical stale
+  tracebacks across 2 redeploys). Force cutover: `modal app stop -y NAME` then
+  `modal deploy`. Diagnose: traceback line numbers ≠ local file's.
+- **`modal run` dies with the local process.** A Bash-timeout/SIGKILL on the local
+  `modal run` tears down the ephemeral app mid-cold-start. For heavy cold starts
+  (model downloads), `modal deploy` once + call via `Cls.from_name` from a separate
+  client process — the deployed container survives local timeouts and a retry hits
+  it warm.
