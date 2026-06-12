@@ -78,6 +78,10 @@ For each phase in the slice, in order:
    premium buys spec fidelity, not efficiency). A downgraded executor's brief MUST carry exact verification
    commands + cleanup directives — low effort skips only *self-initiated* checking, so the brief does the
    initiating. The Agent tool exposes only `model:`; per-dispatch effort needs headless `claude -p --effort`.
+   **Every headless brief MUST include "DO NOT use the Agent tool — run everything yourself in the main
+   loop":** subagent shells sandbox-block build tools (bun/node TTY-approval wall), and a headless arm that
+   delegates to subagents enters a dispatch→blocked→redispatch doom-loop (measured: 146 subagents/40 min,
+   zero progress, looks "stuck" from outside; anim-workbench parity scene 2026-06-12).
 3. **Verify-before-claim.** Run it. The phase's **end-state must observably hold** — run the test, the
    query, the command. Tests fail → say so with the output; a step was skipped → say that. No success
    theater: "done" means verified, not "should work."
