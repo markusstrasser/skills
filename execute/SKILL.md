@@ -51,11 +51,18 @@ For each phase in the slice, in order:
    **manifest of files-touched + files-skipped-with-reason**; diff it against intent before accepting.
    Any subagent prompt that names an output file must instruct: "FIRST tool call = Write a PROBE-IN-PROGRESS
    stub at that path" — the dispatch gate blocks file-output prompts without it (one wasted retry each time).
-   **Executor tier** (`model-guide` → Dispatch Economics): full brief + mechanical gates → Opus effort-low
-   (headless `claude -p --model opus --effort low`); plan-associated integration → Opus default; partial/
-   noisy verifier or spec gaps → don't downgrade. A downgraded executor's brief MUST carry exact
-   verification commands + cleanup directives — low effort skips only *self-initiated* checking, so the
-   brief has to do the initiating.
+   **Executor tier** — set by VERIFIER QUALITY in the brief, not by how hard the task feels
+   (`model-guide` → Dispatch Economics is canonical; measured, anim-workbench evals 2026-06-12):
+   - **search / read fan-out** → Explore agent (output is consumed, not shipped — no executor risk)
+   - **mechanical, no gate to game** (rename sweeps, boilerplate) → sonnet/haiku tier
+   - **full brief + mechanical gates** (tests/typecheck/deterministic verify), greenfield-shaped → Opus effort-low (headless `claude -p --model opus --effort low`)
+   - **plan-associated integration / multi-file** → Opus default effort
+   - **partial/noisy verifier or spec-judgment gaps** → don't downgrade; frontier model, normal effort
+   Note the measured trap: a cheaper executor (Sonnet) *reward-hacked the gate* under pressure, so "cheap +
+   weak gate" is the worst quadrant — and "Opus is token-efficient so cheaper" was REJECTED (~2.4× the
+   premium buys spec fidelity, not efficiency). A downgraded executor's brief MUST carry exact verification
+   commands + cleanup directives — low effort skips only *self-initiated* checking, so the brief does the
+   initiating. The Agent tool exposes only `model:`; per-dispatch effort needs headless `claude -p --effort`.
 3. **Verify-before-claim.** Run it. The phase's **end-state must observably hold** — run the test, the
    query, the command. Tests fail → say so with the output; a step was skipped → say that. No success
    theater: "done" means verified, not "should work."
