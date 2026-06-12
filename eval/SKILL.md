@@ -10,6 +10,34 @@ effort: medium
 # Eval — design and scaffold benchmarks that can't fool you
 
 Home base: `~/Projects/evals` (MACVB + standing bakeoffs + `evalcore` + scaffold).
+
+## Why we run our own (operator framing, 2026-06-13)
+
+Evals here exist to **speed up, parallelize, and buy confidence that tokens
+aren't wasted — not to be stingy**. Two corollaries:
+
+- **Materiality threshold:** a routing/config difference is worth measuring —
+  or even thinking about — at **≥1.5–2×** (tokens, wall, or quality). Below
+  that, take the default and move; optimizing sub-1.5× deltas costs more in
+  attention than it returns. (Matches the measured landscape: gated-execution
+  effort tiers differ 0.3–0.65×, i.e. 1.5–3× — material; same-tier rewordings
+  ~1.0–1.04× — noise.)
+- **Own-benchmark rule:** where literature exists, ADOPT its design (Phase 0);
+  where it can't exist — frontier-local, per-release, per-rig properties like
+  dispatch routing, effort knobs, harness/permission behavior, protocol
+  compliance under failure — **your own eval is the only instrument there is**.
+  Papers will always be a generation behind your rig.
+- **Ride real work:** the cheapest substrate is work that must happen anyway —
+  dispatch the licensed-lane pieces as preregistered arms and the tokens pay
+  twice (evals/dispatch_deletion_edges is the pattern: 3 production deletion
+  edges shipped AND extended the routing table).
+
+**Sanity-check tier (below a full eval):** a ≤10-call probe with a written
+1-line prediction, no scaffold, no DECISIONS row — for "does this lane even
+work / does this knob even move" questions. Keep the artifact (script + outputs)
+in the relevant eval dir or /tmp. The moment its result starts steering a
+default, it must retroactively pass the full gate (see Anti-patterns: "a quick
+probe that becomes a claim").
 Methodology grounding: agent-infra `research/2026-06-11-eval-skill-and-evals-repo-improvements.md`,
 `research/benchmarking-science-2026.md`, `research/2026-05-31-eval-benchmark-methodology-delta.md`.
 
