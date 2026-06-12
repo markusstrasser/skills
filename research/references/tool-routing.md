@@ -183,3 +183,10 @@ cross_refs: research/2026-05-19-engine-reliability-metric.md
 table_claims: 22
 
 end-knowledge-index -->
+
+## llmx Deep Research (`llmx research`) — moved from llmx-routing.md 2026-06-12
+
+Default provider `openai` (o3/o4-mini deep research). **Do NOT default to `perplexity-agent`
+(Search-as-Code)** — evals (`evals/sac_bakeoff`, 2026-06-10) found no measured advantage in ANY
+regime; bounded structured pulls: one Exa `/answer` call ties it at ~1/3 cost. Exhaustive sweeps:
+DIY fan-out over Exa/Brave + primary DBs beats the API.
