@@ -56,6 +56,8 @@ See `lenses/adversarial-review.md` for full dispatch methodology, axis descripti
 > The stub-first line is load-bearing: the subagent dispatch gate BLOCKS any prompt that names an output file without instructing write-stub-first (observed eating one retry per dispatch in 2 sessions, 2026-06-10/12).
 >
 > Then fact-check its findings against code exactly like the Gemini/GPT axes (same trust ranking: convergence + code-verification, not self-confidence). Fable findings that converge with Gemini/GPT are the strongest signal; Fable-only findings on a critical subpart are worth verifying. For routine reviews, skip it — Gemini+GPT is the default.
+>
+> **Effort: dispatch the fable-subagent axis at LOW** (headless `env -u ANTHROPIC_API_KEY claude -p --model claude-fable-5 --effort low`, or Agent tool default). Measured (anim-workbench effort-architecture eval, 2026-06-12, n=1 screening): Fable-low ≈ Fable-high on CRITIQUE quality — 4/4 correct cosigns, 0 false anchors, 2 novel verified proposals — at **0.34× tokens**; effort separated only on design-SYNTHESIS (novel structure from an open hole). Review axes are critique, so low is the right tier; the savings fund running this repo-grounded axis MORE often (it's the only axis that can falsify a plan's premises — see the 2026-06-10 Known Issue below: packet-only reviewers went 0-for-5 on repo-grounded findings across two plans). Escalate to default/high effort only when the axis is asked to DESIGN a replacement, not judge the existing one.
 
 ### 1. Assemble Context
 
@@ -105,9 +107,9 @@ Set `timeout: 660000` on the Bash tool call. See `references/dispatch.md` for `-
 
 **Model-specific prompting:** Before assembling context, consult `/model-guide` for per-model rules. Key: GPT-5.5 context should use XML `<doc>` tags, Gemini query goes at END. See `references/dispatch.md § Context Formatting` for the full checklist.
 
-**Effort levels:** Default `high` is correct for reviews. Use `xhigh` only for formal math verification. See `references/dispatch.md § Reasoning Effort Selection`.
+**Effort levels:** Routine reviews: **2× GPT-5.5 `medium` with split lenses over 1× `high`** at ≈ the same spend — one query pressures correctness/arithmetic of the change itself, the other contracts/interfaces/migration. Rationale: on the one measured effort head-to-head, critique quality was effort-INSENSITIVE (Fable low ≈ high on verdicts/anchors/proposals at 0.34× tokens — anim-workbench `.claude/evals/2026-06-12-fable-effort-architecture/`; only design-SYNTHESIS separated), while diverse lenses measurably surface different findings. The GPT-medium leg is mechanism-extrapolated (no GPT-effort-on-critique probe yet — medium is the model default); revoke to single-`high` on the first missed finding attributable to depth. Keep `high` for the formal axis on math/structure-dense changes; `xhigh` only for formal math verification. See `references/dispatch.md § Reasoning Effort Selection`.
 
-**GPT-only multi-query pattern:** For deep dives where you want multiple focused attack vectors, dispatch 2-3 GPT-5.5 `high` queries in parallel with different questions each, rather than one mega-query. More signal per unit time.
+**GPT-only multi-query pattern:** For deep dives, dispatch 2-3 GPT-5.5 queries in parallel with different questions each (`medium` each per the reallocation above; `high` when a single axis is formal-math), rather than one mega-query. More signal per unit time.
 
 #### Depth Presets
 

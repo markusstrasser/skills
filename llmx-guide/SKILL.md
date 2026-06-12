@@ -173,7 +173,11 @@ See [models.md](references/models.md) for full model table, token limits, and re
 - **Ignores `--reasoning-effort`** — llmx logs *"claude-fable-5 does not support --reasoning-effort (ignoring)"*. There is **no max-vs-high dial** for Fable; it runs fixed internal reasoning (unlike GPT-5.x which honors `-e`).
 - **Downshifts to Opus 4.8** — review/analysis prompts that ask it to "explain reasoning / show your analysis" trip the `reasoning_extraction` classifier → silent fallback to Opus 4.8.
 
-**The only working Fable path is the Claude Code Agent tool** (`Agent(model:"fable")`), which uses subscription/session auth, not the llmx API key. It worked reliably for bounded adjudication (2026-06-10: 7/7 correct, ~70K tok / ~40s each). Keep the prompt **verdict-shaped / response-only** (don't ask for "reasoning prose") to avoid the classifier trip even on the subagent path. So: for Fable, reach for a subagent, not llmx. For llmx Claude work, use `claude-opus-4-8` (subscription via `--lite bare`, see checklist item 7).
+**Two working Fable paths, both subscription-auth, neither llmx** (updated 2026-06-12):
+1. **Claude Code Agent tool** (`Agent(model:"fable")`) — session auth. Reliable for bounded adjudication (2026-06-10: 7/7 correct, ~70K tok / ~40s each).
+2. **Key-stripped headless CC**: `env -u ANTHROPIC_API_KEY claude -p --model claude-fable-5 --effort low|medium|high ...` — runs on the subscription (with the key in env it bills API credits and dies on exit-6-style "credit balance too low"). **The `--effort` knob IS functional on this path** — contradicting the llmx-path "ignores reasoning-effort" note above, which is llmx-transport-specific: measured low = 0.72× medium and 0.34× high output tokens on byte-identical briefs (anim-workbench fable-tier + effort-architecture evals, 2026-06-12).
+
+**Effort routing on the headless path (measured, n=1/arm screening):** critique/verdict/review-shaped work → `--effort low` (quality ≈ high on cosigns, anchor accuracy, even novel findings — at a third of the tokens); design-SYNTHESIS from an open hole → `--effort high` (the only measured quality separation: low folds orthogonal dimensions). Keep prompts **verdict-shaped / response-only** (don't ask for "reasoning prose") to avoid the `reasoning_extraction` classifier trip on either path. For llmx Claude work, use `claude-opus-4-8` (subscription via `--lite bare`, see checklist item 7).
 
 ### 6. Grok 4.20 Reasoning — Three Footguns
 
