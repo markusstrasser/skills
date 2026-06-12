@@ -81,10 +81,13 @@ For each phase in the slice, in order:
      0 false anchors, 2 novel proposals) at **0.34× tokens** (anim-workbench effort-architecture eval,
      n=1 screening). Corroborated cross-model 2026-06-12: **Opus-low** (`llmx --lite bare -e low`, $0)
      matched Opus-default (Agent tool) on a code-promotion review and produced the sharpest finding —
-     review→low holds for Opus, not just Fable. The savings buy a SECOND reviewer: make it **cross-LAB**
-     (GPT-5.5), not same-family (same-family = cleanup, not adversarial pressure), and **ground its facts**
-     — a MiniMax-M3 cross-lab pass that day verified at ~25% precision with confident HIGH-severity
-     fabrications. Weight a cross-lab reviewer's reasoning, never its asserted facts.
+     review→low holds for Opus, not just Fable. The savings buy a SECOND DIVERSE reviewer — but
+     `evals/cross_lab_review` SETTLED the lab question: cross-lab-vs-same-lab margin is **≈0** (count-delta
+     is the win — a second pass of EITHER lab finds what the first missed; this session's same-lab Opus-llmx
+     pass also surfaced a unique finding). The lever is the second diverse LANE, not its being a different
+     lab. What DOES matter is that lane's PRECISION + **fact-grounding**: a MiniMax-M3 cross-lab pass verified
+     at ~25% with confident HIGH-severity fabrications. Weight any second reviewer's reasoning, never its
+     asserted facts.
    - **ungated design SYNTHESIS** (novel structure, open design hole, no oracle) → frontier model,
      effort HIGH — the FIRST measured effort-quality separation (low missed the orthogonal factoring
      high shipped; folded the dimensions and lost a composition the design existed for)
