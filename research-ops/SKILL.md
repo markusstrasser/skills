@@ -1,6 +1,6 @@
 ---
 name: research-ops
-description: "Use when: 'run research cycle', 'compile memos into article', 'what's not in training data', 'dispatch parallel audit'. Autonomous research loops, knowledge compilation, training-data diff. For one-shot research questions use /research."
+description: "Use when: 'compile memos into article', 'what's not in training data', 'dispatch parallel audit', or running the research generate/execute lanes. Knowledge compilation, training-data diff, research-specific loop lanes. For one-shot research questions use /research; the loop CONDUCTOR is /improve maintain."
 user-invocable: true
 argument-hint: <mode> [topic]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent, WebSearch, WebFetch]
@@ -13,14 +13,20 @@ Operator-initiated research workflows. For one-shot research questions, use `/re
 
 | Mode | Trigger | What it does |
 |------|---------|--------------|
-| `cycle` | `/research-ops cycle` | Autonomous discover/gap/plan/review/execute/verify loop via `/loop 15m` |
+| `cycle` | dispatched by `/improve maintain` (research rotation), or `/research-ops cycle` by hand | The research-domain generate/execute lanes (discover/gap/plan/review/verify). NOT a standalone loop conductor. |
 | `compile` | `/research-ops compile <concept>` | Synthesize memos into unified article |
 | `diff` | `/research-ops diff <text or path>` | Extract what's NOT in training data |
 | `dispatch` | `/research-ops dispatch [depth]` | Parallel audit sweep |
 
 ---
 
-# Mode: cycle
+# Mode: cycle (research generate/execute lanes)
+
+> **Not a loop conductor.** The single RSI-loop conductor is `/improve maintain` (one
+> `/loop 30m` window). This mode is the **research-domain worker** it dispatches when the
+> conductor's weekly research rotation is due — or run it by hand for a focused research push.
+> The earlier "run this on `/loop 15m`" framing was retired 2026-06-12 when the three
+> overlapping conductors (orchestrator, improve maintain, research-ops cycle) were merged into one.
 
 Two lanes split by the **verifier boundary** (constitution: verifier-conditioned autonomy):
 

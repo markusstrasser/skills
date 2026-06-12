@@ -1,6 +1,6 @@
 ---
 name: improve
-description: "Use when: 'what should I fix next', 'suggest improvements', 'run maintenance'. Modes: harvest (gather+rank findings), suggest (repeated workflows → skills), maintain (quality checks + implement), tick (one orchestrator cycle)."
+description: "Use when: 'what should I fix next', 'suggest improvements', 'run maintenance', 'run the loop'. Modes: maintain (THE RSI-loop conductor — sweep + pick-one + two-lane routing, run as /loop 30m), harvest (gather+rank findings), suggest (repeated workflows → skills)."
 user-invocable: true
 argument-hint: <mode> [options...]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit]
@@ -276,9 +276,31 @@ If user approves a candidate:
 
 ---
 
-## Mode: maintain
+## Mode: maintain — THE loop conductor
 
-Unified quality agent. Run with `/loop 15m`. Each tick: check state hash, pick ONE task by priority, execute, log to JSONL. Owns SWE quality (rotation) and infrastructure health (findings, proposals, orchestrator). Separate from `/research-cycle` (growth lane). **Never ask for input.**
+Run as `/loop 30m /improve maintain` in one open window you watch. This is the **single
+RSI-loop conductor** — it absorbed two earlier skills that did the same job (the standalone
+`orchestrator` skill and `research-ops cycle`, both retired 2026-06-12, 0 invocations/90d
+each; three conductors for one job was the over-proliferation). It is a **thin conductor**:
+it sweeps for health, picks ONE thing per tick, and dispatches existing worker skills
+(`observe`, `leverage`, `harvest`, `research`, `critique`) — it does not reimplement them.
+
+Each tick, in order:
+1. **SWEEP** (always — this is the visibility): `just hooks-smoke` + a cheap activity glance.
+   A red mechanical job is the tick's priority. (from the old orchestrator's sweep)
+2. **Noop check**: state-hash unchanged AND sweep green → one-line noop, stop. Idle ticks
+   are ~free. (the engine below)
+3. **Pick ONE** by readiness × priority (ladder P2–P6).
+4. **Route by verifier boundary** (constitution: verifier-conditioned autonomy):
+   - **reversible + single-project** → do it, auto-commit meta-local.
+   - **boundary-crossing** (taste/money/irreversible/shared 3+ projects/discovery-tier) →
+     write a sign-off-ready item to `agent-infra/decisions-pending/`, never greenlight.
+     This is the **Generate lane** — unattended-safe because it only produces reversible
+     drafts for a yes/no. (from `research-ops cycle`'s two-lane split)
+5. **Visible tick-report** → stop. The `/loop` interval drives the next tick; don't self-schedule.
+
+The growth/research worker is `/research` (one-shot) and `/research-ops {compile,diff,dispatch}`
+(non-loop tools); their old `cycle` loop is now this skill's Generate lane. **Never ask for input.**
 
 ### Live State
 
@@ -314,7 +336,20 @@ echo ""; echo "=== RECENT ACTIONS ==="; tail -5 "$(pwd)/maintenance-actions.json
 echo ""; echo "=== GIT (last 2h) ==="; for proj in meta intel selve genomics; do dir=~/Projects/$proj; [ -d "$dir/.git" ] || continue; out=$(cd "$dir" && git log --oneline --since="2 hours ago" 2>/dev/null | head -3); [ -n "$out" ] && echo "  $proj:" && echo "$out" | sed "s/^/    /"; done
 ' 2>&1 | head -80`
 
-If state says "NO STATE CHANGE" -- report "noop" in one line and stop.
+### Phase 1: SWEEP (always — the visibility)
+
+Before the noop check, run the cheap health pass. A silently-dead hook or a stuck mechanical
+job surfaces here on the first tick after it breaks (this is why the loop is watched, not headless).
+
+```bash
+just -f ~/Projects/agent-infra/justfile hooks-smoke --timeout 8 2>&1 | tail -3   # ~15s; non-zero exit = a dead/broken hook
+launchctl list 2>/dev/null | grep agent-infra | awk '$2 != 0 {print "  launchd non-zero exit:", $3}'  # red launchd jobs
+```
+
+A **red sweep is the tick's priority** — if the fix is meta-local + obvious, do it this tick
+instead of the normal rotation; don't roll past it. Full `doctor.py` health stays in the P3
+rotation (daily), so the per-tick sweep stays cheap. If state is unchanged AND the sweep is
+green → report "noop" in one line and stop.
 
 ### Rate Limit Check
 
