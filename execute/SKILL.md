@@ -100,8 +100,11 @@ For each phase in the slice, in order:
    commands + cleanup directives — low effort skips only *self-initiated* checking, so the brief does the
    initiating. **Effort pinning, corrected 2026-06-13:** agent-definition frontmatter supports `effort:`
    (low/medium/high/xhigh/max — overrides session; code.claude.com/docs/en/sub-agents.md), so the Agent
-   tool CAN run pinned-effort subagents via a custom agent type — global `fable-low` exists
-   (~/.claude/agents/fable-low.md) and is the default lane: session-native tools (web, MCP) work there.
+   tool CAN run pinned-effort subagents via a custom agent type — global defs exist for every lane with
+   a measured caller: `fable-low` (gated/oracle/review), `opus-low` (briefed-gated + integration-with-
+   oracle), `fable-high` (ungated synthesis) in ~/.claude/agents/; session-native tools (web, MCP) work
+   there. xhigh/max defs deliberately not created: unverified for Fable ("available levels depend on the
+   model") and no measured lane wants them.
    Headless `claude -p --model <m> --effort low` (key-stripped) remains for rig-manifest/eval dispatch
    (~/Projects/evals/bin/dispatch-arm.sh) — but know its wall: `--permission-mode acceptEdits` blocks
    WebSearch/WebFetch/MCP too (measured 2026-06-13: a research arm came back fully DEGRADED), so
