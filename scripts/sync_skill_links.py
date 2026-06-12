@@ -94,6 +94,19 @@ def _mirror(source: Path, target: Path, label: str, *, dry_run: bool) -> list[st
     messages: list[str] = []
     if not source.is_dir():
         return messages
+    # DESTRUCTIVE-LOOP GUARD: when target resolves to the same directory as
+    # source (e.g. `<proj>/.agents/skills` is a symlink to `../.claude/skills`),
+    # mirroring would iterate source onto itself — _replace_symlink sees each
+    # real skill dir as "identical to its own target", rmtree's it, and links it
+    # to itself. That destroyed 36 project-local skill dirs across 4 repos on
+    # 2026-06-12. If the paths already coincide, Codex/Gemini already see the
+    # same skills through the existing symlink; there is nothing to mirror.
+    try:
+        if source.resolve() == target.resolve():
+            messages.append(f"{label}: skip-same-dir (target already aliases source)")
+            return messages
+    except OSError:
+        pass
     _ensure_dir(target)
 
     expected: dict[str, Path] = {}
