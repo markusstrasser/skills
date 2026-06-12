@@ -44,6 +44,14 @@ Select between the current frontier models and prompt them correctly.
 
 For full score tables, read `references/BENCHMARKS.md`.
 
+## llmx Cosigner / Dispatch Defaults (moved from ~/.claude/rules/llmx-routing.md 2026-06-12)
+
+- **Cosigner / critique / synthesis:** `gemini-3.5-flash` (inverted from 3.1 Pro 2026-05-24, operator-empirical).
+- **Cheap classification / mechanical audits:** `gemini-3-flash-preview` or `gemini-3.1-flash-lite-preview`.
+- **`gemini-3.1-pro-preview`:** runner-up — only when ARC-AGI-2 / GPQA Diamond / video dominate.
+- **GPT-5.5 default effort is `medium`** — pass `-e high`/`xhigh` for depth; reasoning bills as output.
+- **Cosigner calibration caveat (AA-Omniscience, 2026-06-11):** both defaults are bottom-quartile abstainers — non-hallucination 39% (`gemini-3.5-flash`), 14% (`gpt-5.5`), despite an abstention prompt. Critique output = adversarial pressure on reasoning, never a fact source; verify novel factual specifics at primary. `gemini-3.1-pro-preview` (50%) is the better-calibrated pick for fact-heavy review. Instruments: agent-infra `research/2026-06-11-aa-benchmark-instrument-validity.md`.
+
 ## Dispatch Economics (subagent executor tiers)
 
 When dispatching subagents to execute work (Agent tool, headless `claude -p`, codex), the executor tier is set by **how good the verifier in the brief is**, not by how hard the task feels. Measured evidence: four preregistered evals, anim-workbench 2026-06-12 (`anim-workbench/.claude/evals/2026-06-12-{dispatch-tier,effort-tier,codex-lane,effort-integration}/`), all n=1 per arm (screening grade).
