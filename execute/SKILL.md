@@ -67,6 +67,15 @@ For each phase in the slice, in order:
    - **judgment-loaded gated work** (declared design holes, oracle-gotcha mapping, adjudicated-fact
      dependencies) → Fable effort-low (headless `claude -p --model claude-fable-5 --effort low`,
      key-stripped) — licensed at 0.90× opus-low tokens; found unique design gaps opus missed
+   - **survivor-edge re-point / gate-redesign-with-oracle** (rewrite a legacy gate or module against a
+     new runtime where the OLD code is in-tree as the behavioral oracle) → Fable effort-low — eval #8
+     (dispatch_deletion_edges 2026-06-13): shipped phase6-gate redesign (4 proof obligations, explicit
+     downgrade disclosure) at 0.65× opus tokens on larger scope, plus the workbench-entry diagnosis.
+     Two standing rules from that eval: build-executing arms need `ARM_PERMISSION_MODE=bypassPermissions`
+     (acceptEdits walls Bash in headless), and a brief whose rewrite changes a SIGNATURE must pre-assign
+     the fate of every typed consumer (else ownership and the typecheck gate are jointly unsatisfiable).
+     Grader keeps the adjudication layer: adaptation-vs-regression calls on disclosed deviations are
+     structurally the grader's (an arm scoped away from scenes/ cannot make them).
    - **ungated design REVIEW** (verdict on EXISTING structure: cosign/critique an architecture, audit a
      schema, grade a memo) → Fable effort-low — measured ≈ effort-high on critique quality (4/4 cosigns,
      0 false anchors, 2 novel proposals) at **0.34× tokens** (anim-workbench effort-architecture eval,
