@@ -5,6 +5,7 @@ user-invocable: true
 argument-hint: "[axes...] [--depth N] [--path dir]"
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent]
 effort: medium
+context: fork
 ---
 
 # Sweep — Structural Consistency Scan
