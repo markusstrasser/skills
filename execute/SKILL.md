@@ -59,7 +59,17 @@ For each phase in the slice, in order:
      against an existing oracle → Opus effort-low (headless `claude -p --model opus --effort low`) or the
      codex $0 lane (`codex exec --full-auto -C <out-of-repo-worktree> -c model_reasoning_effort="low"` —
      pre-install deps, commit from outside the worktree; see model-guide for the gotcha list)
-   - **design-from-scratch integration, no oracle** → Opus default effort
+   - **judgment-loaded gated work** (declared design holes, oracle-gotcha mapping, adjudicated-fact
+     dependencies) → Fable effort-low (headless `claude -p --model claude-fable-5 --effort low`,
+     key-stripped) — licensed at 0.90× opus-low tokens; found unique design gaps opus missed
+   - **ungated design REVIEW** (verdict on EXISTING structure: cosign/critique an architecture, audit a
+     schema, grade a memo) → Fable effort-low — measured ≈ effort-high on critique quality (4/4 cosigns,
+     0 false anchors, 2 novel proposals) at **0.34× tokens** (anim-workbench effort-architecture eval,
+     n=1 screening). The savings buy a SECOND diverse reviewer, which beats one deep one (lanes
+     measurably find different findings).
+   - **ungated design SYNTHESIS** (novel structure, open design hole, no oracle) → frontier model,
+     effort HIGH — the FIRST measured effort-quality separation (low missed the orthogonal factoring
+     high shipped; folded the dimensions and lost a composition the design existed for)
    - **partial/noisy verifier or spec-judgment gaps** → don't downgrade; frontier model, normal effort
    Standing revocation trigger: first cheap-lane gate failure on a task classified fully-briefed →
    fall back to default effort for that class + record it.
