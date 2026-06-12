@@ -52,7 +52,12 @@ For each phase in the slice, in order:
    Any subagent prompt that names an output file must instruct: "FIRST tool call = Write a PROBE-IN-PROGRESS
    stub at that path" — the dispatch gate blocks file-output prompts without it (one wasted retry each time).
    **Executor tier** — set by VERIFIER QUALITY in the brief, not by how hard the task feels
-   (`model-guide` → Dispatch Economics is canonical; measured, anim-workbench evals 2026-06-12):
+   (`model-guide` → Dispatch Economics is canonical; measured, anim-workbench evals 2026-06-12).
+   **Re-run this routing decision at EVERY phase boundary** — inline-momentum is a measured failure
+   mode: a phase where inline was right (judgment-dense one-off after dead dispatches) was followed by
+   briefed-gated phases that stayed inline by default until the operator interrupted (anim-workbench
+   deletion edges, 2026-06-13). When real work fits a licensed lane, dispatch it and preregister the
+   arms — work-tokens double as routing measurements (evals/dispatch_deletion_edges pattern):
    - **search / read fan-out** → Explore agent (output is consumed, not shipped — no executor risk)
    - **mechanical, no gate to game** (rename sweeps, boilerplate) → sonnet/haiku tier
    - **full brief + mechanical gates** (tests/typecheck/deterministic verify), greenfield OR port/re-author
