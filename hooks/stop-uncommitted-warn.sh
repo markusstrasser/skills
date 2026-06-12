@@ -75,23 +75,36 @@ except (OSError, FileNotFoundError):
 
 new_changes = [f for f in all_changes if f not in baseline_files]
 
-# Per-session Edit/Write ledgers (.claude/sessions/<id>.touched-files) — the
-# same ones commit-mine reads. Build mine vs every other session.
+# Per-session Edit/Write ledgers — read BOTH producer conventions so attribution
+# works in every repo. The .claude/sessions-only read left every repo EXCEPT
+# genomics on the whole-delta fallback, which swept concurrent sessions
+# (verified 2026-06-13: a peer session checkpoint swept an unrelated session
+# uncommitted helper-kill). Sources, each line a repo-relative (or absolute) path:
+#   - global  posttool-session-touched-log.sh  -> /tmp/session-touched-<sid>.txt
+#   - per-repo posttool-track-touched-files.sh  -> .claude/sessions/<sid>.touched-files
 my_touched = set()
 other_touched = set()
 if session_id:
+    ledger_files = []  # (owner_sid, absolute_ledger_path)
     sessions_dir = os.path.join(cwd, ".claude", "sessions")
     try:
-        ledger_entries = os.listdir(sessions_dir)
+        for entry in os.listdir(sessions_dir):
+            if entry.endswith(".touched-files"):
+                ledger_files.append((entry[: -len(".touched-files")], os.path.join(sessions_dir, entry)))
     except OSError:
-        ledger_entries = []
-    for entry in ledger_entries:
-        if not entry.endswith(".touched-files"):
-            continue
-        owner_sid = entry[: -len(".touched-files")]
+        pass
+    tmp_prefix = "session-touched-"
+    tmp_suffix = ".txt"
+    try:
+        for entry in os.listdir("/tmp"):
+            if entry.startswith(tmp_prefix) and entry.endswith(tmp_suffix):
+                ledger_files.append((entry[len(tmp_prefix): -len(tmp_suffix)], os.path.join("/tmp", entry)))
+    except OSError:
+        pass
+    for owner_sid, ledger_path in ledger_files:
         owned = set()
         try:
-            with open(os.path.join(sessions_dir, entry)) as fh:
+            with open(ledger_path) as fh:
                 for raw_line in fh:
                     rel = raw_line.strip()
                     if not rel:
