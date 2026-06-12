@@ -125,7 +125,7 @@ Run shared transcript extraction above. Build operational context per `reference
 
 ### Step 2: Dispatch to Gemini
 
-Send full-fidelity transcript + coverage digest + operational context to Gemini 3.1 Pro. Full prompt in `references/gemini-dispatch-prompt.md`.
+Send full-fidelity transcript + coverage digest + operational context to the `deep_review` profile (currently gemini-3.5-flash; the profile owns the model, not this text). Full prompt in `references/gemini-dispatch-prompt.md`.
 
 Dispatch via the shared wrapper, not raw SDK calls. Concatenate BOTH transcript sources
 (Claude Code + Codex) plus the coverage digest. The `[ -s codex.md ]` guard keeps dispatch
@@ -223,7 +223,7 @@ Run shape pre-filter. Note anomalous sessions for priority analysis.
 
 ### Phase 2: Pattern Extraction (Gemini)
 
-Dispatch to Gemini 3.1 Pro for structured pattern extraction. Full prompt in `references/gemini-prompt.md`. Use the shared dispatch helper, not raw CLI subprocess calls.
+Dispatch to the `deep_review` profile (currently gemini-3.5-flash) for structured pattern extraction. Full prompt in `references/gemini-prompt.md`. Use the shared dispatch helper, not raw CLI subprocess calls.
 
 **Gemini's output is DATA, not conclusions.** It extracts patterns; you do the creative synthesis in Phase 3.
 
@@ -305,7 +305,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/extract_transcript.py <project> --sessions 5
 
 ### Step 3: LLM Synthesis (Gemini)
 
-Dispatch raw classification + transcripts to Gemini 3.1 Pro via the shared dispatch wrapper. Read both files, concatenate with the prompt below, and call the wrapper (same pattern as sessions mode dispatch). For each non-NEW_AGENCY pattern, Gemini should determine:
+Dispatch raw classification + transcripts via the shared dispatch wrapper (`deep_review` profile, currently gemini-3.5-flash). Read both files, concatenate with the prompt below, and call the wrapper (same pattern as sessions mode dispatch). For each non-NEW_AGENCY pattern, Gemini should determine:
 1. Is it genuinely automatable? (Filter out actual new information)
 2. Fix type: HOOK | RULE | DEFAULT | SKILL | ARCHITECTURAL
 3. Recurrence count (3+ is signal, 1 is noise)
@@ -418,7 +418,7 @@ Write `{date}-{SID}-manual.json` with:
 
 ## Model Selection for Dispatch
 
-Default: Gemini 3.1 Pro (cheapest 1M context, good at pattern extraction). Use GPT-5.4 at medium effort for formal/quantitative analysis or when Gemini rate-limits. Route both through the shared dispatch helper. See `/model-guide` for detailed routing.
+Default: the `deep_review` profile (currently gemini-3.5-flash — empirically beats 3.1 Pro on critique/synthesis here, 2026-05-24; the profile owns the model). Use GPT-5.5 at medium effort for formal/quantitative analysis or when Gemini rate-limits. Route both through the shared dispatch helper. See `/model-guide` for detailed routing.
 
 ```python
 from pathlib import Path
@@ -436,6 +436,6 @@ r = dispatch(profile="gpt_general", prompt="...", context_text="...", output_pat
   - Codex CLI at `~/.codex/state_5.sqlite` + rollout JSONL (reads project by `cwd` match)
 - Codex runs alongside Claude Code on the same project; dropping it silently loses ~50% of the signal
 - Preprocessor strips thinking blocks and base64 content
-- Gemini 3.1 Pro at ~$0.001/query cached -- cheap enough to run frequently
+- gemini-3.5-flash at ~$0.001/query cached -- cheap enough to run frequently
 
 $ARGUMENTS
