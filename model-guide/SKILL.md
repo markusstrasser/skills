@@ -181,7 +181,9 @@ GPT-5.5 Pro: only for quantitative or high-irreversibility decisions.
 Ground truth: tests, git, databases, source documents, primary web pages.
 ```
 
-Keep the adversarial pass cross-lab. Do not ask GPT to review GPT output as the only adversarial pass; do not ask a Claude model to bless its own code. Same-family review is useful for cleanup, not epistemic independence.
+**Phase-0 before any model COMPARISON / bakeoff:** `grep ~/Projects/evals/DECISIONS.md` for the question FIRST — it may be settled, and a fresh n=1 probe must not steer a default an eval already decided. (2026-06-13: a 4-model review bakeoff re-ran the settled `cross-lab-review-margin` question, and an `/execute` edit got written contradicting its verdict — Phase-0 dedup caught it only after the fact.)
+
+That verdict, calibrated: the cross-lab-vs-same-lab MARGIN is **≈0** — a second DIVERSE pass earns its keep via *count-delta* (it finds what the first missed), but the second reviewer being a different LAB buys ~nothing over a same-lab second instance, and it still hallucinates facts (a MiniMax-M3 pass verified ~25%, confident HIGH fabrications — ground any reviewer's asserted facts, weight its reasoning). The real martingale to avoid is a model reviewing its OWN output (same instance) as the *sole* adversarial pass.
 
 ## Validation Checklists
 
