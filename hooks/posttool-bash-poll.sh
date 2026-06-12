@@ -28,6 +28,14 @@ case "$PATH_TARGET" in
 esac
 [ "${#PATH_TARGET}" -lt 12 ] && exit 0
 
+# Reject BINARY paths — `ls dir | /usr/bin/grep x` extracts /usr/bin/grep as
+# the "polled file" (the binary is the first absolute path after the verb).
+# Fired 21-33x as a false positive across main + arm sessions on 2026-06-13;
+# nobody polls a binary. Same artifact class as F2 above.
+case "$PATH_TARGET" in
+  /usr/bin/*|/bin/*|/sbin/*|/usr/local/bin/*|/opt/homebrew/bin/*|*/.bun/bin/*|*/node_modules/.bin/*) exit 0 ;;
+esac
+
 # Scope tracker per session + fork context to avoid cross-subagent false positives
 # CLAUDE_AGENT_ID is set for subagents; fall back to PPID for main session
 _SCOPE="${CLAUDE_AGENT_ID:-${CLAUDE_SESSION_ID:-$PPID}}"
