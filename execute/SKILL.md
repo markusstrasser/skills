@@ -82,12 +82,24 @@ For each phase in the slice, in order:
    loop":** subagent shells sandbox-block build tools (bun/node TTY-approval wall), and a headless arm that
    delegates to subagents enters a dispatch→blocked→redispatch doom-loop (measured: 146 subagents/40 min,
    zero progress, looks "stuck" from outside; anim-workbench parity scene 2026-06-12).
-3. **Verify-before-claim.** Run it. The phase's **end-state must observably hold** — run the test, the
-   query, the command. Tests fail → say so with the output; a step was skipped → say that. No success
+3. **Verify-before-claim.** Run it. The phase's **end-state must observably hold** — and "run it"
+   means at the **surface the change reaches** (CLI → type the command; server → send the request;
+   library → import through the package boundary; GUI → drive it). Tests/typecheck are CI's
+   evidence, not verification; import-and-call is a unit test you wrote, not the app running.
+   Include **≥1 off-happy-path probe** per end-state (malformed input, repeated flag, stale state)
+   and report probes distinctly (🔍 vs ✅) — held probes still get reported; an all-✅-no-🔍 report
+   is a happy-path replay. **No partial pass:** "3 of 4 passed" is FAIL until the 4th passes or is
+   explained away. Tests fail → say so with the output; a step was skipped → say that. No success
    theater: "done" means verified, not "should work."
 4. **Commit.** Granular semantic commits, one logical change each. **Never `git add -A`/`.`** — stage
    specific paths. Foreground commits only (a hook-blocked commit returns exit 0 from a backgrounded call).
 5. **Gate.** Do not advance to the next phase until this phase's end-state holds and is committed.
+   Then run **`/code-review low`** (Skill tool — injects inline, ~2 tool calls, no subagents) on
+   the phase's commits: a precision-only pass (≤4 findings) that catches the dropped-guard /
+   inverted-condition class while the phase is hot and cheap to fix. Bugs compound across phases —
+   this is the same logic as the multi-phase checkpoint rule. Pass the path-scoped
+   `.claude/rules/` files covering the diff as review context (closest-rules-win). Fix real
+   findings before advancing; `(none)` → advance.
 
 ## Interleaved improvement (the centerpiece — build tooling DURING, not after)
 
@@ -109,8 +121,11 @@ that contradicts what you see, and don't silently abandon it either. Research / 
 ## Done
 1. **Completeness check** (`../decide/references/checklists.md`): every phase in the slice landed AND its
    end-state was verified AND committed. Mechanically verify; don't assert.
-2. **`/critique close`** on the slice's commits — the post-impl review that catches new-code bugs the
-   canary misses.
+2. **Two-layer slice review:** **`/code-review high`** (`xhigh` on risk) over the WHOLE slice —
+   recall mode ("a missed bug ships"), where cross-cutting issues invisible to the per-phase low
+   passes surface — then **`/critique close`** for the design/architecture layer (its Phase 2 now
+   delegates the diff layer to the same vendor pipeline; don't run it twice — one high pass over
+   the slice serves both). Dispatch WITHOUT `--fix`; this session owns commits.
 3. Report: what shipped (verified), what diverged (and why), what tooling you built inline, what's next
    (the next slice / deferred items).
 
