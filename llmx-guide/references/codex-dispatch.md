@@ -67,3 +67,23 @@ git add docs/audit/codex-*.md
 **Diagnostics — `codex doctor`** (Codex 0.131+): runtime/auth/network/config check. Run it before debugging llmx codex-cli failures manually.
 
 **Codex 0.134+ (2026-05-26):** `--profile` is the primary profile selector; read-only MCP servers get parallel tool calls. `--lite bare`/`--lite research` still use the `~/.codex-{bare,research}` profile dirs — after a Codex upgrade, verify nothing routes through unexpected user-config plugins. Don't hand-edit `~/.codex-*/config.toml`; codex rewrites it on launch.
+
+## Codex Inherits the Caller's CWD — Blind/Isolated Dispatch Footgun
+
+`llmx -p codex-cli` hands the caller's CWD to the codex subprocess (`cli_backends.py` "Actual cwd
+handed to the CLI subprocess"), and codex has READ access to that tree by default. A prompt-level
+information diet does NOT hold: the model explores the repo and absorbs context you withheld.
+
+Evidence (2026-06-12, hutter): a "map-blind" brainstorm arm dispatched from the project root
+reproduced same-day ledger specifics it was never given — exact probe values (500k→250k), a
+same-day measurement verdict ("LUT slow/null"), and internal key notation (`{1}`) — silently
+voiding the independent-convergence design.
+
+For genuinely blind / context-isolated codex dispatch:
+- `cd` to a clean directory first (e.g. `mkdir -p /tmp/blind-$$ && cd /tmp/blind-$$`), passing
+  context ONLY via `-f` files copied there; or
+- use the API transport (`-m gpt-5.5` direct, no `-p codex-cli`) — no filesystem at all; or
+- `--lite bare` (no tools) when training-knowledge-only is the point.
+
+Repo access is a FEATURE for map-aware/audit dispatches — make the choice explicit per arm, and
+state in the output memo which arms had filesystem access.
