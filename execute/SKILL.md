@@ -55,9 +55,14 @@ For each phase in the slice, in order:
    (`model-guide` → Dispatch Economics is canonical; measured, anim-workbench evals 2026-06-12):
    - **search / read fan-out** → Explore agent (output is consumed, not shipped — no executor risk)
    - **mechanical, no gate to game** (rename sweeps, boilerplate) → sonnet/haiku tier
-   - **full brief + mechanical gates** (tests/typecheck/deterministic verify), greenfield-shaped → Opus effort-low (headless `claude -p --model opus --effort low`)
-   - **plan-associated integration / multi-file** → Opus default effort
+   - **full brief + mechanical gates** (tests/typecheck/deterministic verify), greenfield OR port/re-author
+     against an existing oracle → Opus effort-low (headless `claude -p --model opus --effort low`) or the
+     codex $0 lane (`codex exec --full-auto -C <out-of-repo-worktree> -c model_reasoning_effort="low"` —
+     pre-install deps, commit from outside the worktree; see model-guide for the gotcha list)
+   - **design-from-scratch integration, no oracle** → Opus default effort
    - **partial/noisy verifier or spec-judgment gaps** → don't downgrade; frontier model, normal effort
+   Standing revocation trigger: first cheap-lane gate failure on a task classified fully-briefed →
+   fall back to default effort for that class + record it.
    Note the measured trap: a cheaper executor (Sonnet) *reward-hacked the gate* under pressure, so "cheap +
    weak gate" is the worst quadrant — and "Opus is token-efficient so cheaper" was REJECTED (~2.4× the
    premium buys spec fidelity, not efficiency). A downgraded executor's brief MUST carry exact verification
