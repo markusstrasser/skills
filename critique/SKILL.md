@@ -1,6 +1,6 @@
 ---
 name: critique
-description: "Adversarial review. Modes: model (Gemini+GPT), verify (fact-check), close (post-impl tests). 'review plan', 'what's wrong', 'fact-check'."
+description: "Adversarial review of plans, designs, findings, and closeouts. Modes: model (Gemini+GPT), verify (fact-check), close (post-impl tests). 'review plan', 'what's wrong', 'fact-check'. For reviewing a code DIFF, use /code-review instead — critique owns the design/plan/findings layer, not the diff layer."
 user-invocable: true
 argument-hint: <mode> [target]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent]
@@ -261,7 +261,19 @@ Do not rely on auto-discovered touched-file scope when the worktree is already c
 
 **Phase 1: Write Tests for New Code** — Identify new functions from plan commits. Write unit tests covering happy path, edge cases, error paths, and contract invariants.
 
-**Phase 2: Cross-Model Review** — Run `/critique model` on the plan-close review packet (not a hand-written summary). Use `--context .model-review/plan-close-context.md --extract --verify`. Fact-check and disposition every finding. Inspect `coverage.json` before closing so you can see packet drops, axis coverage, and verification totals.
+**Phase 2: Two-layer review — vendor pipeline for the diff, cross-model for the design.**
+
+*Diff layer:* run the built-in `/code-review high` (Skill tool; `xhigh` on risk) over the plan's
+commits — its multi-angle finder/verifier pipeline owns diff-level correctness. Dispatch WITHOUT
+`--fix`; the executing session owns commits. (Verified 2026-06-12: built-in skills are invocable
+via the Skill tool from any session context; `low` runs inline, `high`+ fans out.)
+
+*Design layer:* run `/critique model` on the plan-close review packet (not a hand-written summary).
+Use `--context .model-review/plan-close-context.md --extract --verify`. Fact-check and disposition
+every finding. Inspect `coverage.json` before closing so you can see packet drops, axis coverage,
+and verification totals. Include one reviewer instruction to **RUN the changed code paths before
+verdicts** (execution-grounded review — live execution caught 3 real bugs that offline tests +
+packet review both missed, `live-execution-is-the-integration-verifier`).
 
 **Never pass `"close"` (or `"review"`, `"verify"`, bare verbs) as the positional prompt.** The script now detects these as slash-command leakage and substitutes a structured adversarial template (with a stderr warning), but a concrete question tailored to the plan — e.g., `"Find bugs in the new signal-merging logic introduced by $(git log -1 --format=%h); focus on boundary conditions and silent semantic failures"` — produces sharper output than the generic substitute.
 

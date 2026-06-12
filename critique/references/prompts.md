@@ -76,6 +76,33 @@ Ranked by measurable impact. Each must have: (a) what, (b) why with quantitative
 ## 6. Where I'm Likely Wrong
 What am I (GPT-5.5) probably getting wrong? Known biases to flag: overconfidence in fabricated specifics, overcautious scope-limiting, production-grade recommendations for personal projects.
 
+## Finder/Verifier Mechanics (apply to ALL review axes)
+
+Imported 2026-06-12 from the vendor code-review pipeline (binary extraction,
+agent-infra `research/2026-06-12-vendor-binary-skill-archaeology.md`) + Codex review:
+
+1. **failure_scenario is mandatory.** Every finding carries "concrete inputs/state → wrong
+   output/crash". A finding without a nameable failure scenario is an observation, not a finding.
+2. **No self-censorship.** Pass every candidate WITH a nameable failure scenario through —
+   silently dropping half-believed candidates bypasses the verification step and is the dominant
+   cause of misses. The verifier judges; the finder surfaces.
+3. **Refutation must be constructible.** A finding may be marked REFUTED/HALLUCINATED only by:
+   quoting the actual line that contradicts it; showing the type/constant/invariant that makes it
+   impossible; citing the guard in the same diff that already handles it; or showing it is pure
+   style with no observable effect. "Seems unlikely" is not a refutation — it stays PLAUSIBLE.
+4. **Record both.** If two axes flag the same line for different reasons, keep both findings —
+   no cross-suppression.
+5. **Gap sweep (deep reviews):** after verification, one fresh pass over the verified list
+   hunting ONLY for defects not already listed. Seed with the known miss-list: dropped guards in
+   moved/extracted code; defaults evaluated once (dataclass/mutable kwargs); lock-scope shrink;
+   predicate methods with side effects; setup/teardown asymmetry in tests; flipped config defaults.
+6. **Severity surface-gate (reporting boundary):** findings below P1-equivalent (would a
+   maintainer act on this today?) go to the artifact file, not the user-facing synthesis.
+   Precision at the surface, recall in the artifact.
+7. **Salvage + accounting:** if synthesis fails, return verified findings unmerged — never
+   discard the run. Any candidates dropped by a budget/cap are NAMED in the artifact, never
+   silently truncated.
+
 ## Flash -- Optional Mechanical Audit Pass
 
 Mechanical-only passes should use the `mechanical` axis in `review/scripts/model-review.py`.
