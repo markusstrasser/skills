@@ -226,7 +226,7 @@ Local analysis to identify candidate patterns -- extract 3/4/5-grams of tool seq
 
 ### Step 3: Dispatch to Gemini
 
-Send transcripts + tool sequence analysis to Gemini 3.1 Pro via the shared dispatch helper:
+Send transcripts + tool sequence analysis via the shared dispatch helper (`deep_review` profile, currently gemini-3.5-flash):
 
 ```python
 from pathlib import Path
@@ -325,11 +325,9 @@ If >= 5: skip subagent dispatch (Tier 2). Route LLM-heavy analysis through `uv r
 
 ### Each Tick: Pick ONE Task by Priority
 
-**P0: Orchestrator Failures.**
-If any tasks show failed/blocked: transient (network, rate limit) -> retry. Permission denied -> report. Blocked (approval gate) -> list, don't approve.
-
-**P1: Queue Dispatch** (if queue >= 3).
-Dispatch one Opus subagent for the oldest queued item. Rate-limit gate: skip if CLAUDE_PROCS >= 5.
+> The orchestrator was eradicated 2026-06-07. The former P0 (Orchestrator
+> Failures) and P1 (Queue Dispatch) are **deleted** — there is no queue and no
+> orchestrator DB. Priority now starts at P2.
 
 **P2: Implement Promoted Findings.**
 For unimplemented findings with `[ ]`: read context, verify 2+ recurrence, classify autonomous vs propose, execute or write proposal.
@@ -338,10 +336,19 @@ For unimplemented findings with `[ ]`: read context, verify 2+ recurrence, class
 New design-review artifacts -> extract proposal -> write to `~/.claude/steward-proposals/`.
 
 **P3: Routine Rotation.**
-Pick highest-priority task that hasn't run within cadence:
+Pick highest-priority task that hasn't run within cadence. The **session-learning
+loop rows come first** — they are the reason this skill runs on a `/loop`: mine
+what happened, drain what's actionable, scan the frontier. Cadence follows the
+signal rate (don't re-run a daily-grain miner every tick):
 
 | Task | Cadence | How |
 |------|---------|-----|
+| Hook health | Every tick (~15s) | `just hooks-smoke` in agent-infra — catches silently-dead hooks at the cheapest possible point. Non-zero exit → fix or escalate before other work. |
+| Session anti-patterns | Daily (or per ~5 new sessions) | `/observe sessions` — behavioral findings → improvement-log `[obs]` |
+| Supervision waste | Daily | `/observe supervision` — corrections/boilerplate/rubber-stamps → automatable fixes. A reiteration of something already decided elsewhere = highest-signal defect → `decisions-pending/`. |
+| Finding drain | Weekly | `/improve harvest` — gather NEW + drain actionable `[ ]` queue |
+| Architecture patterns | Weekly (alt. with frontier) | `/observe architecture` — cross-project abstractions |
+| Frontier scan | Weekly (alt. with architecture) | `/leverage` then `/trending-scout` — prospective 10-100x wins + ecosystem deltas observe is structurally blind to |
 | Database freshness | Daily | Check timestamps. Flag >30d stale. |
 | Bio-verify audit | Rotate: 1/tick | `just bio-verify-queue` -> top item |
 | Deferred probe | After revisit date | HTTP-probe URLs, check release pages |
@@ -359,7 +366,7 @@ Pick highest-priority task that hasn't run within cadence:
 Read `~/.claude/steward-proposals/`. Autonomous -> implement, verify, commit. Append `**Status:** IMPLEMENTED`. Propose-only -> skip.
 
 **P5: Triage & Escalation.**
-Finding triage (>20 `[ ] proposed` -> batch-triage). Hook escalation (>100 warns/day for 3+ days with <20% FP -> write promote proposal).
+Finding triage (>20 `[ ] proposed` -> batch-triage). Hook escalation (>100 warns/day for 3+ days with <20% FP -> write promote proposal). **Boundary-crossing items** (taste, money, irreversible, shared 3+ project blast radius, discovery-tier direction) -> write a sign-off-ready proposal to `agent-infra/decisions-pending/` (format in its README; run `/critique model` cross-lab first if consequential). Never greenlight these yourself — the loop decides everything reversible and single-project, and escalates only what genuinely needs the human.
 
 **P6: All Clear.** Nothing actionable? Say so in one line. Don't invent work.
 
