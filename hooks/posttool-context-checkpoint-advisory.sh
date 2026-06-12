@@ -42,9 +42,9 @@ JSON
 }
 
 if (( PCT >= 80 && PREV < 80 )); then
-  emit 80 "Context at ${PCT}%. Auto-compaction is near and a mid-task auto-compact stops the turn. Refresh .claude/checkpoint.md now (current task, what's done, what's next) and finish or commit any in-flight edit before it triggers."
-elif (( PCT >= 60 && PREV < 60 )); then
-  emit 60 "Context at ${PCT}%. Wrap up the current sub-task to a committable point soon; the PreCompact hook will snapshot checkpoint.md, but a clean stopping point loses less than a mid-edit compaction."
+  emit 80 "Context at ${PCT}%. Wrap up and commit in-flight work — if this is a long session approaching the window limit, an auto-compact will stop the turn. The PreCompact hook snapshots checkpoint.md, but a clean committed stopping point loses less."
+elif (( PCT >= 40 && PREV < 40 )); then
+  emit 40 "Context at ${PCT}% (~$(( PCT * 10 ))K on a 1M window). Good point to proactively /compact: auto-compact won't fire until near-full (~900K), and on the 1M tier input past 200K bills at 2×, so compacting now keeps context lean and cheap. Get to a committable point first — the PreCompact hook will snapshot checkpoint.md."
 fi
 
 exit 0
