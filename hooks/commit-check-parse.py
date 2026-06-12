@@ -43,8 +43,10 @@ def get_staged_files():
 
 
 def get_known_scopes():
-    """Load canonical scopes from .git-scopes, or extract from recent history."""
-    # Try .git-scopes in repo root
+    """Load canonical scopes from .git-scopes. No fallback: repos without an
+    explicit .git-scopes opted out of scope checking (the git-history-guessing
+    fallback produced 870 false-positive warns in 8 days, mostly in throwaway
+    eval dirs — measured 2026-06-12)."""
     try:
         root = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
@@ -59,22 +61,6 @@ def get_known_scopes():
                         for line in f
                         if line.strip() and not line.startswith("#")
                     }
-    except Exception:
-        pass
-
-    # Dynamic fallback: scopes with 2+ uses in last 200 commits
-    try:
-        result = subprocess.run(
-            ["git", "log", "--format=%s", "-200"],
-            capture_output=True, text=True, timeout=5,
-        )
-        if result.returncode == 0:
-            scope_counts = {}
-            for line in result.stdout.strip().split("\n"):
-                m = re.match(r"\[([^\]]+)\]", line)
-                if m:
-                    scope_counts[m.group(1)] = scope_counts.get(m.group(1), 0) + 1
-            return {s for s, c in scope_counts.items() if c >= 2}
     except Exception:
         pass
     return set()
@@ -186,17 +172,9 @@ def main():
             "Design choice detected \u2014 consider Rejected: trailer for discarded alternatives."
         )
 
-    # Always suggest Session-ID: if available and missing
-    if "Session-ID" not in trailers:
-        sid_path = os.path.join(os.getcwd(), ".claude", "current-session-id")
-        if os.path.isfile(sid_path):
-            try:
-                with open(sid_path) as f:
-                    sid = f.read().strip()
-                if sid:
-                    suggestions.append(f"Add Session-ID: {sid}")
-            except Exception:
-                pass
+    # Session-ID: NOT suggested — the prepare-commit-msg git hook auto-appends
+    # it; the suggestion was unactionable noise on 97% of commits (1,996/2,065
+    # in 8 days, measured 2026-06-12).
 
     # New script gate → suggest Native-First: trailer
     if staged and "Native-First" not in trailers:
