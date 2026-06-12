@@ -213,27 +213,16 @@ Don't create new entity files during a scout run. If a scan surfaces a new tool 
 
 ### Pipeline Output
 
-When invoked as `--weekly` or via orchestrator, also:
+When invoked as `--weekly` (or dispatched from `/improve maintain`'s weekly frontier rotation), also:
 1. Update the research index in `.claude/rules/research-index.md` if new memo warrants a permanent entry
 2. Commit the memo and any entity file updates: `[research] Trending scout — N new findings, window YYYY-MM-DD to YYYY-MM-DD`
 
-## Orchestrator Integration
+## Loop Integration
 
-This skill is designed to run as a weekly orchestrator pipeline. The pipeline template:
-
-```json
-{
-  "name": "trending-scout",
-  "schedule": "weekly",
-  "steps": [
-    {
-      "type": "prompt",
-      "project": "meta",
-      "prompt": "/trending-scout weekly"
-    }
-  ]
-}
-```
+This is a **worker** skill, not a loop conductor. It runs on a weekly cadence as one of the
+frontier-scan rotation rows in `/improve maintain` (alternating with `/observe architecture`),
+or by hand as `/trending-scout weekly`. (The standalone `orchestrator` pipeline that used to
+schedule it was retired 2026-06-12 — `/improve maintain` is the single conductor now.)
 
 ## Edge Cases
 
