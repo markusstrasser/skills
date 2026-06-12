@@ -7,7 +7,7 @@
 # Lightweight file-path check only, no network calls. Exit 0 always (advisory).
 
 INPUT=$(cat)
-FILE_PATH=$(echo "$INPUT" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("file_path",""))' 2>/dev/null)
+FILE_PATH=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // ""' 2>/dev/null)
 [[ -z "$FILE_PATH" ]] && exit 0
 
 CITATION_PATHS="${CITATION_PATHS:-docs/research/|docs/entities/}"

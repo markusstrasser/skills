@@ -7,18 +7,8 @@ trap 'exit 0' ERR
 
 INPUT=$(cat)
 
-# Extract file path — disable trap for Python call
-trap - ERR
-FPATH=$(echo "$INPUT" | python3 -c '
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    fp = d.get("file_path", "") or d.get("tool_input", {}).get("file_path", "")
-    print(fp)
-except Exception:
-    print("")
-' 2>/dev/null)
-trap 'exit 0' ERR
+# Extract file path (top-level file_path, falling back to tool_input.file_path)
+FPATH=$(printf '%s' "$INPUT" | jq -r '(.file_path // "") as $fp | if $fp == "" then (.tool_input.file_path // "") else $fp end' 2>/dev/null || echo "")
 
 [[ -z "$FPATH" ]] && exit 0
 

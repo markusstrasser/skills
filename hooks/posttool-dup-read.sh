@@ -4,15 +4,8 @@
 # Evidence: 8-10 occurrences across meta, genomics, selve (2026-03-20 → 2026-03-26)
 
 INPUT=$(cat)
-eval "$(echo "$INPUT" | python3 -c "
-import sys,json
-ti = json.load(sys.stdin).get('tool_input',{})
-fp = ti.get('file_path','')
-off = ti.get('offset','')
-lim = ti.get('limit','')
-print(f\"FILE='{fp}'\")
-print(f\"KEY='{fp}:{off}:{lim}'\")
-" 2>/dev/null)"
+FILE=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // ""' 2>/dev/null || true)
+KEY=$(printf '%s' "$INPUT" | jq -r '(.tool_input // {}) | "\(.file_path // ""):\(.offset // ""):\(.limit // "")"' 2>/dev/null || true)
 [ -z "$FILE" ] && exit 0
 
 TRACKER="/tmp/claude-read-tracker-${PPID}"

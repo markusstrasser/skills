@@ -8,23 +8,9 @@ trap 'exit 0' ERR
 INPUT=$(cat)
 
 # Extract user message and cwd
-USER_MSG=$(echo "$INPUT" | python3 -c '
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    print(data.get("user_message", ""))
-except Exception:
-    pass
-' 2>/dev/null)
+USER_MSG=$(printf '%s' "$INPUT" | jq -r '.user_message // ""' 2>/dev/null || true)
 
-CWD=$(echo "$INPUT" | python3 -c '
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    print(data.get("cwd", ""))
-except Exception:
-    pass
-' 2>/dev/null)
+CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // ""' 2>/dev/null || true)
 
 # Check for continuation boilerplate patterns
 if echo "$USER_MSG" | grep -qi "continued from a previous conversation\|session is being continued\|context ran out\|ran out of context\|previous conversation that ran out"; then

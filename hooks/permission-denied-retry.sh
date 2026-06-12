@@ -19,7 +19,7 @@ trap 'exit 0' ERR
 
 INPUT=$(cat)
 
-TOOL=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_name',''))" 2>/dev/null) || exit 0
+TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null) || exit 0
 
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -44,7 +44,7 @@ esac
 
 # Write/Edit — retry only for safe paths
 if [ "$TOOL" = "Write" ] || [ "$TOOL" = "Edit" ]; then
-    FPATH=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_input',{}).get('file_path',''))" 2>/dev/null) || exit 0
+    FPATH=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // ""' 2>/dev/null) || exit 0
 
     case "$FPATH" in
         */.claude/plans/*)

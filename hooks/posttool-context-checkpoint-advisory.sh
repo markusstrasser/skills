@@ -19,9 +19,7 @@ if [ "${CODEX_HOOK_COMPAT_SMOKE:-0}" = "1" ] || [ "${CLAUDE_HOOK_SMOKE:-0}" = "1
 fi
 
 INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
-SID=$(printf '%s' "$INPUT" | python3 -c 'import sys,json
-try: print((json.load(sys.stdin) or {}).get("session_id",""))
-except Exception: print("")' 2>/dev/null)
+SID=$(printf '%s' "$INPUT" | jq -r '.session_id // ""' 2>/dev/null || echo "")
 [ -z "$SID" ] && exit 0
 
 PCT_FILE="/tmp/claude-ctxpct-${SID}"

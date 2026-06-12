@@ -12,10 +12,7 @@
 set -uo pipefail
 
 INPUT=$(cat)
-TOOL_NAME=$(echo "$INPUT" | python3 -c "
-import sys, json
-print(json.load(sys.stdin).get('tool_name', ''))
-" 2>/dev/null) || exit 0
+TOOL_NAME=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null) || exit 0
 
 STATE_DIR="${HOME}/.claude/hook-state"
 mkdir -p "$STATE_DIR"
@@ -23,10 +20,7 @@ STATE_FILE="${STATE_DIR}/unverified-script-${PPID}"
 
 case "$TOOL_NAME" in
   Write)
-    FILE_PATH=$(echo "$INPUT" | python3 -c "
-import sys, json
-print(json.load(sys.stdin).get('tool_input', {}).get('file_path', ''))
-" 2>/dev/null) || exit 0
+    FILE_PATH=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // ""' 2>/dev/null) || exit 0
 
     # Only .py files in scripts/ or hooks/ directories
     [[ "$FILE_PATH" == *.py ]] || exit 0
@@ -52,10 +46,7 @@ print(json.load(sys.stdin).get('tool_input', {}).get('file_path', ''))
     UNVERIFIED=$(cat "$STATE_FILE")
     [ -n "$UNVERIFIED" ] || exit 0
 
-    COMMAND=$(echo "$INPUT" | python3 -c "
-import sys, json
-print(json.load(sys.stdin).get('tool_input', {}).get('command', ''))
-" 2>/dev/null) || exit 0
+    COMMAND=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null) || exit 0
 
     # Clear if the command references the unverified script
     BASENAME=$(basename "$UNVERIFIED")

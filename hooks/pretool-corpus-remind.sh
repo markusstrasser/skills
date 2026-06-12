@@ -26,9 +26,7 @@ already_reminded() { [ -f "$STATE_DIR/$1" ]; }
 mark_reminded() { touch "$STATE_DIR/$1" 2>/dev/null; }
 
 INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
-TOOL=$(printf '%s' "$INPUT" | python3 -c 'import sys,json
-try: print(json.load(sys.stdin).get("tool_name",""))
-except: print("")' 2>/dev/null)
+TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null || echo "")
 
 # Extract a likely paper identifier from the tool input. We accept:
 #   - DOI: \b10\.[0-9]{4,9}/[^\s"<>]+
@@ -70,7 +68,7 @@ case "$TOOL" in
     ;;
   Bash)
     # Bash command must include a paper-fetch verb to bother us
-    CMD=$(echo "$INPUT" | python3 -c "import json,sys;_d=json.load(sys.stdin);print((_d.get('tool_input',_d) or {}).get('command',''))" 2>/dev/null)
+    CMD=$(printf '%s' "$INPUT" | jq -r '(if has("tool_input") then (.tool_input // {}) else . end) | .command // ""' 2>/dev/null)
     case "$CMD" in
       *curl*sci-hub*|*curl*doi.org*|*curl*biorxiv*|*curl*medrxiv*|*curl*pubmed*|*wget*doi.org*) ;;
       *) exit 0 ;;

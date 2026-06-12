@@ -9,13 +9,7 @@
 
 trap 'exit 0' ERR
 INPUT=$(cat)
-CMD=$(echo "$INPUT" | python3 -c "
-import sys,json
-try:
-    _d = json.load(sys.stdin)
-    print((_d.get('tool_input', _d) or {}).get('command',''))
-except: sys.exit(0)
-" 2>/dev/null)
+CMD=$(printf '%s' "$INPUT" | jq -r '(if has("tool_input") then (.tool_input // {}) else . end) | .command // ""' 2>/dev/null || true)
 [ -z "$CMD" ] && exit 0
 echo "$CMD" | grep -qE 'llmx|modal run|curl.*api|python.*openai|python.*anthropic' || exit 0
 

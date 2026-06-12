@@ -141,14 +141,7 @@ if [ "$STYPE" = "general-purpose" ]; then
 fi
 
 # Check 5: File-edit intent via subagent
-PROMPT=$(echo "$INPUT" | python3 -c '
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    print(d.get("tool_input", {}).get("prompt", ""))
-except Exception:
-    pass
-' 2>/dev/null)
+PROMPT=$(printf '%s' "$INPUT" | jq -r '.tool_input.prompt // ""' 2>/dev/null || true)
 
 if echo "$DESC $PROMPT" | grep -qiE 'edit (the |a |this )?file|write (to |the )?file|modify (the |a )?file|update (the |a )?file|fix (the |a |this )?(code|file|bug|issue)|implement (the |a |this )?|create (a |the )?file|add (to|code|a function|the)'; then
     # Exception: worktree isolation is fine for code changes

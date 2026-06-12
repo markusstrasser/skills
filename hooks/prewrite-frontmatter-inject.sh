@@ -9,13 +9,7 @@ trap 'exit 0' ERR
 INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
 
 # Quick path check (fastest possible exit for non-eligible files)
-FPATH=$(printf '%s' "$INPUT" | python3 -c "
-import sys, json
-try:
-    d = json.loads(sys.stdin.read())
-    print((d.get('tool_input', d) or {}).get('file_path', ''))
-except: pass
-" 2>/dev/null)
+FPATH=$(printf '%s' "$INPUT" | jq -r '(if has("tool_input") then (.tool_input // {}) else . end) | .file_path // ""' 2>/dev/null || true)
 
 [ -z "$FPATH" ] && exit 0
 

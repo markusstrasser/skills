@@ -8,7 +8,7 @@
 INPUT=$(cat)
 
 # Extract command from tool_input
-CMD=$(echo "$INPUT" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("tool_input",{}).get("command",""))' 2>/dev/null)
+CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
 
 # Extract first line only — multi-line commit messages contain git substrings
 # that would false-positive the grep patterns below.

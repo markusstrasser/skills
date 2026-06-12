@@ -5,7 +5,7 @@
 # Evidence: 4 recurrences of poll-loop pattern (2026-03-06 → 2026-03-29)
 
 INPUT=$(cat)
-CMD=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_input',{}).get('command',''))" 2>/dev/null)
+CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
 [ -z "$CMD" ] && exit 0
 
 # Extract file path from stat-like commands

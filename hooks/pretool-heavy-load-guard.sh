@@ -12,9 +12,7 @@
 trap 'exit 0' ERR
 
 data="$(cat 2>/dev/null)" || exit 0
-cmd="$(printf '%s' "$data" | python3 -c "import json,sys
-try: print(json.load(sys.stdin).get('tool_input',{}).get('command',''))
-except Exception: pass" 2>/dev/null)"
+cmd="$(printf '%s' "$data" | jq -r '.tool_input.command // ""' 2>/dev/null || true)"
 [ -z "$cmd" ] && exit 0
 
 # Heavy LOCAL compute jobs (NOT remote — modal/cloud offload is the FIX, not the

@@ -13,7 +13,7 @@
 set -uo pipefail
 
 INPUT=$(cat)
-COMMAND=$(echo "$INPUT" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("command","")[:500])' 2>/dev/null || echo "")
+COMMAND=$(printf '%s' "$INPUT" | jq -r '(.tool_input.command // "") | .[0:500]' 2>/dev/null || echo "")
 [ -z "$COMMAND" ] && exit 0
 
 # Match: git (revert|reset --hard|checkout --) ... with HEAD/HEAD~N/branch-tip arg

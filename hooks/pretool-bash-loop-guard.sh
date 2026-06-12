@@ -7,14 +7,7 @@
 INPUT=$(cat)
 
 # Extract the command field from JSON input
-CMD=$(echo "$INPUT" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    print((data.get('tool_input', data) or {}).get('command', ''))
-except:
-    sys.exit(0)
-" 2>/dev/null)
+CMD=$(printf '%s' "$INPUT" | jq -r '(if has("tool_input") then (.tool_input // {}) else . end) | .command // ""' 2>/dev/null || true)
 
 # If we couldn't extract, let it through
 [ -z "$CMD" ] && exit 0
