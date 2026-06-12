@@ -75,16 +75,11 @@ except (OSError, FileNotFoundError):
 
 new_changes = [f for f in all_changes if f not in baseline_files]
 
-# Multi-agent attribution: a sibling agent editing a file mid-session makes it
-# dirty AFTER this baseline, so the delta above wrongly claims it. Drop files a
-# DIFFERENT session ledger owns that this one does not — the same per-session
-# Edit/Write ledger commit-mine reads (.claude/sessions/<id>.touched-files).
-# Sibling edits stay with them; files this session itself edited, and its
-# unclaimed subprocess outputs (a regenerated golden lives in no ledger), are
-# kept. No session id or no sessions dir falls back to current behavior.
+# Per-session Edit/Write ledgers (.claude/sessions/<id>.touched-files) — the
+# same ones commit-mine reads. Build mine vs every other session.
+my_touched = set()
+other_touched = set()
 if session_id:
-    my_touched = set()
-    other_touched = set()
     sessions_dir = os.path.join(cwd, ".claude", "sessions")
     try:
         ledger_entries = os.listdir(sessions_dir)
@@ -113,6 +108,23 @@ if session_id:
             my_touched |= owned
         else:
             other_touched |= owned
+
+# Attribution policy. When this session has a populated Edit/Write ledger, that
+# ledger is the source of truth: auto-commit ONLY files in it. A file in NO
+# ledger is an unattributable subprocess output (sync-generated-docs,
+# emit_*_event.py pin refreshes) that may belong to a concurrent peer script,
+# so auto-committing it is the misattribution bug (2026-06-12: a peer
+# verification_events ndjson got swept into this session three times). Those are
+# surfaced non-blocking instead, so nothing is silently lost. When the ledger is
+# empty (no posttool ledger hook in this repo, or no Edit/Write this session)
+# fall back to the prior delta-minus-foreign behavior.
+unattributable = []
+if my_touched:
+    unattributable = sorted(
+        f for f in new_changes if f not in my_touched and f not in other_touched
+    )
+    new_changes = [f for f in new_changes if f in my_touched]
+else:
     foreign = other_touched - my_touched
     if foreign:
         new_changes = [f for f in new_changes if f not in foreign]
@@ -120,6 +132,20 @@ if session_id:
 pre_existing = len(all_changes) - len(new_changes)
 
 if not new_changes:
+    # Nothing this session provably owns. Do NOT auto-commit unattributable
+    # subprocess output (it may be a peer script output) — surface it
+    # non-blocking so the agent can commit its own outputs explicitly.
+    if unattributable:
+        u = len(unattributable)
+        uplural = "s" if u != 1 else ""
+        ulist = "\n".join(unattributable[:10])
+        output = {
+            "hookSpecificOutput": {
+                "hookEventName": "Stop",
+                "additionalContext": f"{u} changed file{uplural} were written by a subprocess and are in no session Edit/Write ledger, so this session did not auto-commit them (they may belong to a concurrent agent script). If they are yours, commit them explicitly:\n{ulist}",
+            },
+        }
+        print(json.dumps(output))
     sys.exit(0)
 
 # Auto-commit session changes
@@ -155,10 +181,15 @@ try:
         # was never a valid Stop shape — the FYI was silently dropped. The nested
         # hookSpecificOutput channel (>=2.1.163) actually reaches the agent.
         pre_msg = f" ({pre_existing} pre-existing/other-session excluded)" if pre_existing else ""
+        u_msg = ""
+        if unattributable:
+            u = len(unattributable)
+            uplural = "s" if u != 1 else ""
+            u_msg = f" {u} subprocess-written file{uplural} (in no ledger) were left uncommitted — commit them explicitly if yours."
         output = {
             "hookSpecificOutput": {
                 "hookEventName": "Stop",
-                "additionalContext": f"Auto-checkpointed {n} session file{plural}{pre_msg} as a [wip] commit. UNGATED (no compile/test ran) and it may have captured in-flight subagent work — if so, squash it into the real commit when that work completes; otherwise amend the message when convenient.",
+                "additionalContext": f"Auto-checkpointed {n} session file{plural}{pre_msg} as a [wip] commit. UNGATED (no compile/test ran) and it may have captured in-flight subagent work — if so, squash it into the real commit when that work completes; otherwise amend the message when convenient.{u_msg}",
             },
         }
         print(json.dumps(output))
