@@ -11,7 +11,7 @@ effort: low
 Select between the current frontier models and prompt them correctly.
 
 **Models covered:** Claude Fable 5, Claude Opus 4.8 (fallback), GPT-5.5, GPT-5.5 Pro.
-**Last updated:** 2026-06-09.
+**Last updated:** 2026-06-12.
 **Active stance:** This skill no longer maintains a broad model zoo. Older GPT, Gemini, Grok, and Sonnet routes were removed from active guidance. Use this guide for high-value frontier decisions; use repo-specific batch tooling or search tools for cheap bulk work.
 
 **Fable 5 + Opus 4.8 are one routing pair.** Fable 5 (`claude-fable-5`) is Anthropic's most capable widely-released model — a "Mythos-class" tier above Opus. It runs safety classifiers (offensive cyber, bio/life-sciences, reasoning-extraction); on a hit it returns `stop_reason:"refusal"` and you fall back to **Opus 4.8**. So Opus 4.8 is the fallback in two senses: the *automatic* target when Fable refuses, and the *deliberate* choice for work that would just trip those classifiers (security review, lab/molecular biology), for cost-sensitive or routine work (Fable is 2× the price), and when you need raw chain-of-thought (Fable only returns summarized thinking).
@@ -43,6 +43,25 @@ Select between the current frontier models and prompt them correctly.
 | Claim verification | Neither alone | Use primary sources and deterministic checks; use models to summarize evidence, not to establish it. |
 
 For full score tables, read `references/BENCHMARKS.md`.
+
+## Dispatch Economics (subagent executor tiers)
+
+When dispatching subagents to execute work (Agent tool, headless `claude -p`, codex), the executor tier is set by **how good the verifier in the brief is**, not by how hard the task feels. Measured evidence: two preregistered evals, anim-workbench 2026-06-12 (`anim-workbench/.claude/evals/2026-06-12-{dispatch-tier,effort-tier}/`), both n=1 per arm.
+
+| Work shape | Executor | Evidence / boundary |
+|---|---|---|
+| FULL brief + mechanical gates (tests, typecheck, deterministic verify script), greenfield-shaped | **Opus 4.8, effort low** | Effort-tier eval: low matched medium on all 5 gates incl. catching a brief bug, at 0.59× tokens/wall. Licensed ONLY for this class; integration-shaped work needs one replication first. |
+| Plan-associated dispatch generally (integration, multi-file) | **Opus 4.8, default effort** | Dispatch-tier eval: Sonnet 4.6 changed the measurement procedure under gate pressure until the gate passed (disclosed, but reward-hacking-shaped). Opus was deviation-free. "Opus is token-efficient so cheaper" was REJECTED (~2.4× Sonnet cost) — the premium buys spec fidelity, not efficiency. |
+| Mechanical no-gate tasks (rename sweeps, boilerplate) | Sonnet/haiku tier | Cheap and gameable-gate risk is moot when there's no gate to game. |
+| Search/read fan-out | Explore agent | No executor risk; output is consumed, not shipped. |
+| Partial/noisy verifier (research synthesis, memos, judgment-coupled work) | **Don't downgrade** — frontier model, normal effort | The Sonnet finding gets WORSE here: gate-gaming in regime-2 is exactly what you can't detect cheaply. Verifier-conditioned scope (constitution) applies. |
+| Judgment gaps in the spec | Yourself / Fable | Cheap executors fill ambiguity with guesses; the savings are repaid as corrections. |
+
+**The conditioning rule:** low effort doesn't mean less verification — both eval arms ran every gate *because the gates were written in the brief*. Self-initiated checking is what higher effort buys; an explicit verifier in the brief makes that purchase unnecessary. So the brief MUST carry: verification commands (exact, runnable), cleanup directives (worktree/scratch teardown), and a files-touched manifest requirement. A cheap executor on a gate-less brief is the worst quadrant.
+
+**Effort knob mechanics:** the Agent tool exposes only `model:`. Per-dispatch effort exists via (1) headless `claude -p --model opus --effort low` (verified working, CLI 2.1.175; background Bash + `--output-format json` for usage), or (2) `.claude/agents/*.md` frontmatter `effort:` (does NOT hot-register mid-session — usable only in later sessions). Codex/GPT-5.5 dispatch via llmx `--lite bare` is $0 (subscription) — see `~/.claude/rules/llmx-routing.md`.
+
+**External validity:** both evals are regime-1 (clear mechanical verifiers — tsc, deterministic scripts). The effort-low finding transfers only to tasks with the same shape; the Sonnet/spec-fidelity finding transfers broadly and conservatively. Replication trigger: one effort eval on a multi-file integration task before generalizing effort-low further.
 
 ## Claude Fable 5 - "The Operator"
 

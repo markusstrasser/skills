@@ -49,6 +49,11 @@ For each phase in the slice, in order:
 2. **Build.** Independent work → parallel subagents, **`isolation: "worktree"`** for anything that touches
    files (hard isolation beats soft; soft hurts on open-ended tasks). Each code subagent returns a
    **manifest of files-touched + files-skipped-with-reason**; diff it against intent before accepting.
+   **Executor tier** (`model-guide` → Dispatch Economics): full brief + mechanical gates → Opus effort-low
+   (headless `claude -p --model opus --effort low`); plan-associated integration → Opus default; partial/
+   noisy verifier or spec gaps → don't downgrade. A downgraded executor's brief MUST carry exact
+   verification commands + cleanup directives — low effort skips only *self-initiated* checking, so the
+   brief has to do the initiating.
 3. **Verify-before-claim.** Run it. The phase's **end-state must observably hold** — run the test, the
    query, the command. Tests fail → say so with the output; a step was skipped → say that. No success
    theater: "done" means verified, not "should work."
