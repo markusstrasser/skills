@@ -49,9 +49,12 @@ See `lenses/adversarial-review.md` for full dispatch methodology, axis descripti
 **Opt-in fourth axis — Fable 5 via SUBAGENT (`fable-subagent`), for critical subparts only.** The ONLY working path to Fable's raw reasoning is the **Agent tool** (`Agent(model:"fable")`, subscription auth) — NOT llmx (billing-dead + downshifts). `model-review.py` is a subprocess and cannot spawn subagents, so this axis is **orchestrator-driven**: the agent running `/critique` dispatches a Fable subagent *alongside* the script and merges its findings into synthesis. Use it sparingly — only on the **critical subparts** of a session (a load-bearing migration, an identity/correctness invariant, a security-sensitive diff), where Fable's edge over Flash/GPT is real (measured 2026-06-10: obscure domain knowledge, multi-hop/split reasoning). Dispatch RESPONSE-ONLY (read-only tools, return findings text; do NOT ask it to "show reasoning" — keep the prompt verdict-shaped to avoid the classifier trip even on the subagent path). Pattern:
 > ```
 > Agent(subagent_type="general-purpose", model="fable", prompt=
->   "Review THIS change for correctness/security bugs. Write findings to <path> and return them. "
->   "Read-only. Return a list of findings: SEVERITY | claim | file:line | why-real. No reasoning prose.")
+>   "Review THIS change for correctness/security bugs. FIRST tool call: Write a 'PROBE IN PROGRESS' stub to <path>, "
+>   "then append findings there and return them. "
+>   "Read-only otherwise. Return a list of findings: SEVERITY | claim | file:line | why-real. No reasoning prose.")
 > ```
+> The stub-first line is load-bearing: the subagent dispatch gate BLOCKS any prompt that names an output file without instructing write-stub-first (observed eating one retry per dispatch in 2 sessions, 2026-06-10/12).
+>
 > Then fact-check its findings against code exactly like the Gemini/GPT axes (same trust ranking: convergence + code-verification, not self-confidence). Fable findings that converge with Gemini/GPT are the strongest signal; Fable-only findings on a critical subpart are worth verifying. For routine reviews, skip it — Gemini+GPT is the default.
 
 ### 1. Assemble Context

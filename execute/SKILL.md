@@ -49,6 +49,8 @@ For each phase in the slice, in order:
 2. **Build.** Independent work → parallel subagents, **`isolation: "worktree"`** for anything that touches
    files (hard isolation beats soft; soft hurts on open-ended tasks). Each code subagent returns a
    **manifest of files-touched + files-skipped-with-reason**; diff it against intent before accepting.
+   Any subagent prompt that names an output file must instruct: "FIRST tool call = Write a PROBE-IN-PROGRESS
+   stub at that path" — the dispatch gate blocks file-output prompts without it (one wasted retry each time).
    **Executor tier** (`model-guide` → Dispatch Economics): full brief + mechanical gates → Opus effort-low
    (headless `claude -p --model opus --effort low`); plan-associated integration → Opus default; partial/
    noisy verifier or spec gaps → don't downgrade. A downgraded executor's brief MUST carry exact
