@@ -83,7 +83,11 @@ def wired_hooks() -> set[str]:
 # Stop / SessionEnd / SubagentStop / SessionStart / UserPromptSubmit receive a
 # different shape (transcript/message/session fields at top level).
 NO_TOOLINPUT_TOKENS = ("stop", "sessionend", "sessionstart", "session-start",
-                       "subagent", "userprompt", "precompact", "postcompact")
+                       "subagent", "userprompt", "precompact", "postcompact",
+                       # Task lifecycle events (TaskCreated/TaskUpdated) carry a
+                       # top-level .task object, NOT a tool_input envelope — they
+                       # are distinct from the TaskCreate/TaskUpdate *tools*.
+                       "task-created", "taskcreated", "task-updated", "taskupdated")
 
 
 def has_no_toolinput(name: str) -> bool:
@@ -202,6 +206,16 @@ def per_project_hooks() -> list[str]:
     return sorted(res)
 
 
+def global_hooks() -> list[str]:
+    """Hook scripts under ~/.claude/hooks — the GLOBAL inline-hooks dir, wired
+    in ~/.claude/settings.json and loaded in every project. Neither the skills
+    glob nor the per-project glob (~/Projects/*/.claude/hooks) reaches it, so a
+    contract-dead hook here is invisible to --surfaces. Found live 2026-06-12:
+    posttool-unsourced-claim-check.sh read bare $CLAUDE_TOOL_INPUT → no-op
+    under Claude for an unknown duration."""
+    return _hook_files(str(HOME / ".claude/hooks"))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--all", action="store_true", help="lint every *.sh, not just wired")
@@ -214,7 +228,7 @@ def main() -> int:
     if args.files:
         targets = [f for f in args.files if f.endswith((".sh", ".py"))]
     elif args.surfaces:
-        targets = _hook_files(str(HOOKS_DIR)) + per_project_hooks()
+        targets = _hook_files(str(HOOKS_DIR)) + per_project_hooks() + global_hooks()
     else:
         targets = _hook_files(str(HOOKS_DIR))
     wired = wired_hooks()
