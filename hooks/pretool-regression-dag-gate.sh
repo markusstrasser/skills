@@ -11,13 +11,7 @@ set -euo pipefail
 INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
 
 # Derive tool_name from the input envelope
-TOOL_NAME=$(printf '%s' "$INPUT" | python3 -c "
-import json, sys
-try:
-    print(json.load(sys.stdin).get('tool_name',''))
-except:
-    print('')
-" 2>/dev/null)
+TOOL_NAME=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null || echo "")
 
 # Only fire on Write/Edit to .py files
 if [[ "$TOOL_NAME" != "Write" && "$TOOL_NAME" != "Edit" ]]; then
@@ -25,31 +19,15 @@ if [[ "$TOOL_NAME" != "Write" && "$TOOL_NAME" != "Edit" ]]; then
 fi
 
 # Check if the content targets a .py file
-FILE_PATH=$(printf '%s' "$INPUT" | python3 -c "
-import json, sys
-try:
-    d = json.load(sys.stdin)
-    ti = d.get('tool_input', d) or {}
-    print(ti.get('file_path', ti.get('path', '')))
-except:
-    print('')
-" 2>/dev/null)
+FILE_PATH=$(printf '%s' "$INPUT" | jq -r '(if has("tool_input") then (.tool_input // {}) else . end) | if has("file_path") then (.file_path // "") else (.path // "") end' 2>/dev/null || echo "")
 
 if [[ "$FILE_PATH" != *.py ]]; then
     exit 0
 fi
 
 # Get the content being written/edited
-CONTENT=$(printf '%s' "$INPUT" | python3 -c "
-import json, sys
-try:
-    d = json.load(sys.stdin)
-    ti = d.get('tool_input', d) or {}
-    # For Write, check content; for Edit, check new_string
-    print(ti.get('content', ti.get('new_string', '')))
-except:
-    print('')
-" 2>/dev/null)
+# For Write, check content; for Edit, check new_string
+CONTENT=$(printf '%s' "$INPUT" | jq -r '(if has("tool_input") then (.tool_input // {}) else . end) | if has("content") then (.content // "") else (.new_string // "") end' 2>/dev/null || echo "")
 
 # Telemetry log
 TELEMETRY_DIR="${HOME}/.claude/hook-telemetry"

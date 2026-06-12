@@ -18,9 +18,7 @@ remind() {
 }
 
 INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
-TOOL=$(printf '%s' "$INPUT" | python3 -c 'import sys,json
-try: print(json.load(sys.stdin).get("tool_name",""))
-except: print("")' 2>/dev/null)
+TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null || echo "")
 
 # Extract command for Bash tools, query for search tools, file path for Write/Edit
 CMD=""

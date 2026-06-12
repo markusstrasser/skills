@@ -17,14 +17,7 @@ BLOCK_THRESHOLD=30
 INPUT=$(cat)
 
 # Extract tool name from PreToolUse input
-TOOL_NAME=$(echo "$INPUT" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    print(data.get('tool_name', ''))
-except:
-    print('')
-" 2>/dev/null || echo "")
+TOOL_NAME=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null || echo "")
 
 # Classify: is this a search tool?
 case "$TOOL_NAME" in

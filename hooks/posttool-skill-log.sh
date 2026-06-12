@@ -12,23 +12,9 @@ STARTFILE="/tmp/claude-skill-start-$$"
 INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
 
 # Extract skill name from tool input
-SKILL=$(printf '%s' "$INPUT" | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    print((d.get('tool_input', d) or {}).get('skill', 'unknown'))
-except:
-    print('unknown')
-" 2>/dev/null)
+SKILL=$(printf '%s' "$INPUT" | jq -er '(if has("tool_input") then (.tool_input // {}) else . end) | .skill // "unknown"' 2>/dev/null || echo "unknown")
 
-ARGS=$(printf '%s' "$INPUT" | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    print((d.get('tool_input', d) or {}).get('args', ''))
-except:
-    print('')
-" 2>/dev/null)
+ARGS=$(printf '%s' "$INPUT" | jq -r '(if has("tool_input") then (.tool_input // {}) else . end) | .args // ""' 2>/dev/null || echo "")
 
 # Extract first word of args as mode (empty for skills without modes)
 MODE=$(echo "$ARGS" | awk '{print $1}')

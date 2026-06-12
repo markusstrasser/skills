@@ -5,7 +5,7 @@
 trap 'exit 0' ERR
 
 INPUT=$(cat)
-CMD=$(echo "$INPUT" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("tool_input",{}).get("command",""))' 2>/dev/null) || exit 0
+CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null) || exit 0
 [ -n "$CMD" ] || exit 0
 
 SESSION_ID=""

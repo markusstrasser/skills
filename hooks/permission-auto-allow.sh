@@ -12,7 +12,7 @@ trap 'exit 0' ERR
 
 INPUT=$(cat)
 
-TOOL=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_name',''))" 2>/dev/null) || exit 0
+TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null) || exit 0
 
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -28,7 +28,7 @@ case "$TOOL" in
         ;;
     Write|Edit)
         # Auto-allow writes to .claude/checkpoint.md (context-save before compaction)
-        FPATH=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_input',{}).get('file_path',''))" 2>/dev/null) || true
+        FPATH=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // ""' 2>/dev/null) || true
         case "$FPATH" in
             */.claude/checkpoint.md) allow_tool "$TOOL:checkpoint" ;;
             */.claude/plans/*) allow_tool "$TOOL:plans" ;;
@@ -41,7 +41,7 @@ case "$TOOL" in
         allow_tool "$TOOL"
         ;;
     Bash)
-        CMD=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tool_input',{}).get('command',''))" 2>/dev/null) || exit 0
+        CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null) || exit 0
         case "$CMD" in
             git\ log*|git\ diff*|git\ status*|git\ branch*|git\ show*|git\ blame*|git\ stash\ list*|git\ ls-files*|git\ rev-parse*|git\ config\ --get*|git\ remote\ -v*|git\ remote\ show*)
                 allow_tool "Bash:${CMD:0:50}"

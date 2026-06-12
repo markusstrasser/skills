@@ -20,14 +20,7 @@ ARCHIVE_TARGET="${ARCHIVE_TARGET:-archive}"
 ARCHIVE_OVERRIDE="${ARCHIVE_OVERRIDE:-ARCHIVAL-REVIEWED}"
 ARCHIVE_MSG="${ARCHIVE_MSG:-Iterative analysis docs cannot be archived — each version contains unique analytical content. Override with $ARCHIVE_OVERRIDE comment.}"
 
-COMMAND=$(echo "$INPUT" | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    print((d.get('tool_input', d) or {}).get('command', ''))
-except:
-    print('')
-" 2>/dev/null)
+COMMAND=$(printf '%s' "$INPUT" | jq -r '(if has("tool_input") then (.tool_input // {}) else . end) | .command // ""' 2>/dev/null || echo "")
 
 # Only check git mv commands
 echo "$COMMAND" | grep -q 'git mv' || exit 0

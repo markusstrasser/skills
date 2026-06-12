@@ -4,9 +4,7 @@
 # Advisory only (exit 0)
 
 INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
-TOOL=$(printf '%s' "$INPUT" | python3 -c 'import sys,json
-try: print(json.load(sys.stdin).get("tool_name",""))
-except: print("")' 2>/dev/null)
+TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null || echo "")
 [[ "$TOOL" != "Read" ]] && exit 0
 
 # Extract file_path from tool input (jq for reliable JSON parsing)

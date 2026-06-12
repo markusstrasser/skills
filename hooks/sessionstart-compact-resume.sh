@@ -25,12 +25,8 @@ fi
 
 INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
 
-read -r SOURCE CWD <<<"$(printf '%s' "$INPUT" | python3 -c 'import sys,json
-try:
-    d = json.load(sys.stdin) or {}
-    print(d.get("source",""), d.get("cwd",""))
-except Exception:
-    print("", "")' 2>/dev/null)"
+SOURCE=$(printf '%s' "$INPUT" | jq -r '.source // ""' 2>/dev/null || echo "")
+CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // ""' 2>/dev/null || echo "")
 
 # Only act on the post-compaction start. The settings matcher should already scope
 # this to "compact"; this is a defensive second check so a no-matcher wiring is safe.

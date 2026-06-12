@@ -19,14 +19,7 @@ trap 'exit 0' ERR
 
 INPUT=$(cat)
 
-CMD=$(echo "$INPUT" | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    print(d.get('tool_input', {}).get('command', ''))
-except Exception:
-    print('')
-" 2>/dev/null)
+CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null || echo "")
 
 [ -z "$CMD" ] && exit 0
 

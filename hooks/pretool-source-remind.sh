@@ -10,14 +10,7 @@ trap 'exit 0' ERR
 
 INPUT=$(cat)
 
-FPATH=$(echo "$INPUT" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    print(data.get('tool_input', {}).get('file_path', ''))
-except:
-    print('')
-" 2>/dev/null || echo "")
+FPATH=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // ""' 2>/dev/null || echo "")
 
 [ -z "$FPATH" ] && exit 0
 
@@ -37,16 +30,8 @@ fi
 echo "$FPATH" | grep -qE '/decisions/' && exit 0
 
 # Check if the content being written already has source tags
-CONTENT=$(echo "$INPUT" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    ti = data.get('tool_input', {})
-    # For Write: check content. For Edit: check new_string.
-    print(ti.get('content', '') or ti.get('new_string', ''))
-except:
-    print('')
-" 2>/dev/null || echo "")
+# For Write: check content. For Edit: check new_string (empty content falls back).
+CONTENT=$(printf '%s' "$INPUT" | jq -r '(.tool_input // {}) as $ti | (($ti.content // "") | if . == "" then ($ti.new_string // "") else . end)' 2>/dev/null || echo "")
 
 if echo "$CONTENT" | grep -qE '\[SOURCE:|\[DATABASE:|\[DATA\]|\[INFERENCE\]|\[SPEC\]|\[CALC\]|\[QUOTE\]|\[TRAINING-DATA\]|\[PREPRINT\]|\[FRONTIER\]|\[UNVERIFIED\]|\[[A-F][1-6](:[^]]+)?\]'; then
     exit 0

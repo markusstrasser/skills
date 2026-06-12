@@ -29,19 +29,8 @@ fi
 
 # Extract session_id and cwd — try Claude's shape first, fall back to
 # common alternates Kimi might use.
-eval "$(echo "$INPUT" | python3 -c '
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    sid = data.get("session_id") or data.get("sessionId") or data.get("id") or ""
-    cwd = data.get("cwd") or data.get("working_directory") or data.get("work_dir") or ""
-    if sid:
-        print(f"SID={sid}")
-    if cwd:
-        print(f"CWD={cwd}")
-except Exception:
-    pass
-' 2>/dev/null)"
+SID=$(printf '%s' "$INPUT" | jq -r 'first((.session_id, .sessionId, .id) | select(. != null and . != "" and . != false)) // ""' 2>/dev/null || echo "")
+CWD=$(printf '%s' "$INPUT" | jq -r 'first((.cwd, .working_directory, .work_dir) | select(. != null and . != "" and . != false)) // ""' 2>/dev/null || echo "")
 
 [ -z "$SID" ] && exit 0
 
