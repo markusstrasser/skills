@@ -39,7 +39,22 @@ def main() -> int:
     parser.add_argument("--max-tokens", type=int, help="Allowed override: max tokens")
     parser.add_argument("--search", action="store_true", help="Allowed override: enable search")
     parser.add_argument("--system", help="Optional system prompt")
+    parser.add_argument("--max-context-bytes", type=int, default=600_000,
+                        help="Refuse if --context exceeds this (default 600KB ~150K tok). "
+                             "Architectural guard: an oversized batch silently kills the dispatch "
+                             "(gemini died on a 3.4MB observe batch, 2026-06-12). 0 disables.")
     args = parser.parse_args()
+
+    # Enforce the context cap in CODE, not in caller prose — instructions are ~0%
+    # reliable; the observe skill said "verify <500KB" and the runtime ignored it.
+    if args.context and args.max_context_bytes and args.context.exists():
+        n = args.context.stat().st_size
+        if n > args.max_context_bytes:
+            print(f"context-too-large: {n} bytes > {args.max_context_bytes} cap "
+                  f"({args.context}). Oversized batches silently kill the dispatch — "
+                  f"split by project or drop the lowest-signal inputs (Codex transcripts first), "
+                  f"or raise --max-context-bytes deliberately.", file=sys.stderr)
+            return 2
 
     prompt = args.prompt
     if args.prompt_file:

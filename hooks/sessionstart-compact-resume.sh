@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
 # sessionstart-compact-resume.sh — SessionStart(matcher:compact) hook.
 # Gov-ID: hook:compact-resume
-# goal: after auto-compaction the turn stops and waits for a human "continue"; an unattended /loop stalls
+# goal: when a turn DOES resume after compaction, it re-orients correctly instead of stalling/re-asking
 # verifier: null
 # blast_radius: shared
 #
-# Fires only on the post-compaction SessionStart (source="compact"). Injects a
-# resume directive so the agent picks the work back up from checkpoint.md WITHOUT
-# waiting for the user to type "continue" — closing the one open half of the
-# compaction flow (PreCompact already auto-writes checkpoint.md). Pairs with the
-# global CLAUDE.md post-compaction rule (read checkpoint, verify claimed commits).
+# HONEST SCOPE (Fable-5 review 2026-06-12): SessionStart additionalContext is
+# injected into the NEXT turn — it does NOT *create* a turn. If the harness stops
+# and waits after auto-compaction, something else (the /loop wakeup, or the human)
+# must start that turn; this hook only makes that turn re-orient correctly. It does
+# NOT by itself close the "type continue" stall — that depends on /loop self-firing,
+# which is still unverified (decisions-pending/2026-06-12-loop-resume-after-autocompact.md).
+#
+# Fires on source="compact" (covers BOTH auto and manual /compact — there's no
+# signal to distinguish them). The message is therefore written to be correct in
+# both cases: "continue the in-progress work" is right after a manual /compact too.
 # Advisory: emits context, never blocks.
 
 trap 'exit 0' ERR
@@ -34,7 +39,7 @@ except Exception:
 CKPT=""
 [ -n "$CWD" ] && [ -f "$CWD/.claude/checkpoint.md" ] && CKPT=" A fresh .claude/checkpoint.md was written by the PreCompact hook — read it first."
 
-MSG="Context was just auto-compacted mid-session.${CKPT} Resume the work in progress automatically — do NOT wait for the user to say \"continue\". First verify reality against the compaction summary: run \`git log --oneline -10\` and confirm any work the summary claims as done actually landed (compaction summaries hallucinate completed commits). Then continue from the checkpoint's Pending Tasks. If a /loop is active, proceed with the current tick."
+MSG="Context was just compacted.${CKPT} Re-orient and continue the in-progress work from the checkpoint's Pending Tasks — don't re-ask the user what you were doing. First verify reality against the compaction summary: run \`git log --oneline -10\` and confirm any work the summary claims as done actually landed (compaction summaries hallucinate completed commits). If a /loop is active, proceed with the current tick."
 
 printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \
   "$(printf '%s' "$MSG" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')"
