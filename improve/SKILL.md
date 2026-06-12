@@ -17,14 +17,14 @@ The action arm of the diagnostic loop. Three modes: harvest cross-artifact findi
 |------|---------|------|-------------|
 | `harvest` | Cross-artifact gathering, dedup, ranked output | no | `--days 3 --focus all` |
 | `suggest` | Detect repeated workflows, propose skill/MCP candidates | no | `--sessions 10` |
-| `maintain` | Quality checks, finding implementation, routine rotation | `/loop 15m` | (none) |
+| `maintain` | THE loop conductor — sweep + pick-one + route | `/loop 30m` | `[repo]` (default: all active) |
 
 **Default (no mode):** Run harvest with defaults, show top 5, implement top confirmed finding.
 
-> The `tick` mode (single orchestrator tick) was removed 2026-06-08 — the orchestrator
-> (`scripts/orchestrator.py` + launchd schedule) was eradicated 2026-06-07. `maintain`'s
-> orchestrator-coupled steps (Live-State orchestrator query, P0 Orchestrator Failures,
-> P1 Queue Dispatch) are likewise dead; treat them as no-ops until removed.
+> History: the `tick` mode and the headless orchestrator (`scripts/orchestrator.py` + launchd)
+> were eradicated 2026-06-07/08; the standalone `orchestrator` skill and `research-ops cycle`
+> were merged INTO `maintain` 2026-06-12 (it is now the single loop conductor — three
+> conductors for one job was over-proliferation). The old orchestrator-queue P0/P1 steps are gone.
 
 Parse mode from first positional argument in `$ARGUMENTS`. Remaining args pass through to the mode.
 
@@ -302,6 +302,14 @@ Each tick, in order:
 The growth/research worker is `/research` (one-shot) and `/research-ops {compile,diff,dispatch}`
 (non-loop tools); their old `cycle` loop is now this skill's Generate lane. **Never ask for input.**
 
+**Scope (optional repo arg).** Default = **all active repos** (agent-infra intel genomics phenome
+hutter substrate) — run it repo-agnostic and let it find the highest-leverage work anywhere. Pass a
+single repo to scope a tick: `/improve maintain genomics` targets that repo's findings/rotation.
+The SWEEP always covers all repos (it's cheap and a red job anywhere is the priority); the scope arg
+only narrows which repo the tick's *rotation/fixes* act on. So:
+- `/loop 30m /improve maintain` — let it rip across everything (the default you want for all-day looping)
+- `/loop 30m /improve maintain intel` — same loop, work scoped to intel
+
 ### Live State
 
 !`bash -c '
@@ -311,7 +319,7 @@ FINDING_HASH=$(grep -c "Status:\*\* \[ \]" ~/Projects/agent-infra/improvement-lo
 MAINTAIN_HASH=$(md5 < "$(pwd)/MAINTAIN.md" 2>/dev/null || echo "na")
 PROPOSAL_HASH=$(ls -la ~/.claude/steward-proposals/ 2>/dev/null | md5 || echo "na")
 DB_HASH=$(for db in ClinVar gnomAD PharmCAT CPIC; do f=$(find "$(pwd)/databases/" -iname "*${db}*" -type f 2>/dev/null | head -1); [ -n "$f" ] && stat -f%m "$f" 2>/dev/null; done | md5 || echo "na")
-GIT_HASH=$(for p in meta intel selve genomics; do cd ~/Projects/$p 2>/dev/null && git log --oneline -1 2>/dev/null; done | md5 || echo "na")
+GIT_HASH=$(for p in agent-infra intel genomics phenome hutter substrate; do cd ~/Projects/$p 2>/dev/null && git log --oneline -1 2>/dev/null; done | md5 || echo "na")
 CURRENT_HASH="${RECEIPT_HASH}|${FINDING_HASH}|${MAINTAIN_HASH}|${PROPOSAL_HASH}|${DB_HASH}|${GIT_HASH}"
 PREV_HASH=$(cat "$HASH_FILE" 2>/dev/null || echo "")
 echo "$CURRENT_HASH" > "$HASH_FILE"
@@ -333,7 +341,7 @@ echo ""; echo "=== PROPOSALS ==="; ls ~/.claude/steward-proposals/*.md 2>/dev/nu
 echo ""; echo "=== DB FRESHNESS ==="; for db in ClinVar gnomAD PharmCAT CPIC; do f=$(find "$(pwd)/databases/" -iname "*${db}*" -type f 2>/dev/null | head -1); if [ -n "$f" ]; then days=$(( ($(date +%s) - $(stat -f%m "$f" 2>/dev/null || echo 0)) / 86400 )); echo "  $db: ${days}d old"; else echo "  $db: not found"; fi; done
 echo ""; echo "=== MAINTAIN STATE ==="; if [ -f "$(pwd)/MAINTAIN.md" ]; then findings=$(grep -c "^\- \*\*M[0-9]" "$(pwd)/MAINTAIN.md" 2>/dev/null || echo 0); queued=$(grep -c "\[queued\]" "$(pwd)/MAINTAIN.md" 2>/dev/null || echo 0); echo "  $findings findings, $queued queued"; else echo "  (no MAINTAIN.md -- first run, create from template)"; fi
 echo ""; echo "=== RECENT ACTIONS ==="; tail -5 "$(pwd)/maintenance-actions.jsonl" 2>/dev/null || echo "(none yet)"
-echo ""; echo "=== GIT (last 2h) ==="; for proj in meta intel selve genomics; do dir=~/Projects/$proj; [ -d "$dir/.git" ] || continue; out=$(cd "$dir" && git log --oneline --since="2 hours ago" 2>/dev/null | head -3); [ -n "$out" ] && echo "  $proj:" && echo "$out" | sed "s/^/    /"; done
+echo ""; echo "=== GIT (last 2h) ==="; for proj in agent-infra intel genomics phenome hutter substrate; do dir=~/Projects/$proj; [ -d "$dir/.git" ] || continue; out=$(cd "$dir" && git log --oneline --since="2 hours ago" 2>/dev/null | head -3); [ -n "$out" ] && echo "  $proj:" && echo "$out" | sed "s/^/    /"; done
 ' 2>&1 | head -80`
 
 ### Phase 1: SWEEP (always — the visibility)
