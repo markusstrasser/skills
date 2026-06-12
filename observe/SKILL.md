@@ -227,14 +227,14 @@ Dispatch to the `deep_review` profile (currently gemini-3.5-flash) for structure
 
 **Gemini's output is DATA, not conclusions.** It extracts patterns; you do the creative synthesis in Phase 3.
 
-**Operational limits (HARD — exceeding the context cap silently kills the dispatch):**
-- **Per-batch context ≤ 400KB (~100K tokens). This is a hard cap, not advisory.** Measured
-  failure 2026-06-12: a `--days 7` architecture run sent ~3.4MB/project (raw Claude+Codex
-  transcripts, `head -c 1800000` + `head -c 1600000`) to gemini-3.5-flash; the dispatch died
-  with NO output and NO error file — a silently-dead loop component, the same class this skill
-  exists to catch. ALWAYS `wc -c "$CTX"` before dispatch and refuse if >400KB. Codex
-  transcripts are the bulk and the least signal-dense — drop them first, or extract with
-  `--full` off, before raising the cap.
+**Operational limits (the context cap is now enforced in CODE, not prose):**
+- **`llm-dispatch.py` refuses `--context` > 600KB (`--max-context-bytes`, exit 2).** You no
+  longer have to remember to check — the wrapper does. Measured failure 2026-06-12: a `--days 7`
+  architecture run sent ~3.4MB/project (raw Claude+Codex transcripts) to gemini-3.5-flash and
+  the dispatch died with NO output and NO error file (silently-dead loop component — the class
+  this skill exists to catch). When the wrapper refuses, **batch by project and drop the
+  lowest-signal inputs first** (Codex transcripts are the bulk and least signal-dense; or extract
+  with `--full` off). Don't blindly raise the cap — splitting preserves signal, a bigger blob loses it.
 - Pattern extraction degrades past ~80 sessions in one Gemini call. For `--days 7+`, batch by project.
 - Gemini hallucination rate on session details: ~20-30%. Verification below is mandatory.
 - Cross-project patterns are harder to detect when batched by project — note this gap.
