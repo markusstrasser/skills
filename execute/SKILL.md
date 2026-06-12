@@ -98,10 +98,15 @@ For each phase in the slice, in order:
    weak gate" is the worst quadrant — and "Opus is token-efficient so cheaper" was REJECTED (~2.4× the
    premium buys spec fidelity, not efficiency). A downgraded executor's brief MUST carry exact verification
    commands + cleanup directives — low effort skips only *self-initiated* checking, so the brief does the
-   initiating. The Agent tool exposes only `model:` → its dispatches silently run **DEFAULT** effort; per-dispatch
-   effort needs headless `claude -p --model <m> --effort low` OR `llmx --lite bare -m <m> -e low` (both
-   $0 subscription via claude-cli transport; the effort dial verified to land 2026-06-12 —
-   `effective_reasoning_effort: low` in the llmx stderr).
+   initiating. **Effort pinning, corrected 2026-06-13:** agent-definition frontmatter supports `effort:`
+   (low/medium/high/xhigh/max — overrides session; code.claude.com/docs/en/sub-agents.md), so the Agent
+   tool CAN run pinned-effort subagents via a custom agent type — global `fable-low` exists
+   (~/.claude/agents/fable-low.md) and is the default lane: session-native tools (web, MCP) work there.
+   Headless `claude -p --model <m> --effort low` (key-stripped) remains for rig-manifest/eval dispatch
+   (~/Projects/evals/bin/dispatch-arm.sh) — but know its wall: `--permission-mode acceptEdits` blocks
+   WebSearch/WebFetch/MCP too (measured 2026-06-13: a research arm came back fully DEGRADED), so
+   web-needing work goes through the Agent-tool lane, not headless-acceptEdits. `llmx --lite bare -m <m>
+   -e low` is the third path ($0 claude-cli transport; verified 2026-06-12).
    **Every headless brief MUST include "DO NOT use the Agent tool — run everything yourself in the main
    loop":** subagent shells sandbox-block build tools (bun/node TTY-approval wall), and a headless arm that
    delegates to subagents enters a dispatch→blocked→redispatch doom-loop (measured: 146 subagents/40 min,
