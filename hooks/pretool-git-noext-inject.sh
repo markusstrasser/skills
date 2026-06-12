@@ -32,15 +32,34 @@ if not cmd:
     sys.exit(0)
 
 # Only rewrite SIMPLE single git invocations. Compound commands (pipes, &&, ;,
-# subshells, redirects, command substitution) are left untouched — rewriting
-# them risks corruption, and the failure mode we guard is interactive viewing.
-if any(tok in cmd for tok in ("|", "&&", "||", ";", "$(", "`", ">", "<", "\n")):
+# subshells, command substitution) are left untouched — rewriting them risks
+# corruption. ONE redirect shape IS handled: a single trailing `> file` /
+# `>> file` — that's the patch-generation form where difftastic output becomes
+# a persisted garbage artifact (2× on 2026-06-12: entity-escape patch + p2
+# LUT patch, both rejected by git apply as "No valid patches").
+if any(tok in cmd for tok in ("|", "&&", "||", ";", "$(", "`", "<", "\n")):
     sys.exit(0)
 
 try:
     parts = shlex.split(cmd)
 except ValueError:
     sys.exit(0)
+
+# Trailing-redirect handling: accept exactly [... '>' target] or [... '>>' target]
+# with no other '>' anywhere; anything else with '>' bails (fd redirects like
+# 2>&1, attached forms like '>file', multiple redirects).
+redirect_suffix = []
+if ">" in cmd:
+    if (
+        len(parts) >= 3
+        and parts[-2] in (">", ">>")
+        and ">" not in parts[-1]
+        and not any(">" in p for p in parts[:-2])
+    ):
+        redirect_suffix = parts[-2:]
+        parts = parts[:-2]
+    else:
+        sys.exit(0)
 if not parts or parts[0] != "git":
     sys.exit(0)
 
@@ -74,6 +93,8 @@ if "--no-ext-diff" not in rest:
 new += rest
 
 new_cmd = " ".join(shlex.quote(p) for p in new)
+if redirect_suffix:
+    new_cmd += " " + redirect_suffix[0] + " " + shlex.quote(redirect_suffix[1])
 if new_cmd == cmd:
     sys.exit(0)
 
