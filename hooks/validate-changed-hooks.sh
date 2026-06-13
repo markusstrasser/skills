@@ -118,10 +118,39 @@ if [ -f "$CONTRACT_LINT" ]; then
     rm -rf "$_ctmp"
 fi
 
+# ── Hook-test gate (opt-in via `# precommit-trigger:`) ────────────────────
+# A hook-test that declares `# precommit-trigger: <basename-globs>` is RUN when a staged
+# file's basename matches one of its globs, blocking the commit if the test fails. This is
+# how an invariant a hook-test guards (e.g. the provenance-taxonomy single-source —
+# test_provenance_tags.py) becomes ENFORCED on the commits that could break it, not merely
+# runnable. Opt-in by design: a test with no trigger line is never run here (so an unrelated
+# or pre-existing-failing test can't block hook commits). Repo-agnostic — reads triggers from
+# whatever test_*.py live beside the changed hooks. Tests are stdlib + fast.
+declare -A _testdirs=()
+for f in "${STAGED[@]}"; do is_hook_path "$f" && _testdirs["$(dirname "$f")"]=1; done
+for d in "${!_testdirs[@]}"; do
+    for t in "$d"/test_*.py; do
+        [ -f "$t" ] || continue
+        trig=$(grep -m1 '^# precommit-trigger:' "$t" 2>/dev/null | sed 's/^# precommit-trigger://')
+        [ -z "$trig" ] && continue   # opt-in: no trigger declared -> not gated
+        _hit=0
+        for f in "${STAGED[@]}"; do
+            base=$(basename "$f")
+            for g in $trig; do case "$base" in $g) _hit=1; break 2 ;; esac; done
+        done
+        [ "$_hit" -eq 0 ] && continue
+        if ! _tout=$(python3 "$t" 2>&1); then
+            echo "BLOCKED: hook-test failed — $(basename "$t") guards an invariant a staged change breaks:"
+            printf '%s\n' "$_tout" | sed 's/^/    /' | tail -12
+            FAILED=1
+        fi
+    done
+done
+
 if [ "$FAILED" -ne 0 ]; then
     echo ""
-    echo "A staged hook is broken (syntax or input-contract). Fix it before committing —"
-    echo "a broken shared hook blocks or silently disables tool handling across sessions."
+    echo "A staged hook is broken (syntax, input-contract, or a triggered hook-test). Fix it before"
+    echo "committing — a broken shared hook blocks or silently disables tool handling across sessions."
     exit 1
 fi
 
