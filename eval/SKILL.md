@@ -137,6 +137,34 @@ Answer in writing (they become PREREGISTRATION.md fields):
    means the *exact text* is novel — NOT that the topic is; general-science/medical content is
    in every model's training data even when your composition isn't, so don't over-claim
    contamination-freeness.
+   - **Valid gold for a claim/verification eval is AFFIRMATIVE, never absence.** A refuse/abstain/HOLD
+     gold must come from a confirmed contradicting source, retraction, or supersession — NOT from
+     "not in the store / NEI / no evidence found" (closed-world; inverts rankings). Every external
+     claim-verification benchmark's NEI label is absence — do NOT lift it. (Canonical: phenome
+     `reference_kb_grounded_eval_defeater_invariant` + ADR 0008; the SciFact/JudgeBench/COVID-Fact
+     audits.)
+   - **The strongest uncontaminated gold is a POST-CUTOFF VERDICT FLIP — harvestable, not just a tag.**
+     A claim whose authoritative verdict flipped *after* the model's cutoff T is contamination-free
+     *by construction* (the model can only have memorised the pre-flip verdict → it regurgitates the
+     now-wrong belief) AND an affirmative defeater (anchored to a dated authority). That combination
+     is the one thing no borrowed benchmark supplies. Harvest LIVE (recall forbidden — past your
+     cutoff too) from dated-authority feeds filtered to `change_date > T`: Retraction Watch, the FDA
+     DSC table, ClinVar delta, the CPIC `cpic-data` git log. Cite the primary dated record, not a
+     blog's crawl date (mirrors re-surface old posts with fresh dates). This is intel-harness
+     point-in-time with **T = the training cutoff**. Method + first harvest: `~/Projects/evals/docs/post-cutoff-flips/`.
+   - **Enforce the flip-gold with the SEAL, not trust — and split judgment from retrieval.** Flip-gold
+     is clean only if the SUT can't search its way to the post-T answer mid-eval, so pair it with
+     `allow_internet=false` (the DeepSWE seal below): the airgap turns "we assume it didn't cheat"
+     into "it provably couldn't." This also dissolves the "but it doesn't test web-browsing" objection
+     by SCOPE: a *judgment*-over-a-staged-claim eval (adjudicate promote/hold/reject given an evidence
+     **packet**) is packetizable + airgappable; *retrieval* ("find the right materials") is a SEPARATE
+     capability where PIT-constraining a LIVE search is unsolved (URLs mutate in place at stable
+     addresses, date metadata lies, engines have no as-of-T mode — intel-harness's unsolved web-PIT
+     problem). Claim-verification ESCAPES that trap precisely because a claim+evidence bundle is a
+     static object you curate as-of-T once; trading can't, its task is integrating an unbounded
+     flowing stream. **Curating the packet enforces the PIT boundary by construction — don't try to
+     PIT a live search.** If you must test retrieval, do it against a FROZEN snapshot (Wayback/Common
+     Crawl at T) and state the coverage ceiling; don't pretend live fetch is as-of-T.
    - **Same-family confound — at EVERY model touchpoint, not just the generator.** General rule:
      *any model that helps produce or score the eval's relevance signal must be neutral to all
      candidates* (share no lab/family). Three touchpoints, all real:
