@@ -21,8 +21,15 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
+
+# precommit-trigger: stop-uncommitted-warn.sh test_stop_uncommitted_attribution.py
+# ^ validate-changed-hooks.sh runs this test when the hook (or this test) is staged. The
+#   inline-single-quote idiom that silently kills this bash-embedded hook has recurred twice
+#   (2026-06-11, then f8e2168); test_embedded_python_parses + the attribution cases now block
+#   the next reintroduction at commit time instead of weeks later.
 
 SCRIPT = Path(__file__).resolve().parent / "stop-uncommitted-warn.sh"
 
@@ -61,6 +68,18 @@ class StopUncommittedAttributionTest(unittest.TestCase):
         d.mkdir(parents=True, exist_ok=True)
         (d / f"{sid}.touched-files").write_text("".join(r + "\n" for r in rels))
 
+    def _write_settled(self, rel: str, content: str) -> None:
+        """Write a repo file and backdate its mtime past the hook's 90s in-flight
+        window. The Stop hook defers files written in the last 90s as still-being-
+        written subagent stubs (stop-uncommitted-warn.sh, commit f8e2168); a fresh
+        write here would be deferred, never committed, masking the attribution
+        behavior these tests target. In-flight deferral is covered separately by
+        test_inflight_file_deferred."""
+        p = self.repo / rel
+        p.write_text(content)
+        old = time.time() - 200
+        os.utime(p, (old, old))
+
     def _fire_as(self, sid: str) -> None:
         stdin = '{"cwd":"%s","session_id":"%s"}' % (self.repo, sid)
         subprocess.run(["bash", str(SCRIPT)], input=stdin,
@@ -73,8 +92,8 @@ class StopUncommittedAttributionTest(unittest.TestCase):
         """Global /tmp ledger: firing other must not commit mine's file."""
         self._tmp_ledger(self.mine, "mine.py")
         self._tmp_ledger(self.other, "other.py")
-        (self.repo / "mine.py").write_text("m\n")
-        (self.repo / "other.py").write_text("o\n")
+        self._write_settled("mine.py", "m\n")
+        self._write_settled("other.py", "o\n")
         self._fire_as(self.other)
         self.assertIn("other.py", self._head_files())
         self.assertIn("mine.py", self._git("status", "--short", "mine.py"))
@@ -83,8 +102,8 @@ class StopUncommittedAttributionTest(unittest.TestCase):
         """other via .claude/sessions, mine via /tmp — both honored together."""
         self._repo_ledger(self.other, "other.py")
         self._tmp_ledger(self.mine, "mine.py")
-        (self.repo / "mine.py").write_text("m\n")
-        (self.repo / "other.py").write_text("o\n")
+        self._write_settled("mine.py", "m\n")
+        self._write_settled("other.py", "o\n")
         self._fire_as(self.other)
         self.assertIn("other.py", self._head_files())
         self.assertIn("mine.py", self._git("status", "--short", "mine.py"))
@@ -93,6 +112,24 @@ class StopUncommittedAttributionTest(unittest.TestCase):
         r = subprocess.run(["bash", str(SCRIPT)], input="{}",
                            capture_output=True, text=True, timeout=10)
         self.assertEqual(r.returncode, 0)
+
+    def test_inflight_file_deferred(self) -> None:
+        """A ledger-owned file written <90s ago is deferred (not committed),
+        even when attribution would otherwise commit it."""
+        self._tmp_ledger(self.other, "fresh.py")
+        (self.repo / "fresh.py").write_text("o\n")  # mtime ~ now -> in-flight
+        self._fire_as(self.other)
+        self.assertNotIn("fresh.py", self._head_files())
+        self.assertIn("fresh.py", self._git("status", "--short", "fresh.py"))
+
+    # NB: parse-safety of the embedded `python3 -c` program (the inline-single-quote
+    # idiom that silently kills this hook) is enforced separately and faithfully by
+    # lint_hook_input_contract.py, which simulates bash's quote splicing — the
+    # always-on contract gate in validate-changed-hooks.sh runs it on every staged
+    # hook. A naive compile() of the raw file text here would be UNFAITHFUL (the
+    # quotes are harmless in a python comment but corrupt the bash-spliced program),
+    # so it is intentionally NOT duplicated. A parse-dead hook also fails every
+    # behavioral case below (no output -> assertions fail), so it cannot slip through.
 
 
 if __name__ == "__main__":
