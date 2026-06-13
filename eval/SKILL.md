@@ -210,6 +210,15 @@ over-obfuscation. Before trusting ANY recall/nDCG/accuracy number:
 queries had the gold outranked by co-relevant sibling memos**; the single-gold recall@5 verdict
 was *inconclusive*, surfaced only by eyeballing misses post-hoc — `audit_label_noise.py`.)
 
+**This generalizes beyond retrieval — read the TRACES, not the buckets, for ANY eval, and ESPECIALLY
+on a clean/perfect score.** Aggregate buckets are a proxy; a verdict on unread traces verifies the
+arithmetic, not the construct. Persist traces by default (a harness that discards them is unauditable).
+For judged refusal/decline/classification evals: read what the judge actually wrote (is its prompt
+leading?), and read what the *opposite-label control* did (a refusal eval with no ENDORSE foil cannot
+tell "refuses the bad" from "hedges on everything"). A perfect score INCREASES the obligation to read.
+(Evidence: phenome KG-verifier 2026-06-13 — a committed "16/16 decision-grade" verdict had unread,
+in fact *unpersisted*, traces; the trace audit found a led judge + no specificity control.)
+
 ## Phase 4 — Run + stats (evalcore does the discipline)
 
 - Judges via `evalcore.judge.dispatch(..., blind_to=[all candidate names])` — blinding is
@@ -279,6 +288,25 @@ empty. Report gaps as a table; fix all confirmed gaps, not top-N.
   output text (output may be parametric recall); (c) judge/generator neutral-family to the
   system-under-test. Generalizes a closed-world rule (absence ≠ negative; UNASSESSABLE) to the
   grading layer. Ref impl: phenome `tests/evals/epistemics/` + ADR `docs/decisions/0008`.
+- **Should-refuse / decline eval without an ENDORSE specificity foil · a LED judge · unpersisted traces**
+  (phenome KG-verifier TRACE AUDIT, 2026-06-13 — all three caught only when the operator said "go look at
+  the traces," AFTER a "16/16 decision-grade" verdict had been written + committed). A refusal eval that
+  asks ONLY should-refuse questions measures *sensitivity*, not discrimination: if every "Is it established
+  that X?" is a should-refuse, a model that **blanket-hedges on the phrasing** scores 100% with zero
+  domain knowledge. The clean 16/16 was fully consistent with that. Three fixes, all required:
+  - **Specificity foils** — identically-phrased cases whose correct answer is the OPPOSITE (definitive
+    true pairs the SUT must ENDORSE, e.g. CFTR→cystic fibrosis next to refuted RYR2→ARVC). Discrimination =
+    refuses-the-bad AND endorses-the-good; a blanket-hedger fails every foil (an `OVER_REFUSED` bucket).
+    Without foils a high refusal-rate is uninterpretable. (This is the same specificity gap as a
+    classifier reporting recall with no negative class.)
+  - **De-lead the judge** — NEVER tell the judge "the correct behavior is to DECLINE" or hand it the
+    seeded reason before it scores; that makes reason-match + agreement near-automatic and suppresses the
+    `GOLD_INVALID` escape. Classify STANCE blind (question + response only); have the judge *independently*
+    assess the claim's real-world status; compare to the seeded label in CODE, not in the prompt.
+  - **Persist every trace by default** (prompt, full response, tool calls, raw judge output) — a verdict
+    you cannot re-read is not verified. A CLEAN / PERFECT score is a trigger to READ traces, not a license
+    to skip them (softball cases, a rubber-stamp judge, and leading phrasing all produce clean scores).
+    No-verdict-on-unread-traces — the single most expensive lesson of the session.
 - **A cheap proxy metric that isn't the objective — even a deterministic one** (extraction bakeoff,
   2026-06-13). Raw yield (claims/doc) ranked C>B>A and was the headline; the objective was *joinable
   graded* claims (graph-citizen/doc, the unit a verification substrate needs), which ranked B>C>A then
