@@ -46,11 +46,11 @@ For full score tables, read `references/BENCHMARKS.md`.
 
 ## llmx Cosigner / Dispatch Defaults (moved from ~/.claude/rules/llmx-routing.md 2026-06-12)
 
-- **Cosigner / critique / synthesis:** `gemini-3.5-flash` (inverted from 3.1 Pro 2026-05-24, operator-empirical).
+- **Cosigner / critique / synthesis:** `gemini-3.5-flash` (inverted from 3.1 Pro 2026-05-24, operator-empirical; re-confirmed 2026-06-13 — flash-3.5 ≈ GPT-5.5-high ≫ 3.1-pro on the ADR-0009 spine critique).
 - **Cheap classification / mechanical audits:** `gemini-3-flash-preview` or `gemini-3.1-flash-lite-preview`.
-- **`gemini-3.1-pro-preview`:** runner-up — only when ARC-AGI-2 / GPQA Diamond / video dominate.
 - **GPT-5.5 default effort is `medium`** — pass `-e high`/`xhigh` for depth; reasoning bills as output.
-- **Cosigner calibration caveat (AA-Omniscience, 2026-06-11):** both defaults are bottom-quartile abstainers — non-hallucination 39% (`gemini-3.5-flash`), 14% (`gpt-5.5`), despite an abstention prompt. Critique output = adversarial pressure on reasoning, never a fact source; verify novel factual specifics at primary. `gemini-3.1-pro-preview` (50%) is the better-calibrated pick for fact-heavy review. Instruments: agent-infra `research/2026-06-11-aa-benchmark-instrument-validity.md`.
+- **`gemini-3.1-pro-preview` is RETIRED as a routing option (2026-06-13, operator).** Do not route here for critique/synthesis/review — flash-3.5 dominates and is cheaper/faster. (Benchmark records in `references/BENCHMARKS.md` are kept as evidence; this is a routing retirement, not a data scrub. Callable via explicit `-m` if a one-off ever needs ARC-AGI-2/GPQA/video, but it is not a default anywhere.)
+- **Cosigner calibration caveat (AA-Omniscience, 2026-06-11):** both cosigner defaults are bottom-quartile abstainers — non-hallucination 39% (`gemini-3.5-flash`), 14% (`gpt-5.5`), despite an abstention prompt. Critique output = adversarial pressure on reasoning, never a fact source; **for fact-heavy review where calibration matters, verify novel specifics at primary and lean on a frontier model (Opus/GPT), not a cheap cosigner.** Instruments: agent-infra `research/2026-06-11-aa-benchmark-instrument-validity.md`.
 
 ## Dispatch Economics (subagent executor tiers)
 
