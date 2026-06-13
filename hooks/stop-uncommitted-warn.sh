@@ -142,6 +142,21 @@ else:
     if foreign:
         new_changes = [f for f in new_changes if f not in foreign]
 
+# Defer files still being actively written (in-flight subagent output). An mtime
+# within the last 90s means a write is in progress; committing now freezes a stub.
+# Deferred, NOT dropped — the next checkpoint catches the finished file once it
+# stops changing. (2026-06-13: a background research agent stub got swept into a
+# [wip] commit repeatedly until this guard.)
+import time as _time
+_now = _time.time()
+def _in_flight(path):
+    try:
+        return (_now - os.path.getmtime(os.path.join(cwd, path))) < 90
+    except OSError:
+        return False
+in_flight = sorted(f for f in new_changes if _in_flight(f))
+new_changes = [f for f in new_changes if f not in in_flight]
+
 pre_existing = len(all_changes) - len(new_changes)
 
 if not new_changes:
@@ -199,10 +214,14 @@ try:
             u = len(unattributable)
             uplural = "s" if u != 1 else ""
             u_msg = f" {u} subprocess-written file{uplural} (in no ledger) were left uncommitted — commit them explicitly if yours."
+        inflight_msg = ""
+        if in_flight:
+            k = len(in_flight)
+            inflight_msg = f" Deferred {k} in-flight file{'s' if k != 1 else ''} (mtime<90s, still being written) to the next checkpoint."
         output = {
             "hookSpecificOutput": {
                 "hookEventName": "Stop",
-                "additionalContext": f"Auto-checkpointed {n} session file{plural}{pre_msg} as a [wip] commit. UNGATED (no compile/test ran) and it may have captured in-flight subagent work — if so, squash it into the real commit when that work completes; otherwise amend the message when convenient.{u_msg}",
+                "additionalContext": f"Auto-checkpointed {n} session file{plural}{pre_msg} as a [wip] commit. UNGATED (no compile/test ran).{inflight_msg}{u_msg}",
             },
         }
         print(json.dumps(output))
