@@ -218,11 +218,15 @@ When invoked as `--weekly` (or dispatched from `/improve maintain`'s weekly fron
 2. Commit the memo and any entity file updates: `[research] Trending scout — N new findings, window YYYY-MM-DD to YYYY-MM-DD`
 3. **Route findings into the consumption loop.** A memo is generation; the loop drains
    `improvement-log.md`, NOT `research/`. So for every finding with verdict **Adopt** or
-   **Evaluate**, append a `[ ]` item to `agent-infra/improvement-log.md` (Evidence: cite the
-   memo path + source; Proposed fix: the integration path; Status: `[ ]` proposed). Without
-   this step the finding is invisible to `/improve maintain` and dies in the memo
-   (generation-without-consumption — see `consumption-over-autonomy.md`). **Watch** / **Ignore**
-   verdicts stay in the memo only. Do NOT auto-implement — `[ ]` is for human/loop disposition.
+   **Evaluate**, append a `[ ]` item to `agent-infra/improvement-log.md` — **include the
+   finding's title verbatim** (that is what clears it in the orphan-findings ratchet, which is
+   finding-level: it matches ≥2 distinctive title tokens, NOT just the memo path) plus Evidence
+   (cite the memo path), Proposed fix (the integration path), Status `[ ]`. If a memo has NO
+   live items (all done/Watch/Extract-study), add ONE `RECONCILIATION:` entry citing the memo
+   stem — that is the only whole-memo clear. Without routing, the finding is invisible to
+   `/improve maintain` and dies in the memo (generation-without-consumption,
+   `consumption-over-autonomy.md`). **Watch** / **Ignore** verdicts stay memo-only. Do NOT
+   auto-implement — `[ ]` is for human/loop disposition.
 
 ## Loop Integration
 
