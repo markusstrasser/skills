@@ -64,7 +64,7 @@ See [error-codes.md](references/error-codes.md) for full exit code table and Pyt
 llmx chat -m gemini-3.5-flash -f context.md --timeout 300 --flex "Review this"
 ```
 
-`--flex` = 50% best-effort discount (variable latency, sheds load with 503s) — right for background/cron/review dispatch; pair with `--fallback`. For bulk async, `llmx batch` is also 50% off. `--schema`, `--search`, and `--max-tokens` all work natively on the API now (no CLI-fallback gymnastics); without `--max-tokens` the API defaults to 8K output, so pass `--max-tokens 65536` for long outputs.
+`--flex` = 50% best-effort discount (variable latency, sheds load with 503s) — right for single best-effort background/cron/review calls; pair with `--fallback`. **NEVER use `--flex` for BULK dispatch where every result must land** (corpus extraction, eval sweeps): under load it sheds requests as silent 503s and a swallow-on-failure loop drops whole items, silently undercounting your dataset — measured 2026-06-13, a chunked extraction got 1 claim instead of 22 (7/8 chunks 503-dropped), nearly inverting an eval verdict. For bulk completeness, use **`llmx batch`** (50% off AND reliable) or per-call with **retry-on-failure** (retry rc≠0/timeout, never a genuine rc==0 empty); add a validity guard for impossible results. `--fallback` is also wrong for evals (it swaps to a weaker model mid-run, changing the arm). `--schema`, `--search`, and `--max-tokens` all work natively on the API now (no CLI-fallback gymnastics); without `--max-tokens` the API defaults to 8K output, so pass `--max-tokens 65536` for long outputs.
 
 ### 1.5. Multi-File `-f` Is Not Reliable Enough For Critical Review Flows
 
