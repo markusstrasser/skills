@@ -29,7 +29,8 @@ esac
 [[ ! -f "$FPATH" ]] && exit 0
 
 # Quick pre-check: if file has reasonable tag density, skip the API call
-if grep -qE '\[SOURCE:|\[DATABASE:|\[DATA\]|\[INFERENCE\]|\[TRAINING-DATA\]|\[PREPRINT\]|\[FRONTIER\]|\[UNVERIFIED\]|\[[A-F][1-6](:[^]]+)?\]|\[PubMed\]|\[arXiv\]|\[Exa\]|\[S2\]|\[ClinGen\]|\[CPIC\]|\[gnomAD\]|\[OMIM\]' "$FPATH"; then
+PROVENANCE_TAG_RE="$(cat "$HOME/Projects/skills/hooks/provenance_tags.re")"  # taxonomy SSOT — references/provenance-tags.md
+if grep -qE "$PROVENANCE_TAG_RE" "$FPATH"; then
     TAG_COUNT=$(grep -cE '\[SOURCE:|\[DATABASE:|\[[A-F][1-6](:[^]]+)?\]|\[PubMed\]|\[arXiv\]|\[Exa\]|\[S2\]|\[ClinGen\]|\[CPIC\]|\[gnomAD\]|\[OMIM\]|\[DATA\]|\[INFERENCE\]' "$FPATH" || true)
     CLAIM_LINES=$(wc -l < "$FPATH")
     if (( TAG_COUNT * 30 >= CLAIM_LINES )); then

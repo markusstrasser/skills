@@ -33,7 +33,8 @@ echo "$FPATH" | grep -qE '/decisions/' && exit 0
 # For Write: check content. For Edit: check new_string (empty content falls back).
 CONTENT=$(printf '%s' "$INPUT" | jq -r '(.tool_input // {}) as $ti | (($ti.content // "") | if . == "" then ($ti.new_string // "") else . end)' 2>/dev/null || echo "")
 
-if echo "$CONTENT" | grep -qE '\[SOURCE:|\[DATABASE:|\[DATA\]|\[INFERENCE\]|\[SPEC\]|\[CALC\]|\[QUOTE\]|\[TRAINING-DATA\]|\[PREPRINT\]|\[FRONTIER\]|\[UNVERIFIED\]|\[[A-F][1-6](:[^]]+)?\]'; then
+PROVENANCE_TAG_RE="$(cat "$HOME/Projects/skills/hooks/provenance_tags.re")"  # taxonomy SSOT — references/provenance-tags.md
+if echo "$CONTENT" | grep -qE "$PROVENANCE_TAG_RE"; then
     exit 0
 fi
 
