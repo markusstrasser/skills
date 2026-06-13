@@ -121,6 +121,25 @@ step 3, future scouts) reference it, never restate it** (constitution principle 
   whole-memo clear). Do NOT inflate the `[ ]` queue with non-actionable items (F1 2026-06-08
   miscount lesson). `doctor.py` surfaces the count daily (`global:orphan-findings`).
 
+**2g. Cross-project memory generalization** (`~/.claude/projects/*/memory/*.md` + `~/.codex/memories/`) —
+the per-project Claude/Codex memory stores accumulate `feedback`/`reference` lessons learned in ONE
+project that are often generalizable to a shared rule/skill/tool. This surface was historically NEVER
+read by the loop (generation-without-consumption — lessons sit siloed where learned; measured 2026-06-14:
+498 memories, 116 feedback-type, 8 cross-project clusters).
+- Run `just memory-harvest` (deterministic pre-filter: `scripts/memory_harvest.py` clusters memories by
+  theme, flags ★ CANDIDATE = spans ≥2 projects or ≥5-silo, suggests a factor-out target). It does NOT
+  judge generalizability — that semantic step is yours here.
+- For each ★ CANDIDATE cluster: **dedup against the suggested target FIRST** (read the global rule / skill
+  it points to — most P8/subagent lessons are already covered; do not re-propose). Promote ONLY a lesson
+  that is (a) genuinely generalizable (not domain-specific), (b) NOT already in the shared home, (c)
+  recurs ≥2 projects OR is a high-value single-project silo whose home is a shared skill. The flagship is
+  the **Modal ops** cluster (~37 mems, mostly genomics) → `skills/modal`: future Modal users + sessions
+  should inherit budget-kill/volume-path/timeout-extrapolation lessons instead of re-learning at cost.
+- Output: a factor-out proposal (lesson → target file) into the harvest ranking. Cross-skill/cross-repo
+  factoring is **propose-only** (it edits shared skills 3+ projects consume) → route to the human unless
+  the user has directed the factoring. Keyword pre-filter over-matches (e.g. "verify" is noisy); the
+  dedup-first step is what keeps the `[ ]` queue honest.
+
 ### Phase 3: Harvest Unstructured Signals
 
 **3a. User `#f` Feedback** -- highest signal, ground-truth corrections:
