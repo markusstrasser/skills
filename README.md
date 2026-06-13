@@ -14,26 +14,48 @@ All three tools discover skills via user-level symlinks pointing here:
 
 ## Skills
 
-| Skill | What it does | Portability |
-|-------|-------------|-------------|
-| `causal-check` | Causal inference discipline. Shape-match explanations to observations, define the null. | Portable |
-| `epistemics` | Bio/medical/scientific evidence hierarchy and anti-hallucination rules. | Portable |
-| `life-science-research` | Route biomedical questions across genetics, expression, pathways, structure, pharmacology, clinical evidence, literature, and omics sources. | Portable |
-| `source-grading` | NATO Admiralty System (A-F reliability, 1-6 credibility). For OSINT, forensic, legal work. | Portable |
-| `goals` | Elicit, clarify, or revise project goals AND operating principles through structured questioning. Produces or updates docs/GOALS.md (one source of truth for goals + governance). | Portable |
-| `investigate` | Deep forensic investigation. Fraud detection, OSINT, billing audits. Adversarial, cross-domain. | Portable |
-| `competing-hypotheses` | Analysis of Competing Hypotheses (ACH). Bayesian LLR scoring. | Mostly portable |
-| `entity-management` | Versioned knowledge files for entities (people, companies, genes, drugs). | Mostly portable |
-| `model-guide` | Frontier model selection and prompting guide. Which model for which task, known pitfalls. | Mostly portable |
-| `retro` | End-of-session retrospective. Extracts failure modes and tooling proposals. | Mostly portable |
-| `supervision-audit` | Audit sessions for wasted supervision. Outputs concrete automation fixes. | Mostly portable |
-| `agent-pliability` | Make project files more discoverable for agents. Renames, splits, builds indexes. | Mostly portable |
-| `llmx-guide` | Gotchas when calling llmx from Python or Bash. Non-obvious bugs and incompatibilities. | Mostly portable |
-| `model-review` | Cross-model adversarial review via llmx. Dispatches to Gemini and GPT for critique. | Claude-heavy |
-| `researcher` | Autonomous multi-source research. Orchestrates Exa, Brave, Perplexity, Semantic Scholar. | Claude-heavy |
-| `session-analyst` | Analyzes session transcripts for behavioral anti-patterns. Dispatches to Gemini. | Claude-heavy |
-| `project-upgrade` | Autonomous codebase improvement via Gemini structured analysis. | Claude-heavy |
-| `debug-mcp-servers` | Debug MCP server loading issues in Claude Code. | Claude-only |
+<!-- GENERATED — mirrors active, non-private skills in skill_manifest.jsonl (the source of truth).
+     Do NOT hand-maintain these rows: this table had drifted to list 13 deleted skills
+     (agent-pliability, model-review, researcher, project-upgrade, …) because it was edited by
+     hand after the 2026-04-08 consolidation. Refresh from the manifest, not by editing rows. -->
+
+| Skill | What it does |
+|-------|--------------|
+| `analyze` | Reusable reasoning lenses: null/base-rate, causal attribution, DAG adjustment, ACH hypotheses, weakest-link audit, and decision-impact stop. Use for why/root-cause/regression/confounder/anomaly questions when a project workflow needs sharper reasoning. Local only. |
+| `bio-verify` | Verify hardcoded bio constants (coords, genes, ratios) vs Ensembl/ClinVar/ISBT/gnomAD/PanelApp. |
+| `brainstorm` | Divergent ideation via systematic perturbation — denial cascades, domain forcing, constraint inversion. Multi-model dispatch optional (volume, not diversity). For convergent critique, use /model-review. |
+| `browse` | Persistent headless browser daemon (Playwright via gstack's browse binary) for QA, scraping, screenshot verification, multi-step web workflows. Replaces stateless MCP browser calls. |
+| `census-data` | Census Data API + IPUMS extract patterns (ACS, CPS, SIPP, QWI, decennial, USA microdata). Use for state/county aggregates, microdata extracts, immigrant shares, earnings-by-group, Card/Borjas-style panels. |
+| `corpus` | Canonical local store for source bytes + parses + citation graph + annotations. 'check corpus store', 'cite something', 'find contradicting citations', 'has any repo already seen this DOI'. |
+| `critique` | Adversarial review. Modes: model (Gemini+GPT), verify (fact-check), close (post-impl tests). 'review plan', 'what's wrong', 'fact-check'. |
+| `data-acquisition` | Probe→stage→register pattern for pulling external datasets (Census, NCES, PSID, MEPS, IPUMS, AHRQ, IRS SOI, BLS, FRED). Use when downloading microdata, bulk-fetching codebooks, or setting up a new dataset in a research topic. |
+| `dataset-register` | Register staged dataset in per-topic catalog with provenance, variables, access state, quirks. Use after /data-acquisition, adding a source to a topic, or formalizing an ad-hoc entry. |
+| `de-slop` | Adversarial editor that hunts AI-prose patterns (vocabulary tells, structural padding, false authority). Use for "de-slop", "clean up prose", "check for AI writing" before publishing. |
+| `emil-design-eng` | Emil Kowalski's philosophy on UI polish, component design, animation decisions, and the invisible details that make software feel great. |
+| `entity-management` | Versioned, sourced entity dossiers across repos. Use when creating/updating company, stock, person, gene, drug, self, contract, or filing pages; routes intel public-company entities to analysis/entities and selve/general entities to docs/entities. |
+| `goals` | Elicit or revise project goals and operating principles into docs/GOALS.md (mission, strategy, metrics, autonomy boundaries). Use when starting a project, pivoting strategy, or governance feels unclear. |
+| `google-workspace` | Automate Google Workspace via gws CLI — Drive uploads, Sheets logs, Gmail alerts, Calendar. Use for session logs to sheets, artifact uploads, pipeline notifications. Not for general HTTP or interactive workflows. |
+| `illustration-gen` | Generate designer-style SVGs from text prompts via Quiver Arrow API (paid). Use when: 'make a logo', 'generate an icon', 'illustrate this concept as SVG'. NOT for precise scientific/technical diagrams — use scientific-drawing instead. |
+| `improve` | Use when: 'what should I fix next', 'suggest improvements', 'run maintenance'. Modes: harvest (gather+rank findings), suggest (repeated workflows → skills), maintain (quality checks + implement), tick (one orchestrator cycle). |
+| `life-science-research` | Biomedical source routing — ClinVar, gnomAD, Ensembl, GTEx, OpenTargets, ChEMBL, PharmGKB, UniProt, PDB, PubMed, bioRxiv. Source lookup + multi-lane synthesis. |
+| `llmx-guide` | llmx CLI gotchas (Python/Bash). Use when writing llmx calls, debugging llmx failures, or choosing model/provider options. |
+| `manim-animations` | Create mathematical animations using Manim. Use when the user mentions animations, mathematical visualizations, 3Blue1Brown-style videos, explaining math concepts visually, animating equations, or working with manim files. |
+| `modal` | Modal serverless Python. Writing/debugging Modal scripts, deploying, or choosing GPU/resource configs. |
+| `model-guide` | Frontier model selection and prompting for Claude Opus 4.8, GPT-5.5, and GPT-5.5 Pro. |
+| `negative-space-sweep` | Divergent discovery of what's MISSING from an optimized system. Multi-perspective search with exclusion lists and category rotation. Use when a domain is heavily optimized and you suspect blind spots. |
+| `neurokit2` | NeuroKit2 biosignal proc: ECG/PPG/EDA/EEG/RSP/EMG/EOG/HRV. HRV analysis, Oura data, sleep studies, wearables. |
+| `observe` | Session retros. Modes: sessions/architecture/supervision/retro. 'what went wrong', 'session quality', 'wasted time'. |
+| `oura-ring` | Oura Ring v2 API: sleep, HRV, readiness, activity, stress, SpO2. Analysis, dashboards, wearable→NeuroKit2. |
+| `research` | 'find papers about', 'research X', 'what's known about'. One-shot research with source grading. /research-ops for cycles/compile/diff. |
+| `research-ops` | Use when: 'run research cycle', 'compile memos into article', 'what's not in training data', 'dispatch parallel audit'. Autonomous research loops, knowledge compilation, training-data diff. For one-shot research questions use /research. |
+| `scientific-drawing` | Use when: 'draw a diagram', 'scientific figure', 'visualize this', 'architecture diagram', 'plot this function'. Typst/CeTZ (fast, default), TikZ (math/circuits/chemistry), D2 (architecture/ERD), Asymptote (3D). |
+| `sweep` | Codebase consistency scan (Flash classifier). Pattern/convention/config drift, function divergence. 'sweep', 'inconsistencies'. |
+| `trending-scout` | Scan for new agent/AI ecosystem developments, filtered against what we already know. Use for "what's new", vendor updates, trending repos, "check for updates", weekly landscape scans. |
+| `upgrade` | Full codebase audit, Gemini+GPT (inventory→plan→review→implement). 'audit codebase', 'find bugs'. Not /critique or /observe. |
+| `verify-before` | Probe before acting, check status before claiming, predict before seeing outcomes. Modes: probe (validate on tiny slice), status (query live ground truth), preregister (lock prediction + decision rule before an experiment/eval reveals its result). |
+| `writing-style` | Write emails, texts, outreach, scheduling notes, or any short prose on behalf of Markus Strasser in his voice. Embeds hard rules, register reference, and banned vocabulary; deeper guide lives in phenome. |
+| `x-api` | X (Twitter) API v2 pay-per-use client — paginated user-tweets pull, cost-tracked Bearer auth, server-side cashtag extraction. Use when monitoring a curated set of finance/research accounts for ticker mentions and material claims. |
+| `youtube-transcript` | Fetch YouTube transcripts via yt-dlp (auto-captions or subs, .vtt → plain text). Use when citing a podcast/video, quoting a speaker, or building a searchable video corpus. Transcript-only. |
 
 ## Life Science Source Skills
 
