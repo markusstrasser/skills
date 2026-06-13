@@ -107,14 +107,17 @@ For each source type, glob within the date window, read each file, extract actio
   (generation-without-consumption; reconciled 2026-06-13). The standing consumer is now
   `just orphan-findings` — it flags any trending memo whose actionable verdicts aren't cited
   in `improvement-log.md` (deterministic memo-cite, report-only, over-reports by design).
-- Run `just orphan-findings`. For each flagged memo, re-verify each actionable finding against
-  the deferred-feature tracker (`research/claude-code-native-features-deferred.md`), git log,
-  and the actual stack. Promote ONLY genuinely-live, discrete, undone items to `improvement-log`
-  as `[ ]`, **citing the memo path** (that citation is what clears the flag). Done-inline /
-  evaluated-rejected / Watch-Extract-study-only / N/A-to-stack / owned-elsewhere → record the
-  disposition in a single reconciliation entry citing the memo (do NOT inflate the `[ ]` queue
-  with non-actionable items — the F1 2026-06-08 miscount lesson). `doctor.py` surfaces the
-  count daily (`global:orphan-findings`).
+- Run `just orphan-findings`. The ratchet is **finding-level** (fixed 2026-06-14): it flags each
+  un-routed actionable finding individually, so partial promotion no longer hides siblings. For
+  each flagged finding, re-verify against the deferred-feature tracker
+  (`research/claude-code-native-features-deferred.md`), git log, and the actual stack. Promote
+  ONLY genuinely-live, discrete, undone items to `improvement-log` as `[ ]`, **including the
+  finding's title verbatim** (the ratchet clears a finding by matching ≥2 distinctive title
+  tokens in the log — a bare memo-path cite no longer clears anything). For a memo whose
+  remaining findings are all done-inline / evaluated-rejected / Watch-Extract-study-only /
+  N/A-to-stack / owned-elsewhere, add ONE `RECONCILIATION:` entry citing the memo stem (the only
+  whole-memo clear). Do NOT inflate the `[ ]` queue with non-actionable items (F1 2026-06-08
+  miscount lesson). `doctor.py` surfaces the count daily (`global:orphan-findings`).
 
 ### Phase 3: Harvest Unstructured Signals
 
