@@ -20,10 +20,9 @@ Examples:
 
 import argparse
 import json
-import os
 import re
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 
 
@@ -99,6 +98,16 @@ def classify_message(text: str) -> tuple[str, str]:
         return ("SYSTEM", "hook-feedback")
     if "session is being continued from a previous conversation" in clean:
         return ("SYSTEM", "context-continuation")
+    # Harness-injected continuation prompt — NOT a user correction. Classifying
+    # the bare "Continue from where you left off." string as CORRECTION has
+    # inflated the wasted-supervision total in every audit (improvement-log
+    # lines 1372/1502/1539/1671/3641). It is a measurement artifact of the
+    # compaction-continuation mechanism, same class as context-continuation above.
+    if lower.rstrip(".!") in {
+        "continue from where you left off",
+        "continue",
+    } and len(clean) < 60:
+        return ("SYSTEM", "context-continuation")
 
     # Rubber stamps (exact match on short messages)
     if lower.rstrip(".!") in RUBBER_STAMP_EXACT and len(clean) < 50:
@@ -131,7 +140,7 @@ def classify_message(text: str) -> tuple[str, str]:
     return ("NEW_AGENCY", "direction")
 
 
-def process_session(path: Path) -> dict:
+def process_session(path: Path) -> dict | None:
     """Process a single JSONL session file."""
     session_id = path.stem
     messages = []
@@ -243,7 +252,6 @@ def main():
             sub_counts[sub] = sub_counts.get(sub, 0) + 1
 
             if cat == "CORRECTION" and len(correction_examples) < 20:
-                proj = "?"
                 correction_examples.append({
                     "session": sess["session_id"],
                     "pattern": sub,
