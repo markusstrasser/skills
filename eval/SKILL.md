@@ -239,6 +239,55 @@ in fact *unpersisted*, traces; the trace audit found a led judge + no specificit
    invariant rows is still useful, just not publishable.
 3. Deviations from prereg → §7 Limitations, explained, never silently absorbed.
 
+## 2026-06 frontier adopts (folded from `evals/research/2026-06-13-frontier-*.md`; ADR 0001)
+
+Cross-axis convergence of 5 frontier memos: **outcome-only scoring is structurally
+insufficient — verify the trace/structure.** That is the same lesson the phenome KG-verifier
+trace audit forced (2026-06-13); the field now backs it (`arXiv:2605.08545` log-analysis as a
+third validity pillar; `arXiv:2604.15149` isomorphic verifiers, causal). Adopt:
+
+- **Isomorphic verifier (Phase 1 verifier-regime).** For agentic/tool-use SUTs, the check is not
+  "did it return verdict X?" but "did it traverse the path that *reaches* X?" — score the trace
+  (which KG nodes/edges queried), not the output (which may be parametric recall). Causal backing:
+  checking structure (not just output) removes the gaming incentive.
+- **Gold-leak guard (Phase 2/4).** Call `evalcore.leakguard.assert_no_gold_leak(sut_prompt, gold)`
+  before EVERY SUT dispatch — the twin of `assert_blind`. It default-denies all gold-only fields
+  (criteria_flags/evidence/failure_modes/route_hints/why_selected/Q-tags + the `gold_verdict`
+  *binding*; the bare answer-space label is fine). This is the structural form of the MACVB
+  criteria_flags→F1=1.0 leak. **Held-out criteria:** the agent must never see the full scoring
+  contract; hold out ≥30% of scoring dimensions (reward-hacking gap grows with task horizon).
+- **Block mirror domains (Phase 1 contamination).** For retrieval/web-search SUTs, block
+  `huggingface.co`, `paperswithcode.com` and benchmark mirrors in the tool config — search-time
+  contamination (the agent retrieves a copy of the test set) hit ~3–4% of queries in a study and
+  standard provenance checks miss it. (Canaries: weak for *training*-contamination, but a synthetic
+  canary in gold-only fields, asserted absent from prompts, is a cheap *leak* tripwire.)
+- **Rubric decomposition before grading (Phase 4).** Decompose each task into sub-rubrics (claim-type
+  / traversal / evidence / verdict / uncertainty) and grade each; rubric-decomposed judges agree with
+  humans at κ≈0.79 vs ≈0.51 for a holistic trajectory judge. Don't use a holistic LLM judge as primary.
+- **Item-quality flag + FDR (Phase 4 stats).** After ≥3 arms accumulate, `evalcore.stats.point_biserial`
+  flags suspect items (stronger arms fail more ⇒ candidate mislabel/contamination) — an INVESTIGATION
+  FLAG for manual gold review, never an auto-gate (noisy at N≈20). `evalcore.stats.benjamini_hochberg`
+  is EXPLORATORY-only; decision claims stay Holm/FWER or bootstrap CIs.
+- **Read ≥5 traces (Phase 3.5 gate).** Before accepting a probe/verdict, read full traces for ≥1 pass
+  + ≥1 fail of each top arm, against the 4 questions (`arXiv:2605.08545`): did it (1) read the answer
+  off a mirror, (2) exploit a scoring loophole, (3) take a dangerous intermediate action, (4) fail from
+  scaffold limits not capability? A decision-grade verdict must cite *verifiable* trace anchors
+  (id + excerpt), not a boolean "I read them."
+- **Metamorphic vocabulary for invariant claims (Phase 5).** State invariants as
+  `source_relation ⇒ output_relation` (the MT discipline behind our "invariant claims"). An oracle-free
+  invariance tier (paraphrase/reorder a gold claim, assert verdict-invariance, report % invariant) is
+  **discovery-only** — preregister invariants, calibrate its ~40% false-positive rate on negatives, and
+  NEVER mix it into pass/fail or the materiality call.
+- **Q-matrix tags (Phase 2 template).** Tag each case to a fixed 3–5-dim capability ontology
+  (retrieval/inference/abstention/binding/query, + `unknown`) as **gold-only** metadata (never in a
+  SUT/judge prompt — it's on the leak deny-list). Enables a diagnostic mIRT capability profile *later*;
+  do NOT fit IRT params at N=10–60 (needs ≥100 items × ≥20 arms).
+
+**Guards (the frontier also tells you what NOT to adopt at our N):** PPI/CLT-PPI label-saving is
+statistically invalid below 50 labels/stratum (GLIDE `arXiv:2605.31278`) — at ~20/stratum, hand-label
+all + bootstrap; `just power` refuses PPI/R² sizing below the threshold. Fitted IRT, CapBencher,
+CAT/LEGO-IRT, noise-injection sandbagging: deferred — see `evals/docs/decisions/deferred-and-open.md`.
+
 ## Review mode
 
 Given an existing eval dir: check each phase artifact exists and bites — prereg committed
