@@ -266,3 +266,16 @@ empty. Report gaps as a table; fix all confirmed gaps, not top-N.
   (prior art) + Phase 1 (controls) + `just power` *before* the claim, not after. We ran the embedder
   eval with full rigor but treated the judge probe as "just measuring" — and it produced a contested
   result. Rigor is triggered by how the result will be USED, not by what you called the script.
+- **KB-absence / KB-structure as a gold label, when grading an agent with broad world knowledge
+  against a PARTIAL store** (phenome KG-as-verifier, 2026-06-13 — the confound recurred 3× in one
+  session). Only **affirmative defeaters** are valid world-truth golds: refutation, contradiction,
+  staleness/supersession, positive multiplicity. Labels from store *absence* (uncited, n=0
+  corroboration, "not in the KB") or *structure* (predicate promiscuity, out-degree) penalize correct
+  knowledge the store happens to lack — closed-world confound; inverts model rankings
+  (`arXiv:2209.08858`). Endpoint-recall, single-source, AND non-entailment-by-promiscuity were all
+  confounded; only refuted/stale/contradicted survived. Corollaries: (a) the judge needs a
+  **`GOLD_INVALID`** escape (both neutral judges agree the case label is wrong) or it merely
+  *automates* the labeling error; (b) to score tool USE / traversal, read the **trace**, not the
+  output text (output may be parametric recall); (c) judge/generator neutral-family to the
+  system-under-test. Generalizes a closed-world rule (absence ≠ negative; UNASSESSABLE) to the
+  grading layer. Ref impl: phenome `tests/evals/epistemics/` + ADR `docs/decisions/0008`.
