@@ -91,6 +91,11 @@ SCENARIOS = [
     ("8 ledger-write-failure", "design + OUTER-LOOP standing rule", "accept_candidate",
      _ctx(gate_verdict=None),
      FAIL_CLOSED, "no durable verdict → a claimed win with no ledger row is void → fail-closed (old loop crashed here)"),
+
+    ("8b errored-accept, gate-not-required", "design (fresh-eyes review)", "accept_candidate",
+     _ctx(gate_verdict="ERROR", gate_required=False),
+     FAIL_CLOSED, "an errored accept is NEVER a reject even when gate_required=False — a crash is not a "
+                  "gate-measured death, so it must not pollute the dead-end bucket (hutter v_dead_ends rule)"),
 ]
 
 

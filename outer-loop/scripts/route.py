@@ -14,7 +14,8 @@ The six rules (in priority order — earlier wins):
   1. PROTECTED action            → HUMAN_REQUIRED   (gate self-edit, model-class change, GOALS/constitution)
   2. discovery / irreversible / non-local blast → HUMAN_REQUIRED  (the human-gate boundary)
   3. gate ERROR / missing required verdict → FAIL_CLOSED  (consumed gate: never accept on a failed/absent gate)
-  4. accept with a non-accept verdict → REJECT          (the gate is consumed, not reported)
+  4. accept with an ERROR/absent verdict → FAIL_CLOSED, with any other non-accept → REJECT
+                                          (the gate is consumed; an un-judged accept is never a reject)
   5. budget-gated action          → BUDGETED/HUMAN       (rate-limited resource; spend only within budget)
   6. clean + reversible + local + accept-verdict → UNATTENDED  (the auto-ratchet); else by regime.
 
@@ -96,6 +97,13 @@ def route(action: str, ctx: Context) -> str:
 
     # Rule 4 — acceptance is decided by the structured verdict, not by the proposer's say-so.
     if action == "accept_candidate":
+        # An accept with no CLEAN verdict is never a REJECT — even if the caller set
+        # gate_required=False. A gate that errored or produced no verdict has not JUDGED the
+        # candidate, so it must not enter the reject/dead-end dedup bucket (hutter's own rule:
+        # "a crash is not a gate-measured death — asserting it forecloses families the gate never
+        # judged", ledger_schema.sql v_dead_ends). Fail closed, unconditionally, for accepts.
+        if ctx.gate_verdict is None or ctx.gate_verdict in ERROR_VERDICTS:
+            return FAIL_CLOSED
         if ctx.gate_verdict not in ctx.accept_verdicts:
             return REJECT
         # accept-verdict present → autonomy by regime:
@@ -107,6 +115,9 @@ def route(action: str, ctx: Context) -> str:
             return UNATTENDED              # the auto-ratchet (reversible + local already checked)
         # partial: per-action unattended IS allowed when reversible + local (already true here);
         # otherwise the broad default is attended.
+        # A bare "mixed" regime reaching an accept means the policy did not stamp the picked item's
+        # own regime on the action (mixed loops route per-item) — fall back to the CONSERVATIVE
+        # attended (human in the room), never to unattended.
         return UNATTENDED if ctx.regime == "partial" else ATTENDED
 
     # Rule 5 — budget-gated actions (spend a rate-limited resource, e.g. arc-agi ground-truth submit).
