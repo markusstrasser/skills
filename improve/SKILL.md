@@ -101,6 +101,21 @@ For each source type, glob within the date window, read each file, extract actio
   Run `just reflect-review` for the ranked view. Do NOT auto-apply — promote into the harvest
   ranking for human disposition only.
 
+**2f. Orphaned research findings** (`research/trending-scout-*.md` adopt-grade verdicts):
+- Harvest's read-path historically EXCLUDED `research/` memos, so trending-scout's
+  Adopt/Evaluate/Extract/Act-now verdicts silently bypassed the loop for ~3 months
+  (generation-without-consumption; reconciled 2026-06-13). The standing consumer is now
+  `just orphan-findings` — it flags any trending memo whose actionable verdicts aren't cited
+  in `improvement-log.md` (deterministic memo-cite, report-only, over-reports by design).
+- Run `just orphan-findings`. For each flagged memo, re-verify each actionable finding against
+  the deferred-feature tracker (`research/claude-code-native-features-deferred.md`), git log,
+  and the actual stack. Promote ONLY genuinely-live, discrete, undone items to `improvement-log`
+  as `[ ]`, **citing the memo path** (that citation is what clears the flag). Done-inline /
+  evaluated-rejected / Watch-Extract-study-only / N/A-to-stack / owned-elsewhere → record the
+  disposition in a single reconciliation entry citing the memo (do NOT inflate the `[ ]` queue
+  with non-actionable items — the F1 2026-06-08 miscount lesson). `doctor.py` surfaces the
+  count daily (`global:orphan-findings`).
+
 ### Phase 3: Harvest Unstructured Signals
 
 **3a. User `#f` Feedback** -- highest signal, ground-truth corrections:
