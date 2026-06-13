@@ -217,7 +217,8 @@ try:
         inflight_msg = ""
         if in_flight:
             k = len(in_flight)
-            inflight_msg = f" Deferred {k} in-flight file{'s' if k != 1 else ''} (mtime<90s, still being written) to the next checkpoint."
+            kplural = "s" if k != 1 else ""  # precompute plural — NO inline single quotes here, they break the bash-embedded program (see L191 NB)
+            inflight_msg = f" Deferred {k} in-flight file{kplural} (mtime<90s, still being written) to the next checkpoint."
         output = {
             "hookSpecificOutput": {
                 "hookEventName": "Stop",
