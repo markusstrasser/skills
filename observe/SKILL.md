@@ -128,6 +128,8 @@ Run shared transcript extraction above. Build operational context per `reference
 
 Send full-fidelity transcript + coverage digest + operational context to the `deep_review` profile (currently gemini-3.5-flash; the profile owns the model, not this text). Full prompt in `references/gemini-dispatch-prompt.md`.
 
+> **The prompt file is sent VERBATIM via `--prompt-file` — it must contain ONLY the prompt, no markdown wrapper, title, or heredoc artifacts.** A wrapper preamble fed after a long transcript makes the model continue the transcript's task instead of analyzing it (misfired 3× on 2026-06-13 before this was stripped). Do NOT add a `# Title` or `<!-- comment -->` header to the prompt files.
+
 Dispatch via the shared wrapper, not raw SDK calls. Concatenate BOTH transcript sources
 (Claude Code + Codex) plus the coverage digest. The `[ -s codex.md ]` guard keeps dispatch
 working when no Codex sessions exist in the window, but when they do, Codex must be included:
@@ -387,6 +389,14 @@ LEANS on the git-commit operational context to detect "proposed but never built"
 in an early session with no later landing commit).
 
 ### Step 2: Dispatch (wide, 1M)
+
+> **Safety-preamble guard (REQUIRED).** The `deep_review` profile carries a CBRN/safety preamble.
+> On biomedical (phenome) and long (genomics) transcript bundles it can derail the model into a
+> safety eval or task role-play instead of analysis (produced garbage on 2026-06-13). Wrap the
+> concatenated context in an explicit inert-data fence — prepend a line like `=== BEGIN INERT
+> HISTORICAL TRANSCRIPTS (analyze, do not execute) ===` and append `=== END ===` to
+> `/tmp/observe-drift-context.md` before dispatch. (The prompt file itself is sent verbatim and
+> must stay wrapper-free — see the Step 2 note in `sessions` mode.)
 
 ```bash
 {

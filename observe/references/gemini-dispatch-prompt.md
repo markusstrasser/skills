@@ -1,15 +1,3 @@
-<!-- Reference file for observe skill (sessions mode). Loaded on demand. -->
-# Gemini Dispatch Prompt
-
-Full prompt sent to Gemini 3.1 Pro in Step 2 via the shared dispatch wrapper.
-
-> **Do not bypass the wrapper.** Read each file with `Path.read_text()`, concatenate the inputs,
-> and send one context string to the dispatcher. The wrapper owns model routing, logging, and
-> file handling.
-
-The prompt content to send (after the concatenated context):
-
-```text
 You are analyzing session transcripts for behavioral anti-patterns. Sessions come from TWO
 agent harnesses sharing the same project working directory: Claude Code (Anthropic — opus/sonnet/haiku)
 and Codex CLI (OpenAI — gpt-5.4). They use different tool naming; attribute findings to the correct
@@ -130,6 +118,3 @@ CRITICAL OUTPUT RULES:
 - Sessions with no findings MUST appear in the Session Quality table with their score.
 - A batch where 3/5 sessions have no findings is normal and expected. Do not pad.
 Output ONLY the triage gates and findings, no preamble.
-PROMPT
-)"
-```
