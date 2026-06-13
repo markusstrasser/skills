@@ -24,7 +24,7 @@ Before finalizing:
 2. Check Claude Code changelog and deferred-features for native coverage:
 
 ```bash
-grep -i "KEYWORD" ~/Projects/meta/research/claude-code-native-features-deferred.md 2>/dev/null | head -5
+grep -i "KEYWORD" ~/Projects/agent-infra/research/claude-code-native-features-deferred.md 2>/dev/null | head -5
 ```
 
 ## 4c. Final Output Format

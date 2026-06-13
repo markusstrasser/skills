@@ -8,7 +8,7 @@ Extract commits with Session-ID trailers for session→commit joining:
 
 ```bash
 DAYS=${DAYS:-14}
-ARTIFACT_DIR="$HOME/Projects/meta/artifacts/evolution-forensics"
+ARTIFACT_DIR="$HOME/Projects/agent-infra/artifacts/evolution-forensics"
 mkdir -p "$ARTIFACT_DIR"
 
 for PROJECT in meta intel selve genomics skills; do
@@ -29,14 +29,14 @@ done
 
 ```bash
 # Improvement log findings with status
-grep -E '^### \[|^\- \*\*Status' ~/Projects/meta/improvement-log.md > "$ARTIFACT_DIR/findings-status.txt"
+grep -E '^### \[|^\- \*\*Status' ~/Projects/agent-infra/improvement-log.md > "$ARTIFACT_DIR/findings-status.txt"
 
 # Hook trigger data
-uv run python3 ~/Projects/meta/scripts/hook-roi.py --days $DAYS 2>/dev/null > "$ARTIFACT_DIR/hook-triggers.txt" || echo "hook-roi unavailable"
+uv run python3 ~/Projects/agent-infra/scripts/hook-roi.py --days $DAYS 2>/dev/null > "$ARTIFACT_DIR/hook-triggers.txt" || echo "hook-roi unavailable"
 
 # Agent failure modes reference
-cp ~/Projects/meta/agent-failure-modes.md "$ARTIFACT_DIR/failure-modes-ref.md" 2>/dev/null || true
+cp ~/Projects/agent-infra/agent-failure-modes.md "$ARTIFACT_DIR/failure-modes-ref.md" 2>/dev/null || true
 
 # Vetoed decisions
-cat ~/Projects/meta/.claude/rules/vetoed-decisions.md > "$ARTIFACT_DIR/vetoed.txt" 2>/dev/null || true
+cat ~/Projects/agent-infra/.claude/rules/vetoed-decisions.md > "$ARTIFACT_DIR/vetoed.txt" 2>/dev/null || true
 ```
