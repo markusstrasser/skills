@@ -60,6 +60,14 @@ PY_TOPLEVEL = re.compile(
 # then collapse '\'' back to a literal quote before compiling.
 EMBEDDED_PY = re.compile(r"python3?\s+-c\s+'([^']*(?:'\\''[^']*)*)'")
 SPLICE = "'\\''"
+# Double-quoted form: python3 -c "<program>". bash unescapes ONLY \" \\ \$ \` and a
+# line-continuation (\<newline>); every other backslash stays literal, so a regex like
+# \[ \d \s survives into python. Replicate exactly, else we'd false-flag valid regexes.
+EMBEDDED_PY_DQ = re.compile(r'python3?\s+-c\s+"((?:[^"\\]|\\.)*)"', re.S)
+
+
+def _bash_dq_unescape(s: str) -> str:
+    return re.sub(r"\\([$`\"\\\n])", lambda m: "" if m.group(1) == "\n" else m.group(1), s)
 # jq top-level: .command / .file_path (not .tool_input.command)
 JQ_TOPLEVEL = re.compile(r"""jq[^\n]*['"][^'"]*(?<!tool_input)\.(%s)\b""" % "|".join(FIELDS))
 
@@ -139,8 +147,9 @@ def lint_code(name: str, src: str) -> list[str]:
     # mangle python strings). Multi-line blocks only: one-liners with a
     # syntax-looking error are usually '\'' quote-splicing artifacts.
     if not name.endswith(".py"):
-        for m in EMBEDDED_PY.finditer(src):
-            prog = m.group(1).replace(SPLICE, "'")
+        progs = [m.group(1).replace(SPLICE, "'") for m in EMBEDDED_PY.finditer(src)]
+        progs += [_bash_dq_unescape(m.group(1)) for m in EMBEDDED_PY_DQ.finditer(src)]
+        for prog in progs:
             if prog.count("\n") < 2:
                 continue
             try:
