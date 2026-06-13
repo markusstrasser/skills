@@ -43,7 +43,10 @@ if echo "$MSG" | grep -qE '\$[0-9]|[0-9]+%|[0-9]{4}-[0-9]{2}|billion|million|tri
 fi
 
 HAS_TAGS=false
-PROVENANCE_TAG_RE="$(cat "$HOME/Projects/skills/hooks/provenance_tags.re")"  # taxonomy SSOT — references/provenance-tags.md
+PROVENANCE_TAG_RE="$(cat "$HOME/Projects/skills/hooks/provenance_tags.re" 2>/dev/null)"  # taxonomy SSOT — references/provenance-tags.md
+# Empty/missing SSOT: warn, then leave HAS_TAGS to the bare-grep below which fails OPEN (matches
+# everything → no false stop-block over a vanished config). Surfacing beats silent disabling.
+[ -n "$PROVENANCE_TAG_RE" ] || echo "WARN: provenance_tags.re missing/empty — subagent provenance gate degraded (fail-open)" >&2
 if echo "$MSG" | grep -qE "$PROVENANCE_TAG_RE"; then
     HAS_TAGS=true
 fi

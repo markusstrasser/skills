@@ -141,11 +141,16 @@ if not research_files:
     sys.exit(0)
 
 # Check each research file for source tags
+try:  # canonical claim-tag taxonomy (SSOT: provenance_tags.re) — load so [Exa]/[S2]/
+    _canon = open(os.path.expanduser('~/Projects/skills/hooks/provenance_tags.re')).read().strip()
+except OSError:  # [gnomAD]/[OMIM]/[A-F][1-6] count here too, not just at the subagent gates
+    _canon = ''  # missing SSOT -> fall back to the research-specific forms only (no empty-OR)
 SOURCE_TAG = re.compile(
-    # Explicit bracket-tagged provenance
-    # Accept bare ([DATA]), colon-qualified ([DATA: x]) AND comma-qualified
-    # ([DATA, FMP, 2026-06-01]) forms — the comma form is valid, more-informative
-    # provenance, not a miss. (Was false-blocking [DATA, source, date] tags.)
+    # SSOT canonical tags (prepended only if non-empty), THEN research-file-specific
+    # forms the SSOT does not carry. Accept bare ([DATA]), colon-qualified ([DATA: x])
+    # AND comma-qualified ([DATA, FMP, 2026-06-01]) forms — the comma form is valid,
+    # more-informative provenance, not a miss. (Was false-blocking [DATA, source, date].)
+    ((_canon + '|') if _canon else '') +
     r'\[SOURCE:|\[DATABASE:|\[DATA[\]:,]|\[INFERENCE[\]:,]|\[TRAINING-DATA[\]:,]|'
     r'\[PREPRINT[\]:,]|\[FRONTIER[\]:,]|\[UNVERIFIED[\]:,]|\[[A-F][1-6](?:[:,][^\]]+)?\]|'
     # Equivalent identifier-bracket forms: [DOI:...], [PMID:...], [PMC######]

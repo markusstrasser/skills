@@ -64,7 +64,12 @@ if not content.strip():
 # Strip HTML comments — invisible-to-reader provenance is guard evasion.
 content_visible = re.sub(r'<!--.*?-->', '', content, flags=re.DOTALL)
 
+try:  # canonical claim-tag taxonomy (SSOT: provenance_tags.re) — load so [Exa]/[S2]/
+    _canon = open(os.path.expanduser('~/Projects/skills/hooks/provenance_tags.re')).read().strip()
+except OSError:  # [gnomAD]/[OMIM] etc. count here too; prepend only if non-empty (no empty-OR)
+    _canon = ''
 SOURCE_TAG = re.compile(
+    ((_canon + '|') if _canon else '') +
     r'\[SOURCE:|\[DATABASE:|\[DATA[\]:]|\[INFERENCE[\]:]|\[TRAINING-DATA[\]:]|'
     r'\[PREPRINT[\]:]|\[FRONTIER[\]:]|\[UNVERIFIED[\]:]|\[[A-F][1-6](?::[^\]]+)?\]|'
     r'https?://(?:doi\.org|pubmed\.ncbi|ncbi\.nlm\.nih\.gov|arxiv\.org)',
