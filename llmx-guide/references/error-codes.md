@@ -19,14 +19,14 @@ Branch on these, don't parse stderr:
 ## Structured Diagnostics (stderr, JSON)
 
 ```json
-{"error": "rate_limit", "provider": "google", "model": "gemini-3.1-pro-preview", "exit_code": 3, "action": "wait or use --stream (API transport)"}
+{"error": "rate_limit", "provider": "google", "model": "gemini-3.5-flash", "exit_code": 3, "action": "wait or use --stream (API transport)"}
 ```
 
 ## Additional stderr Signals
 
 - Transport switch: `[llmx:TRANSPORT] codex-cli → openai-api (--search not supported by CLI)` (Gemini has no CLI since 2026-05-31; switches now only affect Codex CLI)
 - Truncation warning: `[llmx:WARN] output may be truncated`
-- Model suggestion: `"gemini-3.1-pro not found; did you mean gemini-3.1-pro-preview?"`
+- Model suggestion: `"gemini-3.5-flsh not found; did you mean gemini-3.5-flash?"`
 
 ## `--fallback MODEL`
 
@@ -46,7 +46,7 @@ Exists but **not recommended**. Silent model switching masks failures. If you as
 
 ```python
 result = subprocess.run(
-    ['llmx', '-m', 'gemini-3.1-pro-preview', '--timeout', '300'],
+    ['llmx', '-m', 'gemini-3.5-flash', '--timeout', '300'],
     input=prompt, capture_output=True, text=True, timeout=360
 )
 if result.returncode == 3:  # rate limit — API transport has separate capacity

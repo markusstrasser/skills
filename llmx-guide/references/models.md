@@ -6,7 +6,7 @@
 
 | Model | llmx name | Notes |
 |-------|-----------|-------|
-| Gemini 3.1 Pro | `gemini-3.1-pro-preview` | Runner-up Gemini (demoted from default 2026-05-24) — use only where its strengths dominate: ARC-AGI-2, raw GPQA Diamond, video. Paid API; the free Gemini CLI transport was retired 2026-05-31. |
+| ~~Gemini 3.1 Pro~~ | `gemini-3.1-pro-preview` | **RETIRED as a routing option 2026-06-13 (operator).** Do not route here — flash-3.5 dominates critique/synthesis and is cheaper/faster (re-confirmed on the ADR-0009 spine critique). Still callable via explicit `-m` for a one-off ARC-AGI-2/GPQA/video need, but it is not a default or recommended pick anywhere. Paid API; free Gemini CLI retired 2026-05-31. |
 | Gemini 3.5 Flash | `gemini-3.5-flash` | **Default Gemini for critique/synthesis** (promoted over 3.1 Pro 2026-05-24). Stable GA (May 2026). ~3× Flash pricing — Pro-lite tier. Paid API only (~$1.50/$9 per MTok; `--flex` = 50% off) — free Gemini CLI retired 2026-05-31. |
 | Gemini 3 Flash | `gemini-3-flash-preview` | Cheap workhorse. `-preview` required. Use for high-volume classification, not when 3.5's reasoning is needed |
 | GPT Image 2 | `gpt-image-2` | Current SoTA image model. Default for `llmx image`; supports generation and edit/reference workflows |
@@ -24,9 +24,9 @@
 | Grok 4 (default) | `grok-4` | llmx's default xAI model — **superseded** by 4.20 family as of 2026-03-10 |
 | Grok 4.1 Fast (cheap tier) | `grok-4-1-fast-reasoning` | xAI fast/cheap tier, still current |
 
-**Model name format (v0.6.0+):** No provider prefixes needed. Use `gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`. Old LiteLLM-style prefixed names (`gemini/`, `openai/`) still accepted with deprecation warning. Will be removed in a future version.
+**Model name format (v0.6.0+):** No provider prefixes needed. Use `gemini-3.5-flash` not `gemini/gemini-3.5-flash`. Old LiteLLM-style prefixed names (`gemini/`, `openai/`) still accepted with deprecation warning. Will be removed in a future version.
 
-**Model name suggestions:** If you typo a model name, llmx suggests the closest match: `"gemini-3.1-pro not found; did you mean gemini-3.1-pro-preview?"`
+**Model name suggestions:** If you typo a model name, llmx suggests the closest match: `"gemini-3.5-flsh not found; did you mean gemini-3.5-flash?"`
 
 **404 traps:** `gemini-3-flash` (missing `-preview`), `gemini-flash-3` (wrong order), `gpt-5.3` (needs `-chat-latest` suffix).
 
@@ -70,5 +70,5 @@ Temperature locked to 1.0 for GPT-5 and Gemini 3.x thinking models.
 
 | Context | Name |
 |---------|------|
-| llmx CLI | `gemini-3.1-pro-preview` |
+| llmx CLI | `gemini-3.5-flash` |
 | tournament MCP judges | `gemini25-pro` |

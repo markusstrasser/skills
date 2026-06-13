@@ -31,7 +31,7 @@ Use this skill when:
 2. **Timeout — set `--timeout` explicitly for reasoning runs; don't trust the default.** `--timeout` was always in `--help`; the 300s default is what kills flag-less xhigh calls (burned two exit-4s learning this). xhigh runs 30-45 min → pass `--timeout 1800`-`3600`. A default now auto-scales by effort (high→600s, xhigh→1200s) as a safety net, but it's a floor, not the lever. Ceiling 3600s. From Claude Code the outer Bash caps at 600000 ms foreground — **use `run_in_background` for any high/xhigh dispatch** and read the `-o` file after.
 3. **Using `shell=True`?** Don't — parentheses in prompts break it. Use list args + `input=`
 4. **Using `-o FILE`?** Never use `> file` shell redirects — they buffer until exit
-5. **No provider prefixes needed.** `gemini-3.1-pro-preview` not `gemini/gemini-3.1-pro-preview`.
+5. **No provider prefixes needed.** `gemini-3.5-flash` not `gemini/gemini-3.5-flash`.
 6. **Know the transport triggers:** Gemini always goes direct to the paid API (the free `gemini` CLI was retired 2026-05-31; `--schema`/`--search`/`--max-tokens` all work natively — add `--flex` for 50% off non-interactive dispatch). Codex CLI still falls back to API for `--search` and `--stream`, but can keep `--schema` via `codex exec --output-schema`. GPT goes direct to API unless you explicitly force `-p codex-cli`.
 7. **Claude subscription route?** Do not use `claude --bare`; it bypasses OAuth/keychain and forces API-key auth. Direct smoke: `env -u ANTHROPIC_API_KEY -u CLAUDE_API_KEY claude -p --permission-mode dontAsk --tools "" --output-format text "Reply with exactly OK."`. Through llmx, use `llmx chat -p anthropic --lite bare -m claude-opus-4-8 ...`; this maps to `claude-cli`, strips `ANTHROPIC_API_KEY`, and keeps the Claude Code subscription path. If you see "Credit balance is too low", you hit API-key billing, not local subscription auth. (Validated 2026-05-28: stripped-key `claude -p` returns on the sub, and BOTH `--model claude-opus-4-8` and `--model claude-opus-4-7` are selectable — useful for model A/Bs when the API key is out of credits.)
 8. **Hangs in agent context?** Claude Code's Bash tool pipes stdin without EOF. Fixed in current llmx (skips stdin when prompt provided).
@@ -78,7 +78,7 @@ llmx chat -m gemini-3.5-flash -f combined-context.md --timeout 300 "Review this"
 Do **not** assume this is equivalent:
 
 ```bash
-llmx chat -m gemini-3.1-pro-preview -f overview.md -f diff.md -f touched-files.md --timeout 300 "Review this"
+llmx chat -m gemini-3.5-flash -f overview.md -f diff.md -f touched-files.md --timeout 300 "Review this"
 ```
 
 Known failure mode: earlier `-f` files may be silently dropped or incompletely

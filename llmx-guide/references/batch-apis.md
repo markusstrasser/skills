@@ -52,7 +52,8 @@ batch` is the answer and nothing else is needed.
 - **There is no `gemini-3.1-flash` text model.** The 3.1 generation shipped Pro, Flash-Lite,
   and Flash-Image — no plain Flash. The Flash *text* line skips 3.1:
   `gemini-3-flash-preview` → `gemini-3.5-flash`.
-- Current lineup: **latest Flash = `gemini-3.5-flash`**, **latest Pro = `gemini-3.1-pro`**
-  (Flash carries a higher number than Pro — counterintuitive but real).
-- Batch-eligible text IDs include `gemini-3.5-flash`, `gemini-3-flash-preview`,
-  `gemini-3.1-pro`, `gemini-3.1-flash-lite`.
+- Current lineup: **latest Flash = `gemini-3.5-flash`**, latest Pro = `gemini-3.1-pro`
+  (Flash carries a higher number than Pro — counterintuitive but real). **Pro is RETIRED as a
+  routing option (2026-06-13) — do not route batch jobs there; flash-3.5 dominates.**
+- Batch-eligible routing IDs: `gemini-3.5-flash`, `gemini-3-flash-preview`, `gemini-3.1-flash-lite`.
+  (`gemini-3.1-pro` is also batch-eligible but is not a routing option — see model-guide.)
