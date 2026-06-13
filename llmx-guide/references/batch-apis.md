@@ -10,7 +10,7 @@ tool is a **batch API**, not a bigger thread pool. All three frontier providers 
 | Path | Provider | Status |
 |------|----------|--------|
 | `llmx batch {submit,status,get,list,cancel}` | **Gemini only** | ✅ wired — JSONL in, 50% off |
-| `--flex` (per-call, best-effort 50% off) | Gemini | ✅ wired (variable latency, sheds load w/ 503s; pair `--fallback`) — **NOT for bulk completeness: 503s silently drop items.** For a bulk job use `llmx batch` (this row above) or per-call retry-on-failure, never `--flex`. |
+| `--flex` (per-call, best-effort 50% off) | Gemini | ✅ wired (variable latency, sheds load w/ 503s) — **503s now AUTO-RETRY** (backoff+jitter, llmx@0e24d5c), so bulk `--flex` no longer silently drops items. For LARGE bulk, `llmx batch` (row above) is still cheaper + more predictable; per-call loops must still handle exit 3 (sustained outage), not swallow it. |
 | OpenAI Batch API | OpenAI | ❌ not in llmx — use the OpenAI SDK / REST directly |
 | Anthropic Message Batches | Anthropic | ❌ not in llmx — use the Anthropic SDK directly |
 
