@@ -81,18 +81,21 @@ in `substrate/packages/<pkg>` consumed via `path = "../substrate/packages/<pkg>"
 editable = true` (how corpus-core / corpus-testing reach phenome+genomics). Symlinks
 are only for data dirs and the AGENTS.md/GEMINI.md→CLAUDE.md doc mirrors.
 
-- **evals-repo bakeoffs** get `evalcore` + scaffold + prereg guard for free.
-- **in-repo evals** today: the conventions are portable without the package — the
-  `/eval` skill loads in every project, and the templates are readable. Use your
-  repo's existing test infra; do **not** copy evalcore's code in or symlink to it.
-- **evalcore as a shared dep is NOT wired yet, on purpose.** Proven-common bar
-  (vetoed-decisions): zero consumers in phenome/genomics, no stats reimplemented
-  there — wiring it now is the speculative extraction the veto forbids.
-  **Promotion trigger (propose + human sign-off — shared infra):** when a SECOND
-  repo's in-repo eval genuinely needs Wilson/blind-judge/power, lift `evalcore`
-  from `evals/evalcore/` → `substrate/packages/evalcore/` (next to corpus-testing);
-  evals/ and the repo then both depend on it via the editable path dep. Until that
-  second real consumer exists, it stays in evals/.
+- **evals-repo bakeoffs** get `evalcore` + scaffold + prereg guard for free (`evalcore` is an editable
+  dep of evals/ — `import evalcore.stats` / `.judge` / `.leakguard` just works).
+- **`evalcore` lives in `substrate/packages/evalcore`** (promoted 2026-06-13, ADR 0001 — phenome became
+  the proven 2nd consumer). Pure-stdlib, zero-dep. To use it from ANY repo's in-repo eval, add to that
+  repo's `pyproject.toml`: `"evalcore"` in `dependencies` + under `[tool.uv.sources]`
+  `evalcore = { path = "../substrate/packages/evalcore", editable = true }`, then `uv sync`. Then import:
+    - `from evalcore.judge import dispatch, assert_blind, lint_not_leading, lint_stakes_neutral, cyclic_assignment`
+    - `from evalcore.leakguard import assert_no_gold_leak`  — call before EVERY system-under-test dispatch
+    - `from evalcore.stats import wilson_ci, mcnemar_exact, cohen_kappa, holm_correction, point_biserial, benjamini_hochberg`
+  Worked example: `phenome/tests/evals/epistemics/judge_refusal.py` runs `lint_not_leading` on its own
+  judge prompt as a standing tripwire (the regression guard for its 2026-06-13 led-judge incident).
+- **Add it WHEN an eval genuinely needs a primitive, not speculatively** — the proven-common bar still
+  holds (vetoed-decisions): a repo whose evals consume none of it should NOT carry the dep. evals/ +
+  phenome consume it today; genomics/intel add the line if/when an in-repo eval needs blind-judge /
+  leak-guard / Wilson-κ / power. Still: NO symlinks, NO copying evalcore's code into a repo.
 
 ## Phase 0 — Dedup (before designing anything)
 
