@@ -42,7 +42,6 @@ All three tools discover skills via user-level symlinks pointing here:
 | `manim-animations` | Create mathematical animations using Manim. Use when the user mentions animations, mathematical visualizations, 3Blue1Brown-style videos, explaining math concepts visually, animating equations, or working with manim files. |
 | `modal` | Modal serverless Python. Writing/debugging Modal scripts, deploying, or choosing GPU/resource configs. |
 | `model-guide` | Frontier model selection and prompting for Claude Opus 4.8, GPT-5.5, and GPT-5.5 Pro. |
-| `negative-space-sweep` | Divergent discovery of what's MISSING from an optimized system. Multi-perspective search with exclusion lists and category rotation. Use when a domain is heavily optimized and you suspect blind spots. |
 | `neurokit2` | NeuroKit2 biosignal proc: ECG/PPG/EDA/EEG/RSP/EMG/EOG/HRV. HRV analysis, Oura data, sleep studies, wearables. |
 | `observe` | Session retros. Modes: sessions/architecture/supervision/retro. 'what went wrong', 'session quality', 'wasted time'. |
 | `oura-ring` | Oura Ring v2 API: sleep, HRV, readiness, activity, stress, SpO2. Analysis, dashboards, wearable→NeuroKit2. |

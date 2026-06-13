@@ -1,6 +1,6 @@
 ---
 name: leverage
-description: "Hunt order-of-magnitude (10-100x) wins your reactive loops can't see — improvement along axes nothing measures (faster / better / more / simpler / unnecessary), found by scanning the external frontier not your history, then piloted + measured. 'how could this be 10x', 'biggest lever here', 'what are we doing the dumb way', 'frontier audit', 'why do we even do it like this'. The generative twin of /observe."
+description: "Hunt the wins your reactive loops can't see — three divergent-discovery modes. DEFAULT (10-100x leverage): order-of-magnitude wins along axes nothing measures (faster/better/more/simpler/unnecessary), frontier-scanned not history-bound, then piloted + measured. `missing` (negative-space sweep): what entire categories an optimized system never put on an axis — exclusion list + multi-perspective search + pertinent negatives. `generators`: mint new idea-generators from miss patterns when wins keep arriving off-trail. 'how could this be 10x', 'biggest lever here', 'what are we missing', 'blind spots', 'extract more generators', 'frontier audit', 'why do we even do it like this'. The generative twin of /observe."
 user-invocable: true
 argument-hint: <workflow or surface to 10x> [--repo path]
 context: fork
@@ -9,6 +9,22 @@ effort: high
 ---
 
 # Leverage — find the order-of-magnitude wins your reactive loops can't see
+
+## Modes
+
+`/leverage` has one spine (find what reactive, history-bound, frame-fixed loops miss) and three
+modes for three shapes of that miss. Pick by what you're hunting:
+
+| Mode | Invoke | Hunts | Method |
+|------|--------|-------|--------|
+| **default** | `/leverage <surface>` | a 10-100x win on a KNOWN surface | this file: frame → axes → measure floor → frontier scan → critique → pilot → ratchet |
+| **`missing`** | `/leverage missing <domain>` | entire categories an optimized system never put on an axis | [references/missing.md](references/missing.md): exclusion list + STORM perspectives + pertinent negatives |
+| **`generators`** | `/leverage generators` | a better generator SET, when wins keep arriving off-trail | [references/generators.md](references/generators.md): collect miss-pattern → cluster → retrodiction-test → install one level up |
+
+They compose: `generators` reads the misses that `default`/`missing` leave behind and grows the
+generator menu both draw from; `missing` is the divergent front-end when the surface is so
+mature that `default`'s step-2 axis brainstorm won't surface the unframed. The rest of this file
+is the **default** mode.
 
 ## The blind spot it fixes
 
@@ -148,7 +164,11 @@ axes instead of handing off to brainstorm — the dep silently doesn't fire) and
 *duplication drift* (the orchestrator re-states a primitive's method). Both are
 caught by the two rules above. Do **not** merge leverage into brainstorm/observe:
 each has standalone value (pure ideation; pure retro; the measured-win loop), and one
-mega-skill-with-modes would bloat all three.
+mega-skill-with-modes would bloat all three. (The `missing` and `generators` modes were
+folded IN — 2026-06-13 — because they are *specialized divergent-discovery moves that already
+orbited leverage* with no standalone pure-ideation/retro value, not separate primitives. The
+boundary that holds: hand off to brainstorm/critique/research/verify-before; absorb the
+discovery moves that only ever served the leverage hunt.)
 
 (`/sweep` and `/upgrade` are adjacent but orthogonal — drift and bug audits, not
 leverage's axes.)
