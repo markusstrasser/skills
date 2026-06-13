@@ -283,6 +283,18 @@ third validity pillar; `arXiv:2604.15149` isomorphic verifiers, causal). Adopt:
   SUT/judge prompt — it's on the leak deny-list). Enables a diagnostic mIRT capability profile *later*;
   do NOT fit IRT params at N=10–60 (needs ≥100 items × ≥20 arms).
 
+**Confirmed by DeepSWE** (datacurve, 2026-06 — independent production coding-agent benchmark, 113
+tasks, frontier 70%→5% spread; `evals/research/2026-06-13-frontier-agentic.md` §Transfer): authored-
+fresh-over-real-pinned-repo + hidden behavioral verifier + sealed env independently realize the adopts
+above. Two portable patterns: **(1) withheld grader** — ship the scoring tests as a patch applied
+ONLY at grade time (DeepSWE's `test.patch`), so the agent provably can't enumerate the contract (the
+structural form of held-out criteria); **(2) seal the env if you can, domain-block if you can't** —
+DeepSWE sets `allow_internet=false` to kill search-time contamination by construction; a retrieval/
+claim SUT that needs the web can't seal, so it must block benchmark-mirror domains + track provenance.
+**Boundary:** DeepSWE's realism rests on a FREE EXECUTABLE ORACLE (tests); claim-verification has none
+→ that is *why* this rig needs judges + isomorphic trace-checks, not behavioral verifiers. Don't
+cargo-cult "write behavioral verifiers" into a domain with no oracle.
+
 **Guards (the frontier also tells you what NOT to adopt at our N):** PPI/CLT-PPI label-saving is
 statistically invalid below 50 labels/stratum (GLIDE `arXiv:2605.31278`) — at ~20/stratum, hand-label
 all + bootstrap; `just power` refuses PPI/R² sizing below the threshold. Fitted IRT, CapBencher,
