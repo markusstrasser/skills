@@ -29,8 +29,14 @@ esac
 [[ ! -f "$FPATH" ]] && exit 0
 
 # Quick pre-check: if file has reasonable tag density, skip the API call
-PROVENANCE_TAG_RE="$(cat "$HOME/Projects/skills/hooks/provenance_tags.re")"  # taxonomy SSOT — references/provenance-tags.md
-if grep -qE "$PROVENANCE_TAG_RE" "$FPATH"; then
+PROVENANCE_TAG_RE="$(cat "$HOME/Projects/skills/hooks/provenance_tags.re" 2>/dev/null)"  # taxonomy SSOT — references/provenance-tags.md
+# Density PRE-CHECK only (skip the paid API when a file is already tag-dense). An empty/missing
+# SSOT must NOT enter this block ([ -n ] guard) — bare `grep -qE ""` matches every line and would
+# wrongly skip the semantic check; instead fall through to it.
+if [ -n "$PROVENANCE_TAG_RE" ] && grep -qE "$PROVENANCE_TAG_RE" "$FPATH"; then
+    # Deliberately a SUBSET of the SSOT, NOT the full taxonomy: counts substantive citations only.
+    # Meta/hedge tags ([UNVERIFIED]/[SPEC]/[CALC]/[QUOTE]/[TRAINING-DATA]/[PREPRINT]/[FRONTIER]) are
+    # excluded so they can't inflate citation-density and skip the check. Different concern → not single-sourced.
     TAG_COUNT=$(grep -cE '\[SOURCE:|\[DATABASE:|\[[A-F][1-6](:[^]]+)?\]|\[PubMed\]|\[arXiv\]|\[Exa\]|\[S2\]|\[ClinGen\]|\[CPIC\]|\[gnomAD\]|\[OMIM\]|\[DATA\]|\[INFERENCE\]' "$FPATH" || true)
     CLAIM_LINES=$(wc -l < "$FPATH")
     if (( TAG_COUNT * 30 >= CLAIM_LINES )); then

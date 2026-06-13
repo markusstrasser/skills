@@ -88,7 +88,8 @@ fi
 
 # Check for provenance tags
 HAS_TAGS=false
-PROVENANCE_TAG_RE="$(cat "$HOME/Projects/skills/hooks/provenance_tags.re")"  # taxonomy SSOT — references/provenance-tags.md
+PROVENANCE_TAG_RE="$(cat "$HOME/Projects/skills/hooks/provenance_tags.re" 2>/dev/null)"  # taxonomy SSOT — references/provenance-tags.md
+[ -n "$PROVENANCE_TAG_RE" ] || echo "WARN: provenance_tags.re missing/empty — subagent tag check degraded (fail-open)" >&2  # empty RE matches-everything below; warn, don't silently disable
 if echo "$MSG" | grep -qE "$PROVENANCE_TAG_RE"; then
     HAS_TAGS=true
 fi

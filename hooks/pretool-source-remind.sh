@@ -33,7 +33,8 @@ echo "$FPATH" | grep -qE '/decisions/' && exit 0
 # For Write: check content. For Edit: check new_string (empty content falls back).
 CONTENT=$(printf '%s' "$INPUT" | jq -r '(.tool_input // {}) as $ti | (($ti.content // "") | if . == "" then ($ti.new_string // "") else . end)' 2>/dev/null || echo "")
 
-PROVENANCE_TAG_RE="$(cat "$HOME/Projects/skills/hooks/provenance_tags.re")"  # taxonomy SSOT — references/provenance-tags.md
+PROVENANCE_TAG_RE="$(cat "$HOME/Projects/skills/hooks/provenance_tags.re" 2>/dev/null)"  # taxonomy SSOT — references/provenance-tags.md
+[ -n "$PROVENANCE_TAG_RE" ] || { echo "WARN: provenance_tags.re missing/empty — source reminder degraded" >&2; exit 0; }  # empty RE would match-everything; fail open, but loudly
 if echo "$CONTENT" | grep -qE "$PROVENANCE_TAG_RE"; then
     exit 0
 fi
