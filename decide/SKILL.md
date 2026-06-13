@@ -67,6 +67,15 @@ Output: the ADR + the invariants the decision must preserve.
 - **Read the code before planning** (read-before-plan). Plans written from memory diverge within days.
 - **Probe every join/fact the plan asserts** (probe-the-join): inline the literal `git grep`/SQL that
   proves the join site or fact exists. Plan-writers invent joins that look right but don't exist.
+- **Probe storage/identity/hash contracts at the WRITE site** (probe-the-write — extends probe-the-join
+  beyond relational joins): when the decision rests on "store X holds field Y" or "identity/hash Z is
+  computed as…", read where the value is *stamped* (the writer), NOT where it's read. Consumer-side
+  reasoning silently substitutes an *assumed* contract for the real one — silent-proxy-as-truth at the
+  schema layer — and produces confidently-wrong specs that survive to Phase 4 unchallenged. Assert the
+  load-bearing invariant empirically: a one-line assertion in the probe/generator falsifies a bad
+  premise in seconds. (Canonical miss: a spec compared two hash functions assumed equal — different
+  widths, one never written for half the entities; caught only by reading the writer, after the arc
+  had already produced an ADR on it.)
 - Write the plan with probes embedded → `.claude/plans/<session>-<slug>.md`.
 
 Output: a plan grounded in *verified* facts, not assumptions.
@@ -108,7 +117,7 @@ decision is closed. Those HOWs become the first build tasks — hand off, don't 
 |---|---|
 | List assumptions before analysis | Contract 3 (hidden-assumption) |
 | Principle before plan | reasoning drift downstream (FM15) |
-| Probe-before-assert; read-before-plan | phantom joins / stale plans |
+| Probe-before-assert; read-before-plan; probe-the-write (storage/identity at the writer) | phantom joins / stale plans / silent-proxy schema assumptions |
 | Cross-model, not same-model peer | FM11 peer-review theater |
 | Orchestrator-mediated verify-before-fold | FM5 amplification, FM15 silent-semantic |
 | Disagree-self-check (name the new fact) | FM7 post-hoc rationalization, sycophantic flips |
