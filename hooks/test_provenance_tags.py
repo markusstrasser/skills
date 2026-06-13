@@ -41,6 +41,10 @@ def _selftest() -> None:
     print("\n  provenance-taxonomy drift guard passed.")
 
 
+def test_provenance_taxonomy_single_homed():  # pytest-discoverable entry (matches skills test_*.py convention)
+    _selftest()
+
+
 if __name__ == "__main__":
     print("[provenance_tags drift guard]")
     _selftest()
