@@ -157,7 +157,10 @@ def _in_flight(path):
 in_flight = sorted(f for f in new_changes if _in_flight(f))
 new_changes = [f for f in new_changes if f not in in_flight]
 
-pre_existing = len(all_changes) - len(new_changes)
+# Genuinely pre-existing/foreign = everything NOT committed, NOT deferred-in-flight, NOT
+# unattributable. The latter two are surfaced in their own messages, so excluding them here
+# keeps the "(N pre-existing/other-session excluded)" count from double-counting them.
+pre_existing = len(all_changes) - len(new_changes) - len(in_flight) - len(unattributable)
 
 if not new_changes:
     # Nothing this session provably owns. Do NOT auto-commit unattributable
