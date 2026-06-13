@@ -1,5 +1,11 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # PostToolUse:Agent — verify promised output file exists after agent completion.
+#
+# Shebang note: MUST be env bash (5.x), NOT /bin/bash (macOS 3.2). The eval $(python3…)
+# parse below silently returns an empty OUT_PATH under bash 3.2's ANSI-C quoting, so the
+# hook exited 0 with no advisory — it had never fired once (hook-trigger log count 0)
+# despite its target failure recurring 3+ times. subagent-epistemic-gate.sh (which works
+# in prod) uses env bash for the same reason.
 # Advisory only (measure false-positive rate before escalating).
 #
 # Problem it addresses (3rd recurrence by 2026-04-07):
@@ -63,19 +69,35 @@ case "$CHECK_PATH" in
     *)  CHECK_PATH="$(pwd)/$CHECK_PATH" ;;
 esac
 
-# Verify file exists and is non-empty
+# Verify file exists, is non-empty, AND its write-first stub was actually filled in.
+# "exists + non-empty" is satisfied by a bare stub — the write-first protocol seeds the
+# file with a placeholder marked [PENDING] (researcher.md Checkpoint Protocol). The
+# recurring, costly failure is the agent writing that stub then exhausting turns WITHOUT
+# replacing [PENDING] — file exists, non-empty, looks done, findings never landed
+# (this session: 2/5 researchers, ~160K tokens, forced a resume round-trip). [GAP] is an
+# HONEST gap marker the protocol wants kept, so it is NOT a failure signal; only an
+# unreplaced [PENDING] is.
 STATUS=""
 if [ ! -e "$CHECK_PATH" ]; then
     STATUS="MISSING"
 elif [ ! -s "$CHECK_PATH" ]; then
     STATUS="EMPTY"
+elif grep -q '\[PENDING\]' "$CHECK_PATH" 2>/dev/null; then
+    STATUS="PENDING"
 fi
 
 if [ -n "$STATUS" ]; then
     ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-output-check" "warn" \
         "${STATUS} path=${OUT_PATH} stype=${STYPE}" 2>/dev/null || true
 
-    MSG="SUBAGENT OUTPUT ${STATUS}: Dispatch prompt promised file at '${OUT_PATH}' but the file is ${STATUS,,} after completion. The subagent likely exhausted turns, hit API limits, or mis-wrote the path. Before trusting its returned summary, (1) verify by reading the file, (2) re-dispatch with write-stub-first instruction, or (3) treat this output as lost and redo the task directly."
+    case "$STATUS" in
+        PENDING)
+            MSG="SUBAGENT OUTPUT INCOMPLETE: '${OUT_PATH}' exists and is non-empty but still contains an unreplaced [PENDING] placeholder — the subagent wrote its write-first stub then exhausted turns (or died) before filling it in. This is the recurring research-completeness failure; the returned summary may look done while findings are missing. Before trusting it: read the file, and if findings are absent, re-dispatch the SAME agent with the checkpoint path to finish the [PENDING] entries (CORAL epoch) rather than accepting the stub."
+            ;;
+        *)
+            MSG="SUBAGENT OUTPUT ${STATUS}: Dispatch prompt promised file at '${OUT_PATH}' but the file is ${STATUS,,} after completion. The subagent likely exhausted turns, hit API limits, or mis-wrote the path. Before trusting its returned summary, (1) verify by reading the file, (2) re-dispatch with write-stub-first instruction, or (3) treat this output as lost and redo the task directly."
+            ;;
+    esac
 
     SAFE_MSG=$(python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$MSG" 2>/dev/null)
     echo "{\"additionalContext\": ${SAFE_MSG}}"
