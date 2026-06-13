@@ -71,7 +71,7 @@ The unattended generator. Runs as a **launchd job** (`claude -p "/research-ops c
 
 1. `git pull`. Read `queue/` depth, `decisions-pending/`, the Live State improvement signals, and recent git log.
 2. **Decide if there is work.** Queue healthy (≥8 unused proposals) AND no fresh improvement signals → write one `noop` line to `CYCLE.md` log, `git push` if changed, **stop**. Do not manufacture work.
-3. **Discover + gap-analyze.** Search for new developments (lead with Exa for tools/releases, `search_preprints` for papers; `/research dispatch` for deep sweeps). Compare against git log + research memos — skip anything already known. Read improvement signals from Live State; prioritize `STEER` signals. If discover returns empty, run `/brainstorm` on the project domain. SWE quality gaps belong to `/maintain` — don't duplicate.
+3. **Discover + gap-analyze — lead with the divergent engine, not a raw search.** Run `/leverage` for frontier-scanned step-changes (its `missing` mode when the surface is mature and you suspect unframed blind spots; `generators` when recent wins keep arriving off-trail), `/brainstorm` for within-frame candidates, and `search_preprints` + `/research dispatch` for the literature. **Science/research repos — standing SOTA sweep every fire:** pull the newest validated papers (`search_preprints` + `traverse_citations` since the last fire) AND newest tools/methods (`/trending-scout`, Exa) for the repo's domain, and propose upgrades that move it to the current frontier — genomics is the exemplar (always run the newest validated method, not the one that was SOTA when the pipeline was written). Compare every candidate against git log + research memos — skip anything already known. Read improvement signals from Live State; prioritize `STEER`. If discover returns empty, `/brainstorm` the project domain. SWE quality gaps belong to `/maintain` — don't duplicate.
 4. **Write proposals to `queue/`.** Append ≤8 concrete, buildable, ONE-change proposals — each with: the change, files it touches, rationale tied to evidence, and how to verify it. These are *candidates*, not approvals.
 5. **Human-gated items → `decisions-pending/`.** Anything in the "never autonomous" set (classification thresholds with clinical implications, validated clinical logic, new verification tooling, GOALS.md direction) goes here as a written question — never into `queue/`. For these, run `/critique model` cross-lab (Gemini 3.5 Flash + Opus, a *different* lab than the generator) and write recommendation + dissent + the open question. Do NOT greenlight.
 6. `git commit + push` (`queue/`, `decisions-pending/`, `CYCLE.md` log). Keep output small. Never ask whether to continue.
@@ -93,9 +93,13 @@ reversible drafts for a human yes/no — you never ship.</role>
    and improvement signals (run scripts/gather-cycle-state.sh {ROOT}).
 2. If queue ≥8 unused AND no fresh STEER/quality signal AND decisions-pending/ empty:
    write one noop line to CYCLE.md, git push if changed, STOP. Don't manufacture work.
-3. Discover + gap-analyze: Exa/search_preprints for new developments; /research dispatch
-   for deep sweeps; /brainstorm if discover is empty. Skip anything in git log / research
-   memos. Prioritize STEER signals. SWE quality → /maintain's lane, skip.
+3. Discover + gap-analyze: /leverage for frontier step-changes (missing mode if the
+   surface is mature, generators if wins keep arriving off-trail); /brainstorm within-frame;
+   search_preprints/Exa for new papers + tools. SCIENCE REPOS — standing SOTA sweep every
+   fire: newest validated papers (search_preprints + traverse_citations since last fire) +
+   newest tools (/trending-scout) → upgrade proposals (genomics exemplar: run the newest
+   validated method, not the one SOTA when the pipeline was written). Skip anything in git
+   log / research memos. Prioritize STEER. SWE quality → /maintain's lane, skip.
 4. Append ≤8 buildable ONE-change proposals to queue/QUEUE_NNN.md — each: change, files,
    evidence-tied rationale, verification method. Candidates, not approvals.
 5. "Never autonomous" items (clinical thresholds, validated logic, new verifier tooling,
