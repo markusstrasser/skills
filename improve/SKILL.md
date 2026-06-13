@@ -352,12 +352,19 @@ job surfaces here on the first tick after it breaks (this is why the loop is wat
 ```bash
 just -f ~/Projects/agent-infra/justfile hooks-smoke --timeout 8 2>&1 | tail -3   # ~15s; non-zero exit = a dead/broken hook
 launchctl list 2>/dev/null | grep agent-infra | awk '$2 != 0 {print "  launchd non-zero exit:", $3}'  # red launchd jobs
+just -f ~/Projects/agent-infra/justfile freshness 2>&1 | grep -E "DUE|source"  # surveillance sweeps past cadence
 ```
 
 A **red sweep is the tick's priority** — if the fix is meta-local + obvious, do it this tick
 instead of the normal rotation; don't roll past it. Full `doctor.py` health stays in the P3
 rotation (daily), so the per-tick sweep stays cheap. If state is unchanged AND the sweep is
 green → report "noop" in one line and stop.
+
+A **`just freshness` DUE row is a valid pick** for this tick's rotation (it competes by
+leverage like any other) — run the named worker for the due source: `trending-scout` →
+`/trending-scout`, `agent-infra-sweep` → a frontier sweep memo. The deterministic sources
+(vendor-docs, binary-extract) are NOT the agent's job — launchd's daily `vendor-sweep` owns
+them; they appear in `freshness` only so a red (DUE+stale) row exposes a dead launchd job.
 
 ### Rate Limit Check
 
@@ -392,7 +399,8 @@ signal rate (don't re-run a daily-grain miner every tick):
 | Governance-change downstream watch | After constitution/GOALS/invariants edits (`git log` the governance files) | review sessions since the edit for new friction / reverts / anomalies attributable to it → flag to `decisions-pending/` or revert. The compensating control for inferred-approval governance autonomy (invariants #1): autonomy on reversible governance text is only sound if a loop actually catches a bad edit downstream. |
 | Finding drain | Weekly | `/improve harvest` — gather NEW + drain actionable `[ ]` queue |
 | Architecture patterns | Weekly (alt. with frontier) | `/observe architecture` — cross-project abstractions |
-| Frontier scan | Weekly (alt. with architecture) | `/leverage` then `/trending-scout` — prospective 10-100x wins + ecosystem deltas observe is structurally blind to |
+| Leverage scan | Weekly | `/leverage` — prospective 10-100x wins observe is structurally blind to |
+| Frontier sweeps | Freshness-driven (`just freshness`) | `/trending-scout` when DUE (2d) + agent-infra-sweep when DUE (3d). Ecosystem/vendor deltas. Deterministic vendor-docs+binary fetch is launchd's `vendor-sweep` (daily), not a rotation pick. |
 | Database freshness | Daily | Check timestamps. Flag >30d stale. |
 | Bio-verify audit | Rotate: 1/tick | `just bio-verify-queue` -> top item |
 | Deferred probe | After revisit date | HTTP-probe URLs, check release pages |
