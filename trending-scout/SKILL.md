@@ -216,17 +216,15 @@ Don't create new entity files during a scout run. If a scan surfaces a new tool 
 When invoked as `--weekly` (or dispatched from `/improve maintain`'s weekly frontier rotation), also:
 1. Update the research index in `.claude/rules/research-index.md` if new memo warrants a permanent entry
 2. Commit the memo and any entity file updates: `[research] Trending scout — N new findings, window YYYY-MM-DD to YYYY-MM-DD`
-3. **Route findings into the consumption loop.** A memo is generation; the loop drains
-   `improvement-log.md`, NOT `research/`. So for every finding with verdict **Adopt** or
-   **Evaluate**, append a `[ ]` item to `agent-infra/improvement-log.md` — **include the
-   finding's title verbatim** (that is what clears it in the orphan-findings ratchet, which is
-   finding-level: it matches ≥2 distinctive title tokens, NOT just the memo path) plus Evidence
-   (cite the memo path), Proposed fix (the integration path), Status `[ ]`. If a memo has NO
-   live items (all done/Watch/Extract-study), add ONE `RECONCILIATION:` entry citing the memo
-   stem — that is the only whole-memo clear. Without routing, the finding is invisible to
-   `/improve maintain` and dies in the memo (generation-without-consumption,
-   `consumption-over-autonomy.md`). **Watch** / **Ignore** verdicts stay memo-only. Do NOT
-   auto-implement — `[ ]` is for human/loop disposition.
+3. **Route findings into the consumption loop — NOW, at source (immediacy).** A memo is
+   generation; the loop drains `improvement-log.md`, NOT `research/`. Routing here, in the
+   same session that found them, is strictly better than waiting for the weekly harvest to
+   re-derive them — you have full context. **Follow the one canonical finding-routing protocol
+   defined in `/improve` harvest Phase 2f** (enforced by `just orphan-findings`); do NOT restate
+   its rules here — single source, so the two never drift (constitution principle 9). In short:
+   Adopt/Evaluate → `[ ]` with the finding title verbatim; no-live-items memo → one
+   `RECONCILIATION:` entry; Watch/Ignore stay memo-only. Harvest 2f is the weekly backstop for
+   anything missed here; `just orphan-findings` measures the gap.
 
 ## Loop Integration
 
