@@ -121,8 +121,14 @@ def main() -> int:
     field_map = ledger.get("field_map") or {}
     if not regime:
         _fail("contract missing verifier.regime")
+    # Git-native ledgers (the research loop: git history + CYCLE.md + failed-experiments fingerprints)
+    # have no SQL/jsonl table — SQL field conformance does not apply. Skip cleanly, don't hard-fail.
+    if ledger.get("kind") == "git-native":
+        print(f"✓ ledger conformance N/A: {a.contract.name} [{regime}] — git-native ledger "
+              "(checked via git: CYCLE.md + failed-experiments, not SQL fields).")
+        return 0
     if not raw_path:
-        _fail("contract missing ledger.path")
+        _fail("contract missing ledger.path (and ledger.kind is not 'git-native')")
 
     root = a.schema_root or a.contract.resolve().parent
     schema_path = (root / raw_path).resolve()
