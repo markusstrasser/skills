@@ -82,7 +82,7 @@ if [ ! -e "$CHECK_PATH" ]; then
     STATUS="MISSING"
 elif [ ! -s "$CHECK_PATH" ]; then
     STATUS="EMPTY"
-elif grep -q '\[PENDING\]' "$CHECK_PATH" 2>/dev/null; then
+elif grep -qE '\[PENDING(\]|:)' "$CHECK_PATH" 2>/dev/null; then  # bare [PENDING] + structured [PENDING: …]
     STATUS="PENDING"
 fi
 
