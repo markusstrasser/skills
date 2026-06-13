@@ -8,6 +8,10 @@ this test fails if (a) the canonical regex misbehaves, or (b) any enforcer stops
 import re
 from pathlib import Path
 
+# precommit-trigger: provenance_tags.re provenance-tags.md pretool-source-remind.sh postwrite-source-check-semantic.sh subagent-source-check-stop.sh subagent-epistemic-gate.sh test_provenance_tags.py
+# ^ validate-changed-hooks.sh runs this test when any of these is staged (so re-inlining the
+#   taxonomy can't land). Opt-in: a test with no trigger line is never run by the pre-commit gate.
+
 HOOKS = Path(__file__).resolve().parent
 CANON = (HOOKS / "provenance_tags.re").read_text(encoding="utf-8").strip()
 
