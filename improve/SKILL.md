@@ -101,7 +101,9 @@ For each source type, glob within the date window, read each file, extract actio
   Run `just reflect-review` for the ranked view. Do NOT auto-apply — promote into the harvest
   ranking for human disposition only.
 
-**2f. Orphaned research findings** (`research/trending-scout-*.md` adopt-grade verdicts):
+**2f. Orphaned research findings** (`research/trending-scout-*.md` adopt-grade verdicts) —
+**this is the CANONICAL finding-routing protocol; other generators (trending-scout Pipeline
+step 3, future scouts) reference it, never restate it** (constitution principle 9):
 - Harvest's read-path historically EXCLUDED `research/` memos, so trending-scout's
   Adopt/Evaluate/Extract/Act-now verdicts silently bypassed the loop for ~3 months
   (generation-without-consumption; reconciled 2026-06-13). The standing consumer is now
