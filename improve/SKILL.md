@@ -389,6 +389,7 @@ signal rate (don't re-run a daily-grain miner every tick):
 | Hook health | Every tick (~15s) | `just hooks-smoke` in agent-infra — catches silently-dead hooks at the cheapest possible point. Non-zero exit → fix or escalate before other work. |
 | Session anti-patterns | Daily (or per ~5 new sessions) | `/observe sessions` — behavioral findings → improvement-log `[obs]` |
 | Supervision waste | Daily | `/observe supervision` — corrections/boilerplate/rubber-stamps → automatable fixes. A reiteration of something already decided elsewhere = highest-signal defect → `decisions-pending/`. |
+| Governance-change downstream watch | After constitution/GOALS/invariants edits (`git log` the governance files) | review sessions since the edit for new friction / reverts / anomalies attributable to it → flag to `decisions-pending/` or revert. The compensating control for inferred-approval governance autonomy (invariants #1): autonomy on reversible governance text is only sound if a loop actually catches a bad edit downstream. |
 | Finding drain | Weekly | `/improve harvest` — gather NEW + drain actionable `[ ]` queue |
 | Architecture patterns | Weekly (alt. with frontier) | `/observe architecture` — cross-project abstractions |
 | Frontier scan | Weekly (alt. with architecture) | `/leverage` then `/trending-scout` — prospective 10-100x wins + ecosystem deltas observe is structurally blind to |
