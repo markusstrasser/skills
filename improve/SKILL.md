@@ -362,7 +362,10 @@ green → report "noop" in one line and stop.
 
 A **`just freshness` DUE row is a valid pick** for this tick's rotation (it competes by
 leverage like any other) — run the named worker for the due source: `trending-scout` →
-`/trending-scout`, `agent-infra-sweep` → a frontier sweep memo. The deterministic sources
+`/trending-scout` (writes `research/trending-scout-YYYY-MM-DD.md`), `agent-infra-sweep` →
+a frontier sweep memo at `research/agent-infra-sweep-YYYY-MM-DD.md` (the date-stamped name is
+what `freshness` reads to mark the source fresh again — without it the row stays DUE forever).
+The deterministic sources
 (vendor-docs, binary-extract) are NOT the agent's job — launchd's daily `vendor-sweep` owns
 them; they appear in `freshness` only so a red (DUE+stale) row exposes a dead launchd job.
 
