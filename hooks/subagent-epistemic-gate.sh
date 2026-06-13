@@ -88,7 +88,8 @@ fi
 
 # Check for provenance tags
 HAS_TAGS=false
-if echo "$MSG" | grep -qE '\[SOURCE:|\[DATABASE:|\[DATA\]|\[INFERENCE\]|\[SPEC\]|\[CALC\]|\[QUOTE\]|\[TRAINING-DATA\]|\[PREPRINT\]|\[FRONTIER\]|\[UNVERIFIED\]|\[[A-F][1-6](:[^]]+)?\]'; then
+PROVENANCE_TAG_RE="$(cat "$HOME/Projects/skills/hooks/provenance_tags.re")"  # taxonomy SSOT — references/provenance-tags.md
+if echo "$MSG" | grep -qE "$PROVENANCE_TAG_RE"; then
     HAS_TAGS=true
 fi
 

@@ -43,7 +43,8 @@ if echo "$MSG" | grep -qE '\$[0-9]|[0-9]+%|[0-9]{4}-[0-9]{2}|billion|million|tri
 fi
 
 HAS_TAGS=false
-if echo "$MSG" | grep -qE '\[SOURCE:|\[DATA\]|\[INFERENCE\]|\[SPEC\]|\[CALC\]|\[QUOTE\]|\[TRAINING-DATA\]|\[PREPRINT\]|\[FRONTIER\]|\[UNVERIFIED\]|\[[A-F][1-6](:[^]]+)?\]|\[Exa\]|\[S2\]|\[PubMed\]'; then
+PROVENANCE_TAG_RE="$(cat "$HOME/Projects/skills/hooks/provenance_tags.re")"  # taxonomy SSOT — references/provenance-tags.md
+if echo "$MSG" | grep -qE "$PROVENANCE_TAG_RE"; then
     HAS_TAGS=true
 fi
 

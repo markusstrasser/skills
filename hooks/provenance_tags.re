@@ -1,0 +1,1 @@
+\[SOURCE:|\[DATABASE:|\[DATA\]|\[INFERENCE\]|\[SPEC\]|\[CALC\]|\[QUOTE\]|\[TRAINING-DATA\]|\[PREPRINT\]|\[FRONTIER\]|\[UNVERIFIED\]|\[[A-F][1-6](:[^]]+)?\]|\[Exa\]|\[S2\]|\[PubMed\]|\[arXiv\]|\[ClinGen\]|\[CPIC\]|\[gnomAD\]|\[OMIM\]
