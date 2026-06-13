@@ -216,6 +216,13 @@ Don't create new entity files during a scout run. If a scan surfaces a new tool 
 When invoked as `--weekly` (or dispatched from `/improve maintain`'s weekly frontier rotation), also:
 1. Update the research index in `.claude/rules/research-index.md` if new memo warrants a permanent entry
 2. Commit the memo and any entity file updates: `[research] Trending scout — N new findings, window YYYY-MM-DD to YYYY-MM-DD`
+3. **Route findings into the consumption loop.** A memo is generation; the loop drains
+   `improvement-log.md`, NOT `research/`. So for every finding with verdict **Adopt** or
+   **Evaluate**, append a `[ ]` item to `agent-infra/improvement-log.md` (Evidence: cite the
+   memo path + source; Proposed fix: the integration path; Status: `[ ]` proposed). Without
+   this step the finding is invisible to `/improve maintain` and dies in the memo
+   (generation-without-consumption — see `consumption-over-autonomy.md`). **Watch** / **Ignore**
+   verdicts stay in the memo only. Do NOT auto-implement — `[ ]` is for human/loop disposition.
 
 ## Loop Integration
 
