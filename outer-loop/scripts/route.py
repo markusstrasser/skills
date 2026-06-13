@@ -113,12 +113,14 @@ def route(action: str, ctx: Context) -> str:
             return UNATTENDED if ctx.budget_remaining > 0 else HUMAN_REQUIRED
         if ctx.regime in CLEAN_REGIMES:
             return UNATTENDED              # the auto-ratchet (reversible + local already checked)
-        # partial: per-action unattended IS allowed when reversible + local (already true here);
-        # otherwise the broad default is attended.
-        # A bare "mixed" regime reaching an accept means the policy did not stamp the picked item's
-        # own regime on the action (mixed loops route per-item) — fall back to the CONSERVATIVE
-        # attended (human in the room), never to unattended.
-        return UNATTENDED if ctx.regime == "partial" else ATTENDED
+        # partial / mixed: a NOISY gate must not auto-ratchet. Auto-accepting on a partial verdict is
+        # "accept on noise" — the intel/genomics report-not-gate failure inverted into auto-commit.
+        # Default to ATTENDED (a human verifies the noisy accept). The ADR's "narrow-blast + reversible
+        # → unattended ALLOWED" exception is a deliberate per-action CONTRACT literal
+        # (actions[*].autonomy: unattended), NEVER a route() default — exceptions stay explicit and
+        # auditable. (A bare "mixed" reaching here = the policy didn't stamp the item's own regime;
+        # conservative attended is the safe fallback.)
+        return ATTENDED
 
     # Rule 5 — budget-gated actions (spend a rate-limited resource, e.g. arc-agi ground-truth submit).
     if ctx.budget_remaining is not None:
@@ -141,6 +143,10 @@ def _cli() -> int:
     ap.add_argument("--gate-verdict", default=None)
     ap.add_argument("--no-gate-required", action="store_true")
     ap.add_argument("--budget-remaining", type=float, default=None)
+    ap.add_argument("--accept-verdicts", default=None,
+                    help="comma-sep accept-verdict set from the contract (default: ACCEPT,BASELINE,GATE_PASS). "
+                         "A probe omitting this on a repo with custom verdicts (e.g. science VERIFIED) will "
+                         "mis-route — pass the contract's set to probe accurately.")
     a = ap.parse_args()
     ctx = Context(
         regime=a.regime,
@@ -150,6 +156,8 @@ def _cli() -> int:
         gate_verdict=a.gate_verdict,
         gate_required=not a.no_gate_required,
         budget_remaining=a.budget_remaining,
+        accept_verdicts=(frozenset(v.strip() for v in a.accept_verdicts.split(","))
+                         if a.accept_verdicts else DEFAULT_ACCEPT_VERDICTS),
     )
     decision = route(a.action, ctx)
     print(json.dumps({"action": a.action, "decision": decision}))
