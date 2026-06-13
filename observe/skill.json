@@ -43,6 +43,17 @@
         "digest.md"
       ]
     },
+    "drift": {
+      "intent_class": "observational",
+      "requires_packet": true,
+      "requires_gpt": false,
+      "artifacts": [
+        "manifest.json",
+        "candidates.jsonl",
+        "drift-digest.md",
+        "drift-output.meta.json"
+      ]
+    },
     "retro": {
       "intent_class": "observational",
       "requires_packet": false,
