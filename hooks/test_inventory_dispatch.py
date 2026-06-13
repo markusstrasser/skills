@@ -35,8 +35,8 @@ def fires(out: str) -> bool:
     return "INVENTORY-BEFORE-DISPATCH" in obj["hookSpecificOutput"]["additionalContext"]
 
 
-def make_repo(tmp: Path, subjects: list[str]) -> Path:
-    repo = tmp / "repo"
+def make_repo(tmp: Path, subjects: list[str], name: str = "repo") -> Path:
+    repo = tmp / name
     repo.mkdir()
     g = lambda *a: subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True)
     g("init", "-q")
@@ -96,6 +96,39 @@ def main() -> int:
             "tool_input": {"subagent_type": "researcher",
                            "description": "Investigate attestation outbox",
                            "prompt": "research attestation"},
+        })))
+
+        # Positive: a CURATED memo (research/ filename) matches even with NO git
+        # overlap — the months-old-memo rediscovery case the git scan is blind to.
+        memo_repo = make_repo(tmp, ["Unrelated chore: bump deps"], "memo_repo")
+        (memo_repo / "research").mkdir()
+        (memo_repo / "research" / "2026-06-12-symphony-orchestrator-reference.md").write_text("x")
+        check("positive: curated memo filename fires without git overlap", fires(run({
+            "tool_name": "Agent", "cwd": str(memo_repo),
+            "tool_input": {"subagent_type": "researcher",
+                           "description": "Research symphony orchestrator patterns",
+                           "prompt": "prior art on symphony orchestration"},
+        })))
+
+        # Negative: research dispatch ABOUT worktrees must NOT be skipped as an
+        # isolation dispatch (the 2026-06-13 false-negative). With a matching memo
+        # it should fire despite the word 'worktree' in the prompt.
+        wt_repo = make_repo(tmp, ["Unrelated chore: bump deps"], "wt_repo")
+        (wt_repo / "research").mkdir()
+        (wt_repo / "research" / "worktree-orchestrators-survey.md").write_text("x")
+        check("positive: research ABOUT worktrees not skipped", fires(run({
+            "tool_name": "Agent", "cwd": str(wt_repo),
+            "tool_input": {"subagent_type": "researcher",
+                           "description": "Survey worktree orchestrators prior art",
+                           "prompt": "research worktree orchestrator tools"},
+        })))
+
+        # Negative: an ACTUAL isolation dispatch (structured field) stays skipped.
+        check("negative: isolation=worktree field still skipped", not fires(run({
+            "tool_name": "Agent", "cwd": str(wt_repo), "isolation": "worktree",
+            "tool_input": {"subagent_type": "researcher",
+                           "description": "Survey worktree orchestrators prior art",
+                           "prompt": "research worktree orchestrator tools"},
         })))
 
         # Fail-open: garbage stdin still exits 0 with no output.
