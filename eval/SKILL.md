@@ -279,3 +279,40 @@ empty. Report gaps as a table; fix all confirmed gaps, not top-N.
   output text (output may be parametric recall); (c) judge/generator neutral-family to the
   system-under-test. Generalizes a closed-world rule (absence ≠ negative; UNASSESSABLE) to the
   grading layer. Ref impl: phenome `tests/evals/epistemics/` + ADR `docs/decisions/0008`.
+- **A cheap proxy metric that isn't the objective — even a deterministic one** (extraction bakeoff,
+  2026-06-13). Raw yield (claims/doc) ranked C>B>A and was the headline; the objective was *joinable
+  graded* claims (graph-citizen/doc, the unit a verification substrate needs), which ranked B>C>A then
+  C>B>A corpus-weighted — the proxy *inverted* the verdict. Deterministic ≠ valid: a span-count is
+  still wrong if the objective is joins. **Operationalize the unit-of-value in Phase-1 Construct
+  BEFORE picking the metric;** if the metric isn't the objective, it's an instrument failure.
+- **Bulk eval dispatch on best-effort transport that swallows failures as empty** (the same bakeoff).
+  `--flex` shed load as silent 503s under contention; the loop's `if rc!=0: return []` turned 7/8
+  dropped chunks into "1 claim" (vs 22) — would have falsely sunk the winning arm. **Bulk dispatch
+  must use reliable transport (`llmx batch`) or per-call retry-on-failure (retry rc≠0/timeout, never a
+  genuine rc==0 empty), PLUS a deterministic validity guard for impossible results** (here:
+  "chunked < whole-doc," cross-referenced against a hard-failure flag to separate corruption from the
+  genuine fragmentation signal). Never `--fallback` in an eval (swaps the model mid-run).
+- **Building a router/heuristic without bracketing it against the per-doc ORACLE** (same bakeoff).
+  "Density-tiered routing (chunk dilute, leave dense whole)" looked principled; computing the oracle
+  (per-doc best-of) showed naive chunk-all was within **2%** of the ceiling and a length-threshold
+  router *underperformed* naive. **Before building a router, compute the oracle; if naive is within ε,
+  the router is wasted complexity.**
+- **Reporting the metric at the producer's stage, not the consumer's.** Pre-gate yield (16.5) and
+  pre-resolver citizen% were upper bounds; the honest number is **quote-gated + post-resolver** (13.29
+  → lower), the stage the consumer actually sees. Measure through the production pipeline, report at
+  the consumer's stage.
+- **Slow-feedback validation when a fast staged check exists** ([[feedback_prefer_faster_feedback]]).
+  To answer "does it hold," a held-out sample returning in minutes beats a monolithic full run
+  returning in hours. **Batch-async is the SLOWEST feedback** (opaque ≤24h) — never use it to *see if
+  X holds*; stage validation (small held-out first → full run only if it holds).
+
+### /eval skill vs evals repo (recurring question — settle it here)
+They're different KINDS of thing; keep SEPARATE, neither collapses into the other. **This skill =
+portable DISCIPLINE** (phases/gates/anti-patterns; auto-loads in every project; light, project-
+agnostic — "how to think"). **`~/Projects/evals` = cross-cutting INFRA + verdicts + data** (`evalcore`
+with deps, `just new-eval` scaffold, `DECISIONS.md`/`BENCHMARKS.md`, run JSONs — "where bakeoffs
+live"). A skill can't carry a Python package + run data + a live registry (bloats every context load);
+and the skill must auto-load in phenome/genomics/intel, which it can't if it lives only in evals/. So
+the skill *cites* repo examples as pointers, never embeds. **Lesson-flow boundary:** methodology →
+this skill; reusable code → `evalcore` *iff* a 2nd consumer (else the eval dir); verdicts →
+DECISIONS/RESULTS.
