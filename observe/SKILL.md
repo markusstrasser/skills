@@ -1,6 +1,6 @@
 ---
 name: observe
-description: "Session retros. Modes: sessions/architecture/supervision/retro. 'what went wrong', 'session quality', 'wasted time'."
+description: "Session retros. Modes: sessions/architecture/supervision/drift/retro. 'what went wrong', 'session quality', 'wasted time', 'cross-session trends', 'what's drifting'."
 user-invocable: true
 argument-hint: <mode> [project] [options...]
 context: fork
@@ -10,7 +10,7 @@ effort: medium
 
 # Observe
 
-Unified diagnostic workflow. Four lenses on the same transcript data, each answering a different question.
+Unified diagnostic workflow. Five lenses on the same transcript data, each answering a different question.
 
 > **Retrospective + error-oriented by design.** Observe learns from what *happened*
 > (anti-patterns, corrections, wasted supervision). It is structurally blind to
@@ -33,6 +33,7 @@ signal/candidate flow, and promotion gates.
 | `sessions` | What behavioral anti-patterns appeared? | Yes | `manifest.json` -> `signals.jsonl` -> `candidates.jsonl` -> `digest.md` (+ `dispatch.meta.json` when dispatched) |
 | `architecture` | What design wants to emerge? | Yes | `manifest.json` -> `signals.jsonl` -> `candidates.jsonl` -> `patterns.jsonl` -> `YYYY-MM-DD.md` |
 | `supervision` | Where was human time wasted? | Yes | `manifest.json` -> `signals.jsonl` -> `candidates.jsonl` -> `digest.md` (+ `dispatch.meta.json` when dispatched) |
+| `drift` | What slow-moving pattern spans MANY sessions? | Yes (1M wide) | `manifest.json` -> `candidates.jsonl` (tagged `"mode":"drift"`) -> `drift-digest.md` |
 | `retro` | What went wrong this session? | No (local) | `artifacts/session-retro/` |
 
 Parse `$ARGUMENTS` for mode. First positional arg is the mode. Remaining args are project, options.
@@ -42,7 +43,7 @@ Parse `$ARGUMENTS` for mode. First positional arg is the mode. Remaining args ar
 - Otherwise -> `sessions`
 
 **Options common to all modes:**
-- `--days N` -- time window (default: 1 for sessions/architecture/supervision, current session for retro)
+- `--days N` -- time window (default: 1 for sessions/architecture/supervision, 21 for drift, current session for retro)
 - `--project PROJECT` -- filter to one project
 - `--corrections` -- sessions mode only: extract user correction patterns instead of anti-patterns
 
@@ -353,6 +354,77 @@ If `--days 7+`, compare against previous runs:
 - **Fixes deployed:** [list]
 - **Status:** [ ] reviewed
 ```
+
+---
+
+## Mode: drift
+
+The SLOW, WIDE pass. Where `sessions` reads ~5 sessions over 1 day for per-session anti-patterns,
+`drift` reads a WIDE window (default `--days 21`, all projects) in one 1M-context shot to find
+patterns no single retro can see: recurrence counts, proposed-but-never-built, rising friction,
+convention drift. This is the deliberate cross-session reasoning lane — run it weekly via `/loop`,
+not daily.
+
+Why it can be slow + cheap: `deep_review` (gemini-3.5-flash) is 1M-capable and cheap; 3 weeks of
+sessions ≈ 200-600KB, one dispatch. Cost lever is the flash profile + async — NOT the Batch API
+(not wired in `llm-dispatch.py`). The `claude_review` Opus profile caps at 200K, so it is NOT a
+substitute for the wide pass; use `deep_review`.
+
+### Step 1: Extract wide window
+
+Run shared transcript extraction with the wide window across ALL projects (omit `--project`).
+Use a large `--sessions` cap so the window isn't silently truncated:
+
+```bash
+MODE=drift
+DAYS=${DAYS:-21}
+# Extract many sessions across all projects, full fidelity, into input.md (+ codex.md).
+# Reuse the shared extraction commands above with --sessions 60 (or higher) and --full.
+```
+
+Build operational context (Step 1.3) and the coverage digest as in `sessions` mode — drift
+LEANS on the git-commit operational context to detect "proposed but never built" (a fix proposed
+in an early session with no later landing commit).
+
+### Step 2: Dispatch (wide, 1M)
+
+```bash
+{
+  cat "$ARTIFACT_DIR/input.md"
+  if [ -s "$ARTIFACT_DIR/codex.md" ]; then printf '\n\n---\n\n'; cat "$ARTIFACT_DIR/codex.md"; fi
+  printf '\n\n---\n\n'; cat "$ARTIFACT_DIR/operational-context.txt"
+  printf '\n\n---\n\n'; cat "$ARTIFACT_DIR/coverage-digest.txt"
+} > /tmp/observe-drift-context.md
+uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
+  --profile deep_review \
+  --context /tmp/observe-drift-context.md \
+  --prompt-file "$CLAUDE_SKILL_DIR/references/drift-dispatch-prompt.md" \
+  --output "$ARTIFACT_DIR/drift-output.md" \
+  --meta "$ARTIFACT_DIR/drift-output.meta.json" \
+  --error-output "$ARTIFACT_DIR/drift-output.error.json"
+```
+
+If extraction exceeds the dispatcher's size guard, narrow `--days` rather than disabling the
+guard (an oversized batch silently kills the dispatch — gemini died on a 3.4MB observe batch,
+2026-06-12).
+
+### Step 3: Stage findings
+
+Validate against the transcript (session-id anchoring) and stage each finding into
+`candidates.jsonl` tagged `"mode":"drift"`, carrying the distinct-session count in evidence so
+the 2+-recurrence promotion gate is machine-checkable. Same promotion rules as `sessions` mode:
+behavioral observations → `[obs]`; concrete builds → `[ ]` proposed. RECURRENCE findings at 2+
+distinct sessions are promotion-eligible immediately.
+
+### Step 4: Summary
+
+Write `drift-digest.md` (terse — lead with promotable findings). Report to user:
+- Window: N days, M sessions, P projects
+- Recurrence findings ≥2 sessions: N (promotable)
+- Proposed-but-never-built: N
+- Rising-friction trends: N
+- Convention drift: N
+Only write `improvement-log.md` entries for promoted candidates.
 
 ---
 
