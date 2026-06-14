@@ -85,7 +85,8 @@ Think through each (then write the ack to proceed):
 
   TRACE-AUDIT PRE-COMMIT (you commit NOW — enforced at verdict by eval-skill Phase 4.5)
    9. Read EVERY outlier trace + >=1 trace/arm before averaging/concluding. A 0/perfect score or a
-      tiny/empty output is a TRIGGER to read, not a data point.
+      tiny/empty output is a TRIGGER to read, not a data point. Rank them mechanically:
+      \`item_analysis.py <matrix.jsonl>\` (skills/eval/scripts) flags mis-keyed/ceiling/outlier items.
   10. Confirm every arm appears in the OUTPUT tables (hardcoded model lists silently drop new arms).
   11. Report distribution/range + inter-judge agreement — never launder one judge's number into a verdict.
   12. Traces persisted for re-audit.
