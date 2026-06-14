@@ -294,7 +294,10 @@ item analysis catches the outlier/mis-keyed item that a human scanning a table m
 response matrix as long-format JSONL (`{"model","item","score","scale_max"}`, one row per cell) and:
 
 ```bash
-uv run python3 ~/Projects/skills/eval/scripts/item_analysis.py matrix.jsonl   # or --adapter phenome|intel
+# evalcore evals: ZERO hand-emit — trials.jsonl IS the matrix (variant=model, item_id=item, scores)
+uv run python3 ~/Projects/skills/eval/scripts/item_analysis.py --adapter evalcore <run_id>.trials.jsonl
+# non-evalcore: emit long-format yourself  (or --adapter phenome|intel)
+uv run python3 ~/Projects/skills/eval/scripts/item_analysis.py matrix.jsonl
 ```
 
 It computes per-item **difficulty** + **discrimination** (corrected item-total r) + **top-model
