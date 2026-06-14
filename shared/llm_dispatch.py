@@ -179,6 +179,27 @@ PROFILES: dict[str, DispatchProfile] = {
         max_tokens=16384,
         input_token_limit=200000,
     ),
+    "composer_review": DispatchProfile(
+        # Opt-in cheap cosigner: Cursor Composer 2.5 via the llmx `cursor`
+        # transport (cursor-agent headless, Cursor app subscription). A
+        # genuinely different lineage (Cursor) for adversarial diversity.
+        # Cost is usage-metered (Cursor "Auto + Composer" included pool, then
+        # ~$0.50/M in, $2.50/M out) — cheap, NOT flat-free. Validated
+        # frontier-equal on injected-defect review
+        # (evals/cross_lab_review/COMPOSER_ARM_RESULTS.md, 2026-06-14).
+        # CRITICAL: cursor-cli has NO api_fallback — max_tokens/search/stream
+        # all RAISE. So none are set here, and allowed_overrides is locked to
+        # `timeout` only so a caller can't pass --max-tokens/--search and crash
+        # the axis. Composer has no reasoning-effort tiers either (left None).
+        name="composer_review",
+        intent="Cursor Composer 2.5 adversarial review (opt-in $0 cosigner)",
+        provider="cursor",
+        model="composer-2.5",
+        timeout=600,
+        api_only=False,
+        input_token_limit=120000,
+        allowed_overrides=("timeout",),
+    ),
 }
 
 MODEL_TO_PROFILE = {
@@ -187,6 +208,7 @@ MODEL_TO_PROFILE = {
     "gemini-3.1-pro-preview": "legacy_pro_review",  # demoted 2026-05-24
     "gpt-5.5": "gpt_general",
     "claude-opus-4-8": "claude_review",
+    "composer-2.5": "composer_review",
 }
 
 
@@ -522,7 +544,12 @@ def dispatch(
     error_path: Path | None = None,
     parsed_path: Path | None = None,
     schema: dict[str, Any] | None = None,
-    api_only: bool = True,
+    # None (default) → use the profile's own api_only. A bool here is an explicit
+    # per-call override. Must NOT default to True: that forced the API path for
+    # every profile and silently bypassed CLI-transport profiles like
+    # composer_review (provider=cursor, api_only=False) → routed composer-2.5 to
+    # the OpenAI API → 404 model_not_found.
+    api_only: bool | None = None,
     overrides: DispatchOverrides | None = None,
     system: str | None = None,
 ) -> DispatchResult:

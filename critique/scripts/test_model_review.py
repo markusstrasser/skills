@@ -255,6 +255,59 @@ class CallLlmxTest(unittest.TestCase):
         fmt = captured.get("response_format", {})
         self.assertNotIn("additionalProperties", str(fmt))
 
+    def test_call_llmx_honors_cli_transport_for_composer(self) -> None:
+        """A CLI-transport profile (composer_review, api_only=False) must NOT be
+        forced onto the API path. Regression guard: _call_llmx previously
+        hardcoded api_only=True, which routed composer-2.5 to the OpenAI API
+        → 404. The profile owns its transport; the dispatcher honors it."""
+        captured = {}
+        def capture_chat(**kwargs):
+            captured.update(kwargs)
+            resp = MagicMock()
+            resp.content = "ok"
+            resp.latency = 0.1
+            return resp
+
+        with tempfile.TemporaryDirectory() as td:
+            ctx = Path(td) / "ctx.md"
+            ctx.write_text("context")
+            out = Path(td) / "out.md"
+            with patched_llmx_chat(capture_chat):
+                model_review._call_llmx(
+                    provider="cursor", model="composer-2.5",
+                    context_path=ctx, prompt="test", output_path=out,
+                    timeout=10,
+                )
+        self.assertEqual(captured.get("provider"), "cursor")
+        # api_only resolves to the profile's own value (False) — NOT forced True.
+        self.assertFalse(captured.get("api_only"),
+                         "composer (CLI transport) must not be forced to api_only=True")
+
+    def test_call_llmx_keeps_api_only_for_api_profiles(self) -> None:
+        """The other direction: API-backed profiles (gpt_general, api_only=True)
+        still get api_only=True so they skip CLI fallback latency. Honoring the
+        profile must not regress the API path."""
+        captured = {}
+        def capture_chat(**kwargs):
+            captured.update(kwargs)
+            resp = MagicMock()
+            resp.content = "ok"
+            resp.latency = 0.1
+            return resp
+
+        with tempfile.TemporaryDirectory() as td:
+            ctx = Path(td) / "ctx.md"
+            ctx.write_text("context")
+            out = Path(td) / "out.md"
+            with patched_llmx_chat(capture_chat):
+                model_review._call_llmx(
+                    provider="openai", model="gpt-5.5",
+                    context_path=ctx, prompt="test", output_path=out,
+                    timeout=10,
+                )
+        self.assertTrue(captured.get("api_only"),
+                        "API profiles must keep api_only=True (skip CLI fallback)")
+
 
 class AxisResolutionTest(unittest.TestCase):
     def test_standard_preset_is_gpt_inclusive(self) -> None:
