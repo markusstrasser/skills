@@ -37,9 +37,17 @@ count="${count:-0}"
 
 if [ "$count" -ge 2 ]; then
   peers=$((count - 1))
-  echo "PEER SESSION WARNING: ${peers} other claude session(s) share this checkout:"
-  echo "  ${cwd}"
-  echo "  Concurrent peer sessions clobber shared .claude/ state (checkpoint, current-session-id, trackers)."
-  echo "  Isolate next time: claude --worktree <name>  (branches local HEAD; merge via git). Same risk applies to parallel codex."
+  base="$(basename "$cwd")"
+  sfx="$(date +%H%M 2>/dev/null || echo 2)"
+  # LOUD + one-paste-actionable (operator's 2026-06-14 ask): re-fires every session
+  # a peer is present, so it can't be forgotten; carries the exact isolate command
+  # so acting is a single paste, not a recall-from-memory task. No silent magic.
+  echo "⚠  PEER SESSION — ${peers} other claude session(s) share this checkout:"
+  echo "       ${cwd}"
+  echo "   Shared .claude/ state (current-session-id, trackers, checkpoint) WILL clobber across them"
+  echo "   → mis-stamped commits + cross-session confusion (auto-checkpoint now fails closed, but state still thrashes)."
+  echo "   ▶ Isolate THIS session — exit, then relaunch in its own worktree (one paste):"
+  echo "         claude --worktree ${base}-wt${sfx}"
+  echo "   (branches local HEAD; merge back via git. Parallel codex = same risk. Silence: PEER_SESSION_WARN_OFF=1)"
 fi
 exit 0
