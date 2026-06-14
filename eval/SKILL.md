@@ -261,6 +261,14 @@ in fact *unpersisted*, traces; the trace audit found a led judge + no specificit
   `mcnemar_exact` + `holm_correction`; `prob_superiority_beta` is the small-N primary readout.
 - SCREENING declaration → lead with ranks + effect sizes + CIs; p-values secondary.
 
+**Statistical canon** (Miller "Error Bars to Evals" + Biderman "Lessons from the Trenches", full-text in `agent-infra research/2026-06-14-eval-methodology-canon.md`) — the parts not already enforced above:
+- **SE + n on every decision-grade number.** CLT `sqrt(Var/n)`; Bernoulli `sqrt(p(1-p)/n)` ONLY for strict 0/1 scores — it's WRONG (too wide) on F1/partial-credit/judge scores (the Llama-3 report shipped this error). A comparison without an SE is not decision-grade.
+- **Cluster the SE when items are grouped** (shared passage, one prompt × N langs/paraphrases, multi-turn on one scenario) — up to **3.05× wider** on real data; an unclustered grouped CI lies about precision.
+- **≥2 seeds/temps; report mean + variance; NO single-run headline** (Miller + Biderman + BetterBench: 14/24 benchmarks fail this). Cut variance by resample K=4–10 or next-token-probs — **never by lowering temperature** (that changes what you measure).
+- **Separate format-compliance from correctness**: log RAW and extracted output; a regex extractor can 0-score a correct answer. Pin the harness (exact prompts + extraction code + model-version + commit) — a score without it isn't reproducible.
+
+**Don't trust vendor leaderboards as rankings** (`research/2026-06-14-benchmark-leaderboard-methodology-critique.md`): LMArena's Bradley-Terry is sound but the board is structurally captured (Leaderboard Illusion — Meta tested 27 private variants; data-access = +112%); Artificial Analysis is a SOLID screen but 33% of weight flows through LLM judges (use per-axis, not the composite); CursorBench/OpenRouter measure cherry-pick/spend, not capability; SWE-bench **Verified ≫ original**. Steal the contamination-resistant DESIGNS (temporal holdout > canary > fuzzy-dedup), not the leaderboards.
+
 ## Phase 4.5 — Trace audit BEFORE the verdict (mandatory gate)
 
 > Recurred 2× operator-forced (phenome KG-verifier 2026-06-13; Cursor Composer 2026-06-14 —
