@@ -124,6 +124,13 @@ Answer in writing (they become PREREGISTRATION.md fields):
 1. **Construct** — what ability/property, operationalized how? One sentence.
 2. **Decision + consumer** — which production default / routing rule does the verdict
    change, and where is that recorded (DECISIONS.md row)? **No consumer → don't build.**
+   *Criterion validity (the NASA-recruiter test):* name the real-world outcome the score is a
+   proxy for — the way a selection test is only worth running if it predicts *job performance*,
+   not test-taking skill (Schmidt-Hunter selection-validity literature). "Extraction F1" matters
+   only insofar as it predicts pipeline usefulness; a benchmark you never check against the
+   downstream outcome is a vanity metric, however internally clean. Where the criterion is
+   measurable, validate against it; where it isn't yet (partial-verifier regime), say so and treat
+   the score as a *bounded* proxy, not the target. (This is consumption-over-autonomy with a name.)
 3. **Verifier regime** — deterministic ground truth (substring, recall@k, exact answer)
    or judged? Deterministic PRIMARY decides; judges corroborate. A model-as-judge proxy
    does not make taste work verifiable (constitution: bad eval is worse than none).
@@ -282,12 +289,35 @@ in fact *unpersisted*, traces; the trace audit found a led judge + no specificit
 > an `evals?/`/`benchmarks?/`/`tests/evals/` segment) until the agent records a `<evaldir>/.preflight-ack`
 > confirming the design checklist + these trace-audit pre-commitments. One confirm per eval; fails open.
 
+**Mechanize checks 1–2 — run the item analyzer (don't eyeball the matrix).** Psychometric
+item analysis catches the outlier/mis-keyed item that a human scanning a table misses. Emit your
+response matrix as long-format JSONL (`{"model","item","score","scale_max"}`, one row per cell) and:
+
+```bash
+uv run python3 ~/Projects/skills/eval/scripts/item_analysis.py matrix.jsonl   # or --adapter phenome|intel
+```
+
+It computes per-item **difficulty** + **discrimination** (corrected item-total r) + **top-model
+dispersion** and prints a ranked **INSPECT** list. **Every flagged item must be trace-audited
+before the verdict** — they are leads, not conclusions (at small N it says so). What the flags mean:
+- `INSPECT-GOLD` (negative discrimination — the best models score *worst*) → the gold is likely
+  mis-keyed/contaminated. This is the `diekstra` signature: composer's 0/33 was *correct*, the gold
+  was wrong. The analyzer flags it #1 mechanically (validated 2026-06-14); you no longer have to be
+  told "go look at the traces."
+- `CEILING`/`FLOOR` (difficulty →1 / →0) → ~zero information; prune or replace (a saturated item
+  carries no signal — the "injected-defect benchmark" failure mode).
+- `TOP-DISPERSION` (high-ability models disagree) → ambiguous gold or a real capability split.
+
+Normalize per `scale_max` (a 0–3 faithfulness scale is NOT a 0–1 recall scale — the analyzer's own
+first bug). The analyzer is the front-end; the five checks below are the judgment it can't make:
+
 Run these five checks; record the result in EXPERIMENT.md §5 (or a `*_RESULTS.md § Spot-check`):
 
 1. **Outliers first.** For each arm, list per-item scores, not just the mean. Any item far from
    the arm's others (e.g. recall 96/82/**0**) → READ THAT TRACE before averaging it in. A mean
    over a bimodal/outlier distribution is a lie ("52% mid-pack" was really 96%/82% + a correct `[]`).
    Tiny/near-empty outputs (a 1KB output among 30KB ones) are red flags, not data points.
+   *(The item analyzer above ranks these for you; this check is reading the traces it points at.)*
 2. **Is the GOLD/grader valid on contested items?** A model scoring 0 may be doing the RIGHT
    thing against a gold that violates its own contract. Verify: does the gold honor the task's
    own drop/keep rules? (Composer scored 0/33 by correctly dropping methodology claims the contract
