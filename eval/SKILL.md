@@ -311,6 +311,13 @@ before the verdict** — they are leads, not conclusions (at small N it says so)
 Normalize per `scale_max` (a 0–3 faithfulness scale is NOT a 0–1 recall scale — the analyzer's own
 first bug). The analyzer is the front-end; the five checks below are the judgment it can't make:
 
+**Adversarial cross-model complement (the spirit-audit).** item_analysis is mechanical on the
+*matrix*; for the *traces*, run the integrity lens via a different-lineage model — it independently
+catches contaminated gold, broken-arm-scored-as-result, confounds, and saturation (validated
+2026-06-14: Composer, fed the traces blind, caught diekstra + corroborated the saturation finding).
+`~/Projects/skills/analyze/scripts/spirit_audit.sh <PREREGISTRATION.md|EXPERIMENT.md> <trace_files>…`
+fans Composer over the artifacts; or `/critique` with the `composer` axis. Lens: `analyze/lenses/spirit-audit.md`.
+
 Run these five checks; record the result in EXPERIMENT.md §5 (or a `*_RESULTS.md § Spot-check`):
 
 1. **Outliers first.** For each arm, list per-item scores, not just the mean. Any item far from
