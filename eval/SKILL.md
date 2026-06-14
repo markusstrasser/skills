@@ -261,6 +261,40 @@ in fact *unpersisted*, traces; the trace audit found a led judge + no specificit
   `mcnemar_exact` + `holm_correction`; `prob_superiority_beta` is the small-N primary readout.
 - SCREENING declaration → lead with ranks + effect sizes + CIs; p-values secondary.
 
+## Phase 4.5 — Trace audit BEFORE the verdict (mandatory gate)
+
+> Recurred 2× operator-forced (phenome KG-verifier 2026-06-13; Cursor Composer 2026-06-14 —
+> both times a committed verdict was overturned only after "go look at the traces"). This is
+> now a GATE, not advice: **no DECISIONS row, no committed verdict, until this audit is written.**
+> A verdict from aggregates you didn't trace-check is a draft, not a result.
+
+Run these five checks; record the result in EXPERIMENT.md §5 (or a `*_RESULTS.md § Spot-check`):
+
+1. **Outliers first.** For each arm, list per-item scores, not just the mean. Any item far from
+   the arm's others (e.g. recall 96/82/**0**) → READ THAT TRACE before averaging it in. A mean
+   over a bimodal/outlier distribution is a lie ("52% mid-pack" was really 96%/82% + a correct `[]`).
+   Tiny/near-empty outputs (a 1KB output among 30KB ones) are red flags, not data points.
+2. **Is the GOLD/grader valid on contested items?** A model scoring 0 may be doing the RIGHT
+   thing against a gold that violates its own contract. Verify: does the gold honor the task's
+   own drop/keep rules? (Composer scored 0/33 by correctly dropping methodology claims the contract
+   excludes — the gold + every other model extracted them = contract violation. The 0 was correct.)
+   If the gold is wrong for a case, the metric is INVALID there — say so; don't rank on it. Pair with
+   the judge's `GOLD_INVALID` escape (Anti-patterns).
+3. **Inter-judge / inter-rater agreement.** Before reporting any judged number as ground truth,
+   check whether judges agree on it. If they split materially (opus said 24 unsupported, gpt said
+   45), report the RANGE and flag the arm as hard-to-judge — don't launder one judge's count into a
+   verdict.
+4. **Every arm appears in the OUTPUT.** Hardcoded model/candidate lists silently drop a newly-added
+   arm even when its raw files parse fine. Confirm the new arm is in every summary table/row, not
+   just on disk.
+5. **Attribution honesty.** If the conditions you're contrasting differ in ≥2 ways (contract ×
+   domain × prompt-length), you CANNOT attribute the effect to one of them — name the confounds
+   (cross-ref the confound anti-pattern). State the mechanism evidence you DO have, separately from
+   the correlation.
+
+Cheap rule of thumb: **read ≥1 trace per arm and every outlier trace.** The cost is minutes; the
+cost of a committed wrong verdict is a re-audit + a correction commit + lost trust (measured twice).
+
 ## Phase 5 — Verdict + invariant extraction
 
 1. EXPERIMENT.md §6a **local verdict** (config-bound) → DECISIONS.md row + the production
@@ -399,6 +433,13 @@ empty. Report gaps as a table; fix all confirmed gaps, not top-N.
     you cannot re-read is not verified. A CLEAN / PERFECT score is a trigger to READ traces, not a license
     to skip them (softball cases, a rubber-stamp judge, and leading phrasing all produce clean scores).
     No-verdict-on-unread-traces — the single most expensive lesson of the session.
+  - **RECURRED 2026-06-14 (Cursor Composer extraction bakeoff):** a committed routing verdict
+    ("52% mid-pack recall, sloppy over-generator needing a verifier") was overturned only after the
+    operator said "check the traces." The 0/33 outlier was Composer correctly returning `[]` on a
+    methodology doc the contract says to DROP — it was the ONLY contract-faithful arm; the gold +
+    every other model were contract-violating. Same shape as 2026-06-13: aggregate trusted, outlier
+    not read, gold not validated, judges' disagreement (24 vs 45 unsupported) laundered into one
+    number. 2nd occurrence → promoted to the mandatory **Phase 4.5 Trace-audit gate** above.
 - **A cheap proxy metric that isn't the objective — even a deterministic one** (extraction bakeoff,
   2026-06-13). Raw yield (claims/doc) ranked C>B>A and was the headline; the objective was *joinable
   graded* claims (graph-citizen/doc, the unit a verification substrate needs), which ranked B>C>A then
