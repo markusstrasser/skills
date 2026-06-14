@@ -80,6 +80,59 @@ def test_good_item_not_flagged():
     assert probe["discrimination"] > 0
 
 
+def test_exactly_one_inspect_gold_when_one_miskeyed():
+    # C1 regression: a single mis-keyed item must NOT drag clean items negative via a
+    # contaminated ability estimate. With iterative purification, exactly ONE flag.
+    cells = {}
+    for m, base in [("strong", 0.9), ("midhi", 0.7), ("midlo", 0.4), ("weak", 0.1)]:
+        for g in ("good1", "good2", "good3"):
+            cells[(m, g)] = (base, 1.0)
+    # bad: best models score 0, worst score 1 (anti-correlated with ability)
+    for m, v in [("strong", 0.0), ("midhi", 0.0), ("midlo", 1.0), ("weak", 1.0)]:
+        cells[(m, "bad")] = (v, 1.0)
+    res = ia.analyze(_matrix(cells))
+    ig = [r["item"] for r in res["item_stats"] if r["flag"] == "INSPECT-GOLD"]
+    assert ig == ["bad"], f"expected exactly ['bad'] INSPECT-GOLD, got {ig}"
+
+
+def test_non_extreme_negative_still_flags():
+    # A mis-keyed item that is negatively — but not perfectly — discriminating must still
+    # flag (mutation `r<0`->`r<-0.5` would stop catching these; this locks the r<0 threshold).
+    cells = {}
+    for m, base in [("a", 0.9), ("b", 0.7), ("c", 0.5), ("d", 0.3), ("e", 0.1)]:
+        for g in ("g1", "g2", "g3"):
+            cells[(m, g)] = (base, 1.0)
+    # weakly anti-correlated: top model lowest, the rest only mildly off
+    for m, v in [("a", 0.3), ("b", 0.55), ("c", 0.5), ("d", 0.55), ("e", 0.6)]:
+        cells[(m, "weakbad")] = (v, 1.0)
+    res = ia.analyze(_matrix(cells))
+    wb = next(r for r in res["item_stats"] if r["item"] == "weakbad")
+    assert wb["flag"] == "INSPECT-GOLD", wb
+    assert -0.95 < wb["discrimination"] < 0, f"want a non-extreme negative r, got {wb['discrimination']}"
+
+
+def test_loo_excludes_self_pins_sign():
+    # Pin leave-one-out: item X correlates -1 with item Y. Using LOO (basis excludes X) X
+    # flags. Mutation "use FULL ability incl. X" -> ability is flat (0.5 everywhere) -> r
+    # undefined -> X would NOT flag. So this test fails if LOO is removed (the unlocked claim).
+    cells = {}
+    for m, x, y in [("m0", 1.0, 0.0), ("m1", 1.0, 0.0), ("m2", 0.0, 1.0), ("m3", 0.0, 1.0)]:
+        cells[(m, "X")] = (x, 1.0)
+        cells[(m, "Y")] = (y, 1.0)
+    res = ia.analyze(_matrix(cells))
+    assert "X" in res["inspect_gold"], f"LOO not pinned — X should flag, inspect_gold={res['inspect_gold']}"
+
+
+def test_scale_max_nonpositive_raises():
+    # H2: a non-positive scale_max is bad data — fail loud, don't silently /1.0 or flip sign.
+    for bad in (0.0, -3.0):
+        try:
+            ia._norm(1.5, bad)
+        except ValueError:
+            continue
+        raise AssertionError(f"scale_max={bad} should raise ValueError")
+
+
 def test_long_adapter_roundtrip_and_cli():
     # >=3 models required to compute item-total discrimination (can't correlate 2 points).
     rows = []
