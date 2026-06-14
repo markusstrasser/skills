@@ -36,6 +36,11 @@ DB = Path.home() / ".claude" / "agentlogs.db"
 _TRACEBACK = "Traceback (most recent call last):"
 _RAISED_IMPORT = re.compile(r"(?m)^\s*(ModuleNotFoundError|ImportError|cannot import name)\b")
 _NO_MODULE = re.compile(r"No module named ['\"]([A-Za-z0-9_.]+)['\"]")
+# `cannot import name 'X' from 'pkg.mod'` — sub-key by symbol@module so distinct
+# moved-symbol breaks don't lump into one coarse `import-error` bucket (the bug
+# that made 34 assorted import errors look like "RoutingInput ×34", surfacing a
+# phantom top-3 priority — 2026-06-14).
+_CANNOT_IMPORT = re.compile(r"cannot import name ['\"]([A-Za-z0-9_]+)['\"] from ['\"]?([A-Za-z0-9_.]+)")
 _SHIM = re.compile(r'File "[^"]*/bin/([A-Za-z0-9_.-]+)", line \d+, in <module>')
 # command-not-found over-matches prose; require a real shell line/eval prefix
 _CMD_NOTFOUND_REAL = re.compile(
@@ -56,7 +61,8 @@ def classify(text: str):
         elif mod:
             key = f"missing-module:{mod.group(1)}"
         else:
-            key = "import-error"
+            ci = _CANNOT_IMPORT.search(text)
+            key = f"import-error:{ci.group(1)}@{ci.group(2).split('.')[-1]}" if ci else "import-error"
         line = next((l.strip() for l in text.splitlines()
                      if _RAISED_IMPORT.match(l) or _RAISED_IMPORT.search(l)), key)
         return key, line[:160]
