@@ -1,6 +1,6 @@
 ---
 name: observe
-description: "Session retros. Modes: sessions/architecture/supervision/drift/retro/failures. 'what went wrong', 'session quality', 'wasted time', 'cross-session trends', 'what's drifting', 'what tools are broken'."
+description: "Session retros. Modes: sessions/architecture/supervision/drift/retro/failures/blindspot. 'what went wrong', 'session quality', 'cross-session trends', 'what's drifting', 'what tools are broken', 'what loop misses did I have to catch'."
 user-invocable: true
 argument-hint: <mode> [project] [options...]
 context: fork
@@ -36,6 +36,7 @@ signal/candidate flow, and promotion gates.
 | `drift` | What slow-moving pattern spans MANY sessions? | Yes (1M wide) | `manifest.json` -> `candidates.jsonl` (tagged `"mode":"drift"`) -> `drift-digest.md` |
 | `retro` | What went wrong this session? | No (local) | `artifacts/session-retro/` |
 | `failures` | Which tools/CLIs are actually BROKEN in real use? | Tiered: deterministic -> Haiku -> deep | `scan_tool_failures.py` -> `failures.json` -> triaged breaks |
+| `blindspot` | What did the loop MISS that the human had to catch? (RSI coverage gaps) | emb-contrastive (runs in emb's env) | `blindspot_miner.py` -> `.claude/blindspot-digest.md` -> candidate detectors |
 
 Parse `$ARGUMENTS` for mode. First positional arg is the mode. Remaining args are project, options.
 
@@ -547,6 +548,50 @@ Tier-2/3 confirmed breaks -> `improvement-log.md` `[ ]` (actionable infra), or
 `decisions-pending/` if shared-infra/irreversible. One-off scratch failures ->
 drop (don't inflate the queue). Cadence: weekly, or any tick after a "loop missed
 a broken tool" surprise.
+
+---
+
+## Mode: blindspot
+
+**"What did the loop MISS that the human had to catch?"** — the RSI signal. Every
+time the human reproaches/corrects the agent for missing something it should have
+caught (a prior decision, an existing tool, a git-log fact, the right approach),
+that's a labeled example of a loop coverage gap. The objective (Constitution:
+*declining supervision*) is to drive the RATE of these toward zero by converting
+each recurring cluster into a DETECTOR. (Markus, 2026-06-14: *"every time I mention
+something, ask why the loop didn't find it, and metaimprove a way for the next loop
+to find stuff like it."*)
+
+`failures` finds broken *tools*; `supervision` audits wasted *human time* broadly;
+`blindspot` is the sharp cut — the human catching a *loop miss* — and it feeds the
+CONVERT step (`/improve maintain`).
+
+### Detection — emb-contrastive (the only method that works here)
+```bash
+# runs in emb's env so agent-infra stays torch-free; $0 local
+uv run --project ~/Projects/emb python3 ~/Projects/agent-infra/scripts/blindspot_miner.py --days 7
+# or: just -f ~/Projects/agent-infra/justfile blindspot   (the launchd job runs it daily 06:50)
+```
+Why not regex/fuzzy: the distinction is *pragmatic* (is the human reproaching a
+miss?), not topical — "did you check the git log" vs "can you check the tests" are
+topically identical, pragmatically opposite. Benchmark (improvement-log 2026-06-14):
+regex 43% recall; fuzzy hits a lexical ceiling; emb-contrastive (blind-centroid
+minus normal-centroid) is the only one catching semantic paraphrases at precision.
+The miner already runs daily (launchd) and writes `.claude/blindspot-digest.md`;
+this mode is the on-demand / wider-window re-run.
+
+### Cluster + CONVERT (the loop-closure — done in `/improve maintain`)
+1. `emb pairs --fuzzy` (or dense) over the flagged messages clusters recurring misses.
+2. For the **top recurring cluster**, ask: *what deterministic check / state-injection
+   would have caught this autonomously?* (e.g. the dominant cluster is prior-context
+   blindness → a "harness supplies what's already known at the propose/diagnose
+   boundary" detector, extending `inventory-dispatch` past subagent-dispatch.)
+3. Route the proposed detector to `improvement-log.md` `[ ]` (agent-infra-local) or
+   `decisions-pending/` (shared/irreversible). The blindspot-flag rate is the
+   pre-registered success metric — it should fall as detectors land.
+
+Cadence: the digest surfaces every agent-infra SessionStart (`blindspot-surface.sh`);
+triage the top cluster in any `/improve maintain` tick.
 
 ---
 

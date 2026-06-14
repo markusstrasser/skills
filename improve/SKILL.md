@@ -140,6 +140,21 @@ read by the loop (generation-without-consumption — lessons sit siloed where le
   the user has directed the factoring. Keyword pre-filter over-matches (e.g. "verify" is noisy); the
   dedup-first step is what keeps the `[ ]` queue honest.
 
+**2h. Blindspot misses** (`agent-infra/.claude/blindspot-digest.md`) — the RSI loop's
+highest-signal source: the moments the human had to CATCH a loop miss (a missed prior
+decision, an existing tool, a git-log fact, the wrong approach). Produced daily by the
+`com.agent-infra.blindspot-miner` launchd job (emb-contrastive over recent sessions;
+`/observe blindspot` re-runs on demand). This is the labeled stream of loop coverage
+gaps — converting them to detectors IS the declining-supervision objective.
+- Read the digest. Cluster the flags (`emb pairs` over the flagged messages, or by eye).
+- For the **top recurring cluster**, the harvest output is a CANDIDATE DETECTOR, not just
+  a finding: "*what deterministic check / harness state-injection would have caught this
+  class autonomously?*" Rank it high (a recurring blindspot = a standing supervision tax).
+- Route: agent-infra-local detector → `improvement-log.md` `[ ]`; shared/irreversible →
+  `decisions-pending/`. Dedup against existing hooks FIRST (e.g. prior-context blindness
+  partially covered by `inventory-dispatch` at the *dispatch* boundary — propose the
+  *propose/diagnose-boundary* extension, don't re-propose the existing hook).
+
 ### Phase 3: Harvest Unstructured Signals
 
 **3a. User `#f` Feedback** -- highest signal, ground-truth corrections:
@@ -445,6 +460,7 @@ signal rate (don't re-run a daily-grain miner every tick):
 | Governance health read | Daily (consumes the `com.agent-infra.gov-report` launchd job's output) | read `artifacts/gov/gov-report.md`; act on the 3 REAL `gov_invariants` assertions (rule-hook balance, recurrence-architecture, verifier-coverage). Do NOT treat the gov-shrink ELIGIBILITY column as actionable — 3/4 point to non-existent graders (`evals/graders/governance/` is empty); the `verifier_coverage` invariant flags that gap itself. Escalate failed invariants / grader-gaps to `decisions-pending/`. SENSE half is now automated (launchd, zero operator tax); this row is the ACT half. |
 | Finding drain | Weekly | `/improve harvest` — gather NEW + drain actionable `[ ]` queue |
 | Tool failures | Weekly | `/observe failures` — mine agentlogs for tools/CLIs actually broken in real use (the proxy health-checks can't see this; a dead `corpus` CLI hid for days). Tier-1 deterministic ($0); escalate big clusters. |
+| **Blindspot → detector (RSI convert step)** | Daily (consumes `com.agent-infra.blindspot-miner`'s digest) | read `agent-infra/.claude/blindspot-digest.md` (loop misses the human caught). Cluster (`emb pairs`); for the top recurring cluster, **propose the DETECTOR that would have caught the class** (dedup vs existing hooks first) → `improvement-log` `[ ]` / `decisions-pending/`. This is the loop-closure: a flag becomes coverage. The blindspot-flag rate is the declining-supervision objective — it should fall as detectors land. |
 | Architecture patterns | Weekly (alt. with frontier) | `/observe architecture` — cross-project abstractions |
 | Leverage scan | Weekly | `/leverage` — prospective 10-100x wins observe is structurally blind to |
 | Frontier sweeps | Freshness-driven (`just freshness`) | `/trending-scout` when DUE (2d) + agent-infra-sweep when DUE (3d). Ecosystem/vendor deltas. Deterministic vendor-docs+binary fetch is launchd's `vendor-sweep` (daily), not a rotation pick. |
