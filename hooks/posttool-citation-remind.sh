@@ -17,10 +17,11 @@ echo "$FILE_PATH" | grep -qE "$CITATION_PATHS" || exit 0
 # Only fire for markdown files
 case "$FILE_PATH" in *.md) ;; *) exit 0 ;; esac
 
-# Check if the file has citation patterns (DOI/PMID) without [VERIFIED] tag
-if grep -qE '(10\.\d{4,}/|PMID:?\s*\d{5,}|doi\.org/)' "$FILE_PATH" 2>/dev/null; then
-  CITE_COUNT=$(grep -cE '(10\.\d{4,}/|PMID:?\s*\d{5,}|doi\.org/)' "$FILE_PATH" 2>/dev/null || echo 0)
+# Detect DOI / PMID / arXiv citation markers (single-sourced regex, case-insensitive).
+CITE_RE='(10\.\d{4,}/|PMID:?\s*\d{5,}|doi\.org/|arxiv:|arxiv\.org/)'
+if grep -qiE "$CITE_RE" "$FILE_PATH" 2>/dev/null; then
+  CITE_COUNT=$(grep -ciE "$CITE_RE" "$FILE_PATH" 2>/dev/null || echo 0)
   ~/Projects/skills/hooks/hook-trigger-log.sh "citation-remind" "advise" "$FILE_PATH" 2>/dev/null || true
-  echo "Advisory: $CITE_COUNT citation references detected in $(basename "$FILE_PATH"). Verify IDs are resolvable." >&2
+  echo "Advisory: $CITE_COUNT citation(s) in $(basename "$FILE_PATH"). Confirm each is corpus-backed — the full text actually read/ingested, not a WebFetch summary or abstract. Untracked → read + ingest into the canonical corpus, or tag the claim [TRAINING-DATA]/[unverified]." >&2
 fi
 exit 0
