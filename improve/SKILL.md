@@ -337,6 +337,7 @@ Each tick, in order:
      This is the **Generate lane** — unattended-safe because it only produces reversible
      drafts for a yes/no. (from `research-ops cycle`'s two-lane split)
 5. **Visible tick-report** → stop. The `/loop` interval drives the next tick; don't self-schedule.
+6. **Emit the Top-N priorities** (every run, the loop's headline output): `uv run python3 ~/Projects/agent-infra/scripts/top_priorities.py --top 10`. Writes `agent-infra/PRIORITIES.md` (gitignored) and prints the ranked cross-repo "what to plan next" digest — broken tools, pending decisions, open findings, real health fails, stale plans, with transient proxy-noise (stale-agent/uncommitted) suppressed. This is the answer to "the loop reported noop but what should I actually plan?" A green tick still has a priorities list; surface it. If an item is reversible+local+cheap, just do it; if it's a real piece of work, it's a plan candidate (offer/route to `decisions-pending/`).
 
 The growth/research worker is `/research` (one-shot) and `/research-ops {compile,diff,dispatch}`
 (non-loop tools); their old `cycle` loop is now this skill's Generate lane. **Never ask for input.**
