@@ -140,6 +140,20 @@ Best for:
 - Sequential access patterns
 - <5 concurrent writers
 
+**Metadata RPCs are rate-limited — high concurrency storms a v1 volume.** A v1
+volume is sequential-access tuned. A job that fans out hundreds of
+`VolumeListFiles` / `VolumeGetFile` RPCs at high concurrency (building a
+full-tree file ledger, a recursive listdir prefill, a per-file sync) drains the
+workspace rate-limit bucket and gets stuck in sustained 429 backoff for *tens of
+minutes*. Empirically: 128-way concurrency → 442 backoffs/60s (never converges);
+6-16 way → a couple backoffs, builds steadily. **The lever is concurrency, not
+waiting** — cap the parallelism of any volume-metadata sweep and don't burst
+several heavy sweeps back-to-back. Two corollaries: (1) a read that 429s
+mid-sweep can return `None` and be misread as "file absent" → a silent false
+"nothing has run"; make metadata reads **retry-or-raise, never silently
+degrade**. (2) For control-plane *state* (run/stage status), prefer a
+rate-limit-immune DB (Postgres) over re-deriving it from volume file listings.
+
 ### Volumes v2 (Beta)
 
 Improved for:
@@ -308,6 +322,32 @@ Supported but:
 - Last write wins (data loss possible)
 - v1: Limit to ~5 concurrent writers
 - v2: Hundreds of concurrent writers supported
+
+#### `.SUCCESS` sentinels do NOT prevent duplicate execution when `retries>0`
+
+A common fanout pattern: `.map()` workers write `chunk_N.out` + `chunk_N.SUCCESS`
+and skip-on-resume via `verify_checkpoint(require_success_sentinel=True)`. The
+trap: a `vol.reload()` that raises `ConflictError` (a sibling worker has files
+open) is often swallowed as a "benign cache miss" — but then the reloading
+worker's volume view is **stale**, it doesn't see the freshly-written `.SUCCESS`,
+and it re-runs an already-completed chunk. If the output path is the same file,
+it opens it for write and **truncates a complete artifact to 0**, corrupting it
+mid-stream for any concurrent reader (and permanently, if the re-run is itself
+preempted, while the OLD `.SUCCESS` still claims completion).
+
+Defenses, cheapest first:
+1. On the consistency-critical reload (the one checking for a `.SUCCESS`), let
+   `ConflictError` **raise** — don't swallow it.
+2. Open the output with `O_EXCL` / a file lock so the second writer crashes
+   loudly instead of silently overwriting.
+3. **Atomic rename:** write `chunk_N.out.tmp`, then `os.rename()` to
+   `chunk_N.out` only after the write + quickcheck pass. The rename is atomic;
+   concurrent writers race for the tmp file but never expose a half-written
+   final. Validate downstream by record-count, not file presence.
+
+Evidence: 2026-05-27 — worker A finished a chunk at 13:41 (18.6GB + SUCCESS);
+worker B started 30s later on a stale reload, truncated it, and began
+overwriting. The chunk had to be redone.
 
 ## Volume Errors
 

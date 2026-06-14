@@ -195,6 +195,54 @@ Exceeding limits returns `Resource Exhausted` error - retry later.
 
 Each `.map()` invocation: max 1,000 concurrent inputs.
 
+## Sizing & Extrapolating Fanouts
+
+### Chunk size = preemption-loss budget
+Chunk size bounds what a single preemption / budget-kill / timeout destroys on
+a `.map()`/`.starmap()` fanout. Lose a chunk, redo a chunk.
+
+| Chunks | Per-chunk runtime | Preempt loss | Scheduling   | Orch overhead |
+|--------|-------------------|--------------|--------------|---------------|
+| 6      | ~5h               | up to 5h     | hard at 48GB | light         |
+| 60     | ~30min            | up to 30min  | easier       | heavier       |
+| 200    | ~10min            | up to 10min  | easiest      | heavy         |
+
+Default aim: **~30 min runtime per chunk.** For an algorithm with a fixed memory
+floor (e.g. a 25-30GB aligner index), shrink chunks AND cap parallelism via
+`.map(max_concurrent=N)` — chunk size alone won't ease scheduling when every
+container still needs the full memory floor. The `.SUCCESS` sentinel only earns
+its keep when a chunk is short enough to retry cheaply (<1.5h). (Evidence: a
+5h×30GB chunk design lost ~$10 to one Modal infra event; a 60×3GB design would
+have lost <$1.)
+
+### Extrapolating wall-clock from a probe — watch for regime transitions
+Two measured points do NOT prove the function is linear between them. A
+single-item or small-N probe systematically *under*-predicts at scale:
+1. **One-time costs baked into per-item time** (reference/index load, first cold
+   start) inflate the per-item figure a 1-item probe reports.
+2. **Quota-saturation regime transition.** At small N relative to the workspace
+   concurrency cap, all workers start near-simultaneously → observed rate ≈
+   serial × cap. At large N the scheduling queue sits deep and cold-start + wave
+   overhead dominate → rate collapses toward serial. Super-linear wall-clock is
+   the baseline expectation at scale, not an anomaly.
+
+Evidence: an annotate stage ran 50 min at n=5000 (50 chunks / 10-concurrent cap
+= 5 waves) but **9h at n=15000** (150 chunks / same cap = 15 waves) — 10.8×
+wall-clock for 3× input. A separate batch predicted 1.5-2h from a 1-trait probe,
+actually ran ~8.7h for 208 traits, and a 4h timeout killed it at 95/208.
+
+**Before firing a larger scale:**
+- Check whether either probe point saturated the workspace GPU/CPU concurrency
+  cap (log `list_apps` / observed concurrency during the small probe).
+- If projected `queue_depth / cap` > ~2×, expect a different regime — surface the
+  ceiling explicitly *before* spending, don't learn the boundary by burning money.
+- Size the timeout for projected full-scale runtime, not probe runtime (see
+  debugging.md "Timeout Sizing" for the extrapolation formula).
+
+Other regime transitions to watch: a memory cliff when an intermediate array
+grows past L3/driver RAM; volume-commit throughput when commit frequency exceeds
+the NFS flush budget; Flex→Standard billing-tier transitions.
+
 ## Async Usage
 
 Use async APIs for arbitrary parallel execution patterns:
