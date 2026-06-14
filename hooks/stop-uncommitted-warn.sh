@@ -84,8 +84,8 @@ new_changes = [f for f in all_changes if f not in baseline_files]
 #   - per-repo posttool-track-touched-files.sh  -> .claude/sessions/<sid>.touched-files
 my_touched = set()
 other_touched = set()
+ledger_files = []  # (owner_sid, abs_path) — hoisted so the attribution policy below can test it even when session_id is empty
 if session_id:
-    ledger_files = []  # (owner_sid, absolute_ledger_path)
     sessions_dir = os.path.join(cwd, ".claude", "sessions")
     try:
         for entry in os.listdir(sessions_dir):
@@ -137,6 +137,17 @@ if my_touched:
         f for f in new_changes if f not in my_touched and f not in other_touched
     )
     new_changes = [f for f in new_changes if f in my_touched]
+elif ledger_files:
+    # A ledger producer exists and there ARE session ledgers, but THIS sessions
+    # ledger is empty. Under concurrent peers sharing a checkout, current-session-id
+    # clobbering can leave my ledger unwritten while delta-minus-foreign would sweep
+    # files that NO ledger claims -- committing a peer subprocess output under this
+    # session (observed 2026-06-14: codebase-map.py, owned by no ledger, swept into a
+    # [wip]). Fail CLOSED: commit nothing, surface everything as unattributable. The
+    # human commits their own explicitly; nothing is lost. Only the genuine
+    # no-producer case (ledger_files empty) keeps the delta-minus-foreign fallback.
+    unattributable = sorted(new_changes)
+    new_changes = []
 else:
     foreign = other_touched - my_touched
     if foreign:
