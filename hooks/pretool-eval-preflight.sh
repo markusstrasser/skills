@@ -20,8 +20,11 @@ CMD=$(printf '%s' "$INPUT" | jq -r '(if has("tool_input") then (.tool_input // {
 ENV_CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // empty' 2>/dev/null || true)
 [ -z "$CMD" ] && exit 0
 
-# Resolve the eval dir + whether this is an eval run. Conservative: must match an
-# eval-runner script name AND that script's dir must contain EXPERIMENT.md.
+# Resolve the eval dir + whether this is an eval run. Must match an eval-runner
+# script name AND look like a real eval: an eval-design marker (EXPERIMENT.md /
+# PREREGISTRATION.md) in the script's dir or its parent, OR the path sits under an
+# evals/benchmarks segment. Covers all project conventions (evals repo EXPERIMENT.md;
+# phenome eval//tests/evals/ + PREREGISTRATION.md; genomics benchmarks/; intel tools/evals/).
 EVAL_DIR=$(CMD="$CMD" ENV_CWD="$ENV_CWD" python3 - <<'PY' 2>/dev/null || true
 import os, re, shlex
 cmd = os.environ.get("CMD", "")
@@ -38,17 +41,21 @@ try:
 except ValueError:
     toks = cmd.split()
 
-# Eval-runner script names (the dispatch/scoring entry points).
 RUNNER = re.compile(r'(^|/)(run[\w-]*|judge[\w-]*|score|dispatch-arm|dispatch-cursor-arm)\.(py|sh)$')
+MARKERS = ("EXPERIMENT.md", "PREREGISTRATION.md")
+PATHSEG = re.compile(r'/(evals?|benchmarks?)(/|$)|/tests/evals(/|$)')
 for t in toks:
-    if RUNNER.search(t):
-        d = os.path.dirname(t)
-        d = os.path.expanduser(d) if d else cwd
-        if not os.path.isabs(d):
-            d = os.path.normpath(os.path.join(cwd, d))
-        if os.path.isfile(os.path.join(d, "EXPERIMENT.md")):
-            print(d)
-            break
+    if not RUNNER.search(t):
+        continue
+    d = os.path.dirname(t)
+    d = os.path.expanduser(d) if d else cwd
+    if not os.path.isabs(d):
+        d = os.path.normpath(os.path.join(cwd, d))
+    has_marker = any(os.path.isfile(os.path.join(dd, mk))
+                     for dd in (d, os.path.dirname(d)) for mk in MARKERS)
+    if has_marker or PATHSEG.search(d):
+        print(d)
+        break
 PY
 )
 

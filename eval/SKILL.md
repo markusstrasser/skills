@@ -276,10 +276,11 @@ in fact *unpersisted*, traces; the trace audit found a led judge + no specificit
 > now a GATE, not advice: **no DECISIONS row, no committed verdict, until this audit is written.**
 > A verdict from aggregates you didn't trace-check is a draft, not a result.
 >
-> **Hook-enforced (evals project, piloted 2026-06-14):** `pretool-eval-preflight.sh` BLOCKS any
-> eval-runner (`run*/judge*/dispatch-arm` in a dir with `EXPERIMENT.md`) until the agent records
-> a `<evaldir>/.preflight-ack` confirming the design checklist + these trace-audit pre-commitments.
-> One confirm per eval. Propagation to phenome/genomics/intel = pending (3+ projects → approval).
+> **Hook-enforced (evals + phenome + genomics + intel, deployed 2026-06-14):**
+> `pretool-eval-preflight.sh` BLOCKS any eval-runner (`run*/judge*/score/dispatch-arm`) that sits in
+> an eval-design dir (an `EXPERIMENT.md`/`PREREGISTRATION.md` marker in its dir/parent, OR a path under
+> an `evals?/`/`benchmarks?/`/`tests/evals/` segment) until the agent records a `<evaldir>/.preflight-ack`
+> confirming the design checklist + these trace-audit pre-commitments. One confirm per eval; fails open.
 
 Run these five checks; record the result in EXPERIMENT.md §5 (or a `*_RESULTS.md § Spot-check`):
 
