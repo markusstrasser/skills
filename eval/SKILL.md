@@ -401,6 +401,20 @@ third validity pillar; `arXiv:2604.15149` isomorphic verifiers, causal). Adopt:
   (retrieval/inference/abstention/binding/query, + `unknown`) as **gold-only** metadata (never in a
   SUT/judge prompt — it's on the leak deny-list). Enables a diagnostic mIRT capability profile *later*;
   do NOT fit IRT params at N=10–60 (needs ≥100 items × ≥20 arms).
+- **Deterministic-grader constructs (LatchBio bio-agent benchmarks scBench/SpatialBench/SB-Long, audited
+  2026-06-15, 3 readers).** For an eval with a deterministic numeric/structured grader (not a judge),
+  four primitives we lacked: **(1) per-item separation table** — every item documents which WRONG method
+  yields which number, and the tolerance is set to clear the nearest trap by a STATED margin
+  (pre-registered discrimination bound to the ITEM, not the suite); **(2) sentinel/diagnostic gold
+  fields** — grade a probe of the pipeline DECISION (does PC2–5 still correlate with depth ⇒ catches a
+  skipped regress_out), a compound gate where each field traps one shortcut — the deterministic twin of
+  the isomorphic verifier; **(3) before-step snapshot gold** — freeze the analysis state just before the
+  target step so the oracle is a real re-run of standard tools (contamination-resistant, cheaply
+  re-derivable); **(4) method-name suppression** — never name the expected method in the prompt (no
+  "regress_out"/"pseudobulk"), forcing capability over memorized recipe. Plus **reproduce-or-discard
+  candidate gold** (admit a literature claim as gold only after independent reproduction yields a stable
+  answer; log the excluded) and logging **cost + trajectory length** beside accuracy as first-class axes.
+  (Item-difficulty rank-stability is another diagnostic use; the deferral on FITTING IRT at our N stands.)
 
 **Confirmed by DeepSWE** (datacurve, 2026-06 — independent production coding-agent benchmark, 113
 tasks, frontier 70%→5% spread; `evals/research/2026-06-13-frontier-agentic.md` §Transfer): authored-
@@ -520,6 +534,35 @@ empty. Report gaps as a table; fix all confirmed gaps, not top-N.
   To answer "does it hold," a held-out sample returning in minutes beats a monolithic full run
   returning in hours. **Batch-async is the SLOWEST feedback** (opaque ≤24h) — never use it to *see if
   X holds*; stage validation (small held-out first → full run only if it holds).
+- **LatchBio bio-agent benchmark audit (scBench/SpatialBench/SB-Long, 3 readers — 2 on code + 1 on
+  papers — 2026-06-15; excellent constructs, flawed leaderboard). The anti-patterns:**
+  - **Model×agent-harness confound — the confound that hides in AGENT bake-offs.** All three leaderboards
+    rank models across DIFFERENT scaffolds (claude-code / mini-swe / codex / "pi"); the measured harness
+    swing for one model was ~8× the model-to-model gap — the SCAFFOLD explained more variance than the
+    model, so the ranking is uninterpretable. A worked example of the ≥2-differ rule above: hold the
+    harness CONSTANT across compared models, or report model×harness as a 2-factor grid — never a single
+    ranked column. (Same shape as our critique_replay arms differing in model×effort×transport at once.)
+  - **A pass window that admits a known wrong-method answer is not a discriminating grader.** Released
+    numeric_tolerance windows were wide enough to pass the trap value the eval's OWN notes flag as wrong
+    (n_significant GT=1 ±1 admits {0,1,2}; n_hvgs ±10000 passes any count). The tolerance must EXCLUDE
+    every trap in the item's separation table by a stated margin — the GOOD per-item trap table (adopt it)
+    is worthless if the window doesn't clear it.
+  - **Replication you imply but don't deliver.** "3 runs" that are byte-identical (deterministic agents)
+    buy ~zero variance; a CI over per-ITEM means is a between-item interval, not between-run — don't let a
+    two-stage average launder one into the other, and FAIL any reported cell missing its interval.
+    Item-is-the-unit is the correct PRIMARY choice (run-level CI alone underestimates), but report
+    N-items/cell, don't slice below power, and with real replicate variance use a clustered SE.
+  - **Answer/method text in a PUBLIC artifact field the SUT never sees.** A per-item canary GUID protects
+    the DATA, but the specs embed full solution code + literal answers in a notes field → the next
+    training scrape gets the answer key. Gold/method/answer strings must live OUTSIDE any field that ships
+    publicly, prompt-bound or not.
+  - **Withhold items for contamination, but NOT the distribution.** 6-public / 394-withheld with no strata
+    counts makes both the public sample's representativeness and the hidden leaderboard unauditable —
+    publish the strata counts even when you hold the items.
+  - **Deterministic grading systematically under-rates your BEST model** (their deepest admitted threat):
+    a fixed answer surface penalizes valid answers the authors didn't anticipate ⇒ false-negatives GROW
+    WITH CAPABILITY. Generalizes absence≠negative to the grading surface — re-adjudicate high-rubric FAILS
+    by hand; pair with the GOLD_INVALID escape.
 
 ### /eval skill vs evals repo (recurring question — settle it here)
 They're different KINDS of thing; keep SEPARATE, neither collapses into the other. **This skill =

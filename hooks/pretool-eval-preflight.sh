@@ -76,12 +76,17 @@ Think through each (then write the ack to proceed):
    2. Prior art checked (Phase 0 dedup — not already run)?
    3. Decision rule + prediction PRE-REGISTERED before results exist?
    4. Confounds: do compared conditions differ in >=2 ways? If yes you can't attribute — name them.
+      Agent bake-offs: HOLD THE HARNESS/scaffold CONSTANT across models — it can swing more than the model gap.
    5. STATS: N+power (MDE for the gap you need, ~1000 items for 3pp) · SE+n on every decision number
       (CLT, NOT Bernoulli on F1/partial/judge) · compare PAIRED on the same items · >=2 seeds, NO
-      single-run headline · clustered SE if items are grouped · discrimination probe separates good/bad?
+      single-run headline · clustered SE if items are grouped · CI unit = ITEM not run · fail any cell
+      missing its interval · don't slice below power · discrimination probe separates good/bad?
    6. Judges (if any): blind to identity, neutral-family, GOLD_INVALID escape, NOT leading-phrased?
-   7. Gold validity: does the gold honor the task's OWN contract (drop/keep rules)? Absence != negative.
-   8. No gold leak: the SUT prompt can't see gold-only fields.
+   7. Gold validity: honors the task's OWN contract (drop/keep)? Absence != negative. Tolerance/grader
+      EXCLUDES every trap value (per-item separation table — a window that passes a wrong-method answer
+      doesn't discriminate). Deterministic grading under-rates the BEST model — re-adjudicate high-rubric FAILS.
+   8. No gold leak: the SUT prompt can't see gold-only fields — AND no answer/method string sits in ANY
+      field of a PUBLIC artifact (not just the prompt); released items carry a canary.
 
   TRACE-AUDIT PRE-COMMIT (you commit NOW — enforced at verdict by eval-skill Phase 4.5)
    9. Read EVERY outlier trace + >=1 trace/arm before averaging/concluding. A 0/perfect score or a
