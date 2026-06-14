@@ -106,6 +106,8 @@ Cloud handoff (interactive only): prefix message with `&` → continues on curso
 5. **Sandbox vs network** — ask-mode file reads are local; web fetch depends on sandbox config. Don't assume search works headlessly without probing.
 6. **Beta security** — CLI can read/write/delete and run shell ([blog disclaimer](https://cursor.com/blog/cli)). Trusted environments only; isolate with `--workspace` throwaways.
 7. **Don't confuse with Cursor IDE Tab** — this is the **Agent** product line, model family Composer.
+8. **Cost is usage-METERED, not $0 — do NOT analogize from codex-cli/claude-cli.** Those subscription CLIs are genuinely $0-marginal within rate limits; Cursor is different: calls draw from the "Auto + Composer" included-usage pool, then bill usage-based (Composer ~$0.50/M in, $2.50/M out; `-fast` $3/$15; proxied frontier models at their own rates). Near-free *within* the monthly pool, then metered. (We shipped a "$0 marginal" claim across 5 docs by analogizing without checking — corrected 2026-06-14. Verify vendor pricing at cursor.com/pricing before asserting cost.) Full: `agent-infra research/2026-06-14-cursor-cli-composer-integration.md`.
+9. **`--approve-mcps` auto-trusts ALL MCP servers; auto-update drift.** Never pass `--approve-mcps` in automation (a global MCP config could be auto-trusted). `cursor-agent` auto-updates itself + flags evolve (beta) — pin or smoke-test scripted transports on a schedule, and prefer `--output-format json` + check `is_error` over trusting non-empty text.
 
 ## Quick diagnose
 
