@@ -69,7 +69,9 @@ Think through each (then write the ack to proceed):
    2. Prior art checked (Phase 0 dedup — not already run)?
    3. Decision rule + prediction PRE-REGISTERED before results exist?
    4. Confounds: do compared conditions differ in >=2 ways? If yes you can't attribute — name them.
-   5. N declared (just power, not vibes) + a discrimination probe (known-good vs known-bad separates)?
+   5. STATS: N+power (MDE for the gap you need, ~1000 items for 3pp) · SE+n on every decision number
+      (CLT, NOT Bernoulli on F1/partial/judge) · compare PAIRED on the same items · >=2 seeds, NO
+      single-run headline · clustered SE if items are grouped · discrimination probe separates good/bad?
    6. Judges (if any): blind to identity, neutral-family, GOLD_INVALID escape, NOT leading-phrased?
    7. Gold validity: does the gold honor the task's OWN contract (drop/keep rules)? Absence != negative.
    8. No gold leak: the SUT prompt can't see gold-only fields.
