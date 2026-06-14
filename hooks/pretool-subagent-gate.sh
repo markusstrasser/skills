@@ -110,7 +110,19 @@ except Exception:
 AGENT_DEF_DISCIPLINED=0
 if [ -n "$STYPE" ]; then
     for _adef in "$PWD/.claude/agents/$STYPE.md" "$HOME/.claude/agents/$STYPE.md"; do
-        if [ -f "$_adef" ] && grep -qiE '70%|write.*stub|stub.*first|skeleton-first|return.*(file )?path|probe in progress' "$_adef"; then
+        [ -f "$_adef" ] || continue
+        # (a) agent-def embeds output discipline (write-stub / return-path / 70%-stop)
+        if grep -qiE '70%|write.*stub|stub.*first|skeleton-first|return.*(file )?path|probe in progress' "$_adef"; then
+            AGENT_DEF_DISCIPLINED=1
+            break
+        fi
+        # (b) no-Write executor: a tools: line lacking Write/Edit/NotebookEdit (and not
+        # the all-tools '*') CANNOT produce file output — requiring it is incoherent.
+        # Its durable output is a side effect (a git commit persists in the object
+        # store), not a memo. Keeps the gate self-managing for short-output executors
+        # like commit-hygiene; no hardcoded agent names.
+        _tl=$(grep -iE '^tools:' "$_adef" | head -1)
+        if [ -n "$_tl" ] && ! printf '%s' "$_tl" | grep -qiE '(Write|Edit|NotebookEdit|\*)'; then
             AGENT_DEF_DISCIPLINED=1
             break
         fi
