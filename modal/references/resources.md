@@ -161,7 +161,7 @@ def long_job():
 Use on: any function >30 min; any function with preemption history.
 `single_use_containers=True` avoids stale state leaking across retries.
 
-### `nonpreemptible=True` — guaranteed non-preemption
+### `nonpreemptible=True` — blocks *voluntary* preemption only
 
 **3× CPU+Memory cost**, CPU-only (not available for GPU):
 
@@ -178,8 +178,15 @@ preemptible.
 **Do NOT use on**: GPU functions (unsupported), jobs with working
 checkpoint/retry logic, jobs <15 min (preemption is rare for short jobs).
 
-**Budget kill still bypasses this.** `nonpreemptible=True` protects against
-Modal capacity reclamation, not workspace-budget SIGKILL. See debugging.md
+**It protects against capacity reclamation only — it is NOT death-proof.**
+`nonpreemptible=True` still gets SIGKILLed by: Modal infrastructure events
+(worker-node decommission), workspace-budget kill, OOM, and `modal app stop`.
+Symptom when an infra event hits one: `Received a cancellation signal while
+processing input` → `Runner has been shutting down for too long (grace period:
+30 seconds)`. Evidence: 2026-05-27 — a Modal infra event killed all 6
+nonpreemptible 5h×48GB align workers mid-run; the flag bought nothing. The
+resilient combo is still small chunks + `Retries(max_retries=5)` + frequent
+`vol.commit()` + `.SUCCESS` sentinels, not 3× spend. See debugging.md
 "Budget Kill" for the full defense stack.
 
 ### High-memory scheduling (>64 GB)

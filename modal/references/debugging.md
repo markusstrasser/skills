@@ -202,6 +202,15 @@ keeps the *app* alive across local disconnects but cannot extend the
 per-input timeout. Size for projected runtime at full scale, not observed
 probe runtime.
 
+**Extrapolating a batch timeout from a probe.** A single-item probe
+under-predicts — one-time costs (reference load, first cold start) and
+inter-item commit latency hide inside its per-item figure. Use
+`timeout = 2 × [ one_time_cost + (per_item × N × 1.5) ]`. Worked example: a
+2-min reference load + 208 items × 1.5 min × 1.5 ≈ 470 min → the timeout should
+have been ~16h, not the 4h that killed the run at 95/208. And this is still the
+*optimistic* case — see scaling.md "Extrapolating wall-clock from a probe" for
+the quota-saturation regime that makes large-N wall-clock super-linear.
+
 ## CLI disconnect on `modal run --detach` is a false alarm
 
 `modal run --detach` CLI exits 1 on gRPC stream termination
