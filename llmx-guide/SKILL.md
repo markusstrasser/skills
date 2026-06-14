@@ -207,6 +207,14 @@ llmx chat -p xai "..."   # llmx default is still `grok-4`, superseded by 4.20 fa
 | `google` | Gemini paid API (`--flex` = 50% off) | n/a — always API since 2026-05-31 (free CLI retired); `--schema`/`--search`/`--max-tokens` native |
 | `openai` | OpenAI API | explicit `-p codex-cli` if you want Codex CLI instead |
 | `anthropic --lite bare` | Claude CLI subscription route | do not use `claude --bare`; `llmx -p claude` may not exist locally |
+| `cursor` | Cursor app subscription via `cursor-agent` (ask mode, neutral cwd) | **none** — subscription-only; `--schema`/`--search`/`--stream` raise (no API to fall back to) |
+
+**Cursor transport (added 2026-06-14).** Runs on the Cursor app login (`cursor-agent status`). Reaches **Composer 2.5** (Cursor-exclusive, no public API) and proxies any Cursor-hosted frontier model through the sub:
+- `llmx chat -m composer-2.5 "…"` — auto-routes to cursor (composer\* ⇒ cursor provider).
+- `llmx chat -m cursor/claude-opus-4-8-thinking-high "…"` — `cursor/` prefix forces ANY model through the Cursor sub (proxies Opus 4.8 / GPT-5.5 / Fable / Gemini). Enumerate with `cursor-agent --list-models`.
+- **Cost (verified, NOT flat-$0):** Cursor is *usage-metered*, unlike codex-cli/claude-cli. Calls draw from your subscription's "Auto + Composer" **included-usage pool** (near-zero marginal *while it lasts*), then bill usage-based (Composer ~$0.50/M in, $2.50/M out; `-fast` $3/$15; proxied frontier models at their own rates from the same pool). For a ~10k-in/2k-out review that's ≈$0.01 if the pool is spent — cheap, not free. *(Source: cursor.com pricing, 2026-06-14; `research/2026-06-14-cursor-cli-composer-integration.md`.)*
+- **Effort tiers:** Composer 2.5 has none (only `composer-2.5-fast`, a serving-speed tier). For effort-swept work use the proxied frontier models — effort is baked into the model NAME (`…-low/-high/-xhigh`), not a `-e` flag (cursor-agent has no effort flag; `-e` is ignored).
+- **Caveat:** it's an *agent* (system-prompt context, no temperature/seed/max_tokens) in beta. Fine for queries/critique; not for controlled-decoding benchmarks. For the raw `cursor-agent` CLI (modes, sandbox, parallel dispatch) see the `/cursor-agent` skill.
 
 The Codex CLI ignores explicit `--reasoning-effort` (uses its own default); the Gemini API honors it. **GPT `--search` is a silent no-op:** `llmx chat -m gpt-5.5 --search` warns "requires search-specific models" and proceeds WITHOUT search — use `llmx research`, or Exa/Brave/Perplexity for web-grounded queries. See [transport-routing.md](references/transport-routing.md) for CLI vs API decision table, context budget, piping patterns.
 
