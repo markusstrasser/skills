@@ -1,6 +1,6 @@
 ---
 name: observe
-description: "Session retros. Modes: sessions/architecture/supervision/drift/retro. 'what went wrong', 'session quality', 'wasted time', 'cross-session trends', 'what's drifting'."
+description: "Session retros. Modes: sessions/architecture/supervision/drift/retro/failures. 'what went wrong', 'session quality', 'wasted time', 'cross-session trends', 'what's drifting', 'what tools are broken'."
 user-invocable: true
 argument-hint: <mode> [project] [options...]
 context: fork
@@ -35,6 +35,7 @@ signal/candidate flow, and promotion gates.
 | `supervision` | Where was human time wasted? | Yes | `manifest.json` -> `signals.jsonl` -> `candidates.jsonl` -> `digest.md` (+ `dispatch.meta.json` when dispatched) |
 | `drift` | What slow-moving pattern spans MANY sessions? | Yes (1M wide) | `manifest.json` -> `candidates.jsonl` (tagged `"mode":"drift"`) -> `drift-digest.md` |
 | `retro` | What went wrong this session? | No (local) | `artifacts/session-retro/` |
+| `failures` | Which tools/CLIs are actually BROKEN in real use? | Tiered: deterministic -> Haiku -> deep | `scan_tool_failures.py` -> `failures.json` -> triaged breaks |
 
 Parse `$ARGUMENTS` for mode. First positional arg is the mode. Remaining args are project, options.
 
@@ -502,6 +503,50 @@ Write `{date}-{SID}-manual.json` with:
 ```json
 {"findings": [{"category": "...", "summary": "...", "severity": "high|medium|low", "evidence": "...", "project": "...", "proposed_fix": "..."}], "source": "manual-retro"}
 ```
+
+---
+
+## Mode: failures
+
+**"Which tools/CLIs are actually BROKEN in real use?"** — the question the proxy
+health-checks (hooks-smoke, launchd exit, indexer) structurally cannot answer.
+The failure signal lives in `agentlogs` (errored `tool_calls` + their result-event
+stderr) and went unread while a dead `corpus` CLI failed for days (2026-06-14,
+user: *"don't you check the logs for what doesn't work?"*). **Hierarchical**: a
+cheap deterministic net first; escalate real $ only to the big clusters.
+
+### Tier 1 — deterministic miner ($0, always run)
+```bash
+python3 ${CLAUDE_SKILL_DIR}/scripts/scan_tool_failures.py --days 21            # human view
+python3 ${CLAUDE_SKILL_DIR}/scripts/scan_tool_failures.py --days 21 --json > "$ARTIFACT_DIR/failures.json"
+```
+Joins errored tool_calls -> result-event text, keeps only real crash SIGNATURES
+(Traceback + a raised `ModuleNotFoundError/ImportError`, a real shell
+`command not found`, an entry-point shim crash — NOT the bare keyword, which
+matches `except ImportError:` in code the agent merely read). Clusters by root
+cause: `missing-module:X`, `broken-cli:Y (missing Z)`, `command-not-found:W`.
+High recall; minor residual noise is expected and is Tier 2's job to drop.
+
+### Tier 2 — cheap triage (Haiku / cheapest available model)
+Pass the Tier-1 clusters to the cheapest model and classify each:
+`REAL_INFRA_BREAK` vs `TRANSIENT` (one-off scratch script, wrong-dir invocation)
+vs `EXPECTED`. One bulk call — this is a which/yes-no call, not analysis, so it is
+cheap by construction. Output: ranked REAL breaks only. (Route via the shared
+dispatch helper at its cheapest profile.)
+
+### Tier 3 — escalate the big ones ($, only top clusters)
+For clusters that are REAL **and** high-volume/multi-day (e.g.
+`missing-module:duckdb` x46/10d), dispatch a deeper root-cause+fix pass
+(Gemini/Opus): dep missing from an env, or agents invoking bare `python3` instead
+of `uv run`? Produce a concrete fix surface. **Spend here** — a big recurring
+break is worth real compute; better to spend and fix a class than do a few cheap
+lookups and miss it.
+
+### Route findings
+Tier-2/3 confirmed breaks -> `improvement-log.md` `[ ]` (actionable infra), or
+`decisions-pending/` if shared-infra/irreversible. One-off scratch failures ->
+drop (don't inflate the queue). Cadence: weekly, or any tick after a "loop missed
+a broken tool" surprise.
 
 ---
 
