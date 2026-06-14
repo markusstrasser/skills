@@ -288,11 +288,43 @@ Ranked list of the 5 most impactful changes, each with a testable verification c
 ## 6. Blind Spots In My Own Analysis
 What am I (Claude) likely getting wrong? Where should you distrust my assessment?""",
     },
+    "composer": {
+        "label": "Cursor Composer 2.5 (cheap third-lineage adversarial)",
+        "profile": "composer_review",
+        "prompt": """\
+<system>
+You are reviewing as an independent cosigner from Cursor's Composer model — a different lineage than the other reviewers (Gemini, GPT, Claude). Your value is a distinct failure-mode profile: find what they would miss. Be concrete, reference specific code/config/claims. No platitudes. COMMIT to verdicts — when you flag a mechanism as a bug, state plainly that it IS a bug; do not hedge it behind "if you meant X". It is {date}.
+Budget: ~2000 words. Dense tables and lists over prose.
+</system>
+
+{question}
+
+RESPOND WITH EXACTLY THESE SECTIONS:
+
+## 1. Strengths and Weaknesses
+What holds up, what doesn't. Reference actual code/config. Be specific about both errors and what's correct.
+
+## 2. What Was Missed
+Patterns, problems, or opportunities not identified. Cite files, line ranges, gaps.
+
+## 3. Better Approaches
+For each: Agree (with refinements), Disagree (with alternative), or Upgrade (better version).
+
+## 4. What I'd Prioritize Differently
+Ranked list of the 5 most impactful changes, each with a testable verification criterion.
+
+## 5. Goals & Principles Alignment
+{principles_instruction}
+
+## 6. Blind Spots In My Own Analysis
+Where should you distrust my assessment?""",
+    },
 }
 
 # Presets map a single name to a list of axes.
-# `claude` (opt-in third-family cosigner) is intentionally NOT in any preset —
-# request it explicitly: `--axes arch,formal,claude` or `--axes claude`.
+# `claude` (Opus 4.8) and `composer` (Cursor Composer 2.5, $0) are opt-in
+# third-lineage cosigners — intentionally NOT in any preset. Request explicitly:
+# `--axes arch,formal,claude` or `--axes arch,formal,composer`.
 PRESETS = {
     "standard": ["arch", "formal"],
     "deep": ["arch", "formal", "domain", "mechanical"],
@@ -531,7 +563,11 @@ def _call_llmx(
             output_path=output_path,
             schema=schema,
             overrides=overrides,
-            api_only=True,
+            # Transport is owned by the profile (api_only on the DispatchProfile).
+            # Do NOT pass api_only here — a hardcode re-states/overrides the
+            # profile and silently breaks CLI-transport profiles (composer_review
+            # → cursor → was routed to the OpenAI API → 404). The dispatch default
+            # (None) resolves to each profile's declared transport.
         )
         output_size = output_path.stat().st_size if output_path.exists() else 0
         exit_code = 0 if result.status in {"ok", "parse_error"} else 1
