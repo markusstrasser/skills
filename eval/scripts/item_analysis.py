@@ -114,6 +114,36 @@ def load_intel(path):
     return {k: mean(v) for k, v in raw.items()}
 
 
+def load_evalcore(path, metric=None, scale_max=1.0):
+    """Read evalcore's canonical `{run_id}.trials.jsonl` directly — it IS the response matrix
+    (variant=model, item_id=item, scores[metric]=score). This makes item analysis one command on
+    ANY evalcore eval, with no hand-emitted matrix. ERRORED trials (transport failures, scores={})
+    are skipped by construction. metric=None auto-picks the first boolean metric (matching
+    evalcore's own summary), else the first metric; bool scores normalize to 1/0, numeric per
+    scale_max (pass --scale-max for a non-0-1 metric like a 0-3 faithfulness score).
+    Returns (cells, chosen_metric)."""
+    rows = []
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line:
+                rows.append(json.loads(line))
+    rows = [r for r in rows if not r.get("errored") and r.get("scores")]
+    if not rows:
+        return {}, metric
+    if metric is None:
+        metric = next((m for r in rows for m, v in r["scores"].items() if isinstance(v, bool)), None)
+        if metric is None:
+            metric = next(iter(rows[0]["scores"]))
+    cells = {}
+    for r in rows:
+        if metric not in r["scores"]:
+            continue
+        v = r["scores"][metric]
+        cells[(r["variant"], r["item_id"])] = 1.0 if v is True else 0.0 if v is False else _norm(v, scale_max)
+    return cells, metric
+
+
 ADAPTERS = {"long": load_long, "phenome": load_phenome, "intel": load_intel}
 
 
@@ -251,11 +281,18 @@ def render(res):
 def main():
     ap = argparse.ArgumentParser(description="Psychometric item analysis over an eval response matrix.")
     ap.add_argument("path")
-    ap.add_argument("--adapter", choices=list(ADAPTERS), default="long")
+    ap.add_argument("--adapter", choices=list(ADAPTERS) + ["evalcore"], default="long")
+    ap.add_argument("--metric", help="evalcore: which score key to analyze (default: first bool metric)")
+    ap.add_argument("--scale-max", type=float, default=1.0, help="evalcore: normalize a numeric metric by this (e.g. 3 for a 0-3 faith score)")
     ap.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     ap.add_argument("--strict", action="store_true", help="exit 3 if any item is flagged")
     a = ap.parse_args()
-    cells = ADAPTERS[a.adapter](a.path)
+    if a.adapter == "evalcore":
+        cells, chosen = load_evalcore(a.path, metric=a.metric, scale_max=a.scale_max)
+        if cells and not a.json:
+            print(f"(evalcore: analyzing metric '{chosen}' over {a.path})", file=sys.stderr)
+    else:
+        cells = ADAPTERS[a.adapter](a.path)
     if not cells:
         print("no cells parsed", file=sys.stderr); return 0
     res = analyze(cells)

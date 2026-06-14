@@ -133,6 +133,29 @@ def test_scale_max_nonpositive_raises():
         raise AssertionError(f"scale_max={bad} should raise ValueError")
 
 
+def test_evalcore_adapter_skips_errored_and_picks_bool_metric():
+    # evalcore trials.jsonl IS the response matrix (variant=model, item_id=item, scores={metric:v}).
+    # The adapter must skip errored trials and auto-pick the bool metric, so item analysis runs on
+    # any evalcore eval with zero hand-emit.
+    rows = []
+    for m, bad in [("strong", False), ("mid", False), ("weak", True)]:
+        for it, val in [("g1", m != "weak"), ("g2", m != "weak"), ("bad", bad)]:
+            rows.append({"variant": m, "item_id": it, "scores": {"correct": val}, "errored": False})
+    rows.append({"variant": "strong", "item_id": "err", "scores": {}, "errored": True})  # must be skipped
+    with tempfile.NamedTemporaryFile("w", suffix=".trials.jsonl", delete=False) as f:
+        for r in rows:
+            f.write(json.dumps(r) + "\n")
+        path = f.name
+    try:
+        cells, metric = ia.load_evalcore(path)
+        assert metric == "correct", metric
+        assert all(it != "err" for _, it in cells), "errored trial must be skipped"
+        res = ia.analyze(cells)
+        assert "bad" in res["inspect_gold"], res["inspect_gold"]
+    finally:
+        os.unlink(path)
+
+
 def test_long_adapter_roundtrip_and_cli():
     # >=3 models required to compute item-total discrimination (can't correlate 2 points).
     rows = []
