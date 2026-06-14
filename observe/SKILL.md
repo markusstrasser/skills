@@ -585,7 +585,8 @@ this mode is the on-demand / wider-window re-run.
 2. For the **top recurring cluster**, ask: *what deterministic check / state-injection
    would have caught this autonomously?* (e.g. the dominant cluster is prior-context
    blindness → a "harness supplies what's already known at the propose/diagnose
-   boundary" detector, extending `inventory-dispatch` past subagent-dispatch.)
+   boundary" detector, extending `inventory-dispatch` past subagent-dispatch.) If you
+   dispatch a model to cluster-analyze or draft the detector, route it via `/model-guide`.
 3. Route the proposed detector to `improvement-log.md` `[ ]` (agent-infra-local) or
    `decisions-pending/` (shared/irreversible). The blindspot-flag rate is the
    pre-registered success metric — it should fall as detectors land.
