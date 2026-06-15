@@ -618,9 +618,8 @@ class DispatchBudget:
         return max(1.0, min(default, rem))
 
 
-def _resolved_axis_timeout(axis: str) -> int:
-    """Wall-clock timeout for budget gate — mirrors llmx high/xhigh auto-scale."""
-    profile_name = str(AXES[axis]["profile"])
+def _profile_resolved_timeout(profile_name: str) -> int:
+    """Wall-clock timeout — mirrors llmx high/xhigh auto-scale."""
     profile_def = dispatch_core.PROFILES[profile_name]
     timeout = int(profile_def.timeout)
     effort = (profile_def.reasoning_effort or "").lower()
@@ -628,6 +627,11 @@ def _resolved_axis_timeout(axis: str) -> int:
     if scaled and scaled > timeout:
         timeout = scaled
     return timeout
+
+
+def _resolved_axis_timeout(axis: str) -> int:
+    profile_name = str(AXES[axis]["profile"])
+    return _profile_resolved_timeout(profile_name)
 
 
 def _axis_profile_timeout(axis: str) -> int:
@@ -743,6 +747,11 @@ def apply_dispatch_manifest(args: argparse.Namespace, manifest_path: Path) -> di
     if args.axes is None:
         design = (manifest.get("layers") or {}).get("design") or {}
         args.axes = str(design.get("axes") or manifest.get("preset") or "standard")
+    design = (manifest.get("layers") or {}).get("design") or {}
+    if args.extract is None and "extract" in design:
+        args.extract = bool(design["extract"])
+    if args.verify is None and "verify" in design:
+        args.verify = bool(design["verify"])
     return manifest
 
 
@@ -758,7 +767,7 @@ def build_effective_policy(args: argparse.Namespace) -> dict:
         "verify": bool(args.verify),
     }
 
-# Primary Gemini critique axis (deep_review = gemini-3.5-flash since 2026-05-24).
+# Primary Gemini critique axis
 GEMINI_PRIMARY_MODEL = dispatch_core.PROFILES["deep_review"].model
 # Rate-limit fallback target for the Gemini (arch) axis. When gemini-3.5-flash
 # rate-limits, retry the axis on gpt-5.5 — the rule-sanctioned move ("after a
@@ -1491,7 +1500,7 @@ def dispatch(
         axis_def = AXES[axis]
         profile_name = str(axis_def["profile"])
         profile_def = dispatch_core.PROFILES[profile_name]
-        profile_timeout = profile_def.timeout
+        profile_timeout = _resolved_axis_timeout(axis)
         out_path = review_dir / f"{axis}-output.md"
         if budget is not None and not budget.can_start(profile_timeout):
             return axis, _budget_skipped_axis(axis, review_dir, budget, profile_timeout)
@@ -1976,7 +1985,7 @@ def extract_claims(
     def _extract_one(task: tuple[str, Path, str]) -> tuple[str, list[dict] | None]:
         axis, output_path, profile = task
         profile_def = dispatch_core.PROFILES[profile]
-        profile_timeout = profile_def.timeout
+        profile_timeout = _profile_resolved_timeout(profile)
         if budget is not None and not budget.can_start(profile_timeout):
             print(
                 f"warning: extraction for {axis} skipped — "
@@ -2812,13 +2821,14 @@ def main() -> int:
     parser.add_argument(
         "--extract",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Enable extraction. Enabled by default for user-facing reviews; use --no-extract for debugging-only runs.",
+        default=None,
+        help="Extract findings (default on). Manifest or --no-extract when unset.",
     )
     parser.add_argument(
         "--verify",
-        action="store_true",
-        help="After extraction, verify cited files/symbols exist. Implies --extract.",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Verify extracted claims (default off). Manifest or --verify when unset.",
     )
     parser.add_argument(
         "--cross-talk",
@@ -2896,6 +2906,14 @@ def main() -> int:
         print(f"error: project dir {project_dir} not found", file=sys.stderr)
         return 1
 
+    dispatch_manifest_default = project_dir / ".model-review" / "dispatch.json"
+    if args.dispatch_manifest is None and dispatch_manifest_default.is_file():
+        args.dispatch_manifest = dispatch_manifest_default
+        print(
+            f"note: auto-loaded dispatch manifest {dispatch_manifest_default}",
+            file=sys.stderr,
+        )
+
     # At least one of --context / --context-files must be provided (mutex relaxed 2026-05-07)
     if not args.context and not args.context_files:
         print(
@@ -2939,6 +2957,10 @@ def main() -> int:
         args.context_scope = "repo"
     if args.axes is None:
         args.axes = "standard"
+    if args.extract is None:
+        args.extract = True
+    if args.verify is None:
+        args.verify = False
 
     # Resolve axes
     try:

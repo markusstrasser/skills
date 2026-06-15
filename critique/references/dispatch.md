@@ -72,16 +72,21 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
 ```
 
 Use `--verify` when the review is a plan-close packet or when you want the script
-to check file/symbol references after extraction:
+to check file/symbol references after extraction. After triage, manifest carries
+`extract`/`verify` — auto-loaded from `.model-review/dispatch.json` when present:
 
 ```bash
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
+  --repo "$(pwd)" --packet .model-review/plan-close-context.md --mode close
+
 uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --context .model-review/plan-close-context.md \
   --topic "$TOPIC" \
   --project "$(pwd)" \
-  --extract --verify \
   "Review this plan closeout"
 ```
+
+No `--budget-seconds` unless the session is time-boxed (no wall-clock limit by default).
 
 Other useful forms:
 
