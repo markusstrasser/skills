@@ -459,6 +459,24 @@ third validity pillar; `arXiv:2604.15149` isomorphic verifiers, causal). Adopt:
   a GRADED bias instrument** — Cochrane RoB-2's 5 domains (randomization / deviations / missing-data / outcome
   MEASUREMENT / selective REPORTING) map onto our confound/gold/judge/trace gates; import the per-domain
   low/some-concern/high judgment, not a binary pass. (Metrology's invariant-anchoring → Phase 5 §6b below.)
+- **Measurement-canon round 2 — opaque/novel-mind analogs** (folded from `evals/research/2026-06-15-eval-analogs-SYNTHESIS.md`
+  + 5 domain memos; COMPLEMENTS the bullet above, no overlap). Six unrelated sciences converge on how to credit an
+  unobservable capability; net-new transfers: **(1) Ground-truth-free scoring via PEER PREDICTION** (Qiu et al. ICLR'26
+  `arXiv:2601.20299`, Algorithm 1) — score an answer by the PMI between it and *other independent* answers as judged by a
+  (possibly weak) jury; incentive-compatible, NO gold, with an **inverse-scaling** bonus (a weak cheap jury grades a
+  STRONGER model better as the capability gap widens). This is the principled unblock for an ungradeable/clean-stratum
+  metric (e.g. critique_replay invention) — *probe `inspect_ai` first*. FAILS under ≥50% correlated/colluding pool, so
+  never score a near-homogeneous panel. **(2) Capability is the LAST-RESORT hypothesis** — Morgan's Canon (comparative
+  cognition) ≡ "life is last-resort" (astrobiology Ladder criterion 8): a score is evidence of a *capability* only after
+  contamination/shortcut/memorization are affirmatively excluded. Make it a NAMED hard gate, not a footnote. **(3) Verdict
+  as a graded ARGUMENT** — NASA CoLD scale (7 named confidence gates, post-hoc-confound bar α₂≪α₁) as the confidence axis
+  × GSN assurance case (claim→strategies→leaf-evidence, with an ODD scope + an Assurance-Claim-Point saying screening-vs-
+  confirmatory) as the structure. **(4) Competence ≠ performance / elicitation gap** — measure best-case-elicited ability;
+  a probe that *represents* a capability (mech-interp) is weaker evidence than a causal-patch that shows it's *used* (CoLD
+  L3 "could" vs L4 "did"); probes are gameable (`arXiv:2512.11949`) so white-box is a measurement aid, not a certificate.
+  **(5) Anti-Clever-Hans** — a benchmark answerable from a surface cue measures the cue (backs leak-guard from a 2nd field).
+  **(6) DIF probe** — flag items where equal-capability models from different FAMILIES diverge (family/format confound);
+  cheap, reuses run data. Build-rank + the CoLD×GSN verdict-ladder ADR proposal: see the synthesis memo.
 
 **Confirmed by DeepSWE** (datacurve, 2026-06 — independent production coding-agent benchmark, 113
 tasks, frontier 70%→5% spread; `evals/research/2026-06-13-frontier-agentic.md` §Transfer): authored-
