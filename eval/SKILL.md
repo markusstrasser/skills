@@ -587,6 +587,27 @@ empty. Report gaps as a table; fix all confirmed gaps, not top-N.
     a fixed answer surface penalizes valid answers the authors didn't anticipate ⇒ false-negatives GROW
     WITH CAPABILITY. Generalizes absence≠negative to the grading surface — re-adjudicate high-rubric FAILS
     by hand; pair with the GOLD_INVALID escape.
+- **Asserted negative-class gold + substring-matched free-text grading — BOTH fail, from one root, and
+  cross-arm CONVERGENCE catches both** (critique_replay, 2026-06-15; ADR `evals/docs/decisions/0004`).
+  A `clean`/`abstain`/`no-finding` gold label is a UNIVERSAL NEGATIVE ("no defect here") — the hardest
+  claim — and was granted for free; an ensemble found real defects in 3/4 "clean" packets (the best arm
+  took the worst invention penalty for being *correct*). The SAME run's DETECTION anchors were
+  substring-brittle: a "universal capability MISS" was actually a universal HIT — every arm detected it,
+  the anchor caught only ONE arm's phrasing ("propagate" vs "only its own opacity" vs "group opacity
+  inheritance"; a backtick even breaks "find\` command"). Both biases run AGAINST the arms that phrase
+  differently (often the cheaper ones), so the *ranking itself* is confounded by anchor-phrasing-fit.
+  Fixes: **(1)** certify a negative-class item by **ensemble non-convergence** — admit it only if a
+  DIVERSE (≥2 model-family) reviewer set fails to converge on a defect; DETERMINISTIC (cluster on code
+  anchors — symbols/numbers/paths — never an LLM, so gold validity stays reproducible), a SCREEN not a
+  proof (cross-family diversity bounds shared blind spots), conservative (false convergence shrinks the
+  stratum — the safe error), and STANDING (re-certify every run; compose it with the false-alarm metric so
+  d′/SDT REFUSE to compute over uncertified noise). **(2)** audit POSITIVE anchors the same way — an anchor
+  that misses a defect the arms CONVERGE on is a paraphrase false-negative; but **do NOT iteratively widen
+  anchors against the responses you're scoring** (that is gold-fitting). When substring anchors prove
+  brittle, change the MECHANISM (semantic/judge detection, or convergence-as-detection: a defect is detected
+  iff the finding lands in its cross-family cluster), don't patch. Ref impl: `critique_replay/convergence.py`
+  (`certify_clean` + `audit_anchors`). This is absence≠negative + the under-rates-the-best-model anti-pattern
+  above, pushed into BOTH gold strata and given a deterministic instrument.
 
 ### /eval skill vs evals repo (recurring question — settle it here)
 They're different KINDS of thing; keep SEPARATE, neither collapses into the other. **This skill =
