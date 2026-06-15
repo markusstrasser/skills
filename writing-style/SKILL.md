@@ -1,6 +1,6 @@
 ---
 name: writing-style
-description: Write emails, texts, outreach, scheduling notes, or any short prose on behalf of Markus Strasser in his voice. Use when drafting messages, cold outreach, replies to professional emails, LinkedIn DMs, or any prose where Markus is the sender. Embeds hard rules, register reference, and banned vocabulary; deeper guide lives in phenome.
+description: "Use when: drafting email/text/outreach/LinkedIn/scheduling AS Markus. Registers + banned vocab. NOT research memos (/research) or AI-prose cleanup only (/de-slop)."
 user-invocable: true
 argument-hint: '[register: email | text | scheduling | pushback | long-form]'
 effort: low

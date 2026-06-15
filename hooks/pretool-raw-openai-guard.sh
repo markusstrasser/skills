@@ -2,11 +2,11 @@
 # pretool-raw-openai-guard.sh — Block raw OpenAI SDK calls in .py writes; route GPT through llmx.
 # PreToolUse:Write|Edit hook. Reads JSON tool input from stdin.
 #
-# Why: this stack reaches GPT-5.x via `llmx ... --lite bare` (codex-cli, ChatGPT
+# Why: this stack reaches GPT-5.x via `llmx ... --subscription` (codex-cli, ChatGPT
 # subscription = $0) or the llm-dispatch wrapper (governed/logged). Raw `openai` SDK
 # calls bill the paid API for zero benefit. Evidence: 2026-06-10 emb-elevation session —
 # an eval used `chat.completions.create` + `uv pip install openai` for a paid GPT judge
-# when --lite bare was free. User flagged it; pair-rule says structural fix = hook.
+# when --subscription was free. User flagged it; pair-rule says structural fix = hook.
 #
 # Scope: ONLY .py files (docs/memories that MENTION openai are exempt). Near-zero false
 # positives — grep shows no legitimate raw-OpenAI python anywhere in the stack. Gemini's
@@ -25,7 +25,10 @@ try:
     body = ti.get('content', ti.get('new_string', '')) or ''
     # emit file_path then a sentinel-free flag of whether body has raw-openai code
     import re
-    hit = bool(re.search(r'^\s*(import openai|from openai import)|\.chat\.completions\.create|OpenAI\s*\(', body, re.M))
+    # Import is the unambiguous gate — you cannot use the SDK without it, and nobody
+    # writes 'import openai' in a comment/docstring. Method-call matches (.chat.completions
+    # .create / OpenAI() ) were dropped: they appear in prose/examples → false-block risk.
+    hit = bool(re.search(r'^\s*(import openai\b|from openai\b)', body, re.M))
     print(fp, '1' if hit else '0')
 except Exception:
     print('', '0')
@@ -40,7 +43,7 @@ esac
 
 cat >&2 <<'MSG'
 BLOCKED: raw OpenAI SDK in a .py file. This stack routes GPT through llmx, not the paid API:
-  • $0 (ChatGPT subscription):  llmx chat -p codex-cli -m gpt-5.5 --lite bare ...
+  • $0 (ChatGPT subscription):  llmx chat -p codex-cli -m gpt-5.5 --subscription ...
   • governed/logged dispatch:   ~/Projects/skills/scripts/llm-dispatch.py --profile gpt_general
 The raw `openai` SDK bills the paid API for no benefit (see memory route-model-calls-through-llmx).
 Legit exceptions are NOT OpenAI: gemini embeddings/File Search use google.genai directly — those aren't matched.

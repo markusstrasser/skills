@@ -32,6 +32,11 @@ CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // ""' 2>/dev/null || echo "")
 # this to "compact"; this is a defensive second check so a no-matcher wiring is safe.
 [ "$SOURCE" = "compact" ] || exit 0
 
+SID=$(printf '%s' "$INPUT" | jq -r '.session_id // ""' 2>/dev/null || echo "")
+if [ -n "$SID" ]; then
+  date +%s > "/tmp/claude-postcompact-${SID}" 2>/dev/null || true
+fi
+
 CKPT=""
 [ -n "$CWD" ] && [ -f "$CWD/.claude/checkpoint.md" ] && CKPT=" A fresh .claude/checkpoint.md was written by the PreCompact hook — read it first."
 

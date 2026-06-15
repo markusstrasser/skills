@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import tempfile
 import unittest
@@ -150,6 +151,24 @@ class BuildPlanCloseContextTest(unittest.TestCase):
         surviving_titles = [block.title for section in packet.sections for block in section.blocks]
         self.assertIn("Unified Diff", surviving_titles)
         self.assertGreater(token_estimate, packet.budget_policy.limit)
+
+    def test_manifest_includes_review_targets(self) -> None:
+        target = self.repo / "module.py"
+        target.write_text("value = 1\n")
+        run(self.repo, "add", "module.py")
+        run(self.repo, "commit", "-m", "initial")
+        out = self.repo / "packet.md"
+        subprocess.run(
+            ["python3", str(SCRIPT_PATH), "--repo", str(self.repo), "--output", str(out)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        manifest = json.loads(out.with_suffix(".manifest.json").read_text())
+        self.assertIn("review_targets", manifest)
+        self.assertEqual(manifest["review_targets"]["diff_target"]["owner"], "code-review")
+        self.assertEqual(manifest["review_targets"]["design_target"]["owner"], "critique")
+        self.assertEqual(manifest["review_targets"]["design_target"]["axes"], "standard")
 
 
 if __name__ == "__main__":

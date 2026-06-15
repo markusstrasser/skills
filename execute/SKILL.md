@@ -1,7 +1,7 @@
 ---
 name: execute
 disable-model-invocation: true
-description: Execute an approved plan to done WITH hygiene — phase-gated, probe-before-build, verify-before-claim, granular commits, worktree-isolated parallel subagents, and INLINE tooling-building (build the missing tool/hook DURING execution, not at session-end). Runs the disagree-self-check on divergence and /critique close at the end. Use after /decide or on any approved plan file. NOT for exploration/decisions (use /decide) or one-off edits.
+description: "Execute approved plan with hygiene — phased, verify-before-claim, granular commits, worktree subagents, inline tooling. /critique close at end. After /decide or plan file. NOT exploration (/decide)."
 argument-hint: "[--slice P0-P2] [--from PHASE] <plan path>"
 allowed-tools:
   - Bash
@@ -96,7 +96,7 @@ For each phase in the slice, in order:
    - **ungated design REVIEW** (verdict on EXISTING structure: cosign/critique an architecture, audit a
      schema, grade a memo) → Fable effort-low — measured ≈ effort-high on critique quality (4/4 cosigns,
      0 false anchors, 2 novel proposals) at **0.34× tokens** (anim-workbench effort-architecture eval,
-     n=1 screening). Corroborated cross-model 2026-06-12: **Opus-low** (`llmx --lite bare -e low`, $0)
+     n=1 screening). Corroborated cross-model 2026-06-12: **Opus-low** (`llmx chat --subscription -m claude-opus-4-8 -e low`, $0)
      matched Opus-default (Agent tool) on a code-promotion review and produced the sharpest finding —
      review→low holds for Opus, not just Fable. The savings buy a SECOND DIVERSE reviewer — but
      `evals/cross_lab_review` SETTLED the lab question: cross-lab-vs-same-lab margin is **≈0** (count-delta
@@ -125,7 +125,7 @@ For each phase in the slice, in order:
    Headless `claude -p --model <m> --effort low` (key-stripped) remains for rig-manifest/eval dispatch
    (~/Projects/evals/bin/dispatch-arm.sh) — but know its wall: `--permission-mode acceptEdits` blocks
    WebSearch/WebFetch/MCP too (measured 2026-06-13: a research arm came back fully DEGRADED), so
-   web-needing work goes through the Agent-tool lane, not headless-acceptEdits. `llmx --lite bare -m <m>
+   web-needing work goes through the Agent-tool lane, not headless-acceptEdits. `llmx chat --subscription -m <m>
    -e low` is the third path ($0 claude-cli transport; verified 2026-06-12).
    **Every headless brief MUST include "DO NOT use the Agent tool — run everything yourself in the main
    loop":** subagent shells sandbox-block build tools (bun/node TTY-approval wall), and a headless arm that

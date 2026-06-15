@@ -1,6 +1,6 @@
 ---
 name: illustration-gen
-description: "Generate designer-style SVGs from text prompts via Quiver Arrow API (paid). Use when: 'make a logo', 'generate an icon', 'illustrate this concept as SVG'. NOT for precise scientific/technical diagrams — use scientific-drawing instead."
+description: "Use when: paid Quiver Arrow SVG logo/icon from prompt. NOT precise technical diagrams (/scientific-drawing)."
 user-invocable: true
 argument-hint: '[description of illustration]'
 allowed-tools: [Bash, Read, Write]

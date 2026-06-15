@@ -1,6 +1,6 @@
 ---
 name: scientific-drawing
-description: "Use when: 'draw a diagram', 'scientific figure', 'visualize this', 'architecture diagram', 'plot this function'. Typst/CeTZ (fast, default), TikZ (math/circuits/chemistry), D2 (architecture/ERD), Asymptote (3D)."
+description: "Use when: /scientific-drawing, architecture/ERD/math diagram, plot a function. Typst/CeTZ default; TikZ/D2/Asymptote when needed. NOT paid illustration SVGs (/illustration-gen) or Manim (/manim-animations)."
 user-invocable: true
 argument-hint: '[description of diagram]'
 allowed-tools: [Bash, Read, Write, Grep, Glob]

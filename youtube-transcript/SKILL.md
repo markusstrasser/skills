@@ -1,6 +1,6 @@
 ---
 name: youtube-transcript
-description: "Fetch YouTube transcripts via yt-dlp (auto-captions or subs, .vtt → plain text). Use when citing a podcast/video, quoting a speaker, or building a searchable video corpus. Transcript-only."
+description: "Use when: YouTube/podcast transcript via yt-dlp for cite or corpus. Transcript-only — NOT video analysis."
 user-invocable: true
 argument-hint: "<youtube-url-or-id> [topic-prefix]"
 allowed-tools: [Bash, Write, Read]

@@ -1,6 +1,6 @@
 ---
 name: cursor-agent
-description: Cursor Agent CLI (headless `agent`) — install, auth, Composer 2.5 dispatch, modes, sandbox, parallel terminals. Use when dispatching Cursor's agent from shell/scripts, Neovim/JetBrains sidecars, CI probes, or comparing composer-2.5 vs composer-2.5-fast. NOT for in-editor Agent (that's native Cursor) or llmx/claude-cli routes.
+description: "Use when: headless `agent` CLI from shell/CI/scripts, Composer install/auth/dispatch. NOT in-editor Cursor agent or llmx/claude-cli."
 user-invocable: true
 argument-hint: '[install|probe|dispatch|models] [prompt or model id]'
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit]
@@ -90,9 +90,9 @@ Cloud handoff (interactive only): prefix message with `&` → continues on curso
 | Need | Route |
 |---|---|
 | Cursor subscription, terminal/Neovim/JetBrains | **this skill** (`agent`) |
-| Claude subscription, headless CC | `claude -p` / `dispatch-arm.sh` (evals) |
-| GPT/Codex subscription | `codex exec` or `llmx --lite bare` |
-| API billing, batch, schema | `llmx` (`/llmx-guide`) |
+| Claude subscription, headless CC | `claude -p` (strip `ANTHROPIC_API_KEY`) or `llmx chat --subscription -m claude-opus-4-8` |
+| GPT/Codex subscription | `codex exec` or `llmx chat --subscription` |
+| API billing, batch, schema | `llmx chat` without `--subscription` (`/llmx-guide`; probe with `--dry-run`) |
 | In-editor agent with hooks/skills | native Cursor / Claude Code Agent tool |
 
 **Measured screening eval:** `~/Projects/evals/composer_cli_probe/` — ask-mode deterministic tasks, composer-2.5 vs composer-2.5-fast.

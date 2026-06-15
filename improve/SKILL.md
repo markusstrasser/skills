@@ -1,6 +1,6 @@
 ---
 name: improve
-description: "Use when: 'what should I fix next', 'suggest improvements', 'run maintenance', 'run the loop'. Modes: maintain (THE RSI-loop conductor — sweep + pick-one + two-lane routing, run as /loop 30m), harvest (gather+rank findings), suggest (repeated workflows → skills)."
+description: "Use when: /improve, 'what to fix next', maintenance loop, harvest findings, workflow→skill. Modes: maintain (/loop 30m), harvest, suggest. NOT one-shot research (/research)."
 user-invocable: true
 argument-hint: <mode> [options...]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit]
@@ -410,6 +410,30 @@ launchctl list 2>/dev/null | grep agent-infra | awk '$2 != 0 {print "  launchd n
 just -f ~/Projects/agent-infra/justfile freshness 2>&1 | grep -E "DUE|source"  # surveillance sweeps past cadence
 ```
 
+**Composer per-repo drift screen** (parallel, cheap — runs after deterministic checks pass):
+
+```bash
+REPOS="agent-infra intel genomics phenome skills hutter"
+for repo in $REPOS; do
+  (
+    diff=$(cd ~/Projects/$repo 2>/dev/null && git diff HEAD~1 --stat 2>/dev/null | tail -5)
+    [ -z "$diff" ] && exit 0
+    printf '%s\n' "$diff" > /tmp/maintain-diff-$repo.txt
+    uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
+      --profile composer_screen \
+      --context /tmp/maintain-diff-$repo.txt \
+      --prompt "Review this diff stat summary for $repo. Output ONLY if actionable: RISK high|medium + one line why + suggested check. Else output: OK" \
+      --output /tmp/maintain-composer-$repo.md 2>/dev/null
+    grep -q '^RISK' /tmp/maintain-composer-$repo.md 2>/dev/null && \
+      echo "  composer drift: $repo — $(head -1 /tmp/maintain-composer-$repo.md)"
+  ) &
+done
+wait
+```
+
+Surface any `RISK` lines in the tick report. This is triage only — deterministic `doctor`/`drift-sentinel`
+own ground truth; Composer flags diffs worth human glance.
+
 A **red sweep is the tick's priority** — if the fix is meta-local + obvious, do it this tick
 instead of the normal rotation; don't roll past it. Full `doctor.py` health stays in the P3
 rotation (daily), so the per-tick sweep stays cheap. If state is unchanged AND the sweep is
@@ -455,9 +479,11 @@ signal rate (don't re-run a daily-grain miner every tick):
 |------|---------|-----|
 | Hook health | Every tick (~15s) | `just hooks-smoke` in agent-infra — catches silently-dead hooks at the cheapest possible point. Non-zero exit → fix or escalate before other work. |
 | Session anti-patterns | Daily (or per ~5 new sessions) | `/observe sessions` — behavioral findings → improvement-log `[obs]` |
+| **Steering vectors (full corpus)** | Weekly (incremental) | `just steer-mine` in agent-infra — mines steers/confirmations/agent_miss from unscanned sessions (`mine_steers.py`; ledger at `~/.claude/steer-mining/`). Cluster recurring `vector` fields → GOALS tension or steward-proposal; do NOT auto-promote to hooks without observe promotion gates (2+ sessions, checkable). |
 | Supervision waste | Daily | `/observe supervision` — corrections/boilerplate/rubber-stamps → automatable fixes. A reiteration of something already decided elsewhere = highest-signal defect → `decisions-pending/`. |
 | Governance-change downstream watch | After constitution/GOALS/invariants edits (`git log` the governance files) | review sessions since the edit for new friction / reverts / anomalies attributable to it → flag to `decisions-pending/` or revert. The compensating control for inferred-approval governance autonomy (invariants #1): autonomy on reversible governance text is only sound if a loop actually catches a bad edit downstream. |
-| Governance health read | Daily (consumes the `com.agent-infra.gov-report` launchd job's output) | read `artifacts/gov/gov-report.md`; act on the 3 REAL `gov_invariants` assertions (rule-hook balance, recurrence-architecture, verifier-coverage). Do NOT treat the gov-shrink ELIGIBILITY column as actionable — 3/4 point to non-existent graders (`evals/graders/governance/` is empty); the `verifier_coverage` invariant flags that gap itself. Escalate failed invariants / grader-gaps to `decisions-pending/`. SENSE half is now automated (launchd, zero operator tax); this row is the ACT half. |
+| Governance health read | Daily (consumes the `com.agent-infra.gov-report` launchd job's output) | read `artifacts/gov/gov-report.md`; act on the 3 REAL `gov_invariants` assertions (rule-hook balance, recurrence-architecture, verifier-coverage). Graders live in **`~/Projects/evals/graders/governance/`** (sibling repo — gov.py resolves from projects root). Shrink-eligible scaffolds with missing grader files show `⚠ grader not found`; with graders present, read the ✓/✗ verdict. Escalate failed invariants to `decisions-pending/`. SENSE half is launchd; this row is ACT. |
+| **ACT drain (disposition queue)** | Daily (consumes `com.agent-infra.act-drain` digest) | read `~/.claude/act-drain-digest.md` OR run `just act-drain`. Surfaces at SessionStart. Runs `reflect classify` + ranks quarantine / steward / RSI-close pending. **Do NOT add duplicate maintain rows for classify** — this job IS the scheduled classify drain. Human dispositions: `/rsi close`, `just reflect-review`, steward-proposals triage. |
 | Finding drain | Weekly | `/improve harvest` — gather NEW + drain actionable `[ ]` queue |
 | Tool failures | Weekly | `/observe failures` — mine agentlogs for tools/CLIs actually broken in real use (the proxy health-checks can't see this; a dead `corpus` CLI hid for days). Tier-1 deterministic ($0); escalate big clusters. |
 | **Blindspot → detector (RSI convert step)** | Daily (consumes `com.agent-infra.blindspot-miner`'s digest) | read `agent-infra/.claude/blindspot-digest.md` (loop misses the human caught). Cluster (`emb pairs`); for the top recurring cluster, **propose the DETECTOR that would have caught the class** (dedup vs existing hooks first) → `improvement-log` `[ ]` / `decisions-pending/`. This is the loop-closure: a flag becomes coverage. The blindspot-flag rate is the declining-supervision objective — it should fall as detectors land. |

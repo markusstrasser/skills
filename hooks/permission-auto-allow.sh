@@ -70,5 +70,7 @@ case "$TOOL" in
         ;;
 esac
 
-# All other tools — fall through to normal permission prompt
+# All other tools — fall through to normal permission prompt.
+# Tee for statusline ◆ perm (cleared on tab-color.sh working).
+printf '%s' "${TOOL:-?}" > "/tmp/claude-tab-perm-${PPID:-${CLAUDE_PID:-0}}" 2>/dev/null || true
 exit 0

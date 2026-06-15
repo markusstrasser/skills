@@ -1,6 +1,6 @@
 ---
 name: oura-ring
-description: "Oura Ring v2 API: sleep, HRV, readiness, activity, stress, SpO2. Analysis, dashboards, wearable→NeuroKit2."
+description: "Use when: Oura Ring API pull, sleep/HRV/readiness dashboards, wearable→NeuroKit2. NOT generic biosignal code without Oura (/neurokit2)."
 ---
 
 # Oura Ring API (v2)

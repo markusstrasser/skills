@@ -13,6 +13,9 @@ Usage:
 
     # With project dir for goals/governance doc discovery (docs/GOALS.md)
     model-review.py --context plan.md --topic "data wiring" --project ~/Projects/intel "Review this plan"
+
+    # Default: premise scout (cursor-agent, repo workspace) then standard axes
+    model-review.py --context plan.md --topic "gateway outbox" --fork "callers exist" --axes standard "Review"
 """
 
 from __future__ import annotations
@@ -21,6 +24,8 @@ import argparse
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -139,43 +144,141 @@ FINDING_SCHEMA = {
 
 AXES = {
     "arch": {
-        "label": "Gemini (architecture/patterns)",
+        "label": "Gemini A (full review — structure + correctness)",
         "profile": "deep_review",
         "prompt": """\
 <system>
-You are reviewing a codebase. Be concrete. No platitudes. Reference specific code, configs, and findings. It is {date}.
-Budget: ~2000 words. Dense tables and lists over prose.
+Full adversarial review of THIS subpart. Cover architecture AND bugs — not one or the other.
+Lens A: structural soundness, coupling, migration posture, what holds up vs what doesn't.
+Also flag confirmed/likely bugs and silent-failure paths. It is {date}. Budget: ~1200 words.
 </system>
 
 {question}
 
 RESPOND WITH EXACTLY THESE SECTIONS:
 
-## 1. Assessment of Strengths and Weaknesses
-What holds up and what doesn't. Reference actual code/config. Be specific about errors AND what's correct.
+## 1. Strengths and Weaknesses (structure + correctness)
+What holds up and what doesn't. Reference actual code. Include bugs, not just design.
 
-## 2. What Was Missed
-Patterns, problems, or opportunities not identified. Cite files, line ranges, architectural gaps.
+## 2. Better Approaches
+Agree (refine) / Disagree (alternative) / Upgrade per recommendation.
 
-## 3. Better Approaches
-For each recommendation, either: Agree (with refinements), Disagree (with alternative), or Upgrade (better version).
+## 3. Top 5 Priorities
+Ranked with testable verification criteria.
 
-## 4. What I'd Prioritize Differently
-Your ranked list of the 5 most impactful changes, with testable verification criteria.
-
-## 5. Goals & Principles Alignment
+## 4. Goals & Principles Alignment
 {principles_instruction}
 
-## 6. Blind Spots In My Own Analysis
-What am I (Gemini) likely getting wrong? Where should you distrust my assessment?""",
+## 5. Blind Spots In My Own Analysis
+
+## 6. Coverage & assumptions checklist
+What was missed? Cross-file drift? Unverified premises (callers exist? join keys on both sides?)?
+
+## 7. Contracts & interfaces (structure view)
+API/schema drift, unnamed compatibility boundaries, migration posture.
+
+## 8. Structural assumptions
+Load-bearing premises the design depends on. One per line, each starting with "- ".
+Examples: callers exist, join keys on both sides, ordering guarantees, schema matches reality.""",
+    },
+    "gaps": {
+        "label": "Gemini B (full review — coverage + assumptions)",
+        "profile": "deep_review",
+        "prompt": """\
+<system>
+Second Gemini pass — SAME full mandate (architecture + bugs), different lens.
+Lens B: what was missed, cross-file drift, unverified premises. Do NOT only list gaps —
+also judge whether the design is sound. It is {date}. Budget: ~1200 words.
+</system>
+
+{question}
+
+RESPOND WITH EXACTLY THESE SECTIONS:
+
+## 1. What Was Missed (including bugs the first pass might skip)
+Files, line ranges, wiring gaps, logic holes.
+
+## 2. Cross-File Inconsistencies
+Same problem solved differently; drift between siblings.
+
+## 3. Unverified Assumptions
+Callers exist? Join keys on both sides? Schema matches reality?
+
+## 4. Goals & Principles Alignment
+{principles_instruction}
+
+## 5. Blind Spots In My Own Analysis
+
+## 6. Structural assumptions
+Load-bearing premises the design depends on. One per line, each starting with "- ".""",
+    },
+    "correctness": {
+        "label": "GPT-5.5 medium A (full review — bugs + structure)",
+        "profile": "gpt_general",
+        "prompt": """\
+<system>
+Full adversarial review of THIS subpart. GPT-5.5 medium effort.
+Lens A: bugs, boundaries, silent failures — AND whether the architecture supports correctness.
+Budget: ~1200 words.
+</system>
+
+{question}
+
+RESPOND WITH EXACTLY:
+
+## 1. Confirmed or Likely Bugs
+file:line | severity | claim | evidence
+
+## 2. Structural Risks to Correctness
+Design choices that will breed bugs even if no bug exists yet.
+
+## 3. Boundary / Error-Path Gaps
+Unchecked return codes, fail-open paths, missing guards.
+
+## 4. Goals & Principles Alignment
+{principles_instruction}
+
+## 5. Where I'm Likely Wrong
+
+## 6. Contract & migration completeness (mechanism view)
+Interface breaks, dual paths, orphaned consumers, fail-open error semantics.""",
+    },
+    "contracts": {
+        "label": "GPT-5.5 medium B (full review — migration + interfaces)",
+        "profile": "gpt_general",
+        "prompt": """\
+<system>
+Second GPT pass — SAME full mandate (bugs + architecture), different lens.
+Lens B: interfaces, contracts, migration completeness — but still flag real bugs you see.
+Do NOT defer bugs to the other GPT pass. GPT-5.5 medium. Budget: ~1200 words.
+</system>
+
+{question}
+
+RESPOND WITH EXACTLY:
+
+## 1. Interface / Contract Breaks
+API shape, schema drift, caller obligations.
+
+## 2. Bugs Visible Through a Contract Lens
+Integration failures, type mismatches, error-semantics holes.
+
+## 3. Migration & Deletion Completeness
+Dual paths, orphaned consumers, unnamed removal conditions.
+
+## 4. Goals & Principles Alignment
+{principles_instruction}
+
+## 5. Where I'm Likely Wrong""",
     },
     "formal": {
-        "label": "GPT-5.5 (quantitative/formal)",
+        "label": "GPT-5.5 high (quantitative/formal — opt-in)",
         "profile": "formal_review",
         "prompt": """\
 <system>
 You are performing QUANTITATIVE and FORMAL analysis. Other reviewers handle qualitative pattern review. Focus on what they can't do well. Be precise. Show your reasoning. No hand-waving.
-Budget: ~2000 words. Tables over prose. Source-grade claims.
+Use ONLY when the subpart involves math, proofs, Bayes/stats, or formal invariants. GPT-5.5 at HIGH effort.
+Budget: ~1500 words. Tables over prose. Source-grade claims.
 </system>
 
 {question}
@@ -321,15 +424,339 @@ Where should you distrust my assessment?""",
     },
 }
 
+# 2×2 cell metadata: family × lens (inspectable in coverage.json).
+AXIS_CELLS: dict[str, dict[str, str]] = {
+    "arch": {"family": "gemini", "lens": "structure", "cell": "S_G"},
+    "gaps": {"family": "gemini", "lens": "mechanism", "cell": "M_G"},
+    "correctness": {"family": "gpt", "lens": "mechanism", "cell": "M_P"},
+    "contracts": {"family": "gpt", "lens": "structure", "cell": "S_P"},
+}
+
+STRUCTURAL_ASSUMPTIONS_HEADER = re.compile(
+    r"^#{2,3}\s*(?:\d+\.\s*)?Structural\s+[Aa]ssumptions\s*:?\s*$",
+    re.MULTILINE,
+)
+CROSS_TALK_INJECTION = """
+
+--- STRUCTURAL ASSUMPTIONS (from structure pass — falsify or confirm each) ---
+{assumptions}
+--- END STRUCTURAL ASSUMPTIONS ---
+Test each assumption against the code. Flag false or unverified assumptions as findings."""
+
+
+def axis_lens(axis: str) -> str:
+    return str(AXIS_CELLS.get(axis, {}).get("lens") or "")
+
+
+def split_axes_by_lens(axis_names: list[str]) -> tuple[list[str], list[str], list[str]]:
+    structure, mechanism, other = [], [], []
+    for axis in axis_names:
+        lens = axis_lens(axis)
+        if lens == "structure":
+            structure.append(axis)
+        elif lens == "mechanism":
+            mechanism.append(axis)
+        else:
+            other.append(axis)
+    return structure, mechanism, other
+
+
+def parse_structural_assumptions(output_path: Path) -> list[str]:
+    """Deterministic parse of ## Structural assumptions bullets from an axis output."""
+    if not output_path.is_file():
+        return []
+    text = output_path.read_text(errors="replace")
+    m = STRUCTURAL_ASSUMPTIONS_HEADER.search(text)
+    if not m:
+        return []
+    section = text[m.end() :]
+    end = re.search(r"\n##\s*\d", section)
+    if end:
+        section = section[: end.start()]
+    bullets: list[str] = []
+    for line in section.splitlines():
+        line = line.strip()
+        if line.startswith(("-", "*", "•")):
+            item = re.sub(r"^[-*•]\s*", "", line).strip()
+            if len(item) > 8:
+                bullets.append(item)
+    return bullets[:20]
+
+
+def format_cross_talk_injection(assumptions: list[str]) -> str:
+    if not assumptions:
+        return ""
+    body = "\n".join(f"- {a}" for a in assumptions)
+    return CROSS_TALK_INJECTION.format(assumptions=body)
+
+
+def collect_structural_assumptions(review_dir: Path, structure_axes: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for axis in structure_axes:
+        for item in parse_structural_assumptions(review_dir / f"{axis}-output.md"):
+            key = item.lower()
+            if key not in seen:
+                seen.add(key)
+                out.append(item)
+    return out
+
+
+def write_structural_assumptions_artifact(review_dir: Path, assumptions: list[str]) -> Path:
+    path = review_dir / "structural-assumptions.json"
+    path.write_text(
+        json.dumps(
+            {"assumptions": assumptions, "count": len(assumptions)},
+            indent=2,
+        )
+        + "\n"
+    )
+    return path
+
 # Presets map a single name to a list of axes.
 # `claude` (Opus 4.8) and `composer` (Cursor Composer 2.5, $0) are opt-in
 # third-lineage cosigners — intentionally NOT in any preset. Request explicitly:
 # `--axes arch,formal,claude` or `--axes arch,formal,composer`.
+#
+# cross2/lens2 = diagonal 2×2 (S_G + M_P). cross4/lens4/standard = full grid.
+# model-review CLI default stays `standard` until evals/critique_replay/ROUTING_VERDICT.md
+# promotes cross2 (see review_gate triage `preset` field).
 PRESETS = {
-    "standard": ["arch", "formal"],
-    "deep": ["arch", "formal", "domain", "mechanical"],
-    "full": ["arch", "formal", "domain", "mechanical", "alternatives"],
+    # Legacy default: 2× Gemini + 2× GPT-medium (4 lenses).
+    "standard": ["arch", "gaps", "correctness", "contracts"],
+    # Diagonal cross-lab: Gemini structure + GPT mechanism (folded checklists in arch/correctness).
+    "cross2": ["arch", "correctness"],
+    "lens2": ["arch", "correctness"],
+    # Full 2×2 grid (4 cells).
+    "cross4": ["arch", "gaps", "correctness", "contracts"],
+    "lens4": ["arch", "gaps", "correctness", "contracts"],
+    # Math/formal-dense reviews: add `formal` explicitly, e.g. --axes standard,formal
+    "deep": ["arch", "gaps", "correctness", "contracts", "domain", "mechanical"],
+    "full": ["arch", "gaps", "correctness", "contracts", "domain", "mechanical", "alternatives"],
 }
+
+# Premise scout runs before packet-only axes (VOI-sequenced review ADR).
+PREMISE_SCOUT_TIMEOUT = 90
+PREMISE_SCOUT_CONTEXT_CAP = 120_000  # chars of packet fed to scout stdin
+
+PREMISE_SCOUT_PROMPT = """\
+VOI premise scout — falsify load-bearing premises BEFORE adversarial review.
+
+You have read-only access to the repo workspace. The design packet is below.
+
+Rules:
+- Do NOT critique aesthetics or propose redesigns — only verify/falsify premises.
+- List 3–5 load-bearing premises (callers exist? paths real? join keys on both sides? cited helpers exist?).
+- For each premise: run deterministic checks that finish in <60s (grep, read cited files, git log -5 -- path).
+- Probes ≥60s or needing API: disposition "proposed" only — do not run them.
+- One fork focus: {fork}
+
+Review question: {question}
+
+Respond in markdown with:
+## Premises checked
+## Executed probes (<60s)
+## Proposed probes (not run)
+## conviction_after (high|medium|low)
+## recommendation (proceed | human checkpoint)
+
+End with a fenced JSON block (voi-scout.json shape):
+```json
+{{
+  "fork": "...",
+  "uncertainty": "...",
+  "voi_actions": [{{"action": "...", "cost_sec": 5, "disposition": "executed|proposed", "result": "..."}}],
+  "conviction_after": "high|medium|low",
+  "recommendation": "proceed | escalate cross4 | human checkpoint"
+}}
+```
+
+--- DESIGN PACKET ---
+{packet}
+"""
+
+PARALLEL_DISPATCH_WAIT_DEFAULT = 720.0
+DISPATCH_SCHEMA_VERSION = "dispatch.v1"
+EXECUTION_RECEIPT_SCHEMA_VERSION = "execution-receipt.v1"
+SUPPORTED_DISPATCH_SCHEMAS = frozenset({DISPATCH_SCHEMA_VERSION})
+
+
+class DispatchBudget:
+    """Orchestrator wall-clock cap — skip axes that cannot finish; never truncate timeouts."""
+
+    __slots__ = ("deadline_mono",)
+
+    def __init__(self, deadline_mono: float | None = None) -> None:
+        self.deadline_mono = deadline_mono
+
+    @classmethod
+    def from_seconds(cls, seconds: int | None) -> "DispatchBudget":
+        if seconds is None or seconds <= 0:
+            return cls(deadline_mono=None)
+        return cls(deadline_mono=time.monotonic() + seconds)
+
+    @property
+    def active(self) -> bool:
+        return self.deadline_mono is not None
+
+    def remaining(self) -> float | None:
+        if self.deadline_mono is None:
+            return None
+        return max(0.0, self.deadline_mono - time.monotonic())
+
+    def can_start(self, profile_timeout: int) -> bool:
+        """Start only if the full profile timeout fits in remaining budget."""
+        rem = self.remaining()
+        if rem is None:
+            return True
+        return rem >= profile_timeout
+
+    def wait_timeout(self, default: float = PARALLEL_DISPATCH_WAIT_DEFAULT) -> float:
+        rem = self.remaining()
+        if rem is None:
+            return default
+        return max(1.0, min(default, rem))
+
+
+def _resolved_axis_timeout(axis: str) -> int:
+    """Wall-clock timeout for budget gate — mirrors llmx high/xhigh auto-scale."""
+    profile_name = str(AXES[axis]["profile"])
+    profile_def = dispatch_core.PROFILES[profile_name]
+    timeout = int(profile_def.timeout)
+    effort = (profile_def.reasoning_effort or "").lower()
+    scaled = {"high": 600, "xhigh": 1200}.get(effort)
+    if scaled and scaled > timeout:
+        timeout = scaled
+    return timeout
+
+
+def _axis_profile_timeout(axis: str) -> int:
+    return _resolved_axis_timeout(axis)
+
+
+def _budget_skipped_axis(
+    axis: str, review_dir: Path, budget: DispatchBudget, profile_timeout: int
+) -> dict:
+    axis_def = AXES[axis]
+    profile_def = dispatch_core.PROFILES[str(axis_def["profile"])]
+    rem = budget.remaining()
+    return {
+        "label": axis_def["label"],
+        "requested_model": profile_def.model,
+        "model": profile_def.model,
+        "exit_code": 1,
+        "output": str(review_dir / f"{axis}-output.md"),
+        "size": 0,
+        "failure_reason": "budget_exhausted",
+        "budget_remaining_seconds": round(rem, 1) if rem is not None else None,
+        "profile_timeout": profile_timeout,
+    }
+
+
+def load_dispatch_manifest(path: Path) -> dict:
+    return json.loads(path.read_text())
+
+
+def validate_dispatch_schema(manifest: dict) -> str | None:
+    version = manifest.get("schema_version")
+    if version is None:
+        return None
+    if version not in SUPPORTED_DISPATCH_SCHEMAS:
+        return f"unsupported dispatch schema_version {version!r}"
+    return None
+
+
+def dispatch_manifest_blockers(manifest: dict) -> list[str]:
+    return [str(b) for b in (manifest.get("blockers") or []) if str(b).strip()]
+
+
+def _axis_execution_status(entry: dict) -> str:
+    reason = entry.get("failure_reason")
+    if reason == "budget_exhausted":
+        return "skipped_budget"
+    if reason == "thread_timeout":
+        return "thread_timeout"
+    if int(entry.get("exit_code", 0)) != 0 or int(entry.get("size", 0)) == 0:
+        return str(reason) if reason else "failed"
+    return "completed"
+
+
+def _execution_overall(axis_statuses: dict[str, dict]) -> str:
+    statuses = [info["status"] for info in axis_statuses.values()]
+    if not statuses:
+        return "failed"
+    if all(s == "completed" for s in statuses):
+        return "complete"
+    if all(s == "skipped_budget" for s in statuses):
+        return "incomplete_all_skipped"
+    if any(s == "completed" for s in statuses):
+        return "partial"
+    return "failed"
+
+
+def write_execution_receipt(
+    review_dir: Path,
+    *,
+    axis_names: list[str],
+    dispatch_result: dict,
+    effective_policy: dict,
+) -> Path:
+    axes_out: dict[str, dict] = {}
+    for axis in axis_names:
+        entry = dispatch_result.get(axis)
+        if not isinstance(entry, dict):
+            axes_out[axis] = {"status": "missing"}
+            continue
+        axes_out[axis] = {
+            "status": _axis_execution_status(entry),
+            "model": entry.get("model"),
+            "failure_reason": entry.get("failure_reason"),
+            "budget_remaining_seconds": entry.get("budget_remaining_seconds"),
+            "profile_timeout": entry.get("profile_timeout"),
+        }
+    receipt = {
+        "schema_version": EXECUTION_RECEIPT_SCHEMA_VERSION,
+        "overall": _execution_overall(axes_out),
+        "effective_policy": effective_policy,
+        "axes": axes_out,
+        "elapsed_seconds": dispatch_result.get("elapsed_seconds"),
+    }
+    path = review_dir / "execution-receipt.json"
+    path.write_text(json.dumps(receipt, indent=2) + "\n")
+    return path
+
+
+def apply_dispatch_manifest(args: argparse.Namespace, manifest_path: Path) -> dict:
+    """Merge dispatch_policy from triage; CLI flags already set win over manifest."""
+    manifest = load_dispatch_manifest(manifest_path)
+    policy = manifest.get("dispatch_policy") or {}
+    if args.scout is None:
+        args.scout = bool(policy.get("premise_scout", True))
+    if args.context_scope is None:
+        args.context_scope = policy.get("context_scope") or "repo"
+    if args.budget_seconds is None:
+        args.budget_seconds = policy.get("budget_seconds")
+    if not args.irreversible and policy.get("irreversible"):
+        args.irreversible = True
+    if not args.cross_talk and policy.get("cross_talk"):
+        args.cross_talk = True
+    if args.axes is None:
+        design = (manifest.get("layers") or {}).get("design") or {}
+        args.axes = str(design.get("axes") or manifest.get("preset") or "standard")
+    return manifest
+
+
+def build_effective_policy(args: argparse.Namespace) -> dict:
+    return {
+        "scout": bool(args.scout),
+        "context_scope": args.context_scope,
+        "budget_seconds": args.budget_seconds,
+        "axes": args.axes,
+        "irreversible": bool(args.irreversible),
+        "cross_talk": bool(args.cross_talk),
+        "extract": bool(args.extract),
+        "verify": bool(args.verify),
+    }
 
 # Primary Gemini critique axis (deep_review = gemini-3.5-flash since 2026-05-24).
 GEMINI_PRIMARY_MODEL = dispatch_core.PROFILES["deep_review"].model
@@ -387,6 +814,181 @@ GPT_QUOTA_MARKERS = (
 class ContextArtifact(NamedTuple):
     content_path: Path
     manifest_path: Path
+
+
+class PremiseScoutResult(NamedTuple):
+    skipped: bool
+    skip_reason: str | None
+    markdown_path: Path | None
+    json_path: Path | None
+    conviction: str | None
+
+
+def _resolve_cursor_agent_bin() -> str | None:
+    for name in ("cursor-agent", "agent"):
+        path = shutil.which(name)
+        if path:
+            return path
+    return None
+
+
+def _extract_json_block(text: str) -> dict | None:
+    for match in re.finditer(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL | re.IGNORECASE):
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
+def _scout_skip_payload(
+    *,
+    fork: str | None,
+    topic: str,
+    skip_reason: str,
+) -> dict:
+    """Skip is NOT low conviction — absence of scout ≠ substantive verdict."""
+    return {
+        "fork": fork or topic,
+        "skipped": True,
+        "skip_reason": skip_reason,
+        "conviction_after": None,
+        "recommendation": "proceed",
+    }
+
+
+def check_scout_conviction_gate(
+    scout_result: PremiseScoutResult | None,
+    *,
+    irreversible: bool,
+    force: bool,
+) -> int | None:
+    """ADR gate: block adjudication only on executed scout + low + irreversible."""
+    if force or scout_result is None or scout_result.skipped:
+        return None
+    if not irreversible:
+        return None
+    conviction = (scout_result.conviction or "").strip().lower()
+    if conviction == "low":
+        print(
+            "error: premise scout conviction=low on --irreversible review; "
+            "human checkpoint required (or pass --force-scout to proceed anyway)",
+            file=sys.stderr,
+        )
+        return 3
+    return None
+
+
+def should_run_premise_scout(
+    *,
+    scout: bool,
+    context_scope: str,
+    has_context: bool,
+) -> bool:
+    return scout and context_scope == "repo" and has_context
+
+
+def run_premise_scout(
+    *,
+    review_dir: Path,
+    project_dir: Path,
+    context_path: Path,
+    topic: str,
+    question: str,
+    fork: str | None = None,
+    timeout: int = PREMISE_SCOUT_TIMEOUT,
+    budget: DispatchBudget | None = None,
+) -> PremiseScoutResult:
+    """Repo-grounded premise falsifier via cursor-agent (Composer 2.5, workspace=project)."""
+    scout_profile = dispatch_core.PROFILES["premise_scout"]
+    scout_model = scout_profile.model
+    effective_timeout = timeout
+    if budget is not None:
+        if not budget.can_start(timeout):
+            reason = (
+                f"budget exhausted ({budget.remaining():.0f}s left, "
+                f"scout needs {timeout}s)"
+            )
+            payload = _scout_skip_payload(fork=fork, topic=topic, skip_reason=reason)
+            json_path = review_dir / "voi-scout.json"
+            json_path.write_text(json.dumps(payload, indent=2) + "\n")
+            return PremiseScoutResult(True, payload["skip_reason"], None, json_path, None)
+    bin_path = _resolve_cursor_agent_bin()
+    md_path = review_dir / "premise-scout.md"
+    json_path = review_dir / "voi-scout.json"
+    if not bin_path:
+        payload = _scout_skip_payload(
+            fork=fork, topic=topic, skip_reason="cursor-agent not installed"
+        )
+        json_path.write_text(json.dumps(payload, indent=2) + "\n")
+        return PremiseScoutResult(True, payload["skip_reason"], None, json_path, None)
+
+    packet = context_path.read_text(errors="replace")
+    if len(packet) > PREMISE_SCOUT_CONTEXT_CAP:
+        packet = packet[:PREMISE_SCOUT_CONTEXT_CAP] + "\n\n[... packet truncated for scout ...]"
+
+    prompt = PREMISE_SCOUT_PROMPT.format(
+        fork=fork or topic,
+        question=question,
+        packet=packet,
+    )
+    cmd = [
+        bin_path,
+        "-p",
+        "--mode",
+        "ask",
+        "--trust",
+        "--model",
+        scout_model,
+        "--workspace",
+        str(project_dir.resolve()),
+        "--output-format",
+        "text",
+    ]
+    print(
+        f"[premise-scout] cursor-agent workspace={project_dir} fork={fork or topic!r}",
+        file=sys.stderr,
+    )
+    try:
+        proc = subprocess.run(
+            cmd,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            timeout=effective_timeout,
+            cwd=str(project_dir),
+        )
+    except subprocess.TimeoutExpired:
+        payload = _scout_skip_payload(
+            fork=fork, topic=topic, skip_reason=f"timeout after {effective_timeout}s"
+        )
+        json_path.write_text(json.dumps(payload, indent=2) + "\n")
+        return PremiseScoutResult(True, payload["skip_reason"], None, json_path, None)
+
+    stdout = (proc.stdout or "").strip()
+    stderr = (proc.stderr or "").strip()
+    if proc.returncode != 0 or not stdout:
+        reason = stderr[:500] or f"exit {proc.returncode}"
+        payload = _scout_skip_payload(fork=fork, topic=topic, skip_reason=reason)
+        json_path.write_text(json.dumps(payload, indent=2) + "\n")
+        return PremiseScoutResult(True, reason, None, json_path, None)
+
+    md_path.write_text(stdout + "\n")
+    parsed = _extract_json_block(stdout)
+    if parsed is None:
+        parsed = {
+            "fork": fork or topic,
+            "uncertainty": question,
+            "voi_actions": [],
+            "conviction_after": "unknown",
+            "recommendation": "proceed",
+            "parse_warning": "no json fence in scout output",
+        }
+    parsed.setdefault("fork", fork or topic)
+    parsed["skipped"] = False
+    json_path.write_text(json.dumps(parsed, indent=2) + "\n")
+    conviction = str(parsed.get("conviction_after") or "unknown")
+    return PremiseScoutResult(False, None, md_path, json_path, conviction)
 
 
 def context_content_path(value: Path | ContextArtifact) -> Path:
@@ -563,7 +1165,7 @@ def _call_llmx(
             output_path=output_path,
             schema=schema,
             overrides=overrides,
-            # Transport is owned by the profile (api_only on the DispatchProfile).
+            # Transport is owned by the profile (auth on DispatchProfile).
             # Do NOT pass api_only here — a hardcode re-states/overrides the
             # profile and silently breaks CLI-transport profiles (composer_review
             # → cursor → was routed to the OpenAI API → 404). The dispatch default
@@ -623,6 +1225,7 @@ def rerun_axis_with_fallback(
     review_dir: Path,
     ctx_file: Path | ContextArtifact,
     prompt: str,
+    budget: DispatchBudget | None = None,
 ) -> dict:
     """Retry the rate-limited primary Gemini (arch) axis on the cross-provider
     adversarial fallback (gpt-5.5 since 2026-06-07; 3.1-pro retired from
@@ -634,6 +1237,14 @@ def rerun_axis_with_fallback(
         file=sys.stderr,
     )
     api_kwargs = dict(axis_def.get("api_kwargs") or {})  # type: ignore[arg-type]
+    profile_timeout = _axis_profile_timeout(axis)
+    if budget is not None and not budget.can_start(profile_timeout):
+        return {
+            "exit_code": 1,
+            "size": 0,
+            "latency": 0,
+            "error": "budget exhausted before fallback retry",
+        }
     return _call_llmx(
         provider="google",
         model=GEMINI_FALLBACK_MODEL,
@@ -651,19 +1262,20 @@ def rerun_gpt_axis_via_subscription(
     review_dir: Path,
     ctx_file: Path | ContextArtifact,
     prompt: str,
+    budget: DispatchBudget | None = None,
 ) -> dict:
     """Retry a GPT axis that hit API billing/quota via the ChatGPT SUBSCRIPTION
-    transport (llmx CLI `--lite bare` -> codex-cli, $0). The default dispatch uses
+    transport (llmx CLI `--subscription` -> codex-cli, $0). The default dispatch uses
     api_only=True (metered API); when that path is billing-exhausted, the paid-API
     outage would otherwise silently degrade the review to single-model. Subprocess
-    (not the in-process llmx.api) because `--lite` is a CLI-only route. Fires only
+    (not the in-process llmx.api) because subscription routing is CLI-only. Fires only
     on failure; bounded by a timeout — if it also fails we are no worse off."""
     import subprocess
 
     out_path = review_dir / f"{axis}-output.md"
     print(
         f"warning: {axis} GPT API billing/quota failure; retrying once via ChatGPT "
-        f"subscription (llmx --lite bare, $0)",
+        f"subscription (llmx --subscription, $0)",
         file=sys.stderr,
     )
     cmd = [
@@ -671,8 +1283,7 @@ def rerun_gpt_axis_via_subscription(
         "chat",
         "-m",
         model,
-        "--lite",
-        "bare",
+        "--subscription",
         "-e",
         "high",
         "-f",
@@ -681,8 +1292,17 @@ def rerun_gpt_axis_via_subscription(
         str(out_path),
         prompt,
     ]
+    sub_timeout = 660
+    if budget is not None:
+        if not budget.can_start(sub_timeout):
+            return {
+                "exit_code": 1,
+                "size": 0,
+                "latency": 0,
+                "error": "budget exhausted before subscription retry",
+            }
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=660)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=sub_timeout)
         size = out_path.stat().st_size if out_path.exists() else 0
         ok = r.returncode == 0 and size > 0
         return {
@@ -710,6 +1330,7 @@ def build_context(
     *,
     context_file_specs: list[str] | None = None,
     budget_limit_override: int | None = None,
+    premise_scout_path: Path | None = None,
 ) -> dict[str, ContextArtifact]:
     """Assemble shared context packet with goals/governance preamble.
 
@@ -722,6 +1343,22 @@ def build_context(
     """
     preamble_blocks, _ = build_review_preamble_blocks(project_dir)
     packet_sections = [PacketSection("Preamble", preamble_blocks)]
+
+    if premise_scout_path and premise_scout_path.exists():
+        packet_sections.append(
+            PacketSection(
+                "Premise Scout (repo-grounded)",
+                [
+                    TextBlock(
+                        str(premise_scout_path),
+                        premise_scout_path.read_text(),
+                        priority=350,
+                        drop_if_needed=False,
+                        metadata={"path": str(premise_scout_path), "role": "premise_scout"},
+                    )
+                ],
+            )
+        )
 
     if context_file:
         packet_sections.append(
@@ -820,6 +1457,7 @@ def dispatch(
     question: str,
     has_governance: bool,
     question_overrides: dict[str, str] | None = None,
+    budget: DispatchBudget | None = None,
 ) -> dict:
     """Fire N llmx API calls in parallel (one per axis), wait, return results."""
     today = date.today().isoformat()
@@ -853,7 +1491,10 @@ def dispatch(
         axis_def = AXES[axis]
         profile_name = str(axis_def["profile"])
         profile_def = dispatch_core.PROFILES[profile_name]
+        profile_timeout = profile_def.timeout
         out_path = review_dir / f"{axis}-output.md"
+        if budget is not None and not budget.can_start(profile_timeout):
+            return axis, _budget_skipped_axis(axis, review_dir, budget, profile_timeout)
         context_artifact = ctx_files[axis]
         result = _call_llmx(
             provider=profile_def.provider,
@@ -862,6 +1503,7 @@ def dispatch(
             context_manifest_path=context_manifest_path(context_artifact),
             prompt=prompts[axis],
             output_path=out_path,
+            timeout=profile_timeout,
         )
         entry = {
             "label": axis_def["label"],
@@ -893,6 +1535,7 @@ def dispatch(
                 review_dir,
                 ctx_files[axis],
                 prompts[axis],
+                budget=budget,
             )
             entry["model"] = GEMINI_FALLBACK_MODEL
             entry["exit_code"] = fallback_result["exit_code"]
@@ -922,6 +1565,7 @@ def dispatch(
                 review_dir,
                 ctx_files[axis],
                 prompts[axis],
+                budget=budget,
             )
             entry["model"] = f"{profile_def.model} (subscription)"
             entry["exit_code"] = sub_result["exit_code"]
@@ -941,10 +1585,13 @@ def dispatch(
         "axes": axis_names,
         "queries": len(axis_names),
     }
+    wait_timeout = (
+        budget.wait_timeout() if budget is not None else PARALLEL_DISPATCH_WAIT_DEFAULT
+    )
     with ThreadPoolExecutor(max_workers=len(axis_names)) as pool:
         futures = {pool.submit(_run_axis, axis): axis for axis in axis_names}
         try:
-            for future in as_completed(futures, timeout=720):
+            for future in as_completed(futures, timeout=wait_timeout):
                 axis, entry = future.result()
                 results[axis] = entry
         except TimeoutError:
@@ -964,6 +1611,120 @@ def dispatch(
                         "size": 0,
                         "failure_reason": "thread_timeout",
                     }
+
+    results["elapsed_seconds"] = round(time.time() - t0, 1)
+    return results
+
+
+def dispatch_cross_talk(
+    review_dir: Path,
+    ctx_files: dict[str, Path],
+    axis_names: list[str],
+    question: str,
+    has_governance: bool,
+    question_overrides: dict[str, str] | None = None,
+    budget: DispatchBudget | None = None,
+) -> dict:
+    """Sequential cross-talk: structure lenses first, then mechanism with injected assumptions."""
+    structure_axes, mechanism_axes, other_axes = split_axes_by_lens(axis_names)
+    if not structure_axes or not mechanism_axes:
+        return dispatch(
+            review_dir,
+            ctx_files,
+            axis_names,
+            question,
+            has_governance,
+            question_overrides,
+            budget=budget,
+        )
+
+    t0 = time.time()
+    results: dict = {
+        "review_dir": str(review_dir),
+        "axes": axis_names,
+        "queries": len(axis_names),
+        "cross_talk": True,
+    }
+    skip_keys = {"review_dir", "axes", "queries", "elapsed_seconds", "cross_talk"}
+
+    struct_result = dispatch(
+        review_dir,
+        ctx_files,
+        structure_axes,
+        question,
+        has_governance,
+        question_overrides,
+        budget=budget,
+    )
+    for key, val in struct_result.items():
+        if key not in skip_keys:
+            results[key] = val
+
+    assumptions = collect_structural_assumptions(review_dir, structure_axes)
+    assumptions_path = write_structural_assumptions_artifact(review_dir, assumptions)
+    results["structural_assumptions"] = str(assumptions_path)
+    if assumptions:
+        print(
+            f"Cross-talk: {len(assumptions)} structural assumptions → mechanism passes",
+            file=sys.stderr,
+        )
+    else:
+        results["cross_talk_degraded"] = True
+        print(
+            "warning: --cross-talk enabled but no structural assumptions parsed; "
+            "mechanism passes run without injected context (cross_talk_degraded=true)",
+            file=sys.stderr,
+        )
+
+    injection = format_cross_talk_injection(assumptions)
+    mech_overrides = dict(question_overrides or {})
+    for axis in mechanism_axes:
+        base = mech_overrides.get(axis, question)
+        mech_overrides[axis] = base + injection
+
+    if mechanism_axes:
+        if budget is not None and not any(
+            budget.can_start(_axis_profile_timeout(axis)) for axis in mechanism_axes
+        ):
+            print(
+                "warning: dispatch budget exhausted before mechanism cross-talk phase; "
+                "skipping mechanism axes",
+                file=sys.stderr,
+            )
+            for axis in mechanism_axes:
+                results[axis] = _budget_skipped_axis(
+                    axis,
+                    review_dir,
+                    budget,
+                    _axis_profile_timeout(axis),
+                )
+        else:
+            mech_result = dispatch(
+                review_dir,
+                ctx_files,
+                mechanism_axes,
+                question,
+                has_governance,
+                mech_overrides,
+                budget=budget,
+            )
+            for key, val in mech_result.items():
+                if key not in skip_keys:
+                    results[key] = val
+
+    if other_axes:
+        other_result = dispatch(
+            review_dir,
+            ctx_files,
+            other_axes,
+            question,
+            has_governance,
+            question_overrides,
+            budget=budget,
+        )
+        for key, val in other_result.items():
+            if key not in skip_keys:
+                results[key] = val
 
     results["elapsed_seconds"] = round(time.time() - t0, 1)
     return results
@@ -1044,6 +1805,9 @@ def write_coverage_artifact(
             {
                 "axis": axis,
                 "label": info.get("label"),
+                "cell": (AXIS_CELLS.get(axis) or {}).get("cell"),
+                "family": (AXIS_CELLS.get(axis) or {}).get("family"),
+                "lens": (AXIS_CELLS.get(axis) or {}).get("lens"),
                 "requested_model": info.get("requested_model"),
                 "model": info.get("model"),
                 "exit_code": info.get("exit_code"),
@@ -1173,6 +1937,7 @@ def _flag_uncalibrated_thresholds(text: str) -> str:
 def extract_claims(
     review_dir: Path,
     dispatch_result: dict,
+    budget: DispatchBudget | None = None,
 ) -> str | None:
     """Cross-family extraction: Flash extracts GPT outputs, GPT-Instant extracts Gemini outputs.
 
@@ -1211,6 +1976,14 @@ def extract_claims(
     def _extract_one(task: tuple[str, Path, str]) -> tuple[str, list[dict] | None]:
         axis, output_path, profile = task
         profile_def = dispatch_core.PROFILES[profile]
+        profile_timeout = profile_def.timeout
+        if budget is not None and not budget.can_start(profile_timeout):
+            print(
+                f"warning: extraction for {axis} skipped — "
+                f"{profile_timeout}s needed, {budget.remaining():.0f}s left",
+                file=sys.stderr,
+            )
+            return axis, None
         extraction_path = review_dir / f"{axis}-extraction.json"
         result = _call_llmx(
             provider=profile_def.provider,
@@ -1220,6 +1993,7 @@ def extract_claims(
             prompt=EXTRACTION_PROMPT,
             output_path=extraction_path,
             schema=FINDING_SCHEMA,
+            timeout=profile_timeout,
         )
         if result["exit_code"] != 0:
             print(
@@ -1907,6 +2681,90 @@ def verify_claims(
     return str(out_path)
 
 
+def run_preflight() -> int:
+    """Probe llmx CLI (info + subscription dry-run). Import is optional."""
+    import shutil
+    import subprocess
+
+    checks: dict = {}
+    llmx_bin = shutil.which("llmx")
+    checks["llmx_cli"] = {"ok": bool(llmx_bin), "path": llmx_bin}
+    if not llmx_bin:
+        print(json.dumps(checks, indent=2))
+        return 1
+
+    try:
+        import llmx  # type: ignore
+
+        checks["llmx_import"] = {
+            "ok": True,
+            "version": getattr(llmx, "__version__", "?"),
+            "python": sys.executable,
+            "optional": True,
+        }
+    except ImportError as exc:
+        checks["llmx_import"] = {
+            "ok": False,
+            "optional": True,
+            "error": str(exc),
+            "python": sys.executable,
+            "note": "CLI probes are authoritative; import only needed for llm_dispatch API path",
+        }
+
+    info = subprocess.run(
+        [llmx_bin, "info", "--json"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    checks["llmx_info"] = {"ok": info.returncode == 0, "exit_code": info.returncode}
+    if info.returncode == 0:
+        try:
+            checks["routing"] = json.loads(info.stdout)
+        except json.JSONDecodeError:
+            checks["routing_parse"] = {"ok": False}
+    else:
+        checks["llmx_info_stderr"] = (info.stderr or "")[:500]
+
+    dry = subprocess.run(
+        [
+            llmx_bin,
+            "chat",
+            "--dry-run",
+            "--subscription",
+            "-m",
+            "claude-opus-4-8",
+            "-e",
+            "max",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    checks["dry_run_subscription"] = {
+        "ok": dry.returncode == 0,
+        "exit_code": dry.returncode,
+        "stderr": (dry.stderr or "").strip()[:400],
+    }
+    if dry.returncode == 0:
+        try:
+            checks["dry_run_plan"] = json.loads(dry.stdout)
+        except json.JSONDecodeError:
+            pass
+
+    out = Path(".model-review/preflight-latest.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(checks, indent=2) + "\n")
+    print(json.dumps(checks, indent=2))
+
+    oks = [
+        v["ok"]
+        for k, v in checks.items()
+        if isinstance(v, dict) and "ok" in v and k != "llmx_import"
+    ]
+    return 0 if oks and all(oks) else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Model-review dispatch: context assembly + parallel llmx + output collection",
@@ -1926,7 +2784,9 @@ def main() -> int:
         help="Auxiliary file:range specs (e.g., plan.md scripts/ir.py:86-110). Additive with --context.",
     )
     parser.add_argument(
-        "--topic", required=True, help="Short topic label (used in output dir name)"
+        "--topic",
+        default="preflight",
+        help="Short topic label (used in output dir name)",
     )
     parser.add_argument(
         "--project",
@@ -1944,8 +2804,9 @@ def main() -> int:
     )
     parser.add_argument(
         "--axes",
-        default="standard",
-        help="Comma-separated axes or preset name (standard, deep, full). Default: standard",
+        default=None,
+        help="Comma-separated axes or preset (standard, cross2, deep). "
+        "Omit to take preset/axes from --dispatch-manifest.",
     )
     parser.add_argument("--allow-non-gpt", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument(
@@ -1960,9 +2821,63 @@ def main() -> int:
         help="After extraction, verify cited files/symbols exist. Implies --extract.",
     )
     parser.add_argument(
+        "--cross-talk",
+        action="store_true",
+        help="Sequential cross-talk: run structure lenses first, inject structural_assumptions "
+        "into mechanism passes (cross2/cross4). Default remains parallel.",
+    )
+    parser.add_argument(
         "--questions",
         type=Path,
         help="JSON file mapping axis names to custom questions (overrides positional question per-axis)",
+    )
+    parser.add_argument(
+        "--preflight",
+        action="store_true",
+        help="Probe llmx import/info/subscription dry-run and exit (no review dispatch).",
+    )
+    parser.add_argument(
+        "--scout",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Premise scout (default on). Manifest or --no-scout overrides.",
+    )
+    parser.add_argument(
+        "--context-scope",
+        choices=["repo", "packet"],
+        default=None,
+        help="repo=scout may grep workspace. packet=packet-only review.",
+    )
+    parser.add_argument(
+        "--dispatch-manifest",
+        type=Path,
+        default=None,
+        help="review_gate triage output (dispatch.json) — policy fields when CLI omits them.",
+    )
+    parser.add_argument(
+        "--irreversible",
+        action="store_true",
+        help="Load-bearing review: block adjudication if executed scout returns conviction=low.",
+    )
+    parser.add_argument(
+        "--force-scout",
+        action="store_true",
+        help="Proceed to adjudication even when --irreversible and scout conviction=low.",
+    )
+    parser.add_argument(
+        "--fork",
+        help="Named design fork for premise scout (default: --topic).",
+    )
+    parser.add_argument(
+        "--budget-seconds",
+        type=int,
+        default=None,
+        metavar="SEC",
+        help=(
+            "Optional orchestrator wall-clock cap (scout+dispatch+extract). "
+            "No limit by default. When set: skip any call whose full profile "
+            "timeout cannot fit in remaining time — never truncate timeouts."
+        ),
     )
     parser.add_argument(
         "question",
@@ -1972,6 +2887,9 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+
+    if args.preflight:
+        return run_preflight()
 
     project_dir = args.project or Path.cwd()
     if not project_dir.is_dir():
@@ -1990,6 +2908,38 @@ def main() -> int:
         print(f"error: context file {args.context} not found", file=sys.stderr)
         return 1
 
+    if args.dispatch_manifest:
+        if not args.dispatch_manifest.is_file():
+            print(
+                f"error: dispatch manifest {args.dispatch_manifest} not found",
+                file=sys.stderr,
+            )
+            return 1
+        manifest = apply_dispatch_manifest(args, args.dispatch_manifest)
+        schema_err = validate_dispatch_schema(manifest)
+        if schema_err:
+            print(f"error: {schema_err}", file=sys.stderr)
+            return 1
+        if manifest.get("schema_version") is None:
+            print(
+                "warning: dispatch manifest missing schema_version (pre-v1); "
+                "re-run review_gate triage",
+                file=sys.stderr,
+            )
+        print(f"note: dispatch policy from {args.dispatch_manifest}", file=sys.stderr)
+        blockers = dispatch_manifest_blockers(manifest)
+        if blockers:
+            for blocker in blockers:
+                print(f"error: {blocker}", file=sys.stderr)
+            return 1
+
+    if args.scout is None:
+        args.scout = True
+    if args.context_scope is None:
+        args.context_scope = "repo"
+    if args.axes is None:
+        args.axes = "standard"
+
     # Resolve axes
     try:
         axis_names = resolve_axes(args.axes, allow_non_gpt=bool(args.allow_non_gpt))
@@ -2003,16 +2953,74 @@ def main() -> int:
 
     args.question = _rewrite_underspecified_prompt(args.question, args.topic)
 
-    print(
-        f"Dispatching {len(axis_names)} queries: {', '.join(axis_names)}",
-        file=sys.stderr,
-    )
-
-    # Create output directory
+    # Create output directory (scout writes here before context assembly)
     slug = slugify(args.topic)
     hex_id = os.urandom(3).hex()
     review_dir = Path(f".model-review/{date.today().isoformat()}-{slug}-{hex_id}")
     review_dir.mkdir(parents=True, exist_ok=True)
+
+    budget = DispatchBudget.from_seconds(args.budget_seconds)
+    if budget.active:
+        print(
+            f"note: dispatch budget {args.budget_seconds}s — "
+            "axes skip if profile timeout cannot fit",
+            file=sys.stderr,
+        )
+
+    premise_scout_path: Path | None = None
+    scout_result: PremiseScoutResult | None = None
+    primary_context = args.context
+    run_scout = should_run_premise_scout(
+        scout=bool(args.scout),
+        context_scope=args.context_scope,
+        has_context=bool(primary_context),
+    )
+    if args.scout and args.context_scope == "packet":
+        print(
+            "note: --context-scope packet — repo premise scout disabled (packet-only)",
+            file=sys.stderr,
+        )
+    elif args.scout and not primary_context and args.context_files:
+        print(
+            "warning: --scout needs --context (narrative packet); skipping premise scout",
+            file=sys.stderr,
+        )
+    elif run_scout and primary_context:
+        scout_result = run_premise_scout(
+            review_dir=review_dir,
+            project_dir=project_dir,
+            context_path=primary_context,
+            topic=args.topic,
+            question=args.question,
+            fork=args.fork,
+            budget=budget,
+        )
+        if scout_result.markdown_path:
+            premise_scout_path = scout_result.markdown_path
+            print(
+                f"Premise scout complete → {premise_scout_path} "
+                f"(conviction={scout_result.conviction})",
+                file=sys.stderr,
+            )
+        elif scout_result.skip_reason:
+            print(
+                f"warning: premise scout skipped ({scout_result.skip_reason}); "
+                f"see {scout_result.json_path}",
+                file=sys.stderr,
+            )
+
+    gate_exit = check_scout_conviction_gate(
+        scout_result,
+        irreversible=bool(args.irreversible),
+        force=bool(args.force_scout),
+    )
+    if gate_exit is not None:
+        return gate_exit
+
+    print(
+        f"Dispatching {len(axis_names)} queries: {', '.join(axis_names)}",
+        file=sys.stderr,
+    )
 
     # Assemble context
     ctx_files = build_context(
@@ -2021,6 +3029,7 @@ def main() -> int:
         args.context,
         axis_names,
         context_file_specs=args.context_files,
+        premise_scout_path=premise_scout_path,
     )
 
     governance_path = find_governance(project_dir)
@@ -2040,26 +3049,63 @@ def main() -> int:
             )
             return 1
 
-    # Dispatch and wait
-    result = dispatch(
+    # Dispatch and wait (parallel default; --cross-talk for structure→mechanism injection)
+    dispatch_fn = dispatch_cross_talk if args.cross_talk else dispatch
+    if args.cross_talk:
+        structure_axes, mechanism_axes, _ = split_axes_by_lens(axis_names)
+        if not structure_axes or not mechanism_axes:
+            print(
+                "warning: --cross-talk needs both structure and mechanism lenses; "
+                "falling back to parallel dispatch",
+                file=sys.stderr,
+            )
+            dispatch_fn = dispatch
+    result = dispatch_fn(
         review_dir,
         ctx_files,
         axis_names,
         args.question,
         bool(governance_path),
         question_overrides,
+        budget=budget,
     )
-    failures = collect_dispatch_failures(result, ctx_files)
-    if failures:
-        failure_path = review_dir / "dispatch-failures.json"
-        failure_path.write_text(json.dumps({"failures": failures}, indent=2) + "\n")
-        result["dispatch_failures"] = str(failure_path)
-        result["failed_axes"] = [failure["axis"] for failure in failures]
+    if budget.active:
+        rem = budget.remaining()
+        result["budget_seconds"] = args.budget_seconds
+        result["budget_remaining_seconds"] = round(rem, 1) if rem is not None else 0.0
+    effective_policy = build_effective_policy(args)
+    if args.dispatch_manifest:
+        effective_policy["dispatch_manifest"] = str(args.dispatch_manifest)
+    receipt_path = write_execution_receipt(
+        review_dir,
+        axis_names=axis_names,
+        dispatch_result=result,
+        effective_policy=effective_policy,
+    )
+    result["execution_receipt"] = str(receipt_path)
+    receipt = json.loads(receipt_path.read_text())
+    if receipt["overall"] != "complete":
         print(
-            f"error: model-review dispatch produced unusable outputs for "
-            f"{', '.join(result['failed_axes'])}; see {failure_path}",
+            f"error: dispatch incomplete (overall={receipt['overall']}); "
+            f"see {receipt_path}",
             file=sys.stderr,
         )
+    if scout_result and scout_result.json_path:
+        result["premise_scout"] = str(scout_result.json_path)
+        if scout_result.markdown_path:
+            result["premise_scout_md"] = str(scout_result.markdown_path)
+    failures = collect_dispatch_failures(result, ctx_files)
+    if failures or receipt["overall"] != "complete":
+        if failures:
+            failure_path = review_dir / "dispatch-failures.json"
+            failure_path.write_text(json.dumps({"failures": failures}, indent=2) + "\n")
+            result["dispatch_failures"] = str(failure_path)
+            result["failed_axes"] = [failure["axis"] for failure in failures]
+            print(
+                f"error: model-review dispatch produced unusable outputs for "
+                f"{', '.join(result['failed_axes'])}; see {failure_path}",
+                file=sys.stderr,
+            )
         print(json.dumps(result, indent=2))
         return 2
 
@@ -2067,7 +3113,7 @@ def main() -> int:
 
     # Optional extraction phase
     if do_extract:
-        disposition_path = extract_claims(review_dir, result)
+        disposition_path = extract_claims(review_dir, result, budget=budget)
         coverage_path = review_dir / "coverage.json"
         if coverage_path.exists():
             result["coverage"] = str(coverage_path)

@@ -1,6 +1,6 @@
 ---
 name: dataset-register
-description: "Register staged dataset in per-topic catalog with provenance, variables, access state, quirks. Use after /data-acquisition, adding a source to a topic, or formalizing an ad-hoc entry."
+description: "Use when: after /data-acquisition, formalize staged dataset in topic catalog (provenance, variables, quirks). NOT downloading (/data-acquisition)."
 user-invocable: true
 argument-hint: "<topic> <dataset-id>"
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit]

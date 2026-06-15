@@ -1,6 +1,6 @@
 ---
 name: corpus
-description: "Canonical local store for source bytes + parses + citation graph + annotations. 'check corpus store', 'cite something', 'find contradicting citations', 'has any repo already seen this DOI'."
+description: "Use when: corpus cite/attest, 'has repo seen this DOI', contradicting citations. Local source store — NOT web literature (/research)."
 user-invocable: true
 argument-hint: '[doi | pmid | paper_id | "stats"]'
 allowed-tools: [Bash, Read]

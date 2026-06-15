@@ -1,6 +1,6 @@
 ---
 name: brainstorm
-description: Divergent ideation via systematic perturbation — denial cascades, domain forcing, constraint inversion. Multi-model dispatch optional (volume, not diversity). For convergent critique, use /model-review.
+description: "Use when: /brainstorm, divergent design space, denial/domain/constraint perturbation. Optional multi-model volume. NOT convergent review (/critique) or decisions (/decide)."
 argument-hint: "[--quick|--deep] [--axes denial,domain,constraint] [--domains 'jazz, geology, ...'] [--n-ideas N] design space to explore"
 effort: high
 allowed-tools:

@@ -1,6 +1,6 @@
 ---
 name: analyze
-description: "Reusable reasoning lenses: null/base-rate, causal attribution, DAG adjustment, ACH hypotheses, weakest-link audit, and decision-impact stop. Use for why/root-cause/regression/confounder/anomaly questions when a project workflow needs sharper reasoning. Local only."
+description: "Use when: why/root-cause, confounder, regression, ACH, DAG adjustment, weakest-link. Lenses: null, causal, dag, hypotheses, audit, stop. NOT ideation (/brainstorm)."
 user-invocable: true
 argument-hint: "[lens] [question or target]"
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit]

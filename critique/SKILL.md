@@ -1,6 +1,6 @@
 ---
 name: critique
-description: "Adversarial review of plans, designs, findings, and closeouts. Modes: model (Gemini+GPT), verify (fact-check), close (post-impl tests). 'review plan', 'what's wrong', 'fact-check'. For reviewing a code DIFF, use /code-review instead — critique owns the design/plan/findings layer, not the diff layer."
+description: "Use when: /critique, 'review plan', 'what's wrong', fact-check plans/findings/closeout. Modes: model, verify, close. NOT code diffs (/code-review) — critique owns design/plan layer."
 user-invocable: true
 argument-hint: <mode> [target]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent]
@@ -24,13 +24,18 @@ Unless the user explicitly says compatibility matters, treat the target change a
 | Mode | Trigger | What it does |
 |------|---------|-------------|
 | `model` | Default, or explicit `/critique model [topic]` | Adversarial cross-model review via Gemini + GPT |
+| `audit-plan` | `/critique audit-plan [topic]` or large repo audit + remediation plan in context | Lean critique after multi-lane inventory — see `lenses/repo-audit-plan-review.md` |
 | `verify` | `/critique verify <report>` | Fact-check LLM findings against actual code |
 | `close` | `/critique close` | Post-implementation: tests, review, caught-red-handed loop |
 
 **Auto-routing (when no mode specified):**
 - Recent plan in `.claude/plans/` with commits since plan start → `close`
-- Recent findings/audit output in context → `verify`
+- Audit backlog (≥15 open items) + remediation plan in context, with or without fresh lane outputs → `audit-plan`
+- Recent findings/audit output in context (no plan) → `verify`
+- Git diff / PR / "review this diff" in context → `/code-review` (Composer default) OR `model` with `--axes standard,composer` when not using the scout
 - Otherwise → `model`
+
+**Mode: audit-plan** — see `lenses/repo-audit-plan-review.md`. Repo-scale audits: parallel readonly lanes first (orchestrator omits clusters); lean 2-critic pass after verify; commit synthesis to `docs/audit/`.
 
 ---
 
@@ -40,13 +45,13 @@ Unless the user explicitly says compatibility matters, treat the target change a
 
 See `lenses/adversarial-review.md` for full dispatch methodology, axis descriptions, depth presets, per-model prompts, and known issues.
 
-**Cosigner routing (inverted 2026-05-24 — operator empirical).** Default pairing: **Gemini 3.5 Flash + GPT-5.5** for full-weight adversarial pressure. `gemini-3.5-flash` (stable GA, ~3× Flash pricing, supports `--search` for grounded fact-checking) empirically outperforms `gemini-3.1-pro-preview` on critique/synthesis in this workflow. The Pro model is the runner-up — use only when its specific strengths (ARC-AGI-2, raw GPQA Diamond, video understanding) actually dominate the task; request it via `legacy_pro_review` profile or explicit `-m gemini-3.1-pro-preview`. Do **not** substitute base `gemini-3-flash-preview` for adversarial work — it's the cheap-classification slot, not a critique cosigner.
+**Cosigner routing (inverted 2026-05-24 — operator empirical).** Default per subpart: **2× Gemini (`arch`+`gaps`) + 2× GPT-medium (`correctness`+`contracts`)** via `standard` preset — not one Gemini + one GPT-high. Add `composer`/`claude`/`formal` as opt-in cosigners on the subparts that need them.
 
-**Opt-in third cosigner — Claude Opus 4.8 (`claude` axis).** For a genuinely third training family, add the `claude` axis: `/critique model --axes arch,formal,claude`. It dispatches `claude-opus-4-8` via llmx's `anthropic-direct` provider (direct Anthropic API, not OpenRouter). Deliberately NOT in `standard`/`deep`/`full` presets — request it explicitly, and always alongside a GPT axis (axis-resolution requires ≥1 GPT-backed axis, so `--axes claude` alone is rejected by design). Use when cross-family diversity is worth the Opus cost; for routine reviews the Gemini+GPT pairing is the default.
+**Opt-in third cosigner — Claude Opus 4.8 (`claude` axis).** `/critique model --axes standard,claude` per subpart.
 
-**Opt-in cheap cosigner — Cursor Composer 2.5 (`composer` axis).** A genuinely different lineage (Cursor's own model) on the Cursor app subscription: `/critique model --axes arch,formal,composer`. Dispatches `composer-2.5` via llmx's `cursor` transport (`llmx chat -m composer-2.5` → `cursor-agent` headless ask-mode). **Validated** on the cross-lab injected-defect benchmark (evals/cross_lab_review/COMPOSER_ARM_RESULTS.md, 2026-06-14): frontier-equal correctness — 11/11 clean catches matching Opus/GPT/Gemini. **Cost:** usage-metered, not flat-free — draws from your Cursor "Auto + Composer" included-usage pool (near-zero while it lasts), then ~$0.01/review usage-billed; still well under the Opus axis. Caveats: it's an *agent* (no temperature/seed; ~25-30s/call, slower than the API arms) and tends to **enumerate-and-hedge** (surfaces spec ambiguity well, but can list a mechanism without firmly asserting the bug — read its verdicts for commitment, not just mention; the axis prompt now pushes it to commit). Same axis-resolution rule as `claude` (pair with a GPT axis). Use it as the cheap third-lineage option when you want diversity without the Opus cost.
+**Opt-in cheap cosigner — Cursor Composer 2.5 (`composer` axis).** `/critique model --axes standard,composer` per subpart when reviewing a **plan/design packet** (not the diff — use `/code-review` for diffs). Dispatches `composer-2.5` via llmx's `cursor` transport. Validated frontier-equal on injected-defect review (11/11). Usage-metered Cursor pool. Pair with a GPT axis if using `composer` alone (axis-resolution rule).
 
-> **The llmx-transport Claude axis stays on Opus 4.8 — do not switch *that* axis to Fable 5.** Over llmx, Fable costs 2×, returns only summarized CoT, and review prompts that say "explain your analysis / show your reasoning" trip Fable's `reasoning_extraction` classifier → silent fallback to Opus 4.8 anyway (and the `anthropic-direct` llmx key may be billing-exhausted for Fable entirely — exit 6). So for the script-dispatched `claude` axis, Opus 4.8 is correct + cheaper. This is a *transport* limit, not a verdict on Fable's review ability.
+> **The llmx-transport Claude axis stays on Opus 4.8 — do not switch *that* axis to Fable 5.** Over llmx, Fable costs 2×, returns only summarized CoT, and review prompts that say "explain your analysis / show your reasoning" trip Fable's `reasoning_extraction` classifier → silent fallback to Opus 4.8 anyway. The `claude` axis routes via `claude_review` → llmx `anthropic` + `--subscription` (claude-cli); never anthropic-direct/API by default. So for the script-dispatched `claude` axis, Opus 4.8 is correct + cheaper. This is a *transport* limit, not a verdict on Fable's review ability.
 
 **Opt-in fourth axis — Fable 5 via SUBAGENT (`fable-subagent`), for critical subparts only.** The ONLY working path to Fable's raw reasoning is the **Agent tool** (`Agent(model:"fable")`, subscription auth) — NOT llmx (billing-dead + downshifts). `model-review.py` is a subprocess and cannot spawn subagents, so this axis is **orchestrator-driven**: the agent running `/critique` dispatches a Fable subagent *alongside* the script and merges its findings into synthesis. Use it sparingly — only on the **critical subparts** of a session (a load-bearing migration, an identity/correctness invariant, a security-sensitive diff), where Fable's edge over Flash/GPT is real (measured 2026-06-10: obscure domain knowledge, multi-hop/split reasoning). Dispatch RESPONSE-ONLY (read-only tools, return findings text; do NOT ask it to "show reasoning" — keep the prompt verdict-shaped to avoid the classifier trip even on the subagent path). Pattern:
 > ```
@@ -92,12 +97,84 @@ Common review biases — check your context for these before analysis:
 | **Missing project identity** in cross-project reviews | Models apply principles too literally to unfamiliar projects | Include 2-3 line identity per project |
 | **Missing scope declaration** — not stating target users and designed-for scale | Models assume personal/small when reviewing shared infra, or assume production when reviewing prototypes | Always include scope block (see above) |
 
+### 1.5 Decompose into subparts (default — do this before dispatch)
+
+**One mega-packet is the expensive failure mode.** Split the review into 2–4 **subparts**
+(independent file clusters, plan phases, or concerns), then run the standard 4-axis pass
+(**2× Gemini + 2× GPT-medium**) on each subpart separately. Merge findings after.
+
+| Subpart split heuristic | Example |
+|-------------------------|---------|
+| By plan phase / vertical slice | "Phase 2 gateway" vs "Phase 3 consumer migration" |
+| By directory / module cluster | `scripts/knowledge/` vs `migrations/` |
+| By concern when diff is huge | "Schema change" vs "call-site updates" |
+| By risk tier | Load-bearing invariant subpart first |
+
+**Per subpart dispatch** (standard = 2× Gemini + 2× GPT @ medium, **overlapping full-review
+mandate** — each pass covers architecture AND bugs; lenses differ, territories don't):
+
+```bash
+# Build a tight packet for ONE subpart only (<80KB context ideal)
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
+  --repo "$(pwd)" --file path/a.py --file path/b.py \
+  --output .model-review/subpart-1-context.md
+
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
+  --context .model-review/subpart-1-context.md \
+  --topic "$TOPIC — subpart 1: gateway outbox" \
+  --project "$(pwd)" \
+  --axes standard \
+  --extract \
+  "Adversarial review of THIS subpart only. Do not speculate about files not in context."
+```
+
+Repeat for subpart 2…N. **Synthesize across subparts** in the orchestrating session (you merge;
+the script does not auto-merge multi-subpart runs).
+
+**When to add axes beyond standard:**
+- `formal` — math, Bayes/stats, proofs, formal invariants (`--axes standard,formal`)
+- `composer` — cheap third lineage on diffs (`--axes standard,composer`)
+- `claude` — Opus third family on high-stakes only
+
+**Effort policy:** GPT **medium** on `correctness` + `contracts` (standard). GPT **high** only on
+`formal` (opt-in). Gemini stays on `deep_review` for `arch` + `gaps`. Do not escalate effort
+because the topic "feels important" — escalate because the **subpart class** is formal/math-dense.
+
+### 1.5 VOI premise scout (default on — disable for packet-only)
+
+`model-review.py` runs a **repo-grounded premise scout** by default before packet-only axes.
+
+**Disable repo context** when the packet is self-contained:
+
+```bash
+# Default: scout greps repo to falsify premises
+model-review.py --context plan.md --project $(pwd) --axes standard ...
+
+# Packet-only: single file, clear req/res, no repo needed
+model-review.py --context-scope packet --context one-file.md ...
+# or: --no-scout
+```
+
+| Flag | Meaning |
+|------|---------|
+| `--scout` / `--no-scout` | Default **on**. `--no-scout` = skip repo scout |
+| `--context-scope repo` | Default — scout may use workspace |
+| `--context-scope packet` | No repo scout (context-free / single-file) |
+| `--irreversible` | Block axes if executed scout returns `conviction=low` |
+| `--force-scout` | Bypass that gate |
+
+ADR: `agent-infra/decisions/2026-06-15-voi-sequenced-review.md`
+
 ### 2. Dispatch
 
 **Always use the script.** It handles: context assembly, goals/governance preamble injection, parallel dispatch to Gemini + GPT via the shared dispatch core, extraction, and disposition generation.
 
 ```bash
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
+  --repo . --packet .model-review/packet.md --budget-seconds 480
+
 uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
+  --dispatch-manifest .model-review/dispatch.json \
   --context context.md \
   --topic "$TOPIC" \
   --project "$(pwd)" \
@@ -107,28 +184,38 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
 
 Set `timeout: 660000` on the Bash tool call. See `references/dispatch.md` for `--questions`, `--context-files`, depth presets, effort levels, and troubleshooting.
 
+**Dispatch policy (manifest-first):** `review_gate triage` writes `dispatch_policy` into `dispatch.json` (scout, context_scope, budget). Pass `--dispatch-manifest` to `model-review.py`; explicit CLI flags still win.
+
 **Model-specific prompting:** Before assembling context, consult `/model-guide` for per-model rules. Key: GPT-5.5 context should use XML `<doc>` tags, Gemini query goes at END. See `references/dispatch.md § Context Formatting` for the full checklist.
 
-**Effort levels:** Routine reviews: **2× GPT-5.5 `medium` with split lenses over 1× `high`** at ≈ the same spend — one query pressures correctness/arithmetic of the change itself, the other contracts/interfaces/migration. Rationale: on the one measured effort head-to-head, critique quality was effort-INSENSITIVE (Fable low ≈ high on verdicts/anchors/proposals at 0.34× tokens — anim-workbench `.claude/evals/2026-06-12-fable-effort-architecture/`; only design-SYNTHESIS separated), while diverse lenses measurably surface different findings. The GPT-medium leg is mechanism-extrapolated (no GPT-effort-on-critique probe yet — medium is the model default); revoke to single-`high` on the first missed finding attributable to depth. Keep `high` for the formal axis on math/structure-dense changes; `xhigh` only for formal math verification. See `references/dispatch.md § Reasoning Effort Selection`.
+**Effort levels:** Default per subpart: **2× Gemini (`arch`+`gaps`) + 2× GPT-5.5 `medium`
+(`correctness`+`contracts`)** — four parallel narrow passes beat one `high` mega-query at ≈ the same
+or lower cost. Critique quality is effort-insensitive at medium vs high for non-formal work
+(anim-workbench 2026-06-12). Reserve `formal` (GPT **high**) for math/Bayes/proof/invariant
+subparts only. See `references/dispatch.md § Reasoning Effort Selection`.
 
-**GPT-only multi-query pattern:** For deep dives, dispatch 2-3 GPT-5.5 queries in parallel with different questions each (`medium` each per the reallocation above; `high` when a single axis is formal-math), rather than one mega-query. More signal per unit time.
+**Multi-lens pattern:** Built into `standard` preset — do not collapse to a single GPT `formal` pass
+unless the subpart is formal-class.
 
 #### Depth Presets
 
 | Preset | Axes | When |
 |--------|------|------|
-| `standard` (default) | arch (Gemini) + formal (GPT-5.5) | Most reviews |
-| `--axes deep` | arch + formal + domain + mechanical | Structural changes, domain-dense |
-| `--axes full` | all 5 | Shared infra, clinical, high-stakes |
+| `standard` (default) | arch + gaps (Gemini) + correctness + contracts (GPT medium) | Most reviews — **per subpart** |
+| `--axes standard,formal` | + formal (GPT high) | Math/stats/proof/invariant subparts |
+| `--axes deep` | standard + domain + mechanical | Structural + domain-dense |
+| `--axes full` | deep + alternatives | Shared infra, clinical, high-stakes |
+| `--axes standard,composer` | + composer (Cursor) | Plan/design third lineage — **not** closeout diff (use `/code-review`) |
 
-User-facing presets are `standard`, `deep`, and `full`; each includes GPT-5.5.
-Non-GPT axis sets are internal-only and rejected by the default CLI contract.
+`formal`, `composer`, and `claude` are opt-in add-ons. Run `standard` on each subpart; merge in session.
 
-**Genomics classification review** (monthly or after >10 commits to LR-engine/scoring): Use `--axes formal,domain`. GPT-5.5 found 11 conceptual/mathematical bugs for $6.54 — the only detector for incoherent Bayes.
+**Genomics classification review** (monthly or after >10 commits to LR-engine/scoring): Use
+`--axes standard,formal,domain` on LR/math subparts. GPT formal/high found 11 conceptual/mathematical
+bugs — the detector for incoherent Bayes.
 
-### 3. Read Both Outputs and Synthesize
+### 3. Read All Axis Outputs and Synthesize
 
-Read both review outputs. You are the merger — you have both in context and can cross-reference directly.
+Read all axis outputs (4 on standard, more if deep/full). You are the merger — cross-reference directly.
 
 **For each finding from either model:**
 1. **Verify code claims** — read the actual file. Models frequently cite wrong line numbers, invent function names.
@@ -261,21 +348,45 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
 
 Do not rely on auto-discovered touched-file scope when the worktree is already clean or the relevant changes were committed earlier in the session. In that case, build an explicit review scope packet with the concrete files under review. Otherwise `/critique close` can silently review an empty packet and produce useless output.
 
+**Phase 0b: Deterministic triage (required)** — routing + blockers, no LLM:
+```bash
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
+  --repo "$(pwd)" \
+  --packet .model-review/plan-close-context.md \
+  --mode close
+```
+Read `.model-review/dispatch.json`. **Stop on blockers** (oversize packet, dead refs, missing `verified-disposition.md` at close). Follow `layers.diff` → code-review only; `layers.design` → critique only.
+
 **Phase 1: Write Tests for New Code** — Identify new functions from plan commits. Write unit tests covering happy path, edge cases, error paths, and contract invariants.
 
-**Phase 2: Two-layer review — vendor pipeline for the diff, cross-model for the design.**
+**Phase 2: Two-layer review — one pass per layer (partition enforced).**
 
-*Diff layer:* run the built-in `/code-review high` (Skill tool; `xhigh` on risk) over the plan's
-commits — its multi-angle finder/verifier pipeline owns diff-level correctness. Dispatch WITHOUT
-`--fix`; the executing session owns commits. (Verified 2026-06-12: built-in skills are invocable
-via the Skill tool from any session context; `low` runs inline, `high`+ fans out.)
+*Diff layer (once):* run **`/code-review high`** over the plan's commits. Composer is this
+skill's default provider (`cursor-agent`) — do **not** also add a `composer` critique axis on
+the same diff. Validate scout findings against code; do NOT auto-commit fixes.
+For recall mode use `--all-providers` on the diff scope only.
 
-*Design layer:* run `/critique model` on the plan-close review packet (not a hand-written summary).
-Use `--context .model-review/plan-close-context.md --extract --verify`. Fact-check and disposition
-every finding. Inspect `coverage.json` before closing so you can see packet drops, axis coverage,
-and verification totals. Include one reviewer instruction to **RUN the changed code paths before
-verdicts** (execution-grounded review — live execution caught 3 real bugs that offline tests +
-packet review both missed, `live-execution-is-the-integration-verifier`).
+*Design layer (once):* run `/critique model --axes standard` per subpart on the plan-close
+review packet (not the raw diff). Use `--context .model-review/plan-close-context.md --extract --verify`.
+The packet manifest's `review_targets` names `diff_target` (code-review) vs `design_target`
+(critique) — respect it; do not re-review diff content in the design pass.
+Fact-check and disposition every finding. Inspect `coverage.json` before closing so you can see packet
+drops, axis coverage, and verification totals. Include one reviewer instruction to **RUN the changed
+code paths before verdicts** (execution-grounded review — live execution caught 3 real bugs that offline
+tests + packet review both missed, `live-execution-is-the-integration-verifier`).
+
+**Phase 2b: Rank + inconclusive (deterministic, after `--extract --verify`)** — shrink orchestrator load:
+```bash
+REVIEW_DIR=.model-review/<topic-hash>  # from model-review output
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py rank --review-dir "$REVIEW_DIR"
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py inconclusive --review-dir "$REVIEW_DIR" --repo "$(pwd)"
+```
+Implement from `orchestrator-top.json` (top 8, cross-model first). If `escalation-recommendation.json`
+exists → re-run `cross4` on same packet (auto-detected at rank; no manual re-triage).
+INCONCLUSIVE rows with `resolved_deterministic: true` are deprioritized.
+
+Optional on cross2 subparts: add `--cross-talk` to `model-review.py` — structure pass first,
+mechanism pass gets `structural-assumptions.json` injection.
 
 **Never pass `"close"` (or `"review"`, `"verify"`, bare verbs) as the positional prompt.** The script now detects these as slash-command leakage and substitutes a structured adversarial template (with a stderr warning), but a concrete question tailored to the plan — e.g., `"Find bugs in the new signal-merging logic introduced by $(git log -1 --format=%h); focus on boundary conditions and silent semantic failures"` — produces sharper output than the generic substitute.
 
@@ -286,6 +397,23 @@ pytest tests/test_<new>.py -x  # should FAIL
 git stash pop
 pytest tests/test_<new>.py -x  # should PASS
 ```
+
+**Phase 3.5: Integration audit (required before closeout commit)** — deterministic gate that the
+diff did not implement findings marked HALLUCINATED in `verified-disposition.md`:
+```bash
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/integration_audit.py \
+  --review-dir .model-review/<topic-hash> \
+  --repo "$(pwd)" \
+  --plan .claude/plans/<plan>.md
+```
+Exit 1 = stop; do not commit. Warnings = inspect manually. No LLM — joins review artifacts to git diff.
+
+**Phase 3.6: Outcome link (after fix commits)** — tie CONFIRMED findings to git commits:
+```bash
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/outcome_link.py \
+  --repo "$(pwd)" --review-dir "$REVIEW_DIR" --since HEAD~30
+```
+Writes `outcome-link.json` (`linked_anchor` = evidence-grade; `linked_file` = weak candidate only).
 
 **Phase 4: Close the Plan** — Commit tests, update plan status, run `validate-code`, summarize findings.
 
@@ -328,5 +456,6 @@ pytest tests/test_<new>.py -x  # should PASS
 - **[2026-06-03] Cross-repo reviews — pass `--sibling-roots` or the HALLUCINATED rate lies.** The `--verify` pass resolved anchors only against `--project`. On a cross-repo packet (e.g. a genomics↔phenome bridge review where half the diff lives in phenome), every sibling-repo anchor was marked HALLUCINATED — a 5-axis bridge review hit **50.8% "hallucinated", and 2 of the 3 real bugs were in the sibling repo**, nearly buried. **FIXED:** `_resolve_reference` now also resolves against explicitly-passed `--sibling-roots` (exact + basename, tagged `exact_sibling`/`basename_sibling`); default empty so single-repo reviews are unchanged. When a close/model review spans repos, pass `--sibling-roots ~/Projects/phenome` (repeatable). Until then, treat HALLUCINATED on a cross-repo packet as "verify manually against the sibling," not "discard."
 - **[2026-06-09] Code-symbol citations inflated HALLUCINATED — 3rd anchor-inflation class.** Findings citing a SYMBOL as if it were a file (`GenomeObserver.observe()`, `_VcfRecord`, `parse_variant_key()`) miss every file-resolution branch and got marked HALLUCINATED. A genomics close hit ~38% "hallucinated" that was really ~10% (the rest real findings citing real symbols). **FIXED:** `_resolve_reference`, before declaring `missing`, detects a code-symbol reference (dotted identifier, optional `()`, non-source suffix) and greps `def`/`class <leaf>` across `*.py/*.ts/*.tsx/*.js` under project + sibling roots; a definition hit returns `symbol_def`, treated as anchor-confirmed (the def existing IS the grounding; a symbol's "line" is meaningless). Until fully trusted, treat HALLUCINATED on a method/class/function citation as "grep for the def," not "discard."
 - **[2026-06-10] PLAN reviews need ≥1 repo-access axis — packet-only reviewers critique the design; tool-having reviewers falsify the premises.** Evo behavior-tables plan: 3 packet-only axes (Gemini 3.5 Flash, GPT-5.5, Opus 4.8) produced solid design-level corrections — and all 3 missed that the plan's Phase-3 conversion target had ZERO production dispatch sites (dead parallel implementation), that a cited scenario-ID join didn't exist in the doc, and that the proposed compression already existed as a helper. The Fable SUBAGENT axis (repo tools, grepped dispatch sites) found all three, verdict REJECT; every claim verified. Rule: when reviewing a PLAN (not a diff — diffs carry their own ground truth), dispatch at least one axis with repo access (fable-subagent pattern, or any Agent-tool reviewer with Read/Grep), and tell it to verify the plan's premises (do the named functions have callers? do the cited join keys exist on BOTH sides?) before critiquing the design. Packets can never disprove "the code this plan converts is alive." *Second confirmation (2026-06-10, emb elevation plan): 24 packet-only findings (Gemini 3.5 Flash + GPT-5.5) missed both falsifiable premises — a "live caller" that was behind a never-passed flag (dormant LateChunker) and an overfetch hack justified by a stale comment (emb filters pre-ranking); the Fable repo-axis caught both plus a dead integration target (intel relevant_methods.py, zero invocations). Two-for-two on the same day.*
+- **[2026-06-15] Repo-scale audit plans — lanes before packet-only critics; verify before trust.** Genomics lingering-bugs: orchestrator + 8 parallel lanes found load-bearing seams (`execution_plan` ≠ `freshness_verdict`, wrapper finalize) that packet-only 4-axis missed or drowned in noise (76 findings). Rule: `/critique audit-plan` requires repo-premise evidence before lean critics — parallel readonly lanes on first pass (or fresh lane manifest from same session), lane-partition completeness check, mechanical merge with lane-count manifest, then verify decision-dependent claims, then 2 orthogonal critics (sequencing + premise-soundness). Invariant: **no packet-only critic judges a repo-scale plan whose premises are unverified.** Parallel lanes are mandatory on first audit pass because orchestrator context omits module clusters — not replaceable by `build_plan_close_context.py` on unknown scope. llmx Claude: `llmx chat --subscription -m claude-opus-4-8` (API key in env without `--subscription` → "Credit balance too low"); critics run in background — orchestrator inspects task output and kills manually; no skill-prescribed `--timeout`. Commit convergence to `docs/audit/`; `.model-review/` stays gitignored.
 
 $ARGUMENTS

@@ -1,6 +1,6 @@
 ---
 name: verify-before
-description: "Probe before acting, check status before claiming, predict before seeing outcomes. Modes: probe (validate on tiny slice), status (query live ground truth), preregister (lock prediction + decision rule before an experiment/eval reveals its result). Use for 'dry run', 'verify', 'check status', 'pre-register', before expensive pipelines, worked/crashed claims, or experiments/benchmarks."
+description: "Use when: dry-run before expensive work, 'did it work/crash', live status probe, pre-register prediction before results. Modes: probe, status, preregister. NOT eval design (/eval) or adversarial review (/critique)."
 user-invocable: true
 argument-hint: "[probe|status|preregister] [target]"
 allowed-tools: [Read, Glob, Grep, Bash, Write]
@@ -112,6 +112,33 @@ Example:
   "sven-sv (ap-iKJpvDa1) is_running=true, uptime_seconds=834,
    verified_at=2026-04-18T19:40Z. No fatal signals in last 80 lines."
 ```
+
+### Step 2: Composer interpret (optional, default ON for multi-signal triage)
+
+After fetching structured ground truth, you may need to **interpret** ambiguous signals
+(stack traces, partial logs, conflicting fields). Do NOT paraphrase from memory — pass the
+raw structured payload to Composer with a tight output contract:
+
+```bash
+# Write fetched ground truth to a file first (never inline a huge blob in the prompt)
+cat > /tmp/status-ground-truth.json <<'EOF'
+{paste structured fields from modal-triage / duckdb / BashOutput here}
+EOF
+
+uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
+  --profile composer_review \
+  --context /tmp/status-ground-truth.json \
+  --prompt "Interpret this ground truth. Output JSON only: {\"status\": running|crashed|completed|stalled|unknown, \"confidence\": high|low, \"evidence_fields\": [\"...\"], \"recommended_next_probe\": \"...\"}. Cite field names from the input — no invented uptime or exit codes." \
+  --output /tmp/status-interpret.md
+```
+
+**Rules:**
+- Composer interprets **fetched** data only — if you skipped Step 1 (fetch), do not run Step 2.
+- When `confidence` is `low`, run the `recommended_next_probe` before claiming status.
+- The human-facing claim must still cite the **structured fields**, not Composer's paraphrase alone.
+
+Skip Step 2 when ground truth is already unambiguous (single boolean `is_running`, explicit
+`state=stopped`, zero exit code with empty queue).
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: census-data
-description: "Census Data API + IPUMS extract patterns (ACS, CPS, SIPP, QWI, decennial, USA microdata). Use for state/county aggregates, microdata extracts, immigrant shares, earnings-by-group, Card/Borjas-style panels."
+description: "Use when: ACS/CPS/IPUMS/QWI extracts, county/state aggregates, immigrant/earnings panels. Census API patterns. NOT generic dataset staging (/data-acquisition alone)."
 user-invocable: true
 argument-hint: "[acs|cps|qwi|sipp|ipums] <geography-or-extract>"
 allowed-tools: [Read, Glob, Grep, Bash, Write, WebFetch]

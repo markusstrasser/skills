@@ -5,6 +5,7 @@ import contextlib
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -256,10 +257,7 @@ class CallLlmxTest(unittest.TestCase):
         self.assertNotIn("additionalProperties", str(fmt))
 
     def test_call_llmx_honors_cli_transport_for_composer(self) -> None:
-        """A CLI-transport profile (composer_review, api_only=False) must NOT be
-        forced onto the API path. Regression guard: _call_llmx previously
-        hardcoded api_only=True, which routed composer-2.5 to the OpenAI API
-        → 404. The profile owns its transport; the dispatcher honors it."""
+        """CLI-transport profiles must keep auth=subscription from the profile."""
         captured = {}
         def capture_chat(**kwargs):
             captured.update(kwargs)
@@ -279,14 +277,12 @@ class CallLlmxTest(unittest.TestCase):
                     timeout=10,
                 )
         self.assertEqual(captured.get("provider"), "cursor")
-        # api_only resolves to the profile's own value (False) — NOT forced True.
-        self.assertFalse(captured.get("api_only"),
-                         "composer (CLI transport) must not be forced to api_only=True")
+        self.assertEqual(captured.get("auth"), "subscription",
+                         "composer must use profile auth=subscription")
+        self.assertEqual(captured.get("mode"), "chat")
 
-    def test_call_llmx_keeps_api_only_for_api_profiles(self) -> None:
-        """The other direction: API-backed profiles (gpt_general, api_only=True)
-        still get api_only=True so they skip CLI fallback latency. Honoring the
-        profile must not regress the API path."""
+    def test_call_llmx_keeps_api_auth_for_api_profiles(self) -> None:
+        """API-backed profiles keep auth=api (skip CLI fallback latency)."""
         captured = {}
         def capture_chat(**kwargs):
             captured.update(kwargs)
@@ -305,13 +301,59 @@ class CallLlmxTest(unittest.TestCase):
                     context_path=ctx, prompt="test", output_path=out,
                     timeout=10,
                 )
-        self.assertTrue(captured.get("api_only"),
-                        "API profiles must keep api_only=True (skip CLI fallback)")
+        self.assertEqual(captured.get("auth"), "api",
+                        "API profiles must keep auth=api")
+        self.assertEqual(captured.get("mode"), "chat")
+
+    def test_call_llmx_honors_cli_transport_for_claude(self) -> None:
+        """claude_review must route via auth=subscription, not metered API."""
+        captured = {}
+        def capture_chat(**kwargs):
+            captured.update(kwargs)
+            resp = MagicMock()
+            resp.content = "ok"
+            resp.latency = 0.1
+            return resp
+
+        with tempfile.TemporaryDirectory() as td:
+            ctx = Path(td) / "ctx.md"
+            ctx.write_text("context")
+            out = Path(td) / "out.md"
+            with patched_llmx_chat(capture_chat):
+                model_review._call_llmx(
+                    provider="anthropic", model="claude-opus-4-8",
+                    context_path=ctx, prompt="test", output_path=out,
+                    timeout=10,
+                )
+        self.assertEqual(captured.get("provider"), "anthropic")
+        self.assertEqual(captured.get("auth"), "subscription",
+                         "claude must use profile auth=subscription")
+        self.assertEqual(captured.get("mode"), "chat")
 
 
 class AxisResolutionTest(unittest.TestCase):
     def test_standard_preset_is_gpt_inclusive(self) -> None:
-        self.assertEqual(model_review.resolve_axes("standard"), ["arch", "formal"])
+        axes = model_review.resolve_axes("standard")
+        self.assertEqual(axes, ["arch", "gaps", "correctness", "contracts"])
+        self.assertTrue(any(model_review.axis_uses_gpt(a) for a in axes))
+
+    def test_cross2_preset_diagonal(self) -> None:
+        axes = model_review.resolve_axes("cross2")
+        self.assertEqual(axes, ["arch", "correctness"])
+        self.assertEqual(model_review.AXIS_CELLS["arch"]["cell"], "S_G")
+        self.assertEqual(model_review.AXIS_CELLS["correctness"]["cell"], "M_P")
+
+    def test_cross4_matches_standard_geometry(self) -> None:
+        self.assertEqual(
+            model_review.resolve_axes("cross4"),
+            model_review.resolve_axes("standard"),
+        )
+
+    def test_lens2_alias_cross2(self) -> None:
+        self.assertEqual(
+            model_review.resolve_axes("lens2"),
+            model_review.resolve_axes("cross2"),
+        )
 
     def test_simple_preset_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "simple"):
@@ -328,6 +370,38 @@ class AxisResolutionTest(unittest.TestCase):
             model_review.resolve_axes("arch,domain,alternatives", allow_non_gpt=True),
             ["arch", "domain", "alternatives"],
         )
+
+
+class StructuralAssumptionsTest(unittest.TestCase):
+    def test_parse_structural_assumptions_bullets(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "arch-output.md"
+            p.write_text(
+                "### Structural assumptions:\n"
+                "- Callers exist for every gateway entrypoint\n"
+                "- Join keys match on both sides of the outbox\n"
+                "\n## 9. Other\n"
+            )
+            got = model_review.parse_structural_assumptions(p)
+            self.assertEqual(len(got), 2)
+            self.assertIn("Callers exist", got[0])
+
+    def test_collect_assumptions_empty_without_section(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            rd = Path(td)
+            (rd / "arch-output.md").write_text("## 1. No assumptions section\n")
+            self.assertEqual(model_review.collect_structural_assumptions(rd, ["arch"]), [])
+
+    def test_format_cross_talk_injection(self) -> None:
+        inj = model_review.format_cross_talk_injection(["premise A", "premise B"])
+        self.assertIn("premise A", inj)
+        self.assertIn("STRUCTURAL ASSUMPTIONS", inj)
+
+    def test_split_axes_by_lens(self) -> None:
+        s, m, o = model_review.split_axes_by_lens(["arch", "correctness", "formal"])
+        self.assertEqual(s, ["arch"])
+        self.assertEqual(m, ["correctness"])
+        self.assertEqual(o, ["formal"])
 
 
 class UnderspecifiedPromptTest(unittest.TestCase):
@@ -837,6 +911,206 @@ class ModelReviewContextBuildTest(unittest.TestCase):
             dropped = manifest["packet_metadata"]["budget_enforcement"]["dropped_blocks"]
             self.assertEqual(dropped, [])
             self.assertIn(str(context_file), shared_ctx.content_path.read_text())
+
+
+class PremiseScoutTest(unittest.TestCase):
+    def test_run_premise_scout_skips_without_binary(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            review_dir = Path(td) / "run"
+            review_dir.mkdir()
+            project = Path(td) / "proj"
+            project.mkdir()
+            ctx = project / "plan.md"
+            ctx.write_text("# plan\nconvert foo() everywhere")
+            with patch.object(model_review, "_resolve_cursor_agent_bin", return_value=None):
+                result = model_review.run_premise_scout(
+                    review_dir=review_dir,
+                    project_dir=project,
+                    context_path=ctx,
+                    topic="foo conversion",
+                    question="verify callers",
+                )
+            self.assertTrue(result.skipped)
+            self.assertIsNone(result.conviction)
+            self.assertTrue(result.json_path and result.json_path.exists())
+            data = json.loads(result.json_path.read_text())
+            self.assertTrue(data.get("skipped"))
+            self.assertIsNone(data.get("conviction_after"))
+
+    def test_check_scout_conviction_gate_blocks_low_irreversible(self) -> None:
+        scout = model_review.PremiseScoutResult(
+            skipped=False,
+            skip_reason=None,
+            markdown_path=Path("/tmp/x.md"),
+            json_path=Path("/tmp/x.json"),
+            conviction="low",
+        )
+        self.assertEqual(
+            model_review.check_scout_conviction_gate(
+                scout, irreversible=True, force=False
+            ),
+            3,
+        )
+        self.assertIsNone(
+            model_review.check_scout_conviction_gate(
+                scout, irreversible=True, force=True
+            )
+        )
+        self.assertIsNone(
+            model_review.check_scout_conviction_gate(
+                scout, irreversible=False, force=False
+            )
+        )
+
+    def test_check_scout_gate_ignores_skipped(self) -> None:
+        scout = model_review.PremiseScoutResult(
+            skipped=True,
+            skip_reason="no binary",
+            markdown_path=None,
+            json_path=Path("/tmp/x.json"),
+            conviction=None,
+        )
+        self.assertIsNone(
+            model_review.check_scout_conviction_gate(
+                scout, irreversible=True, force=False
+            )
+        )
+
+    def test_build_context_includes_premise_scout(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            review_dir = Path(td) / "run"
+            review_dir.mkdir()
+            project = Path(td) / "proj"
+            project.mkdir()
+            ctx = project / "plan.md"
+            ctx.write_text("plan body")
+            scout_md = review_dir / "premise-scout.md"
+            scout_md.write_text("## Premises checked\n- foo has zero callers")
+            ctx_files = model_review.build_context(
+                review_dir,
+                project,
+                ctx,
+                ["arch"],
+                premise_scout_path=scout_md,
+            )
+            text = ctx_files["arch"].content_path.read_text()
+            self.assertIn("Premise Scout", text)
+            self.assertIn("zero callers", text)
+
+    def test_should_run_premise_scout(self) -> None:
+        self.assertTrue(
+            model_review.should_run_premise_scout(
+                scout=True, context_scope="repo", has_context=True
+            )
+        )
+        self.assertFalse(
+            model_review.should_run_premise_scout(
+                scout=True, context_scope="packet", has_context=True
+            )
+        )
+        self.assertFalse(
+            model_review.should_run_premise_scout(
+                scout=False, context_scope="repo", has_context=True
+            )
+        )
+
+    def test_extract_json_block(self) -> None:
+        text = 'intro\n```json\n{"fork": "x", "conviction_after": "high"}\n```\n'
+        parsed = model_review._extract_json_block(text)
+        self.assertEqual(parsed["conviction_after"], "high")
+
+
+class DispatchBudgetTest(unittest.TestCase):
+    def test_no_budget_allows_all(self) -> None:
+        budget = model_review.DispatchBudget.from_seconds(None)
+        self.assertFalse(budget.active)
+        self.assertTrue(budget.can_start(600))
+
+    def test_skip_when_remaining_less_than_profile(self) -> None:
+        budget = model_review.DispatchBudget(
+            deadline_mono=time.monotonic() + 90,
+        )
+        self.assertFalse(budget.can_start(600))
+
+    def test_start_when_remaining_fits_profile(self) -> None:
+        budget = model_review.DispatchBudget(
+            deadline_mono=time.monotonic() + 650,
+        )
+        self.assertTrue(budget.can_start(600))
+
+    def test_wait_timeout_uses_remaining(self) -> None:
+        budget = model_review.DispatchBudget(
+            deadline_mono=time.monotonic() + 100,
+        )
+        self.assertGreaterEqual(budget.wait_timeout(), 95)
+        self.assertLessEqual(budget.wait_timeout(), 100)
+
+    def test_apply_dispatch_manifest(self) -> None:
+        import argparse
+
+        manifest = {
+            "dispatch_policy": {
+                "premise_scout": False,
+                "context_scope": "packet",
+                "budget_seconds": 300,
+            },
+            "layers": {"design": {"axes": "cross2"}},
+            "preset": "cross4",
+        }
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump(manifest, f)
+            path = Path(f.name)
+        try:
+            args = argparse.Namespace(
+                scout=None,
+                context_scope=None,
+                budget_seconds=None,
+                irreversible=False,
+                cross_talk=False,
+                axes=None,
+            )
+            model_review.apply_dispatch_manifest(args, path)
+            self.assertFalse(args.scout)
+            self.assertEqual(args.context_scope, "packet")
+            self.assertEqual(args.budget_seconds, 300)
+            self.assertEqual(args.axes, "cross2")
+        finally:
+            path.unlink()
+
+    def test_dispatch_manifest_blockers(self) -> None:
+        blockers = model_review.dispatch_manifest_blockers(
+            {"blockers": ["dead refs in packet: foo.py"]}
+        )
+        self.assertEqual(len(blockers), 1)
+
+    def test_resolved_axis_timeout_scales_high(self) -> None:
+        formal_timeout = model_review._resolved_axis_timeout("formal")
+        self.assertGreaterEqual(formal_timeout, 600)
+
+    def test_write_execution_receipt_partial(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            rd = Path(tmp)
+            dispatch_result = {
+                "arch": {"exit_code": 0, "size": 100, "model": "gemini"},
+                "gaps": {
+                    "exit_code": 1,
+                    "size": 0,
+                    "failure_reason": "budget_exhausted",
+                    "budget_remaining_seconds": 30,
+                    "profile_timeout": 600,
+                },
+                "elapsed_seconds": 12.3,
+            }
+            path = model_review.write_execution_receipt(
+                rd,
+                axis_names=["arch", "gaps"],
+                dispatch_result=dispatch_result,
+                effective_policy={"axes": "cross2"},
+            )
+            receipt = json.loads(path.read_text())
+            self.assertEqual(receipt["schema_version"], model_review.EXECUTION_RECEIPT_SCHEMA_VERSION)
+            self.assertEqual(receipt["overall"], "partial")
+            self.assertEqual(receipt["axes"]["gaps"]["status"], "skipped_budget")
 
 
 if __name__ == "__main__":

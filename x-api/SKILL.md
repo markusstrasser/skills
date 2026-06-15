@@ -1,6 +1,6 @@
 ---
 name: x-api
-description: "X (Twitter) API v2 pay-per-use client — paginated user-tweets pull, cost-tracked Bearer auth, server-side cashtag extraction. Use when monitoring a curated set of finance/research accounts for ticker mentions and material claims. Cost: $0.005/post-read, $0.010/user-read."
+description: "Use when: monitoring curated X accounts, cashtags, finance tweet pulls. Paid API ($/post). NOT general search (/research)."
 user-invocable: true
 argument-hint: "[probe USERNAME | pull --config FILE]"
 allowed-tools: [Read, Glob, Grep, Bash, Write]

@@ -1,7 +1,7 @@
 ---
 name: research-ops
 disable-model-invocation: true
-description: "Use when: 'compile memos into article', 'what's not in training data', 'dispatch parallel audit', or running the research generate/execute lanes. Knowledge compilation, training-data diff, research-specific loop lanes. For one-shot research questions use /research; the loop CONDUCTOR is /improve maintain."
+description: "Use when: 'compile memos', training-data diff, parallel research dispatch, generate/execute lanes. NOT one-shot questions — use /research. Loop conductor: /improve maintain."
 user-invocable: true
 argument-hint: <mode> [topic]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent, WebSearch, WebFetch]

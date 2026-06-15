@@ -1,6 +1,6 @@
 ---
 name: upgrade
-description: "Full codebase audit, Gemini+GPT (inventory→plan→review→implement). 'audit codebase', 'find bugs'. Not /critique or /observe."
+description: "Use when: /upgrade, full codebase audit (inventory→plan→implement). Multi-model. NOT plan critique only (/critique) or session retro (/observe)."
 user-invocable: true
 argument-hint: <mode> [project or target]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent]

@@ -2,6 +2,61 @@
 
 # Dispatch Mechanics
 
+## Default economics: presets + subparts
+
+**Presets** (see `model-review.py` PRESETS):
+
+| Preset | Geometry | When |
+|--------|----------|------|
+| `standard` | 2×2 / 4 lenses (CLI default until ROUTING_VERDICT) | Legacy / closeout |
+| `cross2` / `lens2` | diagonal S_G + M_P | Routine design (triage recommends; not CLI default yet) |
+| `cross4` / `lens4` | full 2×2 grid | Governance, multi-repo, INCONCLUSIVE≥3, **contradictory anchors** |
+
+1. **Split** the review into 2–4 subparts (phases, directories, risk tiers).
+2. **Run `review_gate.py triage`** → `dispatch.json` includes `preset`, `dispatch_policy`
+   (scout/scope/budget), and `preset_reasons`.
+3. **Per subpart**, dispatch from triage:
+   ```bash
+   model-review.py --dispatch-manifest .model-review/dispatch.json \
+     --context packet.md --topic "..." "Review"
+   ```
+   CLI flags override manifest fields when explicitly passed.
+   - Optional: `--cross-talk` on cross2/cross4 — structure lenses first, inject
+     `structural-assumptions.json` into mechanism passes (sequential; default parallel).
+4. **Merge** findings across subparts.
+
+`arch` / `correctness` prompts include folded gaps/contracts checklists. Separate `gaps`/`contracts` axes remain for `standard`/`cross4` until ablation promotes `cross2`.
+
+Smaller packets → fewer tokens → lower cost. Split lenses → more findings than one mega-pass.
+
+**Deterministic gate (run before dispatch):** `review_gate.py triage` reads the packet
+manifest + git diff, writes `.model-review/dispatch.json` (layers, blockers, token budget).
+
+**VOI premise scout (default on):** runs unless `--no-scout` or `--context-scope packet`
+(single-file / clear req-res / context-free). `--irreversible` gates on executed
+`conviction=low`; skip ≠ low. See `decisions/2026-06-15-voi-sequenced-review.md`.
+
+**Orchestrator wall-clock budget (opt-in):** `--budget-seconds SEC` — no limit by default.
+When set: skip scout/axis/extract if `remaining < profile.timeout` (full job or nothing;
+never truncate). Skipped axes → `budget_exhausted`; `execution-receipt.json` records
+`overall: partial|incomplete_all_skipped` (dispatch exits 2).
+
+`dispatch.json` includes `schema_version: dispatch.v1`. Triage exits **1** on blockers.
+
+```bash
+model-review.py --budget-seconds 480 --context plan.md --topic "gateway" --axes standard,formal "Review"
+```
+
+After review: `review_gate.py rank` → `orchestrator-top.json` + `anchor-contradictions.json`
++ `escalation-recommendation.json` (when contradictory pairs ≥1); `outcome_link.py` uses
+`linked_anchor` (evidence) not file-touch alone; `integration_audit.py` before commit.
+
+**Escalation ontology:** `contradictory_anchors` = cross-family opposite stance on overlapping topic
+(same file + shared entity terms). **Non-overlap** (different issues, same file) does **not** escalate.
+
+Add `--axes standard,formal` only on subparts with math/Bayes/proofs/invariants (GPT **high**).
+Add `composer` or `claude` as third lineage on high-stakes diffs — not instead of the 4-axis core.
+
 ## Shared Dispatch Contract
 
 The review script owns transport, context packing, output files, extraction, and
@@ -47,9 +102,11 @@ Transport/model choices live in `shared/llm_dispatch.PROFILES`. Update that shar
 contract rather than duplicating provider flags in skill docs.
 
 Relevant profiles:
-- `deep_review` for Gemini pattern review
-- `formal_review` for GPT-5.5 reasoning
-- `fast_extract` for mechanical extraction
+- `deep_review` — Gemini `arch` + `gaps` axes
+- `gpt_general` — GPT-5.5 **medium** on `correctness` + `contracts`
+- `formal_review` — GPT-5.5 **high** on opt-in `formal` axis only
+- `mechanical_review` — GPT-5.5 low on `mechanical` (deep/full)
+- `fast_extract` — mechanical extraction elsewhere
 
 The script writes these artifacts:
 - `shared-context.md` / `shared-context.manifest.json`
@@ -93,5 +150,5 @@ Key points:
 
 Use `--extract` for normal user-facing reviews. Use `--extract --verify` for
 plan-close packets or any review that needs an auditable coverage trail with
-checked references. The user-facing presets are `standard`, `deep`, and `full`;
-each includes GPT-5.5. Non-GPT axis sets are internal-only.
+checked references. Default preset `standard` = 2× Gemini + 2× GPT-medium; add
+`formal` explicitly for math-dense subparts.
