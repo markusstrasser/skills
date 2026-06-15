@@ -156,7 +156,14 @@ if match:
 
 # Check file creation claims against filesystem
 for m in FILE_CLAIMS.finditer(msg):
-    filepath = m.group(2).rstrip(".,;)")
+    filepath = m.group(2).strip(chr(34)).rstrip(".,;)")
+    # Skip prose placeholders ("file X", "wrote file Y") — require a real
+    # filename shape (.ext or a path separator). This lexical false-positive
+    # class (witnessed 2026-06-15 on a summary explaining the concept) is what
+    # the semantic stop-smart-judge.sh replaces; tighten the regex so it stops
+    # nagging on prose that merely discusses file-creation claims.
+    if not re.search(r"\.[A-Za-z0-9]{1,6}$|/", filepath):
+        continue
     # Try relative to cwd
     full = os.path.join(cwd, filepath) if not os.path.isabs(filepath) else filepath
     if not os.path.exists(full):
