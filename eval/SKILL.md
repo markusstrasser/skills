@@ -224,6 +224,17 @@ Answer in writing (they become PREREGISTRATION.md fields):
      length preference. **Lesson: see "controlling *a* confound, not *the* confound" in Anti-patterns.**
      Re-run the probe (`evals/bio_embedding_bakeoff/judge_bias_probe.py`) when judges ship — but with
      controls (length ratio ≤2×, truncation controls to separate filler from genuine completeness).
+   - **Judge NOISE BUDGET — a single-trial judged number is PRELIMINARY (distinct from bias).** Even an
+     unbiased judge is STOCHASTIC. *Coin Flip Judge* (`arXiv:2606.13685`, Jun 2026): **13.6% mean
+     single-trial flip rate** (28% of items >20%), cross-judge κ≈0.51, reliability curve needs **~11
+     repeated trials for 95% fidelity**. At N=20–60 that's ~3–8 flipped outcomes per run — enough to
+     reverse a SCREENING rank. So: report the judge-noise budget; for a decision, repeat the judging
+     (≥3) **or** use PPI/PRECISE (`arXiv:2606.05308`: provably-unbiased ranking from ~30 human-gold +
+     a large LLM-judged set, 21% SE cut) to bias-correct. Corollary — *CARE* (`arXiv:2603.00039`): a
+     multi-judge panel is **not independent** (same-lab judges share confounders) → "3 judges = 3 votes"
+     over-states confidence; cross-lab + confounder-aware, never naive averaging. (Lived it: critique_replay
+     used SINGLE-trial gemini+gpt judges, κ=0.667 — right in this paper's band; its detection ranks are
+     screening-only partly for this reason. evidence: `research/2026-06-15-newest-eval-papers.md`.)
 6. **Invariant ambition** — what mechanism-level claim could this eval produce that
    survives a config swap? If only a local verdict is possible, fine — say so up front.
 
