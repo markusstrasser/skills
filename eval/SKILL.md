@@ -464,9 +464,14 @@ third validity pillar; `arXiv:2604.15149` isomorphic verifiers, causal). Adopt:
   unobservable capability; net-new transfers: **(1) Ground-truth-free scoring via PEER PREDICTION** (Qiu et al. ICLR'26
   `arXiv:2601.20299`, Algorithm 1) — score an answer by the PMI between it and *other independent* answers as judged by a
   (possibly weak) jury; incentive-compatible, NO gold, with an **inverse-scaling** bonus (a weak cheap jury grades a
-  STRONGER model better as the capability gap widens). This is the principled unblock for an ungradeable/clean-stratum
-  metric (e.g. critique_replay invention) — *probe `inspect_ai` first*. FAILS under ≥50% correlated/colluding pool, so
-  never score a near-homogeneous panel. **(2) Capability is the LAST-RESORT hypothesis** — Morgan's Canon (comparative
+  STRONGER model better as the capability gap widens). **WIRED + VALIDATED 2026-06-15** (`evalcore.elicit` +
+  `evals/critique_replay/score_invention.py`, a deterministic anchor jury, $0): on a real run the gold-free PP arm
+  ranking was **IDENTICAL to the gold-based detection ordering (Spearman ρ=1.0)** — convergent validity, and it RETIRED
+  the clean-stratum rebuild for ranking. (`inspect_ai` scanned — no built-in scorer; ours is the in-tree primitive.)
+  FAILS under ≥50% correlated/colluding pool — enforced in code by `evalcore.elicit.pool_independence`/`collusion_risk`,
+  never assumed. **Honest bound:** on a defect-heavy set every packet is collusion-flagged so PP ≈ corroboration-weighted
+  detection — it ranks gold-free but doesn't isolate *pure* invention (uncorroborated-but-real); for that, keep a few
+  no-defect probes or the per-finding judge. **(2) Capability is the LAST-RESORT hypothesis** — Morgan's Canon (comparative
   cognition) ≡ "life is last-resort" (astrobiology Ladder criterion 8): a score is evidence of a *capability* only after
   contamination/shortcut/memorization are affirmatively excluded. Make it a NAMED hard gate, not a footnote. **(3) Verdict
   as a graded ARGUMENT** — NASA CoLD scale (7 named confidence gates, post-hoc-confound bar α₂≪α₁) as the confidence axis
@@ -477,6 +482,10 @@ third validity pillar; `arXiv:2604.15149` isomorphic verifiers, causal). Adopt:
   **(5) Anti-Clever-Hans** — a benchmark answerable from a surface cue measures the cue (backs leak-guard from a 2nd field).
   **(6) DIF probe** — flag items where equal-capability models from different FAMILIES diverge (family/format confound);
   cheap, reuses run data. Build-rank + the CoLD×GSN verdict-ladder ADR proposal: see the synthesis memo.
+  **Process reflex (extends Pre-Build #1):** before INVENTING a metric or grading scheme, inventory the measurement
+  sciences (psychometrics, metrology, mechanism design, mech-interp, comparative cognition, astrobiology) for an
+  existing instrument — every net-new transfer above was already a solved problem in some mature field. "We have no
+  way to grade this" almost always means "we haven't checked who grades the unobservable for a living."
 
 **Confirmed by DeepSWE** (datacurve, 2026-06 — independent production coding-agent benchmark, 113
 tasks, frontier 70%→5% spread; `evals/research/2026-06-13-frontier-agentic.md` §Transfer): authored-
