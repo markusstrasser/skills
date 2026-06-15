@@ -63,7 +63,8 @@ class DispatchProfile:
     input_token_limit: int | None = None
     input_token_estimator: str = "heuristic:chars_div_4"
     search: bool = False
-    api_only: bool = True
+    auth: str = "api"  # "api" | "subscription"
+    mode: str = "chat"  # "chat" | "agent" — req/res vs tools/MCP loop
     allowed_overrides: tuple[str, ...] = ("timeout", "reasoning_effort", "max_tokens", "search")
     version: str = "v1"
 
@@ -88,6 +89,8 @@ PROFILES: dict[str, DispatchProfile] = {
         # 2026-05-24: gemini-3.5-flash empirically outperforms
         # gemini-3.1-pro-preview on critique/synthesis in this workflow.
         # Pro stays available via the legacy_pro_review profile.
+        # Cosigner only (2G+2GPT standard) — never sole reviewer; probe
+        # invention risk on clean packets → orchestrator must disposition.
         model="gemini-3.5-flash",
         timeout=300,
         reasoning_effort="high",
@@ -164,20 +167,21 @@ PROFILES: dict[str, DispatchProfile] = {
         input_token_limit=900000,
     ),
     "claude_review": DispatchProfile(
-        # Opt-in third cosigner: Claude Opus 4.8 via the direct Anthropic API
-        # (llmx provider `anthropic-direct`). NOT in the default Gemini+GPT
-        # pairing — request explicitly with `--axes claude` (or add to an axis
-        # list). A genuinely third training family for adversarial diversity.
-        # Note: opus-4-8 deprecates `temperature` and reasoning_effort on the
-        # compat endpoint; llmx omits temperature for anthropic-direct, and we
-        # leave reasoning_effort=None here so it's never sent.
+        # Opt-in third cosigner: Claude Opus 4.8 via Claude Code subscription
+        # (llmx provider `anthropic` → claude-cli transport). NOT in the default
+        # Gemini+GPT pairing — request explicitly with `--axes claude` (or add to
+        # an axis list). A genuinely third training family for adversarial diversity.
+        # auth=subscription → claude-cli OAuth. NEVER auth=api unless caller opts in.
         name="claude_review",
-        intent="Direct-Anthropic Claude Opus 4.8 adversarial review (opt-in cosigner)",
-        provider="anthropic-direct",
+        intent="Claude Opus 4.8 adversarial review via subscription (opt-in cosigner)",
+        provider="anthropic",
         model="claude-opus-4-8",
         timeout=600,
-        max_tokens=16384,
         input_token_limit=200000,
+        auth="subscription",
+        mode="chat",
+        # claude-cli headless has no max_tokens — setting it forces API fallback (billing).
+        allowed_overrides=("timeout",),
     ),
     "composer_review": DispatchProfile(
         # Opt-in cheap cosigner: Cursor Composer 2.5 via the llmx `cursor`
@@ -192,11 +196,35 @@ PROFILES: dict[str, DispatchProfile] = {
         # `timeout` only so a caller can't pass --max-tokens/--search and crash
         # the axis. Composer has no reasoning-effort tiers either (left None).
         name="composer_review",
-        intent="Cursor Composer 2.5 adversarial review (opt-in $0 cosigner)",
+        intent="Cursor Composer 2.5 adversarial review (opt-in cosigner)",
         provider="cursor",
         model="composer-2.5",
         timeout=600,
-        api_only=False,
+        auth="subscription",
+        input_token_limit=120000,
+        allowed_overrides=("timeout",),
+    ),
+    "composer_screen": DispatchProfile(
+        # Fast screening tier — per-repo drift/diff triage, observe candidate pass.
+        name="composer_screen",
+        intent="Cursor Composer 2.5-fast cheap screen (triage only)",
+        provider="cursor",
+        model="composer-2.5-fast",
+        timeout=300,
+        auth="subscription",
+        input_token_limit=80000,
+        allowed_overrides=("timeout",),
+    ),
+    "premise_scout": DispatchProfile(
+        # Repo-grounded premise falsifier — NOT a cosigner axis. Invoked by
+        # model-review.py via cursor-agent --workspace before packet-only axes.
+        name="premise_scout",
+        intent="VOI premise scout: grep/read repo to falsify design premises",
+        provider="cursor",
+        model="composer-2.5",
+        timeout=300,
+        auth="subscription",
+        mode="chat",
         input_token_limit=120000,
         allowed_overrides=("timeout",),
     ),
@@ -209,6 +237,7 @@ MODEL_TO_PROFILE = {
     "gpt-5.5": "gpt_general",
     "claude-opus-4-8": "claude_review",
     "composer-2.5": "composer_review",
+    "composer-2.5-fast": "composer_screen",
 }
 
 
@@ -532,6 +561,37 @@ def _build_full_prompt(prompt: str, context_text: str | None) -> str:
     return prompt
 
 
+def _resolve_call_auth(
+    *,
+    profile_auth: str,
+    auth: str | None,
+    api_only: bool | None,
+) -> str:
+    if auth is not None and api_only is not None:
+        raise ValueError("pass auth= or api_only=, not both")
+    if auth is not None:
+        token = auth.strip().lower()
+        if token not in ("api", "subscription"):
+            raise ValueError(f"auth must be 'api' or 'subscription'; got {auth!r}")
+        return token
+    if api_only is not None:
+        return "api" if api_only else "subscription"
+    return profile_auth
+
+
+def _resolve_call_mode(
+    *,
+    profile_mode: str,
+    mode: str | None,
+) -> str:
+    if mode is not None:
+        token = mode.strip().lower()
+        if token not in ("chat", "agent"):
+            raise ValueError(f"mode must be 'chat' or 'agent'; got {mode!r}")
+        return token
+    return profile_mode
+
+
 def dispatch(
     *,
     profile: str,
@@ -544,12 +604,10 @@ def dispatch(
     error_path: Path | None = None,
     parsed_path: Path | None = None,
     schema: dict[str, Any] | None = None,
-    # None (default) → use the profile's own api_only. A bool here is an explicit
-    # per-call override. Must NOT default to True: that forced the API path for
-    # every profile and silently bypassed CLI-transport profiles like
-    # composer_review (provider=cursor, api_only=False) → routed composer-2.5 to
-    # the OpenAI API → 404 model_not_found.
-    api_only: bool | None = None,
+    # None (default) → use the profile's auth. Per-call override via auth=.
+    auth: str | None = None,
+    mode: str | None = None,
+    api_only: bool | None = None,  # deprecated: use auth="api"|"subscription"
     overrides: DispatchOverrides | None = None,
     system: str | None = None,
 ) -> DispatchResult:
@@ -636,6 +694,16 @@ def dispatch(
     )
     full_prompt = _build_full_prompt(prompt, context_body)
 
+    resolved_auth = _resolve_call_auth(
+        profile_auth=profile_def.auth,
+        auth=auth,
+        api_only=api_only,
+    )
+    resolved_mode = _resolve_call_mode(
+        profile_mode=profile_def.mode,
+        mode=mode,
+    )
+
     try:
         llmx_chat, llmx_version = _bootstrap_llmx()
     except Exception as exc:
@@ -656,7 +724,8 @@ def dispatch(
             "resolved_provider": profile_def.provider,
             "resolved_model": profile_def.model,
             "resolved_kwargs": resolved,
-            "api_only": api_only,
+            "auth": resolved_auth,
+            "mode": resolved_mode,
             "status": status,
             "retryable": RETRYABLE_STATUSES[status],
             "error_type": status,
@@ -699,7 +768,8 @@ def dispatch(
         "provider": profile_def.provider,
         "model": profile_def.model,
         "temperature": _temperature_for_model(profile_def.model),
-        "api_only": api_only if api_only is not None else profile_def.api_only,
+        "auth": resolved_auth,
+        "mode": resolved_mode,
         "system": system,
         **resolved,
     }
@@ -753,7 +823,8 @@ def dispatch(
             "resolved_provider": profile_def.provider,
             "resolved_model": profile_def.model,
             "resolved_kwargs": resolved,
-            "api_only": call_kwargs["api_only"],
+            "auth": call_kwargs["auth"],
+            "mode": call_kwargs["mode"],
             "schema_used": bool(schema),
             "status": status,
             "retryable": RETRYABLE_STATUSES[status],
@@ -794,7 +865,8 @@ def dispatch(
                 "context_budget_metric": (context_manifest or {}).get("budget_metric"),
                 "context_estimate_method": (context_manifest or {}).get("estimate_method"),
                 "usage": usage,
-                "api_only": call_kwargs["api_only"],
+                "auth": call_kwargs["auth"],
+            "mode": call_kwargs["mode"],
             }
         )
         _remove_if_exists(start_path)
@@ -836,7 +908,8 @@ def dispatch(
             "resolved_provider": profile_def.provider,
             "resolved_model": profile_def.model,
             "resolved_kwargs": resolved,
-            "api_only": call_kwargs["api_only"],
+            "auth": call_kwargs["auth"],
+            "mode": call_kwargs["mode"],
             "schema_used": bool(schema),
             "status": status,
             "retryable": RETRYABLE_STATUSES[status],
@@ -876,7 +949,8 @@ def dispatch(
                 "context_budget_metric": (context_manifest or {}).get("budget_metric"),
                 "context_estimate_method": (context_manifest or {}).get("estimate_method"),
                 "usage": None,
-                "api_only": call_kwargs["api_only"],
+                "auth": call_kwargs["auth"],
+            "mode": call_kwargs["mode"],
                 "error_type": status,
             }
         )

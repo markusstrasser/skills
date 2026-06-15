@@ -3,7 +3,7 @@
 # PreToolUse:Agent command hook.
 #
 # BLOCKING checks (exit 2):
-# 0.  Memory pressure — blocks on actual system memory (vm_stat) + hard process ceiling
+# 0.  Memory pressure — blocks on reclaimable RAM (vm_stat); process ceiling derived from RAM
 # 7.  File-output missing — substantial non-exempt research dispatch with no
 #     file-output instruction (durability; subagents don't self-persist files)
 # 10. Write-stub-first missing — file-output dispatch that doesn't write a stub
@@ -26,18 +26,11 @@
 INPUT=$(cat)
 
 # === Check 0: Memory pressure gate (BLOCKING) ===
-# Two-tier: actual memory availability via vm_stat (primary) + hard process ceiling (backstop)
+# Primary: reclaimable RAM via vm_stat. Backstop: RAM-derived process ceiling (not a fixed count).
 
 CLAUDE_PROCS=$(pgrep -x claude 2>/dev/null | wc -l | tr -d ' ')
 
-# Tier 1: Hard process ceiling — catch runaway spawning regardless of memory
-if [ "$CLAUDE_PROCS" -ge 15 ]; then
-    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "process-ceiling: ${CLAUDE_PROCS}/15" 2>/dev/null || true
-    echo '{"decision": "block", "reason": "PROCESS CEILING: '"$CLAUDE_PROCS"' claude processes (hard limit: 15). Likely runaway spawning — wait for agents to finish."}'
-    exit 2
-fi
-
-# Tier 2: Actual memory pressure via vm_stat (free + inactive + purgeable = reclaimable)
+# Reclaimable RAM via vm_stat (free + inactive + purgeable)
 # Cache vm_stat for 5s — same result, avoids 150ms parse on every Agent call
 VMSTAT_CACHE="/tmp/claude-vmstat-${PPID}"
 CACHE_AGE=999
@@ -65,16 +58,48 @@ case "$AVAIL_MB" in
     ''|*[!0-9-]*) AVAIL_MB=-1 ;;
 esac
 
-if [ "$AVAIL_MB" -gt 0 ] && [ "$AVAIL_MB" -lt 1500 ]; then
+MEMORY_BLOCK_MB="${SUBAGENT_MEMORY_BLOCK_MB:-1500}"
+MEMORY_WARN_MB="${SUBAGENT_MEMORY_WARN_MB:-3000}"
+SYSTEM_RESERVE_MB="${SUBAGENT_SYSTEM_RESERVE_MB:-2048}"
+SPAWN_FLOOR_MB="${SUBAGENT_SPAWN_FLOOR_MB:-350}"
+
+if [ "$AVAIL_MB" -gt 0 ] && [ "$AVAIL_MB" -lt "$MEMORY_BLOCK_MB" ]; then
     ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "memory-pressure: ${AVAIL_MB}MB avail, ${CLAUDE_PROCS} procs" 2>/dev/null || true
     echo '{"decision": "block", "reason": "MEMORY PRESSURE: '"$AVAIL_MB"'MB available (free+inactive+purgeable), '"$CLAUDE_PROCS"' claude processes. Wait for work to finish or close other apps."}'
     exit 2
 fi
 
-# Low-memory advisory (passed to warnings section, doesn't block)
+# RAM-derived process ceiling — scales with machine RAM + measured claude RSS (runaway backstop)
+TOTAL_MB=$(sysctl -n hw.memsize 2>/dev/null | awk '{printf "%d", $1/1048576}')
+[ -z "$TOTAL_MB" ] || [ "$TOTAL_MB" -lt 4096 ] && TOTAL_MB=16384
+
+CLAUDE_RSS_MB=$(ps -axo rss,comm 2>/dev/null | awk '$2=="claude"{s+=$1} END {printf "%d", s/1024}')
+if [ "$CLAUDE_PROCS" -gt 0 ] && [ "$CLAUDE_RSS_MB" -gt 0 ]; then
+    PER_PROC_MB=$(( (CLAUDE_RSS_MB + CLAUDE_PROCS - 1) / CLAUDE_PROCS + 128 ))
+    [ "$PER_PROC_MB" -lt "$SPAWN_FLOOR_MB" ] && PER_PROC_MB=$SPAWN_FLOOR_MB
+else
+    PER_PROC_MB=400
+fi
+
+RAM_PROC_CEILING=$(( (TOTAL_MB - SYSTEM_RESERVE_MB) / PER_PROC_MB ))
+[ "$RAM_PROC_CEILING" -lt 8 ] && RAM_PROC_CEILING=8
+[ "$RAM_PROC_CEILING" -gt 64 ] && RAM_PROC_CEILING=64
+
+if [ "$CLAUDE_PROCS" -ge "$RAM_PROC_CEILING" ]; then
+    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "process-ceiling: ${CLAUDE_PROCS}/${RAM_PROC_CEILING} ram=${TOTAL_MB}MB per=${PER_PROC_MB}MB" 2>/dev/null || true
+    echo '{"decision": "block", "reason": "PROCESS CEILING: '"$CLAUDE_PROCS"' claude processes (RAM-derived limit: '"$RAM_PROC_CEILING"' on '"$TOTAL_MB"'MB RAM, ~'"$PER_PROC_MB"'MB/proc). Likely runaway spawning — wait for agents to finish."}'
+    exit 2
+fi
+
+# Low-memory / spawn-headroom advisory (passed to warnings section, doesn't block)
 MEM_ADVISORY=""
-if [ "$AVAIL_MB" -gt 0 ] && [ "$AVAIL_MB" -lt 3000 ]; then
-    MEM_ADVISORY="LOW MEMORY: ${AVAIL_MB}MB available, ${CLAUDE_PROCS} claude procs. Spawning allowed but monitor responsiveness. "
+SPAWN_SLOTS=0
+if [ "$AVAIL_MB" -gt 0 ]; then
+    SPAWN_SLOTS=$(( (AVAIL_MB - MEMORY_BLOCK_MB) / PER_PROC_MB ))
+    [ "$SPAWN_SLOTS" -lt 0 ] && SPAWN_SLOTS=0
+fi
+if [ "$AVAIL_MB" -gt 0 ] && [ "$AVAIL_MB" -lt "$MEMORY_WARN_MB" ]; then
+    MEM_ADVISORY="LOW MEMORY: ${AVAIL_MB}MB available, ${CLAUDE_PROCS}/${RAM_PROC_CEILING} claude procs, ~${SPAWN_SLOTS} spawn slots @ ~${PER_PROC_MB}MB each. Spawning allowed but monitor responsiveness. "
 fi
 
 # Advisory checks below — fail open

@@ -1,6 +1,6 @@
 ---
 name: entity-management
-description: Versioned, sourced entity dossiers across repos. Use when creating/updating company, stock, person, gene, drug, self, contract, or filing pages; routes intel public-company entities to analysis/entities and selve/general entities to docs/entities.
+description: "Use when: entity dossier create/update (company, gene, person, drug, stock). intel→analysis/entities; else docs/entities. NOT literature synthesis (/research)."
 user-invocable: true
 argument-hint: [entity name - person, company, gene, drug, stock]
 effort: medium

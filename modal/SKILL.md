@@ -1,6 +1,6 @@
 ---
 name: modal
-description: "Modal serverless Python. Writing/debugging Modal scripts, deploying, or choosing GPU/resource configs. v1.0–v1.5.x API."
+description: "Use when: Modal deploy/run/debug, GPU/resource config, `from modal import`. v1 API gotchas. NOT generic cloud (/bash only)."
 effort: low
 ---
 

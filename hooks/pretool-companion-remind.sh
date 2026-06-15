@@ -64,7 +64,11 @@ fi
 
 # --- llmx-guide: Bash command calls llmx ---
 if [ -n "$CMD" ] && echo "$CMD" | grep -q 'llmx'; then
-  remind "llmx-guide" "You're calling llmx. Load the llmx-guide skill if you haven't — it has valid model names, flags, and gotchas."
+  if echo "$CMD" | grep -qiE 'anthropic-direct|claude-opus|claude-fable|claude-cli|-p anthropic'; then
+    remind "llmx-guide" "Claude via llmx: use --subscription (NEVER anthropic-direct/API by default). Load llmx-guide for flags and gotchas."
+  else
+    remind "llmx-guide" "You're calling llmx. Load the llmx-guide skill if you haven't — it has valid model names, flags, and gotchas."
+  fi
 fi
 
 # --- llmx-guide: Python code dispatching to CLI models ---

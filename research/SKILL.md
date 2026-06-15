@@ -1,6 +1,6 @@
 ---
 name: research
-description: "'find papers about', 'research X', 'what's known about'. One-shot research with source grading. /research-ops for cycles/compile/diff."
+description: "Use when: /research, 'find papers about', 'what's known about', literature review, science/benchmark memos. INVOKE BEFORE ad-hoc search — routes S2/Exa/axis diversity into a sourced memo. NOT implementation. Loops/compile/diff → /research-ops."
 user-invocable: true
 argument-hint: '[question]'
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent, WebSearch, WebFetch]

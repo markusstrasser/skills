@@ -1,0 +1,41 @@
+{
+  "auth": "api",
+  "context_budget_metric": "tokens",
+  "context_estimate_method": "heuristic:chars_div_4",
+  "context_manifest_path": ".model-review/2026-06-16-dispatch-manifest-49de55/shared-context.manifest.json",
+  "context_payload_hash": "020244b667dc3a2307f1fd45df98f07fba6c191016993826b1baf1e31e55c816",
+  "context_sha256": "020244b667dc3a2307f1fd45df98f07fba6c191016993826b1baf1e31e55c816",
+  "context_token_estimate": 479,
+  "error_message": null,
+  "error_path": null,
+  "error_type": null,
+  "finished_at": "2026-06-15T23:29:59Z",
+  "helper_version": "2026-04-10-v1",
+  "latency": 39.934592962265015,
+  "llmx_version": "0.6.0.post47.dev0+eedb996",
+  "mode": "chat",
+  "output_path": ".model-review/2026-06-16-dispatch-manifest-49de55/arch-output.md",
+  "parsed_path": null,
+  "profile_fingerprint": "5f4399b048f4193c",
+  "profile_version": "v1",
+  "prompt_sha256": "8cad2a81021e48ff0aeaf68918cf160d56147809a0405245a7de4aae534e19d8",
+  "requested_profile": "deep_review",
+  "resolved_kwargs": {
+    "reasoning_effort": "high",
+    "search": false,
+    "timeout": 300
+  },
+  "resolved_model": "gemini-3.5-flash",
+  "resolved_provider": "google",
+  "retryable": false,
+  "schema_used": false,
+  "started_at": "2026-06-15T23:29:18Z",
+  "status": "ok",
+  "usage": {
+    "cached_tokens": null,
+    "completion_tokens": 1854,
+    "prompt_tokens": 810,
+    "reasoning_tokens": 2641,
+    "total_tokens": 2664
+  }
+}

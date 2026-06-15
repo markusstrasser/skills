@@ -43,6 +43,14 @@ log_entry = {
 log_path = os.path.expanduser("~/.claude/compact-log.jsonl")
 with open(log_path, "a") as f:
     f.write(json.dumps(log_entry) + "\n")
+
+# Statusline ↺compact badge (verify git log before trusting summary)
+if session_id and session_id != "unknown":
+    try:
+        with open(f"/tmp/claude-postcompact-{session_id}", "w") as f:
+            f.write(str(int(datetime.now(timezone.utc).timestamp())))
+    except Exception:
+        pass
 ' 2>/dev/null)
 
 exit 0

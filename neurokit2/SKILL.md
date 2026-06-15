@@ -1,6 +1,6 @@
 ---
 name: neurokit2
-description: "NeuroKit2 biosignal proc: ECG/PPG/EDA/EEG/RSP/EMG/EOG/HRV. HRV analysis, Oura data, sleep studies, wearables."
+description: "Use when: ECG/PPG/HRV/EDA processing, biosignal pipelines, wearables analysis code. NOT Oura API auth/pull (/oura-ring)."
 ---
 
 # NeuroKit2

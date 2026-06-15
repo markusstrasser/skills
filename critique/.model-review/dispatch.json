@@ -1,0 +1,105 @@
+{
+  "schema_version": "dispatch.v1",
+  "generated_at": "2026-06-15T23:48:35Z",
+  "artifact": "closeout",
+  "layers": {
+    "diff": {
+      "owner": "code-review",
+      "run": true,
+      "files": [
+        ".claude/current-session-id",
+        ".claude/overview-marker-source",
+        ".claude/overviews/source-overview.md",
+        ".claude/telemetry/llm-dispatch.jsonl",
+        "README.md",
+        "_archive/browse/SKILL.md",
+        "_archive/code-review/SKILL.md",
+        "_archive/code-review/code-review",
+        "analyze/SKILL.md",
+        "bio-verify/SKILL.md",
+        "brainstorm/SKILL.md",
+        "census-data/SKILL.md",
+        "corpus/SKILL.md",
+        "critique/SKILL.md",
+        "critique/references/dispatch.md",
+        "critique/scripts/build_plan_close_context.py",
+        "critique/scripts/model-review.py",
+        "critique/scripts/test_build_plan_close_context.py",
+        "critique/scripts/test_model_review.py",
+        "cursor-agent/SKILL.md",
+        "data-acquisition/SKILL.md",
+        "dataset-register/SKILL.md",
+        "de-slop/SKILL.md",
+        "decide/SKILL.md",
+        "entity-management/SKILL.md",
+        "eval/SKILL.md",
+        "execute/SKILL.md",
+        "google-workspace/SKILL.md",
+        "hooks/permission-auto-allow.sh",
+        "hooks/postcompact-verify.sh",
+        "hooks/pretool-companion-remind.sh",
+        "hooks/pretool-eval-preflight.sh",
+        "hooks/pretool-raw-openai-guard.sh",
+        "hooks/pretool-subagent-gate.sh",
+        "hooks/sessionend-reflect-capture.sh",
+        "hooks/sessionstart-compact-resume.sh",
+        "illustration-gen/SKILL.md",
+        "improve/SKILL.md",
+        "interview-prompt/SKILL.md",
+        "leverage/SKILL.md",
+        "life-science-research/SKILL.md",
+        "llmx-guide/SKILL.md",
+        "llmx-guide/references/codex-dispatch.md",
+        "llmx-guide/references/transport-routing.md",
+        "modal/SKILL.md",
+        "model-guide/SKILL.md",
+        "neurokit2/SKILL.md",
+        "observe/SKILL.md",
+        "oura-ring/SKILL.md",
+        "research-ops/SKILL.md"
+      ]
+    },
+    "design": {
+      "owner": "critique",
+      "run": true,
+      "axes": "cross4",
+      "preset": "cross4",
+      "preset_reasons": [
+        "governance_paths"
+      ],
+      "extract": true,
+      "verify": true,
+      "dispatch_policy": {
+        "premise_scout": true,
+        "context_scope": "repo",
+        "budget_seconds": null,
+        "irreversible": false,
+        "cross_talk": false
+      }
+    }
+  },
+  "dispatch_policy": {
+    "premise_scout": true,
+    "context_scope": "repo",
+    "budget_seconds": null,
+    "irreversible": false,
+    "cross_talk": false
+  },
+  "preset": "cross4",
+  "preset_reasons": [
+    "governance_paths"
+  ],
+  "inconclusive_escalate_threshold": 3,
+  "contradictory_escalate_threshold": 1,
+  "contradictory_pairs": 0,
+  "escalate_4axis": true,
+  "packet_path": "/Users/alien/Projects/skills/critique/.model-review/session-dispatch-manifest.md",
+  "packet_tokens": 303,
+  "review_dir": null,
+  "review_hash": null,
+  "skip_review": false,
+  "blockers": [],
+  "warnings": [
+    "no open-fork markers in packet \u2014 premise_scout still on (repo premises); set design_target.context_scope=packet or premise_scout=false to skip"
+  ]
+}

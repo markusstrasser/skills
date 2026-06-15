@@ -41,7 +41,7 @@ try:
 except ValueError:
     toks = cmd.split()
 
-RUNNER = re.compile(r'(^|/)(run[\w-]*|judge[\w-]*|score|dispatch-arm|dispatch-cursor-arm)\.(py|sh)$')
+RUNNER = re.compile(r'(^|/)(run[\w-]*|judge[\w-]*|eval[\w-]*|[\w-]*benchmark[\w-]*|score|dispatch-arm|dispatch-cursor-arm)\.(py|sh)$')
 MARKERS = ("EXPERIMENT.md", "PREREGISTRATION.md")
 PATHSEG = re.compile(r'/(evals?|benchmarks?)(/|$)|/tests/evals(/|$)')
 

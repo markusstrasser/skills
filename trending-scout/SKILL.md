@@ -1,6 +1,6 @@
 ---
 name: trending-scout
-description: Scan for new agent/AI ecosystem developments, filtered against what we already know. Use for "what's new", vendor updates, trending repos, "check for updates", weekly landscape scans.
+description: "Use when: vendor/agent landscape scan, 'what's new', trending repos, weekly update check. Filtered vs known memos — NOT deep topic research (/research)."
 argument-hint: '[vendor focus or topic, e.g. "anthropic", "mcp servers", "all"]'
 effort: medium
 user-invocable: true

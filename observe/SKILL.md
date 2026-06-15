@@ -1,6 +1,6 @@
 ---
 name: observe
-description: "Session retros. Modes: sessions/architecture/supervision/drift/retro/failures/blindspot. 'what went wrong', 'session quality', 'cross-session trends', 'what's drifting', 'what tools are broken', 'what loop misses did I have to catch'."
+description: "Use when: /observe, session quality, 'what went wrong', drift, supervision misses, blindspots. Modes: sessions, architecture, supervision, drift, retro, failures, blindspot. NOT 10x discovery (/leverage)."
 user-invocable: true
 argument-hint: <mode> [project] [options...]
 context: fork
@@ -28,15 +28,15 @@ signal/candidate flow, and promotion gates.
 
 ## Mode Routing
 
-| Mode | Question answered | Gemini dispatch? | Canonical artifacts |
-|------|------------------|------------------|---------------------|
-| `sessions` | What behavioral anti-patterns appeared? | Yes | `manifest.json` -> `signals.jsonl` -> `candidates.jsonl` -> `digest.md` (+ `dispatch.meta.json` when dispatched) |
-| `architecture` | What design wants to emerge? | Yes | `manifest.json` -> `signals.jsonl` -> `candidates.jsonl` -> `patterns.jsonl` -> `YYYY-MM-DD.md` |
-| `supervision` | Where was human time wasted? | Yes | `manifest.json` -> `signals.jsonl` -> `candidates.jsonl` -> `digest.md` (+ `dispatch.meta.json` when dispatched) |
-| `drift` | What slow-moving pattern spans MANY sessions? | Yes (1M wide) | `manifest.json` -> `candidates.jsonl` (tagged `"mode":"drift"`) -> `drift-digest.md` |
-| `retro` | What went wrong this session? | No (local) | `artifacts/session-retro/` |
-| `failures` | Which tools/CLIs are actually BROKEN in real use? | Tiered: deterministic -> Haiku -> deep | `scan_tool_failures.py` -> `failures.json` -> triaged breaks |
-| `blindspot` | What did the loop MISS that the human had to catch? (RSI coverage gaps) | emb-contrastive (runs in emb's env) | `blindspot_miner.py` -> `.claude/blindspot-digest.md` -> candidate detectors |
+| Mode | Question answered | Gemini dispatch? | Composer dispatch? | Canonical artifacts |
+|------|------------------|------------------|-------------------|---------------------|
+| `sessions` | What behavioral anti-patterns appeared? | Yes | HIGH candidates only | `manifest.json` -> `signals.jsonl` -> `candidates.jsonl` -> `digest.md` |
+| `architecture` | What design wants to emerge? | Yes | HIGH candidates only | `manifest.json` -> … -> `YYYY-MM-DD.md` |
+| `supervision` | Where was human time wasted? | Yes | **Yes (default)** | `manifest.json` -> … -> `digest.md` |
+| `drift` | What slow-moving pattern spans MANY sessions? | Yes (1M wide) | HIGH candidates only | `manifest.json` -> `candidates.jsonl` -> `drift-digest.md` |
+| `retro` | What went wrong this session? | No (local) | No | `artifacts/session-retro/` |
+| `failures` | Which tools/CLIs are actually BROKEN in real use? | Tiered: deterministic -> Haiku -> deep | No | `scan_tool_failures.py` -> `failures.json` |
+| `blindspot` | What did the loop MISS that the human had to catch? | emb-contrastive | **Yes (default)** | `blindspot_miner.py` -> `.claude/blindspot-digest.md` |
 
 Parse `$ARGUMENTS` for mode. First positional arg is the mode. Remaining args are project, options.
 
@@ -100,6 +100,23 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/session-shape.py --days {DAYS} {--pro
 
 Focus deep analysis on flagged sessions. Skip normal-profile sessions unless you have specific concerns.
 
+### Full-Corpus Steer Mining (optional, weekly)
+
+Recent-window modes above miss steers buried in older sessions. For **preference-vector**
+extraction across the full agentlogs universe (steers, confirmations, agent_miss), run the
+incremental miner — it skips already-scanned sessions via `~/.claude/steer-mining/scanned_ledger.jsonl`:
+
+```bash
+# From agent-infra (preferred — budget-capped defaults):
+just steer-mine
+
+# Or direct (custom budget / output path):
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/mine_steers.py --from-agentlogs --prompt-mode multi --budget 5 --workers 3 --out "$ARTIFACT_DIR/steer-signals.jsonl"
+```
+
+Consumer: `/improve maintain` weekly row clusters recurring `vector` fields → GOALS refresh or
+steward-proposal. Same promotion gates as `references/artifact-contract.md` — no direct hook writes.
+
 ---
 
 ## Mode: sessions
@@ -154,6 +171,25 @@ uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
   --meta "$ARTIFACT_DIR/gemini-output.meta.json" \
   --error-output "$ARTIFACT_DIR/gemini-output.error.json"
 ```
+
+### Step 2b: Composer precision pass (default for `supervision` and `blindspot` modes)
+
+After Gemini bulk classification, run a **repo-grounded Composer screen** on the top candidate
+clusters (max 3) — Composer follows tight contracts and catches false-positive pattern matches
+Gemini invents from transcript alone.
+
+```bash
+# Build a tight packet: top 3 candidates + 20 lines transcript evidence each
+uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
+  --profile composer_review \
+  --context "$ARTIFACT_DIR/composer-candidates.md" \
+  --prompt "For each candidate: VERDICT promote|drop|needs_more_evidence. Cite transcript line or say MISSING. One block per candidate. Commit to a verdict — no hedge-only lists." \
+  --output "$ARTIFACT_DIR/composer-output.md" \
+  --meta "$ARTIFACT_DIR/composer-output.meta.json"
+```
+
+Skip Step 2b when Gemini returned zero candidates or mode is `retro`/`failures` (deterministic).
+For `sessions`/`architecture`/`drift`, run Step 2b only on HIGH-severity candidates.
 
 ### Step 3: Stage Findings
 

@@ -1,6 +1,6 @@
 ---
 name: eval
-description: "Design, scaffold, and run decision-grade evals/benchmarks/bakeoffs the careful way: construct + consumer named, pre-registered decision rule, power preflight, discrimination probe, blind judges, invariant-claims extraction. Use when creating ANY eval/benchmark/grader/judge, comparing models/engines/configs, or reviewing an eval design. Modes: design (default), review (audit an existing eval against the checklist)."
+description: "Use when: /eval, new benchmark/grader/judge, model bakeoff, auditing eval design. Pre-reg decision rule + power preflight. Modes: design, review. NOT spot-checks (/verify-before) or code diffs (/code-review)."
 user-invocable: true
 argument-hint: "[design|review] [question or eval path]"
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit]

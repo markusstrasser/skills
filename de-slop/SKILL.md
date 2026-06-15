@@ -1,6 +1,6 @@
 ---
 name: de-slop
-description: Adversarial editor that hunts AI-prose patterns (vocabulary tells, structural padding, false authority). Use for "de-slop", "clean up prose", "check for AI writing" before publishing.
+description: "Use when: 'de-slop', AI-prose cleanup, pre-publish voice check. Hunts vocabulary/structure tells — NOT full drafting (/writing-style)."
 argument-hint: '[paste text, file path, or git diff range]'
 user-invocable: true
 effort: high

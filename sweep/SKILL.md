@@ -1,6 +1,6 @@
 ---
 name: sweep
-description: "Codebase consistency scan (Flash classifier). Pattern/convention/config drift, function divergence. 'sweep', 'inconsistencies'."
+description: "Use when: /sweep, convention drift, config inconsistency scan across codebase. NOT architecture decisions (/decide)."
 user-invocable: true
 argument-hint: "[axes...] [--depth N] [--path dir]"
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent]
@@ -37,6 +37,7 @@ cases. Different tool, different cost profile, different failure mode coverage.
 /sweep config conventions       # Specific axes only
 /sweep --depth 100              # Deeper git history
 /sweep --path scripts/          # Scope to directory
+/sweep --composer               # Use Composer for Phase 3 (repo-grounded classify)
 ```
 
 ## Methodology
@@ -77,13 +78,16 @@ FILES: config/database_versions.json, scripts/dataset_registry.py
 
 Collect all findings into a structured list before moving to Phase 3.
 
-### Phase 3: Flash Classification (~1 min)
+### Phase 3: Flash / Composer Classification (~1 min)
 
 For each axis with ambiguous findings (pattern consistency, cross-file logic),
-prepare a focused context file and dispatch to Gemini Flash via the shared
-dispatch wrapper.
+prepare a focused context file and dispatch to a classifier.
 
-**Dispatch pattern:**
+**Default:** Gemini Flash via `fast_extract` (cheap bulk). **Repo-grounded ambiguous
+cases:** use Composer (`composer_review` profile) — it reads the workspace and follows
+tight contracts better than Flash on structural "does this actually match?" questions.
+
+**Dispatch pattern (Flash — default):**
 ```bash
 # Prepare axis context (concatenate relevant file heads)
 # IMPORTANT: one combined file, not multiple -f flags
@@ -101,9 +105,19 @@ uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
   --output /tmp/sweep_axis_results.md
 ```
 
-**Parallel dispatch:** Each axis gets its own dispatch. Run them in parallel
-(background Bash commands or parallel Agent calls). Flash is fast enough that
-serial is also acceptable for < 4 axes.
+**Dispatch pattern (Composer — `--composer` flag or axes `ir`/`config` with file evidence):**
+```bash
+cat /tmp/sweep_combined.txt > /tmp/sweep_composer_context.txt
+uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
+  --profile composer_review \
+  --context /tmp/sweep_composer_context.txt \
+  --prompt "Classify each mechanical finding CONFIRMED|REJECTED|NEEDS_READ with one-line evidence. Output ONLY lines: FILE | verdict | reason. If uncertain, NEEDS_READ." \
+  --output /tmp/sweep_axis_composer.md
+```
+
+**Parallel dispatch:** Each axis gets its own dispatch. Run Flash and Composer in parallel
+when both are needed. Composer is slower (~25s) but higher contract-fidelity on ambiguous
+structural mismatches.
 
 **Context budget:** Flash has 1M token context. Include full files for small
 modules (< 500 lines), head-only (first 80 lines) for large files. The

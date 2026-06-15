@@ -1,6 +1,6 @@
 ---
 name: bio-verify
-description: Verify hardcoded bio constants (coords, genes, ratios) vs Ensembl/ClinVar/ISBT/gnomAD/PanelApp.
+description: "Use when: hardcoded gene coords/ratios/constants need external check (Ensembl, ClinVar, gnomAD). NOT full variant interpretation (/life-science-research)."
 argument-hint: "[file or glob] [--domain nutrigenomics|blood|hla|traits|carrier|pgx|all] [--fix] [--sweep]"
 effort: high
 ---

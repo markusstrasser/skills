@@ -1,6 +1,6 @@
 ---
 name: data-acquisition
-description: "Probe→stage→register pattern for pulling external datasets (Census, NCES, PSID, MEPS, IPUMS, AHRQ, IRS SOI, BLS, FRED). Use when downloading microdata, bulk-fetching codebooks, or setting up a new dataset in a research topic."
+description: "Use when: downloading/staging external data (Census, IPUMS, NCES, intel download scripts). Probe→stage→register. Then /dataset-register. NOT papers (/research)."
 user-invocable: true
 argument-hint: "[probe|acquire|catalog] <url-or-dataset-id>"
 allowed-tools: [Read, Glob, Grep, Bash, Write, WebFetch]
@@ -9,11 +9,24 @@ effort: medium
 
 # Data Acquisition
 
-Empirical research needs external datasets. This skill codifies the pattern used across
-immigration (SIPP, ACS, QWI, MEPS) and iq-sex-differences (PSID, NCES, Add Health) work.
+Empirical work in **research** and **intel** needs external datasets. This skill
+codifies the shared probe→stage→register pattern.
 
-**Default staging root:** `sources/<topic>/data/external/stage3/<source>/<dataset>/`
-**Alternate (large files):** `/Volumes/SSK1TB/corpus/<source>/<dataset>/`
+## Repo routing
+
+| Repo | Staging | Register | Repo-specific skill / docs |
+|------|---------|----------|----------------------------|
+| **research** | `sources/<topic>/data/external/stage3/<source>/<dataset>/` | `research/<topic>-dataset-register.md` or `*-dataset-cards.md` | `/dataset-register`, `infra/*/acquire/` |
+| **intel** | `datasets/{name}/` (or `$VOLUME_ROOT/corpus/{name}` for >1GB) | `docs/DATA_INVENTORY.md` | `/dataset`, `docs/workflows/add_dataset.md`, `docs/tools_registry.json` |
+
+**Intel first:** before writing `tools/download_*.py`, check `docs/TOOLS_REFERENCE.md`
+and `docs/tools_registry.json` — 400+ downloaders may already exist.
+
+**Web scraping / bot bypass:** read `~/Projects/skills/references/data-acquisition/SKILL.md`
+(curl_cffi, firecrawl, chrome-cookies, fallback chains).
+
+**Default staging root (research):** `sources/<topic>/data/external/stage3/<source>/<dataset>/`
+**Alternate (large files):** `/Volumes/SSK1TB/corpus/<source>/<dataset>/` or intel `$VOLUME_ROOT/corpus/`
 
 ---
 
@@ -23,10 +36,13 @@ Before any `curl`/`wget` of a file >10MB, answer four questions:
 
 1. **Is it already local?** Check both:
    ```bash
-   # Topic-local stage
+   # Research topic-local stage
    ls sources/*/data/external/stage3/ 2>/dev/null | grep -i <dataset>
-   # SSD corpus
+   # Intel datasets dir
+   ls datasets/ 2>/dev/null | grep -i <dataset>
+   # SSD corpus (research or intel volume root)
    ls /Volumes/SSK1TB/corpus/ 2>/dev/null | grep -i <source>
+   ls "${VOLUME_ROOT:-$HOME/research-data}/corpus/" 2>/dev/null | grep -i <source>
    ```
 2. **Is the URL live?** `curl -sS -I -L <url>` — check `HTTP/1.1 200`, `Content-Length`, `Last-Modified`.
 3. **Is it the right size?** If `Content-Length` ≠ expected, the page may be an HTML landing, not the file.
@@ -66,11 +82,11 @@ sources/immigration-fiscal/data/external/stage3/ahrq/meps/
 
 ## Phase 3 — Register
 
-After staging, update the topic's dataset register:
-- `research/<topic>-dataset-register.md` (immigration) OR
-- `research/<topic>-dataset-cards.md` (iq-sex-differences)
+After staging, update the repo's dataset catalog:
+- **research:** `research/<topic>-dataset-register.md` or `*-dataset-cards.md` — see `/dataset-register`
+- **intel:** `docs/DATA_INVENTORY.md` + regenerate `tools/export_views_catalog.py` if DuckDB views added — see `/dataset`
 
-See `/dataset-register` skill for card format.
+See `/dataset-register` skill for research card format.
 
 ---
 

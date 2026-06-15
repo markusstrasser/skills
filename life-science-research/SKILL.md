@@ -1,6 +1,6 @@
 ---
 name: life-science-research
-description: Biomedical source routing — ClinVar, gnomAD, Ensembl, GTEx, OpenTargets, ChEMBL, PharmGKB, UniProt, PDB, PubMed, bioRxiv. Source lookup + multi-lane synthesis.
+description: "Use when: biomedical source lookup (ClinVar, gnomAD, Ensembl, PubMed, OpenTargets…). Route APIs before synthesis. NOT general memos (/research) unless life-science topic."
 argument-hint: "[question] [--lane genetics|variant|expression|pathway|structure|chemistry|clinical|literature|omics] [--personal]"
 effort: high
 ---

@@ -24,11 +24,10 @@ All three tools discover skills via user-level symlinks pointing here:
 | `analyze` | Reusable reasoning lenses: null/base-rate, causal attribution, DAG adjustment, ACH hypotheses, weakest-link audit, and decision-impact stop. Use for why/root-cause/regression/confounder/anomaly questions when a project workflow needs sharper reasoning. Local only. |
 | `bio-verify` | Verify hardcoded bio constants (coords, genes, ratios) vs Ensembl/ClinVar/ISBT/gnomAD/PanelApp. |
 | `brainstorm` | Divergent ideation via systematic perturbation — denial cascades, domain forcing, constraint inversion. Multi-model dispatch optional (volume, not diversity). For convergent critique, use /model-review. |
-| `browse` | Persistent headless browser daemon (Playwright via gstack's browse binary) for QA, scraping, screenshot verification, multi-step web workflows. Replaces stateless MCP browser calls. |
 | `census-data` | Census Data API + IPUMS extract patterns (ACS, CPS, SIPP, QWI, decennial, USA microdata). Use for state/county aggregates, microdata extracts, immigrant shares, earnings-by-group, Card/Borjas-style panels. |
 | `corpus` | Canonical local store for source bytes + parses + citation graph + annotations. 'check corpus store', 'cite something', 'find contradicting citations', 'has any repo already seen this DOI'. |
 | `critique` | Adversarial review. Modes: model (Gemini+GPT), verify (fact-check), close (post-impl tests). 'review plan', 'what's wrong', 'fact-check'. |
-| `data-acquisition` | Probe→stage→register pattern for pulling external datasets (Census, NCES, PSID, MEPS, IPUMS, AHRQ, IRS SOI, BLS, FRED). Use when downloading microdata, bulk-fetching codebooks, or setting up a new dataset in a research topic. |
+| `data-acquisition` | Probe→stage→register for external datasets (research: Census/NCES/PSID; intel: `tools/download_*`, DATA_INVENTORY) |
 | `dataset-register` | Register staged dataset in per-topic catalog with provenance, variables, access state, quirks. Use after /data-acquisition, adding a source to a topic, or formalizing an ad-hoc entry. |
 | `de-slop` | Adversarial editor that hunts AI-prose patterns (vocabulary tells, structural padding, false authority). Use for "de-slop", "clean up prose", "check for AI writing" before publishing. |
 | `emil-design-eng` | Emil Kowalski's philosophy on UI polish, component design, animation decisions, and the invisible details that make software feel great. |

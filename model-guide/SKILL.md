@@ -1,6 +1,6 @@
 ---
 name: model-guide
-description: Frontier model selection and prompting for Claude Fable 5, Claude Opus 4.8 (fallback), GPT-5.5, and GPT-5.5 Pro.
+description: "Use when: choosing frontier model/effort for a task class (Claude Fable/Opus, GPT-5.5/Pro). NOT transport flags (/llmx-guide)."
 user-invocable: true
 argument-hint: '[task description or model name]'
 effort: low
@@ -44,9 +44,24 @@ Select between the current frontier models and prompt them correctly.
 
 For full score tables, read `references/BENCHMARKS.md`.
 
-## llmx Cosigner / Dispatch Defaults (moved from ~/.claude/rules/llmx-routing.md 2026-06-12)
+## Transport facts (llmx — not judgment)
 
-- **Cosigner / critique / synthesis:** `gemini-3.5-flash` (inverted from 3.1 Pro 2026-05-24, operator-empirical; re-confirmed 2026-06-13 — flash-3.5 ≈ GPT-5.5-high ≫ 3.1-pro on the ADR-0009 spine critique).
+**Read before dispatch:** `~/.claude/cache/llmx-routing.json` (regenerate: `llmx info --write-mirror`). Transport table, effort maps, exit classes live there — not in this skill.
+
+**Claude policy:** NEVER `anthropic-direct`/API by default. Subscription only (`llmx chat --subscription`, `claude -p` with key stripped, Agent tool) unless the user explicitly requests metered API billing.
+
+**Probe subscription path before critique batches:**
+
+```bash
+llmx chat --dry-run --subscription -m claude-opus-4-8 -e max
+# or: uv run python3 ~/Projects/skills/critique/scripts/model-review.py --preflight
+```
+
+Mechanics and footguns: `/llmx-guide`.
+
+## llmx Cosigner / Dispatch Defaults (judgment — transport in mirror)
+
+- **Cosigner / critique / synthesis:** `gemini-3.5-flash` (inverted from 3.1 Pro 2026-05-24, operator-empirical; re-confirmed 2026-06-13 — flash-3.5 ≈ GPT-5.5-high ≫ 3.1-pro on the ADR-0009 spine critique). **Always in the 2G+2GPT mix — never the only reviewer.** Probe flags invention on clean packets; orchestrator dispositions via `--extract --verify` (see agentlogs evidence).
 - **Cheap classification / mechanical audits:** `gemini-3-flash-preview` or `gemini-3.1-flash-lite-preview`.
 - **GPT-5.5 default effort is `medium`** — pass `-e high`/`xhigh` for depth; reasoning bills as output.
 - **`gemini-3.1-pro-preview` is RETIRED as a routing option (2026-06-13, operator).** Do not route here for critique/synthesis/review — flash-3.5 dominates and is cheaper/faster. (Benchmark records in `references/BENCHMARKS.md` are kept as evidence; this is a routing retirement, not a data scrub. Callable via explicit `-m` if a one-off ever needs ARC-AGI-2/GPQA/video, but it is not a default anywhere.)
@@ -71,7 +86,7 @@ When dispatching subagents to execute work (Agent tool, headless `claude -p`, co
 
 **Intern rule (gate-less delegation):** exploratory, divergent, or conceptual dispatches (research sweeps, brainstorms, design options, synthesis) have no mechanical gate to put in the brief — so the coordinator's review IS the gate. Treat the return like an intern's draft: don't re-do the work, but spot-check it before adopting. Concretely: re-run 1-2 of its load-bearing probes/citations yourself, check one claimed source actually says what's claimed, run the completeness check (does every input appear in the output, are dropped items justified), and ask what the brief would have rewarded the agent for skipping. Scale the spot-check to stakes — a brainstorm needs a sniff test, a synthesis feeding a decision needs the citation check. Skipping this turns "delegate" into "launder": unverified subagent output adopted wholesale is the same failure as adopting cross-model critique without cosigning.
 
-**Effort knob mechanics:** the Agent tool exposes only `model:`. Per-dispatch effort exists via (1) headless `claude -p --model opus --effort low` (verified working, CLI 2.1.175; background Bash + `--output-format json` for usage), or (2) `.claude/agents/*.md` frontmatter `effort:` (does NOT hot-register mid-session — usable only in later sessions). Codex/GPT-5.5 dispatch via llmx `--lite bare` is $0 (subscription) — see `~/.claude/rules/llmx-routing.md`.
+**Effort knob mechanics:** the Agent tool exposes only `model:`. Per-dispatch effort exists via (1) headless `claude -p --model opus --effort low` (verified working, CLI 2.1.175; background Bash + `--output-format json` for usage), or (2) `.claude/agents/*.md` frontmatter `effort:` (does NOT hot-register mid-session — usable only in later sessions). Codex/GPT-5.5 cheap cosign via llmx `--subscription` is $0 — probe with `--dry-run --subscription` first; transport table in `~/.claude/cache/llmx-routing.json`.
 
 **External validity:** all four evals are regime-1 (clear mechanical verifiers — tsc, deterministic scripts, numeric oracles) and screening-grade (n=1/arm). Only within-eval contrasts are clean — cross-eval comparisons are confounded by task, brief density (briefs improve as the author learns, flattering later arms), and harness (codex carries MCP servers + sandbox; opus arms ran bare). Every cheap-lane verdict is conditional on the dispatch-time classification "fully-briefed + mechanically gated" being honest — nothing here licenses cheap lanes for judgment-shaped or incomplete-spec work. The greenfield→integration replication trigger from the morning run is SATISFIED (effort-integration, port shape); the standing revocation trigger replaces it.
 

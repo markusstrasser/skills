@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# SessionEnd: zero-LLM capture for the recursive learning loop.
+# SessionEnd: zero-LLM capture for the recursive learning loop + close-intent enqueue.
 # Reads the SessionEnd JSON payload on stdin, extracts deterministic correction
-# signals + SHADOW omission-probe firings into ~/.claude/reflect-capture.jsonl.
+# signals + SHADOW omission-probe firings into ~/.claude/reflect-capture.jsonl,
+# and queues goal-gated close intents to ~/.claude/close-queue/ for async digest.
 # Fail-open (always exit 0), shadow (no user/agent surface), self-gates to the
-# test bed (intel, agent-infra) inside the Python. See plan 4d40085a.
+# test bed (intel, agent-infra, genomics) inside the Python. See plan 4d40085a
+# + decisions/2026-06-15-rsi-session-close-gate.md.
 set +e
 REPO="$HOME/Projects/agent-infra"
 SCRIPT="$REPO/scripts/reflect_capture.py"

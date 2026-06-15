@@ -1,7 +1,7 @@
 ---
 name: leverage
 disable-model-invocation: true
-description: "Hunt the wins your reactive loops can't see — three divergent-discovery modes. DEFAULT (10-100x leverage): order-of-magnitude wins along axes nothing measures (faster/better/more/simpler/unnecessary), frontier-scanned not history-bound, then piloted + measured. `missing` (negative-space sweep): what entire categories an optimized system never put on an axis — exclusion list + multi-perspective search + pertinent negatives. `generators`: mint new idea-generators from miss patterns when wins keep arriving off-trail. 'how could this be 10x', 'biggest lever here', 'what are we missing', 'blind spots', 'extract more generators', 'frontier audit', 'why do we even do it like this'. The generative twin of /observe."
+description: "Use when: /leverage, '10x', 'biggest lever', blind spots, 'what are we missing', frontier audit. Modes: default (order-of-magnitude), missing (negative space), generators. Divergent upside hunt — NOT retros (/observe) or maintenance (/improve maintain)."
 user-invocable: true
 argument-hint: <workflow or surface to 10x> [--repo path]
 context: fork

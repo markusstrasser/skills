@@ -4,16 +4,18 @@
 
 ## CLI vs API by Provider
 
-> **Gemini moved to the paid API on 2026-05-31** — the free Gemini CLI tier was retired (Antigravity migration). Gemini-CLI specifics in the sections below are **historical**; for Gemini, use the paid API with `--flex` (50% off non-interactive). The **Codex CLI** (GPT) and **Claude CLI** (`--lite bare`) remain subscription/flat-priced — prefer those for routine GPT/Claude work. (The `agy` CLI is Gemini's interactive replacement but can't pin a model in headless `-p` mode, so it is not an llmx transport.)
+> **Gemini moved to the paid API on 2026-05-31** — the free Gemini CLI tier was retired (Antigravity migration). Gemini-CLI specifics in the sections below are **historical**; for Gemini, use the paid API with `--flex` (50% off non-interactive). The **Codex CLI** (GPT) and **Claude CLI** (`--subscription`) remain subscription/flat-priced — prefer those for routine GPT/Claude work. (The `agy` CLI is Gemini's interactive replacement but can't pin a model in headless `-p` mode, so it is not an llmx transport.)
+
+> **Claude policy:** NEVER `anthropic-direct`/API by default. Use `--subscription` (claude-cli transport) unless the user explicitly requests metered API billing.
 
 ### CLI Backends
 
 ```bash
 llmx -p google "question"       # paid Gemini API (free CLI retired 2026-05-31); add --flex for 50% off
 llmx -p openai "question"       # uses OpenAI API
-llmx -p anthropic --lite bare "question"  # Claude CLI subscription route
-llmx -p codex-cli "question"    # force Codex CLI transport (subscription)
-llmx -p claude-cli "question"   # force Claude CLI transport, but only lite mode scrubs API-key env
+llmx chat --subscription -m claude-opus-4-8 "question"  # Claude CLI subscription route (canonical)
+llmx -p codex-cli --subscription -m gpt-5.5 "question"  # Codex CLI subscription
+llmx -p claude-cli "question"   # force Claude CLI transport (prefer --subscription on logical anthropic)
 llmx -p xai "question"          # xAI API (OpenAI-compatible at https://api.x.ai/v1)
 ```
 
@@ -22,15 +24,15 @@ Provider names are install-dependent. On the local 2026-05-10 install,
 subscription auth, prefer the logical route:
 
 ```bash
-llmx chat -p anthropic --lite bare -m claude-opus-4-8 \
+llmx chat --subscription -m claude-opus-4-8 \
   --timeout 120 -o /tmp/claude-smoke.txt \
   "Reply with exactly OK."
 ```
 
-`--lite bare` matters: the Claude adapter removes `ANTHROPIC_API_KEY` only in
-lite mode, so Claude Code uses OAuth/keychain subscription auth. Without lite,
-`llmx -p claude-cli ...` can inherit API-key env vars, hit Anthropic billing,
-then report `Credit balance is too low` even though direct Claude Code works.
+`--subscription` strips `ANTHROPIC_API_KEY`/`CLAUDE_API_KEY` so Claude Code
+uses OAuth/keychain subscription auth. Without it, llmx can inherit API-key env
+vars, hit Anthropic billing, then report `Credit balance is too low` even though
+direct Claude Code works. Legacy `--lite bare` is equivalent but deprecated.
 Do not confuse this with Claude Code's own `--bare` flag; `claude --bare`
 bypasses OAuth/keychain and forces API-key auth.
 

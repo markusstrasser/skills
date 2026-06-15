@@ -8,6 +8,7 @@ recurring loss/truncation failures in critical review flows.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -388,6 +389,26 @@ def main() -> int:
         builder_name="plan_close_context",
         builder_version=BUILDER_VERSION,
     )
+    touched = resolve_touched_files(
+        repo, base=base, head=head, files=args.files, tracked_only=args.tracked_only
+    )
+    ref = diff_ref(base, head)
+    manifest = json.loads(manifest_path.read_text())
+    manifest["review_targets"] = {
+        "diff_target": {
+            "owner": "code-review",
+            "git_ref": ref,
+            "base": base,
+            "head": head,
+            "files": touched,
+        },
+        "design_target": {
+            "owner": "critique",
+            "packet_path": str(args.output),
+            "axes": "standard",
+        },
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
     print(args.output)
     return 0
 
