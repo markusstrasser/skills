@@ -119,12 +119,14 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
   --repo "$(pwd)" --file path/a.py --file path/b.py \
   --output .model-review/subpart-1-context.md
 
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
+  --repo "$(pwd)" --packet .model-review/subpart-1-context.md --mode model
+
 uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
+  --dispatch-manifest .model-review/dispatch.json \
   --context .model-review/subpart-1-context.md \
   --topic "$TOPIC — subpart 1: gateway outbox" \
   --project "$(pwd)" \
-  --axes standard \
-  --extract \
   "Adversarial review of THIS subpart only. Do not speculate about files not in context."
 ```
 
@@ -366,8 +368,18 @@ skill's default provider (`cursor-agent`) — do **not** also add a `composer` c
 the same diff. Validate scout findings against code; do NOT auto-commit fixes.
 For recall mode use `--all-providers` on the diff scope only.
 
-*Design layer (once):* run `/critique model --axes standard` per subpart on the plan-close
-review packet (not the raw diff). Use `--context .model-review/plan-close-context.md --extract --verify`.
+*Design layer (once):* triage then manifest-driven dispatch on the plan-close packet:
+```bash
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
+  --repo "$(pwd)" --packet .model-review/plan-close-context.md --mode close
+
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
+  --dispatch-manifest .model-review/dispatch.json \
+  --context .model-review/plan-close-context.md \
+  --topic "$TOPIC" --project "$(pwd)" \
+  "Review plan closeout — design layer only."
+```
+Triage sets `extract`/`verify` on the manifest; no need to pass those flags unless overriding.
 The packet manifest's `review_targets` names `diff_target` (code-review) vs `design_target`
 (critique) — respect it; do not re-review diff content in the design pass.
 Fact-check and disposition every finding. Inspect `coverage.json` before closing so you can see packet

@@ -1068,6 +1068,8 @@ class DispatchBudgetTest(unittest.TestCase):
                 irreversible=False,
                 cross_talk=False,
                 axes=None,
+                extract=None,
+                verify=None,
             )
             model_review.apply_dispatch_manifest(args, path)
             self.assertFalse(args.scout)
@@ -1083,9 +1085,40 @@ class DispatchBudgetTest(unittest.TestCase):
         )
         self.assertEqual(len(blockers), 1)
 
-    def test_resolved_axis_timeout_scales_high(self) -> None:
-        formal_timeout = model_review._resolved_axis_timeout("formal")
-        self.assertGreaterEqual(formal_timeout, 600)
+    def test_apply_dispatch_manifest_extract_verify(self) -> None:
+        import argparse
+
+        manifest = {
+            "dispatch_policy": {},
+            "layers": {"design": {"extract": False, "verify": True, "axes": "standard"}},
+        }
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump(manifest, f)
+            path = Path(f.name)
+        try:
+            args = argparse.Namespace(
+                scout=None,
+                context_scope=None,
+                budget_seconds=None,
+                irreversible=False,
+                cross_talk=False,
+                axes=None,
+                extract=None,
+                verify=None,
+            )
+            model_review.apply_dispatch_manifest(args, path)
+            self.assertFalse(args.extract)
+            self.assertTrue(args.verify)
+        finally:
+            path.unlink()
+
+    def test_profile_resolved_timeout_high(self) -> None:
+        t = model_review._profile_resolved_timeout("formal_review")
+        self.assertGreaterEqual(t, 600)
+
+    def test_dispatch_uses_resolved_timeout_for_arch(self) -> None:
+        t = model_review._resolved_axis_timeout("arch")
+        self.assertGreaterEqual(t, 600)
 
     def test_write_execution_receipt_partial(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

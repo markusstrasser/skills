@@ -36,7 +36,11 @@ HISTORICAL = re.compile(
 LOG_FILE = Path.home() / ".claude" / "surface-gates" / "plan-close-shadow.jsonl"
 FIX_CMD = (
     "uv run python3 ~/Projects/skills/critique/scripts/review_gate.py triage "
-    "--mode close --repo . --packet .model-review/plan-close-context.md"
+    "--mode close --repo . --packet .model-review/plan-close-context.md && "
+    "uv run python3 ~/Projects/skills/critique/scripts/model-review.py "
+    "--dispatch-manifest .model-review/dispatch.json "
+    "--context .model-review/plan-close-context.md --project . "
+    "\"Review plan closeout.\""
 )
 
 
