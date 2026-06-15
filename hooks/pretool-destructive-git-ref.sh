@@ -16,6 +16,19 @@ INPUT=$(cat)
 COMMAND=$(printf '%s' "$INPUT" | jq -r '(.tool_input.command // "") | .[0:500]' 2>/dev/null || echo "")
 [ -z "$COMMAND" ] && exit 0
 
+# Recoverable snapshot before working-tree-destroying ops (steal: Cursor split-to-prs).
+# reset --hard / checkout -- destroy uncommitted changes that reflog does NOT capture,
+# so a one-off `git stash create` snapshot is the only net for that data-loss case.
+# Always-on (not agent-gated): the snapshot is cheap and side-effect-free; fail open.
+if echo "$COMMAND" | grep -qE '(^|[[:space:]&;|])git[[:space:]]+(reset[[:space:]]+--hard|checkout[[:space:]]+--)'; then
+    SNAP=$(git stash create "pre-destructive" 2>/dev/null || true)
+    if [ -n "$SNAP" ]; then
+        git update-ref "refs/backup/predestruct-$(date +%s)" "$SNAP" 2>/dev/null || true
+        echo "SAFETY: working tree snapshotted -> refs/backup/predestruct-* (recover: git stash apply $SNAP)" >&2
+        ~/Projects/skills/hooks/hook-trigger-log.sh "destructive-git-ref" "snapshot" "ref=$SNAP" 2>/dev/null || true
+    fi
+fi
+
 # Match: git (revert|reset --hard|checkout --) ... with HEAD/HEAD~N/branch-tip arg
 if echo "$COMMAND" | grep -qE '(^|[[:space:]&;|])git[[:space:]]+(revert|reset[[:space:]]+--(hard|mixed)|checkout[[:space:]]+--)[[:space:]]+(HEAD([~^][0-9]*)?|[a-z][a-z0-9_/-]*)([[:space:]]|$)'; then
     AGENT_COUNT=$(pgrep -f 'claude ' 2>/dev/null | wc -l | tr -d ' ')
