@@ -481,7 +481,18 @@ third validity pillar; `arXiv:2604.15149` isomorphic verifiers, causal). Adopt:
   L3 "could" vs L4 "did"); probes are gameable (`arXiv:2512.11949`) so white-box is a measurement aid, not a certificate.
   **(5) Anti-Clever-Hans** — a benchmark answerable from a surface cue measures the cue (backs leak-guard from a 2nd field).
   **(6) DIF probe** — flag items where equal-capability models from different FAMILIES diverge (family/format confound);
-  cheap, reuses run data. Build-rank + the CoLD×GSN verdict-ladder ADR proposal: see the synthesis memo.
+  cheap, reuses run data.
+  **(7) Verdict = a machine-checkable GATE-LEDGER, REALIZED** (evals ADR 0007 + `scripts/check_verdict.py`; the
+  CoLD×GSN ladder, built not proposed). A VERDICT-of-record carries a json front-matter ledger:
+  `confidence_level` × `call` + `odd{scope,excludes}` + 7 gates `{status,evidence}`: `discrimination`,
+  `representativeness` (does the ODD sample match the production decision surface? — added by adversarial
+  review), `last_resort`, `independence`, `noise_budget`, `power`, `materiality`. The confidence/call CLAIM is
+  EARNED by discharged gates (CoLD α₂≪α₁): `confirmatory`⇒noise+power+representativeness pass; `promote`⇒
+  last_resort+discrimination+representativeness pass; a `pass` MUST cite a leaf (run_id/§/number), else it is
+  `deferred`. A deferred gate CAPS confidence, never forbids the verdict. The gates are POINTERS to scorers this
+  skill already names (independence→`pool_independence`; noise→`dispatch_repeated` flip_rate; power/noise leaf→
+  `stats.variance_components` G-study; last_resort→the prereg gate). Any repo with the evalcore dep can adopt the
+  pattern; the validator is in evals. Build-rank context: the synthesis memo.
   **Process reflex (extends Pre-Build #1):** before INVENTING a metric or grading scheme, inventory the measurement
   sciences (psychometrics, metrology, mechanism design, mech-interp, comparative cognition, astrobiology) for an
   existing instrument — every net-new transfer above was already a solved problem in some mature field. "We have no
