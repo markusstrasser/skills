@@ -1,5 +1,6 @@
 ---
 name: execute
+disable-model-invocation: true
 description: Execute an approved plan to done WITH hygiene — phase-gated, probe-before-build, verify-before-claim, granular commits, worktree-isolated parallel subagents, and INLINE tooling-building (build the missing tool/hook DURING execution, not at session-end). Runs the disagree-self-check on divergence and /critique close at the end. Use after /decide or on any approved plan file. NOT for exploration/decisions (use /decide) or one-off edits.
 argument-hint: "[--slice P0-P2] [--from PHASE] <plan path>"
 allowed-tools:
@@ -46,6 +47,22 @@ For each phase in the slice, in order:
 1. **Probe-before-build.** Re-run the plan's probes for THIS phase. The codebase may have shifted since
    the plan was written; verify the assumptions (joins exist, deps present, schema shape) before building
    consumers against them. If a probe fails, that's a divergence → step 5.
+
+   **Composer premise probe (default at every phase boundary):** before building, dispatch a read-only
+   falsification pass on the phase's load-bearing premises — uses `composer-2.5` (not `-fast`; reasoning
+   over repo structure). Pattern:
+
+   ```bash
+   # Assemble premises from the plan phase (callers exist? join keys on both sides? helper already exists?)
+   uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
+     --profile composer_review \
+     --context /tmp/phase-premises.md \
+     --prompt "For each numbered premise: PASS|FAIL|UNKNOWN + file:line evidence or MISSING. Commit — no hedge-only lists. FAIL on any load-bearing premise blocks the phase." \
+     --output /tmp/phase-premises-verdict.md
+   ```
+
+   Any `FAIL` on a load-bearing premise → divergence (step 5) before writing code. This replaces
+   ad-hoc greps for plan reviews; still verify Composer claims with Read/Grep (it can hedge).
 2. **Build.** Independent work → parallel subagents, **`isolation: "worktree"`** for anything that touches
    files (hard isolation beats soft; soft hurts on open-ended tasks). Each code subagent returns a
    **manifest of files-touched + files-skipped-with-reason**; diff it against intent before accepting.
@@ -126,12 +143,11 @@ For each phase in the slice, in order:
 4. **Commit.** Granular semantic commits, one logical change each. **Never `git add -A`/`.`** — stage
    specific paths. Foreground commits only (a hook-blocked commit returns exit 0 from a backgrounded call).
 5. **Gate.** Do not advance to the next phase until this phase's end-state holds and is committed.
-   Then run **`/code-review low`** (Skill tool — injects inline, ~2 tool calls, no subagents) on
-   the phase's commits: a precision-only pass (≤4 findings) that catches the dropped-guard /
-   inverted-condition class while the phase is hot and cheap to fix. Bugs compound across phases —
-   this is the same logic as the multi-phase checkpoint rule. Pass the path-scoped
-   `.claude/rules/` files covering the diff as review context (closest-rules-win). Fix real
-   findings before advancing; `(none)` → advance.
+   Then run **`/code-review low`** (Skill tool — local scout, Cursor Composer) on the phase's commits:
+   a precision-only pass (≤4 findings) that catches the dropped-guard / inverted-condition class while
+   the phase is hot and cheap to fix. Bugs compound across phases — this is the same logic as the
+   multi-phase checkpoint rule. Pass the path-scoped `.claude/rules/` files covering the diff as review
+   context (closest-rules-win). Fix real findings before advancing; `(none)` → advance.
 
 ## Interleaved improvement (the centerpiece — build tooling DURING, not after)
 
@@ -153,11 +169,11 @@ that contradicts what you see, and don't silently abandon it either. Research / 
 ## Done
 1. **Completeness check** (`../decide/references/checklists.md`): every phase in the slice landed AND its
    end-state was verified AND committed. Mechanically verify; don't assert.
-2. **Two-layer slice review:** **`/code-review high`** (`xhigh` on risk) over the WHOLE slice —
-   recall mode ("a missed bug ships"), where cross-cutting issues invisible to the per-phase low
-   passes surface — then **`/critique close`** for the design/architecture layer (its Phase 2 now
-   delegates the diff layer to the same vendor pipeline; don't run it twice — one high pass over
-   the slice serves both). Dispatch WITHOUT `--fix`; this session owns commits.
+2. **Two-layer slice review:** **`/code-review high`** (local skill — Cursor Composer + optional
+   `--all-providers`) over the WHOLE slice — recall mode ("a missed bug ships"), where cross-cutting
+   issues invisible to the per-phase low passes surface — then **`/critique close`** for the
+   design/architecture layer (Phase 2 includes `composer` axis by default; diff layer is the local
+   `/code-review` pass — don't run it twice). Dispatch WITHOUT auto-fix; this session owns commits.
 3. Report: what shipped (verified), what diverged (and why), what tooling you built inline, what's next
    (the next slice / deferred items).
 
