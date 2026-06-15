@@ -355,7 +355,10 @@ cost of a committed wrong verdict is a re-audit + a correction commit + lost tru
    change (or explicit no-change). The eval is done only when that row lands.
 2. EXPERIMENT.md §6b **invariant claims** — mechanism, invariant-to, transfer evidence or
    `UNTESTED-TRANSFER`. These rows are the publishable residue; a bakeoff with zero
-   invariant rows is still useful, just not publishable.
+   invariant rows is still useful, just not publishable. (Metrology precedent: in 2019 the
+   kilogram was redefined from a drifting physical artifact — Le Grand K — to a fixed Planck
+   constant, because a standard must be a durable INVARIANT not a perishable artifact. §6a
+   local verdicts ARE the artifact that drifts; §6b mechanism claims are the invariant you keep.)
 3. Deviations from prereg → §7 Limitations, explained, never silently absorbed.
 
 ## 2026-06 frontier adopts (folded from `evals/research/2026-06-13-frontier-*.md`; ADR 0001)
@@ -415,6 +418,21 @@ third validity pillar; `arXiv:2604.15149` isomorphic verifiers, causal). Adopt:
   candidate gold** (admit a literature claim as gold only after independent reproduction yields a stable
   answer; log the excluded) and logging **cost + trajectory length** beside accuracy as first-class axes.
   (Item-difficulty rank-stability is another diagnostic use; the deferral on FITTING IRT at our N stands.)
+- **Measurement-science canon — cross-domain imports** (folded from `evals/research/2026-06-15-measurement-canon-cross-domain.md`;
+  6 primary sources saved to corpus). The mature measurement sciences solved problems we hit; the net-new delta
+  AFTER inventorying what we had (Metamorphic Testing, Goodhart, IRT already covered): **(1) Equating for a
+  DRIFTING instrument** — when the SUT itself changes across versions (a skill's prompt/rules/goals), it is an
+  instrument with drift; freeze ANCHOR items constant across versions and read capability deltas RELATIVE to the
+  anchor — an uncontrolled drift is a confound, not a measurement (psychometric NEAT design; Kolen & Brennan).
+  This is the answer to "what does a frozen measurement of a moving target mean." **(2) Signal Detection Theory
+  for hit/false-alarm evals** — separate detection SKILL (d′) from trigger-happiness (criterion c); ranking arms
+  by RAW detection conflates them (an arm that finds more may just be liberal). Coded ref impl:
+  `critique_replay/sdt.py` (+ bootstrap d′ CI, rank-inversion catch; Green & Swets). **(3) Proper scoring rules**
+  (Brier/log; Gneiting & Raftery) for ANY probabilistic/confidence output — uniquely maximized by reporting the
+  true probability, so hedging can't game it; Murphy-decompose into calibration + resolution. **(4) Pre-flight as
+  a GRADED bias instrument** — Cochrane RoB-2's 5 domains (randomization / deviations / missing-data / outcome
+  MEASUREMENT / selective REPORTING) map onto our confound/gold/judge/trace gates; import the per-domain
+  low/some-concern/high judgment, not a binary pass. (Metrology's invariant-anchoring → Phase 5 §6b below.)
 
 **Confirmed by DeepSWE** (datacurve, 2026-06 — independent production coding-agent benchmark, 113
 tasks, frontier 70%→5% spread; `evals/research/2026-06-13-frontier-agentic.md` §Transfer): authored-
@@ -448,6 +466,12 @@ empty. Report gaps as a table; fix all confirmed gaps, not top-N.
 - Judge panels as truth; judge sees engine/model identity; consequence-framing in judge prompts
 - Single global accuracy hiding the unreliable stratum (PARTIAL-type strata drive disagreement)
 - Items lifted from public benchmark sets without per-item justification
+- **Trusting ABSOLUTE scores on a reused test set; reading a small absolute gain as capability.** Even with
+  NO deliberate gaming, repeated reuse of a fixed test set inflates absolute scores (adaptive overfitting)
+  while RANKINGS stay robust — a freshly-rebuilt ImageNet/CIFAR test set dropped every model's accuracy but
+  preserved order at Pearson R≈0.99 (Recht et al. 2019). A small absolute gain on a reused set may be
+  test-set adaptation, not capability; the trustworthy signal is a RANKING flip. Defenses: refresh items to
+  recalibrate level (LiveBench-style), and anchor-equate (adopts §canon M1) so deltas read against a frozen scale.
 - N chosen by vibes — run `just power` and declare the regime
 - Eval with no consumer; verdict that never reaches DECISIONS.md or production
 - LLM re-audit of gold labels; editing a prereg decision rule after results exist
