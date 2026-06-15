@@ -77,6 +77,8 @@ Think through each (then write the ack to proceed):
    3. Decision rule + prediction PRE-REGISTERED before results exist?
    4. Confounds: do compared conditions differ in >=2 ways? If yes you can't attribute — name them.
       Agent bake-offs: HOLD THE HARNESS/scaffold CONSTANT across models — it can swing more than the model gap.
+      Instrument DRIFT is a confound: if the thing under test changes across versions (a skill's prompt/rules),
+      freeze ANCHOR items + equate to them — else a score delta can't separate capability from instrument drift.
    5. STATS: N+power (MDE for the gap you need, ~1000 items for 3pp) · SE+n on every decision number
       (CLT, NOT Bernoulli on F1/partial/judge) · compare PAIRED on the same items · >=2 seeds, NO
       single-run headline · clustered SE if items are grouped · CI unit = ITEM not run · fail any cell
