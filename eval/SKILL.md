@@ -137,6 +137,21 @@ Answer in writing (they become PREREGISTRATION.md fields):
    *For retrieval/ranking:* is there exactly ONE relevant item per query, or can the corpus
    hold co-relevant siblings? One-gold recall@k is valid only in the former; topically-dense
    corpora need graded multi-doc relevance, or recall@k scores label noise (see Phase 3).
+   *For free-text "did they identify X?" grading:* substring/anchor matching is paraphrase-brittle
+   and biased against the arm that words it differently (critique_replay: a scored "universal MISS"
+   was a universal HIT — the anchor caught one arm's phrasing). INVERT the default there — a blind
+   dual-family judge (**cite-required**: a DETECTED with no quotable span is NOT_FOUND) is PRIMARY;
+   substring + cross-arm convergence run as deterministic BACKSTOPS that FLAG (never silently override)
+   disagreements for human resolution (evals ADR 0005). Three judge-transport gotchas that contaminated
+   a real run *before* its verdict — all caught by reading traces, not buckets:
+   - **INLINE the payload into the judge prompt; do NOT `-f`-attach it.** Under grading framing the judge
+     silently mis-reads an attached file ("no reviewer findings were provided") though it IS delivered —
+     reproduced deterministically. (Fix belongs in `evalcore.judge.dispatch`.)
+   - **A "no findings" / JUDGE_ERROR verdict is TRANSPORT, not a miss** — read the rationale; SMOKE one
+     packet before the batch (it caught two transport bugs before any spend; separate transport from capability).
+   - **Judge competence is ASYMMETRIC — validate each judge against ground truth before trusting a panel.**
+     Cross-family-PRIMARY routing assumes equal competence; a weaker judge (gemini-3.5-flash, forced temp=1.0)
+     under-counts the arms it is primary for. κ + human-resolve-disagreements is load-bearing, not optional.
 4. **Criterion over pipeline** — rubric/criterion design explains ~9× more judge-reliability
    variance than scoring architecture. Spend the hour on the rubric, not on a fancier panel.
 5. **Contamination plan** — per-item provenance: `authored-fresh | post-cutoff |
