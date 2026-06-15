@@ -1,5 +1,6 @@
 ---
 name: interview-prompt
+disable-model-invocation: true
 description: Elicit Markus's taste, beliefs, or preferences by generating high-information questions and asking only the most revealing ones. Active-learning interviewer — analyze a topic/draft/essay, brainstorm many candidate questions, sketch hypothetical answers, ask the few whose answers are most unpredictable. Use before a writing session, to seed/sharpen writing-style, to resolve a taste fork, or when "interview me about X". Routes answers into feedback memory or the writing-style corpus.
 user-invocable: true
 argument-hint: "[--n N] [--route feedback|writing-style|none] topic, draft path, or essay to interview about"
