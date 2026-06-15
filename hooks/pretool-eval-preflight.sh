@@ -44,8 +44,43 @@ except ValueError:
 RUNNER = re.compile(r'(^|/)(run[\w-]*|judge[\w-]*|score|dispatch-arm|dispatch-cursor-arm)\.(py|sh)$')
 MARKERS = ("EXPERIMENT.md", "PREREGISTRATION.md")
 PATHSEG = re.compile(r'/(evals?|benchmarks?)(/|$)|/tests/evals(/|$)')
-for t in toks:
+
+# READ-vs-RUN discriminator: a runner-named token (run*.py / judge*.py / score.py / dispatch-arm.sh)
+# only counts as an eval RUN when it's in EXECUTION position — NOT when it's an ARGUMENT to a
+# read-only inspector (`grep judge_refusal.py`, `find . -name judge.py`, `wc -l run.py`, `cat`,
+# `ls`). Without this, read-only research/inspection on eval files wrongly tripped the gate and
+# burned subagent turns (2026-06-15). Fail OPEN on ambiguity (conservative — better to miss a run
+# than to block every read).
+INTERP = {"python", "python3", "python3.11", "python3.12", "python3.13", "uv", "bash", "sh",
+          "zsh", "nohup", "time", "env", "sudo", "exec", "poetry", "pdm"}
+READONLY = {"grep", "rg", "cat", "head", "tail", "wc", "ls", "find", "sed", "awk", "sort", "uniq",
+            "diff", "less", "more", "echo", "printf", "stat", "file", "column", "jq", "cut", "tr",
+            "git", "xargs", "nl", "tee", "strings", "xxd", "od", "comm", "fold", "basename",
+            "dirname", "realpath", "test", "["}
+SEP = {"&&", ";", "|", "||", "&"}
+
+def _is_run(toks, i, t):
+    if t.startswith("./"):
+        return True                       # explicit ./run.py
+    s = 0                                 # start of this pipeline segment
+    for j in range(i - 1, -1, -1):
+        if toks[j] in SEP:
+            s = j + 1
+            break
+    cmd_head = None                       # first non-env-assignment token of the segment
+    for x in toks[s:i]:
+        if re.match(r'^[A-Za-z_]\w*=', x):  # skip leading VAR=val env prefixes
+            continue
+        cmd_head = x
+        break
+    if cmd_head in READONLY:
+        return False                      # script is an argument to a read-only command
+    return cmd_head is None or cmd_head in INTERP  # bare command, or python3/uv/bash X.py
+
+for i, t in enumerate(toks):
     if not RUNNER.search(t):
+        continue
+    if not _is_run(toks, i, t):
         continue
     d = os.path.dirname(t)
     d = os.path.expanduser(d) if d else cwd
