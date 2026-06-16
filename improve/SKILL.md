@@ -406,6 +406,7 @@ job surfaces here on the first tick after it breaks (this is why the loop is wat
 
 ```bash
 just -f ~/Projects/agent-infra/justfile hooks-smoke --timeout 8 2>&1 | tail -3   # ~15s; non-zero exit = a dead/broken hook
+uv run python3 ~/Projects/agent-infra/scripts/pulse.py canary 2>&1 | grep -E "✗|ALARM" || true  # closure-instrument liveness (null/constant/stale) — a dead metric is the tick's priority
 launchctl list 2>/dev/null | grep agent-infra | awk '$2 != 0 {print "  launchd non-zero exit:", $3}'  # red launchd jobs
 just -f ~/Projects/agent-infra/justfile freshness 2>&1 | grep -E "DUE|source"  # surveillance sweeps past cadence
 ```
