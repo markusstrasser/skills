@@ -60,3 +60,5 @@ media/
 !.model-review/*/findings.json
 !.model-review/*/coverage.json
 !.model-review/*/verified-disposition.md
+critique/.model-review/*/
+!critique/.model-review/dispatch.json
