@@ -77,7 +77,29 @@ Write review material to a single context file.
 
 This prevents the #1 review failure mode: models optimizing for the wrong scale. Evidence: selve UMLS review (2026-04-06) — GPT scored a plan 27/100 as "over-engineered for 105 personal entities" when the actual scope was multi-user scalable.
 
-**Goals & governance anchoring:** Check for `docs/GOALS.md`. Include as preamble if found.
+**Governance relevance — curate, do NOT dump the charter.** Do not inject the whole
+`GOALS.md`/`CLAUDE.md`/constitution as a preamble. A full-charter block under "review
+against these" biases reviewers toward compliance and suppresses the independent
+judgment that is the whole point of cross-model review (2026-06-15 biased-critique
+incident — the neutral re-run only de-biased once the charter was removed). The
+dispatch script no longer auto-injects it; `--charter-anchor` is the explicit opt-in
+for a *compliance* review only.
+
+Instead, as the orchestrating agent, **select the few CURRENT + RELEVANT governance
+constraints that actually bear on THIS review** and add them as a short, targeted block
+in the context you assemble. E.g. a plan proposing a compatibility shim → the
+breaking-refactors-by-default principle; a shared-infra change → the autonomy
+boundaries; a schema/taxonomy → the single-source-of-truth invariant; a research memo →
+the on-point epistemic principle.
+
+- **Relevant + current only.** Re-read the source and confirm each principle still
+  exists / isn't stale before quoting it — governance drifts, and a quoted-but-removed
+  rule misleads the reviewer (verify-before-recommending applies to your own charter).
+- **Frame for judgment, not obedience.** Header it *"Relevant project constraints —
+  apply your own judgment: flag the work if it violates these, AND flag a constraint
+  itself if it looks wrong for this case."* Never *"review against these, not your priors."*
+- **Default to none.** If no principle is clearly on-point, inject nothing — blind-
+  adversarial is the correct default.
 
 See `references/context-assembly.md` for detailed context gathering (narrow, broad, auto-assembled).
 
@@ -169,7 +191,7 @@ ADR: `agent-infra/decisions/2026-06-15-voi-sequenced-review.md`
 
 ### 2. Dispatch
 
-**Always use the script.** It handles: context assembly, goals/governance preamble injection, parallel dispatch to Gemini + GPT via the shared dispatch core, extraction, and disposition generation.
+**Always use the script.** It handles: context assembly, parallel dispatch to Gemini + GPT via the shared dispatch core, extraction, and disposition generation. It does NOT inject the full goals/governance charter by default (blind-adversarial — see Governance relevance above); pass `--charter-anchor` only for an explicit compliance review, and put any *curated* relevant principles into the `--context` packet yourself.
 
 ```bash
 uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
