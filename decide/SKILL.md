@@ -105,8 +105,22 @@ ACTUAL code, cite file:line — which findings are already-handled vs genuinely-
 boundary + overlay model + retraction as "build these"; repo-grounded review showed all three already
 built but *dark/unwired* — changing the decision from greenfield to convergence). **Route arch/design
 critique to OPUS-tier, NEVER Sonnet** — a sonnet repo-critique built a "HALT, reverse the spine"
-conclusion on a search-error false premise (it searched the wrong directory). Pair Opus + GPT-5.5,
-both repo-grounded. (`feedback_repo_grounded_critique`, `feedback_opus_not_sonnet_for_arch`.)
+conclusion on a search-error false premise (it searched the wrong directory).
+
+**Scale to a PANEL of 3–6 repo-grounded cursor agents for a codebase-coupled arch decision** (operator
+directive 2026-06-16, "whatever it takes for good design") — model-diverse via the cursor transport
+(`claude-opus-4-8-thinking-high`, `gpt-5.5-high`, `composer-2.5`: cross-lab AND live repo) and
+role-diverse: **≥1 dedicated FACT-CHECKER** tasked to resolve EVERY `file:line` / count / zero-consumer
+claim in the plan → PRESENT / ABSENT / MISMATCH, plus arch/spine critics and **≥1 innovation /
+alternative-mechanism explorer**. `/critique model` already runs a cursor premise-scout by default
+(`model-review.py`, line ~17 — "the only axis that can falsify a plan's premises; packet-only reviewers
+went 0-for-5"); this scales it up and makes the fact-check role explicit. **Why the dedicated fact-checker
+(the ADR-0029 lesson):** 5 ground-truth errors survived 4 critique rounds *including* two repo-grounded
+ones — because the cursor critics were aimed at ARCHITECTURE (and nailed the spine) but were never tasked
+with exhaustive fact-verification; a reviewer anchors on a plausible asserted `file:line` and reasons
+about the design around it instead of grepping whether it resolves. The fact-check role + a deterministic
+resolver gate (re-run every pinned probe, diff vs claimed) is the cure — not more architecture critique.
+(`feedback_repo_grounded_critique`, `feedback_opus_not_sonnet_for_arch`, `feedback_critique_panel_include_composer`.)
 
 After EACH round, the two non-negotiable checkpoints:
 
