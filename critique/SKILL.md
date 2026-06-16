@@ -92,6 +92,11 @@ breaking-refactors-by-default principle; a shared-infra change → the autonomy
 boundaries; a schema/taxonomy → the single-source-of-truth invariant; a research memo →
 the on-point epistemic principle.
 
+**Curate FROM the compact index, not the raw docs.** If the project has
+`.claude/governance-index.md` (generated from GOALS/constitution/vetoed-decisions by
+`just governance-index` — so it's current and compact), use it as the menu to pick the
+relevant lines from. It is the single source; don't re-read or re-state the full charter.
+
 - **Relevant + current only.** Re-read the source and confirm each principle still
   exists / isn't stale before quoting it — governance drifts, and a quoted-but-removed
   rule misleads the reviewer (verify-before-recommending applies to your own charter).
