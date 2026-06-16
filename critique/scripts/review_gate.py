@@ -541,7 +541,20 @@ def cmd_triage(args: argparse.Namespace) -> int:
 
     dead = _scan_dead_refs(packet_text, repo) if packet_text else []
     if dead:
-        blockers.append(f"dead refs in packet: {', '.join(dead[:8])}")
+        # Dead refs are a diff-COHERENCE signal. Block when there's actual code under
+        # review (a diff layer runs, or explicit close mode): a packet citing
+        # nonexistent files means the diff is incoherent. For a pure DESIGN doc
+        # (plan/ADR — no diff layer) the packet legitimately names cross-repo paths
+        # (~/Projects/other-repo/…), tools by basename, and skill-relative files, so
+        # a "dead ref" is informational, not a defect (recurred 2026-06-15/16 as a
+        # false-block on design critique; the gather `missing:` field already
+        # surfaces these honestly).
+        if args.mode == "close" or layers["diff"]["run"]:
+            blockers.append(f"dead refs in packet: {', '.join(dead[:8])}")
+        else:
+            warnings.append(
+                f"dead refs in packet (design-doc, informational): {', '.join(dead[:8])}"
+            )
 
     review_dir = args.review_dir.resolve() if args.review_dir else _latest_review_dir(repo)
     review_hash = None

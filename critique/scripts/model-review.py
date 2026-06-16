@@ -674,6 +674,47 @@ def dispatch_manifest_blockers(manifest: dict) -> list[str]:
     return [str(b) for b in (manifest.get("blockers") or []) if str(b).strip()]
 
 
+def _manifest_matches_packet(manifest_path: Path, context_path: Path | None) -> bool:
+    """True iff an AUTO-discovered dispatch manifest was computed for the current
+    --context packet.
+
+    Binds via the packet's content hash (review_gate records it as ``review_hash``
+    from the packet sidecar's ``payload_hash``), with a ``packet_path`` fallback.
+    Prevents a stale dispatch.json — from a prior triage in this session or a peer —
+    from silently poisoning the dispatch with its blockers (the stale-canonical-
+    artifact failure mode). An EXPLICIT --dispatch-manifest is always honored; this
+    only gates the silent auto-load.
+    """
+    if context_path is None:
+        return False
+    try:
+        manifest = json.loads(manifest_path.read_text())
+    except (OSError, ValueError):
+        return False
+    expected_hash = manifest.get("review_hash")
+    if expected_hash:
+        sidecar = context_path.with_suffix(".manifest.json")
+        if sidecar.is_file():
+            try:
+                sidecar_data = json.loads(sidecar.read_text())
+            except (OSError, ValueError):
+                sidecar_data = {}
+            actual = sidecar_data.get("payload_hash") or sidecar_data.get(
+                "rendered_content_hash"
+            )
+            if actual:
+                return actual == expected_hash
+    # No usable content hash → bind on the recorded packet path.
+    recorded = manifest.get("packet_path")
+    if recorded:
+        try:
+            return Path(recorded).resolve() == context_path.resolve()
+        except OSError:
+            return False
+    # No binding info at all → cannot prove freshness → do not auto-trust.
+    return False
+
+
 def _axis_execution_status(entry: dict) -> str:
     reason = entry.get("failure_reason")
     if reason == "budget_exhausted":
@@ -1340,6 +1381,7 @@ def build_context(
     context_file_specs: list[str] | None = None,
     budget_limit_override: int | None = None,
     premise_scout_path: Path | None = None,
+    charter_anchor: bool = False,
 ) -> dict[str, ContextArtifact]:
     """Assemble shared context packet with goals/governance preamble.
 
@@ -1350,7 +1392,7 @@ def build_context(
     When both are supplied, --context becomes the "Provided Context" section and
     --context-files become an additional "Context Files" section. Mutex relaxed 2026-05-07.
     """
-    preamble_blocks, _ = build_review_preamble_blocks(project_dir)
+    preamble_blocks, _ = build_review_preamble_blocks(project_dir, charter_anchor=charter_anchor)
     packet_sections = [PacketSection("Preamble", preamble_blocks)]
 
     if premise_scout_path and premise_scout_path.exists():
@@ -2803,6 +2845,15 @@ def main() -> int:
         help="Project dir for goals/governance doc discovery (default: cwd)",
     )
     parser.add_argument(
+        "--charter-anchor",
+        action="store_true",
+        help="Inject the project's GOALS/governance as a review frame (compliance "
+        "review). DEFAULT OFF — design/diff critique is blind-adversarial: the "
+        "reviewer judges on its own priors, not against the project's stated "
+        "conclusions (verbatim-charter injection biases toward compliance and "
+        "against scoping-down). Turn on only for explicit goal-compliance review.",
+    )
+    parser.add_argument(
         "--sibling-roots",
         type=Path,
         nargs="*",
@@ -2908,11 +2959,22 @@ def main() -> int:
 
     dispatch_manifest_default = project_dir / ".model-review" / "dispatch.json"
     if args.dispatch_manifest is None and dispatch_manifest_default.is_file():
-        args.dispatch_manifest = dispatch_manifest_default
-        print(
-            f"note: auto-loaded dispatch manifest {dispatch_manifest_default}",
-            file=sys.stderr,
-        )
+        # Provenance gate: only trust an AUTO-discovered manifest if it was computed
+        # for THIS packet. A stale dispatch.json (prior triage — this session or a
+        # peer) otherwise silently poisons the run with its blockers. An explicit
+        # --dispatch-manifest is always honored; this gates only the silent auto-load.
+        if _manifest_matches_packet(dispatch_manifest_default, args.context):
+            args.dispatch_manifest = dispatch_manifest_default
+            print(
+                f"note: auto-loaded dispatch manifest {dispatch_manifest_default}",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"note: ignoring STALE dispatch manifest {dispatch_manifest_default} "
+                "(computed for a different packet) — self-configuring",
+                file=sys.stderr,
+            )
 
     # At least one of --context / --context-files must be provided (mutex relaxed 2026-05-07)
     if not args.context and not args.context_files:
@@ -3052,9 +3114,12 @@ def main() -> int:
         axis_names,
         context_file_specs=args.context_files,
         premise_scout_path=premise_scout_path,
+        charter_anchor=args.charter_anchor,
     )
 
-    governance_path = find_governance(project_dir)
+    # charter_anchor=False (default) → blind-adversarial: do NOT frame the per-axis
+    # questions with the project's goals either, so the whole review stays prior-driven.
+    governance_path = find_governance(project_dir) if args.charter_anchor else None
 
     # Load per-axis question overrides
     question_overrides = None

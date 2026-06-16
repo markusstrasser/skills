@@ -22,15 +22,33 @@ def find_governance(project_dir: Path) -> str | None:
     return None
 
 
-def build_review_preamble_blocks(project_dir: Path) -> tuple[list, bool]:
+def build_review_preamble_blocks(
+    project_dir: Path, charter_anchor: bool = False
+) -> tuple[list, bool]:
+    """Assemble the review preamble.
+
+    ``charter_anchor`` gates the project GOALS/governance block:
+      - ``False`` (default) — **blind-adversarial** critique: the reviewer judges
+        on its own priors, NOT against the project's stated conclusions. Correct
+        default for design/diff critique (the blind-first-pass principle).
+        Verbatim-charter injection measurably biases reviewers toward
+        charter-compliance and against scoping-down (2026-06-15 biased-critique
+        incident; the neutral re-run only de-biased once the charter was removed).
+      - ``True`` — **compliance/governance** review: inject GOALS so the reviewer
+        checks the work *against* the stated goals.
+
+    ``DEVELOPMENT_CONTEXT`` is ALWAYS injected: it corrects a reviewer bias
+    (assuming human dev costs → "over-engineered for the effort") without imposing
+    the project's conclusions, so it is unbiasing in both modes.
+    """
     goals_path = find_governance(project_dir)
     blocks = []
-    if goals_path:
+    if charter_anchor and goals_path:
         blocks.append(
             PreambleBlock(
-                "PROJECT GOALS & GOVERNANCE (verbatim — review against these, not your priors)",
+                "PROJECT GOALS & GOVERNANCE (verbatim — compliance review against these)",
                 Path(goals_path).read_text(),
             )
         )
     blocks.append(PreambleBlock("DEVELOPMENT CONTEXT", DEVELOPMENT_CONTEXT))
-    return blocks, bool(goals_path)
+    return blocks, bool(charter_anchor and goals_path)
