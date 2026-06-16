@@ -514,7 +514,8 @@ def write_structural_assumptions_artifact(review_dir: Path, assumptions: list[st
     return path
 
 # Presets map a single name to a list of axes.
-# `claude` (Opus 4.8) and `composer` (Cursor Composer 2.5, $0) are opt-in
+# `claude` (Opus 4.8, $0 subscription) and `composer` (Cursor Composer 2.5,
+# metered Cursor pool — "sub" but not free) are opt-in
 # third-lineage cosigners — intentionally NOT in any preset. Request explicitly:
 # `--axes arch,formal,claude` or `--axes arch,formal,composer`.
 #
