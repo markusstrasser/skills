@@ -14,6 +14,20 @@ cheaper AND better for structured work** — measured gemini-flash `-e low` beat
 thinking on quality (1.17×), cost (4×), and speed (4×); default over-reasoning *hurt*.
 Set `-e low` for extraction/classification; reserve high effort for open synthesis.
 
+## Don't rebuild usage capture — llmx already logs it (incl. reasoning tokens + caller)
+Before writing any per-call cost/usage dispatcher, know this exists: `llmx/usage_log.py`
+records every **API-transport** call to `~/.claude/llmx-usage.jsonl` — prompt / completion /
+**reasoning** / cached tokens **+ the caller** (which script/skill invoked it = cost attribution
+per memo/job, for free). `python ~/Projects/llmx/scripts/usage_summary.py --by caller` rolls it
+up to estimated **$** (a PRICING table; `out = completion + reasoning`, so reasoning is billed
+correctly). So "cost per X" needs **no new dispatcher** — read the log. Two real caveats, both
+fix-in-place not fork: (1) **CLI / subscription transports (codex-cli, claude-cli, cursor) log
+NULL tokens** — those CLIs don't return a usage object, so only API transports (gemini paid API,
+openai-api direct) are metered; a subscription run shows calls with empty token fields. (2) the
+PRICING table is a **hardcoded constant that goes stale** (shows `+?` for unpriced models) — update
+it in `usage_summary.py`, don't build a parallel pricer. A bespoke OpenAI-only dispatcher would
+miss gemini/claude AND duplicate the capture llmx already does AND lose the caller attribution.
+
 ## One-offs want a RAW MESSAGES call, NOT an agent
 An *agent* CLI (codex exec, claude/cursor default mode) carries a large harness system
 prompt + tool defs, **re-sent every turn** — pure overhead for a one-shot "text → JSON".
