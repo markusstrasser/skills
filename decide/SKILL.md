@@ -76,6 +76,18 @@ Output: the ADR + the invariants the decision must preserve.
   premise in seconds. (Canonical miss: a spec compared two hash functions assumed equal — different
   widths, one never written for half the entities; caught only by reading the writer, after the arc
   had already produced an ADR on it.)
+- **Every BLOCKER gets its OWN falsification probe — the highest-leverage claims deserve MORE probing, not
+  less.** A "precondition / must-close-before / gates-the-rest" claim is where a wrong premise does the most
+  damage (it reorders the whole plan), yet it is the easiest to assert by analogy from a nearby true fact.
+  For each blocker, write the literal command that would prove it FALSE and run it — separate from the facts
+  it is derived from. **Probe the WRITER/BUILDER of the artifact the decision rests on, not just its readers:**
+  "X reads the monolith" (true of the current instance) does NOT establish "the product reads the monolith"
+  (false when the product artifact is built by a different pipeline). Reader-probes prove the wrong thing.
+  (Canonical miss 2026-06-16: plan blocker "the 566-claim subject_scope leak gates the release" survived the
+  whole arc and was falsified by one grep at execute time — `build_claims_public.py:4` never reads the
+  monolith, so the leak cannot reach the product base; the blocker had probed the monolith readers, never the
+  base builder, and named the wrong gate — `subject_scope` instead of the real `safe_to_share`/clean-room
+  boundary that already contained it.)
 - Write the plan with probes embedded → `.claude/plans/<session>-<slug>.md`.
 
 Output: a plan grounded in *verified* facts, not assumptions.
