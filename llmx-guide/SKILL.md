@@ -20,6 +20,12 @@ For profile-based dispatch with a context manifest, `~/Projects/skills/scripts/l
 
 **Cheap/lean one-off?** Read [bare-lean-dispatch.md](references/bare-lean-dispatch.md): reasoning tokens bill as output (`-e low` is cheaper AND better); one-offs want a RAW messages call not an agent harness; bare invocations to strip MCPs (codex `-c mcp_servers={}`, claude `--system-prompt --tools "" --strict-mcp-config` on the free sub, cursor `--mode ask`); subscription-routing footguns. Contract-tested: `tests/test_cli_contracts.py` (run `LIVE_CLI=1 pytest` after any codex/claude/cursor update).
 
+**Measuring spend / "cost per X"?** Don't build a usage dispatcher — llmx already logs every
+**API-transport** call (prompt/completion/**reasoning**/cached tokens + **caller**) to
+`~/.claude/llmx-usage.jsonl`; `python ~/Projects/llmx/scripts/usage_summary.py --by caller` rolls it
+to estimated `$` (reasoning counted as output). Caveats: CLI/subscription transports log NULL tokens
+(only API transports metered); the PRICING table goes stale — fix it in place, don't fork.
+
 ## Canonical patterns
 
 ### Probe (before subscription dispatch or critique batches)
