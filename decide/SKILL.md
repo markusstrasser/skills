@@ -82,7 +82,21 @@ Output: a plan grounded in *verified* facts, not assumptions.
 
 ### Phase 4 — Escalating adversarial, closed-loop → `/critique model`
 Rounds: **standard → deep (`--axes deep`) → confidence pass.** Cross-model (Gemini + GPT), never
-same-model (FM11 peer-review theater). After EACH round, the two non-negotiable checkpoints:
+same-model (FM11 peer-review theater).
+
+**For codebase-coupled decisions, ALSO run REPO-GROUNDED agents — not only cold API models.** A cold
+reviewer (Gemini/GPT over a pasted spec) produces good *generic* failure modes but cannot tell which
+are *already handled by existing code*. Run cursor agents with real repo read access:
+`cursor-agent -p -f --mode ask --model claude-opus-4-8-thinking-high "verify the design against the
+ACTUAL code, cite file:line — which findings are already-handled vs genuinely-open"`. They routinely
+**overturn the cold round's "must-build" list** (lived 2026-06-16: a cold round flagged the release
+boundary + overlay model + retraction as "build these"; repo-grounded review showed all three already
+built but *dark/unwired* — changing the decision from greenfield to convergence). **Route arch/design
+critique to OPUS-tier, NEVER Sonnet** — a sonnet repo-critique built a "HALT, reverse the spine"
+conclusion on a search-error false premise (it searched the wrong directory). Pair Opus + GPT-5.5,
+both repo-grounded. (`feedback_repo_grounded_critique`, `feedback_opus_not_sonnet_for_arch`.)
+
+After EACH round, the two non-negotiable checkpoints:
 
 1. **Verify-before-fold.** Grep every model claim against the actual code before folding. Model
    line-numbers and symbol names lie; the critique verifier inflates "hallucinated." Trust convergence
