@@ -83,16 +83,20 @@ mode = os.environ.get('PRETOOL_RESEARCH_PROVENANCE_MODE', 'warn').lower()
 if mode == 'shadow':
     sys.exit(0)
 
-msg_lines = [
-    f'Research file write missing provenance tags: {file_path}',
-    'Add at least one before stop-research-gate blocks at session end:',
-    '  [SOURCE: url], [DATABASE: name], [DATA], [INFERENCE],',
-    '  [TRAINING-DATA], [PREPRINT], [FRONTIER], [UNVERIFIED],',
-    '  or NATO Admiralty [A1]-[F6].',
-    '(WARN mode — set PRETOOL_RESEARCH_PROVENANCE_MODE=block to enforce.)',
-]
-print('\n'.join(msg_lines), file=sys.stderr)
+msg = (
+    f'PROVENANCE: research file written without source tags: {file_path}. '
+    'Add at least one now (before stop-research-gate blocks at session end): '
+    '[SOURCE: url], [DATABASE: name], [DATA], [INFERENCE], [TRAINING-DATA], '
+    '[PREPRINT], [FRONTIER], [UNVERIFIED], or NATO Admiralty [A1]-[F6].'
+)
 if mode == 'block':
+    print(msg, file=sys.stderr)
     sys.exit(2)
-sys.exit(1)
+# ERGONOMIC FIX (2026-06-17): emit additionalContext so the AGENT actually sees the
+# reminder at write time and tags in-flight — exit-1 stderr never reaches the model
+# (same lesson stop-research-gate learned for itself; 17 recurring 'wrote memo →
+# blocked at stop → retry' misses were this warning being invisible).
+# research/2026-06-17-embed-once-validated-recurring-mistakes.md
+print(json.dumps({'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'additionalContext': msg}}))
+sys.exit(0)
 "
