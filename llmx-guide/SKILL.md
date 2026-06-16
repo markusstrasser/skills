@@ -16,7 +16,9 @@ llmx info --write-mirror   # → ~/.claude/cache/llmx-routing.json — Read befo
 
 For profile-based dispatch with a context manifest, `~/Projects/skills/scripts/llm-dispatch.py` exists — the dispatch layer behind research-ops/observe/sweep cycles, not a general recommendation; direct CLI dominates ad-hoc usage.
 
-> Detail files: [transport-routing.md](references/transport-routing.md) | [models.md](references/models.md) | [error-codes.md](references/error-codes.md) | [codex-dispatch.md](references/codex-dispatch.md) | [subcommands.md](references/subcommands.md) | [batch-apis.md](references/batch-apis.md)
+> Detail files: [transport-routing.md](references/transport-routing.md) | [bare-lean-dispatch.md](references/bare-lean-dispatch.md) | [models.md](references/models.md) | [error-codes.md](references/error-codes.md) | [codex-dispatch.md](references/codex-dispatch.md) | [subcommands.md](references/subcommands.md) | [batch-apis.md](references/batch-apis.md)
+
+**Cheap/lean one-off?** Read [bare-lean-dispatch.md](references/bare-lean-dispatch.md): reasoning tokens bill as output (`-e low` is cheaper AND better); one-offs want a RAW messages call not an agent harness; bare invocations to strip MCPs (codex `-c mcp_servers={}`, claude `--system-prompt --tools "" --strict-mcp-config` on the free sub, cursor `--mode ask`); subscription-routing footguns. Contract-tested: `tests/test_cli_contracts.py` (run `LIVE_CLI=1 pytest` after any codex/claude/cursor update).
 
 ## Canonical patterns
 
