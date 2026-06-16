@@ -36,6 +36,15 @@ case "$PATH_TARGET" in
   /usr/bin/*|/bin/*|/sbin/*|/usr/local/bin/*|/opt/homebrew/bin/*|*/.bun/bin/*|*/node_modules/.bin/*) exit 0 ;;
 esac
 
+# Reject DIRECTORY targets — `ls DIR` / `du -sh DIR` extract a bare directory
+# (no trailing slash, so the `*/` guard above misses it). A background task's
+# output is always a FILE, never a directory, so re-running `ls`/`du` on the
+# active project dir is normal work, not poll-loop. Without this, N distinct
+# `ls`/`du` on one dir collapse to a single token and trip the counter.
+# Same artifact class as F2 (17x) and the binary case (21-33x): the first-path
+# extractor degrading to a coarser token than the polled leaf.
+[ -d "$PATH_TARGET" ] && exit 0
+
 # Scope tracker per session + fork context to avoid cross-subagent false positives
 # CLAUDE_AGENT_ID is set for subagents; fall back to PPID for main session
 _SCOPE="${CLAUDE_AGENT_ID:-${CLAUDE_SESSION_ID:-$PPID}}"
