@@ -107,6 +107,9 @@ class ReviewGateTest(unittest.TestCase):
         self.assertEqual(policy["budget_seconds"], 480)
 
     def test_triage_dead_ref_blocks(self) -> None:
+        # Dead refs BLOCK in close mode (diff-coherence). For a pure design doc
+        # (model/auto, no diff layer) they now WARN instead — see
+        # test_critique_mode_aware.py::DeadRefModeGateTest.
         self.packet.write_text("# Packet\nSee `missing.py`.\n")
         out = self.repo / "dispatch.json"
 
@@ -116,7 +119,7 @@ class ReviewGateTest(unittest.TestCase):
             manifest = None
             review_dir = None
             base = head = None
-            mode = "auto"
+            mode = "close"
             dispatch_out = out
             json = False
 
