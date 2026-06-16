@@ -95,6 +95,9 @@ INTENT = re.compile(
     r"should (we|i)|could (we|i)|can (we|i)|let'?s|why don'?t (we|i)|"         # suggestion
     r"diagnose|why (is|does|are|did|isn'?t|doesn'?t)|investigate|debug|"       # diagnose
     r"figure out|root[- ]cause|what'?s (wrong|broken|failing|happening)|"
+    r"evaluate|evaluating|critique|critiquing|assess|assessing|audit|"        # evaluate/critique (the eval-repo's core verb class — added 2026-06-16 after a recall miss: 'evaluate … how trustworthy' never matched, so a prior teardown went un-surfaced)
+    r"auditing|teardown|trustworthy|how (good|sound|reliable|trustworthy)|"
+    r"thought (we|i)|didn'?t (we|i)|haven'?t (we|i)|weren'?t (we|i)|"          # retrospective recall ('i thought we did that one')
     r"what'?s the status|any updates?|do we (have|already)|is there (a|an)|"   # status/prior-existence
     r"have we|did we (already|ever)|has (anyone|somebody|someone)|"
     r"is this (already|a thing)|does (this|that) (already )?exist"
