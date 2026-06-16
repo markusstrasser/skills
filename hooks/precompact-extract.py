@@ -302,12 +302,27 @@ def main():
         tracked = False
     if tracked:
         checkpoint_path = os.path.join(checkpoint_dir, "checkpoint-autogen.md")
+    else:
+        # PEER-CLOBBER GUARD (2026-06-17): untracked checkpoint.md is shared mutable
+        # state across concurrent sessions on ONE checkout. If the existing checkpoint
+        # was stamped by a DIFFERENT session, don't overwrite it — divert to autogen.
+        # The git-tracked guard above only protected CURATED (tracked) checkpoints;
+        # 17 recurring shared-checkpoint clobbers were peer UNTRACKED ones slipping it.
+        # research/2026-06-17-embed-once-validated-recurring-mistakes.md
+        try:
+            with open(checkpoint_path) as _f:
+                _m = re.search(r'<!-- session: (\S+) -->', _f.read(400))
+            if _m and session and _m.group(1) != session:
+                checkpoint_path = os.path.join(checkpoint_dir, "checkpoint-autogen.md")
+        except (OSError, FileNotFoundError):
+            pass
 
     ts = datetime.now().strftime("%Y-%m-%d %H:%M")
     has_epistemic = any(buckets.values()) or user_corrections or last_substantial_block
 
     out = []
     out.append("# Resume Checkpoint")
+    out.append("<!-- session: " + (session or "unknown") + " -->")
     out.append("")
     out.append("Written by PreCompact hook at " + ts + ".")
     out.append("This is a handoff document. Prioritize what remains over what happened.")
