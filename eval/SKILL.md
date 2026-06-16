@@ -117,6 +117,15 @@ LEAD on confounds: the controlled design (length-ratio control, truncation contr
 neighborhoods) is scale-independent and transfers. Skipping it is how you repeat a confound the field
 solved two years ago (see the verbosity egg in Anti-patterns).
 
+**For a structured fitness verdict on a candidate external benchmark, dispatch the `benchmark-rater`
+agent** (global; preloads this skill + `model-guide`). It grounds the rate-vs-method call in real
+sources (the paper, the scoring code, training-set membership) and returns **USE-AS-IS /
+ADAPT-DESIGN-ONLY / REJECT** plus a **contamination–durability** sub-verdict (DURABLE / ROTS / NEVER
+— does it rot as a standing instrument re-run per model release?). Use it before adopting a
+third-party benchmark *and* before greenlighting a from-scratch build — its most common output,
+ADAPT-DESIGN-ONLY with a precise BORROW list, is what stops both a needless rebuild and a naive
+adoption of a rotting benchmark.
+
 ## Phase 1 — Design (the questions that decide if the eval should exist)
 
 Answer in writing (they become PREREGISTRATION.md fields):
