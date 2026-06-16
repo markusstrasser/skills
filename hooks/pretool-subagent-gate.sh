@@ -298,11 +298,14 @@ if [ -n "$PROMPT" ]; then
                 elif [ "$AGENT_DEF_DISCIPLINED" -gt 0 ]; then
                     CHECK_IDS="${CHECK_IDS}7,"
                     WARNINGS="${WARNINGS}SUBAGENT OUTPUT: Dispatch prompt missing ${MISSING}. (Advisory — ${STYPE} agent-def already embeds the output discipline.) "
-                # Block if prompt is substantial (>200 chars = real research task)
+                # ERGONOMIC FIX (2026-06-17): AUTO-INJECT instead of block-then-retry.
+                # 18 recurring "dispatch rejected → re-dispatch" misses (semantic mining,
+                # research/2026-06-17-embed-once-validated-recurring-mistakes.md) were THIS
+                # gate blocking the first attempt. Append the discipline to the prompt and
+                # let the dispatch proceed — same outcome, zero retry (transform > block).
                 elif [ "$PROMPT_LEN" -gt 200 ]; then
-                    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "check=7 missing=${MISSING}" 2>/dev/null || true
-                    echo "{\"decision\": \"block\", \"reason\": \"FILE-OUTPUT REQUIRED: Dispatch prompt missing ${MISSING}. Add: 'Write results to a file at <path> and return the file path. Your FIRST tool call MUST be Write a PROBE IN PROGRESS stub at that path, then append findings incrementally.' This clears both the file-output and write-stub (Check 10) gates in one retry. Guards against API-limit / mid-run death producing zero persisted output (subagents do not write files unless told).\"}"
-                    exit 2
+                    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "inject" "check=7 missing=${MISSING}" 2>/dev/null || true
+                    INJECT_SUFFIX="OUTPUT DISCIPLINE (auto-added): Write your results to a file and return the file path — if no path is given, choose a descriptive one under .claude/reviews/. Your FIRST tool call MUST be Write a 'PROBE IN PROGRESS' stub at that path, then append findings incrementally as you confirm them (do NOT batch and write at the end — a mid-run cutoff then loses everything)."
                 else
                     CHECK_IDS="${CHECK_IDS}7,"
                     WARNINGS="${WARNINGS}SUBAGENT OUTPUT: Dispatch prompt missing ${MISSING}. "
@@ -363,9 +366,9 @@ if [ -n "$PROMPT" ] && [ "${HAS_FILE_OUTPUT:-0}" -gt 0 ]; then
                     CHECK_IDS="${CHECK_IDS}10,"
                     WARNINGS="${WARNINGS}SUBAGENT WRITE-FIRST: Prompt specifies file output but doesn't instruct write-stub-first. ${STUB_FIX} (Advisory — ${STYPE} agent-def already embeds the discipline.) "
                 elif [ "$PROMPT_LEN" -gt 200 ]; then
-                    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "block" "check=10 missing=write-stub-first" 2>/dev/null || true
-                    echo "{\"decision\": \"block\", \"reason\": \"SUBAGENT WRITE-FIRST REQUIRED: Prompt specifies file output but doesn't instruct write-stub-first. ${STUB_FIX}\"}"
-                    exit 2
+                    # ERGONOMIC FIX (2026-06-17): auto-inject, don't block-then-retry (see Check 7).
+                    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "inject" "check=10 missing=write-stub-first" 2>/dev/null || true
+                    [ -z "$INJECT_SUFFIX" ] && INJECT_SUFFIX="OUTPUT DISCIPLINE (auto-added): Your FIRST tool call MUST be Write a 'PROBE IN PROGRESS' stub at the output path, then append findings incrementally as you confirm them (do NOT batch and write at the end — a mid-run cutoff then loses everything)."
                 else
                     CHECK_IDS="${CHECK_IDS}10,"
                     WARNINGS="${WARNINGS}SUBAGENT WRITE-FIRST: Prompt specifies file output but doesn't instruct write-stub-first. ${STUB_FIX} "
@@ -390,6 +393,25 @@ if [ -n "$PROMPT" ]; then
             fi
         fi
     fi
+fi
+
+# AUTO-INJECT emission (2026-06-17): if a discipline suffix was set, append it to the
+# dispatch prompt via updatedInput so the dispatch proceeds first-time (no block/retry).
+# Fold any accumulated advisory warnings into the same additionalContext.
+if [ -n "$INJECT_SUFFIX" ]; then
+    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "inject-emit" "checks=${CHECK_IDS%,}" 2>/dev/null || true
+    printf '%s' "$INPUT" | INJECT="$INJECT_SUFFIX" WARN="$WARNINGS" python3 -c '
+import sys, json, os
+data = json.load(sys.stdin)
+ti = data.get("tool_input", {})
+ti["prompt"] = (ti.get("prompt", "") or "") + "\n\n" + os.environ["INJECT"]
+out = {"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": ti}}
+w = (os.environ.get("WARN", "") or "").strip()
+if w:
+    out["hookSpecificOutput"]["additionalContext"] = w
+print(json.dumps(out))
+' 2>/dev/null
+    exit 0
 fi
 
 # Emit combined warnings
