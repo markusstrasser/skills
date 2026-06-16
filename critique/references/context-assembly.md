@@ -52,13 +52,22 @@ The shared packet layer generalizes mechanics only:
 
 It does **not** generalize task-specific file selection. Builders still decide what belongs in context.
 
-## Goals & Governance Preamble (Script Handles This)
+## Governance Relevance (Agent Curates — Do NOT Dump the Charter)
 
-The dispatch script auto-injects the project's goals + governance doc as preamble. For manual dispatch, find and inject it yourself:
+The dispatch script does **not** auto-inject the goals/governance charter (it biases
+reviewers toward compliance over independent judgment — 2026-06-15 biased-critique
+incident). Blind-adversarial is the default. `--charter-anchor` is the explicit opt-in
+that injects the full `GOALS.md` verbatim, for a *compliance* review only.
 
-```bash
-GOALS=$(find . -maxdepth 3 -name "GOALS.md" 2>/dev/null | head -1)
-```
+For everything else, the orchestrating agent curates: select the few **current +
+relevant** principles from `GOALS.md`/`CLAUDE.md`/constitution that bear on THIS review
+and add them to the `--context` packet as a short, targeted block — not the whole charter.
 
-- **If GOALS.md found:** Inject as preamble into ALL context bundles (one block covers both stated goals and operating principles).
-- **If GOALS.md missing:** Proceed anyway — cross-model review still has value without project-specific grounding.
+- **Relevant + current only.** Re-read the source and confirm each principle still
+  exists before quoting it (governance drifts; a stale quote misleads the reviewer).
+- **Frame for judgment, not obedience.** Header it *"Relevant project constraints —
+  apply your own judgment; flag the work if it violates these, AND flag a constraint if
+  it looks wrong here."* Never *"review against these, not your priors."*
+- **Default to none.** No on-point principle → inject nothing.
+
+See SKILL.md § *Governance relevance — curate, do NOT dump the charter* for examples.
