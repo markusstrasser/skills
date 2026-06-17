@@ -685,7 +685,7 @@ else
       DOMAIN="trading"
       ;;
     /Users/alien/Projects/genomics|/Users/alien/Projects/genomics/*|\
-    /Users/alien/Projects/selve|/Users/alien/Projects/selve/*)
+    /Users/alien/Projects/phenome|/Users/alien/Projects/selve/*)
       DOMAIN="research"
       ;;
     /Users/alien/Projects/agent-infra/experiments|/Users/alien/Projects/agent-infra/experiments/*)

@@ -612,7 +612,7 @@ hooks/epistemic-domain-router.sh --- Bash
 24       ;;                              24       ;;
 25     /Users/alien/Projects/genomics|/  25     /Users/alien/Projects/genomics|/
 .. Users/alien/Projects/genomics/*|\     .. Users/alien/Projects/genomics/*|\
-26     /Users/alien/Projects/selve|/Use  26     /Users/alien/Projects/phenome|/U
+26     /Users/alien/Projects/phenome|/Use  26     /Users/alien/Projects/phenome|/U
 .. rs/alien/Projects/selve/*)            .. sers/alien/Projects/phenome/*)
 27       DOMAIN="research"               27       DOMAIN="research"
 28       ;;                              28       ;;
