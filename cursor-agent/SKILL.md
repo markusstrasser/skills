@@ -11,7 +11,7 @@ effort: low
 
 Headless Cursor Agent from any terminal. Announced [2025-08-07](https://cursor.com/blog/cli); docs: [cursor.com/docs/cli](https://cursor.com/docs/cli).
 
-**Default model here: `composer-2.5`** (also `composer-2.5-fast`). Cursor subscription auth — not llmx, not `claude -p`.
+**Only model here: `composer-2.5`** (also `composer-2.5-fast`). Cursor subscription auth — not llmx, not `claude -p`. **NEVER pass a foreign model** (opus/gpt/claude/gemini/sonnet) to `cursor-agent` — cursor proxies them at separate metered rates and it's off-policy. Enforced by `hooks/pretool-cursor-model-guard.py` (blocks any non-Composer `--model`). For frontier models use `claude -p` / `codex exec` / `llmx`, not cursor.
 
 ## Install & auth
 
