@@ -523,7 +523,7 @@ brainstorm/references/llmx-dispatch.md --- 2/2 --- Text
 ...                                      ...  extract yourself.
 
 hooks/epistemic-domain-router.sh --- Bash
-26     /Users/alien/Projects/selve|/Use  26     /Users/alien/Projects/selve|/Use
+26     /Users/alien/Projects/phenome|/Use  26     /Users/alien/Projects/phenome|/Use
 .. rs/alien/Projects/selve/*)            .. rs/alien/Projects/selve/*)
 27       DOMAIN="research"               27       DOMAIN="research"
 28       ;;                              28       ;;
@@ -1478,7 +1478,7 @@ else
       DOMAIN="trading"
       ;;
     /Users/alien/Projects/genomics|/Users/alien/Projects/genomics/*|\
-    /Users/alien/Projects/selve|/Users/alien/Projects/selve/*)
+    /Users/alien/Projects/phenome|/Users/alien/Projects/selve/*)
       DOMAIN="research"
       ;;
     /Users/alien/Projects/agent-infra/experiments|/Users/alien/Projects/agent-infra/experiments/*)
