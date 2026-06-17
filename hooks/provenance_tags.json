@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "_README": "STRUCTURED single source of truth for the provenance-tag taxonomy. Human doc: ../references/provenance-tags.md. The grep-friendly regex provenance_tags.re is GENERATED from this file by gen_provenance_re.py and must match byte-for-byte (test_provenance_tags.py enforces it). Consumers LOAD this (bash via jq/python; python via json) or LOAD the generated .re — they never re-state the head list. 'in_re' controls whether a head appears in the generated .re (the global-hook projection): heads with in_re=false are part of the vocabulary but DELIBERATELY excluded from the hook until an owner approves widening it. 'class' (source|epistemic|status|grade) is the structured axis the KG-fold maps to a source_tier; it does not affect matching.",
+  "heads": [
+    {"head": "SOURCE",        "class": "source",    "payload": "required", "in_re": true},
+    {"head": "DATABASE",      "class": "source",    "payload": "required", "in_re": true},
+    {"head": "DATA",          "class": "source",    "payload": "bare",     "in_re": true},
+    {"head": "INFERENCE",     "class": "epistemic", "payload": "bare",     "in_re": true},
+    {"head": "SPEC",          "class": "source",    "payload": "bare",     "in_re": true},
+    {"head": "CALC",          "class": "epistemic", "payload": "bare",     "in_re": true},
+    {"head": "QUOTE",         "class": "source",    "payload": "bare",     "in_re": true},
+    {"head": "TRAINING-DATA", "class": "epistemic", "payload": "bare",     "in_re": true},
+    {"head": "PREPRINT",      "class": "source",    "payload": "bare",     "in_re": true},
+    {"head": "FRONTIER",      "class": "epistemic", "payload": "bare",     "in_re": true},
+    {"head": "UNVERIFIED",    "class": "epistemic", "payload": "bare",     "in_re": true},
+    {"head": "ESTIMATED",     "class": "epistemic", "payload": "bare",     "in_re": false},
+    {"head": "PROVISIONAL",   "class": "status",    "payload": "bare",     "in_re": false}
+  ],
+  "grade_tags": {"pattern": "[A-F][1-6]", "reason": "optional", "class": "grade", "in_re": true},
+  "engine":   ["Exa", "S2", "PubMed", "arXiv"],
+  "genomics": ["ClinGen", "CPIC", "gnomAD", "OMIM"]
+}
