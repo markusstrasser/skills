@@ -337,6 +337,14 @@ class AxisResolutionTest(unittest.TestCase):
         self.assertEqual(axes, ["arch", "gaps", "correctness", "contracts"])
         self.assertTrue(any(model_review.axis_uses_gpt(a) for a in axes))
 
+    def test_preset_plus_axis_expansion(self) -> None:
+        axes = model_review.resolve_axes("standard,formal")
+        self.assertEqual(
+            axes,
+            ["arch", "gaps", "correctness", "contracts", "formal"],
+        )
+        self.assertEqual(model_review.resolve_axes("cross2,formal"), ["arch", "correctness", "formal"])
+
     def test_cross2_preset_diagonal(self) -> None:
         axes = model_review.resolve_axes("cross2")
         self.assertEqual(axes, ["arch", "correctness"])
@@ -1029,8 +1037,31 @@ class DispatchBudgetTest(unittest.TestCase):
     def test_skip_when_remaining_less_than_profile(self) -> None:
         budget = model_review.DispatchBudget(
             deadline_mono=time.monotonic() + 90,
+            total_seconds=480,
         )
         self.assertFalse(budget.can_start(600))
+
+    def test_budget_insufficient_for_profile_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            rd = Path(tmp)
+            budget = model_review.DispatchBudget(
+                deadline_mono=time.monotonic() + 400,
+                total_seconds=480,
+            )
+            entry = model_review._budget_skipped_axis(
+                "arch", rd, budget, profile_timeout=600
+            )
+            self.assertEqual(entry["failure_reason"], "budget_insufficient_for_profile")
+
+    def test_axis_budget_restarts_after_scout_phase(self) -> None:
+        """Scout wall time must not reduce the axis dispatch budget."""
+        budget_before_scout = model_review.DispatchBudget.from_seconds(650)
+        rem_before = budget_before_scout.remaining()
+        time.sleep(0.05)
+        rem_after_scout = budget_before_scout.remaining()
+        self.assertLess(rem_after_scout, rem_before)
+        budget_for_axes = model_review.DispatchBudget.from_seconds(650)
+        self.assertGreater(budget_for_axes.remaining(), rem_after_scout)
 
     def test_start_when_remaining_fits_profile(self) -> None:
         budget = model_review.DispatchBudget(
@@ -1144,6 +1175,57 @@ class DispatchBudgetTest(unittest.TestCase):
             self.assertEqual(receipt["schema_version"], model_review.EXECUTION_RECEIPT_SCHEMA_VERSION)
             self.assertEqual(receipt["overall"], "partial")
             self.assertEqual(receipt["axes"]["gaps"]["status"], "skipped_budget")
+
+
+class VerifyClaimsAnchorResolutionTest(unittest.TestCase):
+    """Regression: a finding citing a leading-slash / absolute path must not crash
+    the --verify pass. Python 3.13's Path.rglob raises
+    NotImplementedError("Non-relative patterns are unsupported") on a non-relative
+    pattern; _filtered_rglob normalizes with lstrip('/'). The structured `file` field
+    bypasses the body-regex (which requires a relative start), so it is the path that
+    reaches the resolver with a leading slash. Bug: /critique close 2026-06-18 — a
+    "/eval/SKILL.md" anchor aborted the whole verify pass after extraction.
+    """
+
+    def _verify_one(self, file_anchor: str, project_dir: str, sibling_roots=None) -> Path:
+        review_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(review_dir, ignore_errors=True))
+        (review_dir / "findings.json").write_text(
+            json.dumps(
+                {
+                    "findings": [
+                        {
+                            "id": 1,
+                            "title": "leading-slash anchor",
+                            "file": file_anchor,
+                            "line": 0,
+                            "description": "d",
+                            "fix": "f",
+                        }
+                    ]
+                }
+            )
+        )
+        disp = review_dir / "disposition.md"
+        disp.write_text("# Review Findings\n\n1. **[HIGH]** leading-slash anchor\n")
+        out = model_review.verify_claims(
+            review_dir, str(disp), Path(project_dir), sibling_roots=sibling_roots or []
+        )
+        return Path(out)
+
+    def test_leading_slash_anchor_does_not_crash_verify(self) -> None:
+        # Pre-fix this raised NotImplementedError and aborted the whole pass.
+        with tempfile.TemporaryDirectory() as proj:
+            out = self._verify_one("/eval/SKILL.md", proj)
+            self.assertTrue(out.exists())
+            self.assertEqual(out.name, "verified-disposition.md")
+
+    def test_leading_slash_with_sibling_root_does_not_crash(self) -> None:
+        # The original crash path was invoked with --sibling-roots; the sibling
+        # basename search is also routed through _filtered_rglob.
+        with tempfile.TemporaryDirectory() as proj, tempfile.TemporaryDirectory() as sib:
+            out = self._verify_one("/eval/SKILL.md", proj, sibling_roots=[Path(sib)])
+            self.assertTrue(out.exists())
 
 
 if __name__ == "__main__":
