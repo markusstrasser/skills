@@ -49,7 +49,12 @@ Falls back to API for:
 - Gemini CLI: `--schema`, `--search`, `--stream`, `--max-tokens`
 - Codex CLI: `--search`, `--stream`
 - Both CLIs ignore explicit `--reasoning-effort`; they use their own default thinking behavior
-- Codex CLI now handles `--schema` via `codex exec --output-schema`
+- ⚠ Codex CLI `--schema` is UNRELIABLE: llmx translates it to `codex exec --output-schema`, but
+  codex-cli (v0.140.0) returns a generic "CLI returned error" and the call fails (reproduced
+  2026-06-18, `gpt-5.5 --subscription --schema`). claude-cli rejects `--schema` outright
+  ("structured output not supported by CLI"). **On the `--subscription` lane do NOT use `--schema`
+  — use instruction-parsed JSON (ask for a JSON object in the prompt; llmx/`evalcore.judge.dispatch`
+  parse the `{...}`), or `--auth api` for true structured output.**
 - `--max-tokens` forces API because Gemini CLI defaults to 8K with no override
 - `--output` works with both CLI and API transport (Python-level, not shell)
 
