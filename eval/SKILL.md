@@ -519,6 +519,21 @@ claim SUT that needs the web can't seal, so it must block benchmark-mirror domai
 → that is *why* this rig needs judges + isomorphic trace-checks, not behavioral verifiers. Don't
 cargo-cult "write behavioral verifiers" into a domain with no oracle.
 
+**Confirmed by LifeSciBench** (OpenAI, 2026-06; full teardown `evals/research/2026-06-18-lifescibench-rating.md`):
+the best-CONSTRUCTED provider bio-eval to date (750 expert tasks, 19,020 atomic weighted rubric criteria, disjoint
+author/validator pools) and STILL only ADAPT-DESIGN-ONLY — concrete proof that a strong construct does not buy a
+transferable ranking when the grader is same-family + unvalidated and the eval env is browsing-on (static held-out
+set + `internet=on` = search-time contamination by construction → ROTS as a standing per-release instrument).
+Borrow FROM the DURABLE designs it is NOT: **LiveMedBench** (`arXiv:2602.10367`) — contamination-free standing bio
+instrument by construction: WEEKLY post-cutoff clinical-case harvest + a decomposed rubric grader that beats
+LLM-as-judge on physician alignment, and 84% of models degrade on post-cutoff cases (empirical proof of the
+contamination a static set hides); **GeneBench** (Li & Ho 2026) — the better-grader sibling: synthetic
+single-defensible-path + ablations = a DETERMINISTIC verifiable-answer oracle, no model judge (the LatchBio
+scBench family). And a code-shipping debiaser to bolt onto any rubric grader we build: **ProfBench** (NVlabs, MIT)
+ships a **Bias-Index** that cuts cross-provider self-enhancement bias to <1% — the cross-lab-judge discipline a
+same-family grader lacks. (Implement the Bias-Index in `evalcore.judge` only WHEN an eval needs it — no consumer
+yet; don't pre-build.)
+
 **Guards (the frontier also tells you what NOT to adopt at our N):** PPI/CLT-PPI label-saving is
 statistically invalid below 50 labels/stratum (GLIDE `arXiv:2605.31278`) — at ~20/stratum, hand-label
 all + bootstrap; `just power` refuses PPI/R² sizing below the threshold. Fitted IRT, CapBencher,
@@ -532,6 +547,21 @@ before results (`git log --follow`), power declaration matches N, probe evidence
 validity** on dense corpora, judge payloads blind (grep for candidate names in judge
 prompts/payload builders), per-stratum tables, DECISIONS.md row, §6b filled or explicitly
 empty. Report gaps as a table; fix all confirmed gaps, not top-N.
+
+**Grading an EXTERNAL / vendor benchmark** (the `benchmark-rater` agent inherits these — it loads this
+skill; LifeSciBench teardown 2026-06-18, `evals/research/2026-06-18-lifescibench-rating.md`):
+- **Grade DESIGN and RESULT separately — they earn different verdicts.** A provider self-eval's construct +
+  rubric can be genuinely borrow-worthy while its RANKING is non-transferable (the launch model tops a
+  self-graded board). ADAPT-DESIGN-ONLY is the common right answer; never carry a vendor ranking to a
+  DECISIONS row until an independent cross-lab grader reproduces it.
+- **Grader-named-or-fail.** If a model-graded benchmark does not NAME the grader model in the paper, treat
+  judge family-neutrality as FAILED by default — you cannot rule out a same-family judge. (LifeSciBench's
+  grader is GPT-5.5, same family as the winning GPT-Rosalind, and surfaces only in a press quote; the paper
+  says merely "model-assisted grading, where used.")
+- **Validation-printed-or-unvalidated.** A grader-validation study that is DESCRIBED but whose human-agreement
+  numbers (κ / correlation / MAE) are not PRINTED counts as unvalidated — don't credit it. (LifeSciBench §5.3
+  promises "we report correlation, MAE, pass/fail agreement"; no value appears in the paper.) "Expert-authored"
+  via an anonymous/withheld contributor pool (the DRACO pattern) is likewise face validity you cannot audit.
 
 ## Anti-patterns (each one vetoed or observed here)
 
