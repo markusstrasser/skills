@@ -213,6 +213,17 @@ If all your axes are from the same category, you have one axis with multiple que
 
 **YOU WILL FABRICATE under pressure to be precise.** The pattern: real concept + invented specifics (author name, fold-change, sample size). Catch yourself. Vague truth > precise fiction.
 
+**Citation rate-gate (mechanical, run at finalize).** The per-claim checks above are judgment; this is the deterministic backstop. Before publishing a memo with arXiv IDs / DOIs, run:
+```bash
+uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/verify_citations.py <memo.md>   # --json for the machine form
+```
+It resolves every arXiv ID + DOI against Crossref / arXiv / DBLP (keyless, zero-dep) and emits a dispatch-brief.
+- **`hallucinated > 0` is BLOCKING** — a citation resolving to *nothing* is fabricated; fix or remove it before finalizing (exit code is non-zero).
+- **Advisory** (report in the source log, act if cheap): `resolved_rate < 80%`, `arxiv_only_ratio > 60%`, and DBLP `venue-upgrade` candidates (an arXiv-only cite that has a published version). Advisory thresholds stay advisory until a measured miss promotes one (constitution P3).
+- `unreachable` ≠ hallucinated — transient API failures are reported and excluded from the rate, never block. Re-run.
+
+Limitation: the gate proves a cite *exists* and classifies its venue; it does NOT prove a DOI resolves to the *claimed* paper (title-mismatch) — that stays with the in-session `verify_claim` / `read_paper` checks above. ADR: agent-infra `decisions/2026-06-19-autoresearch-grounding-imports.md`.
+
 ## Phase 4 — Synthesize
 
 **Stop conditions** (VMAO-derived, arxiv:2603.11445 — +35% completeness from formal verification):

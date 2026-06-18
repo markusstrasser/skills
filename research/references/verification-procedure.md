@@ -24,6 +24,8 @@ For each audit output:
 | False fix claims | "This was already fixed" when git log shows no such commit | Verify with `git log --grep` |
 | Wrong DOIs | Agent "corrects" a DOI to a different paper | Verify DOI resolves to the claimed paper |
 
+**Mechanical citation gate (finalize):** `scripts/verify_citations.py <memo>` resolves every arXiv ID + DOI against Crossref/arXiv/DBLP and blocks on `hallucinated > 0` (a cite that resolves to *nothing*). Covers existence + venue (arxiv-only ratio, DBLP venue-upgrade); does NOT cover DOI→*claimed-paper* mismatch (keep `verify_claim`/`read_paper` for that). See SKILL.md Phase 3.
+
 **2026-03-18 session note:** In a 13-tool paper audit, GPT-5.4 had **zero hallucinations** in critical findings (bugs, threshold mismatches, config errors). All verified correct. The ~28% error rate is concentrated in counts, severity grading, and external knowledge claims — not in code-reading accuracy. Code-grounded findings (file:line citations) were consistently reliable.
 
 ## Verification output
