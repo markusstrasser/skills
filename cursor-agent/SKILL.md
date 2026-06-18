@@ -103,6 +103,10 @@ Cloud handoff (interactive only): prefix message with `&` → continues on curso
 2. **Ask mode for writes** — agent can read/grep but won't edit; use default agent mode + `--force` for implementation arms.
 3. **Default model drift** — always pass `--model composer-2.5` when comparing; `composer-2.5-fast` is the speed tier, not interchangeable in evals.
 4. **Empty stdout** — check exit code + stderr; wrap with timeout in orchestrators (`timeout 120 agent …`).
+   Observed 2026-06-18: **`--mode plan` returned empty `-p` stdout 2/3 runs** (exit 0, no stderr) on
+   open-ended critique prompts; **`--mode ask --trust` was 2/2 reliable**. For headless review/critique
+   TEXT, prefer `--mode ask`; treat a 1-byte output as a silent failure and re-run (or use
+   `--output-format json` and check `is_error`).
 5. **Sandbox vs network** — ask-mode file reads are local; web fetch depends on sandbox config. Don't assume search works headlessly without probing.
 6. **Beta security** — CLI can read/write/delete and run shell ([blog disclaimer](https://cursor.com/blog/cli)). Trusted environments only; isolate with `--workspace` throwaways.
 7. **Don't confuse with Cursor IDE Tab** — this is the **Agent** product line, model family Composer.
