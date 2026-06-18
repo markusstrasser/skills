@@ -36,38 +36,49 @@ class TestEndedOnQuestion(unittest.TestCase):
 
 
 class TestGate(unittest.TestCase):
-    def test_loop_session_question_would_fire(self):
+    def test_loop_session_question_observed_and_fires_when_opted_in(self):
         rec = sloq.evaluate({
             "last_assistant_message": "Tried the obvious knobs. Which direction do you want?",
             "session_crons": [{"id": "c1", "recurring": True, "prompt": "/dream"}],
             "permission_mode": "default",
-        })
+        }, policy_opt_in=True)
+        self.assertTrue(rec["observed"])
         self.assertTrue(rec["would_fire"])
 
-    def test_interactive_question_does_not_fire(self):
-        # No session_crons → interactive session → ending on a question is CORRECT, no fire.
+    def test_default_off_observed_but_no_action(self):
+        # The operator hasn't opted in → it's measured (observed) but the hook NEVER acts.
+        # Stopping on a real blocker is correct; the action is the operator's explicit option.
+        rec = sloq.evaluate({
+            "last_assistant_message": "Tried the obvious knobs. Which direction do you want?",
+            "session_crons": [{"id": "c1"}],
+        }, policy_opt_in=False)
+        self.assertTrue(rec["observed"])
+        self.assertFalse(rec["would_fire"])
+
+    def test_interactive_question_not_observed(self):
+        # No session_crons → interactive session → ending on a question is CORRECT.
         rec = sloq.evaluate({
             "last_assistant_message": "Which direction do you want?",
             "session_crons": [],
-            "permission_mode": "default",
-        })
-        self.assertFalse(rec["would_fire"])
+        }, policy_opt_in=True)
+        self.assertFalse(rec["observed"])
         self.assertTrue(rec["ended_on_question"])  # predicate true, gate suppresses
 
-    def test_loop_statement_does_not_fire(self):
+    def test_loop_statement_not_observed(self):
         rec = sloq.evaluate({
             "last_assistant_message": "Advanced the probe, committed. Continuing other fronts.",
             "session_crons": [{"id": "c1"}],
-        })
-        self.assertFalse(rec["would_fire"])
+        }, policy_opt_in=True)
+        self.assertFalse(rec["observed"])
 
     def test_continuation_guard(self):
-        # stop_hook_active → already continuing → never fire (avoids loops on promotion).
+        # stop_hook_active → already continuing → never observed (avoids loops on promotion).
         rec = sloq.evaluate({
             "last_assistant_message": "What next?",
             "session_crons": [{"id": "c1"}],
             "stop_hook_active": True,
-        })
+        }, policy_opt_in=True)
+        self.assertFalse(rec["observed"])
         self.assertFalse(rec["would_fire"])
 
 

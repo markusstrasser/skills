@@ -98,8 +98,24 @@ def ended_on_question(text: str) -> bool:
     return stripped.endswith("?")
 
 
-def evaluate(inp: dict) -> dict:
-    """Pure: map a Stop-hook input dict → a shadow record (no I/O). Importable for tests."""
+def _policy_opt_in(inp: dict) -> bool:
+    """Operator's explicit per-loop opt-in: presence of .claude/loop-enforce-no-question-stop.
+
+    Default OFF. Stopping on a genuinely unresolvable blocker / to avoid wasting resources is
+    CORRECT loop behavior (#f 2026-06-18) — so the eventual ACTION (nudge-to-continue) only ever
+    applies to a loop the operator has explicitly opted in. The hook never decides this unilaterally.
+    """
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or inp.get("cwd") or ""
+    if not root:
+        return False
+    return os.path.exists(os.path.join(os.path.expanduser(root), ".claude", "loop-enforce-no-question-stop"))
+
+
+def evaluate(inp: dict, policy_opt_in: bool | None = None) -> dict:
+    """Pure-ish: map a Stop-hook input dict → a shadow record. Importable for tests.
+
+    policy_opt_in is injectable for tests; when None it reads the operator marker from disk.
+    """
     crons = inp.get("session_crons") or []
     crons_len = len(crons) if isinstance(crons, list) else 0
     msg = inp.get("last_assistant_message") or ""
@@ -108,13 +124,18 @@ def evaluate(inp: dict) -> dict:
     q = ended_on_question(msg)
     tail = msg.rstrip()[-200:] if msg else ""
     bg = inp.get("background_tasks") or []
+    opted_in = _policy_opt_in(inp) if policy_opt_in is None else policy_opt_in
+    # The signal we measure (a loop ended on a resolvable-looking question) vs the gated ACTION.
+    observed = bool(q and crons_len > 0 and not inp.get("stop_hook_active"))
     return {
         "ended_on_question": q,
         "session_crons_len": crons_len,
         "permission_mode": inp.get("permission_mode"),
         "stop_hook_active": bool(inp.get("stop_hook_active")),
         "has_background_tasks": bool(bg),
-        "would_fire": bool(q and crons_len > 0 and not inp.get("stop_hook_active")),
+        "policy_opt_in": opted_in,
+        "observed": observed,                      # the measurement (drives the 14-day precision review)
+        "would_fire": bool(observed and opted_in),  # the ACTION — only on an opted-in loop, never unilateral
         "last_msg_tail": tail,
     }
 
