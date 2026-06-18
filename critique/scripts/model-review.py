@@ -60,7 +60,10 @@ def _reexec_under_llmx_python_if_needed() -> None:
     os.execv(str(llmx_py), [str(llmx_py), str(Path(__file__).resolve()), *sys.argv[1:]])
 
 
-_reexec_under_llmx_python_if_needed()
+# Re-exec only when invoked as a script — not on import/exec_module (tests, resolve_axes
+# probes). Otherwise unittest argv or a synthetic --context poisons sys.argv and runs dispatch.
+if __name__ == "__main__":
+    _reexec_under_llmx_python_if_needed()
 
 import shared.llm_dispatch as dispatch_core
 from shared.context_budget import enforce_budget
@@ -585,16 +588,19 @@ SUPPORTED_DISPATCH_SCHEMAS = frozenset({DISPATCH_SCHEMA_VERSION})
 class DispatchBudget:
     """Orchestrator wall-clock cap — skip axes that cannot finish; never truncate timeouts."""
 
-    __slots__ = ("deadline_mono",)
+    __slots__ = ("deadline_mono", "total_seconds")
 
-    def __init__(self, deadline_mono: float | None = None) -> None:
+    def __init__(
+        self, deadline_mono: float | None = None, total_seconds: int | None = None
+    ) -> None:
         self.deadline_mono = deadline_mono
+        self.total_seconds = total_seconds
 
     @classmethod
     def from_seconds(cls, seconds: int | None) -> "DispatchBudget":
         if seconds is None or seconds <= 0:
-            return cls(deadline_mono=None)
-        return cls(deadline_mono=time.monotonic() + seconds)
+            return cls(deadline_mono=None, total_seconds=None)
+        return cls(deadline_mono=time.monotonic() + seconds, total_seconds=seconds)
 
     @property
     def active(self) -> bool:
@@ -640,11 +646,22 @@ def _axis_profile_timeout(axis: str) -> int:
 
 
 def _budget_skipped_axis(
-    axis: str, review_dir: Path, budget: DispatchBudget, profile_timeout: int
+    axis: str,
+    review_dir: Path,
+    budget: DispatchBudget,
+    profile_timeout: int,
 ) -> dict:
     axis_def = AXES[axis]
     profile_def = dispatch_core.PROFILES[str(axis_def["profile"])]
     rem = budget.remaining()
+    if (
+        budget.total_seconds is not None
+        and rem is not None
+        and budget.total_seconds < profile_timeout
+    ):
+        failure_reason = "budget_insufficient_for_profile"
+    else:
+        failure_reason = "budget_exhausted"
     return {
         "label": axis_def["label"],
         "requested_model": profile_def.model,
@@ -652,7 +669,7 @@ def _budget_skipped_axis(
         "exit_code": 1,
         "output": str(review_dir / f"{axis}-output.md"),
         "size": 0,
-        "failure_reason": "budget_exhausted",
+        "failure_reason": failure_reason,
         "budget_remaining_seconds": round(rem, 1) if rem is not None else None,
         "profile_timeout": profile_timeout,
     }
@@ -718,7 +735,7 @@ def _manifest_matches_packet(manifest_path: Path, context_path: Path | None) -> 
 
 def _axis_execution_status(entry: dict) -> str:
     reason = entry.get("failure_reason")
-    if reason == "budget_exhausted":
+    if reason in ("budget_exhausted", "budget_insufficient_for_profile"):
         return "skipped_budget"
     if reason == "thread_timeout":
         return "thread_timeout"
@@ -948,22 +965,16 @@ def run_premise_scout(
     question: str,
     fork: str | None = None,
     timeout: int = PREMISE_SCOUT_TIMEOUT,
-    budget: DispatchBudget | None = None,
 ) -> PremiseScoutResult:
-    """Repo-grounded premise falsifier via cursor-agent (Composer 2.5, workspace=project)."""
+    """Repo-grounded premise falsifier via cursor-agent (Composer 2.5, workspace=project).
+
+    Scout runs outside the axis dispatch budget — it has its own fixed timeout and
+    must not consume wall-clock reserved for parallel axis dispatch (scout timeout
+    previously cascaded into all axes skipped as budget_exhausted).
+    """
     scout_profile = dispatch_core.PROFILES["premise_scout"]
     scout_model = scout_profile.model
     effective_timeout = timeout
-    if budget is not None:
-        if not budget.can_start(timeout):
-            reason = (
-                f"budget exhausted ({budget.remaining():.0f}s left, "
-                f"scout needs {timeout}s)"
-            )
-            payload = _scout_skip_payload(fork=fork, topic=topic, skip_reason=reason)
-            json_path = review_dir / "voi-scout.json"
-            json_path.write_text(json.dumps(payload, indent=2) + "\n")
-            return PremiseScoutResult(True, payload["skip_reason"], None, json_path, None)
     bin_path = _resolve_cursor_agent_bin()
     md_path = review_dir / "premise-scout.md"
     json_path = review_dir / "voi-scout.json"
@@ -1063,16 +1074,24 @@ def resolve_axes(raw_axes: str, *, allow_non_gpt: bool = False) -> list[str]:
         )
 
     if axes_text in PRESETS:
-        axis_names = PRESETS[axes_text]
+        axis_names = list(PRESETS[axes_text])
     else:
-        axis_names = [axis.strip() for axis in axes_text.split(",") if axis.strip()]
-        if not axis_names:
+        tokens = [axis.strip() for axis in axes_text.split(",") if axis.strip()]
+        if not tokens:
             raise ValueError("no review axes provided")
-        unknown_axes = [axis for axis in axis_names if axis not in AXES]
-        if unknown_axes:
-            raise ValueError(
-                f"unknown axis '{unknown_axes[0]}'. Available: {', '.join(sorted(AXES.keys()))}"
-            )
+        axis_names = []
+        for token in tokens:
+            if token in PRESETS:
+                axis_names.extend(PRESETS[token])
+            elif token in AXES:
+                axis_names.append(token)
+            else:
+                raise ValueError(
+                    f"unknown axis '{token}'. Available axes: {', '.join(sorted(AXES.keys()))}; "
+                    f"presets: {', '.join(sorted(PRESETS.keys()))}"
+                )
+        seen: set[str] = set()
+        axis_names = [axis for axis in axis_names if not (axis in seen or seen.add(axis))]
 
     if not allow_non_gpt and not any(
         axis_uses_gpt(axis_name) for axis_name in axis_names
@@ -2408,6 +2427,14 @@ def verify_claims(
         )
 
     def _filtered_rglob(pattern: str, root: Path | None = None) -> list[Path]:
+        # rglob() rejects non-relative patterns — py3.13 raises NotImplementedError.
+        # Findings frequently cite a leading-slash repo path ("/eval/SKILL.md") or an
+        # absolute path; normalize to relative so basename/suffix matching still runs.
+        # (A genuine absolute path that exists is already resolved by the exact-existence
+        # check in _resolve_reference before this is reached.)
+        pattern = pattern.lstrip("/")
+        if not pattern:
+            return []
         return [p for p in (root or project_dir).rglob(pattern) if not _is_cruft(p)]
 
     _TEXT_VERIFY_SUFFIXES = {
@@ -2936,9 +2963,10 @@ def main() -> int:
         default=None,
         metavar="SEC",
         help=(
-            "Optional orchestrator wall-clock cap (scout+dispatch+extract). "
-            "No limit by default. When set: skip any call whose full profile "
-            "timeout cannot fit in remaining time — never truncate timeouts."
+            "Optional orchestrator wall-clock cap for parallel axis dispatch + extract. "
+            "Premise scout is outside this cap (fixed timeout). No limit by default. "
+            "When set: skip any call whose full profile timeout cannot fit in "
+            "remaining time — never truncate timeouts."
         ),
     )
     parser.add_argument(
@@ -3047,13 +3075,14 @@ def main() -> int:
     budget = DispatchBudget.from_seconds(args.budget_seconds)
     if budget.active:
         print(
-            f"note: dispatch budget {args.budget_seconds}s — "
-            "axes skip if profile timeout cannot fit",
+            f"note: axis dispatch budget {args.budget_seconds}s — "
+            "premise scout excluded; axes skip if profile timeout cannot fit",
             file=sys.stderr,
         )
 
     premise_scout_path: Path | None = None
     scout_result: PremiseScoutResult | None = None
+    scout_elapsed_seconds: float | None = None
     primary_context = args.context
     run_scout = should_run_premise_scout(
         scout=bool(args.scout),
@@ -3071,6 +3100,7 @@ def main() -> int:
             file=sys.stderr,
         )
     elif run_scout and primary_context:
+        scout_t0 = time.monotonic()
         scout_result = run_premise_scout(
             review_dir=review_dir,
             project_dir=project_dir,
@@ -3078,8 +3108,8 @@ def main() -> int:
             topic=args.topic,
             question=args.question,
             fork=args.fork,
-            budget=budget,
         )
+        scout_elapsed_seconds = round(time.monotonic() - scout_t0, 1)
         if scout_result.markdown_path:
             premise_scout_path = scout_result.markdown_path
             print(
@@ -3101,6 +3131,10 @@ def main() -> int:
     )
     if gate_exit is not None:
         return gate_exit
+
+    # Axis budget clock starts after scout — scout wall time (including timeout)
+    # must not consume dispatch budget or axes falsely skip as budget_exhausted.
+    budget = DispatchBudget.from_seconds(args.budget_seconds)
 
     print(
         f"Dispatching {len(axis_names)} queries: {', '.join(axis_names)}",
@@ -3162,6 +3196,8 @@ def main() -> int:
         result["budget_seconds"] = args.budget_seconds
         result["budget_remaining_seconds"] = round(rem, 1) if rem is not None else 0.0
     effective_policy = build_effective_policy(args)
+    if scout_elapsed_seconds is not None:
+        effective_policy["scout_elapsed_seconds"] = scout_elapsed_seconds
     if args.dispatch_manifest:
         effective_policy["dispatch_manifest"] = str(args.dispatch_manifest)
     receipt_path = write_execution_receipt(
