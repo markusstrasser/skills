@@ -520,22 +520,21 @@ claim SUT that needs the web can't seal, so it must block benchmark-mirror domai
 cargo-cult "write behavioral verifiers" into a domain with no oracle.
 
 **Confirmed by LifeSciBench** (OpenAI, 2026-06; full teardown `evals/research/2026-06-18-lifescibench-rating.md`):
-the best-CONSTRUCTED provider bio-eval to date (750 expert tasks, 19,020 atomic weighted rubric criteria, disjoint
-author/validator pools) and STILL only ADAPT-DESIGN-ONLY — concrete proof that a strong construct does not buy a
-transferable ranking when the grader is same-family + unvalidated and the eval env is browsing-on (static held-out
-set + `internet=on` = search-time contamination by construction → ROTS as a standing per-release instrument).
-Borrow FROM the DURABLE designs it is NOT: **LiveMedBench** (`arXiv:2602.10367`) — contamination-free standing bio
-instrument by construction: WEEKLY post-cutoff clinical-case harvest + a decomposed rubric grader that beats
-LLM-as-judge on physician alignment, and 84% of models degrade on post-cutoff cases (empirical proof of the
-contamination a static set hides); **GeneBench** (Li & Ho 2026) — the better-grader sibling: synthetic
-single-defensible-path + ablations = a DETERMINISTIC verifiable-answer oracle, no model judge (the LatchBio
-scBench family). And a code-shipping debiaser to bolt onto any rubric grader we build: **ProfBench** (NVlabs, MIT)
-ships a **Bias-Index** that cuts cross-provider self-enhancement bias to <1% — the cross-lab-judge discipline a
-same-family grader lacks. **Built + self-tested as `evalcore.stats.judge_bias_index`** (human-anchored:
-`bias(m)=mean(judge_fulfilled − human_fulfilled)` per response-model, `index = max−min` across models, low=fair;
-read `per_model` for same-family self-enhancement). Run it against any human-validated subset to put a number on
-the LifeSciBench gap; the live-dispatch wiring (panel config feeding it) is deferred to the first standing eval
-that needs it — the function is the proven part, the integration is the consumer-shaped part.
+stronger *gold authorship* than any prior provider bio-eval (disjoint author/validator pools, 19,020 atomic
+weighted rubric criteria) and STILL only ADAPT-DESIGN-ONLY — a strong construct does not buy a transferable
+ranking when the grader is same-family + the grader-validation numbers are unprinted. Durability is **unestablished
+(not a standing per-release instrument)**: a static held-out set with no temporal/canary/post-cutoff controls is a
+vendor-tuning target, and unrestricted eval-time browsing breaks reproducibility + is a per-model-interface confound
+— note this is NOT answer-retrieval (the set is held-out), so don't call open browsing "contamination by
+construction." Borrow FROM the DURABLE designs it is NOT: **LiveMedBench** (`arXiv:2602.10367`) — WEEKLY post-cutoff
+clinical-case harvest (contamination-free by construction) + a decomposed rubric grader that beats LLM-as-judge on
+physician alignment (84% of models degrade post-cutoff = the contamination a static set hides); **GeneBench** (Li &
+Ho 2026) — synthetic single-defensible-path + ablations = a DETERMINISTIC verifiable-answer oracle, no model judge
+(LatchBio scBench family). Code-shipping debiaser: **ProfBench** (NVlabs, MIT) Bias-Index, **built + self-tested as
+`evalcore.stats.judge_bias_index`** — the SPREAD of a judge's per-model signed bias vs human labels (panel-relative;
+LOW = even-handed, NOT accurate, so pair with Macro-F1; it does NOT itself detect same-family self-enhancement —
+the caller must supply which model shares the judge's family). No production caller yet; the live-dispatch wiring is
+the consumer-shaped part, deferred to the first judge-validation eval that needs it.
 
 **Guards (the frontier also tells you what NOT to adopt at our N):** PPI/CLT-PPI label-saving is
 statistically invalid below 50 labels/stratum (GLIDE `arXiv:2605.31278`) — at ~20/stratum, hand-label
