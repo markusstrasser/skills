@@ -531,8 +531,11 @@ contamination a static set hides); **GeneBench** (Li & Ho 2026) — the better-g
 single-defensible-path + ablations = a DETERMINISTIC verifiable-answer oracle, no model judge (the LatchBio
 scBench family). And a code-shipping debiaser to bolt onto any rubric grader we build: **ProfBench** (NVlabs, MIT)
 ships a **Bias-Index** that cuts cross-provider self-enhancement bias to <1% — the cross-lab-judge discipline a
-same-family grader lacks. (Implement the Bias-Index in `evalcore.judge` only WHEN an eval needs it — no consumer
-yet; don't pre-build.)
+same-family grader lacks. **Built + self-tested as `evalcore.stats.judge_bias_index`** (human-anchored:
+`bias(m)=mean(judge_fulfilled − human_fulfilled)` per response-model, `index = max−min` across models, low=fair;
+read `per_model` for same-family self-enhancement). Run it against any human-validated subset to put a number on
+the LifeSciBench gap; the live-dispatch wiring (panel config feeding it) is deferred to the first standing eval
+that needs it — the function is the proven part, the integration is the consumer-shaped part.
 
 **Guards (the frontier also tells you what NOT to adopt at our N):** PPI/CLT-PPI label-saving is
 statistically invalid below 50 labels/stratum (GLIDE `arXiv:2605.31278`) — at ~20/stratum, hand-label
