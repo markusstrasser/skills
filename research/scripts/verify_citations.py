@@ -11,9 +11,10 @@ nothing (the dangerous citable-slop case). Every other threshold is ADVISORY
 reported as `unreachable` and DO NOT block (no false-fail on a flaky API).
 
 Grounding (ADR agent-infra/decisions/2026-06-19-autoresearch-grounding-imports.md):
-`corpus` already resolves *ingested* papers, but most cited papers are not in the
-store, so this hits the public APIs directly. No MCP (tools can't run from a
-standalone script); no `corpus` CLI (`uvx corpus` exposes no executable).
+the `corpus` CLI resolves *ingested* papers (per-repo store, keyed by --corpus-root),
+but most cited papers are not in the store, so this hits the public APIs directly and
+covers them too. And `verify_claim`/scite are in-session MCP tools that cannot run from
+a standalone script. Hence: keyless public-API resolution, zero third-party deps.
 
 Usage:
     verify_citations.py MEMO.md            # human-readable dispatch brief

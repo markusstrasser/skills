@@ -29,31 +29,36 @@ multi-tenant. Source of truth at
 
 ## CLI surface
 
+Ships in `corpus-core`, installed as a uv tool → **`corpus` on PATH**. Do **NOT** use `uvx corpus` — that fetches an unrelated PyPI squat (`corpus` 0.4.2, no executable), not this tool. Every command needs `--corpus-root <store>` (`required=True`, no default). Canonical store: `~/Projects/corpus`. Set once so the commands below work as written:
 ```bash
-uvx corpus stats                            # source count, total size, graph node/edge counts
-uvx corpus show <paper_id>                  # metadata + parsed paths + used_by
-uvx corpus ingest --pdf <path> --doi <doi>  # ingest a paper
-uvx corpus ingest --revise --pdf <new> --paper-id <id>  # archive old, ingest new revision
+alias corpus='corpus --corpus-root ~/Projects/corpus'
+```
+
+```bash
+corpus stats                            # source count, total size, graph node/edge counts
+corpus show <paper_id>                  # metadata + parsed paths + used_by
+corpus ingest --pdf <path> --doi <doi>  # ingest a paper
+corpus ingest --revise --pdf <new> --paper-id <id>  # archive old, ingest new revision
 
 # Graph queries (after maintain --rebuild-graph)
-uvx corpus cites <paper_id>                # outbound edges + snippets + stance
-uvx corpus cited-by <paper_id>             # inbound edges
-uvx corpus cited-by <paper_id> --stance contrasting
-uvx corpus contradictions <paper_id>       # cito:disagreesWith + retraction-flagged citers
-uvx corpus ego <paper_id> --depth 2        # N-hop neighbourhood
-uvx corpus path <a> <b>                    # shortest path
-uvx corpus similar <paper_id> --via co-citation | --via biblio-coupling
+corpus cites <paper_id>                # outbound edges + snippets + stance
+corpus cited-by <paper_id>             # inbound edges
+corpus cited-by <paper_id> --stance contrasting
+corpus contradictions <paper_id>       # cito:disagreesWith + retraction-flagged citers
+corpus ego <paper_id> --depth 2        # N-hop neighbourhood
+corpus path <a> <b>                    # shortest path
+corpus similar <paper_id> --via co-citation | --via biblio-coupling
 
 # Collections + tables
-uvx corpus collection {list, new, add, diff}
-uvx corpus table --cols schema.yaml --paper-ids ...
+corpus collection {list, new, add, diff}
+corpus table --cols schema.yaml --paper-ids ...
 
 # Maintenance (operator-run, no cron)
-uvx corpus maintain --verify               # parsed.sha256 + pdf_sha256 drift detection
-uvx corpus maintain --rebuild-indexes      # rebuild INDEX.json.used_by across repos
-uvx corpus maintain --rebuild-citances [--paper-id <id> | --all]
-uvx corpus maintain --rebuild-graph        # rebuild graph.duckdb from per-source JSONL
-uvx corpus maintain --gc --after-rebuild --dry-run
+corpus maintain --verify               # parsed.sha256 + pdf_sha256 drift detection
+corpus maintain --rebuild-indexes      # rebuild INDEX.json.used_by across repos
+corpus maintain --rebuild-citances [--paper-id <id> | --all]
+corpus maintain --rebuild-graph        # rebuild graph.duckdb from per-source JSONL
+corpus maintain --gc --after-rebuild --dry-run
 ```
 
 ## Parser selection (`--parser`)
