@@ -99,18 +99,23 @@ same-model (FM11 peer-review theater).
 **For codebase-coupled decisions, ALSO run REPO-GROUNDED agents — not only cold API models.** A cold
 reviewer (Gemini/GPT over a pasted spec) produces good *generic* failure modes but cannot tell which
 are *already handled by existing code*. Run cursor agents with real repo read access:
-`cursor-agent -p -f --mode ask --model claude-opus-4-8-thinking-high "verify the design against the
+`cursor-agent -p --mode ask --trust --model composer-2.5 "verify the design against the
 ACTUAL code, cite file:line — which findings are already-handled vs genuinely-open"`. They routinely
 **overturn the cold round's "must-build" list** (lived 2026-06-16: a cold round flagged the release
 boundary + overlay model + retraction as "build these"; repo-grounded review showed all three already
-built but *dark/unwired* — changing the decision from greenfield to convergence). **Route arch/design
-critique to OPUS-tier, NEVER Sonnet** — a sonnet repo-critique built a "HALT, reverse the spine"
-conclusion on a search-error false premise (it searched the wrong directory).
+built but *dark/unwired* — changing the decision from greenfield to convergence). **Cursor transport
+uses the CURSOR model (`composer-2.5`) — NEVER route opus/gpt/sonnet through cursor-agent** (#g
+2026-06-18: off-policy + separately metered; hook-enforced by `pretool-cursor-model-guard.py`; the
+cursor-agent skill is the single owner — load it, don't re-state a model). The repo-grounding comes
+from cursor's LIVE REPO ACCESS, not the model. For any NON-cursor arch critique (cold cross-lab via
+llmx), use a FRONTIER tier (opus / gpt-high), never a weak model — a sonnet repo-critique once built
+a "HALT, reverse the spine" conclusion on a search-error false premise.
 
 **Scale to a PANEL of 3–6 repo-grounded cursor agents for a codebase-coupled arch decision** (operator
-directive 2026-06-16, "whatever it takes for good design") — model-diverse via the cursor transport
-(`claude-opus-4-8-thinking-high`, `gpt-5.5-high`, `composer-2.5`: cross-lab AND live repo) and
-role-diverse: **≥1 dedicated FACT-CHECKER** tasked to resolve EVERY `file:line` / count / zero-consumer
+directive 2026-06-16, "whatever it takes for good design") — all repo-grounded cursor agents run
+`composer-2.5` (cursor's model; #g 2026-06-18). Model diversity is NOT obtained by swapping cursor's
+model — it comes from a SEPARATE cold cross-lab pass (llmx gemini/gpt) scoped to generic,
+non-repo-specific design critique. The cursor panel is ROLE-diverse: **≥1 dedicated FACT-CHECKER** tasked to resolve EVERY `file:line` / count / zero-consumer
 claim in the plan → PRESENT / ABSENT / MISMATCH, plus arch/spine critics and **≥1 innovation /
 alternative-mechanism explorer**. `/critique model` already runs a cursor premise-scout by default
 (`model-review.py`, line ~17 — "the only axis that can falsify a plan's premises; packet-only reviewers
