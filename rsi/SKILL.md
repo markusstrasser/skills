@@ -37,6 +37,12 @@ python3 ~/Projects/agent-infra/scripts/reflect_session_close.py --drain
 
 ### 2. Verify one load-bearing claim
 
+First read the digest's `real_issue_kinds` + `verify_hint` — they name WHY this close fired and
+point the verify at the right claim:
+- `unsupported_completion` → **fabrication risk**: re-run the claimed-successful command, confirm the outcome.
+- `user_rescued_failure` → verify the fix actually landed (test exit / gate / hash), not the recovery narration.
+- `goal_achieved` / `operator_flag` → verify the achievement or what the operator flagged.
+
 Pick ONE claim from the session episode (not the `/goal` Haiku evaluator — that is a proxy):
 
 - Pipeline: `just sample-state`, receipt hash, `_STATUS.json` mtime
