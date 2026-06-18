@@ -9,7 +9,7 @@ trap 'exit 0' ERR
 INPUT=$(cat)
 
 OUTPUT=$(echo "$INPUT" | python3 -c '
-import sys, json, subprocess, os
+import sys, json, subprocess, os, re
 
 try:
     data = json.load(sys.stdin)
@@ -168,6 +168,35 @@ def _in_flight(path):
 in_flight = sorted(f for f in new_changes if _in_flight(f))
 new_changes = [f for f in new_changes if f not in in_flight]
 
+def _unattrib_seen_path(sid):
+    safe = re.sub(r"[^A-Za-z0-9_-]", "", sid or "nosession")[:64] or "nosession"
+    return os.path.join(os.path.expanduser("~"), ".claude", f"stop-unattrib-seen-{safe}.txt")
+
+def _fresh_unattributable(sid, paths):
+    if not paths:
+        return []
+    if not sid:
+        return paths
+    seen = set()
+    p = _unattrib_seen_path(sid)
+    try:
+        if os.path.isfile(p):
+            with open(p) as fh:
+                seen = {ln.strip() for ln in fh if ln.strip()}
+    except OSError:
+        pass
+    fresh = [x for x in paths if x not in seen]
+    if fresh:
+        try:
+            with open(p, "a") as fh:
+                for x in fresh:
+                    fh.write(x + "\n")
+        except OSError:
+            pass
+    return fresh
+
+unattributable_fresh = _fresh_unattributable(session_id, unattributable)
+
 # Genuinely pre-existing/foreign = everything NOT committed, NOT deferred-in-flight, NOT
 # unattributable. The latter two are surfaced in their own messages, so excluding them here
 # keeps the "(N pre-existing/other-session excluded)" count from double-counting them.
@@ -177,14 +206,14 @@ if not new_changes:
     # Nothing this session provably owns. Do NOT auto-commit unattributable
     # subprocess output (it may be a peer script output) — surface it
     # non-blocking so the agent can commit its own outputs explicitly.
-    if unattributable:
-        u = len(unattributable)
+    if unattributable_fresh:
+        u = len(unattributable_fresh)
         uplural = "s" if u != 1 else ""
-        ulist = "\n".join(unattributable[:10])
+        ulist = "\n".join(unattributable_fresh[:10])
         output = {
             "hookSpecificOutput": {
                 "hookEventName": "Stop",
-                "additionalContext": f"{u} changed file{uplural} were written by a subprocess and are in no session Edit/Write ledger, so this session did not auto-commit them (they may belong to a concurrent agent script). If they are yours, commit them explicitly:\n{ulist}",
+                "additionalContext": f"{u} changed file{uplural} were written by a background subprocess (almost always a codex/llmx worker YOU launched, or local automation), not via the Edit/Write tool — so this session did not auto-commit them. They are most likely YOURS: review and commit explicitly. Do NOT infer a concurrent/peer agent from this alone — a real peer needs a SEPARATE checkout (`git worktree list` shows >1) or an independent `claude` whose cwd is this dir; absent that, these are your own subprocess output:\n{ulist}",
             },
         }
         print(json.dumps(output))
@@ -224,8 +253,8 @@ try:
         # hookSpecificOutput channel (>=2.1.163) actually reaches the agent.
         pre_msg = f" ({pre_existing} pre-existing/other-session excluded)" if pre_existing else ""
         u_msg = ""
-        if unattributable:
-            u = len(unattributable)
+        if unattributable_fresh:
+            u = len(unattributable_fresh)
             uplural = "s" if u != 1 else ""
             u_msg = f" {u} subprocess-written file{uplural} (in no ledger) were left uncommitted — commit them explicitly if yours."
         inflight_msg = ""
