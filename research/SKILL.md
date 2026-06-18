@@ -332,6 +332,7 @@ Never present inference as sourced fact. Never present training data as retrieve
 - **Precision fabrication:** Invented numbers or author names under pressure to be precise
 - **Telephone game:** Cited primary via review without reading the primary
 - **Single-axis search:** All queries from same starting point, same intellectual tradition
+- **Named-entity scoping:** Researched only the people/tools/things named in the prompt when the task is governed by a whole DISCIPLINE + product-category you never went and got. If research feeds an application on a standing surface (editor, tool, pipeline, UI), name the governing field first, pull its canonical heuristics + category conventions, and apply them — the named entities are a subset, not the field. (`#f` 2026-06-18: researched Victor/Matuschak to improve an editor, skipped HCI/UX entirely.)
 - **Source hoarding:** Saved papers but never fetched/read them
 - **Scope creep without pushback:** User asks 15 things — say "this session can handle N well; which are priority?"
 - **Websearch citations as primary:** Trusting PMIDs/PDB IDs from websearch without S2 verification

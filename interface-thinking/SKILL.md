@@ -18,6 +18,30 @@ Doug Engelbart, Andy Matuschak, Edward Tufte, Ivan Sutherland — keep returning
 The core conviction behind every lens: **an interface is a machine for closing the distance between
 a person's intent and the world's response.** Everything else is decoration.
 
+## Step 0 — Ground in the discipline BEFORE the lenses (do this first, always)
+
+The lenses below are a *thinking* layer. They are NOT a substitute for the field. Before applying
+them to any real artifact:
+
+1. **Name the discipline and the product category** the artifact lives in. "Improve the editor" is
+   not a Bret-Victor question — it's an **HCI/UX** question about a **timeline/animation editor** and
+   an **inspection/debugging tool**. The named thinkers you happen to know are a *subset*, not the
+   field.
+2. **Pull the canonical heuristics of that discipline** (the §Reference HCI canon below: Nielsen 10,
+   Shneiderman 8, Fitts/Hick/Miller, Gestalt) AND **the conventions of that product category** (the
+   §Domain pattern libraries below). Search for them if not in hand — the canon is stable and cheap
+   to verify.
+3. **Then** run the lenses, *applying* the canon and category conventions — don't re-derive from
+   scratch what the field already settled. A feature you're about to invent usually has a name, a
+   convention, and a known failure mode in the literature (e.g. "ghost trail" = **onion skinning**,
+   with a cyan-past / magenta-future color convention).
+
+The failure this step exists to prevent: **scoping research to the named entities in the prompt and
+designing from them, when the actual task is governed by a whole discipline you never went and got.**
+If improving a surface is part of the project (and editor/tooling work usually is), researching its
+governing field and applying it is not optional and not something to wait to be told. See the
+research skill's "research the governing discipline, not just the named sub-topic."
+
 ## How to use
 
 Pick the lens that matches the symptom, or run the **default sweep** (all seven, fast) for a full
@@ -104,10 +128,52 @@ The tool's job isn't done when it *displays*; it's done when the user **understa
 - **Invisible failure** — a constraint/relationship that breaks silently instead of surfacing its
   residual.
 
+## Reference: the HCI canon (the lenses' empirical backing)
+
+The seven lenses are a synthesis; these are the field's load-bearing checklists. Apply them directly.
+
+- **Nielsen's 10 usability heuristics** (1994, NN/G — for *auditing* an existing UI): 1 visibility of
+  system status · 2 match system↔real world · 3 user control & freedom (undo/redo, exits) · 4
+  consistency & standards · 5 error prevention · 6 **recognition rather than recall** (show options,
+  don't make users remember) · 7 **flexibility & efficiency** (accelerators/shortcuts for experts) ·
+  8 aesthetic & minimalist design · 9 help users recognize/diagnose/recover from errors · 10 help &
+  documentation.
+- **Shneiderman's 8 golden rules** (1986/2016, cs.umd.edu/~ben — for *designing* a new UI): 1 strive
+  for consistency · 2 seek universal usability (novice AND expert) · 3 offer informative feedback · 4
+  design dialogs to yield closure · 5 prevent errors · 6 **permit easy reversal of actions** · 7 keep
+  users in control (internal locus of control) · 8 reduce short-term memory load.
+- **Quantitative laws:** *Fitts's law* — acquisition time ∝ distance/size; make frequent targets big
+  and near, give small click targets generous hit-areas. *Hick's law* — decision time ∝ log(choices);
+  limit options, use progressive disclosure. *Miller's law* — working memory ≈ 4±1 chunks; chunk and
+  group. *Doherty threshold* — keep feedback < ~400ms or attention drifts.
+- **Gestalt grouping** — proximity, similarity, common region, continuity, closure: spatial layout
+  *is* communication; group related controls, separate unrelated ones.
+- **Shneiderman's Visual-Information-Seeking Mantra:** *overview first, zoom and filter, then details
+  on demand.* The backbone of any inspection/exploration UI.
+
+## Domain pattern libraries (category conventions — steal, don't reinvent)
+
+When the artifact is one of these, these are table-stakes patterns with settled conventions:
+
+- **Timeline / animation / video editors:** frame-accurate scrubbing; draggable playhead; click-ruler
+  to jump; **keyboard transport** (Space play/pause, ←/→ frame-step, Home/End to ends, J/K/L shuttle);
+  zoomable time axis; **onion skinning** (ghost of past/future frames — cyan past, magenta future);
+  dope sheet / value-curve graph modes; click-frame-counter to type an exact time; loop region;
+  small-multiples / filmstrip overview. (OpenCut, Final Cut, Thirdrez/Kinetiq, VideoFlow all converge.)
+- **Debugging / inspection / data-exploration tools:** show the **trace** (state over time), not
+  isolated snapshots — don't make the user mentally reconstruct evolution (EPFL *Tracers* 2026);
+  **global view of values in context** beats one-at-a-time (Anteater, Faust et al.); **coordinated
+  views** with linked highlighting (select in one view → highlight in all; Hoffswell/Satyanarayan/Heer);
+  overview+detail / focus+context; sparklines for value-over-time (Tufte); bidirectional source↔effect
+  linking.
+
 ## Provenance
 Grounded in the tools-for-thought canon: Victor (*Inventing on Principle*, *Learnable Programming*,
 *Ladder of Abstraction*, *Magic Ink*), Norman (*Design of Everyday Things* — gulfs, affordances),
 Engelbart (*Augmenting Human Intellect* — co-evolution), Sutherland (*Sketchpad* — direct
 manipulation + constraints), Tufte (small multiples), Matuschak & Nielsen (*tools for thought*,
-mnemonic medium), Ink & Switch (malleable / local-first software). See the companion research memo
-pattern (e.g. anim-workbench `docs/research/2026-06-18-tools-for-thought-interface-thinkers.md`).
+mnemonic medium), Ink & Switch (malleable / local-first software). HCI canon: Nielsen 10 (NN/G 1994),
+Shneiderman 8 golden rules + visual-seeking mantra (cs.umd.edu/~ben, 2016), Fitts/Hick/Miller laws,
+Gestalt grouping; inspection-tool literature (EPFL *Tracers* 2026; Anteater; Hoffswell/Satyanarayan/
+Heer). See the companion research memos (e.g. anim-workbench
+`docs/research/2026-06-18-tools-for-thought-interface-thinkers.md`).
