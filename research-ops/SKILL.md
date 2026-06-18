@@ -19,6 +19,11 @@ Operator-initiated research workflows. For one-shot research questions, use `/re
 | `diff` | `/research-ops diff <text or path>` | Extract what's NOT in training data |
 | `dispatch` | `/research-ops dispatch [depth]` | Parallel audit sweep |
 
+> **Cheap parallel lanes via codex subprocesses ($0).** A fleet of research lanes can run as
+> background `codex exec --full-auto` workers that invoke `$research` and each write their own memo
+> — same skills + MCP stack as Claude, network-backed, subscription-billed. Canary first, then fan
+> out. Full mechanics + gotchas: `model-guide/references/codex-subprocess-dispatch.md`.
+
 ---
 
 # Mode: cycle (research generate/execute lanes)
