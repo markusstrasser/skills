@@ -26,17 +26,13 @@ except Exception: print("")' 2>/dev/null)"
 # canonicalize so /tmp vs /private/tmp etc. compare equal
 cwd="$(cd "$cwd" 2>/dev/null && pwd -P || printf '%s' "$cwd")"
 
-pids="$(pgrep -x claude 2>/dev/null | paste -sd, - || true)"
-[ -z "$pids" ] && exit 0
+# Peer detection is SINGLE-SOURCED in peer-session-count.sh (epistemic-#9) — the
+# exact same detector the Stop hook (stop-uncommitted-warn.sh) uses, so both hooks
+# agree on "does a peer share this checkout". It counts INDEPENDENT claude trees
+# whose cwd is here, excluding my own subagents/children. Fail-open → 0.
+peers="$(~/Projects/skills/hooks/peer-session-count.sh "$cwd" 2>/dev/null || echo 0)"
 
-# One lsof call for all claude PIDs; count those whose cwd == this checkout.
-# Includes the current session itself, so >=2 means at least one peer.
-count="$(lsof -a -d cwd -Fn -p "$pids" 2>/dev/null | sed -n 's/^n//p' \
-         | grep -Fxc "$cwd" 2>/dev/null || true)"
-count="${count:-0}"
-
-if [ "$count" -ge 2 ]; then
-  peers=$((count - 1))
+if [ "$peers" -ge 1 ]; then
   base="$(basename "$cwd")"
   sfx="$(date +%H%M 2>/dev/null || echo 2)"
   # LOUD + one-paste-actionable (operator's 2026-06-14 ask): re-fires every session

@@ -195,6 +195,18 @@ def _fresh_unattributable(sid, paths):
             pass
     return fresh
 
+def _peer_count(d):
+    # SINGLE-SOURCE peer detection (epistemic-#9): the same detector SessionStart
+    # uses. >=1 means a peer claude shares THIS checkout, so an unattributable
+    # subprocess file may be the peers, not ours — never assert "yours" then.
+    try:
+        r = subprocess.run(
+            ["/Users/alien/Projects/skills/hooks/peer-session-count.sh", d],
+            capture_output=True, text=True, timeout=8)
+        return int((r.stdout or "0").strip() or 0)
+    except Exception:
+        return 0
+
 unattributable_fresh = _fresh_unattributable(session_id, unattributable)
 
 # Genuinely pre-existing/foreign = everything NOT committed, NOT deferred-in-flight, NOT
@@ -210,10 +222,24 @@ if not new_changes:
         u = len(unattributable_fresh)
         uplural = "s" if u != 1 else ""
         ulist = "\n".join(unattributable_fresh[:10])
+        peers = _peer_count(cwd)
+        if peers >= 1:
+            pplural = "s" if peers != 1 else ""
+            ctx = (f"{u} changed file{uplural} were written by a background subprocess, NOT via the "
+                   f"Edit/Write tool, so this session did not auto-commit them. {peers} peer claude "
+                   f"session{pplural} share THIS checkout right now, so these may belong to a PEER, "
+                   f"NOT to you. Do NOT auto-commit them: verify ownership (your Edit/Write ledger, the "
+                   f"file purpose, git history) before any git add. Mis-stamping a peer file is the "
+                   f"recurring bug this guard prevents:\n{ulist}")
+        else:
+            ctx = (f"{u} changed file{uplural} were written by a background subprocess (a codex/llmx "
+                   f"worker YOU launched, or local automation), NOT via the Edit/Write tool, so this "
+                   f"session did not auto-commit them. No peer claude shares this checkout, so they are "
+                   f"most likely YOURS: review and commit explicitly:\n{ulist}")
         output = {
             "hookSpecificOutput": {
                 "hookEventName": "Stop",
-                "additionalContext": f"{u} changed file{uplural} were written by a background subprocess (almost always a codex/llmx worker YOU launched, or local automation), not via the Edit/Write tool — so this session did not auto-commit them. They are most likely YOURS: review and commit explicitly. Do NOT infer a concurrent/peer agent from this alone — a real peer needs a SEPARATE checkout (`git worktree list` shows >1) or an independent `claude` whose cwd is this dir; absent that, these are your own subprocess output:\n{ulist}",
+                "additionalContext": ctx,
             },
         }
         print(json.dumps(output))
