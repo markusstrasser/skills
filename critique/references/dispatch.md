@@ -37,9 +37,12 @@ manifest + git diff, writes `.model-review/dispatch.json` (layers, blockers, tok
 `conviction=low`; skip ≠ low. See `decisions/2026-06-15-voi-sequenced-review.md`.
 
 **Orchestrator wall-clock budget (opt-in):** `--budget-seconds SEC` — no limit by default.
-When set: skip scout/axis/extract if `remaining < profile.timeout` (full job or nothing;
-never truncate). Skipped axes → `budget_exhausted`; `execution-receipt.json` records
-`overall: partial|incomplete_all_skipped` (dispatch exits 2).
+Applies to **parallel axis dispatch + extract only**; premise scout has a fixed timeout
+and does not consume this cap (scout timeout previously cascaded into all axes skipped
+as `budget_exhausted`). When set: skip axis/extract if `remaining < profile.timeout`
+(full job or nothing; never truncate). Skipped axes → `budget_exhausted` or
+`budget_insufficient_for_profile` (cap smaller than profile timeout at start);
+`execution-receipt.json` records `overall: partial|incomplete_all_skipped` (dispatch exits 2).
 
 `dispatch.json` includes `schema_version: dispatch.v1`. Triage exits **1** on blockers.
 
