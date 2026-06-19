@@ -135,6 +135,28 @@ def main() -> None:
     check("infra surfaces local script hit", "session_probe.py" in c9)
     infra_td.cleanup()
 
+    # 10. existing_infra slice: view/hook/just recipe → codebase-map + justfile + hooks.
+    ex_td = tempfile.TemporaryDirectory()
+    ex_base = Path(ex_td.name)
+    (ex_base / ".claude/rules").mkdir(parents=True)
+    (ex_base / ".claude/rules/codebase-map.md").write_text(
+        "## scripts/hooks/ — 2 files\n  detail: .claude/maps/codebase.scripts-hooks.md\n"
+    )
+    (ex_base / "justfile").write_text("blindspot:\n    echo blindspot\n\nmaintain-tick:\n    echo tick\n")
+    (ex_base / "scripts/hooks").mkdir(parents=True)
+    (ex_base / "scripts/hooks/sample_guard.py").write_text("# hook\n")
+    out = run({
+        "user_message": "should we add a new hook for blindspot detection or use an existing view?",
+        "cwd": str(ex_base),
+        "session_id": "s_existing_infra",
+    })
+    c10 = ctx(out)
+    check("existing_infra emits additionalContext", bool(c10))
+    check("existing_infra surfaces codebase-map", "codebase-map" in c10 or "scripts-hooks" in c10)
+    check("existing_infra surfaces just recipe", "just blindspot" in c10)
+    check("existing_infra surfaces hook script", "sample_guard.py" in c10)
+    ex_td.cleanup()
+
     td.cleanup()
     print(f"\n{passed} passed, {failed} failed")
     sys.exit(1 if failed else 0)
