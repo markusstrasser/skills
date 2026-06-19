@@ -115,6 +115,26 @@ def main() -> None:
     check("too-short prompt is silent",
           run({"user_message": "build", "cwd": base, "session_id": "s5"}) == "")
 
+    # 9. Infra-design intent surfaces session-forensics + local script inventory.
+    infra_td = tempfile.TemporaryDirectory()
+    infra_base = Path(infra_td.name)
+    (infra_base / "scripts").mkdir()
+    (infra_base / "scripts/session_probe.py").write_text(
+        "# uses v_session_commits and agentlogs.db\n"
+    )
+    (infra_base / ".claude/rules").mkdir(parents=True)
+    (infra_base / ".claude/rules/session-forensics.md").write_text("# agentlogs schema\n")
+    out = run({
+        "user_message": "should we design a schema to join session_commits with git_commits?",
+        "cwd": str(infra_base),
+        "session_id": "s_infra",
+    })
+    c9 = ctx(out)
+    check("infra-design emits additionalContext", bool(c9))
+    check("infra surfaces session-forensics path", "session-forensics.md" in c9)
+    check("infra surfaces local script hit", "session_probe.py" in c9)
+    infra_td.cleanup()
+
     td.cleanup()
     print(f"\n{passed} passed, {failed} failed")
     sys.exit(1 if failed else 0)

@@ -89,6 +89,21 @@ STOP = {
 # request — the surfaces where un-grounded proposals happen. Deliberately broad;
 # the keyword-MATCH gate (must overlap real prior work) is what gives precision,
 # so a loose intent gate costs nothing when no prior work exists.
+OBSERVE_RSI = re.compile(
+    r"\b(/observe|observe\s+(sessions|supervision|drift|retro|failures|blindspot)|"
+    r"agentlogs|blindspot|blindspot-miner|just orient|drift-sentinel)\b",
+    re.I,
+)
+
+INFRA_DESIGN = re.compile(
+    r"\b(schema|migration|agentlogs|session_commits|git_commits|v_session|"
+    r"git\s+blame|already\s+exist|data\s+join|join\s+session)\b",
+    re.I,
+)
+
+PROJECTS_ROOT = Path.home() / "Projects"
+SIBLING_SCAN_MAX = 5
+
 INTENT = re.compile(
     r"\b("
     r"build|add|create|implement|propose|set up|wire up|introduce|"           # propose/build
@@ -170,6 +185,93 @@ def _scan_ideas(base: Path, kw: list[str]) -> list[str]:
     return out
 
 
+def _scan_sibling_repos(cwd: Path, kw: list[str]) -> list[str]:
+    """When cwd repo has no hits, scan sibling ~/Projects/*/research + decisions."""
+    strong = [k for k in kw if len(k) >= 6] or kw
+    refs: list[str] = []
+    try:
+        own = cwd.resolve()
+    except Exception:
+        return refs
+    if not PROJECTS_ROOT.is_dir():
+        return refs
+    for repo in sorted(PROJECTS_ROOT.iterdir()):
+        if not repo.is_dir() or repo.resolve() == own:
+            continue
+        for sub in ("research", "decisions"):
+            d = repo / sub
+            if not d.is_dir():
+                continue
+            for f in d.glob("*.md"):
+                nl = f.name.lower()
+                if any(k in nl for k in strong):
+                    refs.append(f"{repo.name}/{sub}/{f.name}")
+                    if len(refs) >= SIBLING_SCAN_MAX:
+                        return refs
+    return refs
+
+
+def _observe_self_check_lines() -> list[str]:
+    """Harness self-monitoring: surface orient + blindspot digest paths."""
+    blind = Path.home() / "Projects/agent-infra/.claude/blindspot-digest.md"
+    lines = [
+        "Observe/RSI self-check (advisory): run `just orient` (agent-infra) for live "
+        "jobs/hooks map; `just blindspot` or Read `.claude/blindspot-digest.md` for loop misses.",
+    ]
+    if blind.is_file():
+        try:
+            head = blind.read_text(errors="ignore").splitlines()[:8]
+            lines.append("blindspot-digest (head):\n" + "\n".join(f"  {ln}" for ln in head if ln.strip()))
+        except Exception:
+            pass
+    return lines
+
+
+def _scan_local_scripts_infra(base: Path, prompt: str) -> list[str]:
+    """Grep scripts/ for session↔commit join machinery when prompt smells like schema design."""
+    scripts = base / "scripts"
+    if not scripts.is_dir():
+        return []
+    needles = [
+        n for n in (
+            "session_commits", "git_commits", "v_session_commits", "agentlogs.db",
+        )
+        if n.lower() in prompt.lower()
+    ]
+    if INFRA_DESIGN.search(prompt) and not needles:
+        needles = ["session_commits", "git_commits", "agentlogs"]
+    if not needles:
+        return []
+    hits: list[str] = []
+    for py in sorted(scripts.glob("*.py"))[:80]:
+        try:
+            text = py.read_text(errors="ignore")
+        except OSError:
+            continue
+        if any(n.lower() in text.lower() for n in needles):
+            hits.append(f"scripts/{py.name}")
+        if len(hits) >= 5:
+            break
+    return hits
+
+
+def _infra_design_lines(base: Path, prompt: str) -> list[str]:
+    if not INFRA_DESIGN.search(prompt):
+        return []
+    lines = [
+        "Infra inventory (advisory): before designing joins/schemas, Read "
+        "`.claude/rules/session-forensics.md` (agentlogs.db) and grep existing "
+        "scripts — session↔commit joins may already exist.",
+    ]
+    found = _scan_local_scripts_infra(base, prompt)
+    if found:
+        lines.append("Local scripts with session/git join refs:\n" + "\n".join(f"  {s}" for s in found))
+    forensics = base / ".claude/rules/session-forensics.md"
+    if forensics.is_file():
+        lines.append("  .claude/rules/session-forensics.md")
+    return lines
+
+
 def _scan_git(cwd: str, kw: list[str]) -> list[str]:
     """Recent commit subjects in cwd (this repo family auto-commits per task,
     so finished work IS the log). Tightly capped — runs on substantive prompts."""
@@ -234,14 +336,18 @@ def main() -> None:
         return
 
     kw = _kw(prompt)
-    if not kw:
+    infra_only = bool(INFRA_DESIGN.search(prompt) or OBSERVE_RSI.search(prompt))
+    if not kw and not infra_only:
         return
 
     base = Path(cwd)
     memos = _scan_index_and_files(base, kw)
     ideas = _scan_ideas(base, kw)
     commits = _scan_git(cwd, kw)
-    if not (memos or ideas or commits):
+    siblings = _scan_sibling_repos(base, kw) if not (memos or ideas or commits) else []
+    observe_lines = _observe_self_check_lines() if OBSERVE_RSI.search(prompt) else []
+    infra_lines = _infra_design_lines(base, prompt)
+    if not (memos or ideas or commits or siblings or observe_lines or infra_lines):
         return  # intent present but no prior work -> nothing to front-load
 
     # De-dup within the session on the surfaced reference-set: a focused session
@@ -256,8 +362,11 @@ def main() -> None:
             keep.append(x)
         return keep
 
-    memos, ideas, commits = _dedup(memos)[:5], _dedup(ideas)[:4], _dedup(commits)[:6]
-    sig = hashlib.sha1("|".join(memos + ideas + commits).encode()).hexdigest()[:12]
+    memos = _dedup(memos)[:5]
+    ideas = _dedup(ideas)[:4]
+    commits = _dedup(commits)[:6]
+    siblings = _dedup(siblings)[:5]
+    sig = hashlib.sha1("|".join(memos + ideas + commits + siblings + observe_lines + infra_lines).encode()).hexdigest()[:12]
     if _already_surfaced(session_id, sig):
         return
 
@@ -279,6 +388,12 @@ def main() -> None:
         parts.append(f"{len(commits)} recent commit(s):\n" + "\n".join(f"  {c}" for c in commits))
     if ideas:
         parts.append("ideas.md backlog:\n" + "\n".join(f"  {i}" for i in ideas))
+    if siblings:
+        parts.append("Sibling repo memo(s):\n" + "\n".join(f"  {s}" for s in siblings))
+    if observe_lines:
+        parts.extend(observe_lines)
+    if infra_lines:
+        parts.extend(infra_lines)
     parts.append("(blindspot-miner #1 cluster; decisions/2026-06-07-state-externalization-lens.md)")
 
     _mark_surfaced(session_id, sig)
