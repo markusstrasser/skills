@@ -65,3 +65,12 @@ critique/.model-review/*/
 
 # test-written transient session state (current-session-id clobbers shared state — never track)
 llmx-guide/tests/.claude/
+
+# critique run scratch at ANY depth — the older .model-review/*/* patterns were root-anchored and
+# missed critique/scripts/.model-review/ (SKILL.md: ".model-review/ stays gitignored"). Keep only the
+# meaningful summaries.
+**/.model-review/*/*
+!**/.model-review/*/disposition.md
+!**/.model-review/*/findings.json
+!**/.model-review/*/coverage.json
+!**/.model-review/*/verified-disposition.md
