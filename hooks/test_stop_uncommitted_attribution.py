@@ -122,6 +122,26 @@ class StopUncommittedAttributionTest(unittest.TestCase):
         self.assertNotIn("fresh.py", self._head_files())
         self.assertIn("fresh.py", self._git("status", "--short", "fresh.py"))
 
+    def test_contested_file_not_swept(self) -> None:
+        """A file in BOTH this session's AND a peer's ledger (contested) must NOT be
+        auto-committed: whole-file `git add` would sweep the peer's hunks. This is the
+        e4076b2 misattribution (2026-06-19) -- my session edited justfile for the
+        maintain-tick recipe (committed earlier), a peer then re-dirtied justfile with
+        debug recipes, and my session-end checkpoint swept the peer's recipes into a
+        [wip] under my session-id, referencing untracked peer scripts.
+
+        Fire AS mine (the session that legitimately also touched the shared file):
+        the solely-mine file commits, the contested file is deferred + left dirty."""
+        self._tmp_ledger(self.mine, "shared.py", "mine_only.py")
+        self._tmp_ledger(self.other, "shared.py")
+        self._write_settled("shared.py", "two sessions edited me\n")
+        self._write_settled("mine_only.py", "m\n")
+        self._fire_as(self.mine)
+        head = self._head_files()
+        self.assertIn("mine_only.py", head)        # solely mine -> committed
+        self.assertNotIn("shared.py", head)        # contested -> NOT swept
+        self.assertIn("shared.py", self._git("status", "--short", "shared.py"))
+
     # NB: parse-safety of the embedded `python3 -c` program (the inline-single-quote
     # idiom that silently kills this hook) is enforced separately and faithfully by
     # lint_hook_input_contract.py, which simulates bash's quote splicing — the
