@@ -62,3 +62,6 @@ media/
 !.model-review/*/verified-disposition.md
 critique/.model-review/*/
 !critique/.model-review/dispatch.json
+
+# test-written transient session state (current-session-id clobbers shared state — never track)
+llmx-guide/tests/.claude/
