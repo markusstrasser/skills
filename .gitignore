@@ -66,14 +66,13 @@ critique/.model-review/*/
 # test-written transient session state (current-session-id clobbers shared state — never track)
 llmx-guide/tests/.claude/
 
-# critique run scratch at ANY depth — the older .model-review/*/* patterns were root-anchored and
-# missed critique/scripts/.model-review/ (SKILL.md: ".model-review/ stays gitignored"). Keep only the
-# meaningful summaries.
-**/.model-review/*/*
-!**/.model-review/*/disposition.md
-!**/.model-review/*/findings.json
-!**/.model-review/*/coverage.json
-!**/.model-review/*/verified-disposition.md
+# critique scratch under scripts/ — the older root-anchored .model-review/*/* patterns miss this depth.
+# FULLY ignored: it is generated critique output (SKILL.md: meaningful outputs converge to docs/audit/,
+# .model-review stays scratch). No summary exceptions — derived artifacts don't belong in git.
+critique/scripts/.model-review/
+
+# dispatch telemetry — derived/append log written by the dispatch layer, not source.
+.claude/telemetry/
 
 # Overview generator OUTPUT (generate-overview.sh) — derived, pins HEAD sha in its header so it
 # re-churns on every commit. Track the generator + .claude/overview.conf (input), never the output.
