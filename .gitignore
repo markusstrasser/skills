@@ -74,3 +74,9 @@ llmx-guide/tests/.claude/
 !**/.model-review/*/findings.json
 !**/.model-review/*/coverage.json
 !**/.model-review/*/verified-disposition.md
+
+# Overview generator OUTPUT (generate-overview.sh) — derived, pins HEAD sha in its header so it
+# re-churns on every commit. Track the generator + .claude/overview.conf (input), never the output.
+.claude/overviews/
+.claude/overview-marker-source
+.claude/overview-marker-tooling
