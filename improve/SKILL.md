@@ -529,8 +529,8 @@ Max 1 per tick. Rate-limit gate.
 **Dispatch lanes (pick by task shape):**
 - **Repo-coupled critique / analysis → cursor lane (default, encouraged).** Run via the hardened
   wrapper `~/Projects/skills/scripts/cursor_dispatch.sh --prompt "<task>" --out <artifact> [--workspace <dir>]`.
-  Defaults to **Composer** (Cursor's own model — best price/perf; opus via
-  `--model claude-opus-4-8-thinking-high` only for rare high-stakes critique). Read-only
+  Uses **Composer** (Cursor's native lane — best price/perf; a non-Composer `--model` is
+  off-policy AND hook-blocked by `pretool-cursor-model-guard.py`). Read-only
   (`--mode ask`), repo-aware (flags "already-handled at file:line" a cold API model can't), and
   **NOT gated by `CLAUDE_PROCS`** (Cursor quota, separate process). **MANDATORY fallback:** any
   non-zero exit (10 no-binary · 11 no-auth · 12 timeout · 13 error · 14 empty) means cursor is
