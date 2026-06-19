@@ -97,6 +97,9 @@ Validate **every** HIGH finding, not a sample. Read the actual code for each one
 
 **Do NOT categorize-then-skip.** Read the code, judge individually.
 
+**Skip anything tooling already enforces** (linter, type-checker, formatter) — those are caught for free;
+review for what tools can't see. A finding a `ruff`/`pyright` run would flag is noise here.
+
 ### Triage by context, not by pattern name
 
 | Context | Broad except is... | Unchecked returncode is... |
@@ -133,6 +136,20 @@ mkdir -p ~/.claude/artifacts/$PROJECT
 Write `~/.claude/artifacts/$PROJECT/code-review-$(date +%Y-%m-%d).json` with confirmed/unfixed summary
 for downstream skills (`/upgrade`, `/critique close`).
 
+## Module-depth lens (design-level findings)
+
+Beyond line-level smells, flag shallow / over-abstracted design — vocabulary from Ousterhout/Feathers
+(see `agent-infra/research/2026-06-19-mattpocock-skills-best-ideas.md`):
+
+- **Shallow module** — an interface nearly as complex as its implementation (a thin pass-through adding
+  no leverage). Fix is depth, not more wrappers. **Depth = leverage at the interface**, not a line ratio.
+- **Hypothetical seam** — a port/interface with a **single** implementation is needless indirection.
+  Rule: *one adapter = hypothetical seam, two = real* (= our proven-common-≥2). Flag single-adapter ports.
+- **Deletion test** — if this module/abstraction were deleted, what actually breaks? If little, it isn't
+  pulling weight (a dead-code / over-abstraction finding).
+- **Tests past the interface** — a test that asserts internal state (must change whenever the
+  implementation changes) instead of observable behavior. The interface is the test surface.
+
 ## Depth presets (for critique/execute callers)
 
 | Preset | Scout focus | Provider | Notes |
@@ -141,7 +158,9 @@ for downstream skills (`/upgrade`, `/critique close`).
 | `high` | security + patterns | cursor + `--all-providers` on diff scope | Slice closeout; recall mode |
 
 For **diff-scoped** review (plan closeout), pass only changed files via `--module` or a hand-built
-context packet — don't scan the whole repo.
+context packet — don't scan the whole repo. **Fail fast: confirm the ref resolves (`git rev-parse`)
+and the diff is non-empty BEFORE spawning scouts** — a bad ref or empty diff should fail here, not
+inside N parallel workers.
 
 ## Usage Examples
 
