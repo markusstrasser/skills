@@ -22,6 +22,11 @@ This is the harness supplying recoverable bookkeeping so the policy makes only
 the semantic keep/build/supersede decision (state-externalization lens,
 decisions/2026-06-07-state-externalization-lens.md, arXiv:2606.02373).
 
+EXISTING-INFRA slice (2026-06-19): when INFRA_DESIGN matches (schema/view/hook/
+just recipe/codebase-map), also surfaces `.claude/rules/codebase-map.md`, local
+just recipes, and `scripts/hooks/` — targets prior_context_triage `existing_infra`
+bucket. Cursor parity: agent-infra `.cursor/rules/prior-context.mdc`.
+
 Contract (Claude Code 2.1.x):
   - UserPromptSubmit envelope on stdin: `.user_message` (prompt text), `.cwd`,
     `.session_id`. (Field names verified against the sibling working hook
