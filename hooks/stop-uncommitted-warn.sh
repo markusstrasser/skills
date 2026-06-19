@@ -132,11 +132,21 @@ if session_id:
 # empty (no posttool ledger hook in this repo, or no Edit/Write this session)
 # fall back to the prior delta-minus-foreign behavior.
 unattributable = []
+contested = []
 if my_touched:
     unattributable = sorted(
         f for f in new_changes if f not in my_touched and f not in other_touched
     )
-    new_changes = [f for f in new_changes if f in my_touched]
+    # CONTESTED = in MY ledger AND a peer ledger. Two sessions edited the same file,
+    # so a whole-file git add would sweep the peer hunks into this sessions [wip]
+    # checkpoint -- the e4076b2 misattribution (2026-06-19: a peer justfile debug
+    # recipe rode my maintain-tick edit into a [wip] under my session-id, pointing
+    # at untracked peer scripts). Never auto-commit a contested file; defer it for an
+    # explicit owner-attributed commit (surfaced below, left in the tree, not lost).
+    # Same other_touched-based exclusion already used for unattributable + the
+    # no-ledger foreign fallback -- just applied to the in-both case.
+    contested = sorted(f for f in new_changes if f in my_touched and f in other_touched)
+    new_changes = [f for f in new_changes if f in my_touched and f not in other_touched]
 elif ledger_files:
     # A ledger producer exists and there ARE session ledgers, but THIS sessions
     # ledger is empty. Under concurrent peers sharing a checkout, current-session-id
@@ -167,6 +177,18 @@ def _in_flight(path):
         return False
 in_flight = sorted(f for f in new_changes if _in_flight(f))
 new_changes = [f for f in new_changes if f not in in_flight]
+
+# Contested-file advisory (computed once; reused by the empty-branch surface and the
+# success-branch note). Empty string when no file is in both ledgers.
+contested_note = ""
+if contested:
+    c = len(contested)
+    cplural = "s" if c != 1 else ""
+    cnames = ", ".join(contested[:6])
+    cmore = f" (+{len(contested) - 6} more)" if len(contested) > 6 else ""
+    contested_note = (f" {c} contested file{cplural} (in BOTH this session and a peer ledger) were NOT "
+                      f"auto-committed -- whole-file staging would sweep the peer hunks; commit your own "
+                      f"hunks explicitly: {cnames}{cmore}.")
 
 def _unattrib_seen_path(sid):
     safe = re.sub(r"[^A-Za-z0-9_-]", "", sid or "nosession")[:64] or "nosession"
@@ -215,34 +237,26 @@ unattributable_fresh = _fresh_unattributable(session_id, unattributable)
 pre_existing = len(all_changes) - len(new_changes) - len(in_flight) - len(unattributable)
 
 if not new_changes:
-    # Nothing this session provably owns. Do NOT auto-commit unattributable
-    # subprocess output (it may be a peer script output) — surface it
-    # non-blocking so the agent can commit its own outputs explicitly.
-    if unattributable_fresh:
-        peers = _peer_count(cwd)
-        # peers>=1 AND this session owns NOTHING to commit (new_changes empty): an unattributable,
-        # no-ledger file is then far more likely a peer subprocess output than ours, and this session
-        # cannot act on it anyway. Surfacing it every Stop is pure noise (4 firings on peer debug files
-        # in one session, 85bd3604 2026-06-19). Suppress the nag — the files stay in the working tree,
-        # are visible in `git status`, and were already recorded in the seen-log by _fresh_unattributable
-        # (no data loss). peers==0 keeps the surface: nobody else could have written them, so they really
-        # are most likely yours and worth committing explicitly.
-        if peers >= 1:
-            sys.exit(0)
+    # Nothing this session SOLELY owns (contested files were excluded from auto-commit
+    # above). Two categories may still need a non-blocking surface:
+    #   (1) CONTESTED (in my ledger AND a peer ledger) -- partly mine, always surface.
+    #   (2) UNATTRIBUTABLE subprocess output (in NO ledger) -- may be a peer script
+    #       output; surface ONLY when no peer shares the checkout, else it is pure noise
+    #       (4 firings on peer debug files, 85bd3604 2026-06-19; suppressed per d1907d3).
+    # Files stay in the working tree + git status either way -- no data loss.
+    parts = []
+    if contested:
+        parts.append(contested_note.strip())
+    if unattributable_fresh and _peer_count(cwd) < 1:
         u = len(unattributable_fresh)
         uplural = "s" if u != 1 else ""
         ulist = "\n".join(unattributable_fresh[:10])
-        ctx = (f"{u} changed file{uplural} were written by a background subprocess (a codex/llmx "
+        parts.append(f"{u} changed file{uplural} were written by a background subprocess (a codex/llmx "
                f"worker YOU launched, or local automation), NOT via the Edit/Write tool, so this "
                f"session did not auto-commit them. No peer claude shares this checkout, so they are "
                f"most likely YOURS: review and commit explicitly:\n{ulist}")
-        output = {
-            "hookSpecificOutput": {
-                "hookEventName": "Stop",
-                "additionalContext": ctx,
-            },
-        }
-        print(json.dumps(output))
+    if parts:
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": "\n\n".join(parts)}}))
     sys.exit(0)
 
 # Auto-commit session changes
@@ -291,7 +305,7 @@ try:
         output = {
             "hookSpecificOutput": {
                 "hookEventName": "Stop",
-                "additionalContext": f"Auto-checkpointed {n} session file{plural}{pre_msg} as a [wip] commit. UNGATED (no compile/test ran).{inflight_msg}{u_msg}",
+                "additionalContext": f"Auto-checkpointed {n} session file{plural}{pre_msg} as a [wip] commit. UNGATED (no compile/test ran).{inflight_msg}{u_msg}{contested_note}",
             },
         }
         print(json.dumps(output))
