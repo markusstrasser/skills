@@ -45,7 +45,22 @@ The four durable outputs. Adapt headings to the project; keep the contract.
 ## Held AGAINST the critique (disagree-self-check log — what you rejected and why)
 ## First vertical slice (start here, validate before scaling)
 ## Probes (read-before-plan / probe-the-join — the literal commands)
+
+## Acceptance — the `` ```verify `` gate (ENFORCED, not prose)
+``verify
+# stop-plan-gate.sh RUNS each non-comment line as `bash -c <line>` from the session cwd
+# (30s each); ALL must exit 0 before the session can stop. This IS the plan's measurable
+# exit_signal + verifier_commands — enforced, not asserted. Translate each phase's End-state
+# into a runnable assertion. REAL checks only — a placeholder (`true`, a bare `echo`) defeats
+# the gate and is worse than an empty block.
+test -f <the artifact the plan must produce>
+uv run pytest <the test that proves the behavior> -q
+``
 ```
+
+> The `` ```verify `` fence uses three backticks in a real plan (shown here as two to avoid
+> closing this code sample). stop-plan-gate.sh is wired globally — but a plan with no verify
+> block gets no enforcement, so emitting a real one is the whole point.
 
 ## 3. Deferred/open/rejected tracker — `docs/decisions/deferred-and-open.md` (living)
 

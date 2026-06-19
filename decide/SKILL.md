@@ -89,8 +89,15 @@ Output: the ADR + the invariants the decision must preserve.
   base builder, and named the wrong gate — `subject_scope` instead of the real `safe_to_share`/clean-room
   boundary that already contained it.)
 - Write the plan with probes embedded → `.claude/plans/<session>-<slug>.md`.
+- **Emit a runnable ` ```verify ` block** (see `references/templates.md` plan template). Translate each
+  phase's *End-state* into a bash assertion (artifact exists, the test passes, the grep matches).
+  `stop-plan-gate.sh` is globally wired: it RUNS this block at stop-time and BLOCKS the session from
+  ending until every command exits 0 — so it is the plan's *enforced* exit-signal + verifier-commands,
+  not advisory prose. Real assertions only; a placeholder (`true`, a bare `echo`) defeats the gate.
+  (History 2026-06-19: the gate fires in every repo but **0 of 334** plans supplied a block — the
+  binding constraint on plan closure was *adoption*, which this step fixes at the producer.)
 
-Output: a plan grounded in *verified* facts, not assumptions.
+Output: a plan grounded in *verified* facts, not assumptions, with an enforced acceptance gate.
 
 ### Phase 4 — Escalating adversarial, closed-loop → `/critique model`
 Rounds: **standard → deep (`--axes deep`) → confidence pass.** Cross-model (Gemini + GPT), never
