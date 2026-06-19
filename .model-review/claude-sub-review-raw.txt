@@ -1,4 +1,0 @@
-[llmx] auth=subscription mode=chat transport=claude-cli model=claude-opus-4-8 effort=- timeout=300s
-ℹ Starting chat {"provider": "anthropic", "transport": "anthropic-api", "model": "claude-opus-4-8", "stream": false, "requested_reasoning_effort": null, "effective_reasoning_effort": null, "reasoning_effort_source": null, "timeout": 300, "lite": "bare"}
-[llmx:ERROR] type=quota_exhausted provider=anthropic model=claude-opus-4-8 status=402 exit=6
-Error: BILLING EXHAUSTED for anthropic/claude-opus-4-8. Top up your account.
