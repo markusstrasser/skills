@@ -425,6 +425,37 @@ Ranked list of the 5 most impactful changes, each with a testable verification c
 ## 6. Blind Spots In My Own Analysis
 Where should you distrust my assessment?""",
     },
+    "glm": {
+        "label": "Z.ai GLM-5.2 (fourth-lineage adversarial)",
+        "profile": "glm_review",
+        "prompt": """\
+<system>
+You are reviewing as an independent cosigner from Z.ai's GLM-5.2 — a genuinely different training lab (Zhipu/Z.ai) than the other reviewers (Gemini/Google, GPT/OpenAI, Claude/Anthropic). Your value is a distinct failure-mode profile: find what they would miss, not what they'd agree on. Be concrete, reference specific code/config/claims. No platitudes. COMMIT to verdicts — when you flag a mechanism as a bug, state plainly that it IS a bug; do not hedge it behind "if you meant X". It is {date}.
+Budget: ~2000 words. Dense tables and lists over prose.
+</system>
+
+{question}
+
+RESPOND WITH EXACTLY THESE SECTIONS:
+
+## 1. Strengths and Weaknesses
+What holds up, what doesn't. Reference actual code/config. Be specific about both errors and what's correct.
+
+## 2. What Was Missed
+Patterns, problems, or opportunities not identified. Cite files, line ranges, gaps.
+
+## 3. Better Approaches
+For each: Agree (with refinements), Disagree (with alternative), or Upgrade (better version).
+
+## 4. What I'd Prioritize Differently
+Ranked list of the 5 most impactful changes, each with a testable verification criterion.
+
+## 5. Goals & Principles Alignment
+{principles_instruction}
+
+## 6. Blind Spots In My Own Analysis
+Where should you distrust my assessment?""",
+    },
 }
 
 # 2×2 cell metadata: family × lens (inspectable in coverage.json).
@@ -517,10 +548,12 @@ def write_structural_assumptions_artifact(review_dir: Path, assumptions: list[st
     return path
 
 # Presets map a single name to a list of axes.
-# `claude` (Opus 4.8, $0 subscription) and `composer` (Cursor Composer 2.5,
-# metered Cursor pool — "sub" but not free) are opt-in
-# third-lineage cosigners — intentionally NOT in any preset. Request explicitly:
-# `--axes arch,formal,claude` or `--axes arch,formal,composer`.
+# `claude` (Opus 4.8, $0 subscription), `composer` (Cursor Composer 2.5,
+# metered Cursor pool — "sub" but not free), and `glm` (Z.ai GLM-5.2, metered
+# OpenRouter — a genuinely NEW fourth lab) are opt-in third/fourth-lineage
+# cosigners — intentionally NOT in any preset (promotion gated on
+# evals/critique_replay measurement, like cross2). Request explicitly:
+# `--axes arch,formal,claude` / `--axes arch,formal,composer` / `--axes arch,formal,glm`.
 #
 # cross2/lens2 = diagonal 2×2 (S_G + M_P). cross4/lens4/standard = full grid.
 # model-review CLI default stays `standard` until evals/critique_replay/ROUTING_VERDICT.md

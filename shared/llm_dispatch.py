@@ -204,6 +204,23 @@ PROFILES: dict[str, DispatchProfile] = {
         input_token_limit=120000,
         allowed_overrides=("timeout",),
     ),
+    "glm_review": DispatchProfile(
+        # Opt-in fourth-lineage cosigner: Z.ai GLM-5.2 via the llmx `zai` provider
+        # (routed through OpenRouter today, OPENROUTER_API_KEY). A genuinely NEW
+        # training lab (Zhipu/Z.ai) — independent of Google/OpenAI/Anthropic/Cursor —
+        # so it adds real cross-lab adversarial diversity (constitution P12: same-lab
+        # panels are ~1 effective vote). Metered API (~$1.20/M in, $3.20/M out — cheap,
+        # NOT flat-free); auth defaults to "api". NB: GLM emits heavy default reasoning,
+        # so a review costs more reasoning tokens than the GPT/Gemini cosigners.
+        name="glm_review",
+        intent="Z.ai GLM-5.2 adversarial review (opt-in fourth-lineage cosigner)",
+        provider="zai",
+        model="glm-5.2",
+        timeout=600,
+        mode="chat",
+        input_token_limit=200000,
+        allowed_overrides=("timeout",),
+    ),
     "composer_screen": DispatchProfile(
         # Fast screening tier — per-repo drift/diff triage, observe candidate pass.
         name="composer_screen",
@@ -238,6 +255,7 @@ MODEL_TO_PROFILE = {
     "claude-opus-4-8": "claude_review",
     "composer-2.5": "composer_review",
     "composer-2.5-fast": "composer_screen",
+    "glm-5.2": "glm_review",
 }
 
 
