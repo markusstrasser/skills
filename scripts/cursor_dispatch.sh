@@ -9,9 +9,10 @@
 # Anchor: agent-infra decisions/2026-06-16-improve-dispatch-route-to-cursor-agent.md (Fix B).
 # Verified CLI surface (cursor-agent 2026.06.15): --mode {plan,ask}, ask=read-only;
 # NO native --timeout (wrap with shell timeout); -f/--force auto-approves read commands;
-# --workspace roots it. Default model = Composer (Cursor's own model — best price/perf,
-# operator directive 2026-06-19; matches the "Composer default scout" convention). Pass
-# --model claude-opus-4-8-thinking-high only for rare high-stakes critique.
+# --workspace roots it. Model = Composer ONLY (Cursor's native lane — best price/perf,
+# operator directive 2026-06-19). A non-Composer --model (opus/gpt/…) is off-policy AND
+# hook-blocked by pretool-cursor-model-guard.py: cursor proxies frontier models at separate
+# metered rates. --model accepts composer tiers only (composer-2.5 / composer-2.5-fast).
 #
 # Usage:
 #   cursor_dispatch.sh --prompt "<text>" --out <artifact> [--workspace DIR] [--model M] [--timeout S]
@@ -25,7 +26,7 @@
 #    2 usage error
 set -uo pipefail
 
-MODEL="composer-2.5"                    # Composer = best price/perf default (operator 2026-06-19); opus via --model
+MODEL="composer-2.5"                    # Composer ONLY (best price/perf; non-composer is hook-blocked + off-policy)
 WORKSPACE="$PWD"
 TIMEOUT=600                              # cursor-agent has no native timeout; bound it here
 PROMPT=""
