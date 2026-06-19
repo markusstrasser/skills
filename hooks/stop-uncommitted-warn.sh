@@ -219,23 +219,23 @@ if not new_changes:
     # subprocess output (it may be a peer script output) — surface it
     # non-blocking so the agent can commit its own outputs explicitly.
     if unattributable_fresh:
+        peers = _peer_count(cwd)
+        # peers>=1 AND this session owns NOTHING to commit (new_changes empty): an unattributable,
+        # no-ledger file is then far more likely a peer subprocess output than ours, and this session
+        # cannot act on it anyway. Surfacing it every Stop is pure noise (4 firings on peer debug files
+        # in one session, 85bd3604 2026-06-19). Suppress the nag — the files stay in the working tree,
+        # are visible in `git status`, and were already recorded in the seen-log by _fresh_unattributable
+        # (no data loss). peers==0 keeps the surface: nobody else could have written them, so they really
+        # are most likely yours and worth committing explicitly.
+        if peers >= 1:
+            sys.exit(0)
         u = len(unattributable_fresh)
         uplural = "s" if u != 1 else ""
         ulist = "\n".join(unattributable_fresh[:10])
-        peers = _peer_count(cwd)
-        if peers >= 1:
-            pplural = "s" if peers != 1 else ""
-            ctx = (f"{u} changed file{uplural} were written by a background subprocess, NOT via the "
-                   f"Edit/Write tool, so this session did not auto-commit them. {peers} peer claude "
-                   f"session{pplural} share THIS checkout right now, so these may belong to a PEER, "
-                   f"NOT to you. Do NOT auto-commit them: verify ownership (your Edit/Write ledger, the "
-                   f"file purpose, git history) before any git add. Mis-stamping a peer file is the "
-                   f"recurring bug this guard prevents:\n{ulist}")
-        else:
-            ctx = (f"{u} changed file{uplural} were written by a background subprocess (a codex/llmx "
-                   f"worker YOU launched, or local automation), NOT via the Edit/Write tool, so this "
-                   f"session did not auto-commit them. No peer claude shares this checkout, so they are "
-                   f"most likely YOURS: review and commit explicitly:\n{ulist}")
+        ctx = (f"{u} changed file{uplural} were written by a background subprocess (a codex/llmx "
+               f"worker YOU launched, or local automation), NOT via the Edit/Write tool, so this "
+               f"session did not auto-commit them. No peer claude shares this checkout, so they are "
+               f"most likely YOURS: review and commit explicitly:\n{ulist}")
         output = {
             "hookSpecificOutput": {
                 "hookEventName": "Stop",
