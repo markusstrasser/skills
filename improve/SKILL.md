@@ -454,9 +454,13 @@ them; they appear in `freshness` only so a red (DUE+stale) row exposes a dead la
 ### Rate Limit Check
 
 ```bash
-CLAUDE_PROCS=$(pgrep -lf claude 2>/dev/null | wc -l | tr -d ' ')
+CLAUDE_PROCS=$(pgrep -x claude 2>/dev/null | wc -l | tr -d ' ')
 ```
-If >= 5: skip subagent dispatch (Tier 2). Route LLM-heavy analysis through `uv run python3 ~/Projects/skills/scripts/llm-dispatch.py --profile cheap_tick ...`.
+If >= 5: skip the **claude** subagent lane (Tier 2 claude dispatch). `pgrep -x` matches the
+exact `claude` process name — the old `-lf` substring-matched every `~/.claude/...` path (105 vs
+5 true on the dev box), so the gate was permanently stuck closed and the loop never dispatched.
+The **cursor lane (Tier 2, below) runs on Cursor's quota and is NOT gated by this count.**
+Route LLM-heavy analysis through `uv run python3 ~/Projects/skills/scripts/llm-dispatch.py --profile cheap_tick ...`.
 
 ### Each Tick: Pick ONE Task by Priority
 
@@ -521,6 +525,20 @@ Max 1 per tick. Rate-limit gate.
 |------|---------|-----------|
 | Audit sweep | Biweekly | `/dispatch-research quick sweep` |
 | Benchmark drift | After pipeline changes | `noncoding_benchmark.py benchmark` |
+
+**Dispatch lanes (pick by task shape):**
+- **Repo-coupled critique / analysis → cursor lane (default, encouraged).** Run via the hardened
+  wrapper `~/Projects/skills/scripts/cursor_dispatch.sh --prompt "<task>" --out <artifact> [--workspace <dir>]`.
+  Defaults to **Composer** (Cursor's own model — best price/perf; opus via
+  `--model claude-opus-4-8-thinking-high` only for rare high-stakes critique). Read-only
+  (`--mode ask`), repo-aware (flags "already-handled at file:line" a cold API model can't), and
+  **NOT gated by `CLAUDE_PROCS`** (Cursor quota, separate process). **MANDATORY fallback:** any
+  non-zero exit (10 no-binary · 11 no-auth · 12 timeout · 13 error · 14 empty) means cursor is
+  unavailable → re-dispatch the SAME task to the claude Agent lane. Never skip the task on a
+  cursor failure (the wrapper guarantees the loop never silently dies on cursor outage).
+- **Code-mutating / multi-file fixes → claude Agent + worktree isolation** (proven path; the
+  cursor lane is read-only by design, so it does not handle mutations).
+- **Non-repo synthesis / search fan-out → claude `Explore`/`Agent` or `llmx`** (gated by `CLAUDE_PROCS`).
 
 ### Execution Model
 
