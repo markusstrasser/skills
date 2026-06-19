@@ -96,8 +96,9 @@ OBSERVE_RSI = re.compile(
 )
 
 INFRA_DESIGN = re.compile(
-    r"\b(schema|migration|agentlogs|session_commits|git_commits|v_session|"
-    r"git\s+blame|already\s+exist|data\s+join|join\s+session)\b",
+    r"\b(schema|migration|view|views|hook|hooks|justfile|just\s+recipe|"
+    r"codebase[- ]map|mcp\s+tool|already\s+exist|agentlogs|session_commits|"
+    r"git_commits|v_session|git\s+blame|data\s+join|join\s+session)\b",
     re.I,
 )
 
@@ -227,6 +228,69 @@ def _observe_self_check_lines() -> list[str]:
     return lines
 
 
+def _scan_codebase_map(base: Path, kw: list[str]) -> list[str]:
+    """Surface codebase-map index rows when prompt smells like infra design."""
+    cmap = base / ".claude/rules/codebase-map.md"
+    if not cmap.is_file():
+        return []
+    strong = [k for k in kw if len(k) >= 5] or kw
+    hits: list[str] = []
+    try:
+        for line in cmap.read_text(errors="ignore").splitlines():
+            ll = line.lower()
+            if not any(re.search(rf"\b{re.escape(k)}\b", ll) for k in strong):
+                continue
+            s = line.strip()
+            if s.startswith("##") or "←" in s or ".claude/maps/" in s:
+                hits.append(s[:100])
+            if len(hits) >= 4:
+                break
+    except OSError:
+        pass
+    return hits
+
+
+def _scan_justfile_recipes(base: Path, kw: list[str]) -> list[str]:
+    """List just recipes whose names overlap prompt keywords."""
+    jf = base / "justfile"
+    if not jf.is_file():
+        return []
+    strong = [k for k in kw if len(k) >= 5] or kw
+    hits: list[str] = []
+    try:
+        for line in jf.read_text(errors="ignore").splitlines():
+            m = re.match(r"^([a-z][a-z0-9_-]*)\s*:", line)
+            if not m:
+                continue
+            name = m.group(1)
+            if any(k in name for k in strong) or any(
+                re.search(rf"\b{re.escape(k)}\b", line.lower()) for k in strong
+            ):
+                hits.append(f"just {name}")
+            if len(hits) >= 5:
+                break
+    except OSError:
+        pass
+    return hits
+
+
+def _scan_hook_files(base: Path) -> list[str]:
+    """Local hook scripts — existing_infra bucket (prior_context_triage)."""
+    hooks = base / "scripts/hooks"
+    if not hooks.is_dir():
+        hooks = base / ".claude" / "hooks"
+    if not hooks.is_dir():
+        return []
+    out: list[str] = []
+    try:
+        for f in sorted(hooks.glob("*.py"))[:6]:
+            out.append(str(f.relative_to(base)))
+    except ValueError:
+        for f in sorted(hooks.glob("*.py"))[:6]:
+            out.append(f.name)
+    return out
+
+
 def _scan_local_scripts_infra(base: Path, prompt: str) -> list[str]:
     """Grep scripts/ for session↔commit join machinery when prompt smells like schema design."""
     scripts = base / "scripts"
@@ -255,17 +319,26 @@ def _scan_local_scripts_infra(base: Path, prompt: str) -> list[str]:
     return hits
 
 
-def _infra_design_lines(base: Path, prompt: str) -> list[str]:
+def _infra_design_lines(base: Path, prompt: str, kw: list[str]) -> list[str]:
     if not INFRA_DESIGN.search(prompt):
         return []
     lines = [
-        "Infra inventory (advisory): before designing joins/schemas, Read "
-        "`.claude/rules/session-forensics.md` (agentlogs.db) and grep existing "
-        "scripts — session↔commit joins may already exist.",
+        "EXISTING-INFRA (advisory): prompt touches schema/view/hook/recipe surfaces — "
+        "search before proposing. Read `.claude/rules/codebase-map.md`, grep scripts/, "
+        "and `just --list` for live recipes; build on or supersede explicitly.",
     ]
     found = _scan_local_scripts_infra(base, prompt)
+    cmap = _scan_codebase_map(base, kw)
+    recipes = _scan_justfile_recipes(base, kw)
+    hooks = _scan_hook_files(base) if re.search(r"\bhook", prompt, re.I) else []
     if found:
         lines.append("Local scripts with session/git join refs:\n" + "\n".join(f"  {s}" for s in found))
+    if cmap:
+        lines.append("codebase-map hits:\n" + "\n".join(f"  {c}" for c in cmap))
+    if recipes:
+        lines.append("justfile recipes:\n" + "\n".join(f"  {r}" for r in recipes))
+    if hooks:
+        lines.append("Local hook scripts:\n" + "\n".join(f"  {h}" for h in hooks))
     forensics = base / ".claude/rules/session-forensics.md"
     if forensics.is_file():
         lines.append("  .claude/rules/session-forensics.md")
@@ -346,7 +419,7 @@ def main() -> None:
     commits = _scan_git(cwd, kw)
     siblings = _scan_sibling_repos(base, kw) if not (memos or ideas or commits) else []
     observe_lines = _observe_self_check_lines() if OBSERVE_RSI.search(prompt) else []
-    infra_lines = _infra_design_lines(base, prompt)
+    infra_lines = _infra_design_lines(base, prompt, kw)
     if not (memos or ideas or commits or siblings or observe_lines or infra_lines):
         return  # intent present but no prior work -> nothing to front-load
 
