@@ -79,3 +79,7 @@ critique/scripts/.model-review/
 .claude/overviews/
 .claude/overview-marker-source
 .claude/overview-marker-tooling
+
+# .model-review is critique-run SCRATCH at any depth (SKILL.md: "stays gitignored"); meaningful
+# outputs converge to docs/audit/. Fully ignored — derived artifacts do not belong in git.
+.model-review/
