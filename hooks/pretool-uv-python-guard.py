@@ -26,9 +26,9 @@ Tiered by residual FP risk (P3 measure-before-enforce):
   • BLOCK  `uvx python`/`uvx python3` WITHOUT `--with`, when shaped as an
            invocation — isolated dep-less env, never right; shape filter kills the
            mention FP.
-  • WARN   bare `python`/`python3` after `&&`/`;`/`|` (no uv run), shaped as an
-           invocation — real but FP-prone (prose `ran python3 x.py`), so nudge,
-           don't block; escalate to BLOCK later if the warn proves ineffective.
+  • BLOCK  bare `python`/`python3` after `&&`/`;`/`|` (no uv run), shaped as an
+           invocation — compound `cd proj && python3` was the measured duckdb gap
+           (2026-06-14 agentlogs); escalated from WARN 2026-06-20.
   • PASS   anything with `uv run` (incl. `uv run --no-project python3`) or
            `uvx --with …`, and all mentions.
 
@@ -97,12 +97,12 @@ def verdict(cmd: str):
         return ("block",
                 "BLOCK: use `uv run python3`, not bare `python`/`python3` — system python "
                 "lacks project deps (duckdb, etc.). Stdlib throwaway: `uv run --no-project python3`.")
-    # bare python after a separator, shaped as an invocation → warn (FP-prone)
+    # bare python after a separator, shaped as an invocation → block (duckdb gap)
     for m in _BARE_PY_COMPOUND.finditer(cmd):
         if _is_invocation(cmd, m.end()):
-            return ("warn",
-                    "Heads up: bare `python3` after `&&`/`;` uses system python, which lacks "
-                    "project deps (duckdb etc.) — prefer `uv run python3` from the project root.")
+            return ("block",
+                    "BLOCK: bare `python3` after `&&`/`;` uses system python, which "
+                    "lacks project deps (duckdb etc.) — use `cd <proj> && uv run python3 …`.")
     return "pass", ""
 
 
@@ -111,8 +111,8 @@ def _selftest() -> int:
         ("python3 foo.py", "block"),
         ("uvx python3 - <<'PY'\nimport duckdb\nPY", "block"),
         ("uvx python3 -c 'import duckdb'", "block"),
-        ("cd /Users/alien/Projects/intel && python3 setup_duckdb.py", "warn"),
-        ("cd x; python3 -c 'import duckdb'", "warn"),
+        ("cd /Users/alien/Projects/intel && python3 setup_duckdb.py", "block"),
+        ("cd x; python3 -c 'import duckdb'", "block"),
         ("uv run python3 foo.py", "pass"),
         ("cd intel && uv run python3 foo.py", "pass"),
         ("uv run --no-project python3 /tmp/x.py", "pass"),
