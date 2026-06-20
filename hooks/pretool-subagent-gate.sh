@@ -378,6 +378,20 @@ if [ -n "$PROMPT" ] && [ "${HAS_FILE_OUTPUT:-0}" -gt 0 ]; then
     fi
 fi
 
+# Check 11: Audit-bound inject for filesystem scout dispatches
+if [ -n "$PROMPT" ]; then
+    AUDIT_INJECT=$(printf '%s' "$INPUT" | python3 "$HOME/Projects/skills/hooks/subagent_audit_bound.py" pretool 2>/dev/null \
+        | python3 -c 'import sys,json; raw=sys.stdin.read().strip(); print(json.loads(raw).get("hookSpecificOutput",{}).get("additionalContext","") if raw else "")' 2>/dev/null || true)
+    if [ -n "$AUDIT_INJECT" ]; then
+        CHECK_IDS="${CHECK_IDS}11,"
+        if [ -z "$INJECT_SUFFIX" ]; then
+            INJECT_SUFFIX="$AUDIT_INJECT"
+        else
+            WARNINGS="${WARNINGS}${AUDIT_INJECT} "
+        fi
+    fi
+fi
+
 # Check 9: Inject write_json_atomic guidance for genomics project agents
 # Agents consistently use json.dump(…, fh) which fails the ratchet test.
 # 3/3 measurement agents in 2026-04-05 session needed post-hoc fixes.
