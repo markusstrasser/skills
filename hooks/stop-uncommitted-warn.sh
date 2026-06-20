@@ -178,6 +178,48 @@ def _in_flight(path):
 in_flight = sorted(f for f in new_changes if _in_flight(f))
 new_changes = [f for f in new_changes if f not in in_flight]
 
+# Automation-write ledger — the third writer class beyond own/peer sessions.
+# launchd jobs + generators (fm.py, digest/sensor writers) write tracked files
+# through neither the Edit/Write tool nor a session ledger, so without this they
+# fall to "unattributable -> most likely YOURS" (2026-06-20: agent-failure-modes.md
+# + a sensor digest mis-flagged on a session that never touched them). Generators
+# self-register via scripts/common/automation_ledger.py; here we drop any path an
+# automation wrote within the recency window. FAIL-SAFE: this can only REMOVE files
+# from the yours/commit/contest sets (they move to the silent pre-existing/other
+# bucket), never add one -- an empty/absent ledger is a no-op, so it cannot cause a
+# new auto-commit. Recency-windowed so a one-off automation write does not shadow a
+# path a human later edits by hand.
+automation_owned = set()
+_auto_ledger = os.path.join(os.path.expanduser("~"), ".claude", "automation-write-ledger.jsonl")
+_AUTO_WINDOW_S = 36 * 3600
+try:
+    with open(_auto_ledger) as _fh:
+        for _raw in _fh:
+            _raw = _raw.strip()
+            if not _raw:
+                continue
+            try:
+                _rec = json.loads(_raw)
+            except ValueError:
+                continue
+            if _now - float(_rec.get("ts", 0) or 0) > _AUTO_WINDOW_S:
+                continue
+            _p = _rec.get("path", "")
+            if not _p:
+                continue
+            if os.path.isabs(_p):
+                try:
+                    _p = os.path.relpath(_p, cwd)
+                except ValueError:
+                    continue
+            automation_owned.add(_p)
+except OSError:
+    pass
+if automation_owned:
+    unattributable = [f for f in unattributable if f not in automation_owned]
+    new_changes = [f for f in new_changes if f not in automation_owned]
+    contested = [f for f in contested if f not in automation_owned]
+
 # Contested-file advisory (computed once; reused by the empty-branch surface and the
 # success-branch note). Empty string when no file is in both ledgers.
 contested_note = ""
