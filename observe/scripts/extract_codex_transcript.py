@@ -357,11 +357,18 @@ def main():
     for t in threads:
         rollout = Path(t["rollout_path"])
         size_kb = rollout.stat().st_size / 1024 if rollout.exists() else 0
+        sess = process_rollout(t)
+        if sess["message_count"] == 0:
+            print(
+                f"  {t['id'][:12]}... ({size_kb:.0f} KB) skip empty",
+                file=sys.stderr,
+            )
+            continue
         print(
             f"  {t['id'][:12]}... ({size_kb:.0f} KB) {t.get('title', '')[:60]}",
             file=sys.stderr,
         )
-        sessions.append(process_rollout(t))
+        sessions.append(sess)
 
     markdown = format_markdown(sessions, args.project)
 
