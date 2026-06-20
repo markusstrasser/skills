@@ -56,49 +56,53 @@ except Exception:
     print("DESC=\x27\x27")
 ' 2>/dev/null)"
 
-# No output path mentioned → nothing to verify. Most Agent calls (Explore,
-# brainstorm, single-answer research) don't promise a file and are fine.
-[ -z "$OUT_PATH" ] && exit 0
+# No output path mentioned → skip file verification (audit-bound check still runs below).
+MSG=""
 
-# Expand ~ if present
-CHECK_PATH="${OUT_PATH/#\~/$HOME}"
-
-# Resolve relative paths against CWD
-case "$CHECK_PATH" in
-    /*) ;;  # absolute, keep
-    *)  CHECK_PATH="$(pwd)/$CHECK_PATH" ;;
-esac
-
-# Verify file exists, is non-empty, AND its write-first stub was actually filled in.
-# "exists + non-empty" is satisfied by a bare stub — the write-first protocol seeds the
-# file with a placeholder marked [PENDING] (researcher.md Checkpoint Protocol). The
-# recurring, costly failure is the agent writing that stub then exhausting turns WITHOUT
-# replacing [PENDING] — file exists, non-empty, looks done, findings never landed
-# (this session: 2/5 researchers, ~160K tokens, forced a resume round-trip). [GAP] is an
-# HONEST gap marker the protocol wants kept, so it is NOT a failure signal; only an
-# unreplaced [PENDING] is.
 STATUS=""
-if [ ! -e "$CHECK_PATH" ]; then
-    STATUS="MISSING"
-elif [ ! -s "$CHECK_PATH" ]; then
-    STATUS="EMPTY"
-elif grep -qE '\[PENDING(\]|:)' "$CHECK_PATH" 2>/dev/null; then  # bare [PENDING] + structured [PENDING: …]
-    STATUS="PENDING"
-fi
-
-if [ -n "$STATUS" ]; then
-    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-output-check" "warn" \
-        "${STATUS} path=${OUT_PATH} stype=${STYPE}" 2>/dev/null || true
-
-    case "$STATUS" in
-        PENDING)
-            MSG="SUBAGENT OUTPUT INCOMPLETE: '${OUT_PATH}' exists and is non-empty but still contains an unreplaced [PENDING] placeholder — the subagent wrote its write-first stub then exhausted turns (or died) before filling it in. This is the recurring research-completeness failure; the returned summary may look done while findings are missing. Before trusting it: read the file, and if findings are absent, re-dispatch the SAME agent with the checkpoint path to finish the [PENDING] entries (CORAL epoch) rather than accepting the stub."
-            ;;
-        *)
-            MSG="SUBAGENT OUTPUT ${STATUS}: Dispatch prompt promised file at '${OUT_PATH}' but the file is ${STATUS,,} after completion. The subagent likely exhausted turns, hit API limits, or mis-wrote the path. Before trusting its returned summary, (1) verify by reading the file, (2) re-dispatch with write-stub-first instruction, or (3) treat this output as lost and redo the task directly."
-            ;;
+if [ -n "$OUT_PATH" ]; then
+    CHECK_PATH="${OUT_PATH/#\~/$HOME}"
+    case "$CHECK_PATH" in
+        /*) ;;
+        *)  CHECK_PATH="$(pwd)/$CHECK_PATH" ;;
     esac
 
+    if [ ! -e "$CHECK_PATH" ]; then
+        STATUS="MISSING"
+    elif [ ! -s "$CHECK_PATH" ]; then
+        STATUS="EMPTY"
+    elif grep -qE '\[PENDING(\]|:)' "$CHECK_PATH" 2>/dev/null; then
+        STATUS="PENDING"
+    fi
+
+    if [ -n "$STATUS" ]; then
+        ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-output-check" "warn" \
+            "${STATUS} path=${OUT_PATH} stype=${STYPE}" 2>/dev/null || true
+
+        case "$STATUS" in
+            PENDING)
+                MSG="SUBAGENT OUTPUT INCOMPLETE: '${OUT_PATH}' exists and is non-empty but still contains an unreplaced [PENDING] placeholder — the subagent wrote its write-first stub then exhausted turns (or died) before filling it in. This is the recurring research-completeness failure; the returned summary may look done while findings are missing. Before trusting it: read the file, and if findings are absent, re-dispatch the SAME agent with the checkpoint path to finish the [PENDING] entries (CORAL epoch) rather than accepting the stub."
+                ;;
+            *)
+                MSG="SUBAGENT OUTPUT ${STATUS}: Dispatch prompt promised file at '${OUT_PATH}' but the file is ${STATUS,,} after completion. The subagent likely exhausted turns, hit API limits, or mis-wrote the path. Before trusting its returned summary, (1) verify by reading the file, (2) re-dispatch with write-stub-first instruction, or (3) treat this output as lost and redo the task directly."
+                ;;
+        esac
+    fi
+fi
+
+# Audit-bound check (filesystem scout dispatches must declare SEARCH_ROOT).
+AUDIT_MSG=$(printf '%s' "$INPUT" | python3 "$HOME/Projects/skills/hooks/subagent_audit_bound.py" posttool 2>/dev/null \
+    | python3 -c 'import sys,json; raw=sys.stdin.read().strip(); print(json.loads(raw).get("additionalContext","") if raw else "")' 2>/dev/null || true)
+if [ -n "$AUDIT_MSG" ]; then
+    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-audit-bound" "warn" "missing-bound" 2>/dev/null || true
+    if [ -n "$MSG" ]; then
+        MSG="${MSG} ${AUDIT_MSG}"
+    else
+        MSG="$AUDIT_MSG"
+    fi
+fi
+
+if [ -n "$MSG" ]; then
     SAFE_MSG=$(python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$MSG" 2>/dev/null)
     echo "{\"additionalContext\": ${SAFE_MSG}}"
 fi
