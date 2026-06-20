@@ -40,7 +40,16 @@ fi
 CKPT=""
 [ -n "$CWD" ] && [ -f "$CWD/.claude/checkpoint.md" ] && CKPT=" A fresh .claude/checkpoint.md was written by the PreCompact hook — read it first."
 
-MSG="Context was just compacted.${CKPT} Re-orient and continue the in-progress work from the checkpoint's Pending Tasks — don't re-ask the user what you were doing. First verify reality against the compaction summary: run \`git log --oneline -10\` and confirm any work the summary claims as done actually landed (compaction summaries hallucinate completed commits). If a /loop is active, proceed with the current tick."
+# Compaction loses operator CORRECTIONS while keeping ADR principles — so the same
+# wrong instantiation gets re-derived. Re-inject the project's settled-framing headers
+# (each is "topic — verdict") so a settled question is looked up, not re-derived.
+REFRAMINGS=""
+if [ -n "$CWD" ] && [ -f "$CWD/docs/decisions/REFRAMINGS.md" ]; then
+  TOPICS=$(awk '/^## /{sub(/^## /,"");printf "%s%s",sep,$0;sep=" · "}' "$CWD/docs/decisions/REFRAMINGS.md" 2>/dev/null || echo "")
+  [ -n "$TOPICS" ] && REFRAMINGS=" SETTLED FRAMINGS — do NOT re-derive these from principles; the pinned answer is in docs/decisions/REFRAMINGS.md (consult it + \`agentlogs search\` before asserting any identity/firewall/home/scope framing): ${TOPICS}."
+fi
+
+MSG="Context was just compacted.${CKPT} Re-orient and continue the in-progress work from the checkpoint's Pending Tasks — don't re-ask the user what you were doing. First verify reality against the compaction summary: run \`git log --oneline -10\` and confirm any work the summary claims as done actually landed (compaction summaries hallucinate completed commits). If a /loop is active, proceed with the current tick.${REFRAMINGS}"
 
 printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":%s}}\n' \
   "$(printf '%s' "$MSG" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')"
