@@ -573,7 +573,12 @@ PRESETS = {
 }
 
 # Premise scout runs before packet-only axes (VOI-sequenced review ADR).
-PREMISE_SCOUT_TIMEOUT = 90
+# 90s was too tight: 21/22 runs Jun 1-20 timed out and failed open, making the
+# premise gate vacuous. A real arc-agi repo packet measured 229.5s for cursor-agent
+# ask-mode to complete (2026-06-20), so 360s gives genuine headroom over the observed
+# latency. Cost: serial latency before axes (still well under the 900s overall budget);
+# scout has its own timeout and does not consume axis budget.
+PREMISE_SCOUT_TIMEOUT = 360
 PREMISE_SCOUT_CONTEXT_CAP = 120_000  # chars of packet fed to scout stdin
 
 PREMISE_SCOUT_PROMPT = """\
