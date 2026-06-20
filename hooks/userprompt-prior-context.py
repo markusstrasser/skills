@@ -126,6 +126,17 @@ INTENT = re.compile(
     re.I,
 )
 
+# Human correction / rediscovery steers — fire prior context on the RETRY turn too.
+REDISCOVERY = re.compile(
+    r"\b("
+    r"why don'?t you|why didn'?t you|you (clearly )?did(n'?t| not)|"
+    r"did you (read|check|look)|have you (read|checked|looked)|"
+    r"why (not|didn'?t you) (check|read|look)|"
+    r"/execute\b|/improve\b|/research\b|/observe\b"
+    r")\b",
+    re.I,
+)
+
 
 def _kw(text: str) -> list[str]:
     """Distinctive topic keywords (>=5 chars, not generic), longest first."""
@@ -374,6 +385,22 @@ def _scan_git(cwd: str, kw: list[str]) -> list[str]:
     return hits
 
 
+def _scan_git_head(cwd: str, n: int = 12) -> list[str]:
+    """Recent commit subjects without keyword filter — rediscovery retry fallback."""
+    try:
+        out = subprocess.run(
+            ["git", "-C", cwd, "log", "--no-merges", f"-{n}", "--format=%h%x09%s"],
+            capture_output=True, text=True, timeout=2.5,
+        ).stdout
+    except Exception:
+        return []
+    hits: list[str] = []
+    for line in out.splitlines():
+        if "\t" in line:
+            hits.append(line.replace("\t", "  ", 1).strip())
+    return hits
+
+
 def _dedup_path(session_id: str) -> Path:
     sid = re.sub(r"[^A-Za-z0-9_-]", "", session_id or "nosession")[:64] or "nosession"
     return Path.home() / ".claude" / f".prior-context-seen-{sid}.txt"
@@ -409,13 +436,14 @@ def main() -> None:
     if not prompt or len(prompt) < 8:
         return
 
-    # --- Cheap gate FIRST: no propose/diagnose intent -> exit before any I/O.
-    if not INTENT.search(prompt):
+    # --- Cheap gate FIRST: no propose/diagnose/rediscovery intent -> exit before I/O.
+    rediscovery = bool(REDISCOVERY.search(prompt))
+    if not INTENT.search(prompt) and not rediscovery and not OBSERVE_RSI.search(prompt):
         return
 
     kw = _kw(prompt)
     infra_only = bool(INFRA_DESIGN.search(prompt) or OBSERVE_RSI.search(prompt))
-    if not kw and not infra_only:
+    if not kw and not infra_only and not rediscovery:
         return
 
     base = Path(cwd)
@@ -425,6 +453,8 @@ def main() -> None:
     siblings = _scan_sibling_repos(base, kw) if not (memos or ideas or commits) else []
     observe_lines = _observe_self_check_lines() if OBSERVE_RSI.search(prompt) else []
     infra_lines = _infra_design_lines(base, prompt, kw)
+    if rediscovery and not (memos or ideas or commits or siblings):
+        commits = _scan_git_head(cwd, 12)
     if not (memos or ideas or commits or siblings or observe_lines or infra_lines):
         return  # intent present but no prior work -> nothing to front-load
 
@@ -456,8 +486,8 @@ def main() -> None:
 
     parts = [
         "PRIOR-CONTEXT (harness-supplied, advisory): your request touches "
-        f"[{', '.join(matched_kw)}], which already has history. READ the relevant "
-        "ones before proposing/diagnosing — build on, narrow to the real gap, or "
+        f"[{', '.join(matched_kw) if matched_kw else 'rediscovery-retry'}], which already has history. "
+        "READ the relevant ones before proposing/diagnosing — build on, narrow to the real gap, or "
         "supersede them; don't re-derive."
     ]
     if memos:

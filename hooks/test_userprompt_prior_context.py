@@ -157,6 +157,25 @@ def main() -> None:
     check("existing_infra surfaces hook script", "sample_guard.py" in c10)
     ex_td.cleanup()
 
+    # 11. Rediscovery correction steers inject recent git log even without topic keywords.
+    red_td = tempfile.TemporaryDirectory()
+    red_base = Path(red_td.name)
+    (red_base / ".git").mkdir()
+    subprocess.run(["git", "-C", str(red_base), "init", "-q"], check=True)
+    subprocess.run(
+        ["git", "-C", str(red_base), "commit", "--allow-empty", "-m", "prior observe work", "-q"],
+        check=True, env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"},
+    )
+    out = run({
+        "user_message": "why don't you check the git log for what we already built?",
+        "cwd": str(red_base),
+        "session_id": "s_rediscovery",
+    })
+    c11 = ctx(out)
+    check("rediscovery steer emits prior-context", bool(c11))
+    check("rediscovery surfaces recent commits", "prior observe" in c11 or "commit" in c11.lower())
+    red_td.cleanup()
+
     td.cleanup()
     print(f"\n{passed} passed, {failed} failed")
     sys.exit(1 if failed else 0)
