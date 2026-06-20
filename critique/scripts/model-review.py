@@ -1425,6 +1425,71 @@ def rerun_gpt_axis_via_subscription(
         }
 
 
+def rerun_extraction_via_subscription(
+    axis: str,
+    model: str,
+    source_path: Path,
+    prompt: str,
+    extraction_path: Path,
+    *,
+    timeout: int = 300,
+) -> dict:
+    """Retry an OpenAI-provider EXTRACTION that hit API billing/quota via the ChatGPT
+    SUBSCRIPTION transport (llmx CLI `--subscription` -> codex-cli, $0).
+
+    Mirrors rerun_gpt_axis_via_subscription for the extraction stage. Without this,
+    a metered-API 429 silently dropped a whole axis's findings even though the review
+    prose existed (observed 2026-06-20 arc-agi: arch+gaps lost, coverage 0.5). Schema
+    is not enforceable on the subscription transport, so the prompt pins the JSON
+    wrapper shape and the caller's fence-stripping parser handles the text output.
+    Fires only on failure; if it also fails we are no worse off."""
+    import subprocess
+
+    print(
+        f"warning: {axis} extraction GPT API billing/quota failure; retrying once via "
+        f"ChatGPT subscription (llmx --subscription, $0)",
+        file=sys.stderr,
+    )
+    sub_prompt = (
+        prompt
+        + "\n\nReturn ONLY a JSON object of the form {\"findings\": [ ... ]} with no "
+        "prose and no markdown fences."
+    )
+    cmd = [
+        "llmx",
+        "chat",
+        "-m",
+        model,
+        "--subscription",
+        "-e",
+        "low",
+        "-f",
+        str(source_path),
+        "-o",
+        str(extraction_path),
+        sub_prompt,
+    ]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        size = extraction_path.stat().st_size if extraction_path.exists() else 0
+        ok = r.returncode == 0 and size > 0
+        return {
+            "exit_code": 0 if ok else 1,
+            "size": size,
+            "latency": 0,
+            "error": None
+            if ok
+            else (r.stderr or "subscription extraction produced no output")[:500],
+        }
+    except Exception as e:  # noqa: BLE001 — fallback must never raise into the extraction loop
+        return {
+            "exit_code": 1,
+            "size": 0,
+            "latency": 0,
+            "error": f"subscription extraction failed: {str(e)[:300]}",
+        }
+
+
 def build_context(
     review_dir: Path,
     project_dir: Path,
@@ -2099,6 +2164,23 @@ def extract_claims(
             schema=FINDING_SCHEMA,
             timeout=profile_timeout,
         )
+        # GPT API billing/quota fallback to ChatGPT subscription ($0). Mirrors the
+        # review-dispatch fallback; without it a metered-API 429 drops the whole axis
+        # even though the review prose exists (2026-06-20 arc-agi: coverage 0.5).
+        if (
+            result["exit_code"] != 0
+            and profile_def.provider == "openai"
+            and result.get("error")
+            and any(m in result["error"].lower() for m in GPT_QUOTA_MARKERS)
+        ):
+            result = rerun_extraction_via_subscription(
+                axis,
+                profile_def.model,
+                output_path,
+                EXTRACTION_PROMPT,
+                extraction_path,
+                timeout=profile_timeout,
+            )
         if result["exit_code"] != 0:
             print(
                 f"warning: extraction for {axis} failed: {result.get('error', 'unknown')}",
