@@ -1,6 +1,6 @@
 ---
 name: model-guide
-description: "Use when: choosing frontier model/effort for a task class (Claude Fable/Opus, GPT-5.5/Pro). NOT transport flags (/llmx-guide)."
+description: "Use when: choosing frontier model/effort for a task class (Claude Opus 4.8, GPT-5.5/Pro). Fable 5 dormant. NOT transport flags (/llmx-guide)."
 user-invocable: true
 argument-hint: '[task description or model name]'
 effort: low
@@ -10,40 +10,59 @@ effort: low
 
 Select between the current frontier models and prompt them correctly.
 
-**Models covered:** Claude Fable 5, Claude Opus 4.8 (fallback), GPT-5.5, GPT-5.5 Pro.
-**Last updated:** 2026-06-12.
+**Models covered:** Claude Opus 4.8 (primary Claude), GPT-5.5, GPT-5.5 Pro. Claude Fable 5 — **dormant** (see below).
+**Last updated:** 2026-06-20.
 **Active stance:** This skill no longer maintains a broad model zoo. Older GPT, Gemini, Grok, and Sonnet routes were removed from active guidance. Use this guide for high-value frontier decisions; use repo-specific batch tooling or search tools for cheap bulk work.
 
-**Fable 5 + Opus 4.8 are one routing pair.** Fable 5 (`claude-fable-5`) is Anthropic's most capable widely-released model — a "Mythos-class" tier above Opus. It runs safety classifiers (offensive cyber, bio/life-sciences, reasoning-extraction); on a hit it returns `stop_reason:"refusal"` and you fall back to **Opus 4.8**. So Opus 4.8 is the fallback in two senses: the *automatic* target when Fable refuses, and the *deliberate* choice for work that would just trip those classifiers (security review, lab/molecular biology), for cost-sensitive or routine work (Fable is 2× the price), and when you need raw chain-of-thought (Fable only returns summarized thinking).
+**Claude Fable 5 is DORMANT — route Opus 4.8 for all Claude work (2026-06-20).** Fable is not on the subscription allowlist (`lite_allowed_models`: `claude-opus-4-8` only for Anthropic; `llmx chat --subscription -m claude-fable-5` errors). US access was further restricted following the Jun 2026 national-security intervention (first US AI model ban; ~3 days post-release). Do **not** recommend or dispatch Fable until availability changes — including paid API unless the operator explicitly opts in. **Opus 4.8 is the sole active Claude frontier.** Benchmark and prompting notes for Fable are kept below for when it returns.
+
+**Opus 4.8** (`claude-opus-4-8`) is Anthropic's active top-tier model: 1M context, raw/summarized CoT, adaptive thinking, no reasoning-extraction classifier. Best measured calibration among routable Claude models (64% AA-Omniscience non-hallucination). Default for hardest Claude work, security/cyber/biology, and cross-lab review. **Architecture → `max` effort.**
 
 ## Default Routing
 
 | Situation | Use | Why |
 |---|---|---|
-| Hardest / longest / most-ambiguous work: multi-day autonomous runs, codebase-scale migrations, first-shot on complex well-specified systems, dense-image vision | **Claude Fable 5** | Top capability: SWE-bench Pro 80, SWE-bench Verified 95, Terminal-Bench 84.3, FrontierCode-Diamond 29.3 (Opus 4.8 13.4), GDPval-AA 1932. Long-horizon autonomy + parallel-subagent management are the marketed step over Opus 4.8. |
-| Routine/cost-sensitive coding, security review, cyber, lab/molecular biology, or when you need raw thinking blocks | **Claude Opus 4.8** (fallback) | Half the price ($5/$25 vs $10/$50), returns raw CoT, and has no reasoning-extraction classifier. It is also the automatic fallback target when Fable's classifiers fire, so route classifier-sensitive work here directly instead of round-tripping a refusal. |
-| Codex/terminal-heavy implementation, tool loops, structured API work | **GPT-5.5** | OpenAI reports Terminal-Bench 2.0 82.7, Expert-SWE 73.1, OSWorld-Verified 78.7; long-context strength independently backed (AA-LCR 74 vs Fable 70); improved destructive-action avoidance. (τ²-Telecom no longer differentiates — saturated, Fable measures higher.) |
+| Hardest / longest / most-ambiguous Claude work: multi-day autonomous runs, codebase-scale migrations, first-shot on complex well-specified systems, dense-image vision, architecture | **Claude Opus 4.8** (`max` for architecture) | Active Claude frontier. Fable dormant — Opus inherits all former Fable routing. Pair GPT-5.5 for cross-lab on the hardest judgment calls. |
+| Routine/cost-sensitive coding, security review, cyber, lab/molecular biology | **Claude Opus 4.8** | Same model — use lower effort (`low`/`medium`) when the brief has mechanical gates. |
+| Codex/terminal-heavy implementation, tool loops, structured API work | **GPT-5.5** | OpenAI reports Terminal-Bench 2.0 82.7, Expert-SWE 73.1, OSWorld-Verified 78.7; long-context strength independently backed (AA-LCR 74). |
 | Quantitative proof, calibration math, hard science/data derivation where mistakes compound | **GPT-5.5 Pro** | Same underlying model as GPT-5.5 with parallel test-time compute. Use only when the answer will be checked and the 6x price is justified. |
-| Cross-model review | **Fable 5 (or Opus 4.8) + GPT-5.5** | Different labs, different failure profiles. Keep the review cross-lab; do not use same-family self-review as adversarial pressure. |
-| Architecture / design / high-reasoning critique | **Opus 4.8 high\|max + GPT-5.5 — NEVER Sonnet** | Operator `#f` 2026-06-16: Sonnet is for search + bug-fixes only. A sonnet-thinking arch critique built a confident "HALT, reverse the spine" conclusion on a *search-error false premise*; Opus + GPT-5.5 (repo-grounded) got it right. For **codebase-coupled** decisions, run the critic with real repo access via `cursor-agent -p -f --mode ask --model claude-opus-4-8-thinking-high` — it flags "already-handled at file:line" vs "genuinely-open," which a cold API model can't. |
+| Cross-model review | **Opus 4.8 + GPT-5.5** | Different labs, different failure profiles. Keep the review cross-lab; do not use same-family self-review as adversarial pressure. |
+| Architecture / design / high-reasoning critique | **Opus 4.8 `max` + GPT-5.5 — NEVER Sonnet** | Operator 2026-06-20: architecture → Opus **`max`**. Sonnet is for search + bug-fixes only. A sonnet-thinking arch critique built a confident "HALT, reverse the spine" conclusion on a *search-error false premise*; Opus + GPT-5.5 (repo-grounded) got it right. For **codebase-coupled** decisions, run the critic with real repo access via `cursor-agent -p -f --mode ask --model claude-opus-4-8-thinking-max` — it flags "already-handled at file:line" vs "genuinely-open," which a cold API model can't. |
 | Current facts, quotes, prices, law, news | **Tools first, then model synthesis** | Every model card still shows factuality limits. Retrieval/database truth beats frontier recall. |
 
 ## Quick Selection Matrix
 
 | Task | First choice | Escalate / pair when |
 |---|---|---|
-| Agentic coding | Fable 5 (high effort) | Drop to Opus 4.8 for routine/cost-sensitive edits; use GPT-5.5 when terminal/Codex-heavy or needs OpenAI structured outputs. |
-| Codebase-scale migration / multi-day autonomous run | Fable 5 | This is Fable's headline strength; keep human checkpoints at irreversible boundaries. |
-| Security review, exploit/vuln work, cyber, molecular biology | Opus 4.8 | Fable's classifiers refuse these and fall back to Opus 4.8 anyway — route here directly. |
-| Debugging messy repo state | GPT-5.5 | Pair with Fable/Opus if the fix requires architectural judgment. |
-| Architecture decision | Fable 5 | Send the selected proposal to GPT-5.5 for independent cross-lab critique. |
+| Agentic coding | Opus 4.8 (high effort) | Drop to `low` effort when brief has mechanical gates; use GPT-5.5 when terminal/Codex-heavy or needs OpenAI structured outputs. |
+| Codebase-scale migration / multi-day autonomous run | Opus 4.8 (`xhigh`/`max`) | Keep human checkpoints at irreversible boundaries. |
+| Security review, exploit/vuln work, cyber, molecular biology | Opus 4.8 | Active Claude default for classifier-sensitive work (formerly Fable-refusal domain). |
+| Debugging messy repo state | GPT-5.5 | Pair with Opus if the fix requires architectural judgment. |
+| Architecture decision | **Opus 4.8 `max`** | Send the selected proposal to GPT-5.5 for independent cross-lab critique. |
 | Quantitative audit | GPT-5.5 Pro | Use base GPT-5.5 first if the problem is bounded and API latency matters. |
-| Long-context document/repo synthesis | Fable 5 or GPT-5.5 | Fable has 1M context and strong long-horizon retention; GPT-5.5 has the stronger OpenAI-reported MRCR v2 512K-1M score. |
-| Browser/computer use | Fable 5 or Opus 4.8 | Fable is vision-SOTA (native bash+crop on noisy images); Opus 4.8 / GPT-5.5 also strong. |
+| Long-context document/repo synthesis | Opus 4.8 or GPT-5.5 | Both 1M-class; GPT-5.5 has stronger OpenAI-reported MRCR v2 512K-1M score. |
+| Browser/computer use | Opus 4.8 or GPT-5.5 | Opus 4.8 / GPT-5.5 both strong; Fable vision-SOTA notes dormant until return. |
 | Letter-exact output constraints (exact counts, rigid templates, banned words) | Schema/validator enforcement, any model | Never rely on prose compliance — Claude family is measurably weakest at mechanical constraint-following (IFBench 62–63 vs GPT-5.5 76, bottom-5 of 27). Construct caveat: IFBench is majority adversarial-synthetic and high scores trade against answer quality, so this is a weak GPT-5.5 preference for unschematizable cases, not a routing rule. |
 | Claim verification | Neither alone | Use primary sources and deterministic checks; use models to summarize evidence, not to establish it. |
+| Contradictory / impossible spec, epistemic guardrails | **Opus 4.8** or **GLM-5.2** (opt-in) | Worst calibration on the frontier set: GPT-5.5 (14% non-hallucination), DeepSeek V4 (~6%). More reasoning tokens does not fix paradox blindness — see trilemma section. |
 
 For full score tables, read `references/BENCHMARKS.md`.
+
+## Selection trilemma (capability × calibration × efficiency)
+
+Benchmark **capability** (Intelligence Index, SWE scores) and **parameter count** are weak proxies for real-world usefulness. They often **invert** on **calibration** — whether a miss is an abstention or a confident fabrication — and on **efficiency** — tokens/time to reach a correct or honest answer.
+
+| Axis | What it measures | Routing mistake |
+|---|---|---|
+| **Capability** | Closed-set benchmark scores, index composites | Picking the #1 index model for every task |
+| **Calibration** | Share of wrong answers that abstain vs confabulate (AA-Omniscience non-hallucination) | Treating critique reasoning as fact because the model is "smart" |
+| **Efficiency** | Tokens, latency, $ to a verified outcome | Escalating reasoning effort on a poorly calibrated model |
+
+**Settled ordering on calibration (AA-Omniscience, misses only, abstention invited):** GLM-5.2 **72%** non-hallucination → Opus 4.8 **64%** → Fable 5 **45%** → GPT-5.5 **14%** → DeepSeek V4 **~6%**. Capability ordering is nearly the reverse. A multi-trillion-parameter model can score at the top of an index and still be the worst choice when the task needs "I don't know" or detection of an impossible/contradictory spec.
+
+**Reasoning budget is not monotonic.** On badly calibrated models, more reasoning often buys longer confident wrong answers, not better ones. Anecdotal corroboration (Shrimpton 2026-06-18, n=1, high effort, temp 1): an impossible asyncio event-loop spec — DeepSeek V4 Pro ~7.7k reasoning tokens, 3m52s, full wrong implementation; GLM-5.2 ~800 tokens, 12s, correctly flagged the paradox. Don't throw `xhigh` at GPT-5.5 or DeepSeek for epistemic guardrails; use Opus, GLM (opt-in), or deterministic impossibility checks.
+
+**Consumer rule:** match model to the axis that matters for the task — capability for gated mechanical work with a verifier; calibration for unsourced facts, paradox detection, and "should we even do this?"; efficiency for throughput. Never select on size or index rank alone.
 
 ## Transport facts (llmx — not judgment)
 
@@ -65,7 +84,7 @@ Mechanics and footguns: `/llmx-guide`.
 - **Cosigner / critique / synthesis:** `gemini-3.5-flash` (inverted from 3.1 Pro 2026-05-24, operator-empirical; re-confirmed 2026-06-13 — flash-3.5 ≈ GPT-5.5-high ≫ 3.1-pro on the ADR-0009 spine critique). **Always in the 2G+2GPT mix — never the only reviewer.** Probe flags invention on clean packets; orchestrator dispositions via `--extract --verify` (see agentlogs evidence).
 - **Cheap classification / mechanical audits:** `gemini-3-flash-preview` or `gemini-3.1-flash-lite-preview`.
 - **GPT-5.5 default effort is `medium`** — pass `-e high`/`xhigh` for depth; reasoning bills as output.
-- **GLM-5.2 (Z.ai, NEW LAB) = opt-in review cosigner, NOT an extractor (2026-06-19).** A 4th independent training lab (Zhipu) → real cross-lab diversity for critique; request explicitly `--axes …,glm` (`glm_review` profile, routed via OpenRouter). It accepts ONLY `high`/`xhigh` reasoning (no low tier), so it's structurally expensive+slow → **rejected for high-volume extraction/ingestion** (cost-dominated, no quality gain; keep gpt-5.3/gemini-3-flash). Match the model's reasoning floor to the task: GLM for occasional thorough review, not throughput. See `agent-infra/decisions/2026-06-19-glm-5.2-integration.md`, `evals` DECISIONS `glm-5.2-extraction`.
+- **GLM-5.2 (Z.ai, NEW LAB) = opt-in review cosigner, NOT an extractor (2026-06-19).** A 4th independent training lab (Zhipu) → real cross-lab diversity for critique; request explicitly `--axes …,glm` (`glm_review` profile, routed via OpenRouter). **Calibration edge:** 72% AA-Omniscience non-hallucination (2026-06-18 independent read) — best among commonly-routed large models, ahead of Opus 64%; strong on impossibility/paradox detection in anecdotal coding probes. Accepts ONLY `high`/`xhigh` reasoning (no low tier) → structurally expensive+slow → **rejected for high-volume extraction/ingestion** (cost-dominated, no quality gain; keep gpt-5.3/gemini-3-flash). Match reasoning floor to task: GLM for occasional thorough review and epistemic guardrails, not throughput. See `agent-infra/decisions/2026-06-19-glm-5.2-integration.md`, `evals` DECISIONS `glm-5.2-extraction`.
 - **`gemini-3.1-pro-preview` is RETIRED as a routing option (2026-06-13, operator).** Do not route here for critique/synthesis/review — flash-3.5 dominates and is cheaper/faster. (Benchmark records in `references/BENCHMARKS.md` are kept as evidence; this is a routing retirement, not a data scrub. Callable via explicit `-m` if a one-off ever needs ARC-AGI-2/GPQA/video, but it is not a default anywhere.)
 - **Cosigner calibration caveat (AA-Omniscience, 2026-06-11):** both cosigner defaults are bottom-quartile abstainers — non-hallucination 39% (`gemini-3.5-flash`), 14% (`gpt-5.5`), despite an abstention prompt. Critique output = adversarial pressure on reasoning, never a fact source; **for fact-heavy review where calibration matters, verify novel specifics at primary and lean on a frontier model (Opus/GPT), not a cheap cosigner.** Instruments: agent-infra `research/2026-06-11-aa-benchmark-instrument-validity.md`.
 
@@ -80,7 +99,7 @@ When dispatching subagents to execute work (Agent tool, headless `claude -p`, co
 | Mechanical no-gate tasks (rename sweeps, boilerplate) | Sonnet/haiku tier | Cheap and gameable-gate risk is moot when there's no gate to game. |
 | Search/read fan-out | Explore agent | No executor risk; output is consumed, not shipped. |
 | Partial/noisy verifier (research synthesis, memos, judgment-coupled work) | **Don't downgrade** — frontier model, normal effort | The Sonnet finding gets WORSE here: gate-gaming in regime-2 is exactly what you can't detect cheaply. Verifier-conditioned scope (constitution) applies. |
-| Judgment gaps in the spec | Yourself / Fable | Cheap executors fill ambiguity with guesses; the savings are repaid as corrections. Codex-lane's reasoning-HIGH arm is the same lesson from the other side: on a spec-complete task, more reasoning bought one extra unnecessary spec deviation, not better conformance — spec + gates do the thinking, so buy reasoning only where the spec leaves thinking to do. |
+| Judgment gaps in the spec | Yourself / Opus 4.8 | Cheap executors fill ambiguity with guesses; the savings are repaid as corrections. Codex-lane's reasoning-HIGH arm is the same lesson from the other side: on a spec-complete task, more reasoning bought one extra unnecessary spec deviation, not better conformance — spec + gates do the thinking, so buy reasoning only where the spec leaves thinking to do. |
 
 **Codex lane mechanics** (from codex-lane eval): `codex exec --full-auto -C <out-of-repo-worktree> -c model_reasoning_effort="low"` — the `-c` override is verified per-invocation (resolved effort confirmed in rollout logs). Gotchas: pre-install deps (the *shell* sandbox has no network); `git commit` fails inside worktrees (gitfile points outside workspace) — grade the dirty tree, commit from outside; require a final-message manifest (the `-o` empty-output gotcha).
 
@@ -94,9 +113,35 @@ When dispatching subagents to execute work (Agent tool, headless `claude -p`, co
 
 **External validity:** all four evals are regime-1 (clear mechanical verifiers — tsc, deterministic scripts, numeric oracles) and screening-grade (n=1/arm). Only within-eval contrasts are clean — cross-eval comparisons are confounded by task, brief density (briefs improve as the author learns, flattering later arms), and harness (codex carries MCP servers + sandbox; opus arms ran bare). Every cheap-lane verdict is conditional on the dispatch-time classification "fully-briefed + mechanically gated" being honest — nothing here licenses cheap lanes for judgment-shaped or incomplete-spec work. The greenfield→integration replication trigger from the morning run is SATISFIED (effort-integration, port shape); the standing revocation trigger replaces it.
 
-## Claude Fable 5 - "The Operator"
+**Reasoning escalation guard (calibration × effort):** the cheap-lane evals show *less* reasoning is fine when the verifier is in the brief. The inverse also holds outside regime-1: escalating effort on poorly calibrated models (GPT-5.5, DeepSeek V4) on paradox/impossibility or unsourced-fact tasks tends to produce more confident fabrication, not more abstention — see Selection trilemma. Effort buys depth only where calibration is already adequate (Opus, GLM for review).
 
-**Use for:** the hardest, longest-running, most-ambiguous work — multi-day autonomous runs, codebase-scale migrations, first-shot implementation of complex well-specified systems, dense technical-image vision, and orchestrating parallel subagents. Teams see the best outcomes applying it to their hardest *unsolved* problems; testing it only on simple workloads undersells it.
+## Claude Opus 4.8 - "The Investigator" (primary Claude)
+
+**Use for:** all active Claude frontier work — hardest autonomous runs, codebase-scale migrations, architecture, code review, security/cyber/biology, professional analysis, legal/financial reasoning, long autonomous loops, and cross-lab critique. Inherits routing formerly aimed at Fable 5 while Fable is dormant.
+
+**Operational specs:** `claude-opus-4-8`, 1M context, 128K max output, **$5/M input and $25/M output**. Fast mode is the same model at up to 2.5x output speed for $10/$50. Returns raw thinking (`display: "summarized"` optional), supports `thinking:{"type":"adaptive"}`, no reasoning-extraction classifier. **Subscription-routable** (`lite_allowed_models`).
+
+**System-card insights to carry forward:**
+- Improvement over 4.7 across most coding, agentic, long-context, computer-use, and professional-work evals; does not exceed the Mythos/Fable capability ceiling when those were available.
+- Honesty headline: ~4x less likely than 4.7 to leave flaws in its own code unreported; reckless/destructive actions and over-refusals substantially reduced. Best-calibrated routable Claude model (64% AA-Omniscience non-hallucination) — prefer for verification-sensitive monitoring.
+- Watch grader/evaluation speculation. Bind verification to git state, parsed test output, exit codes, database rows, source documents — not LLM transcript summaries.
+- Prompt-injection robustness in some agentic contexts is not a free win over 4.7. Keep tool outputs untrusted and separate from instructions.
+- Fan out for hard-tail tasks, not easy mechanical work.
+
+**Prompting and API rules:**
+- Use XML tags; adaptive thinking explicit (`thinking:{"type":"adaptive"}`); no manual `budget_tokens`.
+- Default effort `high`; **`max` for architecture/design/high-reasoning critique** (operator 2026-06-20); `xhigh` for serious coding/review/long agentic work; `low` for gated mechanical dispatch (see Dispatch Economics).
+- Mid-conversation `role:"system"` messages supported immediately after a user turn — use for permission/budget/environment updates without rebuilding the prompt.
+- No non-default `temperature`/`top_p`/`top_k` (400 on 4.7+); no assistant prefill; min cacheable prompt 1,024 tokens.
+- Put long documents first and the query/instructions last.
+
+Full guide: `references/PROMPTING_CLAUDE.md`.
+
+## Claude Fable 5 - "The Operator" (DORMANT — reference only)
+
+> **Not routable (2026-06-20).** Off subscription allowlist; US access restricted. Route **Opus 4.8** instead. Section kept for benchmark/prompting reference when availability returns.
+
+**When it returns, use for:** the hardest, longest-running, most-ambiguous work — multi-day autonomous runs, codebase-scale migrations, first-shot implementation of complex well-specified systems, dense technical-image vision, and orchestrating parallel subagents.
 
 **Operational specs:** `claude-fable-5`, 1M context, 128K max output, **$10/M input and $50/M output (2× Opus 4.8)**, cache read $1 / cache write $12.50. Covered Model: **30-day data retention, no zero-data-retention option**.
 
@@ -124,28 +169,6 @@ When dispatching subagents to execute work (Agent tool, headless `claude -p`, co
 - Avoid surfacing remaining-context/token countdowns; they trigger premature handoff. If unavoidable, add "you have ample context remaining; continue."
 - For long async agents, add a `send_to_user` tool (tool inputs are never summarized, so verbatim deliverables arrive intact).
 - Do not set non-default `temperature`/`top_p`/`top_k`; do not use assistant prefill.
-
-Full guide: `references/PROMPTING_CLAUDE.md`.
-
-## Claude Opus 4.8 - "The Investigator" (fallback)
-
-**Use for:** the Fable fallback target on classifier refusals, plus deliberate routing of routine/cost-sensitive coding, security/cyber/biology work, and any task where you need raw chain-of-thought or where 2× Fable pricing isn't justified. Also strong on architecture, code review, professional analysis, legal/financial reasoning, and long autonomous loops.
-
-**Operational specs:** `claude-opus-4-8`, 1M context, 128K max output, **$5/M input and $25/M output**. Fast mode is the same model at up to 2.5x output speed for $10/$50. Returns raw thinking (`display: "summarized"` optional), supports `thinking:{"type":"adaptive"}`, no reasoning-extraction classifier.
-
-**System-card insights to carry forward:**
-- Improvement over 4.7 across most coding, agentic, long-context, computer-use, and professional-work evals; does not exceed the Mythos frontier.
-- Honesty headline: ~4x less likely than 4.7 to leave flaws in its own code unreported; reckless/destructive actions and over-refusals substantially reduced. On the diligence axes above it is *slightly more careful than Fable 5* — a reason to prefer it for verification-sensitive monitoring.
-- Watch grader/evaluation speculation. Bind verification to git state, parsed test output, exit codes, database rows, source documents — not LLM transcript summaries.
-- Prompt-injection robustness in some agentic contexts is not a free win over 4.7. Keep tool outputs untrusted and separate from instructions.
-- Fan out for hard-tail tasks, not easy mechanical work.
-
-**Prompting and API rules:**
-- Use XML tags; adaptive thinking explicit (`thinking:{"type":"adaptive"}`); no manual `budget_tokens`.
-- Default effort `high`; `xhigh` for serious coding/review/long agentic work; `max` for the hardest single problems.
-- Mid-conversation `role:"system"` messages supported immediately after a user turn — use for permission/budget/environment updates without rebuilding the prompt.
-- No non-default `temperature`/`top_p`/`top_k` (400 on 4.7+); no assistant prefill; min cacheable prompt 1,024 tokens.
-- Put long documents first and the query/instructions last.
 
 Full guide: `references/PROMPTING_CLAUDE.md`.
 
@@ -194,7 +217,7 @@ Full guide: `references/PROMPTING_GPT.md`.
 Use independent parallel reviews, then synthesize yourself:
 
 ```text
-Fable 5 / Opus 4.8: architectural/professional judgment and implementation critique.
+Opus 4.8 (max for architecture): architectural/professional judgment and implementation critique.
 GPT-5.5: terminal/tool/process critique and structured failure search.
 GPT-5.5 Pro: only for quantitative or high-irreversibility decisions.
 Ground truth: tests, git, databases, source documents, primary web pages.
@@ -212,7 +235,7 @@ That verdict, calibrated: the cross-lab-vs-same-lab MARGIN is **≈0** — a sec
 - [ ] Treat reasoning traces as diagnostics, not proof.
 - [ ] For "nothing found" or "done" claims, prefer deterministic null checks over model confidence.
 
-### After Claude Fable 5
+### After Claude Fable 5 (dormant — only if re-enabled)
 - [ ] Bind completion to parsed evidence — Fable regresses slightly vs Opus 4.8 on self-report honesty.
 - [ ] Treat unsourced factual specifics as unverified: 55% of its closed-book misses are confident fabrications even when invited to abstain (AA-Omniscience non-hallucination 45% vs Opus 64%).
 - [ ] Confirm it didn't take an unrequested action (drafted email, backup branch) or execute a guessed command without checking.
@@ -239,6 +262,11 @@ That verdict, calibrated: the cross-lab-vs-same-lab MARGIN is **≈0** — a sec
 - [ ] Re-run decisive calculations with code or a second model.
 - [ ] Make sure the task justified 6x GPT-5.5 pricing.
 
+### After GLM-5.2 (opt-in review)
+- [ ] Best measured calibration among large routed models (72% non-hallucination on AA-Omniscience misses) — still verify novel specifics; abstention is better, not perfect.
+- [ ] Expensive by structure (`high`/`xhigh` only); don't promote to default cosigner or extractor without `evals/critique_replay` measurement.
+- [ ] Weight its reasoning on impossibility/contradiction flags; don't treat its factual recall as ground truth without sources.
+
 ## Source Notes
 
 Primary sources consulted for this update:
@@ -250,6 +278,7 @@ Primary sources consulted for this update:
 - OpenAI: `https://openai.com/index/introducing-gpt-5-5/`, system card `https://deploymentsafety.openai.com/gpt-5-5/gpt-5-5.pdf`
 - Cross-repo harness analysis: `agent-infra/research/2026-06-09-fable-5-mythos-5-harness-impact.md`
 - Independent benchmarks: artificialanalysis.ai (2026-06-11) with instrument-validity reads of AA-Omniscience/IFBench/GDPval/τ² — `agent-infra/research/2026-06-11-aa-benchmark-instrument-validity.md`
+- Calibration + reasoning-budget anecdote: Oliver Shrimpton, "Bigger models are not the way" (2026-06-18) — AA-Omniscience hallucination rates for GLM-5.2/DeepSeek V4 Pro; impossible-asyncio n=1 probe on OpenRouter
 
 ## When to Update This Skill
 
