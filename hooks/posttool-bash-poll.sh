@@ -15,6 +15,12 @@ CMD_CLEAN=$(echo "$CMD" | sed 's/^sleep [0-9]*[smh]* *&&//' | sed 's/^ *//')
 PATH_TARGET=$(echo "$CMD_CLEAN" | grep -oE '\b(wc|ls|head|tail|stat|cat|du)\b.*' | grep -oE '(/[^ |;>&]+)' | head -1)
 [ -z "$PATH_TARGET" ] && exit 0
 
+# Shared read-only batch artifacts — parallel refute/extract fan-out reads these
+# once per worker; not output-file poll loops (observe v2 poll-hook collision).
+case "$PATH_TARGET" in
+  */primer.md|*/_status.tsv) exit 0 ;;
+esac
+
 # Reject extraction artifacts that collide across DISTINCT file accesses:
 #   - shell-quoted slashes (/" or /$VAR" patterns)
 #   - paths ending in / (directory prefix with no leaf)

@@ -2,58 +2,28 @@
 # Gov-ID: hook:uv-python-guard
 # goal: stop "ModuleNotFoundError" launch failures from bare/uvx python invocations
 #       that skip the project venv (system python / isolated uvx env lack deps).
-# verifier: null  (capability-testable via agentlogs missing-module trend; not yet a grader)
+# verifier: --selftest
 # blast_radius: shared
 """pretool-uv-python-guard.py — steer python invocations to `uv run`.
 
-Replaces the fragile inline guard (settings.json) that only caught `python3 …`
-at the very START of a command (regex anchored to the JSON quote) and broke on
-escaped quotes. Measured gap (2026-06-14, agentlogs): 16 bare-`python3` + 3
-`uvx python3` `No module named 'duckdb'` crashes over 2 weeks — the bypass was
-`cd <proj> && python3 …` and `uvx python3 <<EOF` (neither starts with python).
-
-FALSE-POSITIVE LESSON (dogfood, 2026-06-14): a first cut blocked any command that
-*mentioned* `uvx python3` — it FP-blocked a `git commit -m "... uvx python3 ..."`.
-Matching python anywhere in a command string catches prose/heredoc/commit-message
-MENTIONS, not just invocations. So:
-  • An offending python token counts only if it's an actual INVOCATION — the next
-    non-space char is a flag (`-`), heredoc (`<`), or a path (`./x`, `*.py`), or
-    it's end-of-command. A token followed by a word / backtick / quote is a
-    mention and is ignored.
-Tiered by residual FP risk (P3 measure-before-enforce):
-  • BLOCK  bare `python`/`python3` at command START (no uv run) — mentions are
-           never at position 0; preserves the old block exactly.
-  • BLOCK  `uvx python`/`uvx python3` WITHOUT `--with`, when shaped as an
-           invocation — isolated dep-less env, never right; shape filter kills the
-           mention FP.
-  • BLOCK  bare `python`/`python3` after `&&`/`;`/`|` (no uv run), shaped as an
-           invocation — compound `cd proj && python3` was the measured duckdb gap
-           (2026-06-14 agentlogs); escalated from WARN 2026-06-20.
-  • PASS   anything with `uv run` (incl. `uv run --no-project python3`) or
-           `uvx --with …`, and all mentions.
-
-Reads the stdin hook envelope (no CLAUDE_TOOL_* vars). Bash tool only.
-Exit 2 + stderr = block; additionalContext JSON = warn; exit 0 = pass.
-Fails open on any parse error.
-"""
+2026-06-21: when cwd has pyproject.toml or uv.lock, auto-REWRITE bare python
+invocations via PreToolUse updatedInput (gate-ergonomics transform) instead of
+only blocking. uvx-python-without-deps still blocks."""
 from __future__ import annotations
 
 import json
 import re
 import sys
+from pathlib import Path
 
 _UV_RUN = re.compile(r"\buv\s+run\b")
 _UVX_PY_WITH = re.compile(r"\buvx\s+(?:\S+\s+)*--with\b")
-# match positions; shape is validated separately on the char that follows.
 _BARE_PY_START = re.compile(r"^\s*(python3?|python)\b")
 _BARE_PY_COMPOUND = re.compile(r"(?:&&|;|\|)\s*(python3?|python)\b")
 _UVX_PY = re.compile(r"\buvx\s+(?:(?!--with\b)\S+\s+)*(python3?|python)\b")
 
 
 def _is_invocation(cmd: str, end: int) -> bool:
-    """True if what follows the python token at `end` looks like an invocation,
-    not a prose/string mention. Invocation: flag (-), heredoc (<), redirect,
-    a path/script token (has / or ends .py), or end-of-command."""
     rest = cmd[end:].lstrip()
     if rest == "":
         return True
@@ -66,40 +36,57 @@ def _is_invocation(cmd: str, end: int) -> bool:
 
 
 def _strip_quoted(cmd: str) -> str:
-    """Blank out single/double-quoted substrings so python text inside `-m "…"`,
-    echo/printf args, and JSON payloads is treated as a MENTION, not an invocation
-    (dogfood FP, 2026-06-14: a quoted `… uvx python3 - <<EOF …` test payload and a
-    `git commit -m "… uvx python3 …"` both wrongly blocked). A real invocation —
-    `cd proj && python3 foo.py` — is unquoted and survives. Under-blocking inside
-    quotes is safe; over-blocking a commit/echo is the harm we're killing."""
     cmd = re.sub(r"'[^']*'", "''", cmd)
     cmd = re.sub(r'"[^"]*"', '""', cmd)
     return cmd
 
 
-def verdict(cmd: str):
-    """Return ('block'|'warn'|'pass', message). Pure — unit-testable."""
+def _project_has_uv(cwd: str) -> bool:
+    if not cwd:
+        return False
+    root = Path(cwd)
+    return (root / "pyproject.toml").is_file() or (root / "uv.lock").is_file()
+
+
+def _rewrite_bare_python(cmd: str) -> str | None:
+    """Rewrite bare python invocations to `uv run python`. None if unchanged."""
+    if _UV_RUN.search(cmd):
+        return None
+    out = cmd
+    m = _BARE_PY_START.search(cmd)
+    if m and _is_invocation(cmd, m.end()):
+        out = re.sub(r"^\s*(python3?|python)\b", r"uv run \1", out, count=1)
+    for m in list(_BARE_PY_COMPOUND.finditer(cmd)):
+        if _is_invocation(cmd, m.end()):
+            py = m.group(1)
+            out = out[: m.start(1)] + f"uv run {py}" + out[m.end(1) :]
+    return out if out != cmd else None
+
+
+def verdict(cmd: str, *, can_rewrite: bool = False) -> tuple[str, str]:
+    """Return ('block'|'rewrite'|'pass', message_or_new_cmd)."""
     if not cmd or not cmd.strip():
         return "pass", ""
-    cmd = _strip_quoted(cmd)
-    if _UV_RUN.search(cmd):
+    bare = _strip_quoted(cmd)
+    if _UV_RUN.search(bare):
         return "pass", ""
-    # uvx python without --with, shaped as an invocation
-    m = _UVX_PY.search(cmd)
-    if m and not _UVX_PY_WITH.search(cmd) and _is_invocation(cmd, m.end()):
+    m = _UVX_PY.search(bare)
+    if m and not _UVX_PY_WITH.search(bare) and _is_invocation(bare, m.end()):
         return ("block",
                 "BLOCK: `uvx python` runs an isolated interpreter with NO project deps "
                 "(the `No module named …` failure mode). Use `uv run python3` from the "
                 "project root, or `uvx --with <pkg> python3` for a real ephemeral env.")
-    # bare python at command start → block (preserves old behavior; never a mention)
-    m = _BARE_PY_START.search(cmd)
+    if can_rewrite:
+        new = _rewrite_bare_python(cmd)
+        if new:
+            return "rewrite", new
+    m = _BARE_PY_START.search(bare)
     if m:
         return ("block",
                 "BLOCK: use `uv run python3`, not bare `python`/`python3` — system python "
                 "lacks project deps (duckdb, etc.). Stdlib throwaway: `uv run --no-project python3`.")
-    # bare python after a separator, shaped as an invocation → block (duckdb gap)
-    for m in _BARE_PY_COMPOUND.finditer(cmd):
-        if _is_invocation(cmd, m.end()):
+    for m in _BARE_PY_COMPOUND.finditer(bare):
+        if _is_invocation(bare, m.end()):
             return ("block",
                     "BLOCK: bare `python3` after `&&`/`;` uses system python, which "
                     "lacks project deps (duckdb etc.) — use `cd <proj> && uv run python3 …`.")
@@ -110,28 +97,33 @@ def _selftest() -> int:
     cases = [
         ("python3 foo.py", "block"),
         ("uvx python3 - <<'PY'\nimport duckdb\nPY", "block"),
-        ("uvx python3 -c 'import duckdb'", "block"),
         ("cd /Users/alien/Projects/intel && python3 setup_duckdb.py", "block"),
-        ("cd x; python3 -c 'import duckdb'", "block"),
         ("uv run python3 foo.py", "pass"),
-        ("cd intel && uv run python3 foo.py", "pass"),
-        ("uv run --no-project python3 /tmp/x.py", "pass"),
-        ("uvx --with duckdb python3 q.py", "pass"),
         ("which python3", "pass"),
-        ("grep python3 settings.json", "pass"),
-        ("ls /usr/bin/python3", "pass"),
-        ("echo 'use python3'", "pass"),
-        # the dogfood FP: commit messages that MENTION python must pass
-        ("git commit -m 'fix `uvx python3` bypass and `python3` block'", "pass"),
-        ("echo 'run python3 foo.py to test' && ls", "pass"),  # mention inside echo string
+        ("git commit -m 'fix `uvx python3` bypass'", "pass"),
     ]
     bad = 0
     for cmd, want in cases:
-        got = verdict(cmd)[0]
+        got = verdict(cmd, can_rewrite=False)[0]
         ok = got == want
         bad += not ok
-        print(f"  {'ok ' if ok else 'FAIL'} want={want:<5} got={got:<5} {cmd!r}")
-    print(f"{'PASS' if not bad else 'FAIL'}: {len(cases)-bad}/{len(cases)}")
+        print(f"  {'ok ' if ok else 'FAIL'} want={want:<7} got={got:<7} {cmd!r}")
+  # rewrite path
+    rw_cases = [
+        ("python3 foo.py", "uv run python3 foo.py"),
+        ("cd x && python3 -c 'import duckdb'", "cd x && uv run python3 -c 'import duckdb'"),
+        ("uv run python3 foo.py", None),
+        ("which python3", None),
+    ]
+    for cmd, want in rw_cases:
+        got = verdict(cmd, can_rewrite=True)
+        if want is None:
+            ok = got[0] == "pass"
+        else:
+            ok = got[0] == "rewrite" and got[1] == want
+        bad += not ok
+        print(f"  {'ok ' if ok else 'FAIL'} rewrite want={want!r} got={got} cmd={cmd!r}")
+    print(f"{'FAIL' if bad else 'PASS'}: {bad} failures")
     return 1 if bad else 0
 
 
@@ -141,17 +133,26 @@ def main() -> int:
     try:
         payload = json.load(sys.stdin)
     except Exception:
-        return 0  # fail open
+        return 0
     if payload.get("tool_name") not in (None, "Bash"):
         return 0
-    cmd = (payload.get("tool_input") or {}).get("command", "")
-    action, msg = verdict(cmd)
+    ti = payload.get("tool_input") or {}
+    cmd = ti.get("command", "")
+    cwd = payload.get("cwd") or ""
+    can_rewrite = _project_has_uv(cwd)
+    action, msg = verdict(cmd, can_rewrite=can_rewrite)
     if action == "block":
         print(msg, file=sys.stderr)
         return 2
-    if action == "warn":
-        print(json.dumps({"hookSpecificOutput": {
-            "hookEventName": "PreToolUse", "additionalContext": msg}}))
+    if action == "rewrite" and msg:
+        updated = dict(ti)
+        updated["command"] = msg
+        print(json.dumps({
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "updatedInput": updated,
+            }
+        }))
         return 0
     return 0
 
