@@ -99,3 +99,28 @@ Do not write candidates to `improvement-log.md` unless all three gates pass:
 
 If any gate fails, keep the item in `candidates.jsonl` with an explicit `state`.
 State transitions are append-only. Do not rewrite old rows.
+
+## Maintain-tick bridge (agent-infra-local actionable items)
+
+When promoting an **`[ ]` actionable infra** item to `improvement-log.md`, also append a
+structured row to `config/maintain-candidates.json` (or include a YAML block in the log
+entry) so `scripts/maintain_tick.py` can auto-pick tier-0 builds:
+
+```json
+{
+  "id": "kebab-slug",
+  "title": "one line",
+  "blast_radius": "agent-infra",
+  "reversible": true,
+  "evidence_sessions": 2,
+  "checkable": true,
+  "low_downside": true,
+  "clear_win_vs_baseline": true,
+  "source": "artifacts/observe/<run>/digest.md",
+  "build_kind": "hook | script | recipe | rule",
+  "proposal_outline": "smallest correct build"
+}
+```
+
+Tier rules live in `config/build-autonomy-tiers.json`; the motor LOADS them — do not
+restate inline. Cross-repo items: `blast_radius: shared` (human-gated), still log `[ ]`.
