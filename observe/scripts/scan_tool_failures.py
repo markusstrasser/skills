@@ -2,21 +2,9 @@
 """scan_tool_failures.py — Tier 1 of /observe failures: which tools are actually
 BROKEN, mined deterministically from agentlogs (no LLM, $0).
 
-Why: the health loop checks proxies (hooks/launchd/indexer) and missed a dead
-`corpus` CLI that errored for days. The signal was in the logs the whole time —
-errored tool_calls whose result event text says `ModuleNotFoundError: No module
-named 'corpus_core.cli'`. (2026-06-14, user: "don't you check the logs for what
-doesn't work?")
-
-The precision trick (learned the hard way over 4 noisy probes): filter to
-LAUNCH-FAILURE error text FIRST, then group. A tool that returns nonzero by
-design (ruff lint, grep no-match, `cmd || fallback`, a curl 404 inside a working
-CLI) never prints `ModuleNotFoundError` / `command not found` / `ImportError`.
-Those patterns mean the tool itself couldn't start — exactly "broken," not
-"ran and returned nonzero."
-
-Output: ranked broken-tool report (JSON with --json) for Tier-2 (Haiku triage)
-and Tier-3 (deep dispatch) to consume. Report-only; reads agentlogs.db read-only.
+The precision trick: filter to LAUNCH-FAILURE signatures FIRST, cluster by root
+cause, count DISTINCT tool_calls (not events), and split interactive-agent vs
+harness invocations so cron noise does not promote as agent behavior.
 """
 from __future__ import annotations
 
@@ -29,30 +17,25 @@ from pathlib import Path
 
 DB = Path.home() / ".claude" / "agentlogs.db"
 
-# A REAL launch failure has a crash SIGNATURE, not just the keyword. The keyword
-# alone matches source code an agent read (`except ImportError:`), prose, and
-# commit trailers — the FP mode seen on the first run. Require the actual raised
-# error / shell error, clustered by root cause.
 _TRACEBACK = "Traceback (most recent call last):"
 _RAISED_IMPORT = re.compile(r"(?m)^\s*(ModuleNotFoundError|ImportError|cannot import name)\b")
 _NO_MODULE = re.compile(r"No module named ['\"]([A-Za-z0-9_.]+)['\"]")
-# `cannot import name 'X' from 'pkg.mod'` — sub-key by symbol@module so distinct
-# moved-symbol breaks don't lump into one coarse `import-error` bucket (the bug
-# that made 34 assorted import errors look like "RoutingInput ×34", surfacing a
-# phantom top-3 priority — 2026-06-14).
 _CANNOT_IMPORT = re.compile(r"cannot import name ['\"]([A-Za-z0-9_]+)['\"] from ['\"]?([A-Za-z0-9_.]+)")
 _SHIM = re.compile(r'File "[^"]*/bin/([A-Za-z0-9_.-]+)", line \d+, in <module>')
-# command-not-found over-matches prose; require a real shell line/eval prefix
 _CMD_NOTFOUND_REAL = re.compile(
     r"(?:line \d+: ([A-Za-z0-9_.-]+): command not found"
     r"|\(eval\):\d+: command not found: ([A-Za-z0-9_.-]+)"
     r"|(?:zsh|bash): ([A-Za-z0-9_.-]+): command not found)"
 )
+_LAUNCHD_MARKERS = re.compile(
+    r"\b(launchctl|LaunchAgents|pulse-tick|maintain-tick|agentlogs\s+index|"
+    r"com\.agent-infra\.)\b",
+    re.I,
+)
 
 
 def classify(text: str):
     """Return (cluster_key, key_line) for a REAL launch failure, else None."""
-    # 1. Python crash: Traceback header + a raised import error (NOT `except ...:`)
     if _TRACEBACK in text and _RAISED_IMPORT.search(text):
         mod = _NO_MODULE.search(text)
         shim = _SHIM.search(text)
@@ -66,12 +49,21 @@ def classify(text: str):
         line = next((l.strip() for l in text.splitlines()
                      if _RAISED_IMPORT.match(l) or _RAISED_IMPORT.search(l)), key)
         return key, line[:160]
-    # 2. Real shell command-not-found (has a shell line/eval prefix)
     m = _CMD_NOTFOUND_REAL.search(text)
     if m:
         cmd = next(g for g in m.groups() if g)
         return f"command-not-found:{cmd}", m.group(0).strip()[:160]
     return None
+
+
+def invoker_kind(args_json: str | None, vendor: str | None) -> str:
+    """interactive_agent | harness | unknown"""
+    blob = args_json or ""
+    if _LAUNCHD_MARKERS.search(blob):
+        return "harness"
+    if vendor in ("claude", "codex", "cursor"):
+        return "interactive_agent"
+    return "unknown"
 
 
 def scan(days: int = 21) -> list[dict]:
@@ -81,12 +73,26 @@ def scan(days: int = 21) -> list[dict]:
     con = sqlite3.connect(f"file://{DB}?mode=ro", uri=True)
     con.row_factory = sqlite3.Row
     agg: dict[str, dict] = defaultdict(
-        lambda: {"fails": 0, "days": set(), "runs": set(), "sample": "", "last": ""}
+        lambda: {
+            "tool_calls": set(),
+            "days": set(),
+            "runs": set(),
+            "sessions": set(),
+            "interactive": 0,
+            "harness": 0,
+            "unknown": 0,
+            "sample": "",
+            "last": "",
+        }
     )
     try:
         q = (
-            "SELECT t.run_id, substr(t.ts_start,1,10) d, t.ts_start, e.text "
-            "FROM tool_calls t JOIN events e ON e.tool_call_id = t.tool_call_id "
+            "SELECT t.tool_call_id, t.run_id, t.args_json, t.ts_start, e.text, "
+            "r.vendor, s.session_uuid "
+            "FROM tool_calls t "
+            "JOIN events e ON e.tool_call_id = t.tool_call_id "
+            "JOIN runs r ON r.run_id = t.run_id "
+            "JOIN sessions s ON s.session_pk = r.session_pk "
             "WHERE t.status='error' AND e.text IS NOT NULL AND t.ts_start > ?"
         )
         for r in con.execute(q, (cutoff,)):
@@ -95,25 +101,39 @@ def scan(days: int = 21) -> list[dict]:
                 continue
             key, line = verdict
             e = agg[key]
-            e["fails"] += 1
-            e["days"].add(r["d"])
+            e["tool_calls"].add(r["tool_call_id"])
+            d = (r["ts_start"] or "")[:10]
+            e["days"].add(d)
             e["runs"].add(r["run_id"])
-            if r["ts_start"] > e["last"]:
+            if r["session_uuid"]:
+                e["sessions"].add(r["session_uuid"][:8])
+            kind = invoker_kind(r["args_json"], r["vendor"])
+            e[kind] = e.get(kind, 0) + 1
+            if (r["ts_start"] or "") > e["last"]:
                 e["last"] = r["ts_start"]
                 e["sample"] = line
     finally:
         con.close()
-    out = [
-        {
+    out = []
+    for b, v in agg.items():
+        tc = len(v["tool_calls"])
+        out.append({
             "cluster": b,
-            "fails": v["fails"],
+            "fails": tc,
             "distinct_days": len(v["days"]),
             "distinct_runs": len(v["runs"]),
+            "distinct_sessions": len(v["sessions"]),
+            "interactive_agent": v["interactive"],
+            "harness": v["harness"],
+            "unknown": v["unknown"],
+            "invoker_primary": (
+                "interactive_agent" if v["interactive"] >= v["harness"]
+                else "harness" if v["harness"] > v["interactive"]
+                else "mixed"
+            ),
             "last_seen": v["last"][:16],
             "sample": v["sample"],
-        }
-        for b, v in agg.items()
-    ]
+        })
     out.sort(key=lambda x: (x["distinct_days"], x["distinct_runs"], x["fails"]), reverse=True)
     return out
 
@@ -124,9 +144,13 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Tier 1: deterministic broken-tool miner from agentlogs.")
     ap.add_argument("--days", type=int, default=21)
     ap.add_argument("--json", action="store_true", help="emit JSON for Tier-2/3 consumers")
+    ap.add_argument("--interactive-only", action="store_true",
+                    help="drop clusters whose primary invoker is harness")
     args = ap.parse_args()
 
     rows = scan(days=args.days)
+    if args.interactive_only:
+        rows = [r for r in rows if r["invoker_primary"] != "harness"]
     if args.json:
         print(json.dumps(rows, indent=2))
         return 0
@@ -134,10 +158,10 @@ def main() -> int:
         print(f"✓ no launch-failure (broken-tool) signatures in tool_calls over the last {args.days}d")
         return 0
     print(f"Broken tools (launch failures in real use, last {args.days}d), worst-first:\n")
-    print(f"  {'cluster':<34}{'days':>5}{'runs':>5}{'fails':>6}  {'last':<17}sample")
+    print(f"  {'cluster':<34}{'days':>5}{'runs':>5}{'fails':>6}{'inv':>12}  {'last':<17}sample")
     for x in rows:
-        print(f"  {x['cluster']:<34}{x['distinct_days']:>5}{x['distinct_runs']:>5}{x['fails']:>6}  "
-              f"{x['last_seen']:<17}{x['sample'][:54]}")
+        print(f"  {x['cluster']:<34}{x['distinct_days']:>5}{x['distinct_runs']:>5}{x['fails']:>6}"
+              f"{x['invoker_primary']:>12}  {x['last_seen']:<17}{x['sample'][:44]}")
     return 0
 
 

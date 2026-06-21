@@ -32,8 +32,9 @@ already passed the gates below.
 4. Run deterministic pre-filters such as `session-shape.py`.
 5. Append raw observations to `signals.jsonl`.
 6. Derive backlog items in `candidates.jsonl`.
-7. Write a human-readable `digest.md`.
-8. Only then synthesize or promote to `patterns.jsonl` or `improvement-log.md`.
+7. Write a human-readable `digest.md` from `references/digest-template.md`.
+8. Run `observe_gates.py preflight` → `preflight.json` + `promotion-verdicts.jsonl`.
+9. Only then promote rows with `verdict=promote` to `patterns.jsonl` or `improvement-log.md`.
 
 Signals are source-of-truth observations. Candidates are backlog items. Findings are only final
 after promotion gates pass.
@@ -89,16 +90,32 @@ Useful optional fields:
 - `likely_fix_surface`
 - `existing_coverage_match`
 
-## Promotion Rule
+## Promotion Rule (mechanical — `observe_gates.py`)
 
-Do not write candidates to `improvement-log.md` unless all three gates pass:
+**Do not promote from digest prose.** Run preflight before any `improvement-log.md` write:
 
-1. Recurs across 2+ sessions
-2. Not already covered by existing hooks or rules
-3. Checkable predicate or architectural enforcement exists
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/observe_gates.py" preflight \
+  --artifact-root "$OBSERVE_ARTIFACT_ROOT"
+```
+
+Writes `preflight.json` + `promotion-verdicts.jsonl`. Full gate table: `references/promotion-gates.md`.
+
+Hard gates (all must pass for `verdict=promote` → `[ ]`):
+
+1. **Recurrence** — 2+ sessions or `recurrence>=2`
+2. **Session manifest** — every `sessions[]` id appears in `input.md` / `codex.md`
+3. **Existing coverage** — `novel` only for `[ ]`; matched → `[obs]` or suppress
+4. **Checkable** — `checkable:true` required for actionable `[ ]`
+5. **Indexer health** — failures/supervision/blindspot blocked when `health.indexer_ok=false`
+6. **Saturation** — when `preflight.promotions_allowed=false` due to overlap, no new `[ ]`
+
+Failures lane: promote only `invoker_primary=interactive_agent` clusters (see `scan_tool_failures.py`).
 
 If any gate fails, keep the item in `candidates.jsonl` with an explicit `state`.
 State transitions are append-only. Do not rewrite old rows.
+
+Digest template (metric slots not interchangeable): `references/digest-template.md`.
 
 ## Maintain-tick bridge (agent-infra-local actionable items)
 
