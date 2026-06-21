@@ -249,7 +249,16 @@ Report to user:
 - New failure modes discovered: N
 - Proposed fixes: list
 
-Write the operator summary to `digest.md`. Only write `improvement-log.md` entries for promoted candidates that pass the gates in `references/artifact-contract.md`.
+Write the operator summary to `digest.md` using `references/digest-template.md` (data validity banner + metric legend).
+
+**Mandatory before `improvement-log.md`:**
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/observe_gates.py" preflight \
+  --artifact-root "$ARTIFACT_DIR"
+```
+
+Only write `improvement-log.md` entries for candidates with `verdict=promote` in `promotion-verdicts.jsonl` **and** `preflight.json` → `promotions_allowed=true`. See `references/promotion-gates.md`.
 
 ### Promotion Sink (`improvement-log.md`, only after promotion)
 
