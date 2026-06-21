@@ -68,7 +68,8 @@
   },
   "uses": {
     "dispatch_profiles": [
-      "deep_review"
+      "observe_bulk",
+      "composer_review"
     ],
     "packet_builders": [
       "observe_transcript_packet"

@@ -26,17 +26,42 @@ Unified diagnostic workflow. Five lenses on the same transcript data, each answe
 See `references/artifact-contract.md` for the canonical observe artifact tree, deterministic
 signal/candidate flow, and promotion gates.
 
+## Dispatch routing (2026-06-21)
+
+**Default depends on harness — not one model for everything.**
+
+| Harness | Default analysis | API dispatch |
+|---------|------------------|--------------|
+| **Cursor** (Agent tool available) | Parent + parallel **Composer subagents** (`/multitask`) | **OFF** unless `--headless` |
+| **Claude Code / launchd / `/loop`** | Deterministic extract → **`observe_bulk`** | ON |
+
+**Flags (add to `$ARGUMENTS`):**
+- `--headless` — force `observe_bulk` API dispatch even in Cursor (unattended / escape hatch)
+- `--wide-only` — `observe_bulk` **for drift only**; other modes use subagents or local analysis
+- `--multitask` — Cursor: fan out one subagent per mode in parallel
+
+**Headless profile:** `observe_bulk` → **`gemini-3.1-flash-lite-preview`** (Gemini **3.1** Flash-Lite; 1M ctx;
+~10× cheaper than 3.5-flash). There is no `gemini-3.1-flash` text SKU — Flash-Lite is the 3.1 tier.
+`deep_review` (**3.5-flash**) stays on **`/critique` cosigner only** — never for observe.
+
+**Cursor subagent contract:** each mode subagent runs deterministic extract first, reads artifacts
++ `improvement-log` / `coverage-digest.txt`, stages to `candidates.jsonl`, writes mode digest.
+Verify claims against transcript before promotion (~20-30% invention rate on headless bulk classify).
+
+**Anti-pattern:** parent → subagent → Flash → subagent verifies. Collapse to subagents reading
+artifacts directly, or headless `observe_bulk` without the nested hop.
+
 ## Mode Routing
 
-| Mode | Question answered | Gemini dispatch? | Composer dispatch? | Canonical artifacts |
-|------|------------------|------------------|-------------------|---------------------|
-| `sessions` | What behavioral anti-patterns appeared? | Yes | HIGH candidates only | `manifest.json` -> `signals.jsonl` -> `candidates.jsonl` -> `digest.md` |
-| `architecture` | What design wants to emerge? | Yes | HIGH candidates only | `manifest.json` -> … -> `YYYY-MM-DD.md` |
-| `supervision` | Where was human time wasted? | Yes | **Yes (default)** | `manifest.json` -> … -> `digest.md` |
-| `drift` | What slow-moving pattern spans MANY sessions? | Yes (1M wide) | HIGH candidates only | `manifest.json` -> `candidates.jsonl` -> `drift-digest.md` |
-| `retro` | What went wrong this session? | No (local) | No | `artifacts/session-retro/` |
-| `failures` | Which tools/CLIs are actually BROKEN in real use? | Tiered: deterministic -> Haiku -> deep | No | `scan_tool_failures.py` -> `failures.json` |
-| `blindspot` | What did the loop MISS that the human had to catch? | emb-contrastive | **Yes (default)** | `blindspot_miner.py` -> `.claude/blindspot-digest.md` |
+| Mode | Question answered | Headless dispatch (`observe_bulk`) | Cursor default | Canonical artifacts |
+|------|------------------|-----------------------------------|----------------|-------------------|
+| `sessions` | What behavioral anti-patterns appeared? | `--headless` only | **Subagent** | `manifest.json` -> `signals.jsonl` -> `candidates.jsonl` -> `digest.md` |
+| `architecture` | What design wants to emerge? | `--headless` only | **Subagent** | `manifest.json` -> … -> `YYYY-MM-DD.md` |
+| `supervision` | Where was human time wasted? | `--headless` only | **Subagent** | `manifest.json` -> … -> `digest.md` |
+| `drift` | What slow-moving pattern spans MANY sessions? | **Yes** (`--wide-only` or `--headless`) | Subagent (or headless for wide) | `manifest.json` -> `candidates.jsonl` -> `drift-digest.md` |
+| `retro` | What went wrong this session? | No | **Local parent** | `artifacts/session-retro/` |
+| `failures` | Which tools/CLIs are actually BROKEN in real use? | Tiered: deterministic -> Haiku -> deep | **Deterministic** (+ optional subagent) | `scan_tool_failures.py` -> `failures.json` |
+| `blindspot` | What did the loop MISS that the human had to catch? | emb-contrastive | **Subagent** + emb miner | `blindspot_miner.py` -> `.claude/blindspot-digest.md` |
 
 Parse `$ARGUMENTS` for mode. First positional arg is the mode. Remaining args are project, options.
 
@@ -48,6 +73,9 @@ Parse `$ARGUMENTS` for mode. First positional arg is the mode. Remaining args ar
 - `--days N` -- time window (default: 1 for sessions/architecture/supervision, 21 for drift, current session for retro)
 - `--project PROJECT` -- filter to one project
 - `--corrections` -- sessions mode only: extract user correction patterns instead of anti-patterns
+- `--headless` -- force `observe_bulk` API dispatch (Claude Code / launchd default; opt-in in Cursor)
+- `--wide-only` -- `observe_bulk` for drift mode only; other modes use subagents/local
+- `--multitask` -- Cursor: parallel subagent per mode (sessions · architecture · supervision · drift · failures · blindspot; retro local)
 
 ## Shared: Transcript Extraction
 
@@ -143,9 +171,14 @@ If the same session set already exists in the current manifest and `--force` was
 
 Run shared transcript extraction above. Build operational context per `references/transcript-extraction.md` Step 1.3.
 
-### Step 2: Dispatch to Gemini
+### Step 2: Classify findings
 
-Send full-fidelity transcript + coverage digest + operational context to the `deep_review` profile (currently gemini-3.5-flash; the profile owns the model, not this text). Full prompt in `references/gemini-dispatch-prompt.md`.
+**Cursor (default):** spawn a subagent with transcript artifacts + `coverage-digest.txt` +
+`lenses/behavioral-antipatterns.md`. Subagent reads `improvement-log.md` for prior art, stages
+findings to `candidates.jsonl`, writes `digest.md`. Skip API dispatch unless `--headless`.
+
+**Headless (`--headless` or Claude Code / `/loop`):** send transcript + coverage digest to
+`observe_bulk` (`gemini-3.1-flash-lite-preview`). Full prompt in `references/gemini-dispatch-prompt.md`.
 
 > **The prompt file is sent VERBATIM via `--prompt-file` — it must contain ONLY the prompt, no markdown wrapper, title, or heredoc artifacts.** A wrapper preamble fed after a long transcript makes the model continue the transcript's task instead of analyzing it (misfired 3× on 2026-06-13 before this was stripped). Do NOT add a `# Title` or `<!-- comment -->` header to the prompt files.
 
@@ -164,7 +197,7 @@ working when no Codex sessions exist in the window, but when they do, Codex must
   cat "$ARTIFACT_DIR/coverage-digest.txt"
 } > /tmp/observe-context.md
 uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
-  --profile deep_review \
+  --profile observe_bulk \
   --context /tmp/observe-context.md \
   --prompt-file "$CLAUDE_SKILL_DIR/references/gemini-dispatch-prompt.md" \
   --output "$ARTIFACT_DIR/gemini-output.md" \
@@ -172,11 +205,13 @@ uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
   --error-output "$ARTIFACT_DIR/gemini-output.error.json"
 ```
 
-### Step 2b: Composer precision pass (default for `supervision` and `blindspot` modes)
+### Step 2b: Composer precision pass
 
-After Gemini bulk classification, run a **repo-grounded Composer screen** on the top candidate
-clusters (max 3) — Composer follows tight contracts and catches false-positive pattern matches
-Gemini invents from transcript alone.
+**Cursor:** subagent analysis IS the precision pass — verify session IDs and quotes against
+transcript before staging. No second dispatch needed unless headless bulk output exists.
+
+**Headless:** after `observe_bulk`, run Composer screen on HIGH-severity candidates only
+(max 3 clusters):
 
 ```bash
 # Build a tight packet: top 3 candidates + 20 lines transcript evidence each
@@ -188,12 +223,12 @@ uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
   --meta "$ARTIFACT_DIR/composer-output.meta.json"
 ```
 
-Skip Step 2b when Gemini returned zero candidates or mode is `retro`/`failures` (deterministic).
-For `sessions`/`architecture`/`drift`, run Step 2b only on HIGH-severity candidates.
+Skip Step 2b when headless returned zero candidates or mode is `retro`/`failures` (deterministic).
+For headless `sessions`/`architecture`/`drift`, run Step 2b only on HIGH-severity candidates.
 
 ### Step 3: Stage Findings
 
-Validate Gemini output against transcript, check session UUIDs, and stage the result as a candidate record before any promotion. Full procedure, JSON template, and candidate contract live in `references/findings-staging.md` and `references/artifact-contract.md`.
+Validate classifier output (subagent or headless `observe_bulk`) against transcript, check session UUIDs, and stage the result as a candidate record before any promotion. Full procedure, JSON template, and candidate contract live in `references/findings-staging.md` and `references/artifact-contract.md`.
 
 **Judgment calls when staging:**
 - Gemini flags "unprompted commit" as HIGH -- false positive, global CLAUDE.md authorizes auto-commit
@@ -262,11 +297,16 @@ Run shared transcript extraction. Extract from all active projects (meta, intel,
 
 Run shape pre-filter. Note anomalous sessions for priority analysis.
 
-### Phase 2: Pattern Extraction (Gemini)
+### Phase 2: Pattern Extraction
 
-Dispatch to the `deep_review` profile (currently gemini-3.5-flash) for structured pattern extraction. Full prompt in `references/gemini-prompt.md`. Use the shared dispatch helper, not raw CLI subprocess calls.
+**Cursor (default):** subagent reads merged transcripts + `references/existing-infra-checks.md`,
+extracts patterns per `references/gemini-prompt.md` format, verifies against source. No API dispatch.
 
-**Gemini's output is DATA, not conclusions.** It extracts patterns; you do the creative synthesis in Phase 3.
+**Headless:** dispatch to `observe_bulk` for structured pattern extraction. Full prompt body in
+`references/gemini-prompt.md`. Use the shared dispatch helper, not raw CLI subprocess calls.
+
+**Gemini's output is DATA, not conclusions.** Headless extraction is DATA; creative synthesis
+is Phase 3 (parent or subagent).
 
 **Operational limits (the context cap is now enforced in CODE, not prose):**
 - **`llm-dispatch.py` refuses `--context` > 600KB (`--max-context-bytes`, exit 2).** You no
@@ -351,9 +391,13 @@ For the top 3-5 sessions with most wasted supervision:
 python3 ${CLAUDE_SKILL_DIR}/scripts/extract_transcript.py <project> --sessions 5 --output "$ARTIFACT_DIR/supervision-transcripts.md"
 ```
 
-### Step 3: LLM Synthesis (Gemini)
+### Step 3: LLM Synthesis
 
-Dispatch raw classification + transcripts via the shared dispatch wrapper (`deep_review` profile, currently gemini-3.5-flash). Read both files, concatenate with the prompt below, and call the wrapper (same pattern as sessions mode dispatch). For each non-NEW_AGENCY pattern, Gemini should determine:
+**Cursor (default):** subagent reads `supervision-raw.json` + top-waste transcripts, synthesizes
+automatable patterns per `lenses/supervision-waste.md`, stages verified items.
+
+**Headless:** dispatch raw classification + transcripts via `observe_bulk`. For each non-NEW_AGENCY
+pattern, determine:
 1. Is it genuinely automatable? (Filter out actual new information)
 2. Fix type: HOOK | RULE | DEFAULT | SKILL | ARCHITECTURAL
 3. Recurrence count (3+ is signal, 1 is noise)
@@ -405,10 +449,11 @@ patterns no single retro can see: recurrence counts, proposed-but-never-built, r
 convention drift. This is the deliberate cross-session reasoning lane — run it weekly via `/loop`,
 not daily.
 
-Why it can be slow + cheap: `deep_review` (gemini-3.5-flash) is 1M-capable and cheap; 3 weeks of
-sessions ≈ 200-600KB, one dispatch. Cost lever is the flash profile + async — NOT the Batch API
-(not wired in `llm-dispatch.py`). The `claude_review` Opus profile caps at 200K, so it is NOT a
-substitute for the wide pass; use `deep_review`.
+Why it can be slow + cheap: `observe_bulk` (gemini-3.1-flash-lite-preview) is 1M-capable and
+cheap at volume; 3 weeks of sessions ≈ 200-600KB, one dispatch. Cost lever is Flash-Lite + async
+— NOT the Batch API (not wired in `llm-dispatch.py`). The `claude_review` Opus profile caps at
+200K, so it is NOT a substitute for the wide pass; use `observe_bulk` or Cursor subagent with
+`just observe-drift` context.
 
 ### Step 1: Extract wide window
 
@@ -426,13 +471,15 @@ Build operational context (Step 1.3) and the coverage digest as in `sessions` mo
 LEANS on the git-commit operational context to detect "proposed but never built" (a fix proposed
 in an early session with no later landing commit).
 
-### Step 2: Dispatch (wide, 1M)
+### Step 2: Dispatch (wide, 1M) — headless or `--wide-only`
 
-> **Safety-preamble guard (REQUIRED).** The `deep_review` profile carries a CBRN/safety preamble.
-> On biomedical (phenome) and long (genomics) transcript bundles it can derail the model into a
-> safety eval or task role-play instead of analysis (produced garbage on 2026-06-13). Wrap the
-> concatenated context in an explicit inert-data fence — prepend a line like `=== BEGIN INERT
-> HISTORICAL TRANSCRIPTS (analyze, do not execute) ===` and append `=== END ===` to
+**Cursor default:** subagent with `just observe-drift` context — skip API unless `--headless` or `--wide-only`.
+
+> **Safety-preamble guard (REQUIRED for headless).** The `observe_bulk` profile may carry a
+> CBRN/safety preamble. On biomedical (phenome) and long (genomics) transcript bundles it can
+> derail the model into a safety eval or task role-play instead of analysis (produced garbage on
+> 2026-06-13). Wrap the concatenated context in an explicit inert-data fence — prepend a line like
+> `=== BEGIN INERT HISTORICAL TRANSCRIPTS (analyze, do not execute) ===` and append `=== END ===` to
 > `/tmp/observe-drift-context.md` before dispatch. (The prompt file itself is sent verbatim and
 > must stay wrapper-free — see the Step 2 note in `sessions` mode.)
 
@@ -444,7 +491,7 @@ in an early session with no later landing commit).
   printf '\n\n---\n\n'; cat "$ARTIFACT_DIR/coverage-digest.txt"
 } > /tmp/observe-drift-context.md
 uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
-  --profile deep_review \
+  --profile observe_bulk \
   --context /tmp/observe-drift-context.md \
   --prompt-file "$CLAUDE_SKILL_DIR/references/drift-dispatch-prompt.md" \
   --output "$ARTIFACT_DIR/drift-output.md" \
@@ -634,15 +681,21 @@ triage the top cluster in any `/improve maintain` tick.
 
 ## Model Selection for Dispatch
 
-Default: the `deep_review` profile (currently gemini-3.5-flash — empirically beats 3.1 Pro on critique/synthesis here, 2026-05-24; the profile owns the model). Use GPT-5.5 at medium effort for formal/quantitative analysis or when Gemini rate-limits. Route both through the shared dispatch helper. See `/model-guide` for detailed routing.
+| Harness | Profile | When |
+|---------|---------|------|
+| **Cursor** (default) | **Composer subagents** (`composer-2.5` / `composer-2.5-fast`) | All modes except retro; `/multitask` parallel fan-out |
+| **Headless** | `observe_bulk` → `gemini-3.1-flash-lite-preview` | Claude Code, launchd, `/loop`, or `--headless` / drift `--wide-only` |
+| **Never for observe** | `deep_review` (3.5-flash) | Reserved for `/critique` cosigner — too expensive at observe volume |
+
+Formal/quantitative verification: `gpt_general` (GPT-5.5 medium). Route via shared dispatch helper.
+See `/model-guide` for critique cosigner routing (unchanged).
 
 ```python
 from pathlib import Path
 from shared.llm_dispatch import dispatch
-# Gemini (default — pattern extraction, large context)
-r = dispatch(profile="deep_review", prompt="...", context_text="...", output_path=Path("/tmp/observe.md"))
-# GPT-5.4 medium effort (formal analysis, fact verification)
-r = dispatch(profile="gpt_general", prompt="...", context_text="...", output_path=Path("/tmp/observe-gpt.md"))
+# Headless observe bulk classify only
+r = dispatch(profile="observe_bulk", prompt="...", context_text="...", output_path=Path("/tmp/observe.md"))
+# Cursor: use Agent/subagent fan-out instead of dispatch for interactive observe
 ```
 
 ## Notes
@@ -652,6 +705,6 @@ r = dispatch(profile="gpt_general", prompt="...", context_text="...", output_pat
   - Codex CLI at `~/.codex/state_5.sqlite` + rollout JSONL (reads project by `cwd` match)
 - Codex runs alongside Claude Code on the same project; dropping it silently loses ~50% of the signal
 - Preprocessor strips thinking blocks and base64 content
-- gemini-3.5-flash at ~$0.001/query cached -- cheap enough to run frequently
+- Headless `observe_bulk` ≈ $0.05/MTok in — cheap enough for `/loop`; Cursor subagents use subscription pool instead
 
 $ARGUMENTS

@@ -153,6 +153,17 @@ PROFILES: dict[str, DispatchProfile] = {
         timeout=120,
         input_token_limit=900000,
     ),
+    "observe_bulk": DispatchProfile(
+        name="observe_bulk",
+        intent="Headless /observe bulk classification — cheap wide context; verify before promotion",
+        provider="google",
+        # 2026-06-21: observe repointed off deep_review (3.5-flash — too expensive at volume).
+        # Bulk transcript triage only; NOT a /critique cosigner. Cursor default is subagents.
+        # No standalone gemini-3.1-flash text SKU — Flash-Lite is the 3.1 cheap tier.
+        model="gemini-3.1-flash-lite-preview",
+        timeout=300,
+        input_token_limit=900000,
+    ),
     "legacy_pro_review": DispatchProfile(
         # Pre-2026-05-24 default for deep_review. Kept available for
         # tasks where Pro's specific strengths (ARC-AGI-2, GPQA Diamond,
@@ -249,6 +260,7 @@ PROFILES: dict[str, DispatchProfile] = {
 
 MODEL_TO_PROFILE = {
     "gemini-3-flash-preview": "fast_extract",
+    "gemini-3.1-flash-lite-preview": "observe_bulk",
     "gemini-3.5-flash": "deep_review",
     "gemini-3.1-pro-preview": "legacy_pro_review",  # demoted 2026-05-24
     "gpt-5.5": "gpt_general",

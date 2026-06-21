@@ -2,7 +2,7 @@
 
 # Gemini Pattern Extraction Prompt
 
-Dispatch compressed transcripts to Gemini 3.1 Pro for structured pattern extraction.
+Headless only: dispatch compressed transcripts via `observe_bulk` (`gemini-3.1-flash-lite-preview`). In Cursor, use parallel Composer subagents instead.
 
 ```bash
 OBSERVE_PROJECT_ROOT="${OBSERVE_PROJECT_ROOT:-$HOME/Projects/agent-infra}"
@@ -44,7 +44,7 @@ IMPORTANT:
 - Output ONLY the patterns, no preamble or summary.
 PROMPT
 uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
-  --profile deep_review \
+  --profile observe_bulk \
   --context "$ARTIFACT_DIR/all.md" \
   --prompt-file "$PROMPT_FILE" \
   --output "$ARTIFACT_DIR/patterns.md" \
