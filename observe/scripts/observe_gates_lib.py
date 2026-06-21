@@ -23,6 +23,15 @@ from observe_artifacts import (
 )
 
 DEFAULT_DB = Path.home() / ".claude" / "agentlogs.db"
+def observe_runs_dir(artifact_dir: Path) -> Path:
+    """Parent `artifacts/observe/` dir (handles dated run subdirs)."""
+    p = artifact_dir.resolve()
+    if p.parent.name == "observe":
+        return p.parent
+    if p.name == "observe":
+        return p
+    return project_root() / "artifacts" / "observe"
+
 MANIFEST_ROW = re.compile(r"\|\s*([0-9a-f]{8})\s*\|")
 SESSION_IN_TEXT = re.compile(
     r"(?:session[_\s-]?id|Session|uuid)\s*[:=]?\s*([0-9a-f]{8})\b", re.I
@@ -327,7 +336,7 @@ def saturation_check(
     overlap_threshold: float = 0.6,
 ) -> dict[str, Any]:
     root = artifact_dir or artifact_root()
-    observe_root = project_root() / "artifacts" / "observe"
+    observe_root = observe_runs_dir(root)
     current = load_jsonl(root / CANDIDATES_JSONL)
     current_ids = {c.get("candidate_id") for c in current if c.get("candidate_id")}
     current_tokens: set[str] = set()
