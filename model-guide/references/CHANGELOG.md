@@ -1,5 +1,41 @@
 # Model Guide Changelog
 
+## 2026-06-20 - Fable dormant; Opus primary; architecture → Opus max
+
+Fable 5 not routable on subscription (`lite_allowed_models` = `claude-opus-4-8` only for Anthropic) and US access restricted. Opus 4.8 becomes the live default for all Claude work.
+
+### Changed
+- All Fable-first routing → Opus 4.8.
+- Architecture / design / high-reasoning critique → **Opus 4.8 `max`** (operator 2026-06-20; was `high|max`).
+- Cross-model review: Opus 4.8 + GPT-5.5 (Fable removed).
+- Fable section marked **DORMANT**; Opus section promoted to primary.
+- `cursor-agent` arch critique example → `claude-opus-4-8-thinking-max`.
+
+### Not changed
+- GPT-5.5 / GPT-5.5 Pro routing; trilemma section; GLM opt-in cosigner.
+
+## 2026-06-20 - Selection trilemma: capability × calibration × efficiency
+
+Oliver Shrimpton ("Bigger models are not the way", 2026-06-18) + AA-Omniscience leaderboard read: benchmark capability and parameter count plateau while calibration diverges sharply. Integrated as routing judgment, not a default-model change.
+
+### Added
+- SKILL.md **Selection trilemma** section: three axes, inverted capability/calibration ordering, reasoning-budget-is-not-monotonic guard (DeepSeek V4 Pro vs GLM-5.2 impossible-asyncio anecdote, n=1).
+- Quick Selection Matrix row: contradictory/impossible spec → Opus 4.8 or GLM-5.2 opt-in; avoid GPT-5.5 / DeepSeek V4.
+- Dispatch Economics **reasoning escalation guard** (inverse of cheap-lane finding).
+- **After GLM-5.2** validation checklist.
+- BENCHMARKS.md: GLM-5.2 72% non-hallucination in trust ordering; DeepSeek V4 Pro explicit 94% hallucination-on-miss; capability-plateau note.
+
+### Changed
+- GLM-5.2 cosigner bullet: calibration edge (72% non-hallucination) + impossibility/paradox use case.
+- Last-updated stamp → 2026-06-20.
+
+### Not changed
+- Default frontier routing (Fable/Opus/GPT-5.5) — capability still wins for gated mechanical work; trilemma adds when NOT to pick by index/size alone.
+
+### Sources
+- Oliver Shrimpton 2026-06-18 (AA-Omniscience rates + asyncio impossibility probe via OpenRouter).
+- Prior AA instrument read: `agent-infra/research/2026-06-11-aa-benchmark-instrument-validity.md`.
+
 ## 2026-06-12 - Add Kradle Four Bridges deception finding to GPT-5.5 insights
 
 ### Added

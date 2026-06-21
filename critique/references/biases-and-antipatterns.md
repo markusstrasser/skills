@@ -13,7 +13,9 @@
 
 **Per-model:**
 - **Gemini (3.5-flash):** Production-pattern bias (enterprise for personal projects), self-recommendation (Google services), instruction dropping in long context
-- **GPT-5.5:** Confident fabrication (invents numbers/paths), overcautious scope, production-grade creep
+- **GPT-5.5:** Confident fabrication (invents numbers/paths), overcautious scope, production-grade creep. **Calibration:** 14% AA-Omniscience non-hallucination (86% of misses are confident fabrications despite abstention invite) — worst among frontier models; do not escalate reasoning effort expecting better epistemic discipline.
+- **GLM-5.2 (opt-in):** Best measured calibration among large routed models (72% non-hallucination, 2026-06-18); strong anecdotal impossibility/paradox detection. Expensive (`high`/`xhigh` only) — review cosigner, not default extractor or fact source.
+- **DeepSeek V4 Pro:** ~6% non-hallucination — never cosigner or fact source; more reasoning tokens tends to lengthen wrong answers, not abstentions.
 - **gemini-3-flash-preview / GPT-5.3:** Shallow analysis, ~42% hallucination as a critique axis — the cheap classification tier, never a cosigner. Distinct from gemini-3.5-flash, the clean primary cosigner.
 
 **Dispatch specifics:** the shared review contract owns provider routing,
@@ -28,6 +30,7 @@ biases and workflow anti-patterns, not raw transport flags.
 - **Model agreement = proof.** Agreement is evidence, not proof — verify against source code.
 - **Convergence validates the problem, not the fix-size.** Cross-model agreement is the trust signal for *is this a real flaw* — it does NOT validate *is the proposed fix right-sized*. Both reviewers share a production-grade / more-machinery bias, so they converge on heavier solutions (new manifest, symlink, contract suite, extra service) exactly where a constraint you know about makes them unnecessary — and convergent over-engineering reads as high-confidence because convergence is normally the trust signal. Split the verdict: accept the flagged risk, then size the fix against constraints the models lacked. Evidence (phenome bridge-reframe, 2026-06-01): both models converged on an immutable release-manifest + `latest.json` symlink to fix a torn-snapshot risk; the affected artifacts were already co-located in one attempt, so a 2-line same-run check sufficed — adopting the convergent fix would have rebuilt the exact machinery the refactor was deleting.
 - **Debate workflow.** Martingale. Independent parallel + voting beats sequential discussion.
+- **Escalating reasoning on poorly calibrated models.** Higher effort on GPT-5.5 or DeepSeek for impossibility/contradiction detection or unsourced-fact review — produces longer confident wrong answers, not more abstention (Shrimpton 2026-06-18; see `/model-guide` trilemma). Use Opus, GLM opt-in, or deterministic checks instead.
 - **Same-family reviewers.** Same-model correction: 59.1%. Cross-family: 90.4% (FINCH-ZK).
 - **"Top N" triage.** If INCLUDE, implement. DEFER needs explicit reason per item.
 - **Skipping self-doubt section.** Most valuable part of each review.

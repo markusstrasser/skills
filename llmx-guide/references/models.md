@@ -18,6 +18,7 @@
 | GPT-5.2 (legacy) | `gpt-5.2` | Legacy OpenAI default. |
 | GPT-5-Codex | `gpt-5-codex` | No `minimal` reasoning-effort |
 | Claude Sonnet 4.6 | `claude-sonnet-4-6` | Hyphens, not dots |
+| GLM-5.2 | `glm-5.2` | Z.ai via OpenRouter (`zai` provider). **Reasoning: high/xhigh only** (no low tier). Opt-in critique cosigner — see `/model-guide` trilemma + `agent-infra/decisions/2026-06-19-glm-5.2-integration.md`. |
 | Grok 4.20 Reasoning | `grok-4.20-0309-reasoning` | Use `-p xai`. **Not in `_RECOMMENDED_MODELS`** — pass full name explicitly. |
 | Grok 4.20 Non-Reasoning | `grok-4.20-0309-non-reasoning` | Latency tier, same backbone/price |
 | Grok 4.20 Multi-Agent | `grok-4.20-multi-agent-0309` | `reasoning.effort` controls **agent count** (low/med→4, high/xhigh→16), not depth |
