@@ -53,19 +53,26 @@ def _is_cursor(cmd: str) -> bool:
     )
 
 
+# Shell-segment separators. A foreign model blocks ONLY when it sits in the SAME
+# segment as the cursor invocation — `cursor-agent …; llmx -m gpt-5.5` is two
+# lanes, not cursor routing gpt. (Split before model-matching to kill that FP.)
+_SEGMENT = re.compile(r"(?:&&|\|\||[;&|\n])")
+
+
 def verdict(cmd: str) -> tuple[str, str]:
     if not cmd or not cmd.strip():
         return "pass", ""
-    if not _is_cursor(cmd):
-        return "pass", ""
-    models: list[str] = [m.group(2) for m in _MODEL.finditer(cmd)]
-    if _DISPATCH_ARM.search(cmd):
-        arm = _ARM_MODEL.search(cmd)
-        if arm:
-            models.append(arm.group(1))
-    for model in models:
-        if not _ALLOWED.match(model):
-            return "block", _MSG.format(model=model)
+    for seg in _SEGMENT.split(cmd):
+        if not _is_cursor(seg):
+            continue
+        models: list[str] = [m.group(2) for m in _MODEL.finditer(seg)]
+        if _DISPATCH_ARM.search(seg):
+            arm = _ARM_MODEL.search(seg)
+            if arm:
+                models.append(arm.group(1))
+        for model in models:
+            if not _ALLOWED.match(model):
+                return "block", _MSG.format(model=model)
     return "pass", ""
 
 
@@ -86,6 +93,12 @@ def _selftest() -> int:
         ("python3 -m agent_infra.foo", "pass"),
         ("cd ~/Projects/foo && agent -p --trust --model gpt-5.5 'x'", "block"),
         ("git commit -m 'add agent'", "pass"),
+        # dual-lane: cursor-agent (no model) + a SEPARATE llmx -m foreign → not cursor routing (FP fix, 2026-06-22)
+        ("which cursor-agent; llmx chat --subscription -m gpt-5.5 'ping'", "pass"),
+        ("cursor-agent --version; llmx -m claude-opus-4-8 'x'", "pass"),
+        ("cursor-agent -p --model composer-2.5 'a' && llmx -m opus 'b'", "pass"),
+        # but a foreign model IN the cursor segment still blocks
+        ("cursor-agent -p --model gpt-5.5 'a' && echo done", "block"),
     ]
     bad = 0
     for cmd, want in cases:
