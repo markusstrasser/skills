@@ -11,10 +11,11 @@
 #   - ONLY when run_in_background is true (foreground flushes at exit — no need).
 #   - ONLY when the command invokes python AND PYTHONUNBUFFERED isn't already set.
 #   - prepend-only (env var is ignored by non-python; can't break a command).
-#   - bails on true-compound commands (an env prefix only applies to the FIRST
-#     command, so `cd X && uv run python` would mis-target — don't claim to fix
-#     what we didn't). A trailing redirect `> log` is fine (env applies to the
-#     redirected command).
+#   - handles compound commands (`cd X && uv run python`), pipelines, and
+#     subshells by exporting the var shell-wide (`export VAR=1; <cmd>`) rather
+#     than an inline `VAR=1 cmd` prefix (which binds only to the first simple
+#     command and would mis-target python after `&&`). The export only changes
+#     python's flush timing; it can't alter any command's output or behavior.
 #
 # Contract: exit 0 + {"hookSpecificOutput":{"hookEventName":"PreToolUse","updatedInput":{...}}}
 # Exit 0 with no output = no change.
@@ -55,13 +56,14 @@ if "PYTHONUNBUFFERED" in cmd or re.search(r"\bpython3?\s+-u\b", cmd):
 if not re.search(r"\bpython3?\b", cmd):
     sys.exit(0)
 
-# Conservative: skip true-compound / substitution (an env prefix applies only to
-# the first command). A trailing `>`/`>>` redirect is fine and common, so it is
-# NOT in this bail set.
-if any(tok in cmd for tok in ("|", "&&", "||", ";", "$(", "`", "\n")):
-    sys.exit(0)
-
-new_cmd = "PYTHONUNBUFFERED=1 " + cmd
+# `export VAR=1; <cmd>` sets the var shell-wide for the entire command, so it
+# applies across compound chains (`cd X && uv run python3 ...`), pipelines, and
+# subshells alike — unlike an inline `VAR=1 cmd` prefix, which binds only to the
+# first simple command (so python after `&&` would NOT see it). This is the exact
+# shape that bit 2026-06-22 (`cd <repo> && uv run python3 <bg audit>` buffered for
+# 42 min and read as a wedged run). Each Bash tool call is a fresh shell, so the
+# export cannot leak to a later command.
+new_cmd = "export PYTHONUNBUFFERED=1; " + cmd
 updated = dict(ti)
 updated["command"] = new_cmd
 print(json.dumps({
