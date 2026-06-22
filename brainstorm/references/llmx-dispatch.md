@@ -14,6 +14,7 @@ Date injection: `$(date +%Y-%m-%d)` in every system prompt.
 
 - **Default to Multi-Output single-agent** for the generation pass: one model, `$N_IDEAS` responses in a single inference, each conditioned on the ones before. External dispatch is for **volume and availability only** — it is mildly diversity-*negative*, not a diversity mechanism. Don't add dispatch rounds expecting more diversity.
 - **Keep any dispatch group small, and do NOT use expert/authority personas in generation.** "Senior scientist"/expert framing *suppresses* semantic diversity; independent/junior framing explores broader, and larger/denser groups accelerate premature convergence (paradox of expertise, openreview YL4alzSQIl, 2026). Preserve independence and disagreement.
+- **Dispatch at LOW reasoning effort (`-e low`).** Brainstorm is distribution-SAMPLING — the divergence comes from verbalized-sampling + the perturbation prompting, NOT reasoning depth. Measured 2026-06-22: gpt-5.5 `-e low` spent **6 reasoning tokens** vs **6,657** at `-e high` for the *same* divergent output quality (28s vs 197s); GLM (no low tier) is a poor fit for a brainstorm pass for the same reason. High effort is wasted here — reserve it for the convergent `/critique` stage.
 
 **With external dispatch (and not `--no-llmx`):** Dispatch for additional volume while you also generate your own set. Use the verbalized-sampling + stratification framing below.
 
