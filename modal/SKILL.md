@@ -58,7 +58,21 @@ one non-optional step.
 
 ## Truth Surface By Question
 
-- `Is it running right now?` -> live Modal app state
+"Is it running?" is NOT one question — it splits across three liveness planes, and
+the *obvious* check is wrong on each:
+
+- `Is a STAGE executing on Modal right now?` -> live Modal app state — but read
+  `task_count`/ephemeral, NOT `is_running`. An always-deployed infra app reads
+  `is_running: true` at `task_count: 0` (idle, not working).
+- `Is the local DRIVER/orchestrator alive right now?` -> the LOCAL process plane
+  (`ps` for the driver subprocess), NOT Modal. A local-driven workflow's heavy
+  phase (planning, volume crawl, repin) runs on your host and dispatches Modal
+  apps only AFTER it — so Modal is empty while the driver grinds. Modal app state
+  is structurally blind to the driver.
+- `Is it ADVANCING (vs hung)?` -> the driver's own progress log, NOT CPU% or "the
+  log looks frozen". Rate-limit backoff (e.g. Modal `VolumeListFiles`) freezes CPU
+  and stdout for tens of seconds and mimics a deadlock — the log line
+  (`backing off`, `N/M probed`) is the liveness signal, not process vitals.
 - `Did the worker finish?` -> immutable receipt / terminal artifact
 - `Why did it fail?` -> container logs, app logs, stderr tails, worker receipt error
 - `Can I trust the output?` -> volume artifact plus checksum/validation, not app state
@@ -66,6 +80,9 @@ one non-optional step.
 
 Do not answer a live-state question from a volume file.
 Do not answer a billing question from app state.
+Do not answer driver/orchestrator liveness from Modal app state — join with the
+local process plane (`ps`); an empty Modal app list does NOT mean nothing is running.
+Do not read `is_running` as "doing work" — join with `task_count`/ephemeral.
 Do not merge these into one synthetic status.
 
 ## First Response Pattern
@@ -88,13 +105,16 @@ If you cannot name the source artifact, the question is still open.
 - `stale_receipt`: latest receipt still says running, but live runtime is gone
 - `duplicate_live_app`: multiple live apps claim the same stage/run
 - `incomplete_attempt`: control plane or launcher says work should be active, but no matching live/runtime signal exists
+- `local_driver_invisible`: Modal app list is empty, but a LOCAL orchestrator/driver subprocess is mid-run (planning / volume crawl / repin, *before* any Modal dispatch). An empty Modal does NOT mean idle — check `ps` for the driver + its progress log before concluding "nothing is running". The inverse of `stale_receipt`: there the receipt lies alive; here Modal lies dead.
 
 Usual checks:
 
 - `modal app list --json`
+- `ps` for the local driver/orchestrator subprocess (the plane Modal can't see)
 - app tags
 - `modal app logs --follow`
 - receipt timestamp vs latest heartbeat/progress
+- driver progress log (distinguishes rate-limit backoff from a true hang)
 - If the live app is stopped but a stage receipt still says `RUNNING`, call it `stale_receipt`.
 - If the app has high wall-clock age but no fresh logs/heartbeats, do not treat app age as proof of useful compute.
 
