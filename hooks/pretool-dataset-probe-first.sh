@@ -30,7 +30,7 @@ if echo "$CMD" | grep -qE "$DATA_EXTS|$DATA_HOSTS"; then
 
 Before downloading, confirm:
   1. Not already local:    ls sources/*/data/external/stage3/ | grep -i <dataset>
-                           ls /Volumes/SSK1TB/corpus/           | grep -i <source>
+                           ls /Volumes/2TBPNY/corpus/           | grep -i <source>
   2. URL is live + sized:  curl -sS -I -L '<url>' | grep -E 'HTTP|Content-Length'
   3. Codebook alongside:   fetch matching .pdf/.txt codebook in same pass
   4. Register after stage: /dataset-register <topic> <dataset-id>
