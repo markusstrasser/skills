@@ -64,15 +64,17 @@ corpus maintain --gc --after-rebuild --dry-run
 ## Parser selection (`--parser`)
 
 `corpus ingest` picks a default by source type; override with `--parser <name>`.
-Defaults: **papers/preprints → `mineru`**, non-paper PDFs → `pymupdf4llm`,
+Defaults: **papers/preprints → `marker-modal`**, non-paper PDFs → `pymupdf4llm`,
 web/blog/news → `trafilatura`. Opt-in parsers must be passed explicitly.
+(Ground truth: `corpus_core/extract/__init__.py` `DEFAULT_PARSER`.)
 
 | Parser | License | Output | Reach for it when |
 |---|---|---|---|
-| `mineru` *(default: papers)* | Apache-2.0+ | structured md (headings, tables, equations) | Default for papers/preprints. Structure is the deliverable. |
+| `marker-modal` *(default: papers)* | GPL-3.0 | structured md + figure crops | **Default for papers/preprints.** LLM table/equation/figure fidelity on Modal T4 (~$0.01/paper, needs network; see global `marker-modal-default.md`). |
 | `pymupdf4llm` *(default: other PDFs)* | AGPL-3.0 | markdown (headings + tables) | Local-only structured extraction of born-digital docs. NOT server-side (AGPL). |
 | `trafilatura` *(default: web)* | Apache-2.0 | markdown | HTML/blog/news bytes. |
-| `marker` / `marker-modal` *(opt-in)* | GPL-3.0 | structured md + figure crops | Scanned / figure-heavy / equation-dense papers. `marker-modal` runs on Modal T4 (see global `marker-modal-default.md`); local `marker` has Mac MPS bugs. |
+| `mineru` *(opt-in)* | Apache-2.0+ | structured md (headings, tables, equations) | The **offline/local opt-out for papers** (`--parser mineru`) when Modal/network is unavailable. Apache-licensed; lower table/equation/figure fidelity than marker-modal. |
+| `marker` *(opt-in)* | GPL-3.0 | structured md + figure crops | Local marker — only when Modal isn't an option. Mac MPS bugs (#993/#967/#960); chunked-by-default workaround. |
 | `liteparse` *(opt-in)* | Apache-2.0 | **flat text only** | Fast bulk text recall, **office docs** (.docx/.pptx/.xlsx), when an **Apache license** is required, or as a **scan-vs-digital preflight**. |
 | `gemini-flash-lite` *(opt-in)* | cloud LLM | markdown | Last-resort fallback for PDFs every local parser fails. |
 
