@@ -17,7 +17,7 @@ Before fetching, parsing, or citing — **check here first**.
 
 The user manages this on their own machine; no auth, no remote, no
 multi-tenant. Source of truth at
-`~/Projects/agent-infra/scripts/corpus/`. Schema at
+`~/Projects/substrate/packages/corpus-core/`. Schema at
 `~/Projects/corpus/SCHEMA.md`.
 
 ## When to use
