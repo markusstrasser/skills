@@ -9,10 +9,12 @@ effort: low
 
 # Dataset Register
 
-Normalize per-topic dataset catalogs. Existing examples:
-- `research/immigration-dataset-register.md`
-- `research/iq-sex-differences-dataset-cards.md`
-- `research/iq-sex-differences-dataset-roadmap.md`
+Normalize per-topic dataset catalogs. Existing examples (the `research` repo split 2026-06-23 into
+per-topic repos — paths resolve inside each topic's own repo):
+- `~/Projects/immigration-research/research/immigration-dataset-register.md` (register)
+- `~/Projects/immigration-research/research/immigration-dataset-roadmap.md` (roadmap: verified-URL cards grouped by the gap they fill)
+- `~/Projects/iq-sex-differences/research/iq-sex-differences-dataset-cards.md` (long-form cards)
+- `~/Projects/iq-sex-differences/research/iq-sex-differences-dataset-roadmap.md` (roadmap)
 
 Goal: one card per dataset, queryable by grep, surviving across sessions.
 

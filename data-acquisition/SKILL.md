@@ -19,6 +19,11 @@ codifies the shared probe→stage→register pattern.
 | **research** | `sources/<topic>/data/external/stage3/<source>/<dataset>/` | `research/<topic>-dataset-register.md` or `*-dataset-cards.md` | `/dataset-register`, `infra/*/acquire/` |
 | **intel** | `datasets/{name}/` (or `$VOLUME_ROOT/corpus/{name}` for >1GB) | `docs/DATA_INVENTORY.md` | `/dataset`, `docs/workflows/add_dataset.md`, `docs/tools_registry.json` |
 
+> **Research split (2026-06-23):** the former combined `research` repo is now per-topic repos —
+> `~/Projects/immigration-research` (`immigration-*`), `~/Projects/iq-sex-differences`
+> (`iq-sex-differences-*`), `~/Projects/research-misc`. A `research/<topic>-*` path resolves
+> inside that topic's own repo; cross-repo example refs below carry their repo prefix.
+
 **Intel first:** before writing `tools/download_*.py`, check `docs/TOOLS_REFERENCE.md`
 and `docs/tools_registry.json` — 400+ downloaders may already exist.
 
@@ -133,11 +138,11 @@ curl -sS "https://api.stlouisfed.org/fred/series/observations?series_id=UNRATE&a
 
 ### NCES DataLab
 
-Not API-accessible. Requires browser session. See `research/iq-sex-differences-nces-datalab-acquisition.md`.
+Not API-accessible. Requires browser session. See `~/Projects/iq-sex-differences/research/iq-sex-differences-nces-datalab-acquisition.md`.
 
 ### PSID / Add Health
 
-Registration-gated. See `research/iq-sex-differences-access-playbook.md` for the per-repo registration state.
+Registration-gated. See `~/Projects/iq-sex-differences/research/iq-sex-differences-access-playbook.md` for the per-repo registration state.
 
 ### IPUMS (ACS, CPS, USA)
 
