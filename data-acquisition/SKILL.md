@@ -31,7 +31,7 @@ and `docs/tools_registry.json` — 400+ downloaders may already exist.
 (curl_cffi, firecrawl, chrome-cookies, fallback chains).
 
 **Default staging root (research):** `sources/<topic>/data/external/stage3/<source>/<dataset>/`
-**Alternate (large files):** `/Volumes/SSK1TB/corpus/<source>/<dataset>/` or intel `$VOLUME_ROOT/corpus/`
+**Alternate (large files):** `/Volumes/2TBPNY/corpus/<source>/<dataset>/` or intel `$VOLUME_ROOT/corpus/`
 
 ---
 
@@ -46,7 +46,7 @@ Before any `curl`/`wget` of a file >10MB, answer four questions:
    # Intel datasets dir
    ls datasets/ 2>/dev/null | grep -i <dataset>
    # SSD corpus (research or intel volume root)
-   ls /Volumes/SSK1TB/corpus/ 2>/dev/null | grep -i <source>
+   ls /Volumes/2TBPNY/corpus/ 2>/dev/null | grep -i <source>
    ls "${VOLUME_ROOT:-$HOME/research-data}/corpus/" 2>/dev/null | grep -i <source>
    ```
 2. **Is the URL live?** `curl -sS -I -L <url>` — check `HTTP/1.1 200`, `Content-Length`, `Last-Modified`.
@@ -182,4 +182,4 @@ Symlink or copy — don't commit. `.env` is gitignored.
 
 - 18+ ad-hoc acquisition scripts across `sources/*/scripts/` — same probe/stage/register pattern reinvented.
 - `immigration-public-data-acquisition-2026-04-11.md`, `iq-sex-differences-access-playbook.md` — manual playbooks.
-- SSD corpus (`/Volumes/SSK1TB/corpus/`) not consistently checked before re-downloads.
+- SSD corpus (`/Volumes/2TBPNY/corpus/`) not consistently checked before re-downloads.
