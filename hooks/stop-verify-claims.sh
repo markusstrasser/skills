@@ -83,6 +83,20 @@ if match:
         import time
         sid = (data.get("session_id") or "").strip()
         repos_to_check = [cwd]
+        # Worktree-cwd resilience: when cwd is a LINKED worktree (claude --worktree),
+        # the agents commits may live on the MAIN worktree, not here. Add the main
+        # worktree so they are found (else a false no-commits). Fail-open.
+        try:
+            _cdir = subprocess.run(
+                ["git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                capture_output=True, text=True, timeout=5,
+            ).stdout.strip()
+            if _cdir:
+                _main_wt = os.path.dirname(_cdir)
+                if _main_wt and _main_wt not in repos_to_check:
+                    repos_to_check.append(_main_wt)
+        except Exception:
+            pass
         # Collect candidate repo paths mentioned in the message. The agent
         # may refer to a sibling repo via `git -C <path>` OR more loosely as
         # `~/Projects/<name>` or an absolute path. We gather all candidates
