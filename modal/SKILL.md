@@ -4,13 +4,53 @@ description: "Use when: Modal deploy/run/debug, GPU/resource config, `from modal
 effort: low
 ---
 
-# Modal (v1.5.x, June 2026 — latest v1.5.0)
+# Modal (v1.5.x, June 2026 — latest v1.5.1)
 
 Use this skill for Modal as an operational system, not just an SDK reference.
 Start from the question, choose the truth surface, then reason about failure mode.
 
 Shared status contract:
 `references/status-reconciliation.md`
+
+## v1.5.1 (2026-06-23) — what changed
+
+Newest-first. Most relevant item for a batch pipeline is the **billing API**;
+the headline Server/Endpoint product is HTTP-serving and does NOT apply to a
+batch DAG (see "Not applicable" below — flagged so nobody chases it).
+
+Leverage-worthy here:
+- **Billing API replaced + resource-level breakdown** — `workspace.billing.report()`
+  and `environment.billing.report()` (on the `modal.Workspace` / `modal.Environment`
+  objects) **replace** `modal.billing.workspace_billing_report`. New: a **per-resource
+  cost breakdown — CPU, memory, and specific GPU types** — plus a `modal environment
+  billing` CLI for env-scoped reports. This is the real win for cost attribution: spend
+  split by GPU type / CPU / memory directly feeds the launch-discipline cost model AND
+  the `nonpreemptible=True` 3×-CPU+memory decision (you can finally see what the 3×
+  multiplier actually costs per stage). **Migration (forward-looking, NOT broken now):**
+  the watchdog/cost consumers still call the old fn and it still exists on the installed
+  SDK; `modal.Workspace` does not exist until 1.5. On a 1.4→1.5 bump, migrate
+  `workspace_billing_report(...)` → `workspace.billing.report(...)` — see the billing
+  section below for the exact consumer.
+- **`Image.publish()` on `Image.from_id()` without `build()`** — extends v1.5.0 Named
+  Images: you can now publish an already-built image by id without re-building. Cheap win
+  for pinning/sharing a canonical bio/CUDA base across stages.
+- **Proxy-aware client** — the client now respects `HTTPS_PROXY` (CONNECT) and `ALL_PROXY`
+  (SOCKS4/5). Requires `uv pip install 'modal[api-proxy-support]'`. **Gotcha:** if the host
+  already exports a proxy var for unrelated reasons, the Modal client will now try to route
+  control-plane traffic through it and may fail auth — opt out with `MODAL_DISABLE_API_PROXY=1`
+  (or `disable_api_proxy = true` in `.modal.toml`).
+- **`modal app rollback --strategy {rolling|recreate}`** and **Sandbox
+  `create_connect_token(port=...)`** (port-scoped) — minor; rollback only matters for
+  *deployed* services, not ephemeral `--detach` stage runs.
+
+Not applicable to this batch WGS pipeline (named so nobody integrates them):
+- **`@app.server()` / `modal.Server`** and the **`modal endpoint` CLI / Endpoints product**
+  are ultra-low-latency **HTTP / LLM-inference serving** primitives. This pipeline is a
+  batch stage DAG with no served HTTP surface — the consumer surface is a local Python MCP
+  (`genomics-consumer`), not a Modal endpoint. Skip.
+- **`workspace.proxy_tokens.*` / `modal workspace proxy-tokens` / `modal curl`** authenticate
+  Servers/Endpoints — irrelevant without a served endpoint.
+- **`modal workspace members` CLI** — workspace admin, not pipeline ops.
 
 ## v1.5.0 (2026-06-09) — what changed
 
@@ -389,6 +429,15 @@ Check Modal Live Usage before launching anything significant. >85% = don't launc
 
 ### Programmatic spend queries (v1.3.3+, Feb 2026)
 `modal.billing.workspace_billing_report(*, start: datetime, end: Optional[datetime] = None, resolution: str = 'd', tag_names: list[str] | None = None)` returns `list[dict]` with keys `{object_id, description, environment_name, interval_start, cost (Decimal), tags}` on SDK 1.4.1. CLI: `modal billing report --for today --json`.
+
+**Superseded in 1.5.1** (still present on 1.4.x, the current installed SDK — not yet
+broken): `modal.billing.workspace_billing_report` → `workspace.billing.report()` /
+`environment.billing.report()` on the `modal.Workspace` / `modal.Environment` objects,
+which add a per-resource (CPU / memory / GPU-type) cost breakdown. Genomics consumer to
+migrate on a 1.4→1.5 bump: `scripts/modal_budget_watchdog.py` (`from modal import billing;
+billing.workspace_billing_report(...)`) — the budget-kill defense daemon. `modal.Workspace`
+is absent on 1.4.1, so do NOT pre-migrate; switch when the SDK actually upgrades and the new
+API can be introspected for its exact signature.
 
 Cloud billing APIs typically lag 5-15 min. A 60s watchdog poll + 90% threshold can still miss bursts that cross the cap before the poll. Pair polling (belt) with admission control at launch (suspenders).
 
