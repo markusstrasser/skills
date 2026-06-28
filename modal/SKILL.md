@@ -4,7 +4,7 @@ description: "Use when: Modal deploy/run/debug, GPU/resource config, `from modal
 effort: low
 ---
 
-# Modal (v1.5.x, June 2026 — latest v1.5.1)
+# Modal (operate on v1.4.x — pin `modal>=1.4.1,<1.5`)
 
 Use this skill for Modal as an operational system, not just an SDK reference.
 Start from the question, choose the truth surface, then reason about failure mode.
@@ -12,81 +12,19 @@ Start from the question, choose the truth surface, then reason about failure mod
 Shared status contract:
 `references/status-reconciliation.md`
 
-## v1.5.1 (2026-06-23) — what changed
+## We run v1.4.x — 1.5.x is intentionally out of scope
 
-Newest-first. Most relevant item for a batch pipeline is the **billing API**;
-the headline Server/Endpoint product is HTTP-serving and does NOT apply to a
-batch DAG (see "Not applicable" below — flagged so nobody chases it).
+1.5.x shipped (June 2026) with HTTP-serving (`@app.server()` / Endpoints), a replaced
+billing API, and **breaking** `--json` key normalization. The pin is `modal>=1.4.1,<1.5`
+and this skill does NOT track 1.5 features — they were a live source of confusion
+(an agent reads a 1.5 feature, the venv is 1.4.1, nothing matches). If a real reason to
+upgrade appears, the one non-optional step is a `--json`-consumer audit (1.5 lowercases
+and underscores all keys).
 
-Leverage-worthy here:
-- **Billing API replaced + resource-level breakdown** — `workspace.billing.report()`
-  and `environment.billing.report()` (on the `modal.Workspace` / `modal.Environment`
-  objects) **replace** `modal.billing.workspace_billing_report`. New: a **per-resource
-  cost breakdown — CPU, memory, and specific GPU types** — plus a `modal environment
-  billing` CLI for env-scoped reports. This is the real win for cost attribution: spend
-  split by GPU type / CPU / memory directly feeds the launch-discipline cost model AND
-  the `nonpreemptible=True` 3×-CPU+memory decision (you can finally see what the 3×
-  multiplier actually costs per stage). **Migration (forward-looking, NOT broken now):**
-  the watchdog/cost consumers still call the old fn and it still exists on the installed
-  SDK; `modal.Workspace` does not exist until 1.5. On a 1.4→1.5 bump, migrate
-  `workspace_billing_report(...)` → `workspace.billing.report(...)` — see the billing
-  section below for the exact consumer.
-- **`Image.publish()` on `Image.from_id()` without `build()`** — extends v1.5.0 Named
-  Images: you can now publish an already-built image by id without re-building. Cheap win
-  for pinning/sharing a canonical bio/CUDA base across stages.
-- **Proxy-aware client** — the client now respects `HTTPS_PROXY` (CONNECT) and `ALL_PROXY`
-  (SOCKS4/5). Requires `uv pip install 'modal[api-proxy-support]'`. **Gotcha:** if the host
-  already exports a proxy var for unrelated reasons, the Modal client will now try to route
-  control-plane traffic through it and may fail auth — opt out with `MODAL_DISABLE_API_PROXY=1`
-  (or `disable_api_proxy = true` in `.modal.toml`).
-- **`modal app rollback --strategy {rolling|recreate}`** and **Sandbox
-  `create_connect_token(port=...)`** (port-scoped) — minor; rollback only matters for
-  *deployed* services, not ephemeral `--detach` stage runs.
-
-Not applicable to this batch WGS pipeline (named so nobody integrates them):
-- **`@app.server()` / `modal.Server`** and the **`modal endpoint` CLI / Endpoints product**
-  are ultra-low-latency **HTTP / LLM-inference serving** primitives. This pipeline is a
-  batch stage DAG with no served HTTP surface — the consumer surface is a local Python MCP
-  (`genomics-consumer`), not a Modal endpoint. Skip.
-- **`workspace.proxy_tokens.*` / `modal workspace proxy-tokens` / `modal curl`** authenticate
-  Servers/Endpoints — irrelevant without a served endpoint.
-- **`modal workspace members` CLI** — workspace admin, not pipeline ops.
-
-## v1.5.0 (2026-06-09) — what changed
-
-New capability (additive):
-- **Named Images** — `Image.publish("{name}:{tag}")` registers a built Image;
-  `Image.from_name(...)` references it by name and **never triggers a build**
-  (lookup succeeds or raises `NotFoundError`). Decouples image builds from app
-  deploy and shares one canonical Image across many apps. CLI: `modal image names`.
-  Use it for a published canonical base (e.g. a bio/CUDA base shared by dozens of
-  unrelated stages) + reproducibility pinning (record the `name:tag` a run used).
-- **Function version-pinning** — `version=` on `Function.from_name()` /
-  `Cls.from_name()` pins all inputs (and transitive same-app invocations) to ONE
-  function version, even after a later redeploy. The fix for "a mid-run redeploy
-  shifted inputs onto incompatible new code." Pin at run start for cross-function
-  workflows that must stay consistent.
-- **Sandbox `outbound_domain_allowlist=[...]`** on `Sandbox.create()` — block
-  outbound connections outside the allowlist (denials logged). Sandbox-only.
-- **`modal skills` CLI** — `modal skills install` / `update` ships Modal's own
-  foundational agent skill. Worth comparing/merging with this skill, not a replacement.
-- **`modal.Workspace`** — `workspace.members.list()` (more coming).
-- **`sandbox.filesystem.watch()`** — replaces the deprecated alpha `Sandbox.watch()`.
-
-Breaking changes (audit before upgrading from 1.4.x):
-- **`modal ... --json` keys are now normalized** (lowercased, non-alphanumeric →
-  underscore). ANY parser reading `--json` by camelCase/raw key breaks. This is
-  the upgrade gotcha most likely to bite — grep for `--json` consumers first.
-- **Removed `Volume.delete()` / `.create_deployed()`** (and peers on other storage
-  objects) → use `.objects.delete()` / `.objects.create()`.
-- **Sandbox snapshots**: `snapshot_filesystem()` / `snapshot_directory()` now
-  default `ttl=30*24*3600` (was: persist forever) — pass `ttl=None` for old
-  behavior. `snapshot_directory()` gained `timeout=` (default 55s) → raises
-  `TimeoutError`; pass a long timeout for old wait-forever behavior.
-
-Most environments still run 1.4.x (the rest of this skill targets 1.0–1.4.x);
-these notes are forward-looking. On a 1.4→1.5 bump, the `--json`-key audit is the
-one non-optional step.
+**The one rule that survived that episode** (full pattern: C4 in *Field-tested failure
+patterns* below): keep the **shell-global `modal` and the project venv on the SAME
+version**. A `--json` key-schema difference across 1.4/1.5 silently breaks any poller
+written against the other — verify `modal --version` == `uv run modal --version`.
 
 ## Workflow
 
@@ -185,6 +123,43 @@ Usual checks:
 - per-stage billing aggregation
 
 See `references/attribution.md` for the reporting template.
+
+## Field-tested failure patterns (multi-stage DAG, v1.4.x)
+
+Fundamental, recurring Modal-platform failure modes distilled from an 8-week
+many-stage DAG (IDs kept for cross-reference; full operational catalog incl. the
+non-Modal orchestration classes lives in the consuming repo). These are platform
+truths, not one project's bug list — they reappear on any large stage graph.
+
+- **C1 — VolumeListFiles quota is WORKSPACE-wide.** A full-DAG or recursive volume
+  crawl fans out per-stage list RPCs that compete with live stage *writers* for one
+  shared list quota and **throttle-hang with no backoff line** — the crawl just stops
+  advancing (looks like a deadlock). Never fan out recursive volume lists while stage
+  apps are writing; scope to a single directory, or wait for writers to drain.
+- **C2 — one volume RPC can block a control loop forever.** `VolumeListFiles` /
+  `vol.reload()` has no built-in per-call timeout; a single stalled RPC freezes a
+  reconcile/poll tick at 0% CPU with zero output. Wrap control-loop RPCs in a tick
+  watchdog that aborts a stalled call. A frozen log ≠ a hung process (rate-limit
+  backoff mimics a deadlock for tens of seconds).
+- **C4 — a CLI version split silently breaks pollers.** `--json` key shape differs
+  across modal versions (1.5 lowercases + underscores every key). If the shell-global
+  `modal` and the project venv resolve to **different** versions, a poller written
+  against one reads keys ABSENT against the other — for minutes, while the app really
+  runs. Pin ONE version across both planes; assert `modal --version` ==
+  `uv run modal --version`. (This is why bare `modal …` in a shell and `uv run modal …`
+  must agree — a `uv tool upgrade` that bumps only the global re-opens the split.)
+- **C6 — an in-app retry crash-loop is invisible to an external control plane.**
+  `@app.function(retries=N)` retries *inside* one app; an external DB/poller that keys
+  on "app exists" sees a flat `running` for the entire crash-loop (observed: 69 min
+  before manual triage). Liveness = app logs / fresh `task_count` / retry count — never
+  app existence alone.
+- **C9 — `vol.reload()` races under concurrency.** Reload in a tight loop can swallow a
+  `ConflictError` and never complete, or hand a worker a stale file handle (FASTA/index)
+  → mid-stage crash. Use a best-effort single reload; don't reload-loop under parallel
+  workers.
+- **C11 — concurrent launches race on shared local staging paths.** Two app launches
+  staging into the same host path collide with `[Errno 17] File exists`. Give each
+  concurrent launch an isolated staging dir (or flock the path).
 
 ## Launch Discipline
 
@@ -429,15 +404,6 @@ Check Modal Live Usage before launching anything significant. >85% = don't launc
 
 ### Programmatic spend queries (v1.3.3+, Feb 2026)
 `modal.billing.workspace_billing_report(*, start: datetime, end: Optional[datetime] = None, resolution: str = 'd', tag_names: list[str] | None = None)` returns `list[dict]` with keys `{object_id, description, environment_name, interval_start, cost (Decimal), tags}` on SDK 1.4.1. CLI: `modal billing report --for today --json`.
-
-**Superseded in 1.5.1** (still present on 1.4.x, the current installed SDK — not yet
-broken): `modal.billing.workspace_billing_report` → `workspace.billing.report()` /
-`environment.billing.report()` on the `modal.Workspace` / `modal.Environment` objects,
-which add a per-resource (CPU / memory / GPU-type) cost breakdown. Genomics consumer to
-migrate on a 1.4→1.5 bump: `scripts/modal_budget_watchdog.py` (`from modal import billing;
-billing.workspace_billing_report(...)`) — the budget-kill defense daemon. `modal.Workspace`
-is absent on 1.4.1, so do NOT pre-migrate; switch when the SDK actually upgrades and the new
-API can be introspected for its exact signature.
 
 Cloud billing APIs typically lag 5-15 min. A 60s watchdog poll + 90% threshold can still miss bursts that cross the cap before the poll. Pair polling (belt) with admission control at launch (suspenders).
 
