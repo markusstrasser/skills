@@ -55,6 +55,7 @@ artifacts directly, or headless `observe_bulk` without the nested hop.
 
 | Mode | Question answered | Headless dispatch (`observe_bulk`) | Cursor default | Canonical artifacts |
 |------|------------------|-----------------------------------|----------------|-------------------|
+| `all` | Full RSI pass (all deterministic lanes + triangulation) | optional `--headless` on prep artifacts | **Orchestrator** + `--multitask` subagents | `observe_run.py` → `manifest.json` v2 → `digest.md` → lane subdirs |
 | `sessions` | What behavioral anti-patterns appeared? | `--headless` only | **Subagent** | `manifest.json` -> `signals.jsonl` -> `candidates.jsonl` -> `digest.md` |
 | `architecture` | What design wants to emerge? | `--headless` only | **Subagent** | `manifest.json` -> … -> `YYYY-MM-DD.md` |
 | `supervision` | Where was human time wasted? | `--headless` only | **Subagent** | `manifest.json` -> … -> `digest.md` |
@@ -63,42 +64,90 @@ artifacts directly, or headless `observe_bulk` without the nested hop.
 | `failures` | Which tools/CLIs are actually BROKEN in real use? | Tiered: deterministic -> Haiku -> deep | **Deterministic** (+ optional subagent) | `scan_tool_failures.py` -> `failures.json` |
 | `blindspot` | What did the loop MISS that the human had to catch? | emb-contrastive | **Subagent** + emb miner | `blindspot_miner.py` -> `.claude/blindspot-digest.md` |
 
-Parse `$ARGUMENTS` for mode. First positional arg is the mode. Remaining args are project, options.
+Parse `$ARGUMENTS` for mode. First positional arg is the mode (`all` runs every lane). Remaining args are project, options.
 
 **Default mode logic:**
 - If the session is ending (user said "retro", "retrospective", or session is wrapping up) -> `retro`
 - Otherwise -> `sessions`
 
 **Options common to all modes:**
-- `--days N` -- time window (default: 1 for sessions/architecture/supervision, 21 for drift, current session for retro)
+- `--days N` -- time window (default: 1 for sessions/architecture, 7 for supervision/blindspot, 21 for drift/failures)
 - `--project PROJECT` -- filter to one project
 - `--corrections` -- sessions mode only: extract user correction patterns instead of anti-patterns
 - `--headless` -- force `observe_bulk` API dispatch (Claude Code / launchd default; opt-in in Cursor)
 - `--wide-only` -- `observe_bulk` for drift mode only; other modes use subagents/local
 - `--multitask` -- Cursor: parallel subagent per mode (sessions · architecture · supervision · drift · failures · blindspot; retro local)
 
+## Mode: `all` (recommended for full RSI pass)
+
+Deterministic Tier-0 for every lane in one timestamped run dir, with **cross-mode triangulation**
+(supervision vector + blindspot + failures reinforcing the same theme = higher confidence).
+
+```bash
+OBSERVE_PROJECT_ROOT="${OBSERVE_PROJECT_ROOT:-$HOME/Projects/agent-infra}"
+just -f "$OBSERVE_PROJECT_ROOT/justfile" observe-run all [project] [days]
+# or: uv run python3 "$OBSERVE_PROJECT_ROOT/scripts/observe_run.py" all --project agent-infra --days 7
+```
+
+Writes `artifacts/observe/{run-id}/`:
+- `manifest.json` (v2 — all lane metadata)
+- `digest.md` (composed from deterministic lanes + triangulation)
+- `sessions/`, `supervision/`, `drift/`, `failures/`, `blindspot/`, `architecture/` subdirs
+- `candidates.jsonl` (merged) + `preflight.json`
+
+**Then (Cursor `--multitask`):** fan out subagents for LLM lanes reading the prep artifacts —
+do NOT re-extract transcripts manually. Parent reads `digest.md` triangulation section first.
+
+### Scope-aware triangulation (2026-06-28)
+
+`observe_run.py` tags lanes with scope/sensitivity and **only triangulates within compatible scope**:
+
+| Lane | Scope | Sensitivity |
+|------|-------|-------------|
+| supervision | project-filter | strict |
+| blindspot, drift, failures, architecture | fleet | loose |
+
+Rules:
+- A **zero reading from a strict project-scoped lane is NOT corroboration** for a fleet alarm.
+- Fleet-only signals get `confidence: low` and must not drive RAISE_AUTONOMY on the filtered project.
+- Both lanes firing non-zero → `confidence: high`.
+
+Merged candidates get `existing_coverage_match` at emit time (improvement-log + steward-proposals join) so known-open items surface as `lifecycle: modify`, not fresh `[ ]` rows.
+
+Promotion verdicts carry `lifecycle: add|modify|suppress` (L1 act-drain anti-accretion).
+
+**Headless / launchd:** run `observe_run.py all` then dispatch `observe_bulk` per lane on the
+pre-built `observe-context.md` files (size-safe, already capped).
+
 ## Shared: Transcript Extraction
 
-All modes except `retro` start with transcript extraction. See `references/transcript-extraction.md` for full commands.
+All modes except `retro` start with transcript extraction.
+
+**Prefer the orchestrator** (size-safe, no footguns):
+
+```bash
+just -f ~/Projects/agent-infra/justfile observe-run <mode> [project] [days]
+```
+
+For manual single-mode prep, use `observe_prepare_context.py` (NOT raw `extract_transcript.py`
+concatenation — that produced 10MB blobs in multitask runs):
 
 ```bash
 OBSERVE_PROJECT_ROOT="${OBSERVE_PROJECT_ROOT:-$HOME/Projects/agent-infra}"
 ARTIFACT_DIR="${OBSERVE_ARTIFACT_ROOT:-$OBSERVE_PROJECT_ROOT/artifacts/observe}"
-mkdir -p "$ARTIFACT_DIR"
-cat > "$ARTIFACT_DIR/manifest.json" <<EOF
-{"mode":"$MODE","project":"${PROJECT:-all}","artifact_dir":"$ARTIFACT_DIR"}
-EOF
-
-# Claude Code sessions
-python3 ${CLAUDE_SKILL_DIR}/scripts/extract_transcript.py <project> --sessions <N> --full --output "$ARTIFACT_DIR/input.md"
-
-# Codex CLI sessions (GPT-5.4) — reads ~/.codex/state_5.sqlite + rollout JSONL.
-# Codex runs alongside Claude Code on the same project. Absence is non-fatal, but
-# presence MUST be included in the dispatch context (never silently dropped).
-# The `|| : > ...` ensures codex.md exists even when no sessions match, so the
-# downstream concatenation in Step 2 doesn't fail.
-python3 ${CLAUDE_SKILL_DIR}/scripts/extract_codex_transcript.py <project> --sessions <N> --output "$ARTIFACT_DIR/codex.md" 2>/dev/null || : > "$ARTIFACT_DIR/codex.md"
+uv run python3 "$OBSERVE_PROJECT_ROOT/scripts/observe_prepare_context.py" \
+  --project <project> --sessions <N> --artifact-dir "$ARTIFACT_DIR" --full
 ```
+
+Drift wide window:
+
+```bash
+uv run python3 "$OBSERVE_PROJECT_ROOT/scripts/observe_drift_context.py" \
+  --artifact-dir "$ARTIFACT_DIR/drift" --sessions 60 \
+  --projects agent-infra genomics substrate phenome intel hutter
+```
+
+Legacy raw extract (only if orchestrator unavailable):
 
 Record both inputs in `manifest.json` so downstream tooling can audit what was analyzed:
 
@@ -372,80 +421,83 @@ Write to `$ARTIFACT_DIR/YYYY-MM-DD.md`. Include header from `references/output-t
 
 ## Mode: supervision
 
-Audit sessions for wasted supervision -- corrections, boilerplate, rubber stamps. Classification in `lenses/supervision-waste.md`.
+Measure human correction load as a **direction vector** — not legacy "wasted %".
+Classification: `lenses/supervision-waste.md` · taxonomy: `agent-infra/scripts/supervision_taxonomy.py`.
 
-Every correction, boilerplate instruction, and rubber stamp is a candidate for automation.
-
-### Step 1: Structural Extraction
+### Step 1: Structural extraction
 
 ```bash
 OBSERVE_PROJECT_ROOT="${OBSERVE_PROJECT_ROOT:-$HOME/Projects/agent-infra}"
 ARTIFACT_DIR="${OBSERVE_ARTIFACT_ROOT:-$OBSERVE_PROJECT_ROOT/artifacts/observe}"
 mkdir -p "$ARTIFACT_DIR"
-python3 ${CLAUDE_SKILL_DIR}/scripts/extract_supervision.py $ARGUMENTS --json --output "$ARTIFACT_DIR/supervision-raw.json"
+DAYS=${DAYS:-1}
+PROJECT_FLAG=""
+[[ -n "${PROJECT:-}" ]] && PROJECT_FLAG="--project ${PROJECT}"
+
+uv run python3 "$OBSERVE_PROJECT_ROOT/scripts/supervision-kpi.py" \
+  --days "$DAYS" $PROJECT_FLAG \
+  --report "$ARTIFACT_DIR/supervision-report.json" \
+  --output "$ARTIFACT_DIR/supervision-sessions.jsonl"
 ```
 
 Default: `--days 1`. Pass `--days 7` for weekly, `--project X` to filter.
 
-Read output, report headline numbers:
-- Total sessions, total user messages
-- Wasted supervision % (CORRECTION + BOILERPLATE + RUBBER_STAMP + RE_ORIENT)
-- Top sub-patterns by count
+Read `supervision-report.json` and report headline numbers:
+- Sessions analyzed, user turns, **correction_rate_pct**
+- **Direction vector** (raise_autonomy, reduce_error, grow_coverage, amplify_taste)
+- **autonomy_reading** (genuine_gain | mixed | timidity_rising | …)
+- Top sessions by load; inspectable **examples** with evidence strings
+- AIR (corrections after hooks / hooks shown)
 
-### Step 2: Extract Transcripts for Context
+### Step 2: Extract transcripts for context
 
-For the top 3-5 sessions with most wasted supervision:
+For the top 3-5 sessions by `load` in the report:
 
 ```bash
 python3 ${CLAUDE_SKILL_DIR}/scripts/extract_transcript.py <project> --sessions 5 --output "$ARTIFACT_DIR/supervision-transcripts.md"
 ```
 
-### Step 3: LLM Synthesis
+### Step 3: LLM synthesis
 
-**Cursor (default):** subagent reads `supervision-raw.json` + top-waste transcripts, synthesizes
-automatable patterns per `lenses/supervision-waste.md`, stages verified items.
+**Cursor (default):** subagent reads `supervision-report.json` + top-load transcripts,
+synthesizes automatable patterns per `lenses/supervision-waste.md`, stages verified items.
 
-**Headless:** dispatch raw classification + transcripts via `observe_bulk`. For each non-NEW_AGENCY
-pattern, determine:
-1. Is it genuinely automatable? (Filter out actual new information)
-2. Fix type: HOOK | RULE | DEFAULT | SKILL | ARCHITECTURAL
-3. Recurrence count (3+ is signal, 1 is noise)
-4. Specific fix implementation
+**Headless:** dispatch report + transcripts via `observe_bulk`. For each direction with
+recurrence ≥3, determine fix type and concrete implementation.
 
 Output format per finding:
 
 ```
-### [PATTERN_NAME]: [one-line description]
-- **Category:** CORRECTION | BOILERPLATE | RUBBER_STAMP | RE_ORIENT
+### [TYPE_ID]: [one-line description]
+- **Direction:** RAISE_AUTONOMY | REDUCE_ERROR | GROW_COVERAGE | AMPLIFY_TASTE
 - **Occurrences:** N (across M sessions)
+- **Evidence:** [taxonomy evidence string from report examples]
 - **Fix type:** HOOK | RULE | DEFAULT | SKILL | ARCHITECTURAL
 - **Proposed fix:** [specific implementation]
 - **Maintenance:** NONE | LOW | MEDIUM
-- **Expected reduction:** what % of this pattern would this fix eliminate?
 ```
 
 ### Step 4: Review and Stage
 
-1. Read Gemini output critically -- it may hallucinate session details
-2. Cross-check specific claims against raw JSON and transcripts
-3. Stage verified items into `candidates.jsonl` with explicit state transitions
-4. Write the human-readable summary to `"$ARTIFACT_DIR/digest.md"`
-5. Promote to `"$OBSERVE_PROJECT_ROOT/improvement-log.md"` only when the canonical gates pass
+1. Verify examples against transcript (session IDs, quoted text)
+2. Stage into `candidates.jsonl` tagged `"mode":"supervision"`
+3. Write `digest.md` — lead with direction vector + autonomy_reading, NOT a scalar waste %
+4. Promote only after `observe_gates.py preflight`
 
-### Step 5: Trend Report (weekly)
+### Step 5: Trend report (weekly)
 
-If `--days 7+`, compare against previous runs:
-- Wasted supervision % trending down? (fixes working)
-- New patterns appearing? (expected -- old ones get automated)
-- RE_ORIENT patterns declining? (checkpoint.md working?)
+If `--days 7+`, compare `direction_trends` and `autonomy_reading` vs prior run:
+- RAISE_AUTONOMY trending down without REDUCE_ERROR/GROW_COVERAGE rising = genuine gain
+- Over-caution flat while stop-smart-judge enforce active = detector efficacy confound (check control classes)
 
 ```markdown
-### [YYYY-MM-DD] Supervision Audit
-- **Period:** [N days], [M sessions], [K user messages]
-- **Wasted:** [X%] (target: <15%)
-- **Top patterns:** [list]
-- **Fixes deployed:** [list]
-- **Status:** [ ] reviewed
+### [YYYY-MM-DD] Supervision audit
+- **Period:** [N days], [M sessions], [K user turns]
+- **Correction rate:** [X%]
+- **Vector:** autonomy=[n] error=[n] coverage=[n] taste=[n]
+- **Autonomy reading:** [genuine_gain|mixed|…]
+- **Top type:** [over_caution|rediscovery|…]
+- **Status:** [obs] calibration only unless `[ ]` build staged
 ```
 
 ---

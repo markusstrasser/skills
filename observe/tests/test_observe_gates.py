@@ -65,6 +65,24 @@ class ObserveGatesTest(unittest.TestCase):
             promotions_allowed=True,
         )
         self.assertEqual(v.verdict, "obs")
+        self.assertEqual(v.lifecycle, "modify")
+
+    def test_lifecycle_add_on_promote(self) -> None:
+        v = og.verdict_for_candidate(
+            {
+                "candidate_id": "c5",
+                "sessions": ["abcd1234", "efgh5678"],
+                "recurrence": 3,
+                "checkable": True,
+                "summary": "novel zzyxquatch parser failure",
+            },
+            manifest={"abcd1234", "efgh5678"},
+            log_text="",
+            digest_text="",
+            promotions_allowed=True,
+        )
+        self.assertEqual(v.verdict, "promote")
+        self.assertEqual(v.lifecycle, "add")
 
     def test_indexer_blocks_agentlogs_mode(self) -> None:
         v = og.verdict_for_candidate(

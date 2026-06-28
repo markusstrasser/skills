@@ -17,7 +17,7 @@ Lead with **data validity**, then deterministic lanes, then LLM lanes.
 |------|--------|------------|
 | failures clusters | `scan_tool_failures.py` | Launch-failure signatures; `fails` = distinct tool_calls |
 | invoker | failures JSON | `interactive_agent` vs `harness` — promote agent fixes only on interactive-primary |
-| supervision CORRECTION | `extract_supervision.py` | Classifier CORRECTION register only |
+| supervision vector | `supervision-kpi.py --report` | Direction vector (raise_autonomy / reduce_error / grow_coverage / amplify_taste) + correction_rate_pct — **not** a scalar waste % |
 | blindspot pool | `blindspot_miner.py` | emb-contrastive loop-miss — **not** same as supervision CORRECTION |
 | promotable | `promotion-verdicts.jsonl` | `verdict=promote` after `observe_gates.py preflight` only |
 

@@ -75,15 +75,34 @@ class PromotionVerdict:
     verdict: str  # promote | obs | suppress | needs_evidence
     gates: dict[str, str]
     reasons: list[str]
+    lifecycle: str = "suppress"  # add | modify | suppress — L1 act-drain anti-accretion
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema": "observe.promotion_verdict.v1",
             "candidate_id": self.candidate_id,
             "verdict": self.verdict,
+            "lifecycle": self.lifecycle,
             "gates": self.gates,
             "reasons": self.reasons,
         }
+
+
+def lifecycle_for_verdict(verdict: str, gates: dict[str, str]) -> str:
+    """L1 anti-accretion: route promotions to ADD/MODIFY/SUPPRESS, not monotonic append.
+
+    - add: novel checkable candidate eligible for new improvement-log [ ]
+    - modify: known-open item — drain/reinforce existing backlog, do not re-enter as fresh
+    - suppress: not actionable; no new [ ] row
+    """
+    matched = gates.get("existing_coverage") == "matched"
+    if matched:
+        return "modify"
+    if verdict == "promote":
+        return "add"
+    if verdict == "needs_evidence":
+        return "add"
+    return "suppress"
 
 
 def load_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -291,7 +310,8 @@ def verdict_for_candidate(
     else:
         verdict = "needs_evidence"
 
-    return PromotionVerdict(cid, verdict, gates, reasons)
+    lifecycle = lifecycle_for_verdict(verdict, gates)
+    return PromotionVerdict(cid, verdict, gates, reasons, lifecycle)
 
 
 def promote_check(
