@@ -23,11 +23,11 @@
 
 INPUT=$(cat)
 
-printf '%s' "$INPUT" | python3 -c '
+F16_INPUT="$INPUT" python3 <<'PYEOF'
 import sys, json, re, os, subprocess
 
 try:
-    data = json.load(sys.stdin)
+    data = json.loads(os.environ.get("F16_INPUT") or "{}")
 except Exception:
     sys.exit(0)
 
@@ -44,10 +44,16 @@ if os.environ.get("GENOMICS_F16_ACK") or re.search(r"\bGENOMICS_F16_ACK=1\b", cm
 # Full-DAG volume-crawl signatures (the VolumeListFiles-burst commands). Scoped
 # crawls (--target/--stage, a single non-recursive ls of one stage dir) are cheap
 # and excluded — they list one directory, not the whole DAG.
+# Only `pull --all` WITHOUT `--summaries-only` does the per-stage recursive
+# VolumeListFiles burst. `pull --all --summaries-only` is now LIST-FREE (targeted
+# GETs of the receipt output_manifest — modal_sync_results._summary_artifacts_listfree)
+# and `freshness` only GETs each stage current.json — both touch VolumeGetFile,
+# never the list quota, so both are safe under live writers and excluded.
 full_dag_pull = (
-    re.search(r"modal_sync_results\.py\s+(?:pull|freshness)\b", cmd)
+    re.search(r"modal_sync_results\.py\s+pull\b", cmd)
     and re.search(r"--all\b", cmd)
     and not re.search(r"--stage\b", cmd)
+    and not re.search(r"--summaries-only\b", cmd)
 )
 full_dag_remediation = (
     re.search(r"\bjust\s+(?:sample-remediation|sample-state|sample-readiness)\b", cmd)
@@ -84,7 +90,7 @@ sys.stderr.write(
     "this volume, prefix the command with GENOMICS_F16_ACK=1.\n".format(n=len(live))
 )
 sys.exit(2)
-'
+PYEOF
 rc=$?
 # Only the intentional block (2) propagates; crash/other (1, etc.) fails open.
 [ "$rc" = "2" ] && exit 2
