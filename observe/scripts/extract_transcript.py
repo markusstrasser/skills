@@ -50,7 +50,7 @@ def _tool_cmd_limit(): return 500 if FULL_MODE else 120
 def _tool_arg_limit(): return 800 if FULL_MODE else 150
 
 
-def find_transcripts(project: str, limit: int = 5) -> list[Path]:
+def find_transcripts(project: str, limit: int = 5, days: int | None = None) -> list[Path]:
     """Find the N most recent transcript files for a project."""
     dir_name = PROJECT_MAP.get(project)
     if not dir_name:
@@ -70,6 +70,9 @@ def find_transcripts(project: str, limit: int = 5) -> list[Path]:
             sys.exit(1)
 
     jsonl_files = sorted(project_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if days is not None:
+        cutoff = datetime.now().timestamp() - days * 86400
+        jsonl_files = [p for p in jsonl_files if p.stat().st_mtime >= cutoff]
     return jsonl_files[:limit]
 
 
@@ -334,6 +337,7 @@ def main():
     parser = argparse.ArgumentParser(description="Extract Claude Code session transcripts")
     parser.add_argument("project", help="Project name (intel, selve, meta) or directory prefix")
     parser.add_argument("--sessions", "-n", type=int, default=5, help="Number of recent sessions (default: 5)")
+    parser.add_argument("--days", type=int, help="Only sessions modified within N days (then cap at --sessions)")
     parser.add_argument("--output", "-o", help="Output file (default: stdout)")
     parser.add_argument("--full", action="store_true",
                         help="Full fidelity mode: higher truncation limits, preserve tool args and corrections")
@@ -341,7 +345,7 @@ def main():
 
     FULL_MODE = args.full
 
-    transcripts = find_transcripts(args.project, args.sessions)
+    transcripts = find_transcripts(args.project, args.sessions, args.days)
     if not transcripts:
         print(f"No transcripts found for '{args.project}'", file=sys.stderr)
         sys.exit(1)

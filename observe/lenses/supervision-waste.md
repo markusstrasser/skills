@@ -1,36 +1,66 @@
-# Supervision Waste Classification
+# Supervision — direction vector over human corrections
 
-## Categories
+Single source: `~/Projects/agent-infra/scripts/supervision_taxonomy.py` (types + regex tier).
+Session parser: `supervision_session.py`. CLI: `supervision-kpi.py`.
 
-| Category | Definition | Automatable? |
-|----------|-----------|-------------|
-| **NEW_AGENCY** | Genuinely new direction or information from the user | No -- this is real supervision |
-| **CORRECTION** | User corrects agent mistake that a check could have caught | Yes -- hook or validation |
-| **BOILERPLATE** | User repeats standard instruction already in CLAUDE.md/rules | Yes -- rule enforcement or default change |
-| **RUBBER_STAMP** | User approves without adding information ("yes", "go ahead", "looks good") | Yes -- change approval flow or default |
-| **RE_ORIENT** | User re-provides context lost to compaction or session boundary | Yes -- better checkpointing |
+## The objective is a vector, not a scalar
 
-## Fix Types
+| Direction | Meaning | RSI response | Declining = good? |
+|-----------|---------|--------------|-------------------|
+| **RAISE_AUTONOMY** | Agent was timid (asked/deferred on reversible work) | Loosen, act | Yes — pure autonomy signal |
+| **REDUCE_ERROR** | Agent was wrong | Correctness guardrail | Yes — quality signal |
+| **GROW_COVERAGE** | Agent missed existing context | Add detector / grow recall | Yes — recall signal |
+| **AMPLIFY_TASTE** | Agent missed taste/voice | Generate options, keep human judge | Ambiguous — production burden |
 
-For each non-NEW_AGENCY pattern, classify the fix:
+**Autonomy reading (conjunction):**
+```
+genuine gain == RAISE_AUTONOMY ↓  AND  (REDUCE_ERROR + GROW_COVERAGE) not rising
+```
 
-| Fix type | When to use | Maintenance |
-|----------|------------|-------------|
-| **HOOK** | Deterministic shell/Python check (PreToolUse, PostToolUse, Stop) | NONE (fire-and-forget) |
-| **RULE** | CLAUDE.md instruction (only if checkable and not already covered) | LOW |
-| **DEFAULT** | Change a default behavior (e.g., research depth, commit flow) | NONE |
-| **SKILL** | New or modified skill to handle the pattern | LOW-MEDIUM |
-| **ARCHITECTURAL** | Structural change (new script, registry, checkpoint system) | MEDIUM |
+Never collapse these into one "wasted %" — opposite-sign corrections imply opposite fixes.
 
-## Metrics
+## Typed events (inspectable)
 
-- **Wasted supervision %** = (CORRECTION + BOILERPLATE + RUBBER_STAMP + RE_ORIENT) / total user messages
-- **Target:** <15% wasted supervision
-- **Ranking:** occurrences x maintenance-adjusted automation potential. Dev time is ~free -- rank by ongoing cost, not creation effort.
+Each correction is a `SupervisionEvent` with:
+- `type_id` — over_caution | rediscovery | error_correction | denial | repeated_instruction | taste_steer
+- `direction` — one of the four above
+- `method` — regex | emb | structural
+- `evidence` — matched substring or seed (answerable: "why tagged over_caution?")
+
+## Headline metrics (observe supervision mode)
+
+| Metric | Definition |
+|--------|------------|
+| **correction_rate_pct** | taxonomy-classified events / user turns |
+| **vector** | aggregated direction counts |
+| **autonomy_reading** | genuine_gain \| mixed \| timidity_rising \| … |
+| **AIR** | corrections within 3 turns after hook shown / hooks shown |
+| **gross_load** | weighted sum — coarse total only, NOT the objective |
+
+## Fix types (for synthesis)
+
+For each direction with recurrence ≥3 across sessions:
+
+| Fix type | When |
+|----------|------|
+| **HOOK** | Deterministic predicate (PreToolUse, Stop) |
+| **RULE** | Checkable CLAUDE.md default |
+| **DEFAULT** | Change default behavior |
+| **SKILL** | Workflow encapsulation |
+| **ARCHITECTURAL** | New script, detector, checkpoint system |
 
 ## Constraints
 
-- The extraction script (`scripts/extract_supervision.py`) is DETERMINISTIC -- no LLM judgment in classification. False positives/negatives are consistent and tunable.
-- The Gemini pass is for SYNTHESIS only -- finding non-obvious connections, proposing fixes, filtering noise. Raw data is source of truth.
-- Do not propose fixes that duplicate existing hooks or CLAUDE.md rules.
-- Fixes must be TESTABLE. "Add a rule that says X" alone is not testable (instructions = 0% reliable).
+- Regex tier is deterministic ($0) — same taxonomy as `blindspot_miner` emb tier.
+- Do not duplicate taxonomy regexes in consumers (principle #9).
+- LLM synthesis proposes fixes; raw report JSON is source of truth.
+- Do not propose fixes already in improvement-log / deployed hooks.
+
+## Relationship to blindspot
+
+| Lane | Method | Question |
+|------|--------|----------|
+| **supervision** (this mode) | taxonomy regex + structural | What corrections happened, by direction? |
+| **blindspot** | emb-contrastive on same taxonomy | What loop misses did the human catch semantically? |
+
+Different recall profiles — do not merge counts in digests.

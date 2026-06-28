@@ -26,7 +26,7 @@ CODEX_DB = Path.home() / ".codex" / "state_5.sqlite"
 BASE64_PATTERN = re.compile(r"[A-Za-z0-9+/]{100,}={0,2}")
 
 
-def find_sessions(project: str, limit: int = 5) -> list[dict]:
+def find_sessions(project: str, limit: int = 5, days: int | None = None) -> list[dict]:
     """Find the N most recent Codex sessions for a project via SQLite."""
     if not CODEX_DB.exists():
         print(f"Error: Codex database not found at {CODEX_DB}", file=sys.stderr)
@@ -36,16 +36,22 @@ def find_sessions(project: str, limit: int = 5) -> list[dict]:
     con.row_factory = sqlite3.Row
 
     # Try exact match on cwd ending, then fuzzy
+    day_filter = ""
+    params_tail: list = []
+    if days is not None:
+        cutoff = datetime.now(timezone.utc).timestamp() - days * 86400
+        day_filter = " AND updated_at >= ?"
+        params_tail = [cutoff]
+
     rows = con.execute(
-        "SELECT * FROM threads WHERE cwd LIKE ? ORDER BY updated_at DESC LIMIT ?",
-        (f"%/{project}", limit),
+        f"SELECT * FROM threads WHERE cwd LIKE ?{day_filter} ORDER BY updated_at DESC LIMIT ?",
+        (f"%/{project}", *params_tail, limit),
     ).fetchall()
 
     if not rows:
-        # Fuzzy: any cwd containing the project name
         rows = con.execute(
-            "SELECT * FROM threads WHERE cwd LIKE ? ORDER BY updated_at DESC LIMIT ?",
-            (f"%{project}%", limit),
+            f"SELECT * FROM threads WHERE cwd LIKE ?{day_filter} ORDER BY updated_at DESC LIMIT ?",
+            (f"%{project}%", *params_tail, limit),
         ).fetchall()
 
     if not rows:
@@ -343,11 +349,16 @@ def main():
         help="Number of recent sessions (default: 5)",
     )
     parser.add_argument(
+        "--days",
+        type=int,
+        help="Only sessions updated within N days (then cap at --sessions)",
+    )
+    parser.add_argument(
         "--output", "-o", help="Output file (default: stdout)"
     )
     args = parser.parse_args()
 
-    threads = find_sessions(args.project, args.sessions)
+    threads = find_sessions(args.project, args.sessions, args.days)
     print(
         f"Processing {len(threads)} Codex sessions for '{args.project}'...",
         file=sys.stderr,

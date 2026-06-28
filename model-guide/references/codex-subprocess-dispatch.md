@@ -17,8 +17,12 @@ codex exec --full-auto -c model_reasoning_effort=medium '<PROMPT that invokes a 
 
 ## Why codex can do real research (not training-memory)
 
-- `~/.codex/skills/` mirrors the Claude skill set (`research`, `brainstorm`, `critique`,
-  `analyze`, …). Invoke one in the prompt with its **`$name`** keyword, e.g. `$research`.
+- **Run from the repo root** so Codex discovers **project** skills via `.agents/skills/`
+  (symlinked from `.claude/skills/` by `just -f ~/Projects/agent-infra/justfile codex-parity --repo <name>`).
+  Do **not** rely on stale copies under `~/.codex/skills/` — they lag repo skills and caused
+  false ABSENT / wrong Modal contract reads in genomics (improvement-log 2026-06-21).
+- `~/.codex/skills/` mirrors the global Claude skill set for ad-hoc invocations only.
+  Invoke one in the prompt with its **`$name`** keyword, e.g. `$research`.
 - `~/.codex/config.toml` wires the full MCP stack: `research` (research-mcp), `exa`,
   `brave-search`, `scite`, `perplexity`, `parallel`, `context7`. So a codex worker has the
   **same live network research tools** Claude does.
