@@ -108,6 +108,7 @@ INFRA_DESIGN = re.compile(
 )
 
 PROJECTS_ROOT = Path.home() / "Projects"
+SKILLS_HOOKS = PROJECTS_ROOT / "skills" / "hooks"
 SIBLING_SCAN_MAX = 5
 
 INTENT = re.compile(
@@ -290,21 +291,60 @@ def _scan_justfile_recipes(base: Path, kw: list[str]) -> list[str]:
     return hits
 
 
-def _scan_hook_files(base: Path) -> list[str]:
-    """Local hook scripts — existing_infra bucket (prior_context_triage)."""
-    hooks = base / "scripts/hooks"
-    if not hooks.is_dir():
-        hooks = base / ".claude" / "hooks"
-    if not hooks.is_dir():
-        return []
+def _scan_hook_files(base: Path, prompt: str) -> list[str]:
+    """Local + shared hook scripts — existing_infra bucket (prior_context_triage)."""
     out: list[str] = []
+    for hooks in (base / "scripts/hooks", base / ".claude" / "hooks"):
+        if not hooks.is_dir():
+            continue
+        try:
+            for f in sorted(hooks.glob("*.py"))[:4]:
+                out.append(str(f.relative_to(base)))
+        except ValueError:
+            for f in sorted(hooks.glob("*.py"))[:4]:
+                out.append(f.name)
+    if re.search(r"\bhook", prompt, re.I) and SKILLS_HOOKS.is_dir():
+        try:
+            for f in sorted(SKILLS_HOOKS.glob("*.py"))[:4]:
+                out.append(f"skills/hooks/{f.name}")
+        except OSError:
+            pass
+    return out[:8]
+
+
+def _scan_git_tracked_paths(cwd: str, prompt: str, kw: list[str]) -> list[str]:
+    """Recently touched git paths — existing_infra git-path slice (1.3a)."""
+    strong = [k for k in kw if len(k) >= 5] or kw
+    if INFRA_DESIGN.search(prompt):
+        strong = list(dict.fromkeys(strong + [
+            "schema", "view", "hook", "migration", "justfile", "ledger", "gateway",
+        ]))
     try:
-        for f in sorted(hooks.glob("*.py"))[:6]:
-            out.append(str(f.relative_to(base)))
-    except ValueError:
-        for f in sorted(hooks.glob("*.py"))[:6]:
-            out.append(f.name)
-    return out
+        out = subprocess.run(
+            ["git", "-C", cwd, "log", "--no-merges", "-80", "--since=90.days",
+             "--name-only", "--pretty=format:"],
+            capture_output=True, text=True, timeout=3.0,
+        ).stdout
+    except Exception:
+        return []
+    paths: list[str] = []
+    seen: set[str] = set()
+    for line in out.splitlines():
+        p = line.strip()
+        if not p or p in seen:
+            continue
+        pl = p.lower()
+        if any(re.search(rf"\b{re.escape(k)}\b", pl) for k in strong):
+            seen.add(p)
+            paths.append(p)
+        elif INFRA_DESIGN.search(prompt) and any(
+            x in pl for x in ("schema", "view", "hook", "migration", "justfile", "scripts/", "gateway")
+        ):
+            seen.add(p)
+            paths.append(p)
+        if len(paths) >= 6:
+            break
+    return paths
 
 
 def _scan_local_scripts_infra(base: Path, prompt: str) -> list[str]:
@@ -346,7 +386,9 @@ def _infra_design_lines(base: Path, prompt: str, kw: list[str]) -> list[str]:
     found = _scan_local_scripts_infra(base, prompt)
     cmap = _scan_codebase_map(base, kw)
     recipes = _scan_justfile_recipes(base, kw)
-    hooks = _scan_hook_files(base) if re.search(r"\bhook", prompt, re.I) else []
+    hooks = _scan_hook_files(base, prompt) if re.search(r"\bhook", prompt, re.I) else []
+    git_paths = _scan_git_tracked_paths(str(base), prompt, kw)
+    recent = _scan_git_head(str(base), 8) if INFRA_DESIGN.search(prompt) else []
     if found:
         lines.append("Local scripts with session/git join refs:\n" + "\n".join(f"  {s}" for s in found))
     if cmap:
@@ -354,7 +396,11 @@ def _infra_design_lines(base: Path, prompt: str, kw: list[str]) -> list[str]:
     if recipes:
         lines.append("justfile recipes:\n" + "\n".join(f"  {r}" for r in recipes))
     if hooks:
-        lines.append("Local hook scripts:\n" + "\n".join(f"  {h}" for h in hooks))
+        lines.append("Hook scripts (local + shared skills/hooks):\n" + "\n".join(f"  {h}" for h in hooks))
+    if git_paths:
+        lines.append("Recent git-touched paths:\n" + "\n".join(f"  {p}" for p in git_paths))
+    if recent:
+        lines.append("Recent commits (infra prompt — read before proposing):\n" + "\n".join(f"  {c}" for c in recent))
     forensics = base / ".claude/rules/session-forensics.md"
     if forensics.is_file():
         lines.append("  .claude/rules/session-forensics.md")
