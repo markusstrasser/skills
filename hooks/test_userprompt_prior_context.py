@@ -145,6 +145,14 @@ def main() -> None:
     (ex_base / "justfile").write_text("blindspot:\n    echo blindspot\n\nmaintain-tick:\n    echo tick\n")
     (ex_base / "scripts/hooks").mkdir(parents=True)
     (ex_base / "scripts/hooks/sample_guard.py").write_text("# hook\n")
+    subprocess.run(["git", "-C", str(ex_base), "init", "-q"], check=True)
+    subprocess.run(["git", "-C", str(ex_base), "add", "."], check=True,
+                   env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+                        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"})
+    subprocess.run(["git", "-C", str(ex_base), "commit", "-m", "add blindspot hook scaffold", "-q"],
+                   check=True,
+                   env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+                        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"})
     out = run({
         "user_message": "should we add a new hook for blindspot detection or use an existing view?",
         "cwd": str(ex_base),
@@ -155,7 +163,35 @@ def main() -> None:
     check("existing_infra surfaces codebase-map", "codebase-map" in c10 or "scripts-hooks" in c10)
     check("existing_infra surfaces just recipe", "just blindspot" in c10)
     check("existing_infra surfaces hook script", "sample_guard.py" in c10)
+    check("existing_infra surfaces recent commits on infra prompt", "Recent commits" in c10 or "commit" in c10.lower())
     ex_td.cleanup()
+
+    # 12. Git-path slice: committed tracked file surfaces via recent git-touched paths.
+    gp_td = tempfile.TemporaryDirectory()
+    gp_base = Path(gp_td.name)
+    subprocess.run(["git", "-C", str(gp_base), "init", "-q"], check=True)
+    (gp_base / "migrations").mkdir()
+    seed = gp_base / "migrations/2026-06-29-seed-claimcore-view.sql"
+    seed.write_text("-- claimcore view seed for prior-context test\n")
+    subprocess.run(
+        ["git", "-C", str(gp_base), "add", str(seed)],
+        check=True,
+        env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"},
+    )
+    subprocess.run(
+        ["git", "-C", str(gp_base), "commit", "-m", "add claimcore view migration", "-q"],
+        check=True,
+        env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"},
+    )
+    out = run({
+        "user_message": "should we design a new schema view for claimcore ingestion?",
+        "cwd": str(gp_base),
+        "session_id": "s_git_paths",
+    })
+    c12 = ctx(out)
+    check("git-path slice emits on infra schema prompt", bool(c12))
+    check("git-path surfaces committed migration path", "seed-claimcore-view.sql" in c12 or "migrations/" in c12)
+    gp_td.cleanup()
 
     # 11. Rediscovery correction steers inject recent git log even without topic keywords.
     red_td = tempfile.TemporaryDirectory()
