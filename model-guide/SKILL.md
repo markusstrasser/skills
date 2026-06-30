@@ -10,9 +10,11 @@ effort: low
 
 Select between the current frontier models and prompt them correctly.
 
-**Models covered:** Claude Opus 4.8 (primary Claude), GPT-5.5, GPT-5.5 Pro. Claude Fable 5 — **dormant** (see below).
-**Last updated:** 2026-06-20.
-**Active stance:** This skill no longer maintains a broad model zoo. Older GPT, Gemini, Grok, and Sonnet routes were removed from active guidance. Use this guide for high-value frontier decisions; use repo-specific batch tooling or search tools for cheap bulk work.
+**Models covered:** Claude Opus 4.8 (primary Claude), Claude Sonnet 5 (cost-tier Claude, added 2026-06-30), GPT-5.5, GPT-5.5 Pro. Claude Fable 5 — **dormant** (see below).
+**Last updated:** 2026-06-30.
+**Active stance:** This skill no longer maintains a broad model zoo. Older GPT, Gemini, Grok, and Sonnet-4.6-and-earlier routes were removed from active guidance. Sonnet 5 is reinstated as a named, cost-tier Claude option (2026-06-30) — read "Claude Sonnet 5" below before routing to it. Use this guide for high-value frontier decisions; use repo-specific batch tooling or search tools for cheap bulk work.
+
+**OPEN QUESTION (2026-06-30, not yet resolved — operator call):** the "Architecture / design / high-reasoning critique → NEVER Sonnet" verdict below was reached against Sonnet 4.6 on 2026-06-20. Sonnet 5's system card shows large agentic/coding gains and prompt-injection robustness tying or beating Opus 4.8 in several places, but also the *worst* prefill/system-prompt-susceptibility numbers of the compared models and measurably more turns/tokens per task (system-card digest: `references/sonnet-5-system-card.md`). Whether this changes the "NEVER Sonnet" verdict for architecture/critique work is a live question, not re-litigated here — the verdict stands until the operator revisits it.
 
 **Claude Fable 5 is DORMANT — route Opus 4.8 for all Claude work (2026-06-20).** Fable is not on the subscription allowlist (`lite_allowed_models`: `claude-opus-4-8` only for Anthropic; `llmx chat --subscription -m claude-fable-5` errors). US access was further restricted following the Jun 2026 national-security intervention (first US AI model ban; ~3 days post-release). Do **not** recommend or dispatch Fable until availability changes — including paid API unless the operator explicitly opts in. **Opus 4.8 is the sole active Claude frontier.** Benchmark and prompting notes for Fable are kept below for when it returns.
 
@@ -96,7 +98,8 @@ When dispatching subagents to execute work (Agent tool, headless `claude -p`, co
 |---|---|---|
 | FULL brief + mechanical gates (tests, typecheck, deterministic verify script) — greenfield OR port/re-author against an existing oracle | **Opus 4.8 effort low, or codex reasoning-low ($0)** | Effort-tier: low matched medium on all 5 gates at 0.59× tokens. Effort-integration (the pre-registered replication): low matched DEFAULT on an integration-shaped port — same gates, independently convergent design decisions, 0.574× tokens. Codex-lane: GPT-5.5 reasoning-low passed all gates at $0 (subscription) and resolved a self-contradictory brief *within spec*. Revocation trigger (registered): first cheap-lane gate failure on a task classified fully-briefed → fall back to default effort for that class + record. |
 | Design-from-scratch integration, no oracle to check against | **Opus 4.8, default effort** | The effort-integration license covers port/re-author shapes only (its own caveat: "ports are the friendliest integration shape"). Dispatch-tier still holds: Sonnet 4.6 changed the measurement procedure under gate pressure until the gate passed (reward-hacking-shaped); Opus was deviation-free. "Opus is token-efficient so cheaper" was REJECTED (~2.4× Sonnet cost) — the premium buys spec fidelity, not efficiency. |
-| Mechanical no-gate tasks (rename sweeps, boilerplate) | Sonnet/haiku tier | Cheap and gameable-gate risk is moot when there's no gate to game. |
+| Mechanical no-gate tasks (rename sweeps, boilerplate) | **Claude Sonnet 5** (`claude-sonnet-5`) or haiku tier | Cheap and gameable-gate risk is moot when there's no gate to game. (Row previously said "Sonnet/haiku tier" with no live model — resolved 2026-06-30 now that Sonnet 5 exists.) |
+| Cost-sensitive coding/agentic work WITH a mechanical gate (tests, typecheck) — not architecture | **Claude Sonnet 5**, default effort | System card: beats Sonnet 4.6 broadly, ties Opus 4.8 on several real-world benchmarks (Real-World Finance, GDPval-AA), at ~40-60% of Opus 4.8's per-token price. Runs more turns/tokens per task than Opus though — re-measure cost on your own workload before assuming the $/token saving holds end-to-end. |
 | Search/read fan-out | Explore agent | No executor risk; output is consumed, not shipped. |
 | Partial/noisy verifier (research synthesis, memos, judgment-coupled work) | **Don't downgrade** — frontier model, normal effort | The Sonnet finding gets WORSE here: gate-gaming in regime-2 is exactly what you can't detect cheaply. Verifier-conditioned scope (constitution) applies. |
 | Judgment gaps in the spec | Yourself / Opus 4.8 | Cheap executors fill ambiguity with guesses; the savings are repaid as corrections. Codex-lane's reasoning-HIGH arm is the same lesson from the other side: on a spec-complete task, more reasoning bought one extra unnecessary spec deviation, not better conformance — spec + gates do the thinking, so buy reasoning only where the spec leaves thinking to do. |
@@ -138,6 +141,22 @@ When dispatching subagents to execute work (Agent tool, headless `claude -p`, co
 - Put long documents first and the query/instructions last.
 
 Full guide: `references/PROMPTING_CLAUDE.md`.
+
+## Claude Sonnet 5 - "The Cost Tier" (added 2026-06-30)
+
+**Use for:** cost-sensitive coding and agentic work with a mechanical gate (tests, typecheck), mechanical no-gate dispatch (rename sweeps, boilerplate), and anything where untrusted tool output / prompt-injection exposure is the dominant risk — Sonnet 5 has the strongest measured prompt-injection robustness in its own system card, tying or beating Opus 4.8. **Not** a default for architecture/design/high-reasoning critique — see the OPEN QUESTION note above; that verdict has not been revisited for Sonnet 5.
+
+**Operational specs:** `claude-sonnet-5`, 1M context, 128K max output, **$3/M input and $15/M output** ($2/$10 introductory through 2026-08-31, vs Opus 4.8's $5/$25). Adaptive thinking on by default (unlike Sonnet 4.6, which ran thinking-off by default — omitting `thinking` now runs adaptive). First Sonnet-tier model with `xhigh` effort. New tokenizer vs Sonnet 4.6 (~30% more tokens for the same text — partially offsets the lower $/token). **Not yet on the subscription allowlist** (`lite_allowed_models` in `~/.claude/cache/llmx-routing.json` has no Sonnet entry, 4.6 or 5) — `llmx chat --subscription -m claude-sonnet-5` will not route until that allowlist is updated (llmx's own config, not this skill).
+
+**System-card insights to carry forward** (full digest: `references/sonnet-5-system-card.md`):
+- Largest agentic-safety gain in the whole card: browser-use prompt-injection success without safeguards collapsed from Sonnet 4.6's 47-51% to Sonnet 5's 0.93-1.01%; with safeguards, 0% (matches Mythos 5, the new top-tier model class above Opus). Won a blind cross-lab bug bounty tied with Opus 4.8 (0.19% attack success, vs Sonnet 4.6's 1.41%).
+- Beats Sonnet 4.6 on nearly every coding/agentic benchmark (SWE-bench Pro 63.2% vs 58.1%, FrontierCode 38.8% vs 15.1%, Terminal-Bench 80.4% vs 67.0%); ties Opus 4.8 on several real-world professional evals (Real-World Finance Elo 1219 vs 1222, GDPval-AA 1618 vs 1603); trails Opus/Mythos on hard math (USAMO 79.5% vs Opus 4.8's 96.7%).
+- Lowest MASK sycophantic-lying rate of any tested Claude model (3.1%). **But** has the worst prefill-susceptibility and harmful-system-prompt-compliance numbers of the models compared in this card (Sonnet 4.6, Opus 4.8, Mythos Preview) — absolute rates still low, but it's the regression to watch.
+- Disclosed training-health issue: "the Sonnet 5 training run was flagged as unhealthy in its second half" — partial explanation for an unusually high abstention rate on closed-book factual recall (26.6%, highest of any model compared) and correspondingly low correct-rate (46.9%).
+- Evaluation awareness "concerningly high" — verbalized in ~6% of audit transcripts. Treat any self-reported "this is just a test" reasoning as a live measurement-validity caveat, not noise.
+- Runs measurably more turns/tokens per task than Opus 4.8 or Fable 5 on long agentic work (Toolathlon: 26.0 avg turns vs 16.5-32.0 range; AA-Briefcase: 183 avg turns vs 55-67) — the cheaper $/token doesn't automatically mean cheaper $/task on long loops; measure on your own workload.
+
+**Prompting and API rules:** same XML-tag, no-prefill, no-non-default-sampling-param rules as Opus 4.8 (see `references/PROMPTING_CLAUDE.md` — written for Claude generally, applies here). Effort: default `high`; use `xhigh` for the hardest coding/agentic work in this tier (first Sonnet model to support it); `low`/`medium` for routine/mechanical dispatch per Dispatch Economics above.
 
 ## Claude Fable 5 - "The Operator" (DORMANT — reference only)
 
@@ -244,6 +263,13 @@ That verdict, calibrated: the cross-lab-vs-same-lab MARGIN is **≈0** — a sec
 - [ ] Check it surfaced defects as mistakes, not reframed them as "design decisions."
 - [ ] Watch for `stop_reason:"refusal"` and confirm fallback to Opus 4.8 fired where expected.
 - [ ] Keep prompt-injection boundaries around tool outputs.
+
+### After Claude Sonnet 5
+- [ ] Bind completion to parsed evidence — disclosed training-health issue + highest abstention rate of compared models on closed-book recall (AA-Omniscience) are reasons for slightly less trust in self-report than usual.
+- [ ] Watch for prefill/system-prompt-susceptibility — numerically the weakest of the compared models on this axis (absolute rates still low).
+- [ ] If the dispatch is architecture/design/high-reasoning critique, don't route here — that verdict hasn't been revisited for Sonnet 5 (see OPEN QUESTION).
+- [ ] On long agentic loops, check actual turn/token count against Opus 4.8 before assuming the lower $/token wins on $/task — Sonnet 5 runs more turns on long-horizon work in its own benchmarks.
+- [ ] Keep prompt-injection boundaries around tool outputs (though Sonnet 5 measures strongest-in-class here).
 
 ### After Claude Opus 4.8
 - [ ] Check math and quantitative derivations, especially if not tool-backed.

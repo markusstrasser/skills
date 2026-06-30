@@ -1,5 +1,29 @@
 # Model Guide Changelog
 
+## 2026-06-30 - Claude Sonnet 5 reinstated as a named cost-tier Claude option
+
+Anthropic released Claude Sonnet 5 (2026-06-30): "near-Opus intelligence at Sonnet
+pricing," $3/$15 per MTok ($2/$10 intro through 2026-08-31), first Sonnet-tier model
+with `xhigh` effort. System card reviewed in full (145 pages); digest at
+`references/sonnet-5-system-card.md`.
+
+### Added
+- New "Claude Sonnet 5" section (operational specs, system-card insights, prompting).
+- "After Claude Sonnet 5" validation checklist.
+- Quick/Dispatch-Economics rows: cost-sensitive coding/agentic work with a mechanical
+  gate → Sonnet 5; resolved the orphaned "Sonnet/haiku tier" Dispatch Economics row
+  (no live model named) to point at `claude-sonnet-5` explicitly.
+- OPEN QUESTION callout: whether the 2026-06-20 "NEVER Sonnet" verdict for
+  architecture/design/high-reasoning critique should be revisited given Sonnet 5's
+  capability profile — explicitly NOT resolved here; flagged for operator decision.
+
+### Not changed
+- The "NEVER Sonnet" architecture/critique verdict itself (operator call, not
+  re-litigated by this update).
+- Opus 4.8 / GPT-5.5 / GPT-5.5 Pro routing.
+- Sonnet 5 is not yet on the llmx subscription allowlist (`lite_allowed_models`) —
+  that's llmx's own config, out of scope for this skill.
+
 ## 2026-06-20 - Fable dormant; Opus primary; architecture → Opus max
 
 Fable 5 not routable on subscription (`lite_allowed_models` = `claude-opus-4-8` only for Anthropic) and US access restricted. Opus 4.8 becomes the live default for all Claude work.
