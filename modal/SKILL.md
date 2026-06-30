@@ -64,7 +64,10 @@ the *obvious* check is wrong on each:
 - `Did the worker finish?` -> immutable receipt / terminal artifact
 - `Why did it fail?` -> container logs, app logs, stderr tails, worker receipt error
 - `Can I trust the output?` -> volume artifact plus checksum/validation, not app state
-- `What did this cost?` -> billing rows joined by tags
+- `What did this cost?` -> billing rows joined by tags. In genomics,
+  `stage-telemetry` reports `billing_actual` from Modal billing and
+  `planning_cost_projection` separately; if billing is unavailable, do not
+  substitute the projection or treat the attempt as `$0`.
 
 Do not answer a live-state question from a volume file.
 Do not answer a billing question from app state.
@@ -125,6 +128,9 @@ Usual checks:
 - `unattributed_spend`: billing row has no usable tag join
 - running work with no tags: expect future attribution gap
 - spend after failure can be real; do not call it `running`
+- stage-local progress `run_id` can differ from the pipeline run id in billing
+  tags; join strictly first, then fall back only when
+  `sample+stage+attempt_id` maps to a unique billing pipeline run
 
 Usual checks:
 
