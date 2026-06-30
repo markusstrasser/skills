@@ -10,7 +10,7 @@
 INPUT=$(cat) || exit 0
 
 RESEARCH_PATHS="${RESEARCH_PATHS:-docs/research/|analysis/|docs/entities/}"
-EXCLUDE_PATTERN="${EXCLUDE_PATTERN:-MEMORY\.md|CLAUDE\.md|maintenance-checklist\.md|improvement-log\.md|README\.md}"
+EXCLUDE_PATTERN="${EXCLUDE_PATTERN:-MEMORY\.md|CLAUDE\.md|maintenance-checklist\.md|improvement-log\.md|README\.md|HUMAN\.md}"
 
 echo "$INPUT" | python3 -c "
 import sys, json, os, re, subprocess
@@ -29,7 +29,7 @@ if not cwd or not os.path.isdir(os.path.join(cwd, '.git')):
     sys.exit(0)
 
 research_pattern = os.environ.get('RESEARCH_PATHS', 'docs/research/|analysis/|docs/entities/')
-exclude_pattern = os.environ.get('EXCLUDE_PATTERN', r'MEMORY\.md|CLAUDE\.md|maintenance-checklist\.md|improvement-log\.md|README\.md')
+exclude_pattern = os.environ.get('EXCLUDE_PATTERN', r'MEMORY\.md|CLAUDE\.md|maintenance-checklist\.md|improvement-log\.md|README\.md|HUMAN\.md')
 
 # Session-scoped diff: only check files modified THIS session, not pre-existing dirty files.
 # Resolve the session id the SAME way the attribution path below does: prefer the
