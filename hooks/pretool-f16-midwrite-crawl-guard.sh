@@ -70,13 +70,27 @@ if not (full_dag_pull or full_dag_remediation or recursive_volume_ls):
 # Modal auth flake / network blip never blocks legitimate work.
 try:
     out = subprocess.run(
-        ["modal", "app", "list"], capture_output=True, text=True, timeout=20
+        ["modal", "app", "list", "--json"], capture_output=True, text=True, timeout=20
     ).stdout
 except Exception:
     sys.exit(0)  # cannot confirm liveness -> fail open
+try:
+    rows = json.loads(out)
+except Exception:
+    rows = None
 # "ephemeral" = a live detached stage run; "deployed" services and "stopped" apps
-# are not writers and are excluded.
-live = [ln for ln in out.splitlines() if re.search(r"ephemeral", ln, re.I)]
+# are not writers and are excluded. Prefer JSON because the Rich table can wrap
+# stopped rows across lines and make naive text grep count historical apps.
+if isinstance(rows, list):
+    live = [
+        row
+        for row in rows
+        if isinstance(row, dict) and str(row.get("state") or "").lower() == "ephemeral"
+    ]
+else:
+    # Text fallback for older Modal CLIs without --json. Require an explicit State
+    # cell rather than any occurrence of the word "ephemeral" in a wrapped row.
+    live = [ln for ln in out.splitlines() if re.search(r"[│|]\s*ephemeral\s*[│|]", ln, re.I)]
 if not live:
     sys.exit(0)  # 0 writers -> safe to crawl
 
