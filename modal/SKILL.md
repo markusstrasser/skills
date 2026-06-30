@@ -4,7 +4,7 @@ description: "Use when: Modal deploy/run/debug, GPU/resource config, `from modal
 effort: low
 ---
 
-# Modal (operate on v1.4.x — pin `modal>=1.4.1,<1.5`)
+# Modal (operate on 1.5.x with CLI/venv parity)
 
 Use this skill for Modal as an operational system, not just an SDK reference.
 Start from the question, choose the truth surface, then reason about failure mode.
@@ -12,19 +12,29 @@ Start from the question, choose the truth surface, then reason about failure mod
 Shared status contract:
 `references/status-reconciliation.md`
 
-## We run v1.4.x — 1.5.x is intentionally out of scope
+## Genomics baseline: Modal 1.5.1, parity required
 
-1.5.x shipped (June 2026) with HTTP-serving (`@app.server()` / Endpoints), a replaced
-billing API, and **breaking** `--json` key normalization. The pin is `modal>=1.4.1,<1.5`
-and this skill does NOT track 1.5 features — they were a live source of confusion
-(an agent reads a 1.5 feature, the venv is 1.4.1, nothing matches). If a real reason to
-upgrade appears, the one non-optional step is a `--json`-consumer audit (1.5 lowercases
-and underscores all keys).
+For `/Users/alien/Projects/genomics`, the current baseline is Modal 1.5.1:
+`pyproject.toml` pins `modal>=1.5.1,<1.6`, `uv.lock` resolves `modal==1.5.1`,
+`modal --version` and `uv run python3 -m modal --version` both report
+`modal client version: 1.5.1`, and
+`uv run python3 scripts/modal_version_parity.py` passes.
 
-**The one rule that survived that episode** (full pattern: C4 in *Field-tested failure
-patterns* below): keep the **shell-global `modal` and the project venv on the SAME
-version**. A `--json` key-schema difference across 1.4/1.5 silently breaks any poller
-written against the other — verify `modal --version` == `uv run modal --version`.
+The old pre-1.5 freeze was superseded. The rule that survived the 1.4/1.5
+split incident is stricter and still current: keep the **shell-global
+`modal` and the project venv on the SAME version**. A `--json` key-schema
+difference across CLI planes silently breaks any poller written against the
+other. In this repo, verify:
+
+```bash
+modal --version
+uv run python3 -m modal --version
+uv run python3 scripts/modal_version_parity.py
+```
+
+Modal 1.5.x normalizes CLI JSON keys differently from the old 1.4.x output.
+Consumers should use the repo's normalizer where one exists and should still
+avoid raw `.get("App ID")` / `.get("app_id")` parsing.
 
 ## Workflow
 
@@ -124,7 +134,7 @@ Usual checks:
 
 See `references/attribution.md` for the reporting template.
 
-## Field-tested failure patterns (multi-stage DAG, v1.4.x)
+## Field-tested failure patterns (multi-stage DAG, Modal 1.4/1.5)
 
 Fundamental, recurring Modal-platform failure modes distilled from an 8-week
 many-stage DAG (IDs kept for cross-reference; full operational catalog incl. the
@@ -142,12 +152,11 @@ truths, not one project's bug list — they reappear on any large stage graph.
   watchdog that aborts a stalled call. A frozen log ≠ a hung process (rate-limit
   backoff mimics a deadlock for tens of seconds).
 - **C4 — a CLI version split silently breaks pollers.** `--json` key shape differs
-  across modal versions (1.5 lowercases + underscores every key). If the shell-global
-  `modal` and the project venv resolve to **different** versions, a poller written
-  against one reads keys ABSENT against the other — for minutes, while the app really
-  runs. Pin ONE version across both planes; assert `modal --version` ==
-  `uv run modal --version`. (This is why bare `modal …` in a shell and `uv run modal …`
-  must agree — a `uv tool upgrade` that bumps only the global re-opens the split.)
+  across Modal versions and CLI planes. If the shell-global `modal` and the project
+  venv resolve to **different** versions, a poller written against one reads keys
+  ABSENT against the other — for minutes, while the app really runs. Pin ONE version
+  across both planes; in genomics assert `modal --version` ==
+  `uv run python3 -m modal --version` and run `scripts/modal_version_parity.py`.
 - **C6 — an in-app retry crash-loop is invisible to an external control plane.**
   `@app.function(retries=N)` retries *inside* one app; an external DB/poller that keys
   on "app exists" sees a flat `running` for the entire crash-loop (observed: 69 min
@@ -392,8 +401,11 @@ d[key] = {"step": "mcmc_start", "last_heartbeat": time.time(), ...}
 
 Wrap reads in `try/except (modal.exception.AuthError, ConnectionError, KeyError)` — Dict is the live control plane, NOT the source of truth. JSONL on volume is the audit plane. One truth per axis; never write the same fact to both.
 
-### Identity API (v1.4.1, 2026-03)
-`modal.current_container_id` and `modal.current_app_id` do NOT exist on top-level `modal` and are NOT on `modal.functions` either. Use:
+### Identity API
+Do not trust memory for Modal runtime identity helpers; verify against the
+current client before adopting a new name. Historical probe on 1.4.1: top-level
+`modal.current_container_id` and `modal.current_app_id` did NOT exist and were
+not on `modal.functions` either. Known-safe fallbacks from that probe:
 
 - `modal.current_input_id()` — unique per `.map()` input (returns Optional[str], None locally)
 - `modal.current_function_call_id()` — app invocation identity
@@ -402,13 +414,24 @@ Wrap reads in `try/except (modal.exception.AuthError, ConnectionError, KeyError)
 ### Rule: budget monitoring before launch
 Check Modal Live Usage before launching anything significant. >85% = don't launch long jobs. There's no graceful budget-aware degradation; you hit the limit and everything dies.
 
-### Programmatic spend queries (v1.3.3+, Feb 2026)
-`modal.billing.workspace_billing_report(*, start: datetime, end: Optional[datetime] = None, resolution: str = 'd', tag_names: list[str] | None = None)` returns `list[dict]` with keys `{object_id, description, environment_name, interval_start, cost (Decimal), tags}` on SDK 1.4.1. CLI: `modal billing report --for today --json`.
+### Programmatic spend queries
+For current 1.5.x work, prefer the CLI surface unless you have live-probed the
+Python billing API shape in the active venv:
+`modal billing report --for today --json`.
+
+Historical 1.4.1 probe: `modal.billing.workspace_billing_report(*, start:
+datetime, end: Optional[datetime] = None, resolution: str = 'd', tag_names:
+list[str] | None = None)` returned `list[dict]` with keys `{object_id,
+description, environment_name, interval_start, cost (Decimal), tags}`. Treat
+that as historical evidence, not a current 1.5.x contract.
 
 Cloud billing APIs typically lag 5-15 min. A 60s watchdog poll + 90% threshold can still miss bursts that cross the cap before the poll. Pair polling (belt) with admission control at launch (suspenders).
 
 ### Budget defense: sidecar watchdog + halt flag
-The most reliable defense against budget kill is prevention: a separate daemon that polls `workspace_billing_report` and sets a halt flag in `modal.Dict` which every launch path reads before dispatching.
+The most reliable defense against budget kill is prevention: a separate daemon
+that polls a live-probed billing surface (CLI JSON or a verified Python API)
+and sets a halt flag in `modal.Dict` which every launch path reads before
+dispatching.
 
 ```python
 # Daemon (local process, not on Modal — it'd be killed by the event it detects):
@@ -462,7 +485,12 @@ On launch failure, also inspect the subprocess stderr for `ResourceExhausted` / 
 23. **Artifact file watchdogs are fooled by retry leftovers** -- if a subprocess times out with a 21GB file on ephemeral disk, the retry's new container starts fresh. If the watchdog runs before the retry subprocess touches the dir, it sees `annotation_mb=21793.4` but that's the OLD file from a DIFFERENT container (Modal cleans `/tmp` between retries... usually). Verify via timestamps, not presence.
 
 ### Testing preemption handling
-`modal.experimental.simulate_preemption` does NOT exist on SDK 1.4.1 (`ImportError` from `modal.experimental`). To force-test `@modal.exit()` handling, use `modal app stop <app-id>` mid-work — imperfect proxy because it fires the graceful-shutdown path but does NOT validate budget-kill behavior (which SIGKILLs with no handler run).
+Do not assume `modal.experimental.simulate_preemption` exists; probe the active
+SDK before building around it. Historical 1.4.1 probe: importing it from
+`modal.experimental` failed. To force-test `@modal.exit()` handling, use
+`modal app stop <app-id>` mid-work — imperfect proxy because it fires the
+graceful-shutdown path but does NOT validate budget-kill behavior (which
+SIGKILLs with no handler run).
 
 ## MANDATORY: Test Before Deploying
 
