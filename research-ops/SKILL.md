@@ -52,7 +52,7 @@ Two lanes split by the **verifier boundary** (constitution: verifier-conditioned
 **`/schedule` is a CLOUD agent, not a local scheduler.** It clones one GitHub repo into a sandbox and cannot see local files, the local `queue/`, `ledger.db`, `gather-cycle-state.sh`, MCP state, or env. Its "prompt" is just `job_config.ccr.events[0].data.message.content` (a string — you can put `/research-ops cycle` there), but the skill and the project state must live *inside the cloned repo* for that to resolve. So:
 
 - **Local project with local state (hutter — no GitHub remote):** `/schedule` literally cannot reach it. Use **launchd** (zero-quota, local) or `/loop`.
-- **GitHub-resident project, skill committed into that repo, repo-native work:** `/schedule` fits. Default cloud model is `claude-sonnet-4-6`; request Opus if the generation warrants it.
+- **GitHub-resident project, skill committed into that repo, repo-native work:** `/schedule` fits. Default cloud model is `claude-sonnet-5` (bumped 2026-06-30 from `claude-sonnet-4-6` — same cheap-default-with-Opus-escalation design, newer model); request Opus if the generation warrants it.
 
 `/loop` is for babysitting an open session. The old "run all six phases unsupervised on `/loop 15m`" design is **retired** — it needed a babysat session *and* auto-executed unverified work (worst of both), which is why every project's CYCLE.md went stale.
 
