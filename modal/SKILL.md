@@ -1,7 +1,6 @@
 ---
 name: modal
 description: "Use when: Modal deploy/run/debug, GPU/resource config, `from modal import`. v1 API gotchas. NOT generic cloud (/bash only)."
-effort: low
 ---
 
 # Modal (operate on 1.5.x with CLI/venv parity)
@@ -35,6 +34,37 @@ uv run python3 scripts/modal_version_parity.py
 Modal 1.5.x normalizes CLI JSON keys differently from the old 1.4.x output.
 Consumers should use the repo's normalizer where one exists and should still
 avoid raw `.get("App ID")` / `.get("app_id")` parsing.
+
+## Modal 1.5.1 Features: How Genomics Should Use Them
+
+Verified against `modal changelog --since 1.4.9` on 2026-06-30.
+
+| Feature | Use in genomics | Do not use for |
+|---|---|---|
+| `modal.Workspace.billing.report()` / `modal.Environment.billing.report()` and `modal billing report --show-resources` | Stage telemetry and budget admission. Join rows by `run_id`, `stage`, `attempt_id`; keep CPU, memory, and GPU resource breakdown separate from planning projections. Environment-scoped reports are useful if genomics gets its own Modal environment. | Completion, liveness, or substituting missing billing with `$0`. |
+| Named Images: `Image.publish()`, `Image.from_name()` | Canonical stage images (`genomics/base`, `genomics/deepvariant`, etc.) so many one-stage Apps stop rebuilding divergent images. Pin names/tags in stage metadata and fail loud on missing image. | Implicit build fallback. `Image.from_name()` is a lookup, not a builder. |
+| `Image.from_id(...).publish()` | Promote a known-good build ID after a probe/canary without rebuilding. Useful for overnight stage-image rollouts. | Re-publishing unverified images or hiding changed dependencies behind the same tag. |
+| Version-pinned `Function.from_name(..., version=...)` / `Cls.from_name(..., version=...)` | Deployed helper functions or a future long-lived controller can call a consistent deployed version during one run. Store the version in the run manifest. | Ephemeral one-stage `just dispatch` apps unless they are first deployed and versioned. |
+| `@app.server()` / `modal.Server` | Low-latency HTTP diagnostics or a future status/control endpoint with proxy-token auth. Could serve read-only progress/status without cold-starting a CLI. | Batch WGS stages. Stages remain `@app.function`/`@app.cls` jobs with receipts. |
+| `modal endpoint` | Production LLM inference endpoints, if a future interpretation model needs a served endpoint. | The pipeline controller itself; do not add an endpoint just to avoid receipts. |
+| Proxy tokens + `modal curl` | Authenticated checks against future Modal Servers/Endpoints without manually handling headers. Keep tokens out of logs. | Stage identity or sample authorization inside batch jobs. |
+| Sandbox `outbound_domain_allowlist=[...]` | Network-restricted probes, external-tool canaries, and testsample/fake-DAG sandboxes where only declared domains should be reachable. | Normal WGS stages that need broad DB/reference access unless the allowlist is complete. |
+| `sandbox.filesystem.watch()` | Fast feedback from sandbox-based experiments: watch log/result files without polling whole directories. | Volume receipt completion; still write terminal receipts and payload summaries. |
+| Sandbox connect tokens scoped by `port=` | Safer interactive debugging of a known service port in a Sandbox. | Long-running production control-plane auth. |
+| `modal app rollback --strategy rolling|recreate` | Deployed diagnostic/status services. Prefer `recreate` only when stale containers are unsafe. | Ephemeral per-stage apps; stop/reconcile via run identity instead. |
+| `modal workspace members` | Operator/audit check for who can see or mutate the workspace. | Pipeline readiness or sample completion. |
+
+Adoption order for this repo:
+
+1. **Billing first:** migrate `stage-telemetry` internals to the 1.5.1
+   Workspace/Environment billing APIs or `modal billing report --show-resources`,
+   then keep projections visibly separate.
+2. **Named images second:** publish canonical, tagged images for high-churn stage
+   families and make stage specs reference tags explicitly.
+3. **Version-pinned functions third:** only for deployed helper/controller
+   surfaces where a run needs one stable function version.
+4. **Servers/endpoints only if needed:** useful for a read-only status plane, not
+   for replacing batch-stage receipts.
 
 ## Workflow
 
@@ -421,15 +451,22 @@ not on `modal.functions` either. Known-safe fallbacks from that probe:
 Check Modal Live Usage before launching anything significant. >85% = don't launch long jobs. There's no graceful budget-aware degradation; you hit the limit and everything dies.
 
 ### Programmatic spend queries
-For current 1.5.x work, prefer the CLI surface unless you have live-probed the
-Python billing API shape in the active venv:
-`modal billing report --for today --json`.
+For current 1.5.1 work, prefer the new Workspace/Environment billing API or its
+CLI frontend. The CLI check is:
 
-Historical 1.4.1 probe: `modal.billing.workspace_billing_report(*, start:
-datetime, end: Optional[datetime] = None, resolution: str = 'd', tag_names:
-list[str] | None = None)` returned `list[dict]` with keys `{object_id,
-description, environment_name, interval_start, cost (Decimal), tags}`. Treat
-that as historical evidence, not a current 1.5.x contract.
+```bash
+modal billing report --for today --json --show-resources --tag-names run_id,stage,attempt_id
+modal environment billing report <environment> --for today --json --show-resources --tag-names run_id,stage,attempt_id
+```
+
+The Python-side replacement for the old workspace API is:
+`modal.Workspace().billing.report(...)` or
+`modal.Environment.from_name(...).billing.report(...)` after probing the active
+SDK shape. These reports include resource-level cost breakdowns (CPU, memory,
+specific GPU types), which stage telemetry should preserve.
+
+Deprecated historical surface: `modal.billing.workspace_billing_report(...)`.
+Do not build new code on it.
 
 Cloud billing APIs typically lag 5-15 min. A 60s watchdog poll + 90% threshold can still miss bursts that cross the cap before the poll. Pair polling (belt) with admission control at launch (suspenders).
 
