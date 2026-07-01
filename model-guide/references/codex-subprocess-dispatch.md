@@ -70,6 +70,15 @@ conflict) — only worktree-isolate when they mutate *shared* files.
   *after* the work completed — ignore it.
 - **Subprocess writes aren't in the session ledger.** The Stop hook flags worker-written files as
   "written by a subprocess … did not auto-commit." Expected — commit them explicitly.
+- **A repo's pre-commit ownership guard can BLOCK the parent from committing codex output.**
+  genomics `staged_ownership_guard.py` fires `BLOCKED: … owned by another live Claude session` on
+  a codex-written file — the worker writes its session-touch tracker under its OWN session id (not
+  the parent's), and the guard keys on tracker-mtime recency (30-min grace), *not* process
+  liveness, so it blocks even after the worker has exited (verified 2026-07-01). Fix: BEFORE
+  committing, pre-register the worker's output paths in a write-intent tracker for YOUR session —
+  `printf '%s\n' docs/…/a.md docs/…/b.md > /tmp/claude-write-intent-$CLAUDE_SESSION_ID-wave.txt` —
+  the guard's `_own_tracker_files` globs `claude-write-intent-<your-sid>*.txt` and treats those
+  paths as yours. Do this at dispatch time (paths are known up front) so the commit is frictionless.
 - **llmx is NOT the vehicle for codex research.** `llmx chat --mode` accepts only `chat|agent`
   (no `research` mode); `--lite research` is a dead alias. Route research through `codex exec`
   directly. `llmx --subscription` is still fine for *tool-less* GPT-5.5 chat.
