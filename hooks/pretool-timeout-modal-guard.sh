@@ -38,6 +38,14 @@ if not cmd:
 if not re.search(r"\btimeout\s+(?:-[ksv]\S*\s+)*\d+[smhd]?\b", cmd):
     sys.exit(0)
 
+# EXEMPTION: log STREAMS (`modal app logs`, `modal container logs`) are the one modal
+# case where `timeout` is CORRECT, not destructive — they follow forever and have no
+# partial crawl state to waste, so SIGTERM at the deadline just ends a bounded tail. The
+# streaming-cli-guard even REQUIRES a timeout on them; blocking it here left log
+# inspection with no legal form (both guards firing). Exempt and fail open.
+if re.search(r"\bmodal\s+(?:app|container)\s+logs\b", cmd):
+    sys.exit(0)
+
 # Modal/volume-crawl signatures: the live-Modal `just` recipes + raw modal CLI
 # crawls + the orchestrator subcommands. These do volume.reload / 258-stage
 # ledger crawls / detached launches that a timeout truncates destructively.
