@@ -392,6 +392,24 @@ if [ -n "$PROMPT" ]; then
     fi
 fi
 
+# Check 12: Research-path output must carry canonical bracketed provenance tags from the
+# FIRST write (the stub included). 2026-07-02 arc-agi: 4 consecutive stop-research-gate
+# blocks on subagent-written research/*.md — the dispatch briefs taught a prose
+# "**Provenance:**" convention the gate's taxonomy (provenance_tags.re, SSOT) never
+# accepted, so every stub landed untagged and blocked the PARENT's Stop. Inject, don't
+# warn (Check 7/10 ergonomic pattern): the subagent gets the requirement verbatim.
+if [ -n "$PROMPT" ] && echo "$PROMPT" | grep -qE '(^|[ `"'"'"'(=])research/[A-Za-z0-9_./-]*\.md'; then
+    TAG_RE=$(cat "$HOME/Projects/skills/hooks/provenance_tags.re" 2>/dev/null || printf '%s' '\[DATA\]|\[INFERENCE\]|\[SOURCE:')
+    if ! echo "$PROMPT" | grep -qE "$TAG_RE"; then
+        ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "inject" "check=12 research-tags" 2>/dev/null || true
+        RTAG_INJECT="PROVENANCE TAGS (auto-added): every file you write under research/ must carry bracketed provenance tags from its FIRST write, the stub included — e.g. a header line combining [DATA] (empirical evidence: logs, traces, measurements), [INFERENCE] (your analysis/verdicts), [SOURCE: url], [FRONTIER]/[PREPRINT] (papers), [UNVERIFIED]. A prose 'Provenance:' line without bracketed tags does NOT satisfy the repo's research gate and will block the session."
+        if [ -z "$INJECT_SUFFIX" ]; then INJECT_SUFFIX="$RTAG_INJECT"; else INJECT_SUFFIX="$INJECT_SUFFIX
+
+$RTAG_INJECT"; fi
+        CHECK_IDS="${CHECK_IDS}12,"
+    fi
+fi
+
 # Check 9: Inject write_json_atomic guidance for genomics project agents
 # Agents consistently use json.dump(…, fh) which fails the ratchet test.
 # 3/3 measurement agents in 2026-04-05 session needed post-hoc fixes.
