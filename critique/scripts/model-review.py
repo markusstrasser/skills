@@ -547,6 +547,7 @@ def write_structural_assumptions_artifact(review_dir: Path, assumptions: list[st
     )
     return path
 
+
 # Presets map a single name to a list of axes.
 # `claude` (Opus 4.8, $0 subscription), `composer` (Cursor Composer 2.5,
 # metered Cursor pool — "sub" but not free), and `glm` (Z.ai GLM-5.2, metered
@@ -618,6 +619,12 @@ End with a fenced JSON block (voi-scout.json shape):
 """
 
 PARALLEL_DISPATCH_WAIT_DEFAULT = 720.0
+# Grace absorbed by can_start() so a budget sized EQUAL to an axis timeout (the common
+# `review_gate triage` case: budget 600s, deep_review/gpt_general resolve to 600s) does
+# not spuriously skip every axis on the sub-second setup elapsed since from_seconds().
+# The axis's own _call_llmx timeout still bounds the call, so a start up to this much
+# short of the full profile timeout only risks a budget kill that same margin early.
+_START_GRACE_SECONDS = 45.0
 DISPATCH_SCHEMA_VERSION = "dispatch.v1"
 EXECUTION_RECEIPT_SCHEMA_VERSION = "execution-receipt.v1"
 SUPPORTED_DISPATCH_SCHEMAS = frozenset({DISPATCH_SCHEMA_VERSION})
@@ -650,11 +657,13 @@ class DispatchBudget:
         return max(0.0, self.deadline_mono - time.monotonic())
 
     def can_start(self, profile_timeout: int) -> bool:
-        """Start only if the full profile timeout fits in remaining budget."""
+        """Start if the full profile timeout (minus a small setup grace) fits in
+        remaining budget. The grace prevents an all-axes skip when the budget was
+        sized equal to the axis timeout — see _START_GRACE_SECONDS."""
         rem = self.remaining()
         if rem is None:
             return True
-        return rem >= profile_timeout
+        return rem >= profile_timeout - _START_GRACE_SECONDS
 
     def wait_timeout(self, default: float = PARALLEL_DISPATCH_WAIT_DEFAULT) -> float:
         rem = self.remaining()
@@ -755,9 +764,7 @@ def _manifest_matches_packet(manifest_path: Path, context_path: Path | None) -> 
                 sidecar_data = json.loads(sidecar.read_text())
             except (OSError, ValueError):
                 sidecar_data = {}
-            actual = sidecar_data.get("payload_hash") or sidecar_data.get(
-                "rendered_content_hash"
-            )
+            actual = sidecar_data.get("payload_hash") or sidecar_data.get("rendered_content_hash")
             if actual:
                 return actual == expected_hash
     # No usable content hash → bind on the recorded packet path.
@@ -863,6 +870,7 @@ def build_effective_policy(args: argparse.Namespace) -> dict:
         "extract": bool(args.extract),
         "verify": bool(args.verify),
     }
+
 
 # Primary Gemini critique axis
 GEMINI_PRIMARY_MODEL = dispatch_core.PROFILES["deep_review"].model
@@ -1131,9 +1139,7 @@ def resolve_axes(raw_axes: str, *, allow_non_gpt: bool = False) -> list[str]:
         seen: set[str] = set()
         axis_names = [axis for axis in axis_names if not (axis in seen or seen.add(axis))]
 
-    if not allow_non_gpt and not any(
-        axis_uses_gpt(axis_name) for axis_name in axis_names
-    ):
+    if not allow_non_gpt and not any(axis_uses_gpt(axis_name) for axis_name in axis_names):
         raise ValueError(
             "review requires at least one GPT-backed axis; add `formal` or use `standard`, `deep`, or `full`"
         )
@@ -1261,9 +1267,7 @@ def _call_llmx(
             if key in kwargs and kwargs[key] is not None:
                 override_payload[key] = kwargs[key]
         overrides = (
-            dispatch_core.DispatchOverrides(**override_payload)
-            if override_payload
-            else None
+            dispatch_core.DispatchOverrides(**override_payload) if override_payload else None
         )
         result = dispatch_core.dispatch(
             profile=profile,
@@ -1317,9 +1321,7 @@ def collect_dispatch_failures(
             continue
         entry = dict(info)
         entry["axis"] = axis
-        entry["context"] = (
-            str(context_content_path(ctx_files[axis])) if axis in ctx_files else ""
-        )
+        entry["context"] = str(context_content_path(ctx_files[axis])) if axis in ctx_files else ""
         entry["failure_reason"] = (
             "nonzero_exit" if int(entry.get("exit_code", 0)) != 0 else "empty_output"
         )
@@ -1417,9 +1419,7 @@ def rerun_gpt_axis_via_subscription(
             "exit_code": 0 if ok else 1,
             "size": size,
             "latency": 0,
-            "error": None
-            if ok
-            else (r.stderr or "subscription retry produced no output")[:500],
+            "error": None if ok else (r.stderr or "subscription retry produced no output")[:500],
         }
     except Exception as e:  # noqa: BLE001 — fallback must never raise into the axis loop
         return {
@@ -1456,8 +1456,7 @@ def rerun_extraction_via_subscription(
         file=sys.stderr,
     )
     sub_prompt = (
-        prompt
-        + "\n\nReturn ONLY a JSON object of the form {\"findings\": [ ... ]} with no "
+        prompt + '\n\nReturn ONLY a JSON object of the form {"findings": [ ... ]} with no '
         "prose and no markdown fences."
     )
     cmd = [
@@ -1553,9 +1552,7 @@ def build_context(
         file_blocks = []
         for spec_text in context_file_specs:
             spec = parse_file_spec(spec_text.strip())
-            excerpt, truncated, omission_reason = read_file_excerpt(
-                spec, max_chars=None
-            )
+            excerpt, truncated, omission_reason = read_file_excerpt(spec, max_chars=None)
             metadata: dict[str, object] = {}
             if omission_reason:
                 metadata["omission_reason"] = omission_reason
@@ -1584,9 +1581,7 @@ def build_context(
     token_limits = [
         dispatch_core.profile_input_budget(AXES[axis]["profile"])["input_token_limit"]
         for axis in axis_names
-        if dispatch_core.profile_input_budget(AXES[axis]["profile"])[
-            "input_token_limit"
-        ]
+        if dispatch_core.profile_input_budget(AXES[axis]["profile"])["input_token_limit"]
         is not None
     ]
     budget_limit = (
@@ -1759,9 +1754,7 @@ def dispatch(
         "axes": axis_names,
         "queries": len(axis_names),
     }
-    wait_timeout = (
-        budget.wait_timeout() if budget is not None else PARALLEL_DISPATCH_WAIT_DEFAULT
-    )
+    wait_timeout = budget.wait_timeout() if budget is not None else PARALLEL_DISPATCH_WAIT_DEFAULT
     with ThreadPoolExecutor(max_workers=len(axis_names)) as pool:
         futures = {pool.submit(_run_axis, axis): axis for axis in axis_names}
         try:
@@ -1774,12 +1767,8 @@ def dispatch(
                 if axis not in results:
                     results[axis] = {
                         "label": AXES[axis]["label"],
-                        "requested_model": dispatch_core.PROFILES[
-                            str(AXES[axis]["profile"])
-                        ].model,
-                        "model": dispatch_core.PROFILES[
-                            str(AXES[axis]["profile"])
-                        ].model,
+                        "requested_model": dispatch_core.PROFILES[str(AXES[axis]["profile"])].model,
+                        "model": dispatch_core.PROFILES[str(AXES[axis]["profile"])].model,
                         "exit_code": 1,
                         "output": str(review_dir / f"{axis}-output.md"),
                         "size": 0,
@@ -1956,9 +1945,7 @@ def write_coverage_artifact(
 
     if dispatch_result is not None:
         requested_axes = [
-            str(axis)
-            for axis in dispatch_result.get("axes", [])
-            if isinstance(axis, str)
+            str(axis) for axis in dispatch_result.get("axes", []) if isinstance(axis, str)
         ]
         if not requested_axes:
             requested_axes = [
@@ -2026,16 +2013,10 @@ def write_coverage_artifact(
             "elapsed_seconds": dispatch_result.get("elapsed_seconds"),
         }
 
-    if (
-        extraction_tasks is not None
-        or axis_findings is not None
-        or merged_findings is not None
-    ):
+    if extraction_tasks is not None or axis_findings is not None or merged_findings is not None:
         usable_axes = [axis for axis, _, _ in (extraction_tasks or [])]
         usable_axis_count = len(usable_axes)
-        findings_before_dedup = sum(
-            len(findings) for findings in (axis_findings or {}).values()
-        )
+        findings_before_dedup = sum(len(findings) for findings in (axis_findings or {}).values())
         payload["extraction"] = {
             "enabled": True,
             "usable_axes": usable_axes,
@@ -2231,9 +2212,7 @@ def extract_claims(
     # Merge findings across axes — keyword overlap for cross-model dedup
     def _fingerprint(f: dict) -> set[str]:
         """Extract significant keywords for fuzzy matching."""
-        text = (
-            f"{f.get('title', '')} {f.get('file', '')} {f.get('description', '')[:200]}"
-        )
+        text = f"{f.get('title', '')} {f.get('file', '')} {f.get('description', '')[:200]}"
         words = set(re.findall(r"[a-z_]{4,}", text.lower()))
         # Remove common stop-words that inflate false matches
         words -= {
@@ -2272,9 +2251,7 @@ def extract_claims(
                 ):
                     existing.setdefault("also_found_by", []).append(source_label)
                     existing["cross_model"] = True
-                    existing["confidence"] = min(
-                        1.0, existing.get("confidence", 0.5) + 0.2
-                    )
+                    existing["confidence"] = min(1.0, existing.get("confidence", 0.5) + 0.2)
                     matched = True
                     break
             if not matched:
@@ -2297,9 +2274,7 @@ def extract_claims(
 
     # Write structured JSON
     structured_path = review_dir / "findings.json"
-    structured_path.write_text(
-        json.dumps({"findings": merged_findings}, indent=2) + "\n"
-    )
+    structured_path.write_text(json.dumps({"findings": merged_findings}, indent=2) + "\n")
 
     # Write human-readable disposition
     extractions: list[str] = []
@@ -2542,8 +2517,7 @@ def verify_claims(
     def _is_cruft(p: Path) -> bool:
         s = p.as_posix()
         return any(
-            f"/{d}/" in s or s.endswith(f"/{d}") or s.startswith(f"{d}/")
-            for d in _CRUFT_DIRS
+            f"/{d}/" in s or s.endswith(f"/{d}") or s.startswith(f"{d}/") for d in _CRUFT_DIRS
         )
 
     def _filtered_rglob(pattern: str, root: Path | None = None) -> list[Path]:
@@ -2602,9 +2576,7 @@ def verify_claims(
         # No direct hit — try extension-swap aliases before declaring missing.
         suffix = Path(filepath).suffix
         for alt_ext in _FUZZY_EXT_ALIASES.get(suffix, ()):
-            alt_filepath = (
-                filepath[: -len(suffix)] + alt_ext if suffix else filepath + alt_ext
-            )
+            alt_filepath = filepath[: -len(suffix)] + alt_ext if suffix else filepath + alt_ext
             alt_exact = project_dir / alt_filepath
             if alt_exact.exists():
                 return "exact_extswap", alt_exact, alt_filepath
@@ -2653,9 +2625,7 @@ def verify_claims(
                         if _is_cruft(p):
                             continue
                         try:
-                            if def_re.search(
-                                p.read_text(encoding="utf-8", errors="ignore")
-                            ):
+                            if def_re.search(p.read_text(encoding="utf-8", errors="ignore")):
                                 sym_hits.append(p)
                         except OSError:
                             continue
@@ -2669,9 +2639,7 @@ def verify_claims(
 
         return "missing", None, filepath
 
-    claims: list[dict[str, object]] = (
-        _parse_structured_claims() or _parse_disposition_claims()
-    )
+    claims: list[dict[str, object]] = _parse_structured_claims() or _parse_disposition_claims()
 
     if not claims:
         print("No numbered claims found in disposition.", file=sys.stderr)
@@ -2689,9 +2657,7 @@ def verify_claims(
         structured_line = int(claim.get("line", 0) or 0)
         file_refs = []
         if structured_file:
-            file_refs.append(
-                (structured_file, str(structured_line) if structured_line > 0 else "")
-            )
+            file_refs.append((structured_file, str(structured_line) if structured_line > 0 else ""))
         file_refs.extend(
             re.findall(
                 r"`?([a-zA-Z_][\w/.-]*\.(?:py|js|ts|md|sh|json|yaml|yml|toml|cfg|sql|html|css|clj|cljc|edn))(?::(\d+))?`?",
@@ -2747,9 +2713,7 @@ def verify_claims(
 
         anchor_confirmed = False
         line_corrected = False
-        ambiguous_ref = any(
-            resolution == "ambiguous" for resolution, _, _ in reference_results
-        )
+        ambiguous_ref = any(resolution == "ambiguous" for resolution, _, _ in reference_results)
         for resolution, found_path, line_str in reference_results:
             if resolution in {"ambiguous", "binary"}:
                 continue
@@ -2789,9 +2753,7 @@ def verify_claims(
                     start = max(0, line_num - 4)
                     end = min(len(file_lines), line_num + 3)
                     window = "\n".join(file_lines[start:end]).lower()
-                    matched = [
-                        anchor for anchor in claim_anchors if anchor.lower() in window
-                    ]
+                    matched = [anchor for anchor in claim_anchors if anchor.lower() in window]
                     if matched:
                         anchor_confirmed = True
                         notes.append(
@@ -2801,16 +2763,10 @@ def verify_claims(
                         notes.append(f"{relative_display}:{line_num} readable")
             else:
                 file_text_lower = file_text.lower()
-                matched = [
-                    anchor
-                    for anchor in claim_anchors
-                    if anchor.lower() in file_text_lower
-                ]
+                matched = [anchor for anchor in claim_anchors if anchor.lower() in file_text_lower]
                 if matched:
                     anchor_confirmed = True
-                    notes.append(
-                        f"{relative_display} anchors {', '.join(sorted(set(matched)))}"
-                    )
+                    notes.append(f"{relative_display} anchors {', '.join(sorted(set(matched)))}")
                 else:
                     notes.append(f"{relative_display} exists")
 
@@ -2840,9 +2796,7 @@ def verify_claims(
         "hallucinated_count": hallucinated,
         "inconclusive_count": inconclusive,
         "unverifiable_count": inconclusive,
-        "hallucination_rate": round(hallucinated / len(verified), 3)
-        if verified
-        else 0.0,
+        "hallucination_rate": round(hallucinated / len(verified), 3) if verified else 0.0,
     }
 
     # Write verified disposition
@@ -2861,9 +2815,7 @@ def verify_claims(
     for v in verified:
         claim_text = str(v["text"])
         claim_short = claim_text[:80] + ("..." if len(claim_text) > 80 else "")
-        lines_out.append(
-            f"| {v['num']} | {v['verdict']} | {claim_short} | {v.get('notes', '')} |"
-        )
+        lines_out.append(f"| {v['num']} | {v['verdict']} | {claim_short} | {v.get('notes', '')} |")
     lines_out.append("")
 
     out_path.write_text("\n".join(lines_out) + "\n")
@@ -3330,8 +3282,7 @@ def main() -> int:
     receipt = json.loads(receipt_path.read_text())
     if receipt["overall"] != "complete":
         print(
-            f"error: dispatch incomplete (overall={receipt['overall']}); "
-            f"see {receipt_path}",
+            f"error: dispatch incomplete (overall={receipt['overall']}); see {receipt_path}",
             file=sys.stderr,
         )
     if scout_result and scout_result.json_path:
@@ -3375,9 +3326,7 @@ def main() -> int:
                     sibling_roots=args.sibling_roots,
                 )
                 result["verified_disposition"] = verified_path
-                print(
-                    f"Verified disposition written to {verified_path}", file=sys.stderr
-                )
+                print(f"Verified disposition written to {verified_path}", file=sys.stderr)
 
     print(json.dumps(result, indent=2))
 
