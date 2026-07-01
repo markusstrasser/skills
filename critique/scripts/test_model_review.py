@@ -20,8 +20,9 @@ SPEC.loader.exec_module(model_review)
 
 @contextlib.contextmanager
 def patched_llmx_chat(mock_chat):
-    with patch.object(model_review.dispatch_core, "_LLMX_CHAT", mock_chat), patch.object(
-        model_review.dispatch_core, "_LLMX_VERSION", "test"
+    with (
+        patch.object(model_review.dispatch_core, "_LLMX_CHAT", mock_chat),
+        patch.object(model_review.dispatch_core, "_LLMX_VERSION", "test"),
     ):
         yield
 
@@ -124,25 +125,54 @@ class ModelReviewDispatchTest(unittest.TestCase):
 
     def test_fingerprint_merge_detects_similar_findings(self) -> None:
         """The Jaccard keyword merge should detect findings about the same issue."""
-        f1 = {"title": "Missing null check in parse_config", "file": "config.py",
-               "description": "parse_config does not handle None input", "confidence": 0.8,
-               "category": "bug", "severity": "high", "fix": "add guard", "line": 0}
-        f2 = {"title": "parse_config crashes on null input", "file": "config.py",
-               "description": "Null input causes AttributeError in parse_config", "confidence": 0.7,
-               "category": "bug", "severity": "high", "fix": "validate input", "line": 0}
+        f1 = {
+            "title": "Missing null check in parse_config",
+            "file": "config.py",
+            "description": "parse_config does not handle None input",
+            "confidence": 0.8,
+            "category": "bug",
+            "severity": "high",
+            "fix": "add guard",
+            "line": 0,
+        }
+        f2 = {
+            "title": "parse_config crashes on null input",
+            "file": "config.py",
+            "description": "Null input causes AttributeError in parse_config",
+            "confidence": 0.7,
+            "category": "bug",
+            "severity": "high",
+            "fix": "validate input",
+            "line": 0,
+        }
         # Simulate what extract_claims merge does
         import re
+
         def _fp(f):
             text = f"{f.get('title', '')} {f.get('file', '')} {f.get('description', '')[:200]}"
             words = set(re.findall(r"[a-z_]{4,}", text.lower()))
-            words -= {"this", "that", "with", "from", "should", "could", "would", "does", "have", "will", "also", "been"}
+            words -= {
+                "this",
+                "that",
+                "with",
+                "from",
+                "should",
+                "could",
+                "would",
+                "does",
+                "have",
+                "will",
+                "also",
+                "been",
+            }
             return words
 
         fp1, fp2 = _fp(f1), _fp(f2)
         jaccard = len(fp1 & fp2) / len(fp1 | fp2)
         threshold = model_review.CROSS_MODEL_JACCARD_THRESHOLD
         self.assertGreater(
-            jaccard, threshold,
+            jaccard,
+            threshold,
             f"Expected Jaccard > {threshold} (production merge threshold), got {jaccard:.2f}",
         )
 
@@ -202,8 +232,11 @@ class CallLlmxTest(unittest.TestCase):
             out = Path(td) / "out.md"
             with patched_llmx_chat(exploding_chat):
                 result = model_review._call_llmx(
-                    provider="google", model="gemini-3.5-flash",
-                    context_path=ctx, prompt="test", output_path=out,
+                    provider="google",
+                    model="gemini-3.5-flash",
+                    context_path=ctx,
+                    prompt="test",
+                    output_path=out,
                     timeout=10,
                 )
         self.assertEqual(result["exit_code"], 1)
@@ -212,6 +245,7 @@ class CallLlmxTest(unittest.TestCase):
 
     def test_call_llmx_passes_schema_for_openai(self) -> None:
         captured = {}
+
         def capture_chat(**kwargs):
             captured.update(kwargs)
             resp = MagicMock()
@@ -225,9 +259,13 @@ class CallLlmxTest(unittest.TestCase):
             out = Path(td) / "out.md"
             with patched_llmx_chat(capture_chat):
                 model_review._call_llmx(
-                    provider="openai", model="gpt-5.5",
-                    context_path=ctx, prompt="test", output_path=out,
-                    schema=model_review.FINDING_SCHEMA, timeout=10,
+                    provider="openai",
+                    model="gpt-5.5",
+                    context_path=ctx,
+                    prompt="test",
+                    output_path=out,
+                    schema=model_review.FINDING_SCHEMA,
+                    timeout=10,
                 )
         # Should have additionalProperties added for OpenAI
         fmt = captured.get("response_format", {})
@@ -235,6 +273,7 @@ class CallLlmxTest(unittest.TestCase):
 
     def test_call_llmx_strips_schema_for_google(self) -> None:
         captured = {}
+
         def capture_chat(**kwargs):
             captured.update(kwargs)
             resp = MagicMock()
@@ -248,8 +287,11 @@ class CallLlmxTest(unittest.TestCase):
             out = Path(td) / "out.md"
             with patched_llmx_chat(capture_chat):
                 model_review._call_llmx(
-                    provider="google", model="gemini-3.5-flash",
-                    context_path=ctx, prompt="test", output_path=out,
+                    provider="google",
+                    model="gemini-3.5-flash",
+                    context_path=ctx,
+                    prompt="test",
+                    output_path=out,
                     schema={"type": "object", "additionalProperties": False, "properties": {}},
                     timeout=10,
                 )
@@ -259,6 +301,7 @@ class CallLlmxTest(unittest.TestCase):
     def test_call_llmx_honors_cli_transport_for_composer(self) -> None:
         """CLI-transport profiles must keep auth=subscription from the profile."""
         captured = {}
+
         def capture_chat(**kwargs):
             captured.update(kwargs)
             resp = MagicMock()
@@ -272,18 +315,23 @@ class CallLlmxTest(unittest.TestCase):
             out = Path(td) / "out.md"
             with patched_llmx_chat(capture_chat):
                 model_review._call_llmx(
-                    provider="cursor", model="composer-2.5",
-                    context_path=ctx, prompt="test", output_path=out,
+                    provider="cursor",
+                    model="composer-2.5",
+                    context_path=ctx,
+                    prompt="test",
+                    output_path=out,
                     timeout=10,
                 )
         self.assertEqual(captured.get("provider"), "cursor")
-        self.assertEqual(captured.get("auth"), "subscription",
-                         "composer must use profile auth=subscription")
+        self.assertEqual(
+            captured.get("auth"), "subscription", "composer must use profile auth=subscription"
+        )
         self.assertEqual(captured.get("mode"), "chat")
 
     def test_call_llmx_keeps_api_auth_for_api_profiles(self) -> None:
         """API-backed profiles keep auth=api (skip CLI fallback latency)."""
         captured = {}
+
         def capture_chat(**kwargs):
             captured.update(kwargs)
             resp = MagicMock()
@@ -297,17 +345,20 @@ class CallLlmxTest(unittest.TestCase):
             out = Path(td) / "out.md"
             with patched_llmx_chat(capture_chat):
                 model_review._call_llmx(
-                    provider="openai", model="gpt-5.5",
-                    context_path=ctx, prompt="test", output_path=out,
+                    provider="openai",
+                    model="gpt-5.5",
+                    context_path=ctx,
+                    prompt="test",
+                    output_path=out,
                     timeout=10,
                 )
-        self.assertEqual(captured.get("auth"), "api",
-                        "API profiles must keep auth=api")
+        self.assertEqual(captured.get("auth"), "api", "API profiles must keep auth=api")
         self.assertEqual(captured.get("mode"), "chat")
 
     def test_call_llmx_honors_cli_transport_for_claude(self) -> None:
         """claude_review must route via auth=subscription, not metered API."""
         captured = {}
+
         def capture_chat(**kwargs):
             captured.update(kwargs)
             resp = MagicMock()
@@ -321,13 +372,17 @@ class CallLlmxTest(unittest.TestCase):
             out = Path(td) / "out.md"
             with patched_llmx_chat(capture_chat):
                 model_review._call_llmx(
-                    provider="anthropic", model="claude-opus-4-8",
-                    context_path=ctx, prompt="test", output_path=out,
+                    provider="anthropic",
+                    model="claude-opus-4-8",
+                    context_path=ctx,
+                    prompt="test",
+                    output_path=out,
                     timeout=10,
                 )
         self.assertEqual(captured.get("provider"), "anthropic")
-        self.assertEqual(captured.get("auth"), "subscription",
-                         "claude must use profile auth=subscription")
+        self.assertEqual(
+            captured.get("auth"), "subscription", "claude must use profile auth=subscription"
+        )
         self.assertEqual(captured.get("mode"), "chat")
 
 
@@ -343,7 +398,9 @@ class AxisResolutionTest(unittest.TestCase):
             axes,
             ["arch", "gaps", "correctness", "contracts", "formal"],
         )
-        self.assertEqual(model_review.resolve_axes("cross2,formal"), ["arch", "correctness", "formal"])
+        self.assertEqual(
+            model_review.resolve_axes("cross2,formal"), ["arch", "correctness", "formal"]
+        )
 
     def test_cross2_preset_diagonal(self) -> None:
         axes = model_review.resolve_axes("cross2")
@@ -524,7 +581,12 @@ class ExtractionCoverageTest(unittest.TestCase):
                         ]
                     }
                 output_path.write_text(json.dumps(payload))
-                return {"exit_code": 0, "size": output_path.stat().st_size, "latency": 0.1, "error": None}
+                return {
+                    "exit_code": 0,
+                    "size": output_path.stat().st_size,
+                    "latency": 0.1,
+                    "error": None,
+                }
 
             with patch.object(model_review, "_call_llmx", side_effect=mock_call_llmx):
                 disposition_path = model_review.extract_claims(review_dir, dispatch_result)
@@ -538,7 +600,9 @@ class ExtractionCoverageTest(unittest.TestCase):
             self.assertEqual(coverage["dispatch"]["requested_axis_count"], 2)
             self.assertEqual(coverage["dispatch"]["axes"][1]["model"], "gpt-5.5")
             self.assertEqual(coverage["context_packet"]["payload_hash"], "payload-hash")
-            self.assertEqual(coverage["context_packet"]["dropped_blocks"][0]["block_title"], "context.md")
+            self.assertEqual(
+                coverage["context_packet"]["dropped_blocks"][0]["block_title"], "context.md"
+            )
             self.assertEqual(coverage["extraction"]["usable_axis_count"], 2)
             self.assertEqual(coverage["extraction"]["axes_with_findings_count"], 2)
             self.assertEqual(coverage["extraction"]["findings_before_dedup"], 2)
@@ -585,7 +649,9 @@ class ExtractionCoverageTest(unittest.TestCase):
             self.assertEqual(updated["verification"]["inconclusive_count"], 0)
             self.assertEqual(updated["verification"]["unverifiable_count"], 0)
             self.assertEqual(updated["verification"]["hallucination_rate"], 0.5)
-            self.assertEqual(Path(updated["artifacts"]["verified_disposition"]).name, "verified-disposition.md")
+            self.assertEqual(
+                Path(updated["artifacts"]["verified_disposition"]).name, "verified-disposition.md"
+            )
 
     def test_verify_claims_parses_multiline_disposition_blocks(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -692,23 +758,42 @@ class ModelReviewMainTest(unittest.TestCase):
             }
             (review_dir / "formal-output.md").write_text("output")
             coverage_path = review_dir / "coverage.json"
-            coverage_path.write_text(json.dumps({"schema": "review-coverage.v1", "schema_version": 1}))
+            coverage_path.write_text(
+                json.dumps({"schema": "review-coverage.v1", "schema_version": 1})
+            )
 
             old_cwd = Path.cwd()
             os.chdir(project_dir)
             try:
-                with patch.object(model_review, "build_context", return_value={"formal": project_dir / "ctx.md"}), \
-                     patch.object(model_review, "dispatch", return_value=dispatch_result), \
-                     patch.object(model_review, "find_governance", return_value=None), \
-                     patch.object(model_review, "extract_claims", return_value=str(review_dir / "disposition.md")) as mock_extract, \
-                     patch.object(model_review.os, "urandom", return_value=b"\xab\xcd\x13"), \
-                     patch.object(model_review.sys, "argv", [
-                         "model-review.py",
-                         "--context", str(context_path),
-                         "--topic", "explicit-extract",
-                         "--project", str(project_dir),
-                         "--extract",
-                     ]):
+                with (
+                    patch.object(
+                        model_review,
+                        "build_context",
+                        return_value={"formal": project_dir / "ctx.md"},
+                    ),
+                    patch.object(model_review, "dispatch", return_value=dispatch_result),
+                    patch.object(model_review, "find_governance", return_value=None),
+                    patch.object(
+                        model_review,
+                        "extract_claims",
+                        return_value=str(review_dir / "disposition.md"),
+                    ) as mock_extract,
+                    patch.object(model_review.os, "urandom", return_value=b"\xab\xcd\x13"),
+                    patch.object(
+                        model_review.sys,
+                        "argv",
+                        [
+                            "model-review.py",
+                            "--context",
+                            str(context_path),
+                            "--topic",
+                            "explicit-extract",
+                            "--project",
+                            str(project_dir),
+                            "--extract",
+                        ],
+                    ),
+                ):
                     rc = model_review.main()
             finally:
                 os.chdir(old_cwd)
@@ -739,22 +824,41 @@ class ModelReviewMainTest(unittest.TestCase):
             }
             (review_dir / "formal-output.md").write_text("output")
             coverage_path = review_dir / "coverage.json"
-            coverage_path.write_text(json.dumps({"schema": "review-coverage.v1", "schema_version": 1}))
+            coverage_path.write_text(
+                json.dumps({"schema": "review-coverage.v1", "schema_version": 1})
+            )
 
             old_cwd = Path.cwd()
             os.chdir(project_dir)
             try:
-                with patch.object(model_review, "build_context", return_value={"formal": project_dir / "ctx.md"}), \
-                     patch.object(model_review, "dispatch", return_value=dispatch_result), \
-                     patch.object(model_review, "find_governance", return_value=None), \
-                     patch.object(model_review, "extract_claims", return_value=str(review_dir / "disposition.md")) as mock_extract, \
-                     patch.object(model_review.os, "urandom", return_value=b"\xab\xcd\x12"), \
-                     patch.object(model_review.sys, "argv", [
-                         "model-review.py",
-                         "--context", str(context_path),
-                         "--topic", "default-extract",
-                         "--project", str(project_dir),
-                     ]):
+                with (
+                    patch.object(
+                        model_review,
+                        "build_context",
+                        return_value={"formal": project_dir / "ctx.md"},
+                    ),
+                    patch.object(model_review, "dispatch", return_value=dispatch_result),
+                    patch.object(model_review, "find_governance", return_value=None),
+                    patch.object(
+                        model_review,
+                        "extract_claims",
+                        return_value=str(review_dir / "disposition.md"),
+                    ) as mock_extract,
+                    patch.object(model_review.os, "urandom", return_value=b"\xab\xcd\x12"),
+                    patch.object(
+                        model_review.sys,
+                        "argv",
+                        [
+                            "model-review.py",
+                            "--context",
+                            str(context_path),
+                            "--topic",
+                            "default-extract",
+                            "--project",
+                            str(project_dir),
+                        ],
+                    ),
+                ):
                     rc = model_review.main()
             finally:
                 os.chdir(old_cwd)
@@ -787,14 +891,29 @@ class ModelReviewMainTest(unittest.TestCase):
             old_cwd = Path.cwd()
             os.chdir(project_dir)
             try:
-                with patch.object(model_review, "build_context", return_value={"formal": project_dir / "ctx.md"}), \
-                     patch.object(model_review, "dispatch", return_value=dispatch_result), \
-                     patch.object(model_review, "find_governance", return_value=None), \
-                     patch.object(model_review.os, "urandom", return_value=b"\xab\xcd\x12"), \
-                     patch.object(model_review.sys, "argv", [
-                         "model-review.py", "--context", str(context_path),
-                         "--topic", "empty-axis", "--project", str(project_dir),
-                     ]):
+                with (
+                    patch.object(
+                        model_review,
+                        "build_context",
+                        return_value={"formal": project_dir / "ctx.md"},
+                    ),
+                    patch.object(model_review, "dispatch", return_value=dispatch_result),
+                    patch.object(model_review, "find_governance", return_value=None),
+                    patch.object(model_review.os, "urandom", return_value=b"\xab\xcd\x12"),
+                    patch.object(
+                        model_review.sys,
+                        "argv",
+                        [
+                            "model-review.py",
+                            "--context",
+                            str(context_path),
+                            "--topic",
+                            "empty-axis",
+                            "--project",
+                            str(project_dir),
+                        ],
+                    ),
+                ):
                     rc = model_review.main()
             finally:
                 os.chdir(old_cwd)
@@ -809,14 +928,21 @@ class ModelReviewMainTest(unittest.TestCase):
             old_cwd = Path.cwd()
             os.chdir(project_dir)
             try:
-                with patch.object(model_review.sys, "argv", [
-                    "model-review.py",
-                    "--context", str(context_path),
-                    "--topic", "invalid",
-                    "--project", str(project_dir),
-                    "--verify",
-                    "--no-extract",
-                ]):
+                with patch.object(
+                    model_review.sys,
+                    "argv",
+                    [
+                        "model-review.py",
+                        "--context",
+                        str(context_path),
+                        "--topic",
+                        "invalid",
+                        "--project",
+                        str(project_dir),
+                        "--verify",
+                        "--no-extract",
+                    ],
+                ):
                     rc = model_review.main()
             finally:
                 os.chdir(old_cwd)
@@ -832,13 +958,21 @@ class ModelReviewMainTest(unittest.TestCase):
             old_cwd = Path.cwd()
             os.chdir(project_dir)
             try:
-                with patch.object(model_review.sys, "argv", [
-                    "model-review.py",
-                    "--context", str(context_path),
-                    "--topic", "non-gpt",
-                    "--project", str(project_dir),
-                    "--axes", "arch,domain,alternatives",
-                ]):
+                with patch.object(
+                    model_review.sys,
+                    "argv",
+                    [
+                        "model-review.py",
+                        "--context",
+                        str(context_path),
+                        "--topic",
+                        "non-gpt",
+                        "--project",
+                        str(project_dir),
+                        "--axes",
+                        "arch,domain,alternatives",
+                    ],
+                ):
                     rc = model_review.main()
             finally:
                 os.chdir(old_cwd)
@@ -856,13 +990,21 @@ class ModelReviewMainTest(unittest.TestCase):
             old_cwd = Path.cwd()
             os.chdir(project_dir)
             try:
-                with patch.object(model_review.sys, "argv", [
-                    "model-review.py",
-                    "--context", str(context_path),
-                    "--topic", "bad-questions",
-                    "--project", str(project_dir),
-                    "--questions", str(questions_path),
-                ]):
+                with patch.object(
+                    model_review.sys,
+                    "argv",
+                    [
+                        "model-review.py",
+                        "--context",
+                        str(context_path),
+                        "--topic",
+                        "bad-questions",
+                        "--project",
+                        str(project_dir),
+                        "--questions",
+                        str(questions_path),
+                    ],
+                ):
                     rc = model_review.main()
             finally:
                 os.chdir(old_cwd)
@@ -954,20 +1096,14 @@ class PremiseScoutTest(unittest.TestCase):
             conviction="low",
         )
         self.assertEqual(
-            model_review.check_scout_conviction_gate(
-                scout, irreversible=True, force=False
-            ),
+            model_review.check_scout_conviction_gate(scout, irreversible=True, force=False),
             3,
         )
         self.assertIsNone(
-            model_review.check_scout_conviction_gate(
-                scout, irreversible=True, force=True
-            )
+            model_review.check_scout_conviction_gate(scout, irreversible=True, force=True)
         )
         self.assertIsNone(
-            model_review.check_scout_conviction_gate(
-                scout, irreversible=False, force=False
-            )
+            model_review.check_scout_conviction_gate(scout, irreversible=False, force=False)
         )
 
     def test_check_scout_gate_ignores_skipped(self) -> None:
@@ -979,9 +1115,7 @@ class PremiseScoutTest(unittest.TestCase):
             conviction=None,
         )
         self.assertIsNone(
-            model_review.check_scout_conviction_gate(
-                scout, irreversible=True, force=False
-            )
+            model_review.check_scout_conviction_gate(scout, irreversible=True, force=False)
         )
 
     def test_build_context_includes_premise_scout(self) -> None:
@@ -1048,9 +1182,7 @@ class DispatchBudgetTest(unittest.TestCase):
                 deadline_mono=time.monotonic() + 400,
                 total_seconds=480,
             )
-            entry = model_review._budget_skipped_axis(
-                "arch", rd, budget, profile_timeout=600
-            )
+            entry = model_review._budget_skipped_axis("arch", rd, budget, profile_timeout=600)
             self.assertEqual(entry["failure_reason"], "budget_insufficient_for_profile")
 
     def test_axis_budget_restarts_after_scout_phase(self) -> None:
@@ -1068,6 +1200,17 @@ class DispatchBudgetTest(unittest.TestCase):
             deadline_mono=time.monotonic() + 650,
         )
         self.assertTrue(budget.can_start(600))
+
+    def test_budget_equal_to_profile_timeout_still_starts(self) -> None:
+        """Regression: a budget sized EQUAL to the axis timeout (the review_gate triage
+        default — 600s budget, deep_review/gpt_general resolve to 600s) must NOT skip.
+        Before the start grace, sub-second setup elapsed since from_seconds() left
+        remaining fractionally < timeout, so EVERY axis skipped as 'budget_exhausted'
+        and the cross-model review produced zero output (genomics 2026-07-01)."""
+        budget = model_review.DispatchBudget.from_seconds(600)
+        time.sleep(0.02)  # simulate setup elapsed since budget creation
+        self.assertLess(budget.remaining(), 600)  # remaining is now fractionally < timeout
+        self.assertTrue(budget.can_start(600))  # ...but the start grace lets it dispatch
 
     def test_wait_timeout_uses_remaining(self) -> None:
         budget = model_review.DispatchBudget(
@@ -1172,7 +1315,9 @@ class DispatchBudgetTest(unittest.TestCase):
                 effective_policy={"axes": "cross2"},
             )
             receipt = json.loads(path.read_text())
-            self.assertEqual(receipt["schema_version"], model_review.EXECUTION_RECEIPT_SCHEMA_VERSION)
+            self.assertEqual(
+                receipt["schema_version"], model_review.EXECUTION_RECEIPT_SCHEMA_VERSION
+            )
             self.assertEqual(receipt["overall"], "partial")
             self.assertEqual(receipt["axes"]["gaps"]["status"], "skipped_budget")
 
