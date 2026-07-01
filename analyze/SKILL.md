@@ -29,6 +29,7 @@ Project workflows decide:
 | hypotheses-ach | Multiple explanations, fraud-vs-error, anomaly triage, adversarial workup | `lenses/hypotheses-ach.md` |
 | weakest-link-audit | A causal story sounds plausible but may have one unsupported link | `lenses/weakest-link-audit.md` |
 | spirit-audit | A work-product is judged against a contract (eval verdict, backtest, gate, benchmark, claim) and may be letter-true but spirit-false (gaming, invalid gold, errors-scored-as-results, confounds, leakage) | `lenses/spirit-audit.md` |
+| proxy-validity | Estimating a latent quantity (ability, credibility, capability) from observable proxies, or applying a proposed bias-discount to such an estimate | `lenses/proxy-validity.md` |
 | decision-impact-stop | Analysis may not change any action | `lenses/decision-impact-stop.md` |
 
 Detailed reference files remain under `references/` for DAG algorithms,
