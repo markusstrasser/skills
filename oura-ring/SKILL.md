@@ -6,10 +6,20 @@ description: "Use when: Oura Ring API pull, sleep/HRV/readiness dashboards, wear
 # Oura Ring API (v2)
 
 ```bash
-uv pip install oura-ring   # v0.3.0, MIT, Python >=3.10
+uv pip install oura-ring   # v1.0.1, MIT, Python >=3.12
 ```
 
 **Get token**: https://cloud.ouraring.com/personal-access-tokens
+
+> **v1.x breaking changes vs 0.3.x** (this skill is verified against `oura-ring==1.0.1`):
+> - Constructor is now `OuraClient(access_token=None, *, personal_access_token=None)` — a
+>   personal access token MUST be passed by keyword: `OuraClient(personal_access_token=...)`.
+>   The first positional arg is an OAuth2 access token.
+> - Date params renamed: daily/sleep endpoints take `start_date=` / `end_date=`;
+>   time-series endpoints (`get_heart_rate`, `get_ring_battery_level`) take
+>   `start_datetime=` / `end_datetime=`. The old `start=` / `end=` now raise `TypeError`.
+> - Python floor raised to **>=3.12**.
+> - OAuth2 flow added via `OuraAuth(client_id, client_secret)`; `OuraClient` is a context manager (`close()` / `with`).
 
 ## Quick Start
 
@@ -17,38 +27,50 @@ uv pip install oura-ring   # v0.3.0, MIT, Python >=3.10
 import os
 from oura_ring import OuraClient
 
-client = OuraClient(os.environ["OURA_PAT"])
+# Personal access token → keyword arg (positional is now OAuth2 access_token)
+with OuraClient(personal_access_token=os.environ["OURA_PAT"]) as client:
 
-# Sleep details (stages, HRV, HR, movement)
-sleeps = client.get_daily_sleep(start="2026-02-01", end="2026-02-18")
+    # Daily sleep score + contributors (deep, REM, latency, timing)
+    sleeps = client.get_daily_sleep(start_date="2026-02-01", end_date="2026-02-18")
 
-# Heart rate (5-min intervals)
-hr = client.get_heart_rate(start="2026-02-17", end="2026-02-18")
+    # Heart rate (5-min samples) — note *_datetime params
+    hr = client.get_heart_rate(start_datetime="2026-02-17", end_datetime="2026-02-18")
 
-# Readiness score + contributors
-readiness = client.get_daily_readiness(start="2026-02-01")
+    # Readiness score + contributors — omit end_date for a single day
+    readiness = client.get_daily_readiness(start_date="2026-02-01")
 
-# All methods return list of dicts → easy DataFrame conversion
+# All range methods return list[dict] → easy DataFrame conversion
 import pandas as pd
 df = pd.DataFrame(sleeps)
 ```
 
 ## Available Endpoints
 
+Range methods share the signature `(start_date=None, end_date=None, document_id=None)` unless noted.
+Time-series methods use `(start_datetime=None, end_datetime=None, latest=None)`.
+
 | Method | Returns |
 |--------|---------|
-| `get_daily_sleep(start, end)` | Score, contributors (deep, REM, latency, timing) |
-| `get_daily_activity(start, end)` | Steps, calories, movement, inactivity alerts |
-| `get_daily_readiness(start, end)` | Score, HRV balance, body temperature, recovery |
-| `get_daily_stress(start, end)` | Stress score, high/low periods |
-| `get_daily_spo2(start, end)` | Blood oxygen average |
-| `get_heart_rate(start, end)` | 5-min HR samples (bpm + source) |
-| `get_sleep_periods(start, end)` | Detailed sleep stages (awake/light/deep/REM per period) |
-| `get_sessions(start, end)` | Meditation/breathing sessions |
-| `get_workouts(start, end)` | Activity type, duration, calories, HR |
+| `get_daily_sleep` | Sleep score, contributors (deep, REM, latency, timing) |
+| `get_sleep_periods` | Detailed sleep stages (awake/light/deep/REM per period) |
+| `get_sleep_time` | Recommended/optimal bedtime windows |
+| `get_daily_activity` | Steps, calories, movement, inactivity alerts |
+| `get_daily_readiness` | Score, HRV balance, body temperature, recovery |
+| `get_daily_resilience` | Resilience level + contributors |
+| `get_daily_stress` | Stress score, high/low periods |
+| `get_daily_spo2` | Blood oxygen average |
+| `get_daily_cardiovascular_age` | Estimated cardiovascular age |
+| `get_vo2_max` | VO₂ max estimate |
+| `get_heart_rate` *(datetime)* | 5-min HR samples (bpm + source) |
+| `get_ring_battery_level` *(datetime)* | Ring battery time-series |
+| `get_sessions` | Meditation/breathing sessions |
+| `get_workouts` | Activity type, duration, calories, HR |
+| `get_rest_mode_period` | Rest-mode windows |
+| `get_tags` / `get_enhanced_tag` | User tags / enhanced tags |
+| `get_ring_configuration` | Ring hardware/config (`document_id` only) |
 | `get_personal_info()` | Age, weight, height, biological sex |
 
-All date params are `YYYY-MM-DD` strings. Omit `end` for single day.
+OAuth2 scopes (`oura_ring.SCOPES`): `email, personal, daily, heartrate, workout, tag, session, spo2Daily, stress, heart_health, ring_configuration`.
 
 ## HRV Analysis with NeuroKit2
 
@@ -56,8 +78,8 @@ All date params are `YYYY-MM-DD` strings. Omit `end` for single day.
 import neurokit2 as nk
 import numpy as np
 
-# Get detailed sleep data with HRV
-sleep_periods = client.get_sleep_periods(start="2026-02-17")
+# Detailed sleep stages (per-period)
+sleep_periods = client.get_sleep_periods(start_date="2026-02-17")
 
 # Extract R-R intervals from sleep period (if available via export)
 # Oura CSV exports have rr_intervals column
@@ -87,7 +109,7 @@ Existing CSV exports: `data/wearables/`
 import pandas as pd
 
 # Load Oura + supplement log
-sleep_df = pd.DataFrame(client.get_daily_sleep(start="2026-01-01"))
+sleep_df = pd.DataFrame(client.get_daily_sleep(start_date="2026-01-01"))
 # Merge with supplement tracking data on date
 # Look for: HRV delta, deep sleep %, sleep efficiency changes
 ```
