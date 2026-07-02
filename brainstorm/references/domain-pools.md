@@ -27,6 +27,8 @@ Query 2-3 tangential domain examples via Exa (if available) to expand the soluti
 | Denial rounds | 1 | 2 | 3 |
 | Domain forcing domains | 2 | 3 | 4 |
 | Constraint inversions | skip | 3 | 4 |
+| Contradiction pairs (opt-in axis) | skip | 2 when enabled | 3 (auto-on) |
+| Blends (opt-in axis) | skip | 1 when enabled | 2 (auto-on) |
 | Ideas per round | ~5 | ~15 | ~20 |
 
 ## Mature-Frontier Behavior

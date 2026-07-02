@@ -39,6 +39,8 @@
   "references": [
     "brainstorm/SKILL.md",
     "brainstorm/references/synthesis-templates.md",
-    "brainstorm/references/llmx-dispatch.md"
+    "brainstorm/references/llmx-dispatch.md",
+    "brainstorm/references/domain-pools.md",
+    "brainstorm/references/triz-principles.md"
   ]
 }

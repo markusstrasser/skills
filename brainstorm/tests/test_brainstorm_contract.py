@@ -11,6 +11,7 @@ SKILL_MANIFEST = ROOT / "skill.json"
 DISPATCH_REF = ROOT / "references" / "llmx-dispatch.md"
 TEMPLATES_REF = ROOT / "references" / "synthesis-templates.md"
 DOMAIN_POOLS_REF = ROOT / "references" / "domain-pools.md"
+TRIZ_REF = ROOT / "references" / "triz-principles.md"
 
 
 class BrainstormContractTest(unittest.TestCase):
@@ -53,6 +54,26 @@ class BrainstormContractTest(unittest.TestCase):
         self.assertIn("speculative", dispatch_text)
         self.assertIn("domain_row", dispatch_text)
         self.assertIn("domain_row", domain_pools_text)
+
+    def test_contradiction_and_blend_axes_are_wired(self) -> None:
+        skill_text = SKILL_DOC.read_text()
+        dispatch_text = DISPATCH_REF.read_text()
+
+        # SKILL.md documents both axes and routes to the lookup table
+        self.assertIn("`contradiction`", skill_text)
+        self.assertIn("`blend`", skill_text)
+        self.assertIn("triz-principles.md", skill_text)
+
+        # dispatch payloads exist and land in the extraction cat-line
+        self.assertIn("TRIZ CONTRADICTION ROUND", dispatch_text)
+        self.assertIn("BLENDING ROUND", dispatch_text)
+        self.assertIn("contradiction.md", dispatch_text)
+        self.assertIn("blending.md", dispatch_text)
+
+        # lookup table carries all 40 principles as table rows
+        triz_text = TRIZ_REF.read_text()
+        for n in range(1, 41):
+            self.assertRegex(triz_text, rf"(?m)^\| {n} \|")
 
 
 if __name__ == "__main__":
