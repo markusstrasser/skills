@@ -119,6 +119,53 @@ Best design. What transfers?
 Best design. What transfers?
 ```
 
+## Contradiction — TRIZ (Step 3d)
+
+Opt-in (`--axes contradiction`; on under `--deep`). Default: 2 contradiction pairs. `--deep`: 3.
+Look up candidate principles in `references/triz-principles.md` BEFORE dispatch and inline
+them in the payload — the dispatched model gets the chosen principles with glosses, never
+the whole table.
+
+```md
+<system>
+TRIZ CONTRADICTION ROUND. Each contradiction names a parameter to improve and a parameter that must not worsen. Apply each listed inventive principle to the actual system — one idea per principle. The principle is a structural constraint: the idea must instantiate its mechanism, not cite its name. A valid idea RESOLVES the contradiction (both parameters improve, or the tradeoff frame disappears); rejecting ideas that merely pick a point on the tradeoff curve. It is $(date +%Y-%m-%d).
+</system>
+
+## Design Space
+[Original description]
+
+## Contradiction 1: improve [X] without worsening [Y]
+Principles: [#N name — one-line gloss · #M name — gloss · ...]
+One idea per principle: mechanism, and how the contradiction dissolves.
+
+## Contradiction 2: improve [X] without worsening [Y]
+Same.
+```
+
+Write output to `$BRAINSTORM_DIR/contradiction.md`.
+
+## Conceptual Blending (Step 3e)
+
+Opt-in (`--axes blend`; on under `--deep`). Default: 1 blend. `--deep`: 2. Frames can come
+from the domain pools; distinct move from domain forcing — two frames fuse, not one-way map.
+
+```md
+<system>
+BLENDING ROUND. Merge the two input frames into ONE blended space. First map counterpart elements across the frames, then describe the blend as a single coherent system, then list ONLY emergent structure — properties present in neither input frame alone. Discard one-way analogies (those are domain forcing, a different round). It is $(date +%Y-%m-%d).
+</system>
+
+## Frame A: [the problem, stated as a frame: roles, relations, dynamics]
+## Frame B: [distant frame: roles, relations, dynamics]
+
+1. Cross-space mapping (counterpart elements).
+2. The blended space (one coherent system).
+3. Emergent structure only.
+4. What each emergent property transfers back as a concrete design idea.
+```
+
+Write output to `$BRAINSTORM_DIR/blending.md`. If a blend yields no emergent structure,
+record the dry cell in `coverage.json` and do not force it.
+
 ## Extraction (Step 4)
 
 ```bash
@@ -126,6 +173,8 @@ cat "$BRAINSTORM_DIR"/*generation*.md \
     "$BRAINSTORM_DIR"/denial-r*.md \
     "$BRAINSTORM_DIR"/domain-forcing.md \
     "$BRAINSTORM_DIR"/constraint-inversion.md \
+    "$BRAINSTORM_DIR"/contradiction.md \
+    "$BRAINSTORM_DIR"/blending.md \
     > "$BRAINSTORM_DIR/all-raw.md" 2>/dev/null
 ```
 
@@ -137,7 +186,7 @@ uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
   --context "$BRAINSTORM_DIR/all-raw.md" \
   --prompt "
 <system>
-Extract every discrete idea, approach, or insight as a numbered list. One per line. Tag the source (initial/denial-r1/denial-r2/domain/constraint), axis, domain row if present, and the matrix cell if available. Do not evaluate - extract mechanically.
+Extract every discrete idea, approach, or insight as a numbered list. One per line. Tag the source (initial/denial-r1/denial-r2/domain/constraint/contradiction/blend), axis, domain row if present, and the matrix cell if available. Do not evaluate - extract mechanically.
 </system>
 
 Extract all discrete ideas from the brainstorm artifacts." \

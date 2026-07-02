@@ -1,7 +1,7 @@
 ---
 name: brainstorm
 description: "Use when: /brainstorm, divergent design space, denial/domain/constraint perturbation. Optional multi-model volume. NOT convergent review (/critique) or decisions (/decide)."
-argument-hint: "[--quick|--deep] [--axes denial,domain,constraint] [--domains 'jazz, geology, ...'] [--n-ideas N] design space to explore"
+argument-hint: "[--quick|--deep] [--axes denial,domain,constraint,contradiction,blend] [--domains 'jazz, geology, ...'] [--n-ideas N] design space to explore"
 effort: high
 allowed-tools:
   - Bash
@@ -18,7 +18,7 @@ allowed-tools:
 You are orchestrating divergent ideation. The goal is ideas that escape the default attractor basin — the high-probability outputs that any model (including you) produces first.
 
 **Core mechanism:** Systematic perturbation, not model diversity. Models trained on similar data converge on similar ideas regardless of vendor — the prompting structure does the work. Perturbation operates on two independent dimensions, and you use both:
-- **Content-space perturbation** — denial cascade, domain forcing, constraint inversion. Moves *where* in idea-space you look.
+- **Content-space perturbation** — denial cascade, domain forcing, constraint inversion, TRIZ contradiction, conceptual blending. Moves *where* in idea-space you look.
 - **Output-distribution perturbation** — verbalized sampling (Step 2). Relieves the typicality pressure alignment bakes in, surfacing the low-probability tail. Independent of content; composes with every content-space axis. (Verbalized Sampling, Zhang et al., ICML 2026: +1.6–2.1× diversity, training-free, and *more capable models benefit more* — so it's always-on here, not a toggle.)
 
 **This skill is DIVERGENT only.** It produces candidate space and coverage artifacts, not final selections or implementation plans. For convergent critique, use `/model-review`.
@@ -59,12 +59,12 @@ Parse `$ARGUMENTS` for these optional flags (order doesn't matter, remaining tex
 |------|--------|---------|--------|
 | `--quick` | — | off | 1 denial round, 2 domains, skip constraint inversion. ~5 ideas. |
 | `--deep` | — | off | 3 denial rounds, 4 domains, 4 inversions. Maximum divergence. |
-| `--axes` | comma-separated: `denial`, `domain`, `constraint` | all three | Run only specified perturbation axes |
+| `--axes` | comma-separated: `denial`, `domain`, `constraint`, `contradiction`, `blend` | `denial,domain,constraint` | Run only specified perturbation axes. `contradiction` and `blend` are opt-in (auto-included by `--deep`). |
 | `--domains` | quoted comma-separated domain names | auto-select | Override domain forcing domains (e.g., `--domains "jazz, geology, packet switching"`) |
 | `--n-ideas` | integer | 15 | Target idea count per generation round |
 | `--no-llmx` | — | off | Run everything locally, no external dispatch |
 
-**Effort presets:** default (2 denial, 3 domains, 3 inversions, ~15/round), `--quick` (1 denial, 2 domains, no inversions, ~5/round), `--deep` (3 denial, 4 domains, 4 inversions, ~20/round).
+**Effort presets:** default (2 denial, 3 domains, 3 inversions, ~15/round), `--quick` (1 denial, 2 domains, no inversions, ~5/round), `--deep` (3 denial, 4 domains, 4 inversions, plus contradiction and blend rounds, ~20/round).
 
 ## Prerequisites
 
@@ -98,7 +98,7 @@ With external dispatch: AFTER your own in-conversation set exists, dispatch a pa
 
 ### Step 3: Perturbation Rounds (The Core Mechanism)
 
-Run axes specified by `--axes` (default: all three). With external dispatch, fan out active axes in parallel. Without it, run sequentially.
+Run axes specified by `--axes` (default: `denial,domain,constraint`; `contradiction` and `blend` run when named or under `--deep`). With external dispatch, fan out active axes in parallel. Without it, run sequentially.
 
 First: identify the 3-5 dominant paradigms from Step 2. These are what we're escaping.
 
@@ -107,6 +107,10 @@ First: identify the 3-5 dominant paradigms from Step 2. These are what we're esc
 **3b: Domain Forcing** — Map the problem to distant, unrelated domains. Pick from domain pools in `references/domain-pools.md`. Distant domains, not adjacent ones — the discomfort is the mechanism.
 
 **3c: Constraint Inversion** — Flip key assumptions (e.g., "compute free but storage costs $1/byte"). Design optimal solutions under altered constraints, then identify what transfers back to reality. Skipped in `--quick` mode.
+
+**3d: Contradiction (TRIZ)** — Opt-in (`--axes contradiction`; on under `--deep`). Restate the problem as technical contradictions: "improve X without worsening Y." For each pair, pull 3-5 candidate inventive principles from `references/triz-principles.md` and generate one idea per principle, applied to the actual system. The value is the external non-LLM prior: the principle is a structural constraint the idea must instantiate, not a vibe to sample near. A resolution *dissolves* the contradiction (both X and Y improve, or the tradeoff frame disappears); an idea that just picks a point on the X/Y tradeoff curve fails the round. Name the contradiction pairs explicitly before generating — infra decisions usually are one (depth vs maintenance surface, autonomy vs blast radius, context richness vs token cost).
+
+**3e: Conceptual Blending** — Opt-in (`--axes blend`; on under `--deep`). Distinct from domain forcing: 3b runs a one-way analogy ("how does immunology solve this?"); blending force-merges TWO input frames (the problem frame + one distant frame, or two distant frames) into a single blended space and mines the *emergent* structure — properties present in neither input alone (Fauconnier–Turner). Procedure: state each frame's roles/relations/dynamics, map counterpart elements across them, describe the blend as one coherent system, then keep ONLY the emergent structure. Straight A→B transfers get discarded (they belong to 3b); if a blend yields no emergent structure, record the dry cell in `coverage.json` and move on.
 
 **Knowledge injection:** Before perturbation, query 2-3 tangential domain examples via Exa to prime the search space with real-world mechanisms.
 
@@ -171,6 +175,7 @@ Don't auto-implement — divergent ideas need convergent validation first.
 |------|----------|
 | `references/llmx-dispatch.md` | Shared dispatch prompt payloads, packet expectations, and artifact contract |
 | `references/domain-pools.md` | Domain forcing pools, perturbation axis presets, knowledge injection details |
+| `references/triz-principles.md` | 40 inventive principles (agent/software glosses) + contradiction-pair routing table for the contradiction axis |
 | `references/synthesis-templates.md` | Matrix, coverage, disposition table, synthesis output template, pre-flight bash scripts |
 
 $ARGUMENTS
