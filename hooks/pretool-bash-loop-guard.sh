@@ -12,34 +12,14 @@ CMD=$(printf '%s' "$INPUT" | jq -r '(if has("tool_input") then (.tool_input // {
 # If we couldn't extract, let it through
 [ -z "$CMD" ] && exit 0
 
-# Check for multiline for/while/until/if blocks (the #1 zsh parse error pattern)
-# Pattern: line ending with 'do' or 'then', followed by a newline, indicates multiline loop
-# Heredoc bodies are stripped first: they are opaque to the shell parser, so
-# content like '(do\n' inside a <<'EOF' python/EDN payload cannot be a shell
-# control structure (false positive observed 2026-06-10, session e24a68d3).
-if echo "$CMD" | python3 -c "
-import sys, re
-cmd = sys.stdin.read()
-
-def strip_heredocs(s):
-    out, skip_until = [], None
-    for ln in s.split('\n'):
-        if skip_until is not None:
-            if ln.strip() == skip_until:
-                skip_until = None
-            continue
-        m = re.search(r'<<-?\s*([\'\"]?)(\w+)\1', ln)
-        out.append(ln)
-        if m:
-            skip_until = m.group(2)
-    return '\n'.join(out)
-
-cmd = strip_heredocs(cmd)
-# Detect: 'do\n' or 'then\n' followed by content before 'done'/'fi'
-# This catches multiline loops but NOT single-line ones
-has_multiline = bool(re.search(r'\b(do|then)\s*\n', cmd))
-sys.exit(0 if has_multiline else 1)
-" 2>/dev/null; then
+# Check for multiline for/while/until/if blocks (the #1 zsh parse error pattern):
+# line ending with 'do' or 'then' followed by a newline. Heredoc bodies and quoted-string
+# spans are stripped first (both opaque to the shell parser — false positives 2026-06-10
+# heredoc payload, 2026-07-03 commit-message prose ending a line on 'then').
+# Logic lives in the sidecar (testable; escaping a quote scanner inside a bash
+# double-quoted python -c string is its own bug class): exit 0 = multiline found.
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if printf '%s' "$CMD" | python3 "$HOOK_DIR/pretool_bash_loop_guard.py" 2>/dev/null; then
     echo "BLOCKED: Multiline for/while/if blocks cause zsh parse errors. Use single-line syntax:" >&2
     echo "  for x in *.txt; do echo \"\$x\"; done" >&2
     echo "  while read line; do echo \"\$line\"; done" >&2
