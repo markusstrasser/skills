@@ -45,6 +45,10 @@ if [ "$peers" -ge 1 ]; then
   echo "   ▶ Isolate THIS session — exit, then relaunch in its own worktree (one paste):"
   echo "         claude --worktree ${base}-wt${sfx}"
   echo "   (branches local HEAD; merge back via git. Parallel codex = same risk. Silence: PEER_SESSION_WARN_OFF=1)"
+  echo "   Staying in the shared checkout anyway? Then follow the SHARED-CHECKOUT PROTOCOL:"
+  echo "   commit each logical edit immediately (stage specific paths, never sweep), re-check"
+  echo "   'git status' before touching shared docs (MEMORY.md / checkpoint / rules), and state"
+  echo "   ONCE in your next reply that you're staying shared — never skip this warning silently."
   # Log the fire so the 2026-06-28-peer-warn prediction (does the loud form reduce
   # concurrent-session sharing?) is measurable, not vibes.
   ~/Projects/skills/hooks/hook-trigger-log.sh "peer-session-warn" "warn" "peers=${peers}" 2>/dev/null || true
