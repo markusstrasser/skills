@@ -241,6 +241,20 @@ workloads — you need stdout on every step change.
 receipt says RUNNING, the container is doing work — stopping it loses
 progress.
 
+**Exception — alive-but-hung (RUNNING ≠ progressing).** A container can hold a
+FRESH heartbeat + a RUNNING receipt while its WORK has stalled: the progress
+fingerprint (`step`/`current`/`percent`/`elapsed_s`) is FROZEN across polls. The
+heartbeat-TTL / dead-container repair MISSES this (it only catches heartbeat *loss*),
+and a worst-case-sized per-input `timeout` won't fire within-window — so the stage
+wedges for hours (real: `elapsed_s` frozen at 182.5s for ~4h while heartbeating, ~$6
+burned, hand-killed). Diagnosis: diff the progress fingerprint across polls — frozen
+past a tolerance (~45 min, above the longest legit silent step) WHILE heartbeating =
+hung, and `modal app stop` IS then correct (it converts alive-but-hung → dead-container,
+which the normal repair terminalizes + reruns). Automate with a periodic
+progress-fingerprint watchdog (Postgres-only → freeze-safe under concurrent drivers),
+NOT just heartbeat-TTL. A stage with a legit long SILENT step should declare a wider
+tolerance rather than making the watchdog looser.
+
 `.map()` apps show `tasks=0` on the parent app even while child containers
 are active. The parent dispatches and exits; children run independently.
 `tasks=0` does NOT mean idle for `.map()` apps — check the child function
