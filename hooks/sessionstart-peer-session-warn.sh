@@ -49,4 +49,26 @@ if [ "$peers" -ge 1 ]; then
   # concurrent-session sharing?) is measurable, not vibes.
   ~/Projects/skills/hooks/hook-trigger-log.sh "peer-session-warn" "warn" "peers=${peers}" 2>/dev/null || true
 fi
+
+# Worktree / checkout stale-base guard (observe drift 2026-06-30: genomics+phenome recurrence).
+# Advisory only — counts commits on main not reachable from HEAD.
+if git -C "$cwd" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  main_ref=""
+  for ref in main origin/main master origin/master; do
+    if git -C "$cwd" rev-parse --verify "$ref" >/dev/null 2>&1; then
+      main_ref="$ref"
+      break
+    fi
+  done
+  if [ -n "$main_ref" ]; then
+    behind="$(git -C "$cwd" rev-list --count HEAD.."$main_ref" 2>/dev/null || echo 0)"
+    if [ "${behind:-0}" -ge 10 ]; then
+      echo "⚠  STALE BASE — checkout is ${behind} commit(s) behind ${main_ref}"
+      echo "       ${cwd}"
+      echo "   Subagents/worktrees starting here inherit stale origin — push/rebase or recreate worktree."
+      echo "   ▶ git -C \"${cwd}\" fetch origin && git -C \"${cwd}\" rebase ${main_ref}"
+      ~/Projects/skills/hooks/hook-trigger-log.sh "worktree-stale-base" "warn" "behind=${behind}" 2>/dev/null || true
+    fi
+  fi
+fi
 exit 0
