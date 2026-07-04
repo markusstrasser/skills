@@ -266,6 +266,13 @@ if [ -n "$PROMPT" ]; then
         WARNINGS="${WARNINGS}SUBAGENT TURN-BUDGET (advisory): no turn-budget note in prompt. Prefer parent-controlled epochs — review the subagent's returned output and re-dispatch with refined scope if gaps remain — over a 'stop at 70%' self-instruction. "
     fi
 
+    # Yield-churn advisory (2026-07-04): a subagent that stops/yields while its own
+    # background runs are in flight fires a task-notification at the parent on EVERY
+    # yield (10+ stale notifications in one arc-agi session, 2 sessions affected).
+    if printf '%s' "$PROMPT" | grep -qiE 'background|long-running|watcher|wall[- ]|sweep|induction' ; then
+        WARNINGS="${WARNINGS}SUBAGENT WAIT DISCIPLINE (advisory): prompt implies the subagent may wait on its own background/long-running work. Instruct it to wait SYNCHRONOUSLY (bounded blocking waits, re-issued as needed) rather than stopping/yielding while watchers run — every yield fires a stale task-notification at the parent (yield-churn, 2026-07-04). "
+    fi
+
     if [ "$HAS_FILE_OUTPUT" -eq 0 ]; then
         MISSING="file-output instruction (write results to a file)"
 
