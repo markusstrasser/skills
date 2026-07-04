@@ -23,8 +23,14 @@ except Exception:
     sys.exit(0)
 ti = d.get("tool_input", {})
 cmd = ti.get("command", "")
-# A real git commit invocation (git / git -C <path> commit), not --dry-run.
-if not re.search(r"\bgit\b[^|;&]*\bcommit\b", cmd) or "--dry-run" in cmd:
+# Heredoc bodies are DATA, not commands — strip them before matching. A brief
+# file written via cat <<EOF containing the text "Do NOT git commit" is not a
+# commit (false-positive cascade 2026-07-04: blocked call -> brief never written
+# -> downstream codex ran with an empty prompt).
+cmd = re.sub(r"<<-?\s*([\"\x27]?)(\w+)\1[^\n]*\n.*?\n\s*\2(?=\s|$|;)", "<<HEREDOC_STRIPPED", cmd, flags=re.S)
+# A real git commit INVOCATION: git at a command position (start, after ; && || | & or $( ),
+# not a mention of the words inside prose/echo arguments. Not --dry-run.
+if not re.search(r"(?:^|[;&|]\s*|\$\(\s*)git\b[^|;&\n]*\bcommit\b", cmd, flags=re.M) or "--dry-run" in cmd:
     sys.exit(0)
 if ti.get("run_in_background"):
     print("BG")
