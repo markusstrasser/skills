@@ -132,3 +132,9 @@ Historical details remain available in git history. This skill now answers only 
 - Anthropic system-card registry and Opus 4.8 launch/API pages.
 - Local vendored Opus 4.8 system card.
 - OpenAI GPT-5.5 announcement, system card, API pricing, and model comparison docs.
+
+## 2026-07-04 — Fable 5 partially re-routable (empirical)
+CC-native lanes verified live (interactive session model, fable-high/low agent defs, key-stripped
+headless `claude -p`) in arc-agi session ebbeff04; dormancy header softened accordingly. llmx
+subscription + paid-API routing still unverified. Dispatch-economics fable-tier verdicts re-activated
+for CC-dispatched subagents.
