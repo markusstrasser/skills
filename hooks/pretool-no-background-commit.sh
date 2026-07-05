@@ -14,36 +14,11 @@
 # code captured explicitly.
 #
 # Reads the PreToolUse payload on stdin. --dry-run is exempt (it lands nothing).
+# Classification lives in the sidecar (testable; heredoc stripping is single-sourced
+# there via lib_bash_cmd_strip — divergent stripper copies broke 4× in 3 days).
 INPUT=$(cat)
-CLASS=$(echo "$INPUT" | python3 -c '
-import json, sys, re
-try:
-    d = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-ti = d.get("tool_input", {})
-cmd = ti.get("command", "")
-# Heredoc bodies are DATA, not commands — strip them before matching. A brief
-# file written via cat <<EOF containing the text "Do NOT git commit" is not a
-# commit (false-positive cascade 2026-07-04: blocked call -> brief never written
-# -> downstream codex ran with an empty prompt).
-cmd = re.sub(r"<<-?\s*([\"\x27]?)(\w+)\1[^\n]*\n.*?\n\s*\2(?=\s|$|;)", "<<HEREDOC_STRIPPED", cmd, flags=re.S)
-# A real git commit INVOCATION: git at a command position (start, after ; && || | & or $( ),
-# not a mention of the words inside prose/echo arguments. Not --dry-run.
-if not re.search(r"(?:^|[;&|]\s*|\$\(\s*)git\b[^|;&\n]*\bcommit\b", cmd, flags=re.M) or "--dry-run" in cmd:
-    sys.exit(0)
-if ti.get("run_in_background"):
-    print("BG")
-# The commits own pipe into an exit-code-masking reader. Anchored to a LEADING
-# `git ... commit` (the dominant real trap: `git commit -F m | tail`) so that a
-# mere mention of the pattern inside an echo / heredoc / test harness — which
-# starts with echo/cat/etc., not git — is not a false positive. The segment
-# between commit and the pipe allows a single & (so `2>&1 |` is caught) but
-# breaks on ; or && (a later `... | tail` on a *chained* command is not us).
-# Misses X && git commit | tail (non-leading); rarer, and git log still catches it.
-elif re.search(r"^\s*git\b[^|;&]*\bcommit\b(?:[^|;&]|&(?!&))*\|\s*(tail|head|grep|sed|awk|cat|tee|less|more|wc)\b", cmd):
-    print("PIPE")
-' 2>/dev/null)
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLASS=$(printf '%s' "$INPUT" | python3 "$HOOK_DIR/pretool_no_background_commit.py" 2>/dev/null)
 if [ "$CLASS" = "BG" ]; then
   echo "BLOCKED: git commit inside run_in_background=true — a hook-blocked commit reports success while nothing lands. Run the commit FOREGROUND (background the slow step, then commit in a separate foreground call)." >&2
   exit 2
