@@ -11,55 +11,13 @@ control structure is present (shell wrapper then blocks), exit 1 if clean.
 Heredoc bodies and quoted-string spans are stripped first — both are opaque to the shell
 parser, so 'do\\n'/'then\\n' inside them cannot be a control structure. False positives
 fixed: heredoc payload (2026-06-10, session e24a68d3); commit-message prose ending a line
-on "then" inside -m "..." (2026-07-03, session f4fecc9a).
+on "then" inside -m "..." (2026-07-03, session f4fecc9a). The strippers are single-sourced
+in lib_bash_cmd_strip (divergent copies false-blocked/passed 4× in 3 days — see lib header).
 """
 import re
 import sys
 
-
-def strip_heredocs(s: str) -> str:
-    out, skip_until = [], None
-    for ln in s.split("\n"):
-        if skip_until is not None:
-            if ln.strip() == skip_until:
-                skip_until = None
-            continue
-        m = re.search(r"<<-?\s*(['\"]?)(\w+)\1", ln)
-        out.append(ln)
-        if m:
-            skip_until = m.group(2)
-    return "\n".join(out)
-
-
-def strip_quoted(s: str) -> str:
-    """Drop single/double-quoted spans (incl. their newlines). Backslash escapes are
-    respected outside quotes and inside double quotes; single-quoted text is literal.
-    An unterminated quote strips to end-of-string — fail-open, matching shell reality
-    (the command would be a parse error anyway)."""
-    out, i, n, q = [], 0, len(s), None
-    while i < n:
-        c = s[i]
-        if q is None:
-            if c == "\\" and i + 1 < n:
-                out.append(c)
-                out.append(s[i + 1])
-                i += 2
-                continue
-            if c in ('"', "'"):
-                q = c
-            else:
-                out.append(c)
-        elif q == '"':
-            if c == "\\" and i + 1 < n:
-                i += 2
-                continue
-            if c == '"':
-                q = None
-        else:  # inside '...'
-            if c == "'":
-                q = None
-        i += 1
-    return "".join(out)
+from lib_bash_cmd_strip import strip_heredocs, strip_quoted
 
 
 def has_multiline_block(cmd: str) -> bool:
