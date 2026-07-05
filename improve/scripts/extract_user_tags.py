@@ -79,9 +79,15 @@ def _message_texts(msg: dict) -> list[str]:
     return []
 
 
-def scan_session(session_path: Path, pattern: re.Pattern) -> list[dict]:
-    """Extract tagged messages from a session JSONL file."""
+def scan_session(session_path: Path, pattern: re.Pattern, stats: dict | None = None) -> list[dict]:
+    """Extract tagged messages from a session JSONL file.
+
+    `stats` (optional) accumulates denominators: files/user_messages counts —
+    a bare "0 found" is indistinguishable from a broken parser without them.
+    """
     results = []
+    if stats is not None:
+        stats["files"] = stats.get("files", 0) + 1
     try:
         with open(session_path) as f:
             for line_num, line in enumerate(f, 1):
@@ -94,6 +100,8 @@ def scan_session(session_path: Path, pattern: re.Pattern) -> list[dict]:
                     continue
 
                 text = "\n".join(t for t in _message_texts(msg) if t)
+                if text and stats is not None:
+                    stats["user_messages"] = stats.get("user_messages", 0) + 1
                 # Skill/command expansions quote tag docs verbatim — not feedback.
                 if "<command-name>" in text or "Base directory for this skill" in text:
                     continue
@@ -134,6 +142,7 @@ def main():
             tag = sys.argv[idx + 1].lstrip("#")
 
     pattern = tag_re(tag)
+    stats: dict = {}
     cutoff = datetime.now() - timedelta(days=days)
     cutoff_ts = cutoff.timestamp()
 
@@ -154,20 +163,28 @@ def main():
             if session_file.stat().st_mtime < cutoff_ts:
                 continue
 
-            results = scan_session(session_file, pattern)
+            results = scan_session(session_file, pattern, stats)
             for r in results:
                 r["project"] = proj_name
                 all_feedback.append(r)
 
+    denom = (
+        f"scanned {stats.get('files', 0)} files / "
+        f"parsed {stats.get('user_messages', 0)} user messages"
+    )
+
     if json_output:
-        json.dump(all_feedback, sys.stdout, indent=2)
+        json.dump({"stats": stats, "entries": all_feedback}, sys.stdout, indent=2)
         return
 
     total = len(all_feedback)
-    print(f"User feedback (#{tag}): {total} entries in last {days} days\n")
+    print(f"User feedback (#{tag}): {total} entries in last {days} days ({denom})\n")
 
     if not total:
-        print(f"No #{tag} feedback found yet.")
+        if not stats.get("user_messages"):
+            print(f"WARNING: parsed 0 user messages — source/parser problem, not an absence of #{tag}.")
+        else:
+            print(f"No #{tag} feedback found yet.")
         return
 
     # Group by project
