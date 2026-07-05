@@ -151,6 +151,11 @@ def get_user(username: str, tally: CostTally | None = None) -> dict:
     )
     if tally is not None:
         tally.user_lookups += 1
+    if "data" not in data:
+        # X returns 200 with an `errors` array for suspended/renamed/not-found users —
+        # surface the API's own reason instead of a bare KeyError('data').
+        errs = data.get("errors") or [{"detail": "no data and no errors in response"}]
+        raise RuntimeError(f"user lookup failed for {username!r}: {errs[0].get('detail', errs[0])}")
     return data["data"]
 
 
