@@ -75,24 +75,37 @@ Read in full -- they define what's already known:
 
 ### Phase 2: Harvest Structured Artifacts
 
-For each source type, glob within the date window, read each file, extract actionable items.
+**Live streams first** (launchd-produced, refreshed daily — these carry the current signal),
+then the legacy artifact dirs behind an mtime guard. Read-path reordered 2026-07-05: the
+original 2a-2d producers (session-analyst, design-review, suggest-skill agents) went quiet in
+April-June 2026 and the signal plane moved to the deterministic miners; scanning dead dirs
+every run wasted the tick and buried the live sources at the bottom of the phase.
 
-**2a. Session Retros** (`artifacts/session-retro/`):
-- JSON retros: parse `findings[]` array (category, summary, severity, evidence, proposed_fix, project).
-- Markdown retros: look for `### [FINDING-` sections.
+**2a. Blindspot misses** — see the blindspot block below (kept verbatim; it is the
+highest-signal live source and the canonical detector-conversion protocol).
 
-**2b. Design Reviews** (`artifacts/design-review/`):
-- Prioritize synthesis files (`*-synthesis.md`, `*-cross-platform.md`) over raw pattern files.
-- Extract findings (sections `### F`) and proposals (`**Proposal:**` / `**Recommendation:**`).
-- Skip findings marked "Already exists" or struck-through.
+**2b. Reflect-loop Quarantine** — see below.
 
-**2c. Session Analyst Findings** (`artifacts/session-analyst/`):
-- Parse `findings[]` arrays from `*.json` files.
+**2c. Orphaned research findings** (`just orphan-findings`) — see below.
 
-**2d. Suggest-Skill Outputs** (`artifacts/suggest-skill/`):
-- Extract skill candidates with frequency, ROI estimate, proposed name.
+**2d. Legacy artifact dirs** (`artifacts/session-retro/`, `artifacts/design-review/`,
+`artifacts/session-analyst/`, `artifacts/suggest-skill/`):
+- **Mtime guard first:** `ls -t <dir> | head -1` + stat — if nothing in the window, SKIP the
+  dir without reading anything. Do not "read each file" in a dir whose newest artifact
+  predates the window (design-review/session-analyst have been static since 2026-04).
+- session-retro is semi-live (cursor retro runs). Parse `findings[]` (JSON) / `### [FINDING-`
+  (md). design-review: prefer `*-synthesis.md`; skip "Already exists". session-analyst:
+  `findings[]` arrays. suggest-skill: candidates with frequency + ROI.
+- If a legacy producer wakes up again (fresh artifacts in-window), it's just data — parse it.
 
-**2e. Reflect-loop Quarantine** (`~/.claude/reflect-quarantine/*.jsonl`):
+**Denominator rule (all sources, this phase and Phase 3):** every extractor/miner invoked
+must report its denominators — files scanned, messages/records parsed, items matched — and
+the harvest output quotes them. A bare `0 found` is indistinguishable from a broken parser;
+the #f extractor returned a silent false-zero for months because nothing forced
+`matched 0 / parsed 0` into view (fixed skills@837f4d2). Treat `matched 0` with a healthy
+denominator as signal, and `parsed 0` as a BROKEN SOURCE to fix before trusting the run.
+
+**2e. Reflect-loop Quarantine (detail)** (`~/.claude/reflect-quarantine/*.jsonl`):
 - The learning loop's deep pass (`just reflect-classify` in agent-infra) emits FM-routed
   enforcer/mint proposals here (status `pending`), each tied to a failure-mode dossier with a
   falsifiable verifier sketch (axis: reach/capability/knowledge/taste). These are already
@@ -101,7 +114,7 @@ For each source type, glob within the date window, read each file, extract actio
   Run `just reflect-review` for the ranked view. Do NOT auto-apply — promote into the harvest
   ranking for human disposition only.
 
-**2f. Orphaned research findings** (`research/trending-scout-*.md` adopt-grade verdicts) —
+**2f. Orphaned research findings (detail)** (`research/trending-scout-*.md` adopt-grade verdicts) —
 **this is the CANONICAL finding-routing protocol; other generators (trending-scout Pipeline
 step 3, future scouts) reference it, never restate it** (constitution principle 9):
 - Harvest's read-path historically EXCLUDED `research/` memos, so trending-scout's
@@ -121,7 +134,11 @@ step 3, future scouts) reference it, never restate it** (constitution principle 
   whole-memo clear). Do NOT inflate the `[ ]` queue with non-actionable items (F1 2026-06-08
   miscount lesson). `doctor.py` surfaces the count daily (`global:orphan-findings`).
 
-**2g. Cross-project memory generalization** (`~/.claude/projects/*/memory/*.md` + `~/.codex/memories/`) —
+**2g. Observe shell-env gate** (`artifacts/observe/*/failures/shell-env-candidate.jsonl`):
+- Auto-staged when `zsh-env:*` agentlogs volume ≥50/30d AND `doctor.py` cross-harness shell checks fail.
+- Treat as **high-priority infra** — same class as bare-python guard gaps; do NOT leave as `[obs]`.
+
+**2h. Cross-project memory generalization** (`~/.claude/projects/*/memory/*.md` + `~/.codex/memories/`) —
 the per-project Claude/Codex memory stores accumulate `feedback`/`reference` lessons learned in ONE
 project that are often generalizable to a shared rule/skill/tool. This surface was historically NEVER
 read by the loop (generation-without-consumption — lessons sit siloed where learned; measured 2026-06-14:
@@ -140,7 +157,7 @@ read by the loop (generation-without-consumption — lessons sit siloed where le
   the user has directed the factoring. Keyword pre-filter over-matches (e.g. "verify" is noisy); the
   dedup-first step is what keeps the `[ ]` queue honest.
 
-**2h. Blindspot misses** (`agent-infra/.claude/blindspot-digest.md`) — the RSI loop's
+**2i. Blindspot misses (detail)** (`agent-infra/.claude/blindspot-digest.md`) — the RSI loop's
 highest-signal source: the moments the human had to CATCH a loop miss (a missed prior
 decision, an existing tool, a git-log fact, the wrong approach). Produced daily by the
 `com.agent-infra.blindspot-miner` launchd job (emb-contrastive over recent sessions;
@@ -475,10 +492,21 @@ For unimplemented findings with `[ ]`: read context, verify 2+ recurrence, class
 New design-review artifacts -> extract proposal -> write to `~/.claude/steward-proposals/`.
 
 **P3: Routine Rotation.**
-Pick highest-priority task that hasn't run within cadence. The **session-learning
-loop rows come first** — they are the reason this skill runs on a `/loop`: mine
-what happened, drain what's actionable, scan the frontier. Cadence follows the
-signal rate (don't re-run a daily-grain miner every tick):
+Due-ness is DERIVED, not remembered (state-externalization, 2026-07-05):
+
+```bash
+uv run python3 /Users/alien/.claude/skills/improve/scripts/rotation_due.py   # cadence table of record
+```
+
+The script reads `maintenance-actions.jsonl` and prints DUE/never per task — pick the
+top one. **Logging contract:** when a tick picks a rotation task, append
+`{"ts": ..., "action": "rotation", "target": "<task-key>", "result": ...}` — the script
+only sees what's logged with its task keys; an unlogged run stays "due" forever.
+Cadence values live in the SCRIPT (single source); the table below documents HOW per
+task and the judgment calls. The **session-learning loop rows come first** — they are
+the reason this skill runs on a `/loop`: mine what happened, drain what's actionable,
+scan the frontier. Cadence follows the signal rate (don't re-run a daily-grain miner
+every tick):
 
 | Task | Cadence | How |
 |------|---------|-----|
@@ -491,7 +519,8 @@ signal rate (don't re-run a daily-grain miner every tick):
 | **Maintain motor (build + shrink drafts)** | Daily — the symmetric ACT motor | Run the agent-infra motor (SAFE/dry-run — it NEVER edits/commits/deploys): `uv run python3 ~/Projects/agent-infra/scripts/maintain_tick.py` drafts a tier-0 BUILD proposal; add `--subtract --ablate` to draft a governance RETIREMENT (gov-shrink + advisory-noise, ablation-gated). Both land in `artifacts/maintain/`. Surface the drafts in the tick report and route by KIND: a **BUILD** draft follows P2 (reversible+agent-infra-local → implement+commit). A **RETIRE** draft is governance DELETION → route to `decisions-pending/` for human sign-off **even when local + ablation-PASS** (removing a scaffold is higher-stakes than adding one; gov-id.md earned-autonomy auto-retirement needs a track record + `AUTO_APPLY_ENABLED`, both OFF by default). **Never auto-remove governance in an unattended tick.** This closes the shrink loop: gov SENSE (row above) → motor drafts → human applies. |
 | **ACT drain (disposition queue)** | Daily (consumes `com.agent-infra.act-drain` digest) | read `~/.claude/act-drain-digest.md` OR run `just act-drain`. Surfaces at SessionStart. Runs `reflect classify` + ranks quarantine / steward / RSI-close pending. **Do NOT add duplicate maintain rows for classify** — this job IS the scheduled classify drain. Human dispositions: `/rsi close`, `just reflect-review`, steward-proposals triage. |
 | Finding drain | Weekly | `/improve harvest` — gather NEW + drain actionable `[ ]` queue |
-| Tool failures | Weekly | `/observe failures` — mine agentlogs for tools/CLIs actually broken in real use (the proxy health-checks can't see this; a dead `corpus` CLI hid for days). Tier-1 deterministic ($0); escalate big clusters. |
+| Tool failures | Weekly | `/observe failures` — mine agentlogs for tools/CLIs actually broken in real use (the proxy health-checks can't see this; a dead `corpus` CLI hid for days). Tier-1 deterministic ($0); escalate big clusters. **`zsh-env:*` clusters** → `shell_env_loop_gate.py` auto-stages when volume + doctor fail. |
+| **Cross-harness shell env** | Weekly (with failures) | `doctor.py` → `global:shell-env-*` checks (agent-zsh-safe, Cursor hooks, Claude uv guard). Failures here mean home-dir shell config drift — not repo hooks. |
 | **Blindspot → detector (RSI convert step)** | Daily (consumes `com.agent-infra.blindspot-miner`'s digest) | read `agent-infra/.claude/blindspot-digest.md` (loop misses the human caught). Cluster (`emb pairs`); for the top recurring cluster, **propose the DETECTOR that would have caught the class** (dedup vs existing hooks first) → `improvement-log` `[ ]` / `decisions-pending/`. This is the loop-closure: a flag becomes coverage. The blindspot-flag rate is the declining-supervision objective — it should fall as detectors land. |
 | Architecture patterns | Weekly (alt. with frontier) | `/observe architecture` — cross-project abstractions |
 | Leverage scan | Weekly | `/leverage` — prospective 10-100x wins observe is structurally blind to |
