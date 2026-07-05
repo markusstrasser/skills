@@ -89,6 +89,40 @@ def main() -> int:
     if not marker.is_file():
         return 0
     if (claude_dir / "goal-done").exists() or (claude_dir / "goal-blocked").exists():
+        # Open-board challenge (fires ONCE): goal-done with unblocked A-rows still
+        # open is the premature-stop class (6th manual flag 2026-07-05) — the goal
+        # FILE finishing is not the board being empty. Repo-generic: only where the
+        # obligation backlog exists. Fail-open on any error.
+        challenged = claude_dir / "goal-done-challenged"
+        backlog = cwd / "loop" / "idea_backlog.py"
+        if (
+            (claude_dir / "goal-done").exists()
+            and not challenged.exists()
+            and backlog.is_file()
+        ):
+            try:
+                import subprocess
+
+                out = subprocess.run(
+                    ["uv", "run", "python3", str(backlog), "list", "--open"],
+                    cwd=cwd, capture_output=True, text=True, timeout=15,
+                ).stdout
+                a_rows = [
+                    ln for ln in out.splitlines()
+                    if " A open " in ln and "dep:" not in ln.split("—")[0]
+                ]
+                if a_rows:
+                    challenged.write_text("\n".join(a_rows) + "\n")
+                    return _block(
+                        "GOAL-DONE CHALLENGED (fires once): the goal file is done but "
+                        f"{len(a_rows)} unblocked A-row(s) remain open:\n"
+                        + "\n".join("  " + ln.strip() for ln in a_rows[:8])
+                        + "\nEither continue working them (portfolio dispatches), or append a "
+                        "per-row deferral reason to HUMAN.md and stop. The board being empty, "
+                        "not the goal file, is the stop condition."
+                    )
+            except Exception:
+                pass
         return 0
     lines = []
     try:
