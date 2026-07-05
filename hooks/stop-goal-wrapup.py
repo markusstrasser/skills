@@ -123,6 +123,37 @@ def main() -> int:
                     )
             except Exception:
                 pass
+        # Conversion-debt challenge (fires ONCE, arc-agi shape but repo-generic via the
+        # status surface): goal-done while the HELD-OUT ratchet is dark is the
+        # characterize-without-converting class (118 commits / 5 days, 2026-07-05
+        # postmortem). Thresholds live in loop/status.py conversion_note() — loaded via
+        # --conversion, never re-stated here (one-definition rule). Fail-open.
+        debt_challenged = claude_dir / "goal-done-debt-challenged"
+        status_py = cwd / "loop" / "status.py"
+        if (
+            (claude_dir / "goal-done").exists()
+            and not debt_challenged.exists()
+            and status_py.is_file()
+        ):
+            try:
+                import subprocess
+
+                line = subprocess.run(
+                    ["uv", "run", "python3", str(status_py), "--conversion"],
+                    cwd=cwd, capture_output=True, text=True, timeout=30,
+                ).stdout.strip()
+                if "CONVERSION DEBT" in line:
+                    debt_challenged.write_text(line + "\n")
+                    return _block(
+                        "GOAL-DONE CHALLENGED (fires once): the held-out conversion ratchet "
+                        "is in debt:\n  " + line + "\nA goal run that promotes mechanisms "
+                        "without a held-out conversion attempt is ratcheting on in-sample "
+                        "characterization (Constitution #1). Either run the composed held-out "
+                        "eval (agent/holdout_eval.py) now, or append the per-run deferral "
+                        "reason to HUMAN.md and stop."
+                    )
+            except Exception:
+                pass
         return 0
     lines = []
     try:
