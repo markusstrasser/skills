@@ -13,11 +13,18 @@ self-contained — the state file records ctx at firing; a later ctx well below
 it means a compaction landed, which re-arms. No PostCompact companion needed,
 and manual /compact re-arms too.
 
-Window source: CLAUDE_CODE_AUTO_COMPACT_WINDOW env (hooks inherit the CLI
-process env; goal-night and goal-loop set it) else 200K default. The binary's
-EFFECTIVE trigger fires ~26K below the configured window (observed
-pre=473,991 on window=500,000, arc-agi 182fba14) — MARGIN=45K prompts the
-wrap-up a comfortable turn before that.
+Window source, in priority order:
+1. CLAUDE_CODE_AUTO_COMPACT_WINDOW env (explicit lever; goal-night/goal-loop
+   set it — it MOVES the native trigger, so it wins when present).
+2. /tmp/claude-ctxpct-<session_id> — statusline.sh tees "pct|tokens|window"
+   from the harness's own context_window payload (same canonical source
+   posttool-context-checkpoint-advisory.sh reads). This is the ground truth
+   for the model's real window: 1M sessions (claude-fable-5[1m]) misfired at
+   ~17% when this hook assumed 200K (6 sessions, 2026-07-06).
+3. 200K default (headless sessions with no statusline and no env).
+The binary's EFFECTIVE trigger fires ~26K below the configured window
+(observed pre=473,991 on window=500,000, arc-agi 182fba14) — MARGIN=45K
+prompts the wrap-up a comfortable turn before that.
 
 Skips: goal-run-owned sessions (the goal ritual is richer), repos with a
 .claude/ctx-wrapup-off file (opt-out). State: ~/.claude/ctx-wrapup/<session>.
@@ -42,6 +49,24 @@ PROMPT = """CONTEXT NEAR AUTO-COMPACT ({ctx:,} tokens; trigger fires ≈{trigger
 2. Loose ends only this context can tie off: in-flight edits, promised follow-ups, doc/index updates for files this session touched.
 3. Rewrite .claude/checkpoint.md as the re-entry brief: STATE (what's done, with commit SHAs/paths), NEXT (2-3 actions with exact commands), VERIFY (commands that re-derive claimed state — never bare numbers across the boundary).
 Then end your turn normally; native auto-compact proceeds on a subsequent turn."""
+
+
+def resolve_window(sid: str) -> int:
+    """Env lever > statusline-teed harness window > 200K default."""
+    try:
+        window = int(os.environ.get("CLAUDE_CODE_AUTO_COMPACT_WINDOW", ""))
+        if window > 0:
+            return window
+    except Exception:
+        pass
+    try:
+        parts = Path(f"/tmp/claude-ctxpct-{sid}").read_text().split("|")
+        window = int(parts[2])
+        if window > 0:
+            return window
+    except Exception:
+        pass
+    return DEFAULT_WINDOW
 
 
 def main() -> int:
@@ -71,12 +96,7 @@ def main() -> int:
     ctx = context_tokens(payload.get("transcript_path", ""))
     if ctx <= 0:
         return 0
-    try:
-        window = int(os.environ.get("CLAUDE_CODE_AUTO_COMPACT_WINDOW", ""))
-    except Exception:
-        window = DEFAULT_WINDOW
-    if window <= 0:
-        window = DEFAULT_WINDOW
+    window = resolve_window(sid)
     threshold = max(80_000 - MARGIN, window - MARGIN)
 
     state_dir = Path.home() / ".claude" / "ctx-wrapup"
