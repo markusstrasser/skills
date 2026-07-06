@@ -344,6 +344,10 @@ Never present inference as sourced fact. Never present training data as retrieve
 - **Skipping paper pipeline:** Using Exa snippets when `search_papers` -> `fetch_paper` -> `ask_papers` would give higher-quality evidence
 </anti_patterns>
 
+**Skill upkeep:** if this research arc hit a defect or friction in THIS skill (a dead tool route, a
+wrong cost, a broken pointer), log it for the next run —
+`~/Projects/skills/hooks/append-skill-memento.sh research '<one-line issue>'`.
+
 $ARGUMENTS
 
 <!-- knowledge-index
