@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: "Use when: /orchestrate, file-bus multi-agent pipeline, baseline-since-last-green → audit → verify → commit-slice, operator briefing. Orchestrator model dispatches scouts; operator approves apply. NOT single-skill /debug (scout-only) or /observe (session retro)."
+description: "Use when: /orchestrate, file-bus multi-agent pipeline (baseline → audit → verify → commit-slice), operator briefing. Orchestrator model dispatches scouts; operator approves apply. NOT /debug (scout-only) or /observe."
 user-invocable: true
 argument-hint: <repo> [mode: audit|fix|ship|status]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent]

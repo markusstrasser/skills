@@ -1,7 +1,7 @@
 ---
 name: leverage
 disable-model-invocation: true
-description: "Use when: /leverage, '10x', 'biggest lever', blind spots, 'what are we missing', frontier audit. Modes: default (order-of-magnitude), missing (negative space), generators. Divergent upside hunt — NOT retros (/observe) or maintenance (/improve maintain)."
+description: "Use when: /leverage, '10x', 'biggest lever', 'what are we missing', frontier audit. Modes: default, missing, generators. NOT retros (/observe) or maintenance (/improve)."
 user-invocable: true
 argument-hint: <workflow or surface to 10x> [--repo path]
 context: fork
