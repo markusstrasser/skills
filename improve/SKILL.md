@@ -286,7 +286,7 @@ Parse project from `$ARGUMENTS`. Default: current project, last 10 sessions.
 ```bash
 ARTIFACT_DIR="$HOME/Projects/agent-infra/artifacts/suggest-skill"
 mkdir -p "$ARTIFACT_DIR"
-python3 ~/Projects/skills/session-analyst/scripts/extract_transcript.py <project> --sessions 10 --output "$ARTIFACT_DIR/input.md"
+python3 ~/Projects/skills/observe/scripts/extract_transcript.py <project> --sessions 10 --output "$ARTIFACT_DIR/input.md"
 ```
 
 Fall back to reading the 10 most recent JSONL files from `~/.claude/projects/-Users-alien-Projects-<project>/` if extractor unavailable.
