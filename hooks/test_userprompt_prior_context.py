@@ -71,6 +71,18 @@ def main() -> None:
     td = fixture_dir()
     base = td.name
 
+    # 0. CC 2.1.x contract: the prompt arrives under `.prompt` (renamed from
+    #    `.user_message` ~2026-06-16). The hook MUST read `.prompt`; a regression
+    #    to reading only `.user_message` silently kills the hook in every real
+    #    session (measured dead 2026-06-16..07-06). Fallback keeps `.user_message`
+    #    working for cross-version safety.
+    out_new = run({"user_message": None, "prompt": "should we build a duckdb dependency guard?",
+                   "cwd": base, "session_id": "s-prompt"})
+    check("reads .prompt (CC 2.1.x field)", "duckdb" in ctx(out_new).lower())
+    out_old = run({"user_message": "should we build a duckdb dependency guard?",
+                   "cwd": base, "session_id": "s-usermsg"})
+    check(".user_message fallback still works", "duckdb" in ctx(out_old).lower())
+
     # 1. No intent -> silent (even though "duckdb" matches prior work).
     out = run({"user_message": "the duckdb guard is working great, thanks",
                "cwd": base, "session_id": "s1"})
