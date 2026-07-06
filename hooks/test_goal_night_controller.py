@@ -141,6 +141,54 @@ class TestStopWrapup(GoalNightBase):
         self.assertFalse(self.has("goal-done-challenged"))
 
 
+class TestUnstartedGoal(GoalNightBase):
+    """Opt-in .claude/goal-deliverable -> loud UNSTARTED warning on zero deliverable progress."""
+
+    @staticmethod
+    def _reason(stdout):
+        for line in stdout.splitlines():
+            try:
+                return json.loads(line).get("reason", "")
+            except Exception:
+                continue
+        return ""
+
+    def test_unstarted_warns_when_deliverable_zero(self):
+        self.arm(threshold=10**9)
+        self.state("goal-continues", "1")  # n>=1: goal has been continuing
+        self.state("goal-deliverable", "echo 0/258")
+        _, out = run_hook(STOP, self.payload(transcript_path="/nonexistent"))
+        self.assertEqual(decision(out), "block")
+        self.assertIn("GOAL UNSTARTED", self._reason(out))
+        self.assertIn("0/258", self._reason(out))
+        self.assertTrue(self.has("goal-unstarted-warned"))
+
+    def test_no_warn_when_deliverable_has_progress(self):
+        self.arm(threshold=10**9)
+        self.state("goal-continues", "1")
+        self.state("goal-deliverable", "echo 42/258")
+        _, out = run_hook(STOP, self.payload(transcript_path="/nonexistent"))
+        self.assertEqual(decision(out), "block")
+        self.assertNotIn("GOAL UNSTARTED", self._reason(out))
+        self.assertFalse(self.has("goal-unstarted-warned"))
+
+    def test_no_warn_without_marker(self):
+        self.arm(threshold=10**9)
+        self.state("goal-continues", "1")
+        _, out = run_hook(STOP, self.payload(transcript_path="/nonexistent"))
+        self.assertEqual(decision(out), "block")
+        self.assertNotIn("GOAL UNSTARTED", self._reason(out))
+
+    def test_unstarted_fires_once(self):
+        self.arm(threshold=10**9)
+        self.state("goal-continues", "2")
+        self.state("goal-deliverable", "echo 0/258")
+        self.state("goal-unstarted-warned", "prev\n")  # already warned
+        _, out = run_hook(STOP, self.payload(transcript_path="/nonexistent"))
+        self.assertEqual(decision(out), "block")
+        self.assertNotIn("GOAL UNSTARTED", self._reason(out))
+
+
 class TestPostcompactRearm(GoalNightBase):
     def test_owner_compaction_rearms(self):
         self.arm()

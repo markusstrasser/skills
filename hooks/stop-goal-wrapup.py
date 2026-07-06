@@ -17,6 +17,11 @@ one hook drives the whole night:
 
 Escapes the agent controls: touch .claude/goal-done (goal complete + verified),
 touch .claude/goal-blocked (write HUMAN.md first). Operator disarm: rm .claude/goal-run.
+
+Optional goal<->deliverable binding: write a progress-check command to .claude/goal-deliverable
+(e.g. `ls results/syn3sr/stage-*.done | wc -l | sed 's:$:/258:'`). When armed, a continuing goal
+whose deliverable is still at ZERO progress gets a loud one-time UNSTARTED warning — the class the
+agent conflated with "condition not yet met" (2026-06-27 syn3sr). No marker -> no firing.
 Continuation budget (MAX_CONTINUES) bounds a pathological spin; PostCompact re-arms
 the ritual for the next fill cycle. Fail-open everywhere (P10).
 
@@ -24,6 +29,8 @@ Context measurement: lib_context_tokens (shared with stop-context-wrapup.py —
 the two Stop hooks must agree on what "current context" means).
 """
 import json
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -31,6 +38,37 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib_context_tokens import context_tokens  # noqa: E402
 
 MAX_CONTINUES = 100
+
+
+def _deliverable_progress(cwd: Path, claude_dir: Path):
+    """Opt-in goal<->deliverable binding: .claude/goal-deliverable holds a shell command that
+    prints the goal's checkable progress ("done/total" or a bare integer). Returns (raw, done,
+    total|None) or None when unbound / unparseable. done==0 is the UNSTARTED signal (the goal's
+    deliverable has zero progress — the class the agent conflated with "condition not yet met",
+    2026-06-27 genomics syn3sr). Narrow trigger: fires nothing unless the operator armed the marker.
+    """
+    marker = claude_dir / "goal-deliverable"
+    if not marker.is_file():
+        return None
+    try:
+        cmd = marker.read_text().strip()
+    except Exception:
+        return None
+    if not cmd:
+        return None
+    try:
+        out = subprocess.run(
+            cmd, shell=True, cwd=str(cwd), capture_output=True, text=True, timeout=15
+        ).stdout.strip()
+    except Exception:
+        return None
+    m = re.search(r"(\d+)\s*/\s*(\d+)", out)
+    if m:
+        return (out[:120], int(m.group(1)), int(m.group(2)))
+    m = re.search(r"-?\d+", out)
+    if m:
+        return (out[:120], int(m.group(0)), None)
+    return None
 
 WRAPUP_PROMPT = """CONTEXT THRESHOLD REACHED ({ctx:,} >= {thr:,} tokens) — run the wrap-up ritual NOW, while full context exists. Order matters:
 
@@ -177,7 +215,31 @@ def main() -> int:
         counter.write_text(str(n + 1))
     except Exception:
         pass
-    return _block(CONTINUE_PROMPT.format(n=n + 1, cap=MAX_CONTINUES))
+
+    # UNSTARTED detection (opt-in, fires ONCE): the goal keeps CONTINUING but its bound deliverable
+    # has zero progress -> the agent may be monitoring already-done work instead of starting the goal
+    # (2026-06-27 genomics: syn3sr sat 0/258 an entire overnight window while markus/syn2sr, both
+    # done, were monitored). No-op unless .claude/goal-deliverable is armed; fail-open.
+    unstarted_prefix = ""
+    warned = claude_dir / "goal-unstarted-warned"
+    if n >= 1 and not warned.exists():
+        prog = _deliverable_progress(cwd, claude_dir)
+        if prog is not None and prog[1] == 0:
+            label, _done, total = prog
+            tot = f"/{total}" if total is not None else ""
+            try:
+                warned.write_text(f"{label}\n")
+            except Exception:
+                pass
+            unstarted_prefix = (
+                f"GOAL UNSTARTED: deliverable at 0{tot} after {n} continuation(s). You have been "
+                f"CONTINUING, but the goal's checkable deliverable has ZERO progress — you may be "
+                f"monitoring already-done work instead of starting the goal (progress check output: "
+                f"{label}). START the deliverable NOW, or if it is intentionally deferred, say so "
+                f"explicitly and touch .claude/goal-blocked with the reason in HUMAN.md. Do NOT keep "
+                f"monitoring done work.\n\n"
+            )
+    return _block(unstarted_prefix + CONTINUE_PROMPT.format(n=n + 1, cap=MAX_CONTINUES))
 
 
 if __name__ == "__main__":
