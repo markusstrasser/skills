@@ -32,48 +32,34 @@ If 3+ sessions active: keep questions shorter, batch ambiguous items.
 
 ## Tool Routing
 
-> **Default web-research backend: Exa, then Brave** (operator routing pref, 2026-06-09). **Perplexity is downranked to fallback** — reach for it only for the narrow exact-number case below, and expect quota flakiness (recurrent 401s). Reason: in live sessions Perplexity quota-exhausts unpredictably and is NOT an independent index; Exa + Brave are the durable, independently-indexed pair. Don't open with Perplexity. (This is a default-ordering change, not a capability claim — the genomics exact-number edge below still holds where it applies.)
+> **Default web backend: Exa, then Brave** (operator pref 2026-06-09). Perplexity is fallback-only
+> (quota-flaky, NOT an independent index) — reach for it only for the biomedical exact-number niche
+> below. Exa + Brave are the durable independently-indexed pair (but they agree ~95% at verdict
+> level, κ=0.708 — triangulating both rarely adds signal). Cost/benchmark basis for every routing
+> call here: [references/tool-routing.md](references/tool-routing.md).
 
-**Quick routing by need:**
-- **Factual lookup (need the number):** **Exa first** — `web_search_advanced_exa` (or `verify_claim` for a specific value), then Brave. Fall back to `perplexity_ask` (~$0.01-0.05/call) ONLY for exact numeric lookups (bp counts, odds ratios, gene/protein sizes) where it empirically beat Exa `/answer` 5-0 on the genomics eval — and only after Exa/Brave came up short. Default to Exa otherwise.
-- **Factual verification (have the number, need to check it):** `verify_claim` (Exa /answer, ~$0.005/call, cached 7d) — confirms or denies a specific claim. Cheaper but less precise — says "supported" without giving the exact value. Best for checking numbers you already have.
-- **Academic papers:** `search_papers` (S2, 220M+) for discovery -> `fetch_paper` + `read_paper` before citing
-- **Recent papers (<6mo):** `web_search_advanced_exa` with `category: "research paper"` + date filter (S2 has no date filtering)
-- **Recent preprints:** `search_preprints` (bioRxiv/medRxiv, free, date-range filtering)
-- **Citation stance:** `search_literature` (scite) — 1.6B+ citations classified as supporting/contrasting/mentioning
-- **Patents / grants / FDA 510(k) / UK MHRA:** scite Pro — `search_patents`, `search_grants`, `search_device510k` + `search_510k_summaries`, `search_mhra`. No fleet equivalent for any of these; reach for 510(k)/MHRA on regulatory predicate work, patents for IP landscape, grants for funder mapping.
-- **Entity enrichment:** `web_search_advanced_exa` with `type: "deep"` + `outputSchema` — structured JSON with per-field citations, eliminates search->fetch->extract chains
-- **Database lookups (UniProt, gnomAD, ClinVar):** Exa/Brave websearch, NOT S2 (returns papers *about* databases, not the data). This is an empirical finding (EBF3 benchmark) — websearch found exact domain boundaries that academic tools missed.
-- **News/events:** `brave_news_search` (24h-7d), Exa with date filter for older
-- **URL discovery / cheap search:** **Brave or Exa first**; `perplexity_search` (~$0.005/call) is a fallback only (raw ranked results, comparable to Brave but quota-flaky).
-- **Triangulation:** Exa + Brave (confirmed independent indexes). Perplexity is NOT independent (uses same underlying indexes).
-- **Deep "why" analysis:** `perplexity_reason` (~$0.05-0.15/call) — chain-of-thought with web grounding. Only for analytical questions needing reasoning + evidence.
-- **Comprehensive surveys:** `perplexity_research` (~$0.15-0.50/call, slow 30s+) — multi-source deep research. Reserve for literature-survey-scale questions. **Cost discipline:** it was ~87% of Perplexity spend in May 2026 — always pass `reasoning_effort: medium` (or `low`), never default `high`; opt-in for broad scope only; re-grade vs Exa Deep first. See `references/tool-routing.md` §Perplexity cost discipline.
-- **Autonomous deep research:** `deep_research` (~$2-5/call, 2-10min async) — Gemini Deep Research agent conducts 80-160 web searches autonomously. Use when the question is broad/unknown-scope, needs multi-source synthesis, and you have time. Returns a full report with inline citations. Overkill for focused questions — use the paper pipeline or perplexity_research instead.
-- **Complex multi-step web research:** `parallel_task` (core ~$0.05/call, ultra ~$0.30-$2.40/call) — Parallel Task API. Code-execution sandbox keeps intermediate data out of context. Best for causal-chain questions requiring cross-referencing across multiple web sources (e.g., "find co-authors across 3 institutions, then check which joined a federal committee"). Processor tiers: lite ($0.005) for simple lookups, core ($0.05) default, ultra+ ($0.30-$2.40) for hard multi-step. 70-82% on DeepSearchQA (vs GPT-5.4 63%, Opus 58%). Latency: 10-60s. Use `parallel_search` for quick web-grounded lookups as alternative to `verify_claim`.
+**Quick routing by need** (tool ← need; full tool table + per-engine precision in the reference):
+- **Factual lookup (need the number):** Exa `web_search_advanced_exa` → Brave. `perplexity_ask` ONLY for biomedical exact numbers (bp/OR/gene sizes; 5-0 vs Exa on the genomics eval) after Exa/Brave miss.
+- **Factual verification (have the number):** `verify_claim` (Exa /answer, ~$0.005, cached 7d).
+- **Academic papers:** `search_papers` (S2) → `fetch_paper` + `read_paper` before citing.
+- **Recent papers (<6mo):** `web_search_advanced_exa` `category:"research paper"` + date filter (S2 has no date filter).
+- **Recent preprints:** `search_preprints` (bioRxiv/medRxiv, free, date-range).
+- **Citation stance:** `search_literature` (scite). **Patents/grants/FDA 510(k)/MHRA:** scite Pro (no fleet equivalent).
+- **Entity enrichment:** `web_search_advanced_exa` `type:"deep"` + `outputSchema` (per-field citations).
+- **Database lookups (UniProt/gnomAD/ClinVar):** Exa/Brave websearch, NOT S2 (S2 returns papers *about* the DB).
+- **News/events:** `brave_news_search` (24h-7d); Exa + date filter for older.
+- **Deep "why":** `perplexity_reason` (~$0.05-0.15). **Surveys:** `perplexity_research` (pass `reasoning_effort:medium`, never default high). **Autonomous deep:** `deep_research` (~$2-5, async). **Multi-step causal chains:** `parallel_task` (retrieval≠synthesis — start with Exa for exact-source memos).
 
-**Interpret Parallel benchmarks correctly:**
-- Parallel's published wins are on **DeepSearchQA-style multi-hop answer generation**, not exact-source retrieval. High benchmark accuracy means the harness is good at navigating causal chains, not that it will beat Exa at landing on the single best paper/page for a memo.
-- Treat `parallel_task` as a **reasoning/synthesis engine**. Treat Exa as a **retrieval engine**. These are different jobs.
-- For memo-grade work where the question is really "what is the exact paper / benchmark / official page?", start with Exa (and crawl the winning URLs) before using Parallel.
-- For broad "figure out the answer across many pages" questions, Parallel may beat a naive search loop.
-- `ultra` is a **background job**, not an interactive tool. Prefer async start/result for `ultra` and `ultra8x`.
+**Parallel vs Exa, and the genomics empirical routing** (Exa wins exact-source targeting; Parallel core
+wins broad multi-hop): full write-ups in references/tool-routing.md §Parallel-vs-Exa and §EBF3.
 
-**Empirical routing update (genomics eval, 2026-04-07):**
-- Exa beat Parallel core on **exact source targeting** for CMRG hard-locus benchmarking, targeted long-read PGx comparison, and CHIP assay-limit papers.
-- Parallel core produced decent one-shot answers, but often cited broader adjacent sources instead of the sharpest primary source.
-- For "write a defensible memo with the right citations," Exa search -> crawl was better.
-- For "draft me an answer with citations," Parallel core was useful.
 
 **Paper pipeline (Standard+ academic queries) — run this, not just Exa snippets:**
 `search_papers` -> `save_paper` (seed papers) -> `fetch_paper` -> `get_paper` -> `prepare_evidence` -> `ask_papers(use_rcs=True)`
 This is the highest-quality evidence path. RCS scoring produces significantly better synthesis than websearch snippets (PaperQA2 ablation: p<0.001). 3 well-read papers beat 20 snippet-scanned papers.
 
-**When `fetch_paper` fails (Sci-Hub + Unpaywall both miss) — the green-OA / Cloudflare-blocked retrieval ladder** (validated 2026-07-04 on De Benedictis 1999 FASEB, PMID 10463944, DOI 10.1096/fasebj.13.12.1532 — closed on Unpaywall, Sci-Hub behind a captcha, yet fully open at a university repository):
-1. **Confirm the wall is real, not a dead mirror.** `fetch_paper` tries Sci-Hub then Unpaywall `best_oa_location` only. A Sci-Hub miss is often a *transport* failure — mirrors rotate and now gate behind a captcha (do NOT solve it; captcha-bypass is prohibited). Papers too new (post-~2021) are genuinely absent from Sci-Hub. Neither miss means "no free copy exists."
-2. **Look for GREEN OA that Unpaywall missed** — institutional repositories are the big blind spot. Two discovery moves: (a) the **PubMed page's "full text links" sidebar** flags free-full-text providers by name (e.g. "Archivio Istituzionale della Ricerca Unimi — Access Free Full Text"); (b) EuropePMC core record — `https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=EXT_ID:<PMID>%20AND%20SRC:MED&resultType=core&format=json` — whose `fullTextUrlList` lists free/embargo-expired copies ("Free after 12 months" on a decades-old paper = now free). Author-affiliation repos (DSpace/IRIS: `air.unimi.it`, `iris.*`, `*.edu` handles) very often host the publisher's own PDF as `accesso aperto`.
-3. **Bypass Cloudflare with `crawling_exa`.** These repos routinely 403 curl / WebFetch / the MCP downloader (Cloudflare "Just a moment…" challenge), but **Exa's `crawling_exa` renders through it and returns the extracted full text** — including a PDF *bitstream* URL directly. DSpace bitstream pattern: `https://<repo>/bitstream/<handle>/<seq>/<filename>.pdf` (seq is usually 1 or 2); IRIS DSpace-CRIS uses `.../retrieve/<uuid>/<filename>.pdf`. Crawl the handle page to get the filename, then crawl the bitstream URL for the body text. Archive the result with `save_source` (the binary PDF stays behind Cloudflare, but the extracted text is the governable evidence).
-4. **Genuinely paywalled full text** (recent subscription-only, e.g. Karger/Wiley post-embargo with no green copy) needs institutional access — drive a real browser (`claude-in-chrome`) with the user's library login, or ask the user. Do NOT purchase PPV. Note: the publisher abstract page + title + reference list are usually Exa-crawlable even when the body 403s, and often already carry the load-bearing claim.
+**When `fetch_paper` fails (Sci-Hub + Unpaywall both miss):** the green-OA / Cloudflare retrieval ladder (confirm-the-wall → find green OA Unpaywall missed via PubMed sidebar / EuropePMC `fullTextUrlList` → bypass Cloudflare with `crawling_exa` on the DSpace bitstream → institutional access for genuinely-paywalled) lives in [references/tool-routing.md](references/tool-routing.md) §fetch_paper-failure-recovery.
+
 
 **Critical rules:**
 - `fetch_paper` then `get_paper`/`read_paper` BEFORE citing. Abstracts are not primary sources.
