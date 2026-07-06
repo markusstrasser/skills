@@ -48,6 +48,8 @@ def active_skills(session_id: str) -> list[dict]:
             row = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if not isinstance(row, dict):
+            continue  # corrupt log fragments can parse as bare scalars ("1." -> 1.0)
         if row.get("event") != "skill_invoke" or row.get("session") != session_id:
             continue
         try:
@@ -88,4 +90,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Exception:
+        sys.exit(0)  # fail open per contract — never break compaction

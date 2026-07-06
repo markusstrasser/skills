@@ -50,5 +50,8 @@ if echo "${RESULT} ${CLAUDE_TOOL_RESULT:-}" | grep -qi "error\|failed\|exception
     EXIT_CODE=1
 fi
 
-printf '{"ts":"%s","event":"skill_complete","skill":"%s","mode":"%s","session":"%s","project":"%s","duration_ms":%d,"exit_code":%d}\n' \
-    "$TS" "$SKILL" "$MODE" "$SESSION" "$PROJECT" "$DURATION_MS" "$EXIT_CODE" >> "$LOGFILE"
+# jq -cn, never printf: unescaped fields corrupted the log (2026-07-06).
+jq -cn --arg ts "$TS" --arg skill "$SKILL" --arg mode "$MODE" \
+    --arg session "$SESSION" --arg project "$PROJECT" \
+    --argjson duration_ms "${DURATION_MS:-0}" --argjson exit_code "${EXIT_CODE:-0}" \
+    '{ts:$ts,event:"skill_complete",skill:$skill,mode:$mode,session:$session,project:$project,duration_ms:$duration_ms,exit_code:$exit_code}' >> "$LOGFILE"
