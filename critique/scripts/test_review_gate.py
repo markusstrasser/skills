@@ -96,7 +96,7 @@ class ReviewGateTest(unittest.TestCase):
             review_dir = None
             base = head = None
             mode = "model"
-            budget_seconds = 480
+            budget_seconds = 900  # must sit at/above the axis-profile floor (600s for standard)
             dispatch_out = out
             json = False
 
@@ -104,7 +104,70 @@ class ReviewGateTest(unittest.TestCase):
         policy = json.loads(out.read_text())["dispatch_policy"]
         self.assertEqual(policy["context_scope"], "packet")
         self.assertFalse(policy["premise_scout"])
-        self.assertEqual(policy["budget_seconds"], 480)
+        self.assertEqual(policy["budget_seconds"], 900)
+
+    def test_triage_budget_below_floor_is_config_error(self) -> None:
+        # 480 < the 600s standard-axis profile timeout: the ad6ba340 incident shape.
+        # Triage must refuse (exit 2) and must NOT emit dispatch.json.
+        out = self.repo / ".model-review" / "dispatch.json"
+
+        class Args:
+            repo = self.repo
+            packet = self.packet
+            manifest = None
+            review_dir = None
+            base = head = None
+            mode = "model"
+            budget_seconds = 480
+            dispatch_out = out
+            json = False
+
+        self.assertEqual(rg.cmd_triage(Args), 2)
+        self.assertFalse(out.exists())
+
+    def test_triage_budget_at_floor_passes(self) -> None:
+        out = self.repo / ".model-review" / "dispatch.json"
+        floor, _axis = rg.axis_budget_floor("standard")
+
+        class Args:
+            repo = self.repo
+            packet = self.packet
+            manifest = None
+            review_dir = None
+            base = head = None
+            mode = "model"
+            budget_seconds = floor
+            dispatch_out = out
+            json = False
+
+        self.assertEqual(rg.cmd_triage(Args), 0)
+        policy = json.loads(out.read_text())["dispatch_policy"]
+        self.assertEqual(policy["budget_seconds"], floor)
+
+    def test_triage_manifest_budget_below_floor_is_config_error(self) -> None:
+        # design_target.budget_seconds from the packet manifest hits the same floor.
+        manifest = {
+            "review_targets": {
+                "design_target": {"owner": "critique", "axes": "standard", "budget_seconds": 300},
+            },
+            "payload_hash": "abc-floor",
+        }
+        self.packet.with_suffix(".manifest.json").write_text(json.dumps(manifest))
+        out = self.repo / ".model-review" / "dispatch.json"
+
+        class Args:
+            repo = self.repo
+            packet = self.packet
+            manifest = None
+            review_dir = None
+            base = head = None
+            mode = "model"
+            budget_seconds = None
+            dispatch_out = out
+            json = False
+
+        self.assertEqual(rg.cmd_triage(Args), 2)
+        self.assertFalse(out.exists())
 
     def test_triage_dead_ref_blocks(self) -> None:
         # Dead refs BLOCK in close mode (diff-coherence). For a pure design doc
