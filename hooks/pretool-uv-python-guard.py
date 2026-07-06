@@ -48,18 +48,34 @@ def _project_has_uv(cwd: str) -> bool:
     return (root / "pyproject.toml").is_file() or (root / "uv.lock").is_file()
 
 
+def _in_quotes(cmd: str, pos: int) -> bool:
+    """Crude but safe: odd count of ' or \" before pos → inside a quoted region."""
+    return cmd.count("'", 0, pos) % 2 == 1 or cmd.count('"', 0, pos) % 2 == 1
+
+
 def _rewrite_bare_python(cmd: str) -> str | None:
-    """Rewrite bare python invocations to `uv run python`. None if unchanged."""
+    """Rewrite bare python invocations to `uv run python`. None if unchanged.
+
+    All spans are collected against the ORIGINAL string and applied in reverse
+    offset order — splicing left-to-right after an insertion shifts every later
+    offset by +7 ("uv run ") and corrupts the command (2026-07-06 exhibits:
+    `/dev/null || python3` → `/dev/nuv…`, `jsonl | python3` → `.juv…python3python3`).
+    Spans inside quoted regions are skipped (a `python3` in a commit message must
+    never be spliced)."""
     if _UV_RUN.search(cmd):
         return None
-    out = cmd
+    spans: list[tuple[int, int, str]] = []
     m = _BARE_PY_START.search(cmd)
-    if m and _is_invocation(cmd, m.end()):
-        out = re.sub(r"^\s*(python3?|python)\b", r"uv run \1", out, count=1)
-    for m in list(_BARE_PY_COMPOUND.finditer(cmd)):
-        if _is_invocation(cmd, m.end()):
-            py = m.group(1)
-            out = out[: m.start(1)] + f"uv run {py}" + out[m.end(1) :]
+    if m and _is_invocation(cmd, m.end()) and not _in_quotes(cmd, m.start(1)):
+        spans.append((m.start(1), m.end(1), m.group(1)))
+    for m in _BARE_PY_COMPOUND.finditer(cmd):
+        if _is_invocation(cmd, m.end()) and not _in_quotes(cmd, m.start(1)):
+            spans.append((m.start(1), m.end(1), m.group(1)))
+    if not spans:
+        return None
+    out = cmd
+    for s, e, py in sorted(spans, reverse=True):
+        out = out[:s] + f"uv run {py}" + out[e:]
     return out if out != cmd else None
 
 
@@ -114,6 +130,13 @@ def _selftest() -> int:
         ("cd x && python3 -c 'import duckdb'", "cd x && uv run python3 -c 'import duckdb'"),
         ("uv run python3 foo.py", None),
         ("which python3", None),
+        # multi-match offset regression (2026-07-06 corruption exhibits):
+        ("tail -1 x.jsonl 2>/dev/null || python3 a.py | python3 -m json.tool",
+         "tail -1 x.jsonl 2>/dev/null || uv run python3 a.py | uv run python3 -m json.tool"),
+        ("python3 d.py --drain 2>&1 | tail -6; tail -1 x.jsonl | python3 -m json.tool",
+         "uv run python3 d.py --drain 2>&1 | tail -6; tail -1 x.jsonl | uv run python3 -m json.tool"),
+        # quoted python must never be spliced:
+        ("git commit -m 'run && python3 later'", None),
     ]
     for cmd, want in rw_cases:
         got = verdict(cmd, can_rewrite=True)
@@ -134,7 +157,7 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except Exception:
         return 0
-    if payload.get("tool_name") not in (None, "Bash"):
+    if payload.get("tool_name") not in (None, "Bash", "Shell"):
         return 0
     ti = payload.get("tool_input") or {}
     cmd = ti.get("command", "")
