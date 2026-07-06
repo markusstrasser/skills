@@ -6,16 +6,19 @@ import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Sequence
 
 HOOK = Path(__file__).parent / "precompact-skill-arcs.py"
 
 
-def run_hook(payload: dict, log_lines: list[dict], goal_run: bool = False) -> str:
+def run_hook(payload: dict, log_lines: Sequence[dict | str], goal_run: bool = False) -> str:
     with tempfile.TemporaryDirectory() as td:
         home = Path(td)
         (home / ".claude").mkdir()
         log = home / ".claude" / "skill-triggers.jsonl"
-        log.write_text("\n".join(json.dumps(r) for r in log_lines))
+        log.write_text(
+            "\n".join(r if isinstance(r, str) else json.dumps(r) for r in log_lines)
+        )
         cwd = home / "proj"
         (cwd / ".claude").mkdir(parents=True)
         if goal_run:
@@ -80,7 +83,15 @@ def main() -> int:
     )
     assert "/decide" in out, out
     ok += 1
-    print(f"OK — {ok}/7 cases pass")
+    # 8. corrupt log fragments (non-dict JSON scalars + raw prose) -> skipped,
+    #    good rows still fire (regression: 2026-07-06 compaction crash on "1." -> 1.0)
+    out = run_hook(
+        {"session_id": "s1"},
+        [row("decide", "s1"), "1.", "Adversarial", "[1,2]", "null", '"str"'],
+    )
+    assert "/decide" in out, out
+    ok += 1
+    print(f"OK — {ok}/8 cases pass")
     return 0
 
 
