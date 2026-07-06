@@ -1,6 +1,6 @@
 ---
 name: diagnose
-description: "Use when: diagnosing ONE specific bug or performance regression — \"diagnose\", \"debug this\", \"why is X broken/throwing/failing/slow\". Single-agent discipline: build the feedback loop FIRST. NOT fan-out audit / bug-hunt across a repo (that's /debug), NOT plan critique (/critique)."
+description: "Use when: diagnosing ONE bug or perf regression — \"diagnose\", \"debug this\", \"why is X broken/failing/slow\". Build the feedback loop FIRST. NOT repo-wide bug hunt (/debug) or plan critique (/critique)."
 user-invocable: true
 argument-hint: "[the bug / regression to diagnose]"
 allowed-tools: [Read, Glob, Grep, Bash, Edit, Write]
