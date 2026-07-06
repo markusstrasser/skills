@@ -147,6 +147,44 @@ if my_touched:
     # no-ledger foreign fallback -- just applied to the in-both case.
     contested = sorted(f for f in new_changes if f in my_touched and f in other_touched)
     new_changes = [f for f in new_changes if f in my_touched and f not in other_touched]
+    # CONTESTED-BY-CONTENT (2026-07-06, peer checkpoint 0a2873a): path-ownership never
+    # expires, so a file I edited hours ago whose CURRENT dirt was written by a peer
+    # Bash append (invisible to every ledger) still auto-commits under my session-id.
+    # Guard: the .hashes.txt sidecar (posttool-session-touched-log.sh) records the
+    # content hash at my last Edit/Write; if the file current content differs,
+    # someone/something wrote after me -> defer it like contested (surfaced, not lost).
+    # Files with no hash entry (pre-sidecar ledger lines) keep legacy behavior.
+    import hashlib as _hl
+    _my_hashes = {}
+    try:
+        with open(f"/tmp/session-touched-{session_id}.hashes.txt") as _fh:
+            for _ln in _fh:
+                if "\t" in _ln:
+                    _rp, _hv = _ln.rstrip("\n").split("\t", 1)
+                    if os.path.isabs(_rp):
+                        try:
+                            _rp = os.path.relpath(_rp, cwd)
+                        except ValueError:
+                            continue
+                    _my_hashes[_rp] = _hv  # last write wins
+    except OSError:
+        pass
+    if _my_hashes:
+        _stale = []
+        for _f in list(new_changes):
+            _want = _my_hashes.get(_f)
+            if _want is None:
+                continue
+            try:
+                with open(os.path.join(cwd, _f), "rb") as _fh:
+                    _cur = _hl.sha256(_fh.read()).hexdigest()
+            except OSError:
+                continue
+            if _cur != _want:
+                _stale.append(_f)
+        if _stale:
+            contested = sorted(set(contested) | set(_stale))
+            new_changes = [f for f in new_changes if f not in _stale]
 elif ledger_files:
     # A ledger producer exists and there ARE session ledgers, but THIS sessions
     # ledger is empty. Under concurrent peers sharing a checkout, current-session-id

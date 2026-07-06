@@ -34,5 +34,19 @@ try:
         fh.write(rel + '\n')
 except OSError:
     pass
+# Content hash at write time -> /tmp/session-touched-<sid>.hashes.txt (path\thash).
+# Consumer: stop-uncommitted-warn.sh commits a my_touched file ONLY if its current
+# content still matches the owner's last-written hash — a later mutation by a peer
+# session or an unledgered subprocess makes it contested-by-content and DEFERRED,
+# never swept (2026-07-06: peer checkpoint 0a2873a committed another session's
+# justfile/HINDSIGHT content because path-ownership from hours earlier never expired).
+try:
+    import hashlib
+    with open(fp, 'rb') as fh:
+        h = hashlib.sha256(fh.read()).hexdigest()
+    with open(f'/tmp/session-touched-{sid}.hashes.txt','a') as fh:
+        fh.write(f'{rel}\t{h}\n')
+except OSError:
+    pass
 " 2>/dev/null
 exit 0
