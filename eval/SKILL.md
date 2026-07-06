@@ -196,54 +196,25 @@ Answer in writing (they become PREREGISTRATION.md fields):
      flowing stream. **Curating the packet enforces the PIT boundary by construction — don't try to
      PIT a live search.** If you must test retrieval, do it against a FROZEN snapshot (Wayback/Common
      Crawl at T) and state the coverage ceiling; don't pretend live fetch is as-of-T.
-   - **Same-family confound — at EVERY model touchpoint, not just the generator.** General rule:
-     *any model that helps produce or score the eval's relevance signal must be neutral to all
-     candidates* (share no lab/family). Three touchpoints, all real:
-     - **Generator** (LLM-written cases/queries): a candidate-sibling generator inflates that candidate
-       (its paraphrase distribution aligns with the sibling's representation space). ≥2 neutral-family
-       generators, temp 0, persisted fixtures, report a generator effect. (Evidence: bio_embedding_bakeoff
-       v1 — gemini-flash queries gave the gemini embedder pooled P=0.97; neutral GPT → a tie.)
-     - **Judge** (LLM-graded relevance): never grade with a candidate's sibling family. **Blinding to
-       model identity does NOT protect you** — the bias rides the *content* of the grades (a sibling
-       judge rates the candidate's neighbors relevant via shared representation space), not the label.
-       ≥2 neutral families, report inter-judge κ, anchor with a human spot-check. (v2: GPT+Claude
-       judges, never Gemini, κ=0.669.)
-     - **Reranker / fusion in a consumer lane**: a reranker from a candidate's family can't be the
-       *deciding* lane — decide on the model-agnostic (raw cosine) lane, treat the production rerank as
-       a diagnostic. (v2: production reranker is gte-family → the gte-vs-gemini2 switch is decided on the
-       isolation lane. Mechanical nuance: a *text* cross-encoder scores blind to the retriever so its
-       scoring origin-bias is ~0, but its notion of relevance still shares a lab — it informs, doesn't gate.)
+   - **Same-family confound — at EVERY model touchpoint** (generator / judge / reranker-fusion):
+     any model that helps produce or score the eval's relevance signal must share no lab/family with
+     any candidate. ≥2 neutral-family generators and judges (blinding does NOT protect — the bias
+     rides the content of the grades); a candidate-family reranker informs, never gates. Measured
+     incidents + mechanics: [references/anti-pattern-evidence.md](references/anti-pattern-evidence.md) §Phase-1.
    - **Cheap pre-screen before building an embedder bakeoff at all:** embed the corpus with both
      candidates, run a handful of queries through the *production* stack, measure top-10 overlap. **>~0.85
      ⇒ the swap is immaterial — don't build the full graded eval.** (v2 measured 0.89: through hybrid+rerank
      the two embedders returned ~9 of the same 10 docs. The full eval confirmed HOLD, but the overlap screen
      predicts "switching changes ~1 in 10" in minutes — run it at the §0 gate.)
-   - **Frontier judge bias (current, measured + reconciled with prior art).** *Established:*
-     **position/order bias is solved** on frontier judges (our probe: 0 position-locks over 66
-     presentations incl. ambiguous pairs; corroborated by `arXiv:2604.23178` position ≤0.04, "style is
-     the dominant bias"). Stop spending order-swap/position-debias on frontier judges. *Established
-     (use it):* **same-lab judges share a style signature → a same-lab panel is ~1 effective vote and
-     any Bradley-Terry/Elo SE on it is false precision** — use a **cross-lab panel**, read disagreement
-     as signal (`arXiv:2601.05114`: judges self-consistent but disagree — "measuring different
-     things"). Self-preference is real and quality-controllable to measure (`arXiv:2604.22891`
-     PIR-vs-Null-PIR framework, `2604.06996` GPT-5/Claude-4.5). *RETRACTED — cautionary tale:* our n=5
-     probe found GPT/Gemini "prefer padded filler 8–9/10"; a controlled-ratio study (`2604.23178`,
-     n=825, truncation controls) found the **opposite** — frontier judges penalize filler and reward
-     genuine completeness. Our "verbosity bias" was a **length-RATIO artifact** (3–4× padding), not a
-     length preference. **Lesson: see "controlling *a* confound, not *the* confound" in Anti-patterns.**
-     Re-run the probe (`evals/bio_embedding_bakeoff/judge_bias_probe.py`) when judges ship — but with
-     controls (length ratio ≤2×, truncation controls to separate filler from genuine completeness).
-   - **Judge NOISE BUDGET — a single-trial judged number is PRELIMINARY (distinct from bias).** Even an
-     unbiased judge is STOCHASTIC. *Coin Flip Judge* (`arXiv:2606.13685`, Jun 2026): **13.6% mean
-     single-trial flip rate** (28% of items >20%), cross-judge κ≈0.51, reliability curve needs **~11
-     repeated trials for 95% fidelity**. At N=20–60 that's ~3–8 flipped outcomes per run — enough to
-     reverse a SCREENING rank. So: report the judge-noise budget; for a decision, repeat the judging
-     (≥3) **or** use PPI/PRECISE (`arXiv:2606.05308`: provably-unbiased ranking from ~30 human-gold +
-     a large LLM-judged set, 21% SE cut) to bias-correct. Corollary — *CARE* (`arXiv:2603.00039`): a
-     multi-judge panel is **not independent** (same-lab judges share confounders) → "3 judges = 3 votes"
-     over-states confidence; cross-lab + confounder-aware, never naive averaging. (Lived it: critique_replay
-     used SINGLE-trial gemini+gpt judges, κ=0.667 — right in this paper's band; its detection ranks are
-     screening-only partly for this reason. evidence: `research/2026-06-15-newest-eval-papers.md`.)
+   - **Frontier judge bias (measured 2026-06):** position/order bias is SOLVED on frontier judges —
+     stop spending order-swaps/position-debias there. Same-lab judges share a style signature (a
+     same-lab panel ≈ 1 effective vote; Bradley-Terry SE on it is false precision) → use cross-lab
+     panels, read disagreement as signal. Our "verbosity bias" probe was RETRACTED (length-ratio
+     artifact). Rates, arXiv refs, re-run controls: references/anti-pattern-evidence.md §Phase-1.
+   - **Judge NOISE BUDGET — a single-trial judged number is PRELIMINARY** (distinct from bias):
+     ~13.6% mean single-trial flip rate at frontier; for a decision repeat the judging (≥3) or
+     PPI/PRECISE-correct; a same-lab multi-judge panel is NOT independent votes. Numbers + refs:
+     references/anti-pattern-evidence.md §Phase-1.
 6. **Invariant ambition** — what mechanism-level claim could this eval produce that
    survives a config swap? If only a local verdict is possible, fine — say so up front.
 
@@ -396,150 +367,33 @@ cost of a committed wrong verdict is a re-audit + a correction commit + lost tru
    local verdicts ARE the artifact that drifts; §6b mechanism claims are the invariant you keep.)
 3. Deviations from prereg → §7 Limitations, explained, never silently absorbed.
 
-## 2026-06 frontier adopts (folded from `evals/research/2026-06-13-frontier-*.md`; ADR 0001)
+## 2026-06 frontier adopts (digest)
 
 Cross-axis convergence of 5 frontier memos: **outcome-only scoring is structurally
-insufficient — verify the trace/structure.** That is the same lesson the phenome KG-verifier
-trace audit forced (2026-06-13); the field now backs it (`arXiv:2605.08545` log-analysis as a
-third validity pillar; `arXiv:2604.15149` isomorphic verifiers, causal). Adopt:
+insufficient — verify the trace/structure.** One line per adopt below; the mechanics, arXiv
+evidence, and the DeepSWE / LifeSciBench confirmations live in
+[references/frontier-adopts.md](references/frontier-adopts.md) — read it before implementing any of these.
 
-- **Isomorphic verifier (Phase 1 verifier-regime).** For agentic/tool-use SUTs, the check is not
-  "did it return verdict X?" but "did it traverse the path that *reaches* X?" — score the trace
-  (which KG nodes/edges queried), not the output (which may be parametric recall). Causal backing:
-  checking structure (not just output) removes the gaming incentive.
-- **Gold-leak guard (Phase 2/4).** Call `evalcore.leakguard.assert_no_gold_leak(sut_prompt, gold)`
-  before EVERY SUT dispatch — the twin of `assert_blind`. It default-denies all gold-only fields
-  (criteria_flags/evidence/failure_modes/route_hints/why_selected/Q-tags + the `gold_verdict`
-  *binding*; the bare answer-space label is fine). This is the structural form of the MACVB
-  criteria_flags→F1=1.0 leak. **Held-out criteria:** the agent must never see the full scoring
-  contract; hold out ≥30% of scoring dimensions (reward-hacking gap grows with task horizon).
-- **Block mirror domains (Phase 1 contamination).** For retrieval/web-search SUTs, block
-  `huggingface.co`, `paperswithcode.com` and benchmark mirrors in the tool config — search-time
-  contamination (the agent retrieves a copy of the test set) hit ~3–4% of queries in a study and
-  standard provenance checks miss it. (Canaries: weak for *training*-contamination, but a synthetic
-  canary in gold-only fields, asserted absent from prompts, is a cheap *leak* tripwire.)
-- **Rubric decomposition before grading (Phase 4).** Decompose each task into sub-rubrics (claim-type
-  / traversal / evidence / verdict / uncertainty) and grade each; rubric-decomposed judges agree with
-  humans at κ≈0.79 vs ≈0.51 for a holistic trajectory judge. Don't use a holistic LLM judge as primary.
-- **Item-quality flag + FDR (Phase 4 stats).** After ≥3 arms accumulate, `evalcore.stats.point_biserial`
-  flags suspect items (stronger arms fail more ⇒ candidate mislabel/contamination) — an INVESTIGATION
-  FLAG for manual gold review, never an auto-gate (noisy at N≈20). `evalcore.stats.benjamini_hochberg`
-  is EXPLORATORY-only; decision claims stay Holm/FWER or bootstrap CIs.
-- **Read ≥5 traces (Phase 3.5 gate).** Before accepting a probe/verdict, read full traces for ≥1 pass
-  + ≥1 fail of each top arm, against the 4 questions (`arXiv:2605.08545`): did it (1) read the answer
-  off a mirror, (2) exploit a scoring loophole, (3) take a dangerous intermediate action, (4) fail from
-  scaffold limits not capability? A decision-grade verdict must cite *verifiable* trace anchors
-  (id + excerpt), not a boolean "I read them."
-- **Metamorphic vocabulary for invariant claims (Phase 5).** State invariants as
-  `source_relation ⇒ output_relation` (the MT discipline behind our "invariant claims"). An oracle-free
-  invariance tier (paraphrase/reorder a gold claim, assert verdict-invariance, report % invariant) is
-  **discovery-only** — preregister invariants, calibrate its ~40% false-positive rate on negatives, and
-  NEVER mix it into pass/fail or the materiality call.
-- **Q-matrix tags (Phase 2 template).** Tag each case to a fixed 3–5-dim capability ontology
-  (retrieval/inference/abstention/binding/query, + `unknown`) as **gold-only** metadata (never in a
-  SUT/judge prompt — it's on the leak deny-list). Enables a diagnostic mIRT capability profile *later*;
-  do NOT fit IRT params at N=10–60 (needs ≥100 items × ≥20 arms).
-- **Deterministic-grader constructs (LatchBio bio-agent benchmarks scBench/SpatialBench/SB-Long, audited
-  2026-06-15, 3 readers).** For an eval with a deterministic numeric/structured grader (not a judge),
-  four primitives we lacked: **(1) per-item separation table** — every item documents which WRONG method
-  yields which number, and the tolerance is set to clear the nearest trap by a STATED margin
-  (pre-registered discrimination bound to the ITEM, not the suite); **(2) sentinel/diagnostic gold
-  fields** — grade a probe of the pipeline DECISION (does PC2–5 still correlate with depth ⇒ catches a
-  skipped regress_out), a compound gate where each field traps one shortcut — the deterministic twin of
-  the isomorphic verifier; **(3) before-step snapshot gold** — freeze the analysis state just before the
-  target step so the oracle is a real re-run of standard tools (contamination-resistant, cheaply
-  re-derivable); **(4) method-name suppression** — never name the expected method in the prompt (no
-  "regress_out"/"pseudobulk"), forcing capability over memorized recipe. Plus **reproduce-or-discard
-  candidate gold** (admit a literature claim as gold only after independent reproduction yields a stable
-  answer; log the excluded) and logging **cost + trajectory length** beside accuracy as first-class axes.
-  (Item-difficulty rank-stability is another diagnostic use; the deferral on FITTING IRT at our N stands.)
-- **Measurement-science canon — cross-domain imports** (folded from `evals/research/2026-06-15-measurement-canon-cross-domain.md`;
-  6 primary sources saved to corpus). The mature measurement sciences solved problems we hit; the net-new delta
-  AFTER inventorying what we had (Metamorphic Testing, Goodhart, IRT already covered): **(1) Equating for a
-  DRIFTING instrument** — when the SUT itself changes across versions (a skill's prompt/rules/goals), it is an
-  instrument with drift; freeze ANCHOR items constant across versions and read capability deltas RELATIVE to the
-  anchor — an uncontrolled drift is a confound, not a measurement (psychometric NEAT design; Kolen & Brennan).
-  This is the answer to "what does a frozen measurement of a moving target mean." **(2) Signal Detection Theory
-  for hit/false-alarm evals** — separate detection SKILL (d′) from trigger-happiness (criterion c); ranking arms
-  by RAW detection conflates them (an arm that finds more may just be liberal). Coded ref impl:
-  `critique_replay/sdt.py` (+ bootstrap d′ CI, rank-inversion catch; Green & Swets). **(3) Proper scoring rules**
-  (Brier/log; Gneiting & Raftery) for ANY probabilistic/confidence output — uniquely maximized by reporting the
-  true probability, so hedging can't game it; Murphy-decompose into calibration + resolution. **(4) Pre-flight as
-  a GRADED bias instrument** — Cochrane RoB-2's 5 domains (randomization / deviations / missing-data / outcome
-  MEASUREMENT / selective REPORTING) map onto our confound/gold/judge/trace gates; import the per-domain
-  low/some-concern/high judgment, not a binary pass. (Metrology's invariant-anchoring → Phase 5 §6b below.)
-- **Measurement-canon round 2 — opaque/novel-mind analogs** (folded from `evals/research/2026-06-15-eval-analogs-SYNTHESIS.md`
-  + 5 domain memos; COMPLEMENTS the bullet above, no overlap). Six unrelated sciences converge on how to credit an
-  unobservable capability; net-new transfers: **(1) Ground-truth-free scoring via PEER PREDICTION** (Qiu et al. ICLR'26
-  `arXiv:2601.20299`, Algorithm 1) — score an answer by the PMI between it and *other independent* answers as judged by a
-  (possibly weak) jury; incentive-compatible, NO gold, with an **inverse-scaling** bonus (a weak cheap jury grades a
-  STRONGER model better as the capability gap widens). **WIRED + VALIDATED 2026-06-15** (`evalcore.elicit` +
-  `evals/critique_replay/score_invention.py`, a deterministic anchor jury, $0): on a real run the gold-free PP arm
-  ranking was **IDENTICAL to the gold-based detection ordering (Spearman ρ=1.0)** — convergent validity, and it RETIRED
-  the clean-stratum rebuild for ranking. (`inspect_ai` scanned — no built-in scorer; ours is the in-tree primitive.)
-  FAILS under ≥50% correlated/colluding pool — enforced in code by `evalcore.elicit.pool_independence`/`collusion_risk`,
-  never assumed. **Honest bound:** on a defect-heavy set every packet is collusion-flagged so PP ≈ corroboration-weighted
-  detection — it ranks gold-free but doesn't isolate *pure* invention (uncorroborated-but-real); for that, keep a few
-  no-defect probes or the per-finding judge. **(2) Capability is the LAST-RESORT hypothesis** — Morgan's Canon (comparative
-  cognition) ≡ "life is last-resort" (astrobiology Ladder criterion 8): a score is evidence of a *capability* only after
-  contamination/shortcut/memorization are affirmatively excluded. Make it a NAMED hard gate, not a footnote. **(3) Verdict
-  as a graded ARGUMENT** — NASA CoLD scale (7 named confidence gates, post-hoc-confound bar α₂≪α₁) as the confidence axis
-  × GSN assurance case (claim→strategies→leaf-evidence, with an ODD scope + an Assurance-Claim-Point saying screening-vs-
-  confirmatory) as the structure. **(4) Competence ≠ performance / elicitation gap** — measure best-case-elicited ability;
-  a probe that *represents* a capability (mech-interp) is weaker evidence than a causal-patch that shows it's *used* (CoLD
-  L3 "could" vs L4 "did"); probes are gameable (`arXiv:2512.11949`) so white-box is a measurement aid, not a certificate.
-  **(5) Anti-Clever-Hans** — a benchmark answerable from a surface cue measures the cue (backs leak-guard from a 2nd field).
-  **(6) DIF probe** — flag items where equal-capability models from different FAMILIES diverge (family/format confound);
-  cheap, reuses run data.
-  **(7) Verdict = a machine-checkable GATE-LEDGER, REALIZED** (evals ADR 0007 + `scripts/check_verdict.py`; the
-  CoLD×GSN ladder, built not proposed). A VERDICT-of-record carries a json front-matter ledger:
-  `confidence_level` × `call` + `odd{scope,excludes}` + 7 gates `{status,evidence}`: `discrimination`,
-  `representativeness` (does the ODD sample match the production decision surface? — added by adversarial
-  review), `last_resort`, `independence`, `noise_budget`, `power`, `materiality`. The confidence/call CLAIM is
-  EARNED by discharged gates (CoLD α₂≪α₁): `confirmatory`⇒noise+power+representativeness pass; `promote`⇒
-  last_resort+discrimination+representativeness pass; a `pass` MUST cite a leaf (run_id/§/number), else it is
-  `deferred`. A deferred gate CAPS confidence, never forbids the verdict. The gates are POINTERS to scorers this
-  skill already names (independence→`pool_independence`; noise→`dispatch_repeated` flip_rate; power/noise leaf→
-  `stats.variance_components` G-study; last_resort→the prereg gate). Any repo with the evalcore dep can adopt the
-  pattern; the validator is in evals. Build-rank context: the synthesis memo.
-  **Process reflex (extends Pre-Build #1):** before INVENTING a metric or grading scheme, inventory the measurement
-  sciences (psychometrics, metrology, mechanism design, mech-interp, comparative cognition, astrobiology) for an
-  existing instrument — every net-new transfer above was already a solved problem in some mature field. "We have no
-  way to grade this" almost always means "we haven't checked who grades the unobservable for a living."
+- **Isomorphic verifier** — for agentic/tool-use SUTs, score the trace (the path that *reaches* the verdict), not just the output.
+- **Gold-leak guard** — `evalcore.leakguard.assert_no_gold_leak(sut_prompt, gold)` before EVERY SUT dispatch; hold out ≥30% of scoring dimensions.
+- **Block mirror domains** — retrieval/web SUTs block `huggingface.co` / `paperswithcode.com` / benchmark mirrors (search-time contamination ~3–4% of queries).
+- **Rubric decomposition before grading** — decomposed judges κ≈0.79 vs ≈0.51 holistic; never a holistic LLM judge as primary.
+- **Item-quality flag + FDR** — `evalcore.stats.point_biserial` flags suspect items (investigation flag, never auto-gate); `benjamini_hochberg` is EXPLORATORY-only.
+- **Read ≥5 traces** — ≥1 pass + ≥1 fail per top arm against the 4 questions (mirror-read / loophole / dangerous action / scaffold limit); cite verifiable trace anchors.
+- **Metamorphic vocabulary** — state §6b invariants as `source_relation ⇒ output_relation`; the oracle-free invariance tier is discovery-only.
+- **Q-matrix tags** — gold-only 3–5-dim capability ontology per case; do NOT fit IRT at N=10–60.
+- **Deterministic-grader constructs** (LatchBio) — per-item separation table, sentinel gold fields, before-step snapshot gold, method-name suppression, reproduce-or-discard gold, cost+trajectory as first-class axes.
+- **Measurement-science canon** — anchor-equate a drifting SUT (NEAT), SDT d′-vs-criterion split (`critique_replay/sdt.py`), proper scoring rules for confidence outputs, RoB-2-style graded pre-flight.
+- **Peer prediction (gold-free scoring)** — `evalcore.elicit` + anchor jury; validated ρ=1.0 vs gold ordering; FAILS under ≥50% colluding pool (enforced in code, never assumed).
+- **Capability is the LAST-RESORT hypothesis** — a score is capability evidence only after contamination/shortcut/memorization are affirmatively excluded (named hard gate).
+- **Verdict = machine-checkable gate-ledger** — evals ADR 0007 + `scripts/check_verdict.py`; confidence/call is EARNED by discharged gates; a `pass` must cite a leaf.
+- **Guards** — PPI/CLT-PPI invalid below 50 labels/stratum (`just power` refuses); fitted IRT / CapBencher / CAT / noise-injection sandbagging stay deferred (`evals/docs/decisions/deferred-and-open.md`).
+- **Process reflex** (extends Pre-Build #1) — before inventing a metric or grading scheme, inventory the measurement sciences for the existing instrument.
 
-**Confirmed by DeepSWE** (datacurve, 2026-06 — independent production coding-agent benchmark, 113
-tasks, frontier 70%→5% spread; `evals/research/2026-06-13-frontier-agentic.md` §Transfer): authored-
-fresh-over-real-pinned-repo + hidden behavioral verifier + sealed env independently realize the adopts
-above. Two portable patterns: **(1) withheld grader** — ship the scoring tests as a patch applied
-ONLY at grade time (DeepSWE's `test.patch`), so the agent provably can't enumerate the contract (the
-structural form of held-out criteria); **(2) seal the env if you can, domain-block if you can't** —
-DeepSWE sets `allow_internet=false` to kill search-time contamination by construction; a retrieval/
-claim SUT that needs the web can't seal, so it must block benchmark-mirror domains + track provenance.
-**Boundary:** DeepSWE's realism rests on a FREE EXECUTABLE ORACLE (tests); claim-verification has none
-→ that is *why* this rig needs judges + isomorphic trace-checks, not behavioral verifiers. Don't
-cargo-cult "write behavioral verifiers" into a domain with no oracle.
-
-**Confirmed by LifeSciBench** (OpenAI, 2026-06; full teardown `evals/research/2026-06-18-lifescibench-rating.md`):
-stronger *gold authorship* than any prior provider bio-eval (disjoint author/validator pools, 19,020 atomic
-weighted rubric criteria) and STILL only ADAPT-DESIGN-ONLY — a strong construct does not buy a transferable
-ranking when the grader is same-family + the grader-validation numbers are unprinted. Durability is **unestablished
-(not a standing per-release instrument)**: a static held-out set with no temporal/canary/post-cutoff controls is a
-vendor-tuning target, and unrestricted eval-time browsing breaks reproducibility + is a per-model-interface confound
-— note this is NOT answer-retrieval (the set is held-out), so don't call open browsing "contamination by
-construction." Borrow FROM the DURABLE designs it is NOT: **LiveMedBench** (`arXiv:2602.10367`) — WEEKLY post-cutoff
-clinical-case harvest (contamination-free by construction) + a decomposed rubric grader that beats LLM-as-judge on
-physician alignment (84% of models degrade post-cutoff = the contamination a static set hides); **GeneBench** (Li &
-Ho 2026) — synthetic single-defensible-path + ablations = a DETERMINISTIC verifiable-answer oracle, no model judge
-(LatchBio scBench family). Code-shipping debiaser: **ProfBench** (NVlabs, MIT) Bias-Index, **built + self-tested as
-`evalcore.stats.judge_bias_index`** — the SPREAD of a judge's per-model signed bias vs human labels (panel-relative;
-LOW = even-handed, NOT accurate, so pair with Macro-F1; it does NOT itself detect same-family self-enhancement —
-the caller must supply which model shares the judge's family). No production caller yet; the live-dispatch wiring is
-the consumer-shaped part, deferred to the first judge-validation eval that needs it.
-
-**Guards (the frontier also tells you what NOT to adopt at our N):** PPI/CLT-PPI label-saving is
-statistically invalid below 50 labels/stratum (GLIDE `arXiv:2605.31278`) — at ~20/stratum, hand-label
-all + bootstrap; `just power` refuses PPI/R² sizing below the threshold. Fitted IRT, CapBencher,
-CAT/LEGO-IRT, noise-injection sandbagging: deferred — see `evals/docs/decisions/deferred-and-open.md`.
+**Independently confirmed** by DeepSWE (withheld grader; seal-the-env-or-domain-block; the
+free-executable-oracle boundary — don't cargo-cult behavioral verifiers into oracle-free domains)
+and LifeSciBench (strong construct ≠ transferable ranking; grader-named-or-fail;
+validation-printed-or-unvalidated). Full teardowns in the reference file.
 
 ## Review mode
 
@@ -567,152 +421,31 @@ skill; LifeSciBench teardown 2026-06-18, `evals/research/2026-06-18-lifescibench
 
 ## Anti-patterns (each one vetoed or observed here)
 
-- Composite quality scores / standing leaderboards (vetoed 2×: session_quality, Arena-transfer)
-- Judge panels as truth; judge sees engine/model identity; consequence-framing in judge prompts
-- Single global accuracy hiding the unreliable stratum (PARTIAL-type strata drive disagreement)
-- Items lifted from public benchmark sets without per-item justification
-- **Trusting ABSOLUTE scores on a reused test set; reading a small absolute gain as capability.** Even with
-  NO deliberate gaming, repeated reuse of a fixed test set inflates absolute scores (adaptive overfitting)
-  while RANKINGS stay robust — a freshly-rebuilt ImageNet/CIFAR test set dropped every model's accuracy but
-  preserved order at Pearson R≈0.99 (Recht et al. 2019). A small absolute gain on a reused set may be
-  test-set adaptation, not capability; the trustworthy signal is a RANKING flip. Defenses: refresh items to
-  recalibrate level (LiveBench-style), and anchor-equate (adopts §canon M1) so deltas read against a frozen scale.
-- N chosen by vibes — run `just power` and declare the regime
-- Eval with no consumer; verdict that never reaches DECISIONS.md or production
-- LLM re-audit of gold labels; editing a prereg decision rule after results exist
-- Single-gold recall@k on a corpus with co-relevant siblings — scores label noise as model skill
-  (bio_embedding_bakeoff: 23/48 golds outranked by *relevant* siblings; verdict inconclusive)
-- Trusting aggregate metrics without reading one failure; over-obfuscated riddle-queries that beat
-  the keyword baseline but don't match the real query distribution
-- **Controlling *a* confound, not *the* confound** (judge-bias probe, 2026-06-12 — the egg). A
-  manipulation probe must hold ALL-BUT-ONE variable constant between its two conditions. Our "verbose
-  vs concise" answers differed on *two* axes — sycophantic framing AND raw length ratio (3–4×) — so a
-  preference could not be attributed to "verbosity." We checked one confound (reasoning effort, it
-  held) and called it robust; the confound that actually drove it (length ratio) we never isolated. A
-  controlled-ratio study (`arXiv:2604.23178`) with truncation controls found the opposite. **Before
-  claiming "X causes the preference," list everything that differs between your two conditions; if ≥2
-  differ, you cannot attribute the effect. Large effect size at small N is NOT robustness — it can be
-  100% one uncontrolled confound.**
-- **A "quick probe" that becomes a claim must retroactively pass this whole gate.** The moment a
-  throwaway measurement starts feeling publishable / decision-grade, STOP and run it through Phase 0
-  (prior art) + Phase 1 (controls) + `just power` *before* the claim, not after. We ran the embedder
-  eval with full rigor but treated the judge probe as "just measuring" — and it produced a contested
-  result. Rigor is triggered by how the result will be USED, not by what you called the script.
-- **KB-absence / KB-structure as a gold label, when grading an agent with broad world knowledge
-  against a PARTIAL store** (phenome KG-as-verifier, 2026-06-13 — the confound recurred 3× in one
-  session). Only **affirmative defeaters** are valid world-truth golds: refutation, contradiction,
-  staleness/supersession, positive multiplicity. Labels from store *absence* (uncited, n=0
-  corroboration, "not in the KB") or *structure* (predicate promiscuity, out-degree) penalize correct
-  knowledge the store happens to lack — closed-world confound; inverts model rankings
-  (`arXiv:2209.08858`). Endpoint-recall, single-source, AND non-entailment-by-promiscuity were all
-  confounded; only refuted/stale/contradicted survived. Corollaries: (a) the judge needs a
-  **`GOLD_INVALID`** escape (both neutral judges agree the case label is wrong) or it merely
-  *automates* the labeling error; (b) to score tool USE / traversal, read the **trace**, not the
-  output text (output may be parametric recall); (c) judge/generator neutral-family to the
-  system-under-test. Generalizes a closed-world rule (absence ≠ negative; UNASSESSABLE) to the
-  grading layer. Ref impl: phenome `tests/evals/epistemics/` + ADR `docs/decisions/0008`.
-- **Should-refuse / decline eval without an ENDORSE specificity foil · a LED judge · unpersisted traces**
-  (phenome KG-verifier TRACE AUDIT, 2026-06-13 — all three caught only when the operator said "go look at
-  the traces," AFTER a "16/16 decision-grade" verdict had been written + committed). A refusal eval that
-  asks ONLY should-refuse questions measures *sensitivity*, not discrimination: if every "Is it established
-  that X?" is a should-refuse, a model that **blanket-hedges on the phrasing** scores 100% with zero
-  domain knowledge. The clean 16/16 was fully consistent with that. Three fixes, all required:
-  - **Specificity foils** — identically-phrased cases whose correct answer is the OPPOSITE (definitive
-    true pairs the SUT must ENDORSE, e.g. CFTR→cystic fibrosis next to refuted RYR2→ARVC). Discrimination =
-    refuses-the-bad AND endorses-the-good; a blanket-hedger fails every foil (an `OVER_REFUSED` bucket).
-    Without foils a high refusal-rate is uninterpretable. (This is the same specificity gap as a
-    classifier reporting recall with no negative class.)
-  - **De-lead the judge** — NEVER tell the judge "the correct behavior is to DECLINE" or hand it the
-    seeded reason before it scores; that makes reason-match + agreement near-automatic and suppresses the
-    `GOLD_INVALID` escape. Classify STANCE blind (question + response only); have the judge *independently*
-    assess the claim's real-world status; compare to the seeded label in CODE, not in the prompt.
-  - **Persist every trace by default** (prompt, full response, tool calls, raw judge output) — a verdict
-    you cannot re-read is not verified. A CLEAN / PERFECT score is a trigger to READ traces, not a license
-    to skip them (softball cases, a rubber-stamp judge, and leading phrasing all produce clean scores).
-    No-verdict-on-unread-traces — the single most expensive lesson of the session.
-  - **RECURRED 2026-06-14 (Cursor Composer extraction bakeoff):** a committed routing verdict
-    ("52% mid-pack recall, sloppy over-generator needing a verifier") was overturned only after the
-    operator said "check the traces." The 0/33 outlier was Composer correctly returning `[]` on a
-    methodology doc the contract says to DROP — it was the ONLY contract-faithful arm; the gold +
-    every other model were contract-violating. Same shape as 2026-06-13: aggregate trusted, outlier
-    not read, gold not validated, judges' disagreement (24 vs 45 unsupported) laundered into one
-    number. 2nd occurrence → promoted to the mandatory **Phase 4.5 Trace-audit gate** above.
-- **A cheap proxy metric that isn't the objective — even a deterministic one** (extraction bakeoff,
-  2026-06-13). Raw yield (claims/doc) ranked C>B>A and was the headline; the objective was *joinable
-  graded* claims (graph-citizen/doc, the unit a verification substrate needs), which ranked B>C>A then
-  C>B>A corpus-weighted — the proxy *inverted* the verdict. Deterministic ≠ valid: a span-count is
-  still wrong if the objective is joins. **Operationalize the unit-of-value in Phase-1 Construct
-  BEFORE picking the metric;** if the metric isn't the objective, it's an instrument failure.
-- **Bulk eval dispatch on best-effort transport that swallows failures as empty** (the same bakeoff).
-  `--flex` shed load as silent 503s under contention; the loop's `if rc!=0: return []` turned 7/8
-  dropped chunks into "1 claim" (vs 22) — would have falsely sunk the winning arm. **Bulk dispatch
-  must use reliable transport (`llmx batch`) or per-call retry-on-failure (retry rc≠0/timeout, never a
-  genuine rc==0 empty), PLUS a deterministic validity guard for impossible results** (here:
-  "chunked < whole-doc," cross-referenced against a hard-failure flag to separate corruption from the
-  genuine fragmentation signal). Never `--fallback` in an eval (swaps the model mid-run).
-- **Building a router/heuristic without bracketing it against the per-doc ORACLE** (same bakeoff).
-  "Density-tiered routing (chunk dilute, leave dense whole)" looked principled; computing the oracle
-  (per-doc best-of) showed naive chunk-all was within **2%** of the ceiling and a length-threshold
-  router *underperformed* naive. **Before building a router, compute the oracle; if naive is within ε,
-  the router is wasted complexity.**
-- **Reporting the metric at the producer's stage, not the consumer's.** Pre-gate yield (16.5) and
-  pre-resolver citizen% were upper bounds; the honest number is **quote-gated + post-resolver** (13.29
-  → lower), the stage the consumer actually sees. Measure through the production pipeline, report at
-  the consumer's stage.
-- **Slow-feedback validation when a fast staged check exists** ([[feedback_prefer_faster_feedback]]).
-  To answer "does it hold," a held-out sample returning in minutes beats a monolithic full run
-  returning in hours. **Batch-async is the SLOWEST feedback** (opaque ≤24h) — never use it to *see if
-  X holds*; stage validation (small held-out first → full run only if it holds).
-- **LatchBio bio-agent benchmark audit (scBench/SpatialBench/SB-Long, 3 readers — 2 on code + 1 on
-  papers — 2026-06-15; excellent constructs, flawed leaderboard). The anti-patterns:**
-  - **Model×agent-harness confound — the confound that hides in AGENT bake-offs.** All three leaderboards
-    rank models across DIFFERENT scaffolds (claude-code / mini-swe / codex / "pi"); the measured harness
-    swing for one model was ~8× the model-to-model gap — the SCAFFOLD explained more variance than the
-    model, so the ranking is uninterpretable. A worked example of the ≥2-differ rule above: hold the
-    harness CONSTANT across compared models, or report model×harness as a 2-factor grid — never a single
-    ranked column. (Same shape as our critique_replay arms differing in model×effort×transport at once.)
-  - **A pass window that admits a known wrong-method answer is not a discriminating grader.** Released
-    numeric_tolerance windows were wide enough to pass the trap value the eval's OWN notes flag as wrong
-    (n_significant GT=1 ±1 admits {0,1,2}; n_hvgs ±10000 passes any count). The tolerance must EXCLUDE
-    every trap in the item's separation table by a stated margin — the GOOD per-item trap table (adopt it)
-    is worthless if the window doesn't clear it.
-  - **Replication you imply but don't deliver.** "3 runs" that are byte-identical (deterministic agents)
-    buy ~zero variance; a CI over per-ITEM means is a between-item interval, not between-run — don't let a
-    two-stage average launder one into the other, and FAIL any reported cell missing its interval.
-    Item-is-the-unit is the correct PRIMARY choice (run-level CI alone underestimates), but report
-    N-items/cell, don't slice below power, and with real replicate variance use a clustered SE.
-  - **Answer/method text in a PUBLIC artifact field the SUT never sees.** A per-item canary GUID protects
-    the DATA, but the specs embed full solution code + literal answers in a notes field → the next
-    training scrape gets the answer key. Gold/method/answer strings must live OUTSIDE any field that ships
-    publicly, prompt-bound or not.
-  - **Withhold items for contamination, but NOT the distribution.** 6-public / 394-withheld with no strata
-    counts makes both the public sample's representativeness and the hidden leaderboard unauditable —
-    publish the strata counts even when you hold the items.
-  - **Deterministic grading systematically under-rates your BEST model** (their deepest admitted threat):
-    a fixed answer surface penalizes valid answers the authors didn't anticipate ⇒ false-negatives GROW
-    WITH CAPABILITY. Generalizes absence≠negative to the grading surface — re-adjudicate high-rubric FAILS
-    by hand; pair with the GOLD_INVALID escape.
-- **Asserted negative-class gold + substring-matched free-text grading — BOTH fail, from one root, and
-  cross-arm CONVERGENCE catches both** (critique_replay, 2026-06-15; ADR `evals/docs/decisions/0004`).
-  A `clean`/`abstain`/`no-finding` gold label is a UNIVERSAL NEGATIVE ("no defect here") — the hardest
-  claim — and was granted for free; an ensemble found real defects in 3/4 "clean" packets (the best arm
-  took the worst invention penalty for being *correct*). The SAME run's DETECTION anchors were
-  substring-brittle: a "universal capability MISS" was actually a universal HIT — every arm detected it,
-  the anchor caught only ONE arm's phrasing ("propagate" vs "only its own opacity" vs "group opacity
-  inheritance"; a backtick even breaks "find\` command"). Both biases run AGAINST the arms that phrase
-  differently (often the cheaper ones), so the *ranking itself* is confounded by anchor-phrasing-fit.
-  Fixes: **(1)** certify a negative-class item by **ensemble non-convergence** — admit it only if a
-  DIVERSE (≥2 model-family) reviewer set fails to converge on a defect; DETERMINISTIC (cluster on code
-  anchors — symbols/numbers/paths — never an LLM, so gold validity stays reproducible), a SCREEN not a
-  proof (cross-family diversity bounds shared blind spots), conservative (false convergence shrinks the
-  stratum — the safe error), and STANDING (re-certify every run; compose it with the false-alarm metric so
-  d′/SDT REFUSE to compute over uncertified noise). **(2)** audit POSITIVE anchors the same way — an anchor
-  that misses a defect the arms CONVERGE on is a paraphrase false-negative; but **do NOT iteratively widen
-  anchors against the responses you're scoring** (that is gold-fitting). When substring anchors prove
-  brittle, change the MECHANISM (semantic/judge detection, or convergence-as-detection: a defect is detected
-  iff the finding lands in its cross-family cluster), don't patch. Ref impl: `critique_replay/convergence.py`
-  (`certify_clean` + `audit_anchors`). This is absence≠negative + the under-rates-the-best-model anti-pattern
-  above, pushed into BOTH gold strata and given a deterministic instrument.
+Pattern + lesson inline; the full war stories, incident dates, arXiv refs, and ref-impls live in
+[references/anti-pattern-evidence.md](references/anti-pattern-evidence.md) — read the entry before
+re-litigating or rebuilding anything named here.
+
+- **Composite quality scores / standing leaderboards** — vetoed 2× (session_quality, Arena-transfer).
+- **Judge panels as truth** — judge sees engine/model identity; consequence-framing in judge prompts.
+- **Single global accuracy** — hides the unreliable stratum (PARTIAL-type strata drive disagreement).
+- **Items lifted from public benchmark sets** without per-item justification.
+- **Trusting ABSOLUTE scores on a reused test set** — reuse inflates absolutes while RANKINGS stay robust; trust ranking flips, refresh items, anchor-equate.
+- **N chosen by vibes** — run `just power` and declare SCREENING|CONFIRMATORY.
+- **Eval with no consumer** — a verdict that never reaches DECISIONS.md or production.
+- **LLM re-audit of gold labels; editing a prereg decision rule after results exist.**
+- **Single-gold recall@k on a corpus with co-relevant siblings** — scores label noise as model skill.
+- **Trusting aggregates without reading one failure; over-obfuscated riddle-queries** that beat the keyword baseline but don't match the real query distribution.
+- **Controlling *a* confound, not *the* confound** — if ≥2 variables differ between conditions you cannot attribute the effect; a large effect at small N can be 100% one uncontrolled confound.
+- **A "quick probe" that becomes a claim** — must retroactively pass Phase 0 + Phase 1 + `just power` BEFORE the claim; rigor is triggered by how the result is USED, not what you called the script.
+- **KB-absence / KB-structure as gold** — only affirmative defeaters (refuted / contradicted / stale / superseded) are valid world-truth golds; absence labels invert rankings; the judge needs a `GOLD_INVALID` escape.
+- **Should-refuse eval without an ENDORSE foil · a LED judge · unpersisted traces** — refusal-only measures sensitivity, not discrimination (a blanket-hedger scores 100%); classify stance blind; persist every trace — a CLEAN score raises the obligation to read.
+- **A cheap proxy metric that isn't the objective** — deterministic ≠ valid; operationalize the unit-of-value in Phase-1 Construct BEFORE picking the metric.
+- **Bulk dispatch on best-effort transport that swallows failures as empty** — reliable transport (`llmx batch`) or per-call retry, plus a deterministic validity guard for impossible results; never `--fallback` in an eval.
+- **Router/heuristic without the per-doc ORACLE** — compute the oracle first; if naive is within ε, the router is wasted complexity.
+- **Reporting the metric at the producer's stage** — measure through the production pipeline; report at the consumer's stage.
+- **Slow-feedback validation when a fast staged check exists** — batch-async (opaque ≤24h) never answers "does it hold"; stage a small held-out first.
+- **LatchBio leaderboard class** — model×harness confound (hold the harness constant or report a 2-factor grid); tolerance windows must exclude every trap in the separation table; byte-identical "3 runs" ≠ replication; answer text in public artifact fields leaks to the next scrape; withheld items still need published strata counts; deterministic grading under-rates the BEST model (re-adjudicate high-rubric FAILS).
+- **Asserted negative-class gold + substring-matched free-text grading** — certify a negative item by cross-family ensemble NON-convergence; audit positive anchors for paraphrase false-negatives; never widen anchors against the responses you're scoring.
 
 ### /eval skill vs evals repo (recurring question — settle it here)
 They're different KINDS of thing; keep SEPARATE, neither collapses into the other. **This skill =
