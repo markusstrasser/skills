@@ -33,8 +33,9 @@ python3 ~/Projects/skills/x-api/scripts/probe.py aleabitoreddit 100 2026-04-01T0
 Read a JSON account-list, pull tweets since N hours ago, filter for cashtags
 and material-claim keywords, emit a markdown digest with coverage delta.
 
-Hard cap $100/month spend (refuses to run if MTD exceeds). Cost ledger at
-`.scratch/x_api_cost_ledger.jsonl` in the current working directory.
+Hard cap $100/month spend (refuses to run if MTD exceeds). Cost ledger is
+wallet-scoped at `~/.local/state/x-api/cost_ledger.jsonl` (NOT CWD-scoped —
+spend from every repo counts against the one monthly cap).
 
 ```
 python3 ~/Projects/skills/x-api/scripts/pull.py \
