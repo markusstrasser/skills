@@ -75,28 +75,29 @@ Read in full -- they define what's already known:
 
 ### Phase 2: Harvest Structured Artifacts
 
-**Live streams first** (launchd-produced, refreshed daily — these carry the current signal),
-then the legacy artifact dirs behind an mtime guard. Read-path reordered 2026-07-05: the
-original 2a-2d producers (session-analyst, design-review, suggest-skill agents) went quiet in
-April-June 2026 and the signal plane moved to the deterministic miners; scanning dead dirs
-every run wasted the tick and buried the live sources at the bottom of the phase.
+**Live streams first** (launchd-produced, refreshed daily — they carry the current signal),
+then the legacy artifact dirs behind an mtime guard (read-path reordered 2026-07-05: the
+original 2a-2d producers went quiet April-June 2026 and the signal plane moved to the
+deterministic miners). One line per source below; the per-source protocol, history, and
+judgment calls live in [references/harvest-sources.md](references/harvest-sources.md) —
+read a source's entry (§2d-§2i) before working it.
 
-**2a. Blindspot misses** — see the blindspot block below (kept verbatim; it is the
-highest-signal live source and the canonical detector-conversion protocol).
-
-**2b. Reflect-loop Quarantine** — see below.
-
-**2c. Orphaned research findings** (`just orphan-findings`) — see below.
-
-**2d. Legacy artifact dirs** (`artifacts/session-retro/`, `artifacts/design-review/`,
-`artifacts/session-analyst/`, `artifacts/suggest-skill/`):
-- **Mtime guard first:** `ls -t <dir> | head -1` + stat — if nothing in the window, SKIP the
-  dir without reading anything. Do not "read each file" in a dir whose newest artifact
-  predates the window (design-review/session-analyst have been static since 2026-04).
-- session-retro is semi-live (cursor retro runs). Parse `findings[]` (JSON) / `### [FINDING-`
-  (md). design-review: prefer `*-synthesis.md`; skip "Already exists". session-analyst:
-  `findings[]` arrays. suggest-skill: candidates with frequency + ROI.
-- If a legacy producer wakes up again (fresh artifacts in-window), it's just data — parse it.
+- **2a. Blindspot misses** (`agent-infra/.claude/blindspot-digest.md`; detail §2i) — highest-signal
+  live source: the loop misses the human had to catch. Top recurring cluster → a CANDIDATE DETECTOR
+  (dedup vs existing hooks first); route local → `improvement-log` `[ ]`, shared → `decisions-pending/`.
+- **2b. Reflect-loop quarantine** (`~/.claude/reflect-quarantine/*.jsonl`; detail §2e) — FM-routed
+  enforcer/mint proposals, pre-deduped and pre-generalized; `just reflect-review` for the ranked
+  view; promote for human disposition only, never auto-apply.
+- **2c. Orphaned research findings** (`just orphan-findings`; detail §2f — the CANONICAL
+  finding-routing protocol other generators cite, never restate) — finding-level ratchet; promote
+  only genuinely-live, discrete, undone items with the finding title verbatim; one
+  `RECONCILIATION:` entry clears a fully-dispositioned memo.
+- **2d. Legacy artifact dirs** (session-retro / design-review / session-analyst / suggest-skill) —
+  mtime guard FIRST: skip any dir with nothing in-window; parse normally if a producer wakes.
+- **2g. Observe shell-env gate** (`artifacts/observe/*/failures/shell-env-candidate.jsonl`) —
+  auto-staged; treat as high-priority infra, never `[obs]`.
+- **2h. Cross-project memory generalization** (`just memory-harvest`) — dedup against the suggested
+  target FIRST; promote only generalizable ≥2-project lessons; cross-skill factoring is propose-only.
 
 **Denominator rule (all sources, this phase and Phase 3):** every extractor/miner invoked
 must report its denominators — files scanned, messages/records parsed, items matched — and
@@ -104,73 +105,6 @@ the harvest output quotes them. A bare `0 found` is indistinguishable from a bro
 the #f extractor returned a silent false-zero for months because nothing forced
 `matched 0 / parsed 0` into view (fixed skills@837f4d2). Treat `matched 0` with a healthy
 denominator as signal, and `parsed 0` as a BROKEN SOURCE to fix before trusting the run.
-
-**2e. Reflect-loop Quarantine (detail)** (`~/.claude/reflect-quarantine/*.jsonl`):
-- The learning loop's deep pass (`just reflect-classify` in agent-infra) emits FM-routed
-  enforcer/mint proposals here (status `pending`), each tied to a failure-mode dossier with a
-  falsifiable verifier sketch (axis: reach/capability/knowledge/taste). These are already
-  deduped against the FM taxonomy and arrive pre-generalized (merge-before-mint), so prefer
-  them over raw signals. Enforcers are report-only canaries until a human flips them active.
-  Run `just reflect-review` for the ranked view. Do NOT auto-apply — promote into the harvest
-  ranking for human disposition only.
-
-**2f. Orphaned research findings (detail)** (`research/trending-scout-*.md` adopt-grade verdicts) —
-**this is the CANONICAL finding-routing protocol; other generators (trending-scout Pipeline
-step 3, future scouts) reference it, never restate it** (constitution principle 9):
-- Harvest's read-path historically EXCLUDED `research/` memos, so trending-scout's
-  Adopt/Evaluate/Extract/Act-now verdicts silently bypassed the loop for ~3 months
-  (generation-without-consumption; reconciled 2026-06-13). The standing consumer is now
-  `just orphan-findings` — it flags any trending memo whose actionable verdicts aren't cited
-  in `improvement-log.md` (deterministic memo-cite, report-only, over-reports by design).
-- Run `just orphan-findings`. The ratchet is **finding-level** (fixed 2026-06-14): it flags each
-  un-routed actionable finding individually, so partial promotion no longer hides siblings. For
-  each flagged finding, re-verify against the deferred-feature tracker
-  (`research/claude-code-native-features-deferred.md`), git log, and the actual stack. Promote
-  ONLY genuinely-live, discrete, undone items to `improvement-log` as `[ ]`, **including the
-  finding's title verbatim** (the ratchet clears a finding by matching ≥2 distinctive title
-  tokens in the log — a bare memo-path cite no longer clears anything). For a memo whose
-  remaining findings are all done-inline / evaluated-rejected / Watch-Extract-study-only /
-  N/A-to-stack / owned-elsewhere, add ONE `RECONCILIATION:` entry citing the memo stem (the only
-  whole-memo clear). Do NOT inflate the `[ ]` queue with non-actionable items (F1 2026-06-08
-  miscount lesson). `doctor.py` surfaces the count daily (`global:orphan-findings`).
-
-**2g. Observe shell-env gate** (`artifacts/observe/*/failures/shell-env-candidate.jsonl`):
-- Auto-staged when `zsh-env:*` agentlogs volume ≥50/30d AND `doctor.py` cross-harness shell checks fail.
-- Treat as **high-priority infra** — same class as bare-python guard gaps; do NOT leave as `[obs]`.
-
-**2h. Cross-project memory generalization** (`~/.claude/projects/*/memory/*.md` + `~/.codex/memories/`) —
-the per-project Claude/Codex memory stores accumulate `feedback`/`reference` lessons learned in ONE
-project that are often generalizable to a shared rule/skill/tool. This surface was historically NEVER
-read by the loop (generation-without-consumption — lessons sit siloed where learned; measured 2026-06-14:
-498 memories, 116 feedback-type, 8 cross-project clusters).
-- Run `just memory-harvest` (deterministic pre-filter: `scripts/memory_harvest.py` clusters memories by
-  theme, flags ★ CANDIDATE = spans ≥2 projects or ≥5-silo, suggests a factor-out target). It does NOT
-  judge generalizability — that semantic step is yours here.
-- For each ★ CANDIDATE cluster: **dedup against the suggested target FIRST** (read the global rule / skill
-  it points to — most P8/subagent lessons are already covered; do not re-propose). Promote ONLY a lesson
-  that is (a) genuinely generalizable (not domain-specific), (b) NOT already in the shared home, (c)
-  recurs ≥2 projects OR is a high-value single-project silo whose home is a shared skill. The flagship is
-  the **Modal ops** cluster (~37 mems, mostly genomics) → `skills/modal`: future Modal users + sessions
-  should inherit budget-kill/volume-path/timeout-extrapolation lessons instead of re-learning at cost.
-- Output: a factor-out proposal (lesson → target file) into the harvest ranking. Cross-skill/cross-repo
-  factoring is **propose-only** (it edits shared skills 3+ projects consume) → route to the human unless
-  the user has directed the factoring. Keyword pre-filter over-matches (e.g. "verify" is noisy); the
-  dedup-first step is what keeps the `[ ]` queue honest.
-
-**2i. Blindspot misses (detail)** (`agent-infra/.claude/blindspot-digest.md`) — the RSI loop's
-highest-signal source: the moments the human had to CATCH a loop miss (a missed prior
-decision, an existing tool, a git-log fact, the wrong approach). Produced daily by the
-`com.agent-infra.blindspot-miner` launchd job (emb-contrastive over recent sessions;
-`/observe blindspot` re-runs on demand). This is the labeled stream of loop coverage
-gaps — converting them to detectors IS the declining-supervision objective.
-- Read the digest. Cluster the flags (`emb pairs` over the flagged messages, or by eye).
-- For the **top recurring cluster**, the harvest output is a CANDIDATE DETECTOR, not just
-  a finding: "*what deterministic check / harness state-injection would have caught this
-  class autonomously?*" Rank it high (a recurring blindspot = a standing supervision tax).
-- Route: agent-infra-local detector → `improvement-log.md` `[ ]`; shared/irreversible →
-  `decisions-pending/`. Dedup against existing hooks FIRST (e.g. prior-context blindness
-  partially covered by `inventory-dispatch` at the *dispatch* boundary — propose the
-  *propose/diagnose-boundary* extension, don't re-propose the existing hook).
 
 ### Phase 3: Harvest Unstructured Signals
 
@@ -384,37 +318,11 @@ only narrows which repo the tick's *rotation/fixes* act on. So:
 
 ### Live State
 
-!`bash -c '
-HASH_FILE=~/.claude/maintain-state-hash.txt
-RECEIPT_HASH=$(tail -3 ~/.claude/session-receipts.jsonl 2>/dev/null | md5 || echo "na")
-FINDING_HASH=$(grep -c "Status:\*\* \[ \]" ~/Projects/agent-infra/improvement-log.md 2>/dev/null || echo "0")
-MAINTAIN_HASH=$(md5 < "$(pwd)/MAINTAIN.md" 2>/dev/null || echo "na")
-PROPOSAL_HASH=$(ls -la ~/.claude/steward-proposals/ 2>/dev/null | md5 || echo "na")
-DB_HASH=$(for db in ClinVar gnomAD PharmCAT CPIC; do f=$(find "$HOME/Projects/genomics/databases/" -iname "*${db}*" 2>/dev/null | head -1); [ -n "$f" ] && stat -f%m "$f" 2>/dev/null; done | md5 || echo "na")
-GIT_HASH=$(for p in agent-infra intel genomics phenome hutter substrate; do cd ~/Projects/$p 2>/dev/null && git log --oneline -1 2>/dev/null; done | md5 || echo "na")
-CURRENT_HASH="${RECEIPT_HASH}|${FINDING_HASH}|${MAINTAIN_HASH}|${PROPOSAL_HASH}|${DB_HASH}|${GIT_HASH}"
-PREV_HASH=$(cat "$HASH_FILE" 2>/dev/null || echo "")
-echo "$CURRENT_HASH" > "$HASH_FILE"
-if [ "$CURRENT_HASH" = "$PREV_HASH" ]; then
-  echo "NO STATE CHANGE since last tick. Logging noop."
-  echo "{\"ts\":\"$(date -u +%Y-%m-%dT%H:%M:%S)\",\"action\":\"noop\",\"target\":\"state-unchanged\",\"result\":\"ok\",\"detail\":\"hash match\"}" >> "$(pwd)/maintenance-actions.jsonl" 2>/dev/null
-  exit 0
-fi
-echo "=== RECENT SESSIONS ==="; tail -8 ~/.claude/session-receipts.jsonl 2>/dev/null | python3 -c "
-import sys,json
-for line in sys.stdin:
-  try:
-    r=json.loads(line.strip()); cost=\"\${:.2f}\".format(r.get(\"cost_usd\",0)); nc=len(r.get(\"commits\",[])); ts=r.get(\"ts\",\"?\")[:16]; proj=r.get(\"project\",\"?\"); reason=r.get(\"reason\",\"?\")
-    print(f\"  {ts} | {proj:10} | {cost:>6} | {nc}c | {reason:12}\")
-  except: pass
-" || echo "(no receipts)"
-echo ""; echo "=== UNIMPLEMENTED FINDINGS ==="; grep -B2 "Status:\*\* \[ \]" ~/Projects/agent-infra/improvement-log.md 2>/dev/null | grep -E "(###|\*\*Status)" | head -10 || echo "(all clear)"
-echo ""; echo "=== PROPOSALS ==="; ls ~/.claude/steward-proposals/*.md 2>/dev/null | while read f; do echo "  $(basename "$f")"; done || echo "(none)"
-echo ""; echo "=== DB FRESHNESS ==="; for db in ClinVar gnomAD PharmCAT CPIC; do f=$(find "$HOME/Projects/genomics/databases/" -iname "*${db}*" 2>/dev/null | head -1); if [ -n "$f" ]; then days=$(( ($(date +%s) - $(stat -f%m "$f" 2>/dev/null || echo 0)) / 86400 )); echo "  $db: ${days}d old"; else echo "  $db: not found"; fi; done
-echo ""; echo "=== MAINTAIN STATE ==="; if [ -f "$(pwd)/MAINTAIN.md" ]; then findings=$(grep -c "^\- \*\*M[0-9]" "$(pwd)/MAINTAIN.md" 2>/dev/null || echo 0); queued=$(grep -c "\[queued\]" "$(pwd)/MAINTAIN.md" 2>/dev/null || echo 0); echo "  $findings findings, $queued queued"; else echo "  (no MAINTAIN.md -- first run, create from template)"; fi
-echo ""; echo "=== RECENT ACTIONS ==="; tail -5 "$(pwd)/maintenance-actions.jsonl" 2>/dev/null || echo "(none yet)"
-echo ""; echo "=== GIT (last 2h) ==="; for proj in agent-infra intel genomics phenome hutter substrate; do dir=~/Projects/$proj; [ -d "$dir/.git" ] || continue; out=$(cd "$dir" && git log --oneline --since="2 hours ago" 2>/dev/null | head -3); [ -n "$out" ] && echo "  $proj:" && echo "$out" | sed "s/^/    /"; done
-' 2>&1 | head -80`
+Snapshot + noop-hash logic lives in `scripts/maintain_live_state.sh` (Native-First extraction
+2026-07-06; behavior-preserving — writes `~/.claude/maintain-state-hash.txt`, appends noop rows
+to `$(pwd)/maintenance-actions.jsonl`, exits 0 early on unchanged state):
+
+!`bash ~/.claude/skills/improve/scripts/maintain_live_state.sh 2>&1 | head -80`
 
 ### Phase 1: SWEEP (always — the visibility)
 
