@@ -1,7 +1,7 @@
 ---
 name: interview-prompt
 disable-model-invocation: true
-description: "Use when: 'interview me about X', taste fork on a draft, seeding writing-style, eliciting Markus preferences before writing. High-information questions only — NOT brainstorm (/brainstorm) or drafting prose (/writing-style)."
+description: "Use when: 'interview me about X', taste fork on a draft, eliciting Markus preferences before writing. NOT brainstorm (/brainstorm) or drafting prose (/writing-style)."
 user-invocable: true
 argument-hint: "[--n N] [--route feedback|writing-style|none] topic, draft path, or essay to interview about"
 effort: medium

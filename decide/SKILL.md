@@ -1,6 +1,6 @@
 ---
 name: decide
-description: "Architecture/strategy decision arc — diverge → principle → code → cross-model critique → capture. Use for hard-to-reverse decisions (schema, breaking refactor, tech choice). Composes /brainstorm + /critique. NOT trivial (/critique) or ideation (/brainstorm)."
+description: "Architecture/strategy decision arc — ground → diverge → cross-model critique → capture. For hard-to-reverse decisions (schema, breaking refactor, tech choice). NOT trivial (/critique) or ideation (/brainstorm)."
 argument-hint: "[--quick] the consequential decision to make"
 allowed-tools:
   - Bash
