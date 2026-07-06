@@ -28,9 +28,9 @@ just recipes, and `scripts/hooks/` — targets prior_context_triage `existing_in
 bucket. Cursor parity: agent-infra `.cursor/rules/prior-context.mdc`.
 
 Contract (Claude Code 2.1.x):
-  - UserPromptSubmit envelope on stdin: `.user_message` (prompt text), `.cwd`,
-    `.session_id`. (Field names verified against the sibling working hook
-    userprompt-context-warn.sh.)
+  - UserPromptSubmit envelope on stdin: `.prompt` (prompt text; CC 2.1.x renamed
+    it from `.user_message` ~2026-06-16), `.cwd`, `.session_id`. Reads `.prompt`
+    with a `.user_message` fallback; a missing-both envelope logs [DEGRADED].
   - Advisory ONLY: emits hookSpecificOutput.additionalContext, never blocks.
   - Fails OPEN: any error -> exit 0, no output.
   - Cheap by construction: the intent gate (a regex) runs first; the git-log /
@@ -476,7 +476,14 @@ def main() -> None:
     if not raw.strip():
         return
     env = json.loads(raw)
-    prompt = (env.get("user_message") or "").strip()
+    # CC 2.1.x envelope field is `.prompt`. `.user_message` was the pre-rename key
+    # (CC renamed it ~2026-06-16); the rename silently killed every UserPromptSubmit
+    # hook still reading the old name — read the new field, keep the old as fallback.
+    prompt = (env.get("prompt") or env.get("user_message") or "").strip()
+    if not prompt and "prompt" not in env and "user_message" not in env:
+        print("[DEGRADED] userprompt-prior-context: envelope has neither .prompt nor "
+              ".user_message — CC UserPromptSubmit contract drifted again",
+              file=sys.stderr)
     cwd = env.get("cwd") or "."
     session_id = env.get("session_id") or ""
     if not prompt or len(prompt) < 8:
