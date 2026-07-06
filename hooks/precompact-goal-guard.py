@@ -38,6 +38,12 @@ def main() -> int:
     marker = claude_dir / "goal-run"
     if not marker.is_file():
         return 0
+    # Goal finished/blocked: the ritual will never fire again (Stop hook exits on
+    # these), so blocking would starve every future auto-compact 5 attempts per
+    # fill cycle (measured live: genomics be0657a9, 91/105 attempts blocked
+    # post-done). The run is over — stand down entirely.
+    if (claude_dir / "goal-done").exists() or (claude_dir / "goal-blocked").exists():
+        return 0
     try:
         words = marker.read_text().split()
     except Exception:
