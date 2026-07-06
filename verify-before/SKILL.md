@@ -2,6 +2,7 @@
 name: verify-before
 description: "Use when: dry-run before expensive work, 'did it work/crash', live status probe, pre-register prediction before results. Modes: probe, status, preregister. NOT eval design (/eval) or adversarial review (/critique)."
 user-invocable: true
+disable-model-invocation: true
 argument-hint: "[probe|status|preregister] [target]"
 allowed-tools: [Read, Glob, Grep, Bash, Write]
 effort: medium
