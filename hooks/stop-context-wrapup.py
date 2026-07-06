@@ -13,15 +13,25 @@ self-contained — the state file records ctx at firing; a later ctx well below
 it means a compaction landed, which re-arms. No PostCompact companion needed,
 and manual /compact re-arms too.
 
-Window source, in priority order:
+Window resolution (the value auto-compact actually triggers against), in
+priority order — every source capped by the model window when known:
 1. CLAUDE_CODE_AUTO_COMPACT_WINDOW env (explicit lever; goal-night/goal-loop
    set it — it MOVES the native trigger, so it wins when present).
-2. /tmp/claude-ctxpct-<session_id> — statusline.sh tees "pct|tokens|window"
-   from the harness's own context_window payload (same canonical source
-   posttool-context-checkpoint-advisory.sh reads). This is the ground truth
-   for the model's real window: 1M sessions (claude-fable-5[1m]) misfired at
-   ~17% when this hook assumed 200K (6 sessions, 2026-07-06).
-3. 200K default (headless sessions with no statusline and no env).
+2. autoCompactWindow settings key (project settings.local > project > global)
+   — the same binary lever in settings form.
+3. The binary's own default, derived from the model window teed by
+   statusline.sh to /tmp/claude-ctxpct-<sid> ("pct|tokens|window", the same
+   source posttool-context-checkpoint-advisory.sh reads): on a 1M window the
+   UNCONFIGURED binary auto-compacts at ~475K — i.e. an effective 500K
+   window (measured: 12 native compactions at 462-530K, genomics be0657a9,
+   CC 2.1.201, fable-5[1m], no env/settings lever set). So: min(window,
+   500K). Re-verify that constant on CC major bumps; the statusline payload
+   carries no trigger field (raw-payload dump checked 2026-07-06).
+4. 200K default (headless sessions with no statusline and no lever).
+Getting this wrong is symmetric pain: assuming 200K on a 1M session nudged
+at ~17% fill (6 sessions, 2026-07-06); assuming the full 1M would place the
+threshold at 955K and the nudge would NEVER beat the ~475K native compact
+(the 14-compactions-0-wrap-ups failure this hook exists to close).
 The binary's EFFECTIVE trigger fires ~26K below the configured window
 (observed pre=473,991 on window=500,000, arc-agi 182fba14) — MARGIN=45K
 prompts the wrap-up a comfortable turn before that.
@@ -51,21 +61,46 @@ PROMPT = """CONTEXT NEAR AUTO-COMPACT ({ctx:,} tokens; trigger fires ≈{trigger
 Then end your turn normally; native auto-compact proceeds on a subsequent turn."""
 
 
-def resolve_window(sid: str) -> int:
-    """Env lever > statusline-teed harness window > 200K default."""
+UNCONFIGURED_1M_EFFECTIVE = 500_000  # measured binary default, CC 2.1.201
+
+
+def _settings_auto_compact_window(cwd: Path) -> int:
+    for settings in (
+        cwd / ".claude" / "settings.local.json",
+        cwd / ".claude" / "settings.json",
+        Path.home() / ".claude" / "settings.json",
+    ):
+        try:
+            value = int(json.loads(settings.read_text())["autoCompactWindow"])
+            if value > 0:
+                return value
+        except Exception:
+            continue
+    return 0
+
+
+def resolve_window(sid: str, cwd: Path) -> int:
+    """The value the binary's auto-compact actually triggers against:
+    env lever > settings lever > binary default for the model window > 200K.
+    Levers are capped by the model window when the statusline teed it."""
+    model_window = 0
     try:
-        window = int(os.environ.get("CLAUDE_CODE_AUTO_COMPACT_WINDOW", ""))
-        if window > 0:
-            return window
+        model_window = int(Path(f"/tmp/claude-ctxpct-{sid}").read_text().split("|")[2])
     except Exception:
         pass
+
+    lever = 0
     try:
-        parts = Path(f"/tmp/claude-ctxpct-{sid}").read_text().split("|")
-        window = int(parts[2])
-        if window > 0:
-            return window
+        lever = int(os.environ.get("CLAUDE_CODE_AUTO_COMPACT_WINDOW", ""))
     except Exception:
         pass
+    if lever <= 0:
+        lever = _settings_auto_compact_window(cwd)
+    if lever > 0:
+        return min(lever, model_window) if model_window > 0 else lever
+
+    if model_window > 0:
+        return min(model_window, UNCONFIGURED_1M_EFFECTIVE)
     return DEFAULT_WINDOW
 
 
@@ -96,7 +131,7 @@ def main() -> int:
     ctx = context_tokens(payload.get("transcript_path", ""))
     if ctx <= 0:
         return 0
-    window = resolve_window(sid)
+    window = resolve_window(sid, cwd)
     threshold = max(80_000 - MARGIN, window - MARGIN)
 
     state_dir = Path.home() / ".claude" / "ctx-wrapup"
