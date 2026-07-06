@@ -533,4 +533,7 @@ user #f feedback -> session transcripts ---------------+
 git corrections --> git log ----------------------------+
 ```
 
+**Skill upkeep:** if a tick exposed a defect or friction in THIS skill, log it for the next run —
+`~/Projects/skills/hooks/append-skill-memento.sh improve '<one-line issue>'`.
+
 $ARGUMENTS

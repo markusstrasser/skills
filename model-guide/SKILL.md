@@ -244,3 +244,6 @@ Update after a current-frontier release or material system-card revision:
 2. Update `references/PROMPTING_CLAUDE.md` or `references/PROMPTING_GPT.md`.
 3. Update this routing surface if the default choice changes.
 4. Add a dated entry to `references/CHANGELOG.md`.
+
+Hit a defect or friction consulting this guide (a stale routing line, a wrong price, a missing model)?
+Log it for the next reader: `~/Projects/skills/hooks/append-skill-memento.sh model-guide '<one-line issue>'`.

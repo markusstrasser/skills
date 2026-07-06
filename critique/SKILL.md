@@ -479,7 +479,9 @@ Writes `outcome-link.json` (`linked_anchor` = evidence-grade; `linked_file` = we
 ## Known Issues
 
 Dispatch-bug log (append-only) lives in [references/known-issues.md](references/known-issues.md) —
-read it before debugging a dispatch failure; append new entries THERE. Highest-frequency traps:
+read it before debugging a dispatch failure; append new entries THERE (or via
+`~/Projects/skills/hooks/append-skill-memento.sh critique '<one-line issue>'` when a review arc hits
+a fresh skill defect or friction). Highest-frequency traps:
 never shell-redirect review artifacts; never pipe `model-review.py` through `tail`; xhigh needs
 explicit `--timeout 1800`+ and background dispatch; PLAN reviews need ≥1 repo-access axis; a
 `budget_seconds` below the axis-profile floor is a triage hard config error (exit 2).

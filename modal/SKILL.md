@@ -466,3 +466,6 @@ Detailed docs in `references/`:
   (model downloads), `modal deploy` once + call via `Cls.from_name` from a separate
   client process — the deployed container survives local timeouts and a retry hits
   it warm.
+
+**Hit a fresh Modal gotcha or a defect in THIS skill?** Log it so the next deploy inherits the fix:
+`~/Projects/skills/hooks/append-skill-memento.sh modal '<one-line issue>'`.

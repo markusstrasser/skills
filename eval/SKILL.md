@@ -457,3 +457,7 @@ and the skill must auto-load in phenome/genomics/intel, which it can't if it liv
 the skill *cites* repo examples as pointers, never embeds. **Lesson-flow boundary:** methodology →
 this skill; reusable code → `evalcore` *iff* a 2nd consumer (else the eval dir); verdicts →
 DECISIONS/RESULTS.
+
+---
+**Hit a defect or friction in THIS skill during the eval arc?** Log it so the next run inherits the fix:
+`~/Projects/skills/hooks/append-skill-memento.sh eval '<one-line issue>'`.
