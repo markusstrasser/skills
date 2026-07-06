@@ -1,6 +1,6 @@
 ---
 name: interface-thinking
-description: "Use when: designing/critiquing any interface, editor, tool, UI, or feedback loop; 'how should this feel', 'why is this clunky', closing the gap between intent and effect. Lenses from Victor/Norman/Engelbart/Matuschak. NOT visual styling (/frontend-design) or ideation (/brainstorm)."
+description: "Use when: designing/critiquing any interface, tool, UI, feedback loop, or agent-facing representation/cockpit/instrument; 'how should this feel', 'why is this clunky'. Victor/Norman/Engelbart lenses. NOT visual styling or ideation."
 user-invocable: true
 argument-hint: "[lens] [the interface/tool/loop to think about]"
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit]

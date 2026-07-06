@@ -1,6 +1,6 @@
 ---
 name: debug
-description: "Use when: parallel adversarial verification (code + scientific/conceptual), bug hunt fan-out, pre-commit audit. Scouts write files; frontier orchestrator model triages. NOT code-review structural scout (/code-review) or plan critique (/critique). Full pipeline: /orchestrate."
+description: "Use when: parallel adversarial bug-hunt fan-out or pre-commit audit; scouts write files, orchestrator model triages. NOT single-bug diagnosis (/diagnose), code-review scout (/code-review), or plan critique (/critique)."
 user-invocable: true
 argument-hint: <repo> [scope] [extra prompt]
 allowed-tools: [Read, Glob, Grep, Bash, Write]
