@@ -42,6 +42,37 @@ _ia_spec.loader.exec_module(ia)
 load_findings = ia.load_findings
 merge_records = ia.merge_records
 
+_MODEL_REVIEW = None
+
+
+def _model_review_module():
+    """Lazy sibling import (same pattern as integration_audit above).
+
+    Single source for the axis→profile map and resolved per-axis timeouts —
+    never restate those tables here; drift between the two is the silent
+    all-axes-skipped class this floor check exists to prevent.
+    """
+    global _MODEL_REVIEW
+    if _MODEL_REVIEW is None:
+        spec = importlib.util.spec_from_file_location(
+            "model_review", Path(__file__).parent / "model-review.py"
+        )
+        assert spec and spec.loader
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["model_review"] = mod
+        spec.loader.exec_module(mod)
+        _MODEL_REVIEW = mod
+    return _MODEL_REVIEW
+
+
+def axis_budget_floor(axes: str) -> tuple[int, str]:
+    """Largest resolved axis timeout for an axes/preset string → (seconds, axis)."""
+    mr = _model_review_module()
+    names = mr.resolve_axes(axes, allow_non_gpt=True)
+    floors = {a: int(mr._resolved_axis_timeout(a)) for a in names}
+    axis = max(floors, key=floors.get)
+    return floors[axis], axis
+
 PACKET_WARN_TOKENS = 45_000
 PACKET_FAIL_TOKENS = 90_000
 DISPATCH_SCHEMA_VERSION = "dispatch.v1"
@@ -524,6 +555,27 @@ def cmd_triage(args: argparse.Namespace) -> int:
             budget_seconds=getattr(args, "budget_seconds", None),
         )
         layers["design"]["dispatch_policy"] = dispatch_policy
+        budget = dispatch_policy.get("budget_seconds")
+        if budget is not None:
+            try:
+                budget_val = int(budget)
+                floor, floor_axis = axis_budget_floor(axes)
+            except (ValueError, TypeError, KeyError, ImportError, AssertionError, OSError) as exc:
+                warnings.append(f"budget-floor check skipped ({exc}); model-review re-validates axes")
+            else:
+                if budget_val < floor:
+                    print(
+                        f"CONFIG ERROR [review-gate triage]: budget_seconds={budget_val} is below "
+                        f"{floor}s, the resolved timeout of axis '{floor_axis}' (axes={axes}).\n"
+                        f"With a budget under the axis-profile timeout, every axis is skipped as "
+                        f"budget_insufficient_for_profile before any model call — a silent no-op "
+                        f"dispatch (known-issues 2026-06-18; recurred, value-audit 2026-07-06).\n"
+                        f"fix: pass --budget-seconds >= {floor}, set design_target.budget_seconds "
+                        f">= {floor}, or omit the budget for uncapped dispatch. "
+                        f"dispatch.json NOT written.",
+                        file=sys.stderr,
+                    )
+                    return 2
         if (
             dispatch_policy["context_scope"] == "repo"
             and not _packet_has_open_fork(packet_text)
