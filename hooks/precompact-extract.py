@@ -38,6 +38,7 @@ def sentences(text):
 
 # ─── Deduplication ────────────────────────────────────────────────────
 
+
 def _word_set(s):
     return set(s.lower().split())
 
@@ -61,32 +62,56 @@ def is_near_dup(candidate, existing, threshold=0.6):
 
 HEDGING = re.compile(
     r"\b(likely|approximately|suggests?|uncertain|possibly|might|could be|"
-    r"unclear|tentative|preliminary|probably|seems|appears to)\b", re.I
+    r"unclear|tentative|preliminary|probably|seems|appears to)\b",
+    re.I,
 )
 NEGATIVES = re.compile(
     r"\b(didn.t work|failed|not possible|rejected|can.t|doesn.t work|"
     r"no evidence|won.t work|ruled out|dead end|not feasible|disproved|"
-    r"false positive|overstated|false)\b", re.I
+    r"false positive|overstated|false)\b",
+    re.I,
 )
 DECISIONS = re.compile(
     r"\b(decided|chose|because|therefore|the reason|opting for|"
-    r"selected|deferred|killed|going with|trade.?off)\b", re.I
+    r"selected|deferred|killed|going with|trade.?off)\b",
+    re.I,
 )
 QUESTIONS_SKIP = re.compile(
     r"\b(right\?|shall I|want me to|does that|sound good|ok\?|ready\?|"
-    r"caught your eye|how about|what do you|or just)\b", re.I
+    r"caught your eye|how about|what do you|or just)\b",
+    re.I,
 )
 HEDGING_WORDS = [
-    "likely", "approximately", "suggests", "uncertain", "possibly",
-    "might", "could", "unclear", "tentative", "preliminary",
+    "likely",
+    "approximately",
+    "suggests",
+    "uncertain",
+    "possibly",
+    "might",
+    "could",
+    "unclear",
+    "tentative",
+    "preliminary",
 ]
 QUALIFIER_PHRASES = [
-    "however", "on the other hand", "caveat",
-    "limitation", "exception", "but note",
+    "however",
+    "on the other hand",
+    "caveat",
+    "limitation",
+    "exception",
+    "but note",
 ]
 PROVENANCE_TAGS = [
-    "[SOURCE:", "[INFERENCE]", "[TRAINING-DATA]", "[PREPRINT]",
-    "[FRONTIER]", "[UNVERIFIED]", "[SPEC]", "[CALC]", "[DATA]", "[QUOTE]",
+    "[SOURCE:",
+    "[INFERENCE]",
+    "[TRAINING-DATA]",
+    "[PREPRINT]",
+    "[FRONTIER]",
+    "[UNVERIFIED]",
+    "[SPEC]",
+    "[CALC]",
+    "[DATA]",
+    "[QUOTE]",
 ]
 
 
@@ -187,8 +212,10 @@ def main():
                         # over debugging chatter or tool output.
                         if len(words) > 50:
                             has_epistemic = bool(
-                                HEDGING.search(txt) or DECISIONS.search(txt)
-                                or NEGATIVES.search(txt) or "?" in txt
+                                HEDGING.search(txt)
+                                or DECISIONS.search(txt)
+                                or NEGATIVES.search(txt)
+                                or "?" in txt
                             )
                             if has_epistemic or not last_substantial_block:
                                 last_substantial_block = txt
@@ -241,10 +268,10 @@ def main():
     diff_stat = ""
 
     if cwd and os.path.isdir(os.path.join(cwd, ".git")):
+
         def git(*args, timeout=5):
             r = subprocess.run(
-                ["git"] + list(args),
-                cwd=cwd, capture_output=True, text=True, timeout=timeout
+                ["git"] + list(args), cwd=cwd, capture_output=True, text=True, timeout=timeout
             )
             return r.stdout.strip() if r.returncode == 0 else ""
 
@@ -252,7 +279,9 @@ def main():
             branch = git("rev-parse", "--abbrev-ref", "HEAD")
             modified = [l for l in git("diff", "--name-only").split("\n") if l][:20]
             staged = [l for l in git("diff", "--cached", "--name-only").split("\n") if l][:20]
-            untracked = [l for l in git("ls-files", "--others", "--exclude-standard").split("\n") if l][:10]
+            untracked = [
+                l for l in git("ls-files", "--others", "--exclude-standard").split("\n") if l
+            ][:10]
             recent_commits = git("log", "--oneline", "-5")
             diff_stat = git("diff", "--stat")
         except Exception:
@@ -295,9 +324,14 @@ def main():
     # it is a curated handoff doc owned by the project: write the autogen NEXT TO it instead
     # of over it. Untracked checkpoint.md keeps the original overwrite behavior.
     try:
-        tracked = subprocess.run(
-            ["git", "-C", cwd, "ls-files", "--error-unmatch", ".claude/checkpoint.md"],
-            capture_output=True, timeout=5).returncode == 0
+        tracked = (
+            subprocess.run(
+                ["git", "-C", cwd, "ls-files", "--error-unmatch", ".claude/checkpoint.md"],
+                capture_output=True,
+                timeout=5,
+            ).returncode
+            == 0
+        )
     except Exception:
         tracked = False
     if tracked:
@@ -309,11 +343,26 @@ def main():
         # The git-tracked guard above only protected CURATED (tracked) checkpoints;
         # 17 recurring shared-checkpoint clobbers were peer UNTRACKED ones slipping it.
         # research/2026-06-17-embed-once-validated-recurring-mistakes.md
+        #
+        # BUT only protect a LIVE peer. A different-session checkpoint old enough to be
+        # a dead remnant is RECLAIMED (overwritten) — otherwise a stale 2-day-old file
+        # persists as `checkpoint.md` and misleads the resume path + non-hook readers
+        # (the CLAUDE.md "read .claude/checkpoint.md" convention). This closes the
+        # reader/writer split that re-oriented a resume off a dead session
+        # (genomics 2026-07-06). Age discriminator single-sourced in checkpoint_resume:
+        # a live peer re-writes on every compaction, far inside the age floor.
+        try:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from checkpoint_resume import is_stale_remnant
+        except Exception:
+            is_stale_remnant = None
         try:
             with open(checkpoint_path) as _f:
-                _m = re.search(r'<!-- session: (\S+) -->', _f.read(400))
+                _m = re.search(r"<!-- session: (\S+) -->", _f.read(400))
             if _m and session and _m.group(1) != session:
-                checkpoint_path = os.path.join(checkpoint_dir, "checkpoint-autogen.md")
+                remnant = is_stale_remnant(checkpoint_path, session) if is_stale_remnant else False
+                if not remnant:
+                    checkpoint_path = os.path.join(checkpoint_dir, "checkpoint-autogen.md")
         except (OSError, FileNotFoundError):
             pass
 
@@ -360,7 +409,7 @@ def main():
 
         def _fmt(s, maxlen=200):
             s = s.replace("\n", " ").strip()
-            return s[:maxlen - 3] + "..." if len(s) > maxlen else s
+            return s[: maxlen - 3] + "..." if len(s) > maxlen else s
 
         if buckets["questions"]:
             out.append("### Open Questions")
