@@ -42,6 +42,22 @@ def get_staged_files():
     return []
 
 
+def _is_test_script(path):
+    """Mirror the native_first grader's exclusion (evals/graders/governance/
+    native_first.py): tests/fixtures are not 'new capability scripts' — there is
+    no native-tool alternative to a unit test, so no Native-First: trailer is
+    expected. Keep this predicate in sync with the grader so the advisory fires
+    on exactly the population the metric measures (else it nudges on files that
+    never count — a false positive)."""
+    base = path.rsplit("/", 1)[-1]
+    return (
+        "/tests/" in path
+        or base.startswith("test_")
+        or base.endswith("_test.py")
+        or base == "conftest.py"
+    )
+
+
 def get_known_scopes():
     """Load canonical scopes from .git-scopes. No fallback: repos without an
     explicit .git-scopes opted out of scope checking (the git-history-guessing
@@ -187,6 +203,7 @@ def main():
                 new_scripts = [
                     f for f in added.stdout.strip().split("\n")
                     if f.startswith("scripts/") and f.endswith(".py")
+                    and not _is_test_script(f)
                 ]
                 if new_scripts:
                     names = ", ".join(os.path.basename(f) for f in new_scripts)
