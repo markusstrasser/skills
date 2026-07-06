@@ -6,15 +6,17 @@
 # blast_radius: shared
 """pretool-uv-python-guard.py — steer python invocations to `uv run`.
 
-2026-06-21: when cwd has pyproject.toml or uv.lock, auto-REWRITE bare python
-invocations via PreToolUse updatedInput (gate-ergonomics transform) instead of
-only blocking. uvx-python-without-deps still blocks."""
+2026-06-21: auto-REWRITE bare python invocations via PreToolUse updatedInput
+(gate-ergonomics transform). 2026-07-06: rewrite EVERYWHERE — the cwd
+pyproject-sniffing gate made behavior direction-dependent (pass/rewrite/block by
+shell cwd) and its block path was the only remaining bare-python friction; `uv run`
+resolves the project at execution cwd, which is strictly more correct. Only
+uvx-python-without-deps still blocks (genuinely hazardous, no safe rewrite)."""
 from __future__ import annotations
 
 import json
 import re
 import sys
-from pathlib import Path
 
 _UV_RUN = re.compile(r"\buv\s+run\b")
 _UVX_PY_WITH = re.compile(r"\buvx\s+(?:\S+\s+)*--with\b")
@@ -39,13 +41,6 @@ def _strip_quoted(cmd: str) -> str:
     cmd = re.sub(r"'[^']*'", "''", cmd)
     cmd = re.sub(r'"[^"]*"', '""', cmd)
     return cmd
-
-
-def _project_has_uv(cwd: str) -> bool:
-    if not cwd:
-        return False
-    root = Path(cwd)
-    return (root / "pyproject.toml").is_file() or (root / "uv.lock").is_file()
 
 
 def _in_quotes(cmd: str, pos: int) -> bool:
@@ -161,9 +156,13 @@ def main() -> int:
         return 0
     ti = payload.get("tool_input") or {}
     cmd = ti.get("command", "")
-    cwd = payload.get("cwd") or ""
-    can_rewrite = _project_has_uv(cwd)
-    action, msg = verdict(cmd, can_rewrite=can_rewrite)
+    # 2026-07-06: rewrite EVERYWHERE, block never (except uvx). The cwd gate made the
+    # same command pass/rewrite/block depending on which directory the persistent shell
+    # happened to be in (arc-agi root has no pyproject — deps live in agent/). `uv run`
+    # resolves the project at ITS OWN cwd at execution time, so `cd proj && uv run
+    # python3` picks up the project env and a bare dir gets a uv-managed interpreter —
+    # strictly better than cwd-sniffing here.
+    action, msg = verdict(cmd, can_rewrite=True)
     if action == "block":
         print(msg, file=sys.stderr)
         return 2
