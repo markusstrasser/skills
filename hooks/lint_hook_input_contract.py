@@ -143,6 +143,22 @@ def lint_code(name: str, src: str) -> list[str]:
                 f"reads .{field} but never references tool_input — field lives under "
                 f".tool_input.{field} (Claude stdin is the full envelope)")
 
+    # UserPromptSubmit field rename: CC 2.1.x carries the prompt in `.prompt`
+    # (renamed from `.user_message` ~2026-06-16). A hook reading only the old key
+    # is a SILENT no-op — it reads empty and exits, producing no output and no
+    # error. Found live 2026-07-06: four UserPromptSubmit hooks (prior-context,
+    # clash-capture, context-warn, continuation-guard) dead for ~3 weeks, starving
+    # the prior-context front-load AND the clash-detect shadow. `user_message`
+    # has no other legitimate use, so this is filename-agnostic: flag any hook that
+    # reads user_message without also reading prompt (comment/docstring mentions are
+    # already stripped from `code`).
+    if re.search(r"user_message", code) and not re.search(
+            r"""\.prompt\b|get\(\s*['"]prompt['"]|['"]\.prompt['"]|jq[^\n]*\.prompt\b""", code):
+        viol.append(
+            "reads .user_message but not .prompt — CC 2.1.x renamed the "
+            "UserPromptSubmit field to .prompt (~2026-06-16); reading only the old "
+            "name is a silent no-op (read .prompt, keep .user_message as fallback)")
+
     # Compile embedded python -c blocks (raw src — comment-stripping would
     # mangle python strings). Multi-line blocks only: one-liners with a
     # syntax-looking error are usually '\'' quote-splicing artifacts.
