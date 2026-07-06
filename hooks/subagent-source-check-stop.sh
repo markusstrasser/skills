@@ -9,6 +9,11 @@ trap 'exit 0' ERR
 
 INPUT=$(cat)
 
+# SHADOW (never blocks): log the pathological-empty case — researcher did many research calls but
+# wrote only a stub (findings unwritten). Fire-and-forget; builds the 0-FP promotion dataset before
+# any advisory/block. See subagent-empty-research-shadow.py + steward-proposal 2026-06-21.
+printf '%s' "$INPUT" | python3 ~/Projects/skills/hooks/subagent-empty-research-shadow.py 2>/dev/null || true
+
 eval "$(echo "$INPUT" | python3 -c '
 import sys, json
 
