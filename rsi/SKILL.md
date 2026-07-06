@@ -9,8 +9,8 @@ effort: medium
 
 # RSI — session close
 
-Thin Tier 1 close for the goal-gated learning loop. Reads the latest digest from
-`~/.claude/reflect-close-digest.jsonl`, verifies one principal claim, attaches evidence.
+Thin Tier 1 close for the goal-gated learning loop. Loads this session's close digest,
+verifies one principal claim, captures one structural lesson, acks.
 
 **Do not run mid-goal** unless the user explicitly invoked `/rsi close`. SessionEnd
 already skipped Tier 1 when goal is still active.
@@ -26,14 +26,26 @@ already skipped Tier 1 when goal is still active.
 ### 1. Load digest
 
 ```bash
-tail -1 ~/.claude/reflect-close-digest.jsonl | python3 -m json.tool
+uv run --project ~/Projects/agent-infra python3 \
+  ~/Projects/agent-infra/scripts/reflect_session_close.py \
+  --latest-digest "$(cat .claude/current-session-id 2>/dev/null)"
 ```
 
-If empty: run drain then retry:
+Selects this session's last `reflect.close-digest.v1` row — never a `close-ack.v1`
+(acks share the file and dominate the tail; blind `tail -1` returns an ack). An empty
+session arg falls back to the latest **un-acked** digest — the SessionStart-nudge case,
+where the digest belongs to a prior session.
+
+If exit 1 (no digest): drain the queue, then retry:
 
 ```bash
-python3 ~/Projects/agent-infra/scripts/reflect_session_close.py --drain
+uv run --project ~/Projects/agent-infra python3 \
+  ~/Projects/agent-infra/scripts/reflect_session_close.py --drain
 ```
+
+The drain is fail-loud: it prints `N intents read, M digests written, K skipped (…)`
+and exits nonzero on a silent zero. Still no digest after a clean drain → this session
+had no Tier-1-eligible close; stop here.
 
 ### 2. Verify one load-bearing claim
 
@@ -51,22 +63,27 @@ Pick ONE claim from the session episode (not the `/goal` Haiku evaluator — tha
 
 Record the command + output snippet. If verification fails, report failure — do not attach evidence.
 
-### 3. Attach evidence (max one)
+### 3. Close: structural lesson + ack
+
+The close centers on the Step-2 verify plus ONE durable capture — write the structural
+lesson where the next session finds it: a project memory file (+ MEMORY.md pointer), OR
+at most **one** `[obs]` line in the project's improvement log / `MAINTAIN.md`. One
+destination, not several.
+
+`fm.py attach-evidence` is **optional** — `fm-evidence.jsonl` is auto-fed by the capture
+path (~1.7K rows); attach manually ONLY when the verify surfaced novel evidence no
+automated row carries:
 
 ```bash
-cd ~/Projects/agent-infra
-python3 scripts/fm.py attach-evidence <FM_ID> \
-  --session <SESSION_ID> \
-  --quote "<verified fact + command output>"
+cd ~/Projects/agent-infra && uv run python3 scripts/fm.py attach-evidence <FM_ID> \
+  --session <SESSION_ID> --quote "<verified fact + command output>"
 ```
-
-If no FM row fits, append at most **one** `[obs]` line to the project's improvement log or
-`MAINTAIN.md` — not both.
 
 Then ack the digest (stops SessionStart nudge):
 
 ```bash
-python3 ~/Projects/agent-infra/scripts/reflect_session_close.py --ack <SESSION_ID>
+uv run --project ~/Projects/agent-infra python3 \
+  ~/Projects/agent-infra/scripts/reflect_session_close.py --ack <SESSION_ID>
 ```
 
 ### 4. Steward proposal (optional, max one)
