@@ -88,6 +88,22 @@ def main() -> int:
     marker = claude_dir / "goal-run"
     if not marker.is_file():
         return 0
+    lines = []
+    try:
+        lines = marker.read_text().split()
+    except Exception:
+        pass
+    try:
+        threshold = int(lines[0]) if lines else 100000
+    except Exception:
+        threshold = 100000
+    # Ownership FIRST: goal-night stamps the goal session's id as the 2nd token, so
+    # OTHER sessions in an armed repo (a daytime peer, a subagent shell) are never
+    # controlled — including the goal-done challenges below. No 2nd token (manual
+    # arming) = legacy: control any session.
+    owner = lines[1] if len(lines) > 1 else ""
+    if owner and payload.get("session_id") != owner:
+        return 0
     if (claude_dir / "goal-done").exists() or (claude_dir / "goal-blocked").exists():
         # Open-board challenge (fires ONCE): goal-done with unblocked A-rows still
         # open is the premature-stop class (6th manual flag 2026-07-05) — the goal
@@ -154,21 +170,6 @@ def main() -> int:
                     )
             except Exception:
                 pass
-        return 0
-    lines = []
-    try:
-        lines = marker.read_text().split()
-    except Exception:
-        pass
-    try:
-        threshold = int(lines[0]) if lines else 100000
-    except Exception:
-        threshold = 100000
-    # Ownership: goal-night stamps the goal session's id as the 2nd token, so
-    # OTHER sessions in an armed repo (a daytime peer, a subagent shell) are
-    # never controlled. No 2nd token (manual arming) = legacy: control any session.
-    owner = lines[1] if len(lines) > 1 else ""
-    if owner and payload.get("session_id") != owner:
         return 0
 
     # Ritual outranks continuation: it must land before the native compact.
