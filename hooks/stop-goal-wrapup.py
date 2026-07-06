@@ -20,12 +20,15 @@ touch .claude/goal-blocked (write HUMAN.md first). Operator disarm: rm .claude/g
 Continuation budget (MAX_CONTINUES) bounds a pathological spin; PostCompact re-arms
 the ritual for the next fill cycle. Fail-open everywhere (P10).
 
-Context measurement: last assistant usage in the transcript =
-input_tokens + cache_read + cache_creation.
+Context measurement: lib_context_tokens (shared with stop-context-wrapup.py —
+the two Stop hooks must agree on what "current context" means).
 """
 import json
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lib_context_tokens import context_tokens  # noqa: E402
 
 MAX_CONTINUES = 100
 
@@ -48,29 +51,6 @@ CONTINUE_PROMPT = """GOAL-RUN ACTIVE (continuation {n}/{cap}) — the goal is no
 - Advance the highest-value front. Run the portfolio (grind subagents / heretic on what just landed / scout / meta) rather than a single serial thread; don't idle, don't re-derive settled state.
 - Goal fully done AND verified → touch .claude/goal-done, write the final summary, stop.
 - Genuinely blocked on the human with no other front progressable → append the ask to HUMAN.md, touch .claude/goal-blocked, stop."""
-
-
-def _context_tokens(transcript: str) -> int:
-    try:
-        with open(transcript, "rb") as f:
-            tail = f.read()[-200_000:].decode("utf-8", "replace").splitlines()
-        for line in reversed(tail):
-            if '"usage"' not in line:
-                continue
-            try:
-                entry = json.loads(line)
-            except Exception:
-                continue
-            usage = (entry.get("message") or {}).get("usage") or {}
-            if "input_tokens" in usage:
-                return (
-                    usage.get("input_tokens", 0)
-                    + usage.get("cache_read_input_tokens", 0)
-                    + usage.get("cache_creation_input_tokens", 0)
-                )
-    except Exception:
-        pass
-    return 0
 
 
 def _block(reason: str) -> int:
@@ -174,7 +154,7 @@ def main() -> int:
 
     # Ritual outranks continuation: it must land before the native compact.
     fired = claude_dir / "goal-wrapup-fired"
-    ctx = _context_tokens(payload.get("transcript_path", ""))
+    ctx = context_tokens(payload.get("transcript_path", ""))
     if ctx >= threshold and not fired.exists():
         try:
             fired.write_text(f"ctx={ctx}\n")
