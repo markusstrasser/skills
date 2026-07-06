@@ -32,6 +32,21 @@ class Base(unittest.TestCase):
         self.claude = os.path.join(self.cwd, ".claude")
         os.makedirs(self.claude)
         os.makedirs(self.home)
+        # Isolate from any real statusline tee for these SIDs.
+        for sid in (SID, OWNER):
+            self.addCleanup(self._rm_ctxpct, sid)
+            self._rm_ctxpct(sid)
+
+    @staticmethod
+    def _rm_ctxpct(sid):
+        try:
+            os.unlink(f"/tmp/claude-ctxpct-{sid}")
+        except FileNotFoundError:
+            pass
+
+    def write_ctxpct(self, pct, tokens, window, sid=SID):
+        with open(f"/tmp/claude-ctxpct-{sid}", "w") as f:
+            f.write(f"{pct}|{tokens}|{window}")
 
     def transcript(self, ctx):
         path = os.path.join(self.tmp.name, "transcript.jsonl")
@@ -83,6 +98,22 @@ class TestContextWrapup(Base):
         # window 500K -> threshold 455K; 160K stays silent
         self.assertIsNone(self.fire(160_000, window=500_000))
         self.assertEqual(self.fire(460_000, window=500_000), "block")
+
+    def test_statusline_window_1m_no_misfire(self):
+        # Real incident (2026-07-06): 1M sessions nudged at ~17% because the
+        # hook assumed 200K. The statusline tee carries the harness window.
+        self.write_ctxpct(17, 170_000, 1_000_000)
+        self.assertIsNone(self.fire(170_000))
+        self.assertEqual(self.fire(960_000), "block")  # 1M - 45K = 955K
+
+    def test_env_window_beats_statusline(self):
+        self.write_ctxpct(17, 170_000, 1_000_000)
+        self.assertEqual(self.fire(460_000, window=500_000), "block")
+
+    def test_garbage_ctxpct_falls_back_to_default(self):
+        with open(f"/tmp/claude-ctxpct-{SID}", "w") as f:
+            f.write("not|a|window")
+        self.assertEqual(self.fire(160_000), "block")  # default 200K path
 
     def test_goal_owner_skipped_peer_covered(self):
         with open(os.path.join(self.claude, "goal-run"), "w") as f:
