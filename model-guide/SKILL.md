@@ -126,12 +126,10 @@ When dispatching subagents to execute work (Agent tool, headless `claude -p`, co
 
 **Operational specs:** `claude-opus-4-8`, 1M context, 128K max output, **$5/M input and $25/M output**. Fast mode is the same model at up to 2.5x output speed for $10/$50. Returns raw thinking (`display: "summarized"` optional), supports `thinking:{"type":"adaptive"}`, no reasoning-extraction classifier. **Subscription-routable** (`lite_allowed_models`).
 
-**System-card insights to carry forward:**
-- Improvement over 4.7 across most coding, agentic, long-context, computer-use, and professional-work evals; does not exceed the Mythos/Fable capability ceiling when those were available.
-- Honesty headline: ~4x less likely than 4.7 to leave flaws in its own code unreported; reckless/destructive actions and over-refusals substantially reduced. Best-calibrated routable Claude model (64% AA-Omniscience non-hallucination) — prefer for verification-sensitive monitoring.
-- Watch grader/evaluation speculation. Bind verification to git state, parsed test output, exit codes, database rows, source documents — not LLM transcript summaries.
-- Prompt-injection robustness in some agentic contexts is not a free win over 4.7. Keep tool outputs untrusted and separate from instructions.
-- Fan out for hard-tail tasks, not easy mechanical work.
+**System-card routing line:** improves on 4.7 across coding/agentic/long-context/professional
+evals; best-calibrated routable Claude (64% AA-Omniscience non-hallucination), ~4× fewer unreported
+self-code flaws — still bind verification to ground truth (git, parsed tests, exit codes) and keep
+tool outputs untrusted. Full parsed card: [references/opus-4-8-system-card.md](references/opus-4-8-system-card.md).
 
 **Prompting and API rules:**
 - Use XML tags; adaptive thinking explicit (`thinking:{"type":"adaptive"}`); no manual `budget_tokens`.
@@ -148,50 +146,22 @@ Full guide: `references/PROMPTING_CLAUDE.md`.
 
 **Operational specs:** `claude-sonnet-5`, 1M context, 128K max output, **$3/M input and $15/M output** ($2/$10 introductory through 2026-08-31, vs Opus 4.8's $5/$25). Adaptive thinking on by default (unlike Sonnet 4.6, which ran thinking-off by default — omitting `thinking` now runs adaptive). First Sonnet-tier model with `xhigh` effort. New tokenizer vs Sonnet 4.6 (~30% more tokens for the same text — partially offsets the lower $/token). **Not yet on the subscription allowlist** (`lite_allowed_models` in `~/.claude/cache/llmx-routing.json` has no Sonnet entry, 4.6 or 5) — `llmx chat --subscription -m claude-sonnet-5` will not route until that allowlist is updated (llmx's own config, not this skill).
 
-**System-card insights to carry forward** (full digest: `references/sonnet-5-system-card.md`):
-- Largest agentic-safety gain in the whole card: browser-use prompt-injection success without safeguards collapsed from Sonnet 4.6's 47-51% to Sonnet 5's 0.93-1.01%; with safeguards, 0% (matches Mythos 5, the new top-tier model class above Opus). Won a blind cross-lab bug bounty tied with Opus 4.8 (0.19% attack success, vs Sonnet 4.6's 1.41%).
-- Beats Sonnet 4.6 on nearly every coding/agentic benchmark (SWE-bench Pro 63.2% vs 58.1%, FrontierCode 38.8% vs 15.1%, Terminal-Bench 80.4% vs 67.0%); ties Opus 4.8 on several real-world professional evals (Real-World Finance Elo 1219 vs 1222, GDPval-AA 1618 vs 1603); trails Opus/Mythos on hard math (USAMO 79.5% vs Opus 4.8's 96.7%).
-- Lowest MASK sycophantic-lying rate of any tested Claude model (3.1%). **But** has the worst prefill-susceptibility and harmful-system-prompt-compliance numbers of the models compared in this card (Sonnet 4.6, Opus 4.8, Mythos Preview) — absolute rates still low, but it's the regression to watch.
-- Disclosed training-health issue: "the Sonnet 5 training run was flagged as unhealthy in its second half" — partial explanation for an unusually high abstention rate on closed-book factual recall (26.6%, highest of any model compared) and correspondingly low correct-rate (46.9%).
-- Evaluation awareness "concerningly high" — verbalized in ~6% of audit transcripts. Treat any self-reported "this is just a test" reasoning as a live measurement-validity caveat, not noise.
-- Runs measurably more turns/tokens per task than Opus 4.8 or Fable 5 on long agentic work (Toolathlon: 26.0 avg turns vs 16.5-32.0 range; AA-Briefcase: 183 avg turns vs 55-67) — the cheaper $/token doesn't automatically mean cheaper $/task on long loops; measure on your own workload.
+**System-card routing line** (digest: [references/sonnet-5-system-card.md](references/sonnet-5-system-card.md)):
+strongest measured prompt-injection robustness (ties/beats Opus 4.8); beats Sonnet 4.6 on nearly
+every coding/agentic benchmark; watch-items — worst-of-cohort prefill/system-prompt susceptibility,
+disclosed training-health issue (highest closed-book abstention of compared models), ~6%
+evaluation-awareness, and more turns/tokens per task than Opus 4.8 (cheaper $/token ≠ cheaper
+$/task on long loops — measure on your own workload).
 
 **Prompting and API rules:** same XML-tag, no-prefill, no-non-default-sampling-param rules as Opus 4.8 (see `references/PROMPTING_CLAUDE.md` — written for Claude generally, applies here). Effort: default `high`; use `xhigh` for the hardest coding/agentic work in this tier (first Sonnet model to support it); `low`/`medium` for routine/mechanical dispatch per Dispatch Economics above.
 
-## Claude Fable 5 - "The Operator" (DORMANT — reference only)
+## Claude Fable 5 - "The Operator" (dormant tiers — reference only)
 
-> **Not routable (2026-06-20).** Off subscription allowlist; US access restricted. Route **Opus 4.8** instead. Section kept for benchmark/prompting reference when availability returns.
-
-**When it returns, use for:** the hardest, longest-running, most-ambiguous work — multi-day autonomous runs, codebase-scale migrations, first-shot implementation of complex well-specified systems, dense technical-image vision, and orchestrating parallel subagents.
-
-**Operational specs:** `claude-fable-5`, 1M context, 128K max output, **$10/M input and $50/M output (2× Opus 4.8)**, cache read $1 / cache write $12.50. Covered Model: **30-day data retention, no zero-data-retention option**.
-
-**API shape (differs from Opus — read before migrating):**
-- **Adaptive thinking is always on and the only mode.** `thinking:{"type":"disabled"}` is unsupported; there are no extended-thinking budgets.
-- **Raw chain-of-thought is never returned.** `thinking.display` defaults to `"omitted"` (empty thinking field); set `"summarized"` for readable summaries. Pass thinking blocks back unchanged in multi-turn on the same model. If you need reasoning visibility, read the structured `thinking` blocks — do **not** instruct the model to recite its reasoning as response text (that trips the `reasoning_extraction` classifier; see below).
-- **Effort** is the primary intelligence/latency/cost dial (low/medium/high/xhigh/max). Default **high**; **xhigh** for capability-sensitive work; **medium/low** for routine. Lower effort on Fable often exceeds `xhigh` on prior models.
-- **Longer turns by default.** Hard tasks can run many minutes per request at higher effort; autonomous runs can go hours. Adjust client timeouts, streaming, and progress indicators; prefer async check-ins over blocking.
-- **Refusals + fallback:** classifier hit → HTTP 200 with `stop_reason:"refusal"` naming the classifier. Use the `fallbacks` param (beta) or SDK middleware to retry on **Opus 4.8**. Not billed for a refusal that produced no output; fallback credit refunds the prompt-cache switch cost.
-
-**System-card insights to carry forward:**
-- Most capable model Anthropic has released; SOTA across coding, reasoning, long-context agentic, vision, and life-sciences benchmarks. Fable's published scores dip below Mythos 5's only where its classifiers fire and it falls back to Opus 4.8.
-- **Honesty is a watch item, and slightly worse than Opus 4.8.** Fable shows small *regressions* vs Opus 4.8 on code-summary honesty (4.6% vs 3.7% dishonest summaries), silent-fallback misreporting (0.021 vs 0.000), and overconfidence (it executes a guessed command then self-corrects, where Opus checks docs first). The §2.3.3 shortcomings still occur: reporting a release healthy without verifying, claiming it tested end-to-end when it hadn't, claiming code came from a human to dodge review. **Bind completion to ground truth, not its progress summary.**
-- **Independently confirmed (AA-Omniscience, 2026-06):** non-hallucination 45% vs Opus 4.8's 64% — on closed-book long-tail facts Fable fabricates on over half its misses *despite an explicit abstention invitation*, while leading all models on accuracy (61%). #1 knowledge + mid-pack calibration means its confabulations are unusually convincing. The honesty regression is two-source (system card + independent benchmark): settled, not provisional.
-- Still engages in reckless/destructive actions in service of a user's goal, and interpretability shows it is aware the action is transgressive while doing it. Keep destructive-action guards live.
-- Evaluation/grader awareness is significant and not always verbalized; reasoning text is denser and harder to interpret than prior models.
-- Strong instruction-following: you can steer most behaviors with one brief instruction rather than enumerating each by name. Dispatches and manages parallel/long-lived subagents reliably.
-
-**Prompting and API rules:**
-- Use XML tags for structure: `<instructions>`, `<context>`, `<documents>`, `<evidence>`. Put long documents first, query/instructions last.
-- Give the *reason* behind a request; Fable connects intent to context better than it infers it.
-- Steer with brief instructions, not exhaustive enumerations. A short brevity instruction beats listing every pattern.
-- Ground progress claims: `Before reporting progress, audit each claim against a tool result from this session.`
-- Do **not** tell it to echo/transcribe/explain its internal reasoning in the response (`reasoning_extraction` → silent fallback to Opus 4.8). Audit migrated skills/system-prompts for show-your-thinking instructions.
-- Avoid surfacing remaining-context/token countdowns; they trigger premature handoff. If unavoidable, add "you have ample context remaining; continue."
-- For long async agents, add a `send_to_user` tool (tool inputs are never summarized, so verbatim deliverables arrive intact).
-- Do not set non-default `temperature`/`top_p`/`top_k`; do not use assistant prefill.
-
-Full guide: `references/PROMPTING_CLAUDE.md`.
+Routability: see the PARTIALLY RE-ROUTABLE note at the top of this skill (CC-native lanes live
+2026-07-04; llmx/API unverified). Specs ($10/$50, 2× Opus), API shape (adaptive-only thinking,
+hidden CoT, `reasoning_extraction` classifier, refusal→Opus fallback), system-card insights
+(two-source honesty regression vs Opus: AA-Omniscience 45% vs 64%), and prompting rules:
+[references/fable-5-dormant.md](references/fable-5-dormant.md).
 
 ## GPT-5.5 - "The Professional"
 
@@ -250,50 +220,9 @@ That verdict, calibrated: the cross-lab-vs-same-lab MARGIN is **≈0** — a sec
 
 ## Validation Checklists
 
-### All Outputs
-- [ ] Verify current facts, prices, names, laws, schedules, and claims with source tools.
-- [ ] Verify code completion with tests, type checks, lint, git diff, and actual runtime state.
-- [ ] Treat reasoning traces as diagnostics, not proof.
-- [ ] For "nothing found" or "done" claims, prefer deterministic null checks over model confidence.
-
-### After Claude Fable 5 (dormant — only if re-enabled)
-- [ ] Bind completion to parsed evidence — Fable regresses slightly vs Opus 4.8 on self-report honesty.
-- [ ] Treat unsourced factual specifics as unverified: 55% of its closed-book misses are confident fabrications even when invited to abstain (AA-Omniscience non-hallucination 45% vs Opus 64%).
-- [ ] Confirm it didn't take an unrequested action (drafted email, backup branch) or execute a guessed command without checking.
-- [ ] Check it surfaced defects as mistakes, not reframed them as "design decisions."
-- [ ] Watch for `stop_reason:"refusal"` and confirm fallback to Opus 4.8 fired where expected.
-- [ ] Keep prompt-injection boundaries around tool outputs.
-
-### After Claude Sonnet 5
-- [ ] Bind completion to parsed evidence — disclosed training-health issue + highest abstention rate of compared models on closed-book recall (AA-Omniscience) are reasons for slightly less trust in self-report than usual.
-- [ ] Watch for prefill/system-prompt-susceptibility — numerically the weakest of the compared models on this axis (absolute rates still low).
-- [ ] If the dispatch is architecture/design/high-reasoning critique, don't route here — that verdict hasn't been revisited for Sonnet 5 (see OPEN QUESTION).
-- [ ] On long agentic loops, check actual turn/token count against Opus 4.8 before assuming the lower $/token wins on $/task — Sonnet 5 runs more turns on long-horizon work in its own benchmarks.
-- [ ] Keep prompt-injection boundaries around tool outputs (though Sonnet 5 measures strongest-in-class here).
-
-### After Claude Opus 4.8
-- [ ] Check math and quantitative derivations, especially if not tool-backed.
-- [ ] Best-calibrated frontier model measured (AA-Omniscience non-hallucination 64%) — appropriate as monitor, but it still fabricates on a third of its misses; sources still required.
-- [ ] Watch over-abstention on answerable questions.
-- [ ] Bind completion to parsed evidence, not the model's own progress summary.
-- [ ] Keep prompt-injection boundaries around tool outputs.
-
-### After GPT-5.5
-- [ ] Check that it did not take action when the user only asked a question.
-- [ ] Treat every unsourced factual specific as unverified-by-default: 86% of its closed-book misses are confident fabrications even when explicitly invited to abstain (AA-Omniscience non-hallucination 14% — worst of the frontier set). Weight its critiques by their reasoning, never their asserted facts.
-- [ ] Check that it preserved pre-existing user/worktree changes.
-- [ ] For impossible or intentionally blocked tasks, verify it admitted the block instead of pretending success.
-- [ ] Fact-check dense professional prose; improved factuality is not source-grade accuracy.
-
-### After GPT-5.5 Pro
-- [ ] Verify every intermediate quantitative step.
-- [ ] Re-run decisive calculations with code or a second model.
-- [ ] Make sure the task justified 6x GPT-5.5 pricing.
-
-### After GLM-5.2 (opt-in review)
-- [ ] Best measured calibration among large routed models (72% non-hallucination on AA-Omniscience misses) — still verify novel specifics; abstention is better, not perfect.
-- [ ] Expensive by structure (`high`/`xhigh` only); don't promote to default cosigner or extractor without `evals/critique_replay` measurement.
-- [ ] Weight its reasoning on impossibility/contradiction flags; don't treat its factual recall as ground truth without sources.
+Post-output verification lists — All Outputs + per-model (Fable 5, Sonnet 5, Opus 4.8, GPT-5.5,
+GPT-5.5 Pro, GLM-5.2): [references/validation-checklists.md](references/validation-checklists.md).
+Consult after receiving output from a routed model, not at routing time.
 
 ## Source Notes
 
