@@ -23,6 +23,9 @@ try: print(json.load(sys.stdin).get("cwd","") or "")
 except Exception: print("")' 2>/dev/null)"
 [ -z "$cwd" ] && cwd="$(pwd -P 2>/dev/null || true)"
 [ -z "$cwd" ] && exit 0
+my_sid="$(printf '%s' "$input" | python3 -c 'import sys,json
+try: print(json.load(sys.stdin).get("session_id","") or "")
+except Exception: print("")' 2>/dev/null)"
 # canonicalize so /tmp vs /private/tmp etc. compare equal
 cwd="$(cd "$cwd" 2>/dev/null && pwd -P || printf '%s' "$cwd")"
 
@@ -49,6 +52,11 @@ if [ "$peers" -ge 1 ]; then
   echo "   commit each logical edit immediately (stage specific paths, never sweep), re-check"
   echo "   'git status' before touching shared docs (MEMORY.md / checkpoint / rules), and state"
   echo "   ONCE in your next reply that you're staying shared — never skip this warning silently."
+  # Per-peer WORK detail: what's uncommitted-dirty + recent peer commit topics, so "pick another
+  # front or coordinate" is an informed choice (2026-06-18: a full /decide arc duplicated a
+  # concurrent session's build because live peer work is uncommitted -> invisible to git-log).
+  # Live git only (no agentlogs join); prints nothing when there's no peer work (no noise).
+  python3 ~/Projects/skills/hooks/peer-work-visibility.py "$cwd" "$my_sid" 2>/dev/null || true
   # Log the fire so the 2026-06-28-peer-warn prediction (does the loud form reduce
   # concurrent-session sharing?) is measurable, not vibes.
   ~/Projects/skills/hooks/hook-trigger-log.sh "peer-session-warn" "warn" "peers=${peers}" 2>/dev/null || true
