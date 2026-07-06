@@ -101,14 +101,32 @@ class TestContextWrapup(Base):
 
     def test_statusline_window_1m_no_misfire(self):
         # Real incident (2026-07-06): 1M sessions nudged at ~17% because the
-        # hook assumed 200K. The statusline tee carries the harness window.
+        # hook assumed 200K. The statusline tee carries the model window.
         self.write_ctxpct(17, 170_000, 1_000_000)
         self.assertIsNone(self.fire(170_000))
-        self.assertEqual(self.fire(960_000), "block")  # 1M - 45K = 955K
+
+    def test_statusline_window_1m_fires_before_native_compact(self):
+        # Unconfigured binary on 1M compacts at ~475K (effective 500K window,
+        # measured genomics be0657a9) — the nudge must beat it: 500K-45K=455K.
+        self.write_ctxpct(46, 460_000, 1_000_000)
+        self.assertEqual(self.fire(460_000), "block")
 
     def test_env_window_beats_statusline(self):
         self.write_ctxpct(17, 170_000, 1_000_000)
         self.assertEqual(self.fire(460_000, window=500_000), "block")
+
+    def test_env_lever_capped_by_model_window(self):
+        # A 900K env lever on a 200K-window model can't move the binary past
+        # the model window — threshold must stay 200K-relative.
+        self.write_ctxpct(80, 160_000, 200_000)
+        self.assertEqual(self.fire(160_000, window=900_000), "block")
+
+    def test_settings_auto_compact_window_honored(self):
+        with open(os.path.join(self.claude, "settings.json"), "w") as f:
+            json.dump({"autoCompactWindow": 300_000}, f)
+        self.write_ctxpct(30, 290_000, 1_000_000)
+        self.assertIsNone(self.fire(200_000))          # 300K-45K=255K
+        self.assertEqual(self.fire(260_000), "block")
 
     def test_garbage_ctxpct_falls_back_to_default(self):
         with open(f"/tmp/claude-ctxpct-{SID}", "w") as f:
