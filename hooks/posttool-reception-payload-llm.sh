@@ -12,7 +12,10 @@
 # Cost: ~$0.001 per fire (Haiku, ~2K input + ~500 output tokens). Fires only on
 # substantive reception edits — a few times per editing session, not per keystroke.
 #
-# Requires: ANTHROPIC_API_KEY in env. Falls back to silent exit if missing.
+# Transport: $0 OAuth subscription (`claude -p`) FIRST — the metered ANTHROPIC_API_KEY
+# path returns "credit balance too low" and was silently dead (steward-proposals/
+# 2026-06-15-llm-hooks-dead-metered-api.md). Falls back to the metered API only if
+# subscription fails; logs [DEGRADED] when NO transport works, so death is visible.
 
 set -u
 trap 'exit 0' ERR
@@ -34,8 +37,8 @@ esac
 # Opt-out marker.
 grep -q '// reception-payload-llm:skip' "$FILE_PATH" 2>/dev/null && exit 0
 
-# Need API key. Silent exit if missing — don't fail open with a warning, that's noisy.
-[[ -z "${ANTHROPIC_API_KEY:-}" ]] && exit 0
+# No hard API-key gate: the primary transport is the $0 subscription (claude -p),
+# which does not need ANTHROPIC_API_KEY. The API is only a fallback.
 
 # Diff against HEAD: get added/modified lines that look like `note:` / `body:` strings.
 CHANGED=$(python3 - "$FILE_PATH" <<'PY' 2>/dev/null
@@ -75,12 +78,9 @@ n_changed=$(echo "$CHANGED" | grep -c '^.\+$' 2>/dev/null || echo 0)
 
 # Call Haiku via direct HTTPS to the messages endpoint.
 RESPONSE=$(python3 - <<PY 2>/dev/null
-import os, json, urllib.request, sys
+import os, json, subprocess, sys
 
-api_key = os.environ.get("ANTHROPIC_API_KEY")
-if not api_key:
-    sys.exit(0)
-
+MODEL = "claude-haiku-4-5-20251001"
 entries = """$CHANGED"""
 
 prompt = f"""You are reviewing reception notes for a primary-text reader (Shakespeare, Bible, etc.). Each entry sits next to a painting or video clip. A good note adds payload the reader cannot see — date, artist, source-text moment depicted, staging history, technical detail. A bad note is restatement — it describes what's in the image or says something abstract about the work.
@@ -93,45 +93,67 @@ Entries:
 {entries}
 """
 
-req = urllib.request.Request(
-    "https://api.anthropic.com/v1/messages",
-    data=json.dumps({
-        "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 800,
-        "messages": [{"role": "user", "content": prompt}],
-    }).encode(),
-    headers={
-        "x-api-key": api_key,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-    },
-)
-try:
-    with urllib.request.urlopen(req, timeout=12) as resp:
-        body = json.loads(resp.read())
-    content = body.get("content", [])
-    text = "".join(b.get("text", "") for b in content if b.get("type") == "text")
-    # Extract the JSON array — model sometimes wraps in prose.
-    import re as _re
-    m = _re.search(r"\[\s*(?:\{.*?\}\s*,?\s*)*\]", text, _re.DOTALL)
-    if not m:
-        sys.exit(0)
-    parsed = json.loads(m.group(0))
-    if not parsed:
-        sys.exit(0)
-    lines = entries.split("\n")
-    for finding in parsed:
-        i = finding.get("i")
-        verdict = finding.get("verdict")
-        why = finding.get("why", "")
-        if not isinstance(i, int) or i < 0 or i >= len(lines):
-            continue
-        if verdict not in ("restatement", "unclear"):
-            continue
-        excerpt = lines[i][:80]
-        print(f"{verdict.upper()}: {excerpt!r} — {why}")
-except Exception:
+def via_subscription(p):
+    # $0 OAuth subscription — strip the metered key so billing can't intercept.
+    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+    try:
+        r = subprocess.run(
+            ["claude", "-p", "--model", MODEL, "--strict-mcp-config",
+             "--mcp-config", json.dumps({"mcpServers": {}}), "--setting-sources", ""],
+            input=p, capture_output=True, text=True, timeout=45, env=env)
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout
+    except Exception:
+        pass
+    return None
+
+def via_api(p):
+    import urllib.request
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        return None
+    req = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages",
+        data=json.dumps({"model": MODEL, "max_tokens": 800,
+                         "messages": [{"role": "user", "content": p}]}).encode(),
+        headers={"x-api-key": key, "anthropic-version": "2023-06-01",
+                 "content-type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            body = json.loads(resp.read())
+        return "".join(b.get("text", "") for b in body.get("content", [])
+                       if b.get("type") == "text")
+    except Exception:
+        return None
+
+text = via_subscription(prompt)
+if text is None:
+    text = via_api(prompt)
+if text is None:
+    # Both transports dead — fail LOUD so this doesn't rot silently again.
+    sys.stderr.write("[DEGRADED] reception-payload-llm: no working LLM transport "
+                     "(subscription + metered API both failed) — check `claude -p` auth\n")
     sys.exit(0)
+
+# Extract the JSON array — model sometimes wraps in prose.
+import re as _re
+m = _re.search(r"\[\s*(?:\{.*?\}\s*,?\s*)*\]", text, _re.DOTALL)
+if not m:
+    sys.exit(0)
+parsed = json.loads(m.group(0))
+if not parsed:
+    sys.exit(0)
+lines = entries.split("\n")
+for finding in parsed:
+    i = finding.get("i")
+    verdict = finding.get("verdict")
+    why = finding.get("why", "")
+    if not isinstance(i, int) or i < 0 or i >= len(lines):
+        continue
+    if verdict not in ("restatement", "unclear"):
+        continue
+    excerpt = lines[i][:80]
+    print(f"{verdict.upper()}: {excerpt!r} — {why}")
 PY
 )
 
