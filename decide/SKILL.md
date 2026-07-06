@@ -40,6 +40,12 @@ proactivity, FM14).
 
 ## The arc (six phases — each phase's OUTPUT gates the next)
 
+> **Phase 0 alone is the common case.** Measured across real invocations, grounding *dissolves or
+> reframes* the decision before any divergence in the majority of runs — the escalating cross-model
+> adversarial rounds (Phase 4) fire only when the decision **SURVIVES** Phase-0 grounding as a genuine
+> multi-mechanism choice. Reach for `--frame` (below) to run Phase 0 alone by default and escalate to
+> the full arc only on survival; don't pay for a six-phase panel on a decision the inventory kills.
+
 ### Phase 0 — Frame & find the axis
 Do NOT jump to a plan or an answer. First:
 - **List the hidden assumptions explicitly** (Contract 3). What is being taken for granted?
@@ -48,8 +54,30 @@ Do NOT jump to a plan or an answer. First:
 - Engage the user as the authority on their own constraints; ground in prior work, prior decisions
   (`git log`, ADRs, `docs/decisions/`, vetoed-decisions). **Inventory before dispatch** — has this
   been decided/built already?
+- **The "already built?" verdict must READ the candidate file / RUN the recipe — never rest on a
+  keyword-grep miss.** A grep hit *or miss* only LOCATES; it does not DECIDE (global `never-trust-regex`:
+  false negatives hide behind imports, aliases, alternate spellings, generated/gitignored files). A
+  Phase-0 inventory that concludes "❌ absent — no X anywhere" from one grep is the arc's most expensive
+  friction: it inverts the whole decision from *convergence* (wire the existing thing) to *greenfield*
+  (build it new). Confirm ABSENCE by reading the plausible home + running the workflow, exactly as a
+  BLOCKER falsification-probe in Phase 3. (Canonical miss 024fca68: "no B2/backblaze code anywhere" from
+  a keyword grep — the whole `[group('donor')]` + `refresh-and-publish` workflow existed; the operator
+  had to catch it.)
 
 Output: the framing, the axis, the assumption list. Get a read from the user before diverging.
+
+**Phase-0 exit — DISSOLVED (a first-class outcome, not a failure).** The common result is that
+grounding *dissolves* the decision: the inventory shows it's already built (→ converge/wire, not
+build), already decided (→ the existing ADR/veto is the answer), or the reframed axis collapses the
+options to one. When that happens, STOP the arc here and capture cleanly — do NOT manufacture
+divergence to justify the remaining phases (running a greenfield arc over a built system is
+toxic-proactivity, FM14). Capture template:
+- **NO-BUILD / convergence ADR** → `docs/decisions/NNNN-<slug>.md` stating what dissolved it (the file
+  read / recipe run / prior decision), the axis as reframed, and the convergence action (wire the dark
+  code / adopt the existing pattern) or explicit no-change.
+- **vetoed-decisions entry** (if the outcome is "don't build X") → one verdict line + pointer, so it's
+  not re-proposed. (Canonical clean exit e4f4b7be: three probes dissolved the decision → NO-BUILD ADR +
+  vetoed-decisions entry, commit landed; the inventory *was* the value, not any adversarial panel.)
 
 ### Phase 1 — Diverge → `/brainstorm`
 Generate 5+ genuinely-different *mechanisms* (not variations) before converging. First idea = the
@@ -188,10 +216,21 @@ decision is closed. Those HOWs become the first build tasks — hand off, don't 
 
 Templates for all four: `references/templates.md`.
 
+## `--frame` (Phase 0 only — the common-case default)
+Run **Phase 0 alone**: frame, find the axis, list assumptions, and do the READ-not-grep inventory.
+Then STOP and report one of two outcomes:
+- **DISSOLVED** → capture per the Phase-0 DISSOLVED exit (NO-BUILD/convergence ADR + vetoed-decisions
+  entry). Done — no divergence, no panel.
+- **SURVIVES** → the decision is a real multi-mechanism choice; escalate to the full arc (Phase 1→5)
+  or `--quick`, now that grounding has earned the spend.
+
+This is the mode to default to: it makes the cheap inventory gate explicit and only pays for the
+adversarial machinery when a decision actually withstands grounding.
+
 ## `--quick`
-For a consequential-but-smaller decision: Phase 0 → 1 (inline, skip the full /brainstorm fan-out) →
-2 (lightweight ADR) → 4 (one standard `/critique` round) → 5. Keep the disagree-self-check and the
-completeness check — those are never optional.
+For a consequential-but-smaller decision that SURVIVED framing: Phase 0 → 1 (inline, skip the full
+/brainstorm fan-out) → 2 (lightweight ADR) → 4 (one standard `/critique` round) → 5. Keep the
+disagree-self-check and the completeness check — those are never optional.
 
 ## Honest limitation
 This skill encodes one operator's process (n=1 origin). After 2-3 real uses, run `/observe` or
