@@ -92,6 +92,15 @@ class TestPrecompactGuard(GoalNightBase):
         self.assertIsNone(decision(out))
         self.assertFalse(self.has("goal-compact-blocks"))
 
+    def test_three_token_marker_parses(self):
+        # goal-night stamps the window as a 3rd token (resume drivers restore the
+        # env from it) — hooks must tolerate it: token 1 threshold, token 2 owner.
+        self.state("goal-run", f"1 {OWNER} 500000\n")
+        _, out = run_hook(GUARD, self.payload(trigger="auto"))
+        self.assertEqual(decision(out), "block")
+        _, out = run_hook(GUARD, self.payload(sid=PEER, trigger="auto"))
+        self.assertIsNone(decision(out))
+
     def test_block_cap_then_allow(self):
         self.arm()
         self.state("goal-compact-blocks", "5")
