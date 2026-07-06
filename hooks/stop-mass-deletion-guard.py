@@ -55,9 +55,13 @@ def main() -> None:
     msg = (
         f"MASS DELETION GUARD: {n} tracked files vanished from the working tree as UNSTAGED "
         f"deletions (no `git rm`). The Edit/Write tools never delete and intentional removals are "
-        f"staged, so this is most likely a concurrent peer agent (cursor/codex), a runaway script, "
-        f"or an accident -- NOT your work. They are still in HEAD (recoverable). VERIFY before "
-        f"committing (`git commit -a` / `git add -A` would commit the loss):\n{shown}{more}\n"
+        f"staged, so something outside this session's tools removed them. ORIGIN UNKNOWN -- do NOT "
+        f"attribute to a peer before verifying: (1) `launchctl list` / process table for a second "
+        f"live agent; (2) `git log --format=%an` / Session-ID on the affected paths; (3) is "
+        f".claude/checkpoint.md from THIS session or stale? Own-work from a prior session in this "
+        f"lineage (e.g. a `.sh`->`.py` migration) is the common case, not a peer. They are still in "
+        f"HEAD (recoverable). VERIFY before committing (`git commit -a` / `git add -A` would commit "
+        f"the loss):\n{shown}{more}\n"
         f"Recover:  git -C {cwd} checkout HEAD -- <paths>  (or the whole tree). "
         f"If the deletion IS intentional, `git rm` them so it is a deliberate staged change."
     )
