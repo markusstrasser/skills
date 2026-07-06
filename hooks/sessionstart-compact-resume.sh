@@ -38,7 +38,17 @@ if [ -n "$SID" ]; then
 fi
 
 CKPT=""
-[ -n "$CWD" ] && [ -f "$CWD/.claude/checkpoint.md" ] && CKPT=" A fresh .claude/checkpoint.md was written by the PreCompact hook — read it first."
+if [ -n "$CWD" ] && [ -d "$CWD/.claude" ]; then
+  # Point the resume at the CURRENT session's checkpoint — NOT a stale sibling.
+  # The PreCompact writer may divert a fresh checkpoint to checkpoint-autogen.md
+  # (anti-clobber for a tracked/curated or LIVE-peer checkpoint.md). This hook used
+  # to hardcode "a fresh checkpoint.md was written — read it first", which was FALSE
+  # after a divert and re-oriented a resume off a dead 2-day-old different-session
+  # checkpoint (genomics 2026-07-06). checkpoint_resume single-sources the selection
+  # (session-stamp match, else newest) and returns an honest, provenance-aware message.
+  HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  CKPT=$(python3 "$HOOK_DIR/checkpoint_resume.py" resume-message "$CWD/.claude" "$SID" 2>/dev/null || echo "")
+fi
 
 # Compaction loses operator CORRECTIONS while keeping ADR principles — so the same
 # wrong instantiation gets re-derived. Re-inject the project's settled-framing headers
