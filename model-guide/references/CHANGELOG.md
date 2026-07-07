@@ -1,5 +1,35 @@
 # Model Guide Changelog
 
+## 2026-07-07 - Fable 5 off subscription: metered usage credits, fable lanes suspended on cost
+
+Anthropic ended subscription-included Fable 5 access after 2026-07-07 (Pro/Max/Team);
+continued access bills metered usage credits at $10/$50 per MTok — 2× Opus 4.8, which
+stays subscription-routable at $0. Anthropic states the change is temporary (capacity
+fallout from the June export-control suspension/relaunch): "restore Fable as a standard
+part of our subscriptions as soon as capacity allows."
+
+### Changed
+- Top-of-skill OFF-SUBSCRIPTION note added; description + Fable section header now say
+  "metered opt-in" instead of "dormant".
+- fable-low lane license SUSPENDED ON COST (not capability): its measured token savings
+  (0.34× review, 0.65× gate-redesign) were vs fable-high, never vs a $0 Opus lane —
+  gated/briefed/review dispatch routes to opus-low. fable-high stays a paid opt-in
+  requiring a named Fable-specific justification (obscure-domain, multi-hop edge,
+  measured 2026-06-10).
+- Working copies updated in the same pass: execute/SKILL.md (repricing rider on the
+  Fable lanes), critique/SKILL.md (fable-subagent axis repriced), and the
+  ~/.claude/agents/fable-{low,high}.md definitions.
+
+### Unverified / triggers
+- Whether CC session/Agent-tool fable dispatches now bill credits silently or fail:
+  UNVERIFIED — probe one small dispatch and check billing before batch use.
+- Re-license trigger: Anthropic restores Fable to subscription plans → revert the
+  OFF-SUBSCRIPTION note and re-activate the 2026-07-04 fable-lane verdicts.
+
+Sources: techtimes.com 2026-07-06 (subsidy end + rates), bleepingcomputer.com
+(Anthropic "not permanent" statement), digitalapplied.com (July-7 usage-credits guide),
+claude.com/pricing.
+
 ## 2026-06-30 - Claude Sonnet 5 reinstated as a named cost-tier Claude option
 
 Anthropic released Claude Sonnet 5 (2026-06-30): "near-Opus intelligence at Sonnet
