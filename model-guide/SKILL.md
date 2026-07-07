@@ -1,6 +1,6 @@
 ---
 name: model-guide
-description: "Use when: choosing frontier model/effort for a task class (Claude Opus 4.8, GPT-5.5/Pro). Fable 5 dormant. NOT transport flags (/llmx-guide)."
+description: "Use when: choosing frontier model/effort for a task class (Claude Opus 4.8, GPT-5.5/Pro). Fable 5 METERED since 2026-07-07 (off subscription, 2× Opus) — fable lanes are paid opt-ins. NOT transport flags (/llmx-guide)."
 user-invocable: true
 argument-hint: '[task description or model name]'
 effort: low
@@ -10,13 +10,15 @@ effort: low
 
 Select between the current frontier models and prompt them correctly.
 
-**Models covered:** Claude Opus 4.8 (primary Claude), Claude Sonnet 5 (cost-tier Claude, added 2026-06-30), GPT-5.5, GPT-5.5 Pro. Claude Fable 5 — **dormant** (see below).
-**Last updated:** 2026-06-30.
+**Models covered:** Claude Opus 4.8 (primary Claude), Claude Sonnet 5 (cost-tier Claude, added 2026-06-30), GPT-5.5, GPT-5.5 Pro. Claude Fable 5 — **metered opt-in** (off subscription 2026-07-07; see below).
+**Last updated:** 2026-07-07.
 **Active stance:** This skill no longer maintains a broad model zoo. Older GPT, Gemini, Grok, and Sonnet-4.6-and-earlier routes were removed from active guidance. Sonnet 5 is reinstated as a named, cost-tier Claude option (2026-06-30) — read "Claude Sonnet 5" below before routing to it. Use this guide for high-value frontier decisions; use repo-specific batch tooling or search tools for cheap bulk work.
 
 **OPEN QUESTION (2026-06-30, not yet resolved — operator call):** the "Architecture / design / high-reasoning critique → NEVER Sonnet" verdict below was reached against Sonnet 4.6 on 2026-06-20. Sonnet 5's system card shows large agentic/coding gains and prompt-injection robustness tying or beating Opus 4.8 in several places, but also the *worst* prefill/system-prompt-susceptibility numbers of the compared models and measurably more turns/tokens per task (system-card digest: `references/sonnet-5-system-card.md`). Whether this changes the "NEVER Sonnet" verdict for architecture/critique work is a live question, not re-litigated here — the verdict stands until the operator revisits it.
 
 **Claude Fable 5 — PARTIALLY RE-ROUTABLE (2026-07-04, empirical): live in Claude Code session + Agent-tool lanes; llmx/API status unverified.** Observed 2026-07-04 (arc-agi session ebbeff04): interactive CC sessions run `claude-fable-5` as the selected model, and `fable-high`/`fable-low` agent-def lanes + key-stripped headless `claude -p --model claude-fable-5` all dispatch and complete. The 2026-06-20 dormancy note (subscription allowlist, US restriction) is therefore stale for CC-native lanes; `llmx chat --subscription -m claude-fable-5` and paid-API routing remain UNVERIFIED since then — probe with `--dry-run` before relying on them. Routing consequence: the fable-tier dispatch-economics verdicts below (fable-low for gated/briefed work, fable-high for ungated design-synthesis) are ACTIVE again for CC-dispatched subagents; Opus 4.8 remains the default where Fable-specific value isn't needed. Benchmark and prompting notes below apply.
+
+**Fable 5 — OFF SUBSCRIPTION since 2026-07-07: metered usage credits, $10/$50 per MTok (2× Opus 4.8).** Anthropic ended subscription-included Fable access after 2026-07-07 (Pro/Max/Team); continued access bills usage credits at list price — Anthropic's most expensive GA pricing. Stated as temporary ("restore Fable as a standard part of our subscriptions as soon as capacity allows"; capacity fallout from the June export-control suspension). Economics inversion: the fable lanes were licensed as *$0 subscription* lanes; Opus 4.8 remains subscription-routable at $0. So the 2026-07-04 "ACTIVE again" license above is **suspended on cost, not capability**: **fable-low is no longer a cheap lane** — its measured 0.34× token efficiency was vs fable-high, not vs a $0 Opus lane; route gated/briefed/review dispatch to **opus-low** (subscription) instead. **fable-high** remains callable only as a paid opt-in where a Fable-specific capability edge (obscure-domain knowledge, multi-hop reasoning, measured 2026-06-10) justifies real dollars over Opus `max` at $0 — name the justification in the dispatch. UNVERIFIED: whether CC session/Agent-tool fable lanes now bill credits silently or fail — probe with one small dispatch and check billing before any batch use; do not assume $0. Re-license trigger: Anthropic restores Fable to subscription plans → revert this note and re-activate the fable-lane verdicts. Sources: techtimes.com 2026-07-06, bleepingcomputer.com (Anthropic statement), digitalapplied.com July-7 guide, claude.com/pricing.
 
 **Opus 4.8** (`claude-opus-4-8`) is Anthropic's active top-tier model: 1M context, raw/summarized CoT, adaptive thinking, no reasoning-extraction classifier. Best measured calibration among routable Claude models (64% AA-Omniscience non-hallucination). Default for hardest Claude work, security/cyber/biology, and cross-lab review. **Architecture → `max` effort.**
 
@@ -24,7 +26,7 @@ Select between the current frontier models and prompt them correctly.
 
 | Situation | Use | Why |
 |---|---|---|
-| Hardest / longest / most-ambiguous Claude work: multi-day autonomous runs, codebase-scale migrations, first-shot on complex well-specified systems, dense-image vision, architecture | **Claude Opus 4.8** (`max` for architecture) | Active Claude frontier. Fable dormant — Opus inherits all former Fable routing. Pair GPT-5.5 for cross-lab on the hardest judgment calls. |
+| Hardest / longest / most-ambiguous Claude work: multi-day autonomous runs, codebase-scale migrations, first-shot on complex well-specified systems, dense-image vision, architecture | **Claude Opus 4.8** (`max` for architecture) | Active Claude frontier. Fable metered at 2× Opus (off-subscription 2026-07-07) — Opus keeps all default Claude routing. Pair GPT-5.5 for cross-lab on the hardest judgment calls. |
 | Routine/cost-sensitive coding, security review, cyber, lab/molecular biology | **Claude Opus 4.8** | Same model — use lower effort (`low`/`medium`) when the brief has mechanical gates. |
 | Codex/terminal-heavy implementation, tool loops, structured API work | **GPT-5.5** | OpenAI reports Terminal-Bench 2.0 82.7, Expert-SWE 73.1, OSWorld-Verified 78.7; long-context strength independently backed (AA-LCR 74). |
 | Quantitative proof, calibration math, hard science/data derivation where mistakes compound | **GPT-5.5 Pro** | Same underlying model as GPT-5.5 with parallel test-time compute. Use only when the answer will be checked and the 6x price is justified. |
@@ -155,10 +157,10 @@ $/task on long loops — measure on your own workload).
 
 **Prompting and API rules:** same XML-tag, no-prefill, no-non-default-sampling-param rules as Opus 4.8 (see `references/PROMPTING_CLAUDE.md` — written for Claude generally, applies here). Effort: default `high`; use `xhigh` for the hardest coding/agentic work in this tier (first Sonnet model to support it); `low`/`medium` for routine/mechanical dispatch per Dispatch Economics above.
 
-## Claude Fable 5 - "The Operator" (dormant tiers — reference only)
+## Claude Fable 5 - "The Operator" (metered opt-in — reference only)
 
-Routability: see the PARTIALLY RE-ROUTABLE note at the top of this skill (CC-native lanes live
-2026-07-04; llmx/API unverified). Specs ($10/$50, 2× Opus), API shape (adaptive-only thinking,
+Routability + economics: see the OFF-SUBSCRIPTION note at the top of this skill (metered usage
+credits 2026-07-07; CC-native lanes technically live per 2026-07-04 but paid; llmx/API unverified). Specs ($10/$50, 2× Opus), API shape (adaptive-only thinking,
 hidden CoT, `reasoning_extraction` classifier, refusal→Opus fallback), system-card insights
 (two-source honesty regression vs Opus: AA-Omniscience 45% vs 64%), and prompting rules:
 [references/fable-5-dormant.md](references/fable-5-dormant.md).

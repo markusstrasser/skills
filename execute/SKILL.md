@@ -81,11 +81,19 @@ For each phase in the slice, in order:
      against an existing oracle → Opus effort-low (headless `claude -p --model opus --effort low`) or the
      codex $0 lane (`codex exec --full-auto -C <out-of-repo-worktree> -c model_reasoning_effort="low"` —
      pre-install deps, commit from outside the worktree; see model-guide for the gotcha list)
+   > **Fable repricing rider (2026-07-07):** Fable 5 is off subscription — metered usage credits at
+   > $10/$50 per MTok (2× Opus 4.8, which stays $0 subscription-routable). The Fable lanes below are
+   > suspended ON COST, not capability: route them to **opus-low** (gated/oracle/review) or **Opus
+   > default/max** (synthesis) until Fable returns to subscription (Anthropic says temporary).
+   > A fable dispatch now needs a named Fable-specific justification + a one-shot billing probe first
+   > (bill-vs-fail unverified). Canonical status: model-guide OFF-SUBSCRIPTION note.
    - **judgment-loaded gated work** (declared design holes, oracle-gotcha mapping, adjudicated-fact
      dependencies) → Fable effort-low (headless `claude -p --model claude-fable-5 --effort low`,
      key-stripped) — licensed at 0.90× opus-low tokens; found unique design gaps opus missed
+     *(suspended per rider above → opus-low)*
    - **survivor-edge re-point / gate-redesign-with-oracle** (rewrite a legacy gate or module against a
-     new runtime where the OLD code is in-tree as the behavioral oracle) → Fable effort-low — eval #8
+     new runtime where the OLD code is in-tree as the behavioral oracle) → Fable effort-low *(suspended
+     per rider above → opus-low)* — eval #8
      (dispatch_deletion_edges 2026-06-13): shipped phase6-gate redesign (4 proof obligations, explicit
      downgrade disclosure) at 0.65× opus tokens on larger scope, plus the workbench-entry diagnosis.
      Two standing rules from that eval: build-executing arms need `ARM_PERMISSION_MODE=bypassPermissions`
@@ -94,7 +102,7 @@ For each phase in the slice, in order:
      Grader keeps the adjudication layer: adaptation-vs-regression calls on disclosed deviations are
      structurally the grader's (an arm scoped away from scenes/ cannot make them).
    - **ungated design REVIEW** (verdict on EXISTING structure: cosign/critique an architecture, audit a
-     schema, grade a memo) → Fable effort-low — measured ≈ effort-high on critique quality (4/4 cosigns,
+     schema, grade a memo) → Fable effort-low *(suspended per rider above → opus-low)* — measured ≈ effort-high on critique quality (4/4 cosigns,
      0 false anchors, 2 novel proposals) at **0.34× tokens** (anim-workbench effort-architecture eval,
      n=1 screening). Corroborated cross-model 2026-06-12: **Opus-low** (`llmx chat --subscription -m claude-opus-4-8 -e low`, $0)
      matched Opus-default (Agent tool) on a code-promotion review and produced the sharpest finding —
