@@ -246,7 +246,12 @@ fi
 # Advisory for Explore, observe (read-only or self-managed)
 if [ -n "$PROMPT" ]; then
     # \bturn\b avoids matching "return the path" as a turn-budget instruction.
-    HAS_TURN_BUDGET=$(echo "$PROMPT" | grep -ciE '(stop|halt|synthesize|write).*(70%|\bturn\b|budget|before running out)|max.*(\bturn\b|epoch)|epoch.*boundar' || true)
+    # `[0-9]+ ?turns?\b` catches the common "Budget ~45 turns" / "45 turns" form (a numeric
+    # turn count IS a budget) — the prior regex only matched "budget" after a control verb, so
+    # it false-fired on every well-formed dispatch (10+ in one 2026-07-07 session). A digit is
+    # required, so it still won't match "return the path". False-match only SUPPRESSES an
+    # advisory (harmless direction).
+    HAS_TURN_BUDGET=$(echo "$PROMPT" | grep -ciE '(stop|halt|synthesize|write).*(70%|\bturn\b|budget|before running out)|max.*(\bturn\b|epoch)|epoch.*boundar|[0-9]+ ?turns?\b' || true)
     HAS_FILE_OUTPUT=$(echo "$PROMPT" | grep -ciE '(write|save|output).*(file|path|memo|artifact)' || true)
 
     # Turn-budget is ADVISORY-ONLY as of 2026-06-03 (was a blocking trigger).
