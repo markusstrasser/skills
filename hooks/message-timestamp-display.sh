@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-# MessageDisplay — prepend local [HH:MM] to assistant text on screen only.
-# Native showMessageTimestamps is gated behind tengu_silk_hinge (off by default).
+# MessageDisplay — prepend local [HH:MM] to the FIRST line of each assistant
+# message on screen. Display-only (stored message + model view untouched).
+# Native showMessageTimestamps is gated behind the server-side tengu_silk_hinge
+# Statsig flag (off by default, no client override), so this hook is the only
+# working path. Wired globally in ~/.claude/settings.json → all projects.
 set -euo pipefail
 
 command -v jq >/dev/null 2>&1 || exit 0
