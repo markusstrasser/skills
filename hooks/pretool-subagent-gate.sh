@@ -439,20 +439,33 @@ if [ -n "$PROMPT" ]; then
     fi
 fi
 
-# AUTO-INJECT emission (2026-06-17): if a discipline suffix was set, append it to the
-# dispatch prompt via updatedInput so the dispatch proceeds first-time (no block/retry).
-# Fold any accumulated advisory warnings into the same additionalContext.
-if [ -n "$INJECT_SUFFIX" ]; then
-    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "inject-emit" "checks=${CHECK_IDS%,}" 2>/dev/null || true
-    printf '%s' "$INPUT" | INJECT="$INJECT_SUFFIX" WARN="$WARNINGS" python3 -c '
+# MODEL-GUARD (2026-07-08, arc-agi #g): an Agent dispatch with no explicit `model` defaults to
+# claude-sonnet-4-6 (operator veto — "no outdated models"; it silently stalled 5 subagents
+# mid-writeup in one session). Auto-inject model:opus ($0 subscription, current, strong) via
+# updatedInput, INDEPENDENTLY of the prompt-injection path. Risk profile: worst case the harness
+# ignores an injected `model` → the advisory still fires; a python error → no stdout → the
+# original dispatch proceeds unchanged (no-op, can never BREAK the call).
+MODEL_UNSET=$(printf '%s' "$INPUT" | jq -r 'if ((.tool_input.model // "") | tostring) == "" then "1" else "" end' 2>/dev/null || true)
+
+# AUTO-INJECT emission (2026-06-17): if a discipline suffix was set, append it to the dispatch
+# prompt via updatedInput so the dispatch proceeds first-time (no block/retry). Also carries the
+# model-guard. Fold any accumulated advisory warnings into the same additionalContext.
+if [ -n "$INJECT_SUFFIX" ] || [ -n "$MODEL_UNSET" ]; then
+    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "inject-emit" "checks=${CHECK_IDS%,}${MODEL_UNSET:+model}" 2>/dev/null || true
+    printf '%s' "$INPUT" | INJECT="$INJECT_SUFFIX" WARN="$WARNINGS" MODEL_UNSET="$MODEL_UNSET" python3 -c '
 import sys, json, os
 data = json.load(sys.stdin)
 ti = data.get("tool_input", {})
-ti["prompt"] = (ti.get("prompt", "") or "") + "\n\n" + os.environ["INJECT"]
+inj = os.environ.get("INJECT", "") or ""
+if inj:
+    ti["prompt"] = (ti.get("prompt", "") or "") + "\n\n" + inj
+warn = (os.environ.get("WARN", "") or "").strip()
+if os.environ.get("MODEL_UNSET"):
+    ti["model"] = "opus"
+    warn = (warn + " MODEL-GUARD: no model set -> injected model:opus (harness default claude-sonnet-4-6 is #g-vetoed). Pass model explicitly to override.").strip()
 out = {"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": ti}}
-w = (os.environ.get("WARN", "") or "").strip()
-if w:
-    out["hookSpecificOutput"]["additionalContext"] = w
+if warn:
+    out["hookSpecificOutput"]["additionalContext"] = warn
 print(json.dumps(out))
 ' 2>/dev/null
     exit 0
