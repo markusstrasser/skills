@@ -70,6 +70,24 @@ lesson where the next session finds it: a project memory file (+ MEMORY.md point
 at most **one** `[obs]` line in the project's improvement log / `MAINTAIN.md`. One
 destination, not several.
 
+**If digest has `operator_dx_reflex` (non-empty) or `operator_dx` in `real_issue_kinds`:**
+fill the four fields for the top intervention (max one action):
+
+```json
+{
+  "operator_added_value": "what the operator contributed",
+  "miss_class": "discovery|tool_reuse|stopping|dx|queue|eval|other",
+  "would_have_prevented": "existing tool|new hook proposal|skill update|backlog row|noop",
+  "action_taken": "path written OR explicit noop reason"
+}
+```
+
+Rules (steward `2026-07-09-rsi-dx-reflex.md`):
+- Obvious no-downside local fix → do it, put path in `action_taken`.
+- Global/hook-level → write one steward proposal, cite it in `action_taken`.
+- No strictly-better change → `would_have_prevented: noop` + reason in `action_taken`.
+- Do NOT dump RSI prose into every answer — only at close.
+
 `fm.py attach-evidence` is **optional** — `fm-evidence.jsonl` is auto-fed by the capture
 path (~1.7K rows); attach manually ONLY when the verify surfaced novel evidence no
 automated row carries:
@@ -79,7 +97,17 @@ cd ~/Projects/agent-infra && uv run python3 scripts/fm.py attach-evidence <FM_ID
   --session <SESSION_ID> --quote "<verified fact + command output>"
 ```
 
-Then ack the digest (stops SessionStart nudge):
+Then ack the digest (stops SessionStart nudge). **arc-agi + operator_dx:** append Mode-3 grade
+(only when you have a derivability judgment — skip if NON-DERIVABLE taste call):
+
+```bash
+uv run --project ~/Projects/agent-infra python3 \
+  ~/Projects/agent-infra/scripts/reflect_session_close.py --ack <SESSION_ID> \
+  --hindsight '{"item":"operator:<slug>","grade":"DERIVABLE","evidence":"<what operator added>","gap":"<would_have_prevented>"}'
+```
+
+Grades: `DERIVABLE` | `NON-DERIVABLE` (taste/telos — logged, no fault). No auto-append on ack
+without `--hindsight` — avoids empty stub cruft.
 
 ```bash
 uv run --project ~/Projects/agent-infra python3 \

@@ -31,10 +31,14 @@ TRANSCRIPT_BASE = Path.home() / ".claude" / "projects"
 
 # Map project short names to directory prefixes
 PROJECT_MAP = {
+    "agent-infra": "-Users-alien-Projects-agent-infra",
     "intel": "-Users-alien-Projects-intel",
     "selve": "-Users-alien-Projects-selve",
     "meta": "-Users-alien-Projects-meta",
     "genomics": "-Users-alien-Projects-genomics",
+    "phenome": "-Users-alien-Projects-phenome",
+    "substrate": "-Users-alien-Projects-substrate",
+    "personal": "-Users-alien-Projects-personal",
 }
 
 # Content patterns to strip
@@ -50,24 +54,65 @@ def _tool_cmd_limit(): return 500 if FULL_MODE else 120
 def _tool_arg_limit(): return 800 if FULL_MODE else 150
 
 
+def _canonical_dir_names(project: str) -> list[str]:
+    return [
+        f"-Users-alien-Projects-{project}",
+        f"Users-alien-Projects-{project}",
+    ]
+
+
+def _is_canonical_project_dir(path: Path, project: str) -> bool:
+    return path.name in _canonical_dir_names(project)
+
+
+def _is_topic_subdir(path: Path, project: str) -> bool:
+    """True when dir is Projects-{project}-<topic>, not the repo root."""
+    name = path.name.lower()
+    slug = project.lower()
+    for prefix in ("-users-alien-projects-", "users-alien-projects-"):
+        marker = prefix + slug
+        if name.startswith(marker) and len(name) > len(marker) and name[len(marker)] == "-":
+            return True
+    return False
+
+
+def resolve_project_dir(project: str) -> Path:
+    """Resolve ~/.claude/projects/<dir> for a project short name."""
+    mapped = PROJECT_MAP.get(project)
+    if mapped:
+        candidate = TRANSCRIPT_BASE / mapped
+        if candidate.is_dir():
+            return candidate
+
+    for name in _canonical_dir_names(project):
+        candidate = TRANSCRIPT_BASE / name
+        if candidate.is_dir():
+            return candidate
+
+    direct = TRANSCRIPT_BASE / project
+    if direct.is_dir():
+        return direct
+
+    matches = [
+        d for d in TRANSCRIPT_BASE.iterdir()
+        if d.is_dir() and project.lower() in d.name.lower()
+    ]
+    if not matches:
+        print(f"Error: No transcript directory found for '{project}'", file=sys.stderr)
+        print(f"Available: {[d.name for d in TRANSCRIPT_BASE.iterdir() if d.is_dir()]}", file=sys.stderr)
+        sys.exit(1)
+
+    canonical = [d for d in matches if _is_canonical_project_dir(d, project)]
+    if canonical:
+        return canonical[0]
+
+    pool = [d for d in matches if not _is_topic_subdir(d, project)] or matches
+    return min(pool, key=lambda d: len(d.name))
+
+
 def find_transcripts(project: str, limit: int = 5, days: int | None = None) -> list[Path]:
     """Find the N most recent transcript files for a project."""
-    dir_name = PROJECT_MAP.get(project)
-    if not dir_name:
-        # Try direct directory name
-        dir_name = project
-
-    project_dir = TRANSCRIPT_BASE / dir_name
-    if not project_dir.exists():
-        # Try fuzzy match
-        for d in TRANSCRIPT_BASE.iterdir():
-            if d.is_dir() and project.lower() in d.name.lower():
-                project_dir = d
-                break
-        else:
-            print(f"Error: No transcript directory found for '{project}'", file=sys.stderr)
-            print(f"Available: {[d.name for d in TRANSCRIPT_BASE.iterdir() if d.is_dir()]}", file=sys.stderr)
-            sys.exit(1)
+    project_dir = resolve_project_dir(project)
 
     jsonl_files = sorted(project_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
     if days is not None:

@@ -667,10 +667,16 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/scan_tool_failures.py --days 21 --json > "$A
 ```
 Joins errored tool_calls -> result-event text, keeps only real crash SIGNATURES
 (Traceback + a raised `ModuleNotFoundError/ImportError`, a real shell
-`command not found`, an entry-point shim crash — NOT the bare keyword, which
-matches `except ImportError:` in code the agent merely read). Clusters by root
-cause: `missing-module:X`, `broken-cli:Y (missing Z)`, `command-not-found:W`.
+`command not found`, an entry-point shim crash, **or cross-harness zsh-env
+failures** — `zsh-env:nomatch`, `zsh-env:alias-collision`, `zsh-env:parse-error`).
+PreToolUse hook blocks are explicitly excluded (working guards, not broken tools).
 High recall; minor residual noise is expected and is Tier 2's job to drop.
+
+**Shell-env gate (auto, $0):** after writing `failures.json`, `observe_run.py`
+runs `scripts/shell_env_loop_gate.py` → `failures/shell-env-gate.json`. When
+`zsh-env:*` volume ≥50/30d **and** `doctor.py` cross-harness shell checks fail,
+stages `shell-env-candidate.jsonl` for `/improve harvest` (no human transcript
+mining required).
 
 ### Tier 2 — cheap triage (Haiku / cheapest available model)
 Pass the Tier-1 clusters to the cheapest model and classify each:
