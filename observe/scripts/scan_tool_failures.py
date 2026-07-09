@@ -2,7 +2,7 @@
 """scan_tool_failures.py — Tier 1 of /observe failures: which tools are actually
 BROKEN, mined deterministically from agentlogs (no LLM, $0).
 
-The precision trick: filter to LAUNCH-FAILURE signatures FIRST, cluster by root
+The precision trick: filter to LAUNCH-FAILURE and SHELL-ENV signatures FIRST, cluster by root
 cause, count DISTINCT tool_calls (not events), and split interactive-agent vs
 harness invocations so cron noise does not promote as agent behavior.
 """
@@ -32,10 +32,29 @@ _LAUNCHD_MARKERS = re.compile(
     r"com\.agent-infra\.)\b",
     re.I,
 )
+_PRETOOL_HOOK_BLOCK = re.compile(r"PreToolUse:(?:Bash|Shell) hook error", re.I)
+_ZSH_NOMATCH = re.compile(r"(?:\(eval\):\d+: )?no matches found:")
+_ZSH_ALIAS_COLLISION = re.compile(r"defining function based on alias")
+_ZSH_PARSE = re.compile(r"(?:\(eval\):\d+: )?parse error near")
+
+
+def _hook_block(text: str) -> bool:
+    return bool(_PRETOOL_HOOK_BLOCK.search(text))
 
 
 def classify(text: str):
-    """Return (cluster_key, key_line) for a REAL launch failure, else None."""
+    """Return (cluster_key, key_line) for a REAL launch/shell-env failure, else None."""
+    if _hook_block(text):
+        return None
+    if _ZSH_ALIAS_COLLISION.search(text):
+        line = next((l.strip() for l in text.splitlines() if _ZSH_ALIAS_COLLISION.search(l)), "alias collision")
+        return "zsh-env:alias-collision", line[:160]
+    if _ZSH_NOMATCH.search(text):
+        line = next((l.strip() for l in text.splitlines() if _ZSH_NOMATCH.search(l)), "nomatch")
+        return "zsh-env:nomatch", line[:160]
+    if _ZSH_PARSE.search(text) and "(eval)" in text:
+        line = next((l.strip() for l in text.splitlines() if _ZSH_PARSE.search(l)), "parse error")
+        return "zsh-env:parse-error", line[:160]
     if _TRACEBACK in text and _RAISED_IMPORT.search(text):
         mod = _NO_MODULE.search(text)
         shim = _SHIM.search(text)
