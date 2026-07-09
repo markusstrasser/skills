@@ -4,11 +4,13 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from shared.context_packet import BudgetPolicy, ContextPacket, PacketSection, TextBlock
 from shared.context_renderers import write_packet_artifact
 from shared.file_specs import FileSpec, parse_file_spec, read_file_excerpt
-from shared.git_context import parse_status_porcelain, truncate_diff_text
+from shared.git_context import parse_status_porcelain, run_git, truncate_diff_text
 
 
 class ContextPacketTest(unittest.TestCase):
@@ -73,6 +75,15 @@ class ContextPacketTest(unittest.TestCase):
         text, truncated = truncate_diff_text(diff, 90)
         self.assertTrue(truncated)
         self.assertLessEqual(len(text), 90)
+
+    @patch("shared.git_context.subprocess.run")
+    def test_run_git_disables_external_diff_for_machine_consumers(self, mock_run) -> None:
+        mock_run.return_value = SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        run_git(Path("/repo"), ["diff", "HEAD"])
+
+        command = mock_run.call_args.args[0]
+        self.assertEqual(command, ["git", "-C", "/repo", "diff", "--no-ext-diff", "HEAD"])
 
 
 if __name__ == "__main__":
