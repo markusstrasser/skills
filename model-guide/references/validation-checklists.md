@@ -34,17 +34,17 @@
 - [ ] Bind completion to parsed evidence, not the model's own progress summary.
 - [ ] Keep prompt-injection boundaries around tool outputs.
 
-### After GPT-5.5
+### After GPT-5.6 Sol/Terra
 - [ ] Check that it did not take action when the user only asked a question.
 - [ ] Treat every unsourced factual specific as unverified-by-default: 86% of its closed-book misses are confident fabrications even when explicitly invited to abstain (AA-Omniscience non-hallucination 14% — worst of the frontier set). Weight its critiques by their reasoning, never their asserted facts.
 - [ ] Check that it preserved pre-existing user/worktree changes.
 - [ ] For impossible or intentionally blocked tasks, verify it admitted the block instead of pretending success.
 - [ ] Fact-check dense professional prose; improved factuality is not source-grade accuracy.
 
-### After GPT-5.5 Pro
+### After GPT-5.6 Sol (pro mode)
 - [ ] Verify every intermediate quantitative step.
 - [ ] Re-run decisive calculations with code or a second model.
-- [ ] Make sure the task justified 6x GPT-5.5 pricing.
+- [ ] Make sure the task justified pro-mode token spend on Sol.
 
 ### After GLM-5.2 (opt-in review)
 - [ ] Best measured calibration among large routed models (72% non-hallucination on AA-Omniscience misses) — still verify novel specifics; abstention is better, not perfect.
@@ -55,5 +55,5 @@
 - [ ] Confirm transport was `cursor-agent --workspace` for critique (receipt `transport: cursor-agent-workspace`) — not llmx packet-only cursor.
 - [ ] Re-run 1–2 of its load-bearing greps yourself; weight reasoning, not asserted facts (~46% AA-Omniscience non-hallucination).
 - [ ] Do not treat CursorBench / vendor coding scores as decisive (Cursor blog: training contamination).
-- [ ] Hard physics / CritPt-shaped claims: distrust — AA CritPt 15%; escalate to GPT-5.5 Pro.
+- [ ] Hard physics / CritPt-shaped claims: distrust — AA CritPt 15%; escalate to GPT-5.6 Sol max/pro.
 - [ ] If xAI API path was attempted: 403 `API key is currently blocked` is a **key** problem, not EU geo.

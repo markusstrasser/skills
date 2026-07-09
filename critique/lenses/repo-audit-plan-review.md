@@ -155,7 +155,7 @@ Claude/Codex disagree.
 | Critic | Lens | Dispatch |
 |--------|------|----------|
 | Claude Opus | Sequencing / unification | `llmx chat --subscription -m claude-opus-4-8` |
-| Codex | Premise-soundness / false-positive risk | `llmx chat -p codex-cli -m gpt-5.5` |
+| Codex | Premise-soundness / false-positive risk | `llmx chat -p codex-cli -m gpt-5.6-sol` |
 
 ```bash
 cd "$REPO"
@@ -168,7 +168,7 @@ llmx chat --subscription -m claude-opus-4-8 \
   -o .model-review/critique-claude-opus-subscription.md \
   "Adversarial. UNIFIED root-cause fixes. Label claims lane-backed|verify-backed|speculative. Return: Findings | Top 3 | DELETE | Disagreements"
 
-llmx chat -p codex-cli -m gpt-5.5 \
+llmx chat -p codex-cli -m gpt-5.6-sol \
   -f .model-review/<topic>-critique-combined.md \
   -e high \
   -o .model-review/critique-codex-cli.md \

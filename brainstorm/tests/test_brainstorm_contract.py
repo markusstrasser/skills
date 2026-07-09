@@ -49,7 +49,7 @@ class BrainstormContractTest(unittest.TestCase):
         dispatch_text = DISPATCH_REF.read_text()
         domain_pools_text = DOMAIN_POOLS_REF.read_text()
 
-        self.assertIn("/model-review", skill_text)
+        self.assertIn("/critique", skill_text)
         self.assertIn("caller_evidence", dispatch_text)
         self.assertIn("speculative", dispatch_text)
         self.assertIn("domain_row", dispatch_text)

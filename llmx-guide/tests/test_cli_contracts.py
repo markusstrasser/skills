@@ -170,7 +170,7 @@ def test_live_cursor_ask_mode_is_lean():
 @live
 def test_live_codex_subscription_route_not_api_fallback():
     """Tripwire for the llmx `--subscription` -> PAID openai-api fallback. `-p codex-cli` MUST keep
-    gpt-5.5 on the ChatGPT sub. We assert the transport line says codex-cli, not openai-api billing."""
+    gpt-5.6-sol on the ChatGPT sub. We assert the transport line says codex-cli, not openai-api billing."""
     if shutil.which("llmx") is None:
         pytest.skip("llmx not installed")
     p = subprocess.run(
@@ -178,7 +178,7 @@ def test_live_codex_subscription_route_not_api_fallback():
             "llmx",
             "chat",
             "-m",
-            "gpt-5.5",
+            "gpt-5.6-sol",
             "-p",
             "codex-cli",
             "-e",
@@ -192,5 +192,5 @@ def test_live_codex_subscription_route_not_api_fallback():
     # transport line is on stderr; must route codex-cli (sub), never bill the API
     assert "transport" in p.stderr.lower(), f"no transport diagnostic: {p.stderr[:200]}"
     assert "codex-cli" in p.stderr, (
-        f"gpt-5.5 -p codex-cli did NOT route codex-cli sub: {p.stderr[:300]}"
+        f"gpt-5.6-sol -p codex-cli did NOT route codex-cli sub: {p.stderr[:300]}"
     )

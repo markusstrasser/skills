@@ -1,19 +1,20 @@
-# GPT-5.5 Prompting Guide
+# GPT-5.6 Prompting Guide
 
-**Last updated:** 2026-06-06
-**Scope:** GPT-5.5 and GPT-5.5 Pro.
+**Last updated:** 2026-07-09
+**Scope:** GPT-5.6 Sol / Terra / Luna (+ Pro mode). GPT-5.5 removed.
 
-## Use GPT-5.5 For
+## Use Sol / Terra / Luna For
 
-- Codex and terminal-heavy implementation.
+- **Sol** (`gpt-5.6-sol`): Codex and terminal-heavy implementation; formal/cross-lab; architecture GPT side.
+- **Terra** (`gpt-5.6-terra`): Mid-tier opt-in between Luna and Sol.
+- **Luna** (`gpt-5.6-luna`): Everyday GPT (≈ prior 5.5 perf at ~½ price) + mechanical/lint at low effort.
 - Structured outputs and strict tool schemas.
 - Document, spreadsheet, and slide generation inside OpenAI/Codex workflows.
 - Long-context retrieval where OpenAI-reported MRCR performance matters.
-- Professional execution where the task shape is clear and source material is available.
 
-## Use GPT-5.5 Pro For
+## Use Pro Mode For
 
-Use Pro only when the task is worth the cost:
+Pro is **not** a separate slug — set API `reasoning.mode=pro` on Sol/Terra/Luna (same $/MTok, more tokens). Use only when the task is worth the cost:
 
 - Hard quantitative derivation.
 - Calibration math or Bayesian chains.
@@ -27,10 +28,12 @@ Do not use Pro for ordinary coding, broad web research, simple classification, o
 
 | Variant | What differs | Price | Context | Max output |
 |---|---|---:|---:|---:|
-| `gpt-5.5` | Base reasoning model | $5/M input, $0.50/M cached input, $30/M output | 1.05M | 128K |
-| `gpt-5.5-pro` | Same underlying model plus parallel test-time compute | $30/M input, no listed cached discount, $180/M output | 1.05M | 128K |
+| `gpt-5.6-sol` | Flagship | $5/M input, $30/M output | 1.05M | 128K |
+| `gpt-5.6-terra` | Balanced | $2.50/M input, $15/M output | 1.05M | 128K |
+| `gpt-5.6-luna` | Cheap/fast | $1/M input, $6/M output | 1.05M | 128K |
+| Pro mode | Same model + parallel test-time compute | Same $/MTok (more tokens) | 1.05M | 128K |
 
-Both list a Dec 1 2025 knowledge cutoff in OpenAI's model comparison docs. Both support Responses, Chat Completions, Batch, streaming, function calling, structured outputs, and image input.
+Cutoff Feb 16 2026. Support Responses, Chat Completions, Batch, streaming, function calling, structured outputs, and image input. Effort includes `max`.
 
 ## Prompting Rules
 

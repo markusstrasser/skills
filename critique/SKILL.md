@@ -223,7 +223,7 @@ Set `timeout: 660000` on the Bash tool call. See `references/dispatch.md` for `-
 
 **Model-specific prompting:** Before assembling context, consult `/model-guide` for per-model rules. Key: GPT-5.5 context should use XML `<doc>` tags, Gemini query goes at END. See `references/dispatch.md § Context Formatting` for the full checklist.
 
-**Effort levels:** Default per subpart: **2× Gemini (`arch`+`gaps`) + 2× GPT-5.5 `medium`
+**Effort levels:** Default per subpart: **2× Gemini (`arch`+`gaps`) + 2× GPT-5.6 Luna `medium`
 (`correctness`+`contracts`)** — four parallel narrow passes beat one `high` mega-query at ≈ the same
 or lower cost. Critique quality is effort-insensitive at medium vs high for non-formal work
 (anim-workbench 2026-06-12). Reserve `formal` (GPT **high**) for math/Bayes/proof/invariant
@@ -340,7 +340,7 @@ See `lenses/verification.md` for the full procedure.
 
 ### When NOT to Use
 
-- For verifying scientific/factual claims (use `/researcher` or `/epistemics`)
+- For verifying scientific/factual claims (use `/research` or `references/epistemics`)
 - For verifying a single specific bug (just read the code directly)
 - When findings are already human-verified
 

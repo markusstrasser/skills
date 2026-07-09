@@ -71,7 +71,7 @@ table compresses the lane + tool tables below into a single decision.
 
 | Question shape | First move |
 |---|---|
-| Personal genome / variant in this user's WGS | `genomics-consumer` MCP → `gene_profile` / `variant_lookup` / `explain_finding` |
+| Personal genome / variant in this user's WGS | genomics `just` recipes / volume reads / stable `results/` artifacts (genomics-consumer MCP retired 2026-06-28) |
 | Public variant annotation (ClinVar / gnomAD / AF) | `biomedical` MCP `variants_lookup`, `variants_clinvar`, `population_variant_frequency`; or BioMCP |
 | Variant regulatory effect prediction | `biomcp get variant <id> predict` (AlphaGenome) |
 | Gene → disease / panel / dosage | `biomedical` MCP `curation_*`, `panels_*`, `phenotype_*`, `targets_disease_associations` |
@@ -155,7 +155,7 @@ available everywhere.
 | Need | Preferred Surface | Fallback |
 |---|---|---|
 | Personal corpus / current beliefs | project MCP claim store, entity pages, `./phenome search` | grep repo docs first, then semantic search |
-| Personal genome interpretation | genomics-consumer MCP, stable `results/` artifacts, `gene_profile` | read clinical maps / registry files |
+| Personal genome interpretation | genomics `just sample-*` / `results/` artifacts (no consumer MCP — producer-only boundary) | read clinical maps / registry files |
 | Variant public annotation | BioMCP or biomedical MCP variant lookup | MyVariant.info, ClinVar, gnomAD web/API |
 | PGx | PharmGKB/CPIC via MCP or BioMCP | PharmGKB, CPIC guideline/API, FDA labels |
 | Literature | research MCP, scite, PubMed/PMC, paperclip where configured | PubMed + PMC + DOI landing pages |

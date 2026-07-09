@@ -1,7 +1,8 @@
 # Frontier Model Benchmarks
 
 **Last updated:** 2026-07-09
-**Active scope:** Claude Fable 5, Claude Opus 4.8, GPT-5.5, GPT-5.5 Pro, Grok 4.5 (AA niche).
+**Active scope:** Claude Fable 5, Claude Opus 4.8, GPT-5.6 Sol/Terra/Luna, Grok 4.5 (AA niche).
+**Note:** GPT-5.5 columns below are historical AA/vendor snapshots (pre-5.6); do not route to GPT-5.5.
 
 Older GPT/Gemini/Grok-4.20-and-earlier/Sonnet routing rows were removed from the active benchmark surface. Historical comparisons remain only where a vendor used them as a baseline. Fable 5 numbers are the GA-configuration scores (production safety classifiers on, fallback to Opus 4.8 where they fire); the unsafeguarded Mythos 5 scores a touch higher on classifier-adjacent rows. Grok 4.5 rows below are from Artificial Analysis independent evals (2026-07-08), not vendor self-report.
 
@@ -87,8 +88,9 @@ Same-harness AA v4.1 board after SpaceXAI launch. Config: **Grok 4.5 (high)**. N
 | Model | Input/MTok | Cached input/MTok | Output/MTok | Context | Max output | Knowledge cutoff | Notes |
 |---|---:|---:|---:|---:|---:|---|---|
 | Claude Opus 4.8 | $5.00 | - | $25.00 | 1M | 128K | Jan 2026 | Fast mode: $10/$50, up to 2.5x output speed. |
-| GPT-5.5 | $5.00 | $0.50 | $30.00 | 1.05M | 128K | Dec 1 2025 | Batch/Flex available; Priority costs more. |
-| GPT-5.5 Pro | $30.00 | - | $180.00 | 1.05M | 128K | Dec 1 2025 | Same weights plus parallel test-time compute. |
+| GPT-5.6 Sol | $5.00 | (cache 90% off) | $30.00 | 1.05M | 128K | Feb 16 2026 | Flagship; Pro = reasoning.mode=pro. |
+| GPT-5.6 Terra | $2.50 | (cache 90% off) | $15.00 | 1.05M | 128K | Feb 16 2026 | Mid opt-in. |
+| GPT-5.6 Luna | $1.00 | (cache 90% off) | $6.00 | 1.05M | 128K | Feb 16 2026 | Everyday GPT (≈ prior 5.5 perf). |
 | Grok 4.5 | $2.00 | - | $6.00 | 500k | - | - | Cursor fast variant $4/$18. Reasoning low/med/high. |
 
 ## Model-Card Behavior Signals

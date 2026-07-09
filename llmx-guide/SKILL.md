@@ -47,7 +47,7 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py --preflight
 
 ```bash
 llmx chat --subscription -m claude-opus-4-8 -f ctx.md -o out.md "query"
-llmx chat -p codex-cli --subscription -m gpt-5.5 -f ctx.md -o out.md "query"
+llmx chat -p codex-cli --subscription -m gpt-5.6-sol -f ctx.md -o out.md "query"
 ```
 
 Strips API-key env on Claude/Codex subscription paths. If you see "Credit balance is too low", you hit API-key billing, not local subscription auth.

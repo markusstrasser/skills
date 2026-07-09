@@ -79,9 +79,9 @@ Query live ground truth before asserting a remote/long-running job's state.
 
 | Target | Tool | Structured fields to cite |
 |---|---|---|
-| Modal app | `mcp__modal-triage__status(app_id)` | `is_running`, `uptime_seconds`, `verified_at` |
-| Modal app + logs | `mcp__modal-triage__triage(app_id)` | `signals`, `tail_lines`, `verified_at` |
-| Modal log pattern | `mcp__modal-triage__grep_logs(app_id, pattern)` | `match_count`, `matches` |
+| Modal app | fresh subprocess: `modal app list --json` (or `uv run python3 scripts/watch_active_apps.py`) | app state, created_at; cite fields, not paraphrase |
+| Modal app + logs | fresh subprocess: `modal app logs <id>` (tail) | recent log lines + exit/stop signals |
+| Modal log pattern | `modal app logs <id> 2>&1 \| rg -n 'PATTERN'` | match lines; do not invent counts |
 | DuckDB state | `mcp__duckdb__query(db_path, sql)` | row counts, `verified_at` implicit |
 | Background bash | `BashOutput(bash_id)` | stdout/stderr tail with timestamps |
 | launchd job | `launchctl list \| grep com.X` | PID, exit code, last run |
@@ -105,7 +105,7 @@ Query live ground truth before asserting a remote/long-running job's state.
 
 ```
 # Before writing any status claim:
-1. Call the structured tool (modal-triage / duckdb / BashOutput / etc.)
+1. Call the structured tool (fresh `modal app …` / duckdb / BashOutput / etc.)
 2. Extract the verified fields.
 3. Write the claim with the verified value inline.
 
@@ -123,7 +123,7 @@ raw structured payload to Composer with a tight output contract:
 ```bash
 # Write fetched ground truth to a file first (never inline a huge blob in the prompt)
 cat > /tmp/status-ground-truth.json <<'EOF'
-{paste structured fields from modal-triage / duckdb / BashOutput here}
+{paste structured fields from modal app list/logs / duckdb / BashOutput here}
 EOF
 
 uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
@@ -244,7 +244,7 @@ if post-hoc-rationalization recurs after this mode ships.
 - `/upgrade` — broader refactor workflow; `verify-before` is the narrow
   pre-launch / pre-diagnosis contract.
 - `/modal` (reference) — documents Modal SDK gotchas. `verify-before status`
-  tells you when to consult it; the modal-triage MCP tells you the actual state.
+  tells you when to consult it; a **fresh** `modal app list --json` / `modal app logs` subprocess tells you the actual state (modal-triage MCP retired 2026-07-02).
 
 ## Evidence
 
