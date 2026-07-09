@@ -222,6 +222,15 @@ def main() -> None:
     c11 = ctx(out)
     check("rediscovery steer emits prior-context", bool(c11))
     check("rediscovery surfaces recent commits", "prior observe" in c11 or "commit" in c11.lower())
+
+    # 11b. Blindspot 2026-07-09: RSI-meta / "ask yourself" steers also trip REDISCOVERY.
+    out_meta = run({
+        "user_message": "RSI : why did you not find/figure this out? ask yourself the meta question",
+        "cwd": str(red_base),
+        "session_id": "s_rsi_meta",
+    })
+    c_meta = ctx(out_meta)
+    check("RSI-meta rediscovery steer emits prior-context", bool(c_meta))
     red_td.cleanup()
 
     td.cleanup()

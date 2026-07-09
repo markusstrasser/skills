@@ -128,12 +128,17 @@ INTENT = re.compile(
 )
 
 # Human correction / rediscovery steers — fire prior context on the RETRY turn too.
+# Extended 2026-07-09 (blindspot digest): "RSI : why did you not find/figure this out"
+# / "ask yourself … meta" / "everytime I mention" — human meta-steers that prior-context
+# should have caught on the *next* propose turn (harvest rediscovery cluster).
 REDISCOVERY = re.compile(
     r"\b("
     r"why don'?t you|why didn'?t you|you (clearly )?did(n'?t| not)|"
     r"did you (read|check|look)|have you (read|checked|looked)|"
-    r"why (not|didn'?t you) (check|read|look)|"
-    r"/execute\b|/improve\b|/research\b|/observe\b"
+    r"why (not|didn'?t you) (check|read|look|find|figure)|"
+    r"why did you not (find|figure|check|read|look)|"
+    r"ask yourself|every ?time I mention|RSI\s*:"
+    r"|/execute\b|/improve\b|/research\b|/observe\b"
     r")\b",
     re.I,
 )
