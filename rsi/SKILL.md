@@ -70,6 +70,11 @@ lesson where the next session finds it: a project memory file (+ MEMORY.md point
 at most **one** `[obs]` line in the project's improvement log / `MAINTAIN.md`. One
 destination, not several.
 
+**arc-agi MEMORY discipline (AP10):** never paste session blocks into `MEMORY.md`. Write the
+fact to `project_*.md` Revisions (or `research/` / `decisions/`), then add/update **one**
+MEMORY.md pointer line. Soft cap 8KB — see `.claude/rules/memory-write-discipline.md`.
+Run `just memory-lint` if you touched memory.
+
 **If digest has `operator_dx_reflex` (non-empty) or `operator_dx` in `real_issue_kinds`:**
 fill the four fields for the top intervention (max one action):
 
