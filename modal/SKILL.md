@@ -469,3 +469,7 @@ Detailed docs in `references/`:
 
 **Hit a fresh Modal gotcha or a defect in THIS skill?** Log it so the next deploy inherits the fix:
 `~/Projects/skills/hooks/append-skill-memento.sh modal '<one-line issue>'`.
+
+## Known Issues
+<!-- Append-only. Session-analyst may suggest additions. -->
+- **[2026-07-09] add_local_dir/add_local_python_source copy the WORKING TREE at dispatch, not git HEAD — uncommitted edits ship to containers, and a stage dispatched mid-edit records a code fingerprint that exists in no commit (unreproducible run). Commit before a dispatch wave; "predates the commit" is never the fix boundary — the mount is.**
