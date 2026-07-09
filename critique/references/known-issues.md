@@ -32,3 +32,9 @@
   axis as `budget_insufficient_for_profile` at dispatch (silent no-op; recurrence of the 2026-06-18
   class, caught in the 2026-07-06 skill-value audit). Floor is computed from model-review's own
   axis→profile tables (`review_gate.axis_budget_floor`); covered by `test_review_gate.py`.
+- **[2026-07-09] FIXED — deterministic review triage hung inside configured external diff.**
+  `review_gate.py triage` calls the shared Python `run_git`, so it bypassed the interactive shell hook
+  that injects `--no-ext-diff`; on a dirty `uv.lock`, `difft` ran for minutes and the gate emitted no
+  manifest or error. `shared.git_context.run_git` now injects `--no-ext-diff` for every `git diff`
+  subprocess, with a regression test that asserts the exact command. Machine-consumed Git output must
+  not depend on an interactive external renderer.

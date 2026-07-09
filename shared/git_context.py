@@ -16,14 +16,21 @@ class GitStatusEntry:
 
 
 def run_git(repo: Path, args: list[str], *, check: bool = True, text: bool = True):
+    command_args = list(args)
+    # Python subprocesses bypass the interactive pretool hook that normally
+    # injects --no-ext-diff.  Keep packet builders and deterministic review
+    # gates on Git's built-in diff so configured pagers/renderers cannot hang
+    # or corrupt a machine-consumed stream.
+    if command_args and command_args[0] == "diff" and "--no-ext-diff" not in command_args:
+        command_args.insert(1, "--no-ext-diff")
     proc = subprocess.run(
-        ["git", "-C", str(repo), *args],
+        ["git", "-C", str(repo), *command_args],
         capture_output=True,
         text=text,
     )
     if check and proc.returncode != 0:
         stderr = proc.stderr if text else proc.stderr.decode("utf-8", errors="replace")
-        raise RuntimeError(stderr.strip() or f"git {' '.join(args)} failed")
+        raise RuntimeError(stderr.strip() or f"git {' '.join(command_args)} failed")
     return proc.stdout
 
 
