@@ -23,7 +23,7 @@ All three tools discover skills via user-level symlinks pointing here:
 |-------|--------------|
 | `analyze` | Reusable reasoning lenses: null/base-rate, causal attribution, DAG adjustment, ACH hypotheses, weakest-link audit, and decision-impact stop. Use for why/root-cause/regression/confounder/anomaly questions when a project workflow needs sharper reasoning. Local only. |
 | `bio-verify` | Verify hardcoded bio constants (coords, genes, ratios) vs Ensembl/ClinVar/ISBT/gnomAD/PanelApp. |
-| `brainstorm` | Divergent ideation via systematic perturbation — denial cascades, domain forcing, constraint inversion. Multi-model dispatch optional (volume, not diversity). For convergent critique, use /model-review. |
+| `brainstorm` | Divergent ideation via systematic perturbation — denial cascades, domain forcing, constraint inversion. Multi-model dispatch optional (volume, not diversity). For convergent critique, use /critique. |
 | `census-data` | Census Data API + IPUMS extract patterns (ACS, CPS, SIPP, QWI, decennial, USA microdata). Use for state/county aggregates, microdata extracts, immigrant shares, earnings-by-group, Card/Borjas-style panels. |
 | `corpus` | Canonical local store for source bytes + parses + citation graph + annotations. 'check corpus store', 'cite something', 'find contradicting citations', 'has any repo already seen this DOI'. |
 | `critique` | Adversarial review. Modes: model (Gemini+GPT), verify (fact-check), close (post-impl tests). 'review plan', 'what's wrong', 'fact-check'. |

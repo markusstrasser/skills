@@ -14,7 +14,7 @@
 llmx -p google "question"       # paid Gemini API (free CLI retired 2026-05-31); add --flex for 50% off
 llmx -p openai "question"       # uses OpenAI API
 llmx chat --subscription -m claude-opus-4-8 "question"  # Claude CLI subscription route (canonical)
-llmx -p codex-cli --subscription -m gpt-5.5 "question"  # Codex CLI subscription
+llmx -p codex-cli --subscription -m gpt-5.6-sol "question"  # Codex CLI subscription
 llmx -p claude-cli "question"   # force Claude CLI transport (prefer --subscription on logical anthropic)
 llmx -p xai "question"          # xAI API (OpenAI-compatible at https://api.x.ai/v1)
 ```
@@ -51,7 +51,7 @@ Falls back to API for:
 - Both CLIs ignore explicit `--reasoning-effort`; they use their own default thinking behavior
 - ⚠ Codex CLI `--schema` is UNRELIABLE: llmx translates it to `codex exec --output-schema`, but
   codex-cli (v0.140.0) returns a generic "CLI returned error" and the call fails (reproduced
-  2026-06-18, `gpt-5.5 --subscription --schema`). claude-cli rejects `--schema` outright
+  2026-06-18, GPT `--subscription --schema`). claude-cli rejects `--schema` outright
   ("structured output not supported by CLI"). **On the `--subscription` lane do NOT use `--schema`
   — use instruction-parsed JSON (ask for a JSON object in the prompt; llmx/`evalcore.judge.dispatch`
   parse the `{...}`), or `--auth api` for true structured output.**

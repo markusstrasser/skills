@@ -216,11 +216,11 @@ Callers exist? Join keys on both sides? Schema matches reality?
 Load-bearing premises the design depends on. One per line, each starting with "- ".""",
     },
     "correctness": {
-        "label": "GPT-5.5 medium A (full review — bugs + structure)",
+        "label": "GPT-5.6 Luna medium A (full review — bugs + structure)",
         "profile": "gpt_general",
         "prompt": """\
 <system>
-Full adversarial review of THIS subpart. GPT-5.5 medium effort.
+Full adversarial review of THIS subpart. GPT-5.6 Luna medium effort.
 Lens A: bugs, boundaries, silent failures — AND whether the architecture supports correctness.
 Budget: ~1200 words.
 </system>
@@ -247,13 +247,13 @@ Unchecked return codes, fail-open paths, missing guards.
 Interface breaks, dual paths, orphaned consumers, fail-open error semantics.""",
     },
     "contracts": {
-        "label": "GPT-5.5 medium B (full review — migration + interfaces)",
+        "label": "GPT-5.6 Luna medium B (full review — migration + interfaces)",
         "profile": "gpt_general",
         "prompt": """\
 <system>
 Second GPT pass — SAME full mandate (bugs + architecture), different lens.
 Lens B: interfaces, contracts, migration completeness — but still flag real bugs you see.
-Do NOT defer bugs to the other GPT pass. GPT-5.5 medium. Budget: ~1200 words.
+Do NOT defer bugs to the other GPT pass. GPT-5.6 Luna medium. Budget: ~1200 words.
 </system>
 
 {question}
@@ -275,12 +275,12 @@ Dual paths, orphaned consumers, unnamed removal conditions.
 ## 5. Where I'm Likely Wrong""",
     },
     "formal": {
-        "label": "GPT-5.5 high (quantitative/formal — opt-in)",
+        "label": "GPT-5.6 Sol high (quantitative/formal — opt-in)",
         "profile": "formal_review",
         "prompt": """\
 <system>
 You are performing QUANTITATIVE and FORMAL analysis. Other reviewers handle qualitative pattern review. Focus on what they can't do well. Be precise. Show your reasoning. No hand-waving.
-Use ONLY when the subpart involves math, proofs, Bayes/stats, or formal invariants. GPT-5.5 at HIGH effort.
+Use ONLY when the subpart involves math, proofs, Bayes/stats, or formal invariants. GPT-5.6 Sol at HIGH effort.
 Budget: ~1500 words. Tables over prose. Source-grade claims.
 </system>
 
@@ -304,7 +304,7 @@ Convert vague claims into falsifiable predictions with success criteria. If a cl
 Ranked by measurable impact. Each must have: (a) what, (b) why with quantitative justification, (c) how to verify with specific metrics.
 
 ## 6. Where I'm Likely Wrong
-What am I (GPT-5.5) probably getting wrong? Known biases to flag: overconfidence in fabricated specifics, overcautious scope-limiting, production-grade recommendations for personal projects.""",
+What am I (GPT-5.6) probably getting wrong? Known biases to flag: overconfidence in fabricated specifics, overcautious scope-limiting, production-grade recommendations for personal projects.""",
     },
     "domain": {
         "label": "Gemini (domain correctness)",
@@ -328,7 +328,7 @@ For each domain-specific claim in the reviewed material:
 Flag any URLs, API endpoints, or version numbers that should be probed before implementation.""",
     },
     "mechanical": {
-        "label": "GPT-5.5 (mechanical audit)",
+        "label": "GPT-5.6 Luna (mechanical audit)",
         "profile": "mechanical_review",
         "prompt": """\
 <system>
@@ -919,7 +919,7 @@ def build_effective_policy(args: argparse.Namespace) -> dict:
 # Primary Gemini critique axis
 GEMINI_PRIMARY_MODEL = dispatch_core.PROFILES["deep_review"].model
 # Rate-limit fallback target for the Gemini (arch) axis. When gemini-3.5-flash
-# rate-limits, retry the axis on gpt-5.5 — the rule-sanctioned move ("after a
+# rate-limits, retry the axis on gpt-5.6-luna — the rule-sanctioned move ("after a
 # Gemini rate-limit, switch to GPT or Flash"; llmx transport-routing) and an
 # adversarial-grade model. Tradeoff: this collapses the arch+formal pair to GPT
 # for that one review (degraded cross-model diversity), accepted because it is
@@ -1472,7 +1472,7 @@ def rerun_axis_with_fallback(
     budget: DispatchBudget | None = None,
 ) -> dict:
     """Retry the rate-limited primary Gemini (arch) axis on the cross-provider
-    adversarial fallback (gpt-5.5 since 2026-06-07; 3.1-pro retired from
+    adversarial fallback (gpt-5.6-luna since 2026-07-09; 3.1-pro retired from
     automation). Collapses the pair to GPT for this review, but rare + reliable."""
     out_path = review_dir / f"{axis}-output.md"
     print(
@@ -2643,7 +2643,7 @@ def verify_claims(
         return anchors
 
     # Extension-swap fallbacks — models frequently hallucinate these when
-    # citing data/config files. Order reflects observed frequency: GPT-5.5
+    # citing data/config files. Order reflects observed frequency: GPT
     # and Gemini both emit ``.js`` where ``.json`` was meant, and there's
     # a similar ``.yml`` ⇄ ``.yaml`` ambiguity. Known issue logged at
     # /Users/alien/.claude/skills/critique/SKILL.md § Known Issues

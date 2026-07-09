@@ -1,3 +1,13 @@
+## OpenAI — GPT-5.6 suite (GA 2026-07-09)
+
+| ID | Role | $/MTok in/out | Effort |
+|---|---|---|---|
+| `gpt-5.6-sol` (alias `gpt-5.6`) | Flagship | $5 / $30 | none…max |
+| `gpt-5.6-terra` | Balanced (≈ prior 5.5) | $2.50 / $15 | none…max |
+| `gpt-5.6-luna` | Cheap/fast | $1 / $6 | none…max |
+
+Default provider model: **Sol**. Pro = `reasoning.mode=pro` (same rates). Context 1.05M / 128K out.
+
 <!-- Reference file for llmx-guide skill. Loaded on demand. -->
 
 # Model Names, Limits & Reasoning
@@ -12,9 +22,10 @@
 | GPT Image 2 | `gpt-image-2` | Current SoTA image model. Default for `llmx image`; supports generation and edit/reference workflows |
 | Gemini 3 Pro Image | `gemini-3-pro-image-preview` | Available via `llmx image --provider google -m pro` |
 | GPT-5.3 Instant | `gpt-5.3-chat-latest` | Reasoning max: **medium only**. Auto-defaults |
-| GPT-5.5 | `gpt-5.5` | **Default OpenAI model.** 1M API context / 400K Codex. Pricing $5/$30 per MTok (batch/flex 50%, priority 2.5x). `openai` prefers Codex CLI when installed. API defaults reasoning to `high`; `xhigh` also supported. |
-| GPT-5.5 Pro | `gpt-5.5-pro` | Same weights as 5.5 + parallel test-time compute. $30/$180 per MTok. Also in ChatGPT Pro/Business/Enterprise. |
-| GPT-5.4 | `gpt-5.4` | Previous default. Kept for back-comparison; use `gpt-5.5` for new work. |
+| GPT-5.6 Sol | `gpt-5.6-sol` (alias `gpt-5.6`) | **Default OpenAI model.** Flagship. $5/$30. Effort `none`…`max`. Pro = API `reasoning.mode=pro`. Context 1.05M / 128K. |
+| GPT-5.6 Terra | `gpt-5.6-terra` | Mid opt-in. $2.50/$15. Effort `none`…`max`. |
+| GPT-5.6 Luna | `gpt-5.6-luna` | **Everyday GPT** (≈ prior 5.5 perf at ~½ price). $1/$6. Also mechanical at low effort. |
+| GPT-5.4 | `gpt-5.4` | Older GPT. Prefer Sol/Terra/Luna for new work. |
 | GPT-5.2 (legacy) | `gpt-5.2` | Legacy OpenAI default. |
 | GPT-5-Codex | `gpt-5-codex` | No `minimal` reasoning-effort |
 | Claude Sonnet 5 | `claude-sonnet-5` | Released 2026-06-30. 1M context, 128K output, $3/$15 per MTok ($2/$10 intro through 2026-08-31). Adaptive thinking on by default; first Sonnet-tier model with `xhigh` effort. Not yet in `lite_allowed_models` (subscription allowlist) — `--subscription -m claude-sonnet-5` will not route until that's added. See `/model-guide` for routing guidance and the full system-card digest. |
@@ -38,7 +49,7 @@
 
 | Model | Max Input | Max Output | Notes |
 |-------|----------|-----------|-------|
-| GPT-5.5 | 1,000,000 (API) / 400,000 (Codex) | 128,000 | API limit per announcement; Codex limit per Plus/Pro/Business/Enterprise/Edu/Go plans |
+| GPT-5.6 Sol / Terra / Luna | 1,050,000 | 128,000 | Effort includes `max`; Pro = `reasoning.mode=pro` |
 | GPT-5.4 | 1,050,000 | 128,000 | |
 | GPT-5.2 | 272,000 | 128,000 | |
 | GPT-5.3 Chat | 128,000 | 16,384 | Smallest output cap — watch for truncation |
@@ -54,7 +65,7 @@
 | Model | Valid values | Default |
 |-------|------------|---------|
 | GPT-5.3 Instant | **medium only** | medium (auto) |
-| GPT-5.5 | none, minimal, low, medium, high, xhigh | high |
+| GPT-5.6 Sol / Terra / Luna | none, low, medium, high, xhigh, **max** | medium |
 | GPT-5.4 | none, minimal, low, medium, high, xhigh | high |
 | GPT-5.2 | minimal, low, medium, high | high |
 | GPT-5-Codex | low, medium, high | high |

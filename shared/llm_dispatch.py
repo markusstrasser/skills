@@ -100,7 +100,9 @@ PROFILES: dict[str, DispatchProfile] = {
         name="formal_review",
         intent="Formal or quantitative GPT-backed review",
         provider="openai",
-        model="gpt-5.5",
+        # 2026-07-09: GPT-5.6 Sol (flagship). Escalate further via API
+        # reasoning.mode=pro (same model id) when wired — not a separate slug.
+        model="gpt-5.6-sol",
         timeout=600,
         # 2026-06-10: formal is the GPT reasoning axis for reviews — operator
         # policy is "medium most cases, high for deep/formal". `gpt_general`
@@ -113,22 +115,24 @@ PROFILES: dict[str, DispatchProfile] = {
         name="gpt_general",
         intent="General-purpose GPT-backed dispatch",
         provider="openai",
-        model="gpt-5.5",
+        # 2026-07-09: Luna ≈ prior GPT-5.5 perf at ~½ that price ($1/$6 vs old $5/$30).
+        model="gpt-5.6-luna",
         timeout=600,
         reasoning_effort="medium",
         max_tokens=16384,
         input_token_limit=120000,
     ),
     "mechanical_review": DispatchProfile(
-        # Mechanical/lint axis (deep/full presets). gpt-5.5 at LOW effort:
+        # Mechanical/lint axis (deep/full presets). Luna at LOW effort:
         # the job is fast pattern-spotting (stale refs, naming, dup), not
         # reasoning. Repointed off gemini-3-flash-preview on 2026-06-01 — that
         # model measured ~42-67% hallucination as a critique axis, poisoning
         # exactly the high-stakes deep/full reviews where mechanical runs.
+        # 2026-07-09: same Luna id as gpt_general; effort (low vs medium) is the dial.
         name="mechanical_review",
         intent="Low-effort GPT mechanical/lint audit",
         provider="openai",
-        model="gpt-5.5",
+        model="gpt-5.6-luna",
         timeout=300,
         reasoning_effort="low",
         max_tokens=16384,
@@ -284,7 +288,10 @@ MODEL_TO_PROFILE = {
     "gemini-3.1-flash-lite-preview": "observe_bulk",
     "gemini-3.5-flash": "deep_review",
     "gemini-3.1-pro-preview": "legacy_pro_review",  # demoted 2026-05-24
-    "gpt-5.5": "gpt_general",
+    "gpt-5.6-sol": "formal_review",
+    "gpt-5.6": "formal_review",
+    "gpt-5.6-terra": "gpt_general",  # mid-tier opt-in; default gpt_general is Luna
+    "gpt-5.6-luna": "gpt_general",
     "claude-opus-4-8": "claude_review",
     "composer-2.5": "composer_review",
     "composer-2.5-fast": "composer_screen",

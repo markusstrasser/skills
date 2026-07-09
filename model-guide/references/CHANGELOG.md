@@ -1,5 +1,12 @@
 # Model Guide Changelog
 
+## 2026-07-09 - GPT-5.6 Sol / Terra / Luna; GPT-5.5 fully removed
+
+- OpenAI GA 2026-07-09: `gpt-5.6-sol` (flagship, alias `gpt-5.6`), `gpt-5.6-terra` (mid), `gpt-5.6-luna` (everyday).
+- Pricing: Sol $5/$30, Terra $2.50/$15, Luna $1/$6 per MTok. Effort adds `max`. Pro is reasoning.mode, not a new slug.
+- Fleet defaults: formal/cross-lab → Sol; **gpt_general → Luna** (≈ prior 5.5 perf at ~½ price); mechanical → Luna low. Terra = mid opt-in.
+- **GPT-5.5 fully removed** from llmx (no upgrade, no PRICING, no routing). Passing `gpt-5.5` is unknown/typo.
+
 ## 2026-07-09 - Grok 4.5: AA niche routing (more agentic / less epistemic)
 
 Operator pasted Artificial Analysis live board (v4.1, Grok 4.5 high, 2026-07-08 eval).

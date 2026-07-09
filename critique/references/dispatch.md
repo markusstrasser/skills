@@ -111,9 +111,9 @@ contract rather than duplicating provider flags in skill docs.
 
 Relevant profiles:
 - `deep_review` — Gemini `arch` + `gaps` axes
-- `gpt_general` — GPT-5.5 **medium** on `correctness` + `contracts`
-- `formal_review` — GPT-5.5 **high** on opt-in `formal` axis only
-- `mechanical_review` — GPT-5.5 low on `mechanical` (deep/full)
+- `gpt_general` — GPT-5.6 Luna **medium** on `correctness` + `contracts`
+- `formal_review` — GPT-5.6 Sol **high** on opt-in `formal` axis only
+- `mechanical_review` — GPT-5.6 Luna **low** on `mechanical` (deep/full)
 - `fast_extract` — mechanical extraction elsewhere
 
 The script writes these artifacts:

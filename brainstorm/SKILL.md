@@ -21,7 +21,7 @@ You are orchestrating divergent ideation. The goal is ideas that escape the defa
 - **Content-space perturbation** — denial cascade, domain forcing, constraint inversion, TRIZ contradiction, conceptual blending. Moves *where* in idea-space you look.
 - **Output-distribution perturbation** — verbalized sampling (Step 2). Relieves the typicality pressure alignment bakes in, surfacing the low-probability tail. Independent of content; composes with every content-space axis. (Verbalized Sampling, Zhang et al., ICML 2026: +1.6–2.1× diversity, training-free, and *more capable models benefit more* — so it's always-on here, not a toggle.)
 
-**This skill is DIVERGENT only.** It produces candidate space and coverage artifacts, not final selections or implementation plans. For convergent critique, use `/model-review`.
+**This skill is DIVERGENT only.** It produces candidate space and coverage artifacts, not final selections or implementation plans. For convergent critique, use `/critique`.
 
 ## Mode Discipline (READ FIRST — gates everything below)
 
@@ -153,7 +153,7 @@ This gate exists to populate `caller_evidence`, `speculative`, and final disposi
 
 If EXPLORE items survive the pain-point gate:
 
-> "Brainstorm identified N ideas worth exploring (M survived pain-point gate). Want a plan for the top 1-2, or `/model-review` to stress-test a specific idea?"
+> "Brainstorm identified N ideas worth exploring (M survived pain-point gate). Want a plan for the top 1-2, or `/critique` to stress-test a specific idea?"
 
 Don't auto-implement — divergent ideas need convergent validation first.
 
@@ -162,12 +162,12 @@ Don't auto-implement — divergent ideas need convergent validation first.
 - **Evaluating during generation.** Steps 2-3 generate. Steps 4-5 evaluate. Don't mix.
 - **Skipping denial rounds.** Initial generation IS the attractor basin. Denial is how you escape it.
 - **"Related" domains for domain forcing.** Adjacent fields converge to the same basin. Pick distant domains.
-- **Implementing brainstorm output directly.** Prototype cheaply or stress-test with `/model-review` first.
+- **Implementing brainstorm output directly.** Prototype cheaply or stress-test with `/critique` first.
 - **Skipping coverage artifacts.** If you cannot name the matrix cells you covered, you do not yet know what was actually explored.
 - **Using brainstorm as a decision memo.** It produces candidate space plus coverage, not the final call.
 - **Synthesizing without extracting.** Drops ideas silently. Always extract first.
 - **Treating model choice (or parallel multi-agent fan-out) as the diversity mechanism.** The prompting structure (stratification, verbalized sampling, denial, domains, inversions) produces divergence. Parallel agents converge and closed loops semantically collapse — model/agent count is for volume and availability only.
-- **Using expert/authority personas during generation.** "Senior scientist" framing suppresses semantic diversity. Generate with independent/neutral framing; bring expertise in at the convergent (`/model-review`) stage.
+- **Using expert/authority personas during generation.** "Senior scientist" framing suppresses semantic diversity. Generate with independent/neutral framing; bring expertise in at the convergent (`/critique`) stage.
 
 ## Reference Files
 

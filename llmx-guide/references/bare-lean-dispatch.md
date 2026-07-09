@@ -49,8 +49,8 @@ Reach for an agent only when the task genuinely needs tools/multi-step.
 - **cursor**: `cursor-agent -p --mode ask --model composer-2.5 --output-format text "<task>"`. **`--mode ask`** is the lightweight read-only Q&A path (the bundle's "ephemeral question" system prompt, NOT the agent harness) — ~16× faster than agent mode (14s vs 224s for a small doc). The CLI reports no token count (latency is the lean proxy); meter via the Cloud Agents `/v1/agents/{id}/usage` endpoint.
 
 ## Subscription routing gotchas (llmx)
-- `llmx chat -m gpt-5.5 --subscription` **silently falls back to `openai-api` (PAID)** — saw `transport: openai-api`. Use **`-p codex-cli`** to stay on the ChatGPT sub.
-- `composer-2.5` is **blocked in llmx sub-mode** ("restricted to frontier models: opus / gemini-flash / gpt-5.5; use --auth api"). Reach Composer via `cursor-agent` directly, not llmx sub.
+- `llmx chat -m gpt-5.6-sol --subscription` **silently falls back to `openai-api` (PAID)** — saw `transport: openai-api`. Use **`-p codex-cli`** to stay on the ChatGPT sub.
+- `composer-2.5` is **blocked in llmx sub-mode** ("restricted to frontier models: opus / gemini-flash / gpt-5.6-*; use --auth api"). Reach Composer via `cursor-agent` directly, not llmx sub.
 - **gemini has NO sub route** (free CLI retired 2026-05-31) — always paid API (cheap with `-e low`/`--flex`).
 - **Subsidy map:** ChatGPT (codex) + Claude (OAuth) subs are *subsidized* (~$0 marginal). **Cursor's pool is METERED** ($0.50/$2.50 Composer Standard) — "sub" but not free.
 

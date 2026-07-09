@@ -20,14 +20,14 @@ codex exec --full-auto -C /path/to/project "List all API endpoints"
 codex exec --full-auto --output-schema schema.json "Extract function signatures"
 ```
 
-**Key facts (v0.123.0, verified with gpt-5.5 on 2026-04-24):**
-- **Auth:** ChatGPT account (browser login). Subscription-tier models work: `gpt-5.5` (default), `gpt-5.4`, `gpt-5.3-codex`. `o3`, `gpt-4.1`, etc. are rejected.
+**Key facts (v0.123.0+; GPT-5.6 suite GA 2026-07-09):**
+- **Auth:** ChatGPT account (browser login). Subscription-tier models work: `gpt-5.6-sol` (default), `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.4`, `gpt-5.3-codex`. `o3`, `gpt-4.1`, etc. are rejected.
 - **Token overhead:** ~37K tokens per call from MCP server tool descriptions (9 servers). No flag to disable. Structural cost — fine for substantial tasks, wasteful for trivial queries.
 - **MCP servers loaded:** context7, exa, research, meta-knowledge, brave-search, paper-search, perplexity, scite, codex_apps. Configured in `~/.codex/config.toml`.
 - **`--ephemeral`:** Avoid — sandbox cleanup deletes file writes including `-o` output.
 - **`--full-auto`:** Sandboxed auto-approval (workspace-write). Required for non-interactive use.
 - **`--search`:** Only works in interactive mode, NOT in `exec`. Use MCP tools instead.
-- **Default model:** Set in `~/.codex/config.toml` (`model = "gpt-5.5"`). Don't pass `--model` unless overriding.
+- **Default model:** Set in `~/.codex/config.toml` (`model = "gpt-5.6-sol"`). Don't pass `--model` unless overriding.
 
 **As Claude Code subagent:** Call via Bash tool. Set `timeout: 120000` or higher. Output is on stdout (last message repeated at end). Use `-o FILE` for file capture, but read/copy immediately — sandbox cleanup can delete.
 
@@ -82,7 +82,7 @@ voiding the independent-convergence design.
 For genuinely blind / context-isolated codex dispatch:
 - `cd` to a clean directory first (e.g. `mkdir -p /tmp/blind-$$ && cd /tmp/blind-$$`), passing
   context ONLY via `-f` files copied there; or
-- use the API transport (`-m gpt-5.5` direct, no `-p codex-cli`) — no filesystem at all; or
+- use the API transport (`-m gpt-5.6-sol` direct, no `-p codex-cli`) — no filesystem at all; or
 - `--subscription` (no tools) when training-knowledge-only is the point.
 
 Repo access is a FEATURE for map-aware/audit dispatches — make the choice explicit per arm, and
