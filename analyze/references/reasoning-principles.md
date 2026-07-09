@@ -4,7 +4,7 @@ Core reasoning discipline for investigation, analysis, and causal inference. Eve
 
 **Provenance:** Commoncog (Cedric Chin) frameworks → Claude Opus synthesis → GPT-5.2 formal verification → Gemini 3.1 Pro adversarial review
 
-Referenced by: `/causal-check`, `/competing-hypotheses`, `/investigate`
+Referenced by: `/analyze` (causal / hypotheses lenses). Former standalone skills `/causal-check`, `/competing-hypotheses`, `/investigate` were folded here / archived.
 
 ---
 

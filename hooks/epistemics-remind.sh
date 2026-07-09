@@ -1,7 +1,7 @@
 #!/bin/bash
-# epistemics-remind.sh — Advisory PreToolUse hook for selve
+# epistemics-remind.sh — Advisory PreToolUse hook for selve/phenome
 # Fires on web search tools when query contains bio/medical keywords.
-# Reminds agent to invoke /epistemics companion skill.
+# Reminds agent to load references/epistemics (not a standalone /epistemics skill).
 
 trap 'exit 0' ERR
 
@@ -27,7 +27,7 @@ keywords = r'biotech|drug|gene\b|clinical|supplement|aging|anti.?aging|neuroscie
 if re.search(keywords, params):
     output = {
         'decision': 'allow',
-        'additionalContext': 'Bio/medical search detected. Invoke /epistemics if not already active.'
+        'additionalContext': 'Bio/medical search detected. Load skills/references/epistemics (and /research or /life-science-research as needed) — there is no standalone /epistemics skill.'
     }
     print(json.dumps(output))
 " 2>/dev/null
