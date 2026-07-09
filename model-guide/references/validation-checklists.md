@@ -50,3 +50,10 @@
 - [ ] Best measured calibration among large routed models (72% non-hallucination on AA-Omniscience misses) — still verify novel specifics; abstention is better, not perfect.
 - [ ] Expensive by structure (`high`/`xhigh` only); don't promote to default cosigner or extractor without `evals/critique_replay` measurement.
 - [ ] Weight its reasoning on impossibility/contradiction flags; don't treat its factual recall as ground truth without sources.
+
+### After Grok 4.5 (repo-grounded critique / Cursor pool / agentic niche)
+- [ ] Confirm transport was `cursor-agent --workspace` for critique (receipt `transport: cursor-agent-workspace`) — not llmx packet-only cursor.
+- [ ] Re-run 1–2 of its load-bearing greps yourself; weight reasoning, not asserted facts (~46% AA-Omniscience non-hallucination).
+- [ ] Do not treat CursorBench / vendor coding scores as decisive (Cursor blog: training contamination).
+- [ ] Hard physics / CritPt-shaped claims: distrust — AA CritPt 15%; escalate to GPT-5.5 Pro.
+- [ ] If xAI API path was attempted: 403 `API key is currently blocked` is a **key** problem, not EU geo.

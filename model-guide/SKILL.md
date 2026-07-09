@@ -10,9 +10,9 @@ effort: low
 
 Select between the current frontier models and prompt them correctly.
 
-**Models covered:** Claude Opus 4.8 (primary Claude), Claude Sonnet 5 (cost-tier Claude, added 2026-06-30), GPT-5.5, GPT-5.5 Pro. Claude Fable 5 — **metered opt-in** (off subscription 2026-07-07; see below).
-**Last updated:** 2026-07-07.
-**Active stance:** This skill no longer maintains a broad model zoo. Older GPT, Gemini, Grok, and Sonnet-4.6-and-earlier routes were removed from active guidance. Sonnet 5 is reinstated as a named, cost-tier Claude option (2026-06-30) — read "Claude Sonnet 5" below before routing to it. Use this guide for high-value frontier decisions; use repo-specific batch tooling or search tools for cheap bulk work.
+**Models covered:** Claude Opus 4.8 (primary Claude), Claude Sonnet 5 (cost-tier Claude, added 2026-06-30), GPT-5.5, GPT-5.5 Pro. Claude Fable 5 — **metered opt-in** (off subscription 2026-07-07; see below). Grok 4.5 — **frontier niche** (AA 2026-07-08; Cursor pool + opt-in critique axis; see below).
+**Last updated:** 2026-07-09.
+**Active stance:** This skill no longer maintains a broad model zoo. Older GPT, Gemini, Grok-4.20-and-earlier, and Sonnet-4.6-and-earlier routes were removed from active guidance. Sonnet 5 is reinstated as a named, cost-tier Claude option (2026-06-30). Grok 4.5 is a **named niche** (agentic tool workflows + cheap/fast frontier cosign via Cursor), not a Default Routing replacement for Opus/GPT-5.5 — calibration is mid-pack (AA-Omniscience non-hallucination ~46%). Use this guide for high-value frontier decisions; use repo-specific batch tooling or search tools for cheap bulk work.
 
 **OPEN QUESTION (2026-06-30, not yet resolved — operator call):** the "Architecture / design / high-reasoning critique → NEVER Sonnet" verdict below was reached against Sonnet 4.6 on 2026-06-20. Sonnet 5's system card shows large agentic/coding gains and prompt-injection robustness tying or beating Opus 4.8 in several places, but also the *worst* prefill/system-prompt-susceptibility numbers of the compared models and measurably more turns/tokens per task (system-card digest: `references/sonnet-5-system-card.md`). Whether this changes the "NEVER Sonnet" verdict for architecture/critique work is a live question, not re-litigated here — the verdict stands until the operator revisits it.
 
@@ -30,25 +30,27 @@ Select between the current frontier models and prompt them correctly.
 | Routine/cost-sensitive coding, security review, cyber, lab/molecular biology | **Claude Opus 4.8** | Same model — use lower effort (`low`/`medium`) when the brief has mechanical gates. |
 | Codex/terminal-heavy implementation, tool loops, structured API work | **GPT-5.5** | OpenAI reports Terminal-Bench 2.0 82.7, Expert-SWE 73.1, OSWorld-Verified 78.7; long-context strength independently backed (AA-LCR 74). |
 | Quantitative proof, calibration math, hard science/data derivation where mistakes compound | **GPT-5.5 Pro** | Same underlying model as GPT-5.5 with parallel test-time compute. Use only when the answer will be checked and the 6x price is justified. |
-| Cross-model review | **Opus 4.8 + GPT-5.5** | Different labs, different failure profiles. Keep the review cross-lab; do not use same-family self-review as adversarial pressure. |
-| Architecture / design / high-reasoning critique | **Opus 4.8 `max` + GPT-5.5 — NEVER Sonnet** | Operator 2026-06-20: architecture → Opus **`max`**. Sonnet is for search + bug-fixes only. A sonnet-thinking arch critique built a confident "HALT, reverse the spine" conclusion on a *search-error false premise*; Opus + GPT-5.5 (repo-grounded) got it right. For **codebase-coupled** decisions, run the critic with real repo access via `cursor-agent -p -f --mode ask --model claude-opus-4-8-thinking-max` — it flags "already-handled at file:line" vs "genuinely-open," which a cold API model can't. |
-| Current facts, quotes, prices, law, news | **Tools first, then model synthesis** | Every model card still shows factuality limits. Retrieval/database truth beats frontier recall. |
+| Cross-model review | **Opus 4.8 + GPT-5.5** (+ opt-in `grok` on PLAN packets) | Different labs, different failure profiles. Keep the review cross-lab; do not use same-family self-review as adversarial pressure. Add `--axes …,grok` when the packet needs **repo-grounded** premise falsification (Cursor workspace). |
+| Architecture / design / high-reasoning critique | **Opus 4.8 `max` + GPT-5.5 — NEVER Sonnet** | Operator 2026-06-20: architecture → Opus **`max`**. Sonnet is for search + bug-fixes only. A sonnet-thinking arch critique built a confident "HALT, reverse the spine" conclusion on a *search-error false premise*; Opus + GPT-5.5 (repo-grounded) got it right. For **codebase-coupled** decisions, run the critic with real repo access via `cursor-agent -p -f --mode ask --model claude-opus-4-8-thinking-max` — or `--axes …,grok` (Grok 4.5-xhigh, workspace). Cold API models can't flag "already-handled at file:line." |
+| Agentic SaaS / multi-tool workflows (AutomationBench-shaped) | **Grok 4.5** (Cursor pool) or Opus | AA 2026-07-08: Grok leads AutomationBench-AA (51%); strong τ³-Banking. Prefer when Cursor pool is free/cheap and the task is tool-loop heavy with a verifier. |
+| Current facts, quotes, prices, law, news | **Tools first, then model synthesis** | Every model card still shows factuality limits. Retrieval/database truth beats frontier recall. **Not Grok alone** — AA-Omniscience non-hallucination ~46% (mid-pack; worse than Opus 64% / GLM 72%). |
 
 ## Quick Selection Matrix
 
 | Task | First choice | Escalate / pair when |
 |---|---|---|
-| Agentic coding | Opus 4.8 (high effort) | Drop to `low` effort when brief has mechanical gates; use GPT-5.5 when terminal/Codex-heavy or needs OpenAI structured outputs. |
-| Codebase-scale migration / multi-day autonomous run | Opus 4.8 (`xhigh`/`max`) | Keep human checkpoints at irreversible boundaries. |
+| Agentic coding | Opus 4.8 (high effort) | Drop to `low` effort when brief has mechanical gates; use GPT-5.5 when terminal/Codex-heavy; **Grok 4.5 (Cursor)** when tool-loop / SaaS-workflow heavy and pool is cheap (AA AutomationBench lead; Coding Index ~72, near Opus). |
+| Codebase-scale migration / multi-day autonomous run | Opus 4.8 (`xhigh`/`max`) | Keep human checkpoints at irreversible boundaries. Grok Coding Agent Index (Grok Build) is competitive — still prefer Opus for irreversible shared-infra until dogfooded. |
 | Security review, exploit/vuln work, cyber, molecular biology | Opus 4.8 | Active Claude default for classifier-sensitive work (formerly Fable-refusal domain). |
-| Debugging messy repo state | GPT-5.5 | Pair with Opus if the fix requires architectural judgment. |
-| Architecture decision | **Opus 4.8 `max`** | Send the selected proposal to GPT-5.5 for independent cross-lab critique. |
-| Quantitative audit | GPT-5.5 Pro | Use base GPT-5.5 first if the problem is bounded and API latency matters. |
-| Long-context document/repo synthesis | Opus 4.8 or GPT-5.5 | Both 1M-class; GPT-5.5 has stronger OpenAI-reported MRCR v2 512K-1M score. |
+| Debugging messy repo state | GPT-5.5 | Pair with Opus if the fix requires architectural judgment; Grok Cursor session is a fine third try when pool is free. |
+| Architecture decision | **Opus 4.8 `max`** | Send the selected proposal to GPT-5.5 for independent cross-lab critique; add `--axes …,grok` for repo-grounded premise checks. |
+| Quantitative audit / CritPt-hard physics | GPT-5.5 Pro | Grok CritPt **15%** — weak; do not route hard derivation here. |
+| Long-context document/repo synthesis | Opus 4.8 or GPT-5.5 | Both 1M-class; GPT-5.5 AA-LCR 74 vs Grok 68 (parity band). Grok API context is **500k** — prefer Opus/GPT for >500k. |
 | Browser/computer use | Opus 4.8 or GPT-5.5 | Opus 4.8 / GPT-5.5 both strong; Fable vision-SOTA notes dormant until return. |
+| PLAN critique needing repo falsification | **`--axes standard,grok`** (or cross2,grok) | Repo-grounded Cursor agent; same class as premise_scout. Prefer over packet-only `composer` when callers/joins must be checked. |
 | Letter-exact output constraints (exact counts, rigid templates, banned words) | Schema/validator enforcement, any model | Never rely on prose compliance — Claude family is measurably weakest at mechanical constraint-following (IFBench 62–63 vs GPT-5.5 76, bottom-5 of 27). Construct caveat: IFBench is majority adversarial-synthetic and high scores trade against answer quality, so this is a weak GPT-5.5 preference for unschematizable cases, not a routing rule. |
 | Claim verification | Neither alone | Use primary sources and deterministic checks; use models to summarize evidence, not to establish it. |
-| Contradictory / impossible spec, epistemic guardrails | **Opus 4.8** or **GLM-5.2** (opt-in) | Worst calibration on the frontier set: GPT-5.5 (14% non-hallucination), DeepSeek V4 (~6%). More reasoning tokens does not fix paradox blindness — see trilemma section. |
+| Contradictory / impossible spec, epistemic guardrails | **Opus 4.8** or **GLM-5.2** (opt-in) | Worst calibration on the frontier set: GPT-5.5 (14% non-hallucination), DeepSeek V4 (~6%). Grok ~46% non-hallucination — mid-pack, **not** a calibration pick. More reasoning tokens does not fix paradox blindness — see trilemma section. |
 
 For full score tables, read `references/BENCHMARKS.md`.
 
@@ -62,7 +64,7 @@ Benchmark **capability** (Intelligence Index, SWE scores) and **parameter count*
 | **Calibration** | Share of wrong answers that abstain vs confabulate (AA-Omniscience non-hallucination) | Treating critique reasoning as fact because the model is "smart" |
 | **Efficiency** | Tokens, latency, $ to a verified outcome | Escalating reasoning effort on a poorly calibrated model |
 
-**Settled ordering on calibration (AA-Omniscience, misses only, abstention invited):** GLM-5.2 **72%** non-hallucination → Opus 4.8 **64%** → Fable 5 **45%** → GPT-5.5 **14%** → DeepSeek V4 **~6%**. Capability ordering is nearly the reverse. A multi-trillion-parameter model can score at the top of an index and still be the worst choice when the task needs "I don't know" or detection of an impossible/contradictory spec.
+**Settled ordering on calibration (AA-Omniscience, misses only, abstention invited):** GLM-5.2 **72%** non-hallucination → Opus 4.8 **64%** → Grok 4.5 **~46%** / Fable 5 **45%** → GPT-5.5 **14%** → DeepSeek V4 **~6%**. Capability ordering is nearly the reverse (Grok Intelligence Index **54**, near GPT-5.5 55 / Opus 56). A multi-trillion-parameter model can score at the top of an index and still be the worst choice when the task needs "I don't know" or detection of an impossible/contradictory spec.
 
 **Reasoning budget is not monotonic.** On badly calibrated models, more reasoning often buys longer confident wrong answers, not better ones. Anecdotal corroboration (Shrimpton 2026-06-18, n=1, high effort, temp 1): an impossible asyncio event-loop spec — DeepSeek V4 Pro ~7.7k reasoning tokens, 3m52s, full wrong implementation; GLM-5.2 ~800 tokens, 12s, correctly flagged the paradox. Don't throw `xhigh` at GPT-5.5 or DeepSeek for epistemic guardrails; use Opus, GLM (opt-in), or deterministic impossibility checks.
 
@@ -89,6 +91,7 @@ Mechanics and footguns: `/llmx-guide`.
 - **Cheap classification / mechanical audits:** `gemini-3-flash-preview` or `gemini-3.1-flash-lite-preview`.
 - **GPT-5.5 default effort is `medium`** — pass `-e high`/`xhigh` for depth; reasoning bills as output.
 - **GLM-5.2 (Z.ai, NEW LAB) = opt-in review cosigner, NOT an extractor (2026-06-19).** A 4th independent training lab (Zhipu) → real cross-lab diversity for critique; request explicitly `--axes …,glm` (`glm_review` profile, routed via OpenRouter). **Calibration edge:** 72% AA-Omniscience non-hallucination (2026-06-18 independent read) — best among commonly-routed large models, ahead of Opus 64%; strong on impossibility/paradox detection in anecdotal coding probes. Accepts ONLY `high`/`xhigh` reasoning (no low tier) → structurally expensive+slow → **rejected for high-volume extraction/ingestion** (cost-dominated, no quality gain; keep gpt-5.3/gemini-3-flash). Match reasoning floor to task: GLM for occasional thorough review and epistemic guardrails, not throughput. See `agent-infra/decisions/2026-06-19-glm-5.2-integration.md`, `evals` DECISIONS `glm-5.2-extraction`.
+- **Grok 4.5 (SpaceXAI, AA 2026-07-08) = opt-in repo-grounded cosigner + agentic niche — NOT a calibration pick.** Intelligence Index **54** (frontier pack with GPT-5.5 55 / Opus 56); **cost/task ~$0.31** (≪ GPT $0.86 / Fable $2.75); speed mid-high (~88 tok/s). **Use more:** PLAN critique with `--axes …,grok` (Cursor `--workspace`); AutomationBench/τ³-shaped tool loops when Cursor pool is cheap; cheap/fast frontier second opinion. **Use less / never alone:** unsourced facts (non-hallucination ~46%), CritPt-hard physics (15%), epistemic guardrails, sole architecture judge. See Grok section below + `decisions/2026-07-09-grok-4.5-transport.md`.
 - **`gemini-3.1-pro-preview` is RETIRED as a routing option (2026-06-13, operator).** Do not route here for critique/synthesis/review — flash-3.5 dominates and is cheaper/faster. (Benchmark records in `references/BENCHMARKS.md` are kept as evidence; this is a routing retirement, not a data scrub. Callable via explicit `-m` if a one-off ever needs ARC-AGI-2/GPQA/video, but it is not a default anywhere.)
 - **Cosigner calibration caveat (AA-Omniscience, 2026-06-11):** both cosigner defaults are bottom-quartile abstainers — non-hallucination 39% (`gemini-3.5-flash`), 14% (`gpt-5.5`), despite an abstention prompt. Critique output = adversarial pressure on reasoning, never a fact source; **for fact-heavy review where calibration matters, verify novel specifics at primary and lean on a frontier model (Opus/GPT), not a cheap cosigner.** Instruments: agent-infra `research/2026-06-11-aa-benchmark-instrument-validity.md`.
 
@@ -116,7 +119,7 @@ When dispatching subagents to execute work (Agent tool, headless `claude -p`, co
 
 **Effort knob mechanics:** the Agent tool exposes only `model:`. Per-dispatch effort exists via (1) headless `claude -p --model opus --effort low` (verified working, CLI 2.1.175; background Bash + `--output-format json` for usage), or (2) `.claude/agents/*.md` frontmatter `effort:` (does NOT hot-register mid-session — usable only in later sessions). Codex/GPT-5.5 cheap cosign via llmx `--subscription` is $0 — probe with `--dry-run --subscription` first; transport table in `~/.claude/cache/llmx-routing.json`.
 
-**Agent-tool DEFAULT model is NOT the session model (2026-06-29, cost a "diagnose" round).** `general-purpose`/most subagents default to **`CLAUDE_CODE_SUBAGENT_MODEL`** (observed `claude-sonnet-4-6`), NOT the parent's Opus. So a bare `Agent(...)` with no `model:` runs **Sonnet 4.6** — fine for search/bounded work, but a **tier silently-wrong trap when the dispatch IS the measurement** (an eval baseline, a "frontier agent" arm): you'll claim Opus and run Sonnet. **For any tier-sensitive dispatch: pass `model:` explicitly AND verify it landed** (`grep '"model"' <agent-transcript>.jsonl` → confirm `claude-opus-4-8`). Same class as the Exa-under-shoot baseline-mismatch — the baseline must BE the entity the construct names. Second footgun, same session: an open-ended "be exhaustive" prompt to `general-purpose` triggered **sub-delegation + stall** (it spawned 6 children, returned "I'll pause here", delivered nothing, burned 72K tokens) — for bounded research dispatches, **explicitly forbid delegation** ("do this yourself in one pass; do NOT spawn subagents").
+**Agent-tool DEFAULT model is NOT the session model (2026-06-29, cost a "diagnose" round).** `general-purpose`/most subagents default to **`CLAUDE_CODE_SUBAGENT_MODEL`** (now **`claude-sonnet-5`** — Sonnet 4.6 is RETIRED as of 2026-07-07 per operator; do not route to it or treat it as a live comparator anywhere), NOT the parent's Opus. So a bare `Agent(...)` with no `model:` runs **Sonnet 5** — fine for search/bounded work, but a **tier silently-wrong trap when the dispatch IS the measurement** (an eval baseline, a "frontier agent" arm): you'll claim Opus and run Sonnet. **For any tier-sensitive dispatch: pass `model:` explicitly AND verify it landed** (`grep '"model"' <agent-transcript>.jsonl` → confirm `claude-opus-4-8`). Same class as the Exa-under-shoot baseline-mismatch — the baseline must BE the entity the construct names. Second footgun, same session: an open-ended "be exhaustive" prompt to `general-purpose` triggered **sub-delegation + stall** (it spawned 6 children, returned "I'll pause here", delivered nothing, burned 72K tokens) — for bounded research dispatches, **explicitly forbid delegation** ("do this yourself in one pass; do NOT spawn subagents").
 
 **External validity:** all four evals are regime-1 (clear mechanical verifiers — tsc, deterministic scripts, numeric oracles) and screening-grade (n=1/arm). Only within-eval contrasts are clean — cross-eval comparisons are confounded by task, brief density (briefs improve as the author learns, flattering later arms), and harness (codex carries MCP servers + sandbox; opus arms ran bare). Every cheap-lane verdict is conditional on the dispatch-time classification "fully-briefed + mechanically gated" being honest — nothing here licenses cheap lanes for judgment-shaped or incomplete-spec work. The greenfield→integration replication trigger from the morning run is SATISFIED (effort-integration, port shape); the standing revocation trigger replaces it.
 
@@ -205,6 +208,53 @@ Full guide: `references/PROMPTING_GPT.md`.
 
 **Prompting rule:** give Pro exact data and ask for derivations. Example ending: `Show all derivations. I will verify every intermediate step.`
 
+## Grok 4.5 - "Cheap frontier agent / repo cosigner" (AA 2026-07-08)
+
+SpaceXAI frontier model (2026-07-08), jointly trained with Cursor. Independent AA
+measurement puts it in the **frontier pack on capability** with a **cost/speed edge**,
+and **mid-pack calibration** — route on that split, not on the Intelligence Index alone.
+
+**AA snapshot (high effort, operator paste 2026-07-09 — treat as screen, not verifier):**
+
+| Metric | Grok 4.5 | vs peers (same paste) | Routing read |
+|---|---:|---|---|
+| Intelligence Index | **54** | Fable 60 · Opus 56 · GPT-5.5 55 · GLM 51 | Frontier-capable; not #1 |
+| Coding Index | **72.4** | Fable 76.5 · GPT 74.9 · Opus 74.3 | Near Opus/GPT for coding |
+| Terminal-Bench v2.1 | **82%** | Fable/Opus 85 · GPT 84 | Parity band |
+| AutomationBench-AA | **51%** | Fable/Opus 49 · GPT 42 | **Lead** — tool/SaaS workflows |
+| τ³-Banking | **33%** | GPT 31 · Opus 28 | **Lead** — agentic tool use |
+| AA-Briefcase Elo | **1328** | Fable 1583 · Opus 1354 · GPT 1158 | Strong knowledge-work agent |
+| CritPt | **15%** | GPT-Pro 31 · Fable 29 · Opus 21 | **Weak** — hard physics |
+| AA-Omniscience accuracy | **52%** | Fable 61 · GPT 57 · Opus 47 | Solid recall |
+| AA-Omniscience non-hallucination | **~46%** | GLM 72 · Opus 64 · Fable 45 · GPT 14 | Mid-pack — not a fact source |
+| Cost / Intelligence task | **~$0.31** | GPT $0.86 · Opus ~$1.8 · Fable $2.75 | **Use more when $ matters** |
+| Output speed | **~88 tok/s** | Flash 167 · Fable 70 · GPT 68 | Faster than Fable/GPT |
+
+**Use more:**
+1. **PLAN critique with repo access** — `--axes standard,grok` / `cross2,grok` (Cursor `--workspace`). Prefer over packet-only `composer` when premises must be grepped.
+2. **Agentic tool / SaaS / multi-step workflows** when Cursor pool is free or cheap (AutomationBench + τ³ lead).
+3. **Cheap/fast frontier second opinion** — cost/task ~⅓ of GPT-5.5 xhigh on AA's index; good count-delta pass, not sole judge.
+4. **Interactive Cursor sessions** on coding/agentic work when you want SpaceXAI lineage diversity vs Opus/GPT.
+
+**Use less / never alone:**
+1. **Unsourced facts / "should we even do this?"** — ~46% non-hallucination; tools + Opus/GLM for epistemic guardrails.
+2. **Hard quantitative / CritPt physics** — 15%; use GPT-5.5 Pro.
+3. **Sole architecture judge** — still Opus `max` + GPT cross-lab; Grok is the *repo* axis, not the taste axis.
+4. **Contexts >500k** — API window is 500k; Opus/GPT are 1M-class.
+5. **CursorBench scores** — Cursor blog: training contamination; excluded from their table.
+
+**Operational specs (API):** `grok-4.5`, **500k context**, $2/$6 per MTok, reasoning `low`/`medium`/`high` (default high). Fast Cursor variant $4/$18.
+
+**Surfaces:**
+| Surface | How | Status (2026-07-09) |
+|---|---|---|
+| Critique `grok` axis | `model-review.py --axes standard,grok` → `cursor-agent --model grok-4.5-xhigh --workspace <project>` | **Wired** — repo context |
+| Cursor session / `cursor-agent` | `--model grok-4.5-xhigh` (or `-medium`/`-high`; optional `-fast-`) | **Live** — smoked `OK`. Bare `grok-4.5` aliases to **fast-xhigh**. |
+| llmx Cursor pool | `llmx chat -p cursor -m grok-4.5-xhigh` | Allowlisted — **packet-only** (neutral cwd); use critique axis for repo work |
+| llmx xAI API | `llmx chat -p xai -m grok-4.5 -e high` | Wired + priced; **API key currently blocked** (403) — key status, not EU geo |
+
+See `agent-infra/decisions/2026-07-09-grok-4.5-transport.md`.
+
 ## Cross-Model Review Pattern
 
 Use independent parallel reviews, then synthesize yourself:
@@ -223,7 +273,7 @@ That verdict, calibrated: the cross-lab-vs-same-lab MARGIN is **≈0** — a sec
 ## Validation Checklists
 
 Post-output verification lists — All Outputs + per-model (Fable 5, Sonnet 5, Opus 4.8, GPT-5.5,
-GPT-5.5 Pro, GLM-5.2): [references/validation-checklists.md](references/validation-checklists.md).
+GPT-5.5 Pro, GLM-5.2, Grok 4.5): [references/validation-checklists.md](references/validation-checklists.md).
 Consult after receiving output from a routed model, not at routing time.
 
 ## Source Notes
@@ -249,3 +299,7 @@ Update after a current-frontier release or material system-card revision:
 
 Hit a defect or friction consulting this guide (a stale routing line, a wrong price, a missing model)?
 Log it for the next reader: `~/Projects/skills/hooks/append-skill-memento.sh model-guide '<one-line issue>'`.
+
+## Known Issues
+<!-- Append-only. Session-analyst may suggest additions. -->
+- **[2026-07-07] Sonnet 4.6 RETIRED 2026-07-07 (operator): default subagent model now claude-sonnet-5 (line 119 fixed). Comparison refs ~L104/149/152 remain as dated evidence but 4.6 is NOT a live option — scrub to absolute-property framing on next steward pass.**
