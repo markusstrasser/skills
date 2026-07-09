@@ -1,5 +1,40 @@
 # Model Guide Changelog
 
+## 2026-07-09 - Grok 4.5: AA niche routing (more agentic / less epistemic)
+
+Operator pasted Artificial Analysis live board (v4.1, Grok 4.5 high, 2026-07-08 eval).
+Promotes Grok from "transport stub" to a **named niche** — not a Default Routing
+replacement for Opus/GPT.
+
+### Routing verdict (capability × calibration × cost)
+- **Use more:** PLAN `--axes …,grok` (repo workspace); AutomationBench/τ³-shaped tool
+  loops on Cursor pool; cheap/fast frontier second opinion (~$0.31/task vs GPT $0.86 /
+  Fable $2.75).
+- **Use less / never alone:** unsourced facts (~46% non-hallucination), CritPt physics
+  (15%), sole architecture judge, contexts >500k.
+- Intelligence Index **54** (frontier pack with GPT 55 / Opus 56); Coding Index **72.4**;
+  AutomationBench **51% lead**; τ³ **33% lead**.
+
+### Also this day (earlier)
+- Transport + critique `grok` axis + blocked-key (not EU) diagnosis — see decision
+  `2026-07-09-grok-4.5-transport.md`.
+
+Sources: artificialanalysis.ai leaderboard paste 2026-07-09; docs.x.ai; cursor.com/blog/grok-4-5.
+
+## 2026-07-09 - Grok 4.5 transport wired; critique axis
+
+SpaceXAI released Grok 4.5 (2026-07-08): Opus-class pitch, $2/$6 (fast $4/$18), 500k
+context, jointly trained with Cursor.
+
+### Added / changed
+- llmx: xAI default → `grok-4.5`; PRICING + CONTEXT_WINDOW; Cursor effort-slugs → `cursor`;
+  lite allowlist +`grok-4.5` +`composer-2.5`.
+- critique: repo-grounded `grok` axis (`cursor-agent --workspace`).
+- llmx-guide footguns 7b/7c/7d; detector 500k; decision + research memo.
+
+### Explicitly deferred (superseded later same day by AA niche entry above)
+- Full Default Routing replacement of Opus/GPT.
+
 ## 2026-07-07 - Fable 5 off subscription: metered usage credits, fable lanes suspended on cost
 
 Anthropic ended subscription-included Fable 5 access after 2026-07-07 (Pro/Max/Team);

@@ -89,6 +89,9 @@ Routing table: `critique/lenses/repo-audit-plan-review.md`. Preflight via `model
 | 5 | Model name 404s | Hyphens not dots; see [models.md](references/models.md) |
 | 6 | Fable over llmx | Downshifts / API billing; use Agent subagent or `--subscription` Opus — see `/model-guide` |
 | 7 | Grok 4.20 `--reasoning-effort` | Errors on reasoning variant; >200K input = 20× price tier |
+| 7b | Grok 4.5 Cursor bare slug | `cursor-agent --model grok-4.5` aliases to **fast-xhigh**; pass `grok-4.5-xhigh` (or medium/high) explicitly. API id `grok-4.5` is xAI-only. |
+| 7c | Grok 4.5 xAI API 403 | `API key is currently blocked` — **key status**, not EU geo (Chicago Mullvad egress still 403'd 2026-07-09). Rotate/unblock key in console; Cursor pool is the live path meanwhile. |
+| 7d | Critique `grok` vs llmx cursor | `grok` axis uses `cursor-agent --workspace` (repo). `llmx -p cursor` uses neutral empty cwd (packet-only). Don't substitute. |
 | 8 | Shelling llmx from Python: `subprocess.run(capture_output=True, timeout=)` hangs forever at 0% CPU | run()'s TimeoutExpired kills the child then blocks draining a pipe the llmx→claude-CLI grandchild holds. Use `Popen(start_new_session=True)` + `communicate(timeout)` + `os.killpg` on expiry (exemplar: arc-agi `agent/foundry_ewm.py llm()`; 27-min wedge 2026-07-04) |
 
 Legacy: `--lite bare` still works but `--subscription` is canonical. `--lite research` for Codex research MCP profile only.

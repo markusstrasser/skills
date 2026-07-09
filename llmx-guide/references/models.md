@@ -20,10 +20,12 @@
 | Claude Sonnet 5 | `claude-sonnet-5` | Released 2026-06-30. 1M context, 128K output, $3/$15 per MTok ($2/$10 intro through 2026-08-31). Adaptive thinking on by default; first Sonnet-tier model with `xhigh` effort. Not yet in `lite_allowed_models` (subscription allowlist) — `--subscription -m claude-sonnet-5` will not route until that's added. See `/model-guide` for routing guidance and the full system-card digest. |
 | Claude Sonnet 4.6 | `claude-sonnet-4-6` | Hyphens, not dots. Superseded by Sonnet 5 (2026-06-30) — prefer the newer ID for new work. |
 | GLM-5.2 | `glm-5.2` | Z.ai via OpenRouter (`zai` provider). **Reasoning: high/xhigh only** (no low tier). Opt-in critique cosigner — see `/model-guide` trilemma + `agent-infra/decisions/2026-06-19-glm-5.2-integration.md`. |
-| Grok 4.20 Reasoning | `grok-4.20-0309-reasoning` | Use `-p xai`. **Not in `_RECOMMENDED_MODELS`** — pass full name explicitly. |
+| **Grok 4.5** (SpaceXAI, 2026-07-08) | `grok-4.5` | **Current xAI default** (`-p xai`). API: $2/$6 per MTok, 500k context, reasoning `low`/`medium`/`high` (default high). Live smoke may 403 with `API key is currently blocked` — key status, not geo (US egress still blocked 2026-07-09). Prefer Cursor pool / critique `grok` axis. |
+| Grok 4.5 (Cursor pool) | `grok-4.5-{medium,high,xhigh}` / `grok-4.5-fast-{medium,high,xhigh}` | Cursor-native slugs bake effort into the id. **Do not pass bare `grok-4.5` to cursor-agent** — it aliases to `grok-4.5-fast-xhigh`. Fast tier $4/$18. Route via `-p cursor -m grok-4.5-xhigh` (subscription allowlist includes `grok-4.5`). |
+| Grok 4.20 Reasoning | `grok-4.20-0309-reasoning` | Legacy. Use `-p xai`. **Not in `_RECOMMENDED_MODELS`** — pass full name explicitly. |
 | Grok 4.20 Non-Reasoning | `grok-4.20-0309-non-reasoning` | Latency tier, same backbone/price |
 | Grok 4.20 Multi-Agent | `grok-4.20-multi-agent-0309` | `reasoning.effort` controls **agent count** (low/med→4, high/xhigh→16), not depth |
-| Grok 4 (default) | `grok-4` | llmx's default xAI model — **superseded** by 4.20 family as of 2026-03-10 |
+| Grok 4 (legacy default) | `grok-4` | Superseded by Grok 4.5 as llmx xAI default (2026-07-09) |
 | Grok 4.1 Fast (cheap tier) | `grok-4-1-fast-reasoning` | xAI fast/cheap tier, still current |
 
 **Model name format (v0.6.0+):** No provider prefixes needed. Use `gemini-3.5-flash` not `gemini/gemini-3.5-flash`. Old LiteLLM-style prefixed names (`gemini/`, `openai/`) still accepted with deprecation warning. Will be removed in a future version.
@@ -44,6 +46,7 @@
 | Gemini 3.1 Pro | 1,048,576 | 65,536 | Server default is 8K — always pass `--max-tokens 65536` |
 | Gemini 3.5 Flash | 1,048,576 | 65,536 | Same window as Pro; pass `--max-tokens 65536` for long outputs |
 | Gemini 3 Flash | 1,048,576 | 65,535 | |
+| Grok 4.5 | 500,000 | (API default) | docs.x.ai Chat API table 2026-07-09 |
 | Grok 4.20 Reasoning | 2,000,000 | 128,000 | **>200K input → 20× price tier** ($40/$120 per M). Chunk before crossing. |
 
 ## Reasoning Effort Values
@@ -58,6 +61,8 @@
 | Gemini 3 Flash | low, medium, high | high (server-side, via `thinking_config`) |
 | Gemini 3.5 Flash | low, medium, high | high (server-side, via `thinking_config`) |
 | Gemini 3.x (Pro/Flash) | low, medium, high | high (server-side, via `thinking_config`) |
+| Grok 4.5 (API) | **low, medium, high** | high |
+| Grok 4.5 (Cursor) | effort baked into slug (`-medium`/`-high`/`-xhigh`; optional `-fast-`) | pass explicit slug — bare `grok-4.5` → fast-xhigh |
 | Grok 4.20 Reasoning | **NONE — passing `reasoning_effort` errors** | auto (model reasons internally) |
 | Grok 4.20 Multi-Agent | low, medium, high, xhigh — **selects agent count, not depth** (low/med→4 agents, high/xhigh→16) | -- |
 | Grok 4.20 Non-Reasoning | n/a (no thinking) | -- |

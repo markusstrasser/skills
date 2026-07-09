@@ -1,9 +1,9 @@
 # Frontier Model Benchmarks
 
-**Last updated:** 2026-06-09
-**Active scope:** Claude Fable 5, Claude Opus 4.8, GPT-5.5, GPT-5.5 Pro.
+**Last updated:** 2026-07-09
+**Active scope:** Claude Fable 5, Claude Opus 4.8, GPT-5.5, GPT-5.5 Pro, Grok 4.5 (AA niche).
 
-Older GPT/Gemini/Grok/Sonnet routing rows were removed from the active benchmark surface. Historical comparisons remain only where a vendor used them as a baseline. Fable 5 numbers are the GA-configuration scores (production safety classifiers on, fallback to Opus 4.8 where they fire); the unsafeguarded Mythos 5 scores a touch higher on classifier-adjacent rows.
+Older GPT/Gemini/Grok-4.20-and-earlier/Sonnet routing rows were removed from the active benchmark surface. Historical comparisons remain only where a vendor used them as a baseline. Fable 5 numbers are the GA-configuration scores (production safety classifiers on, fallback to Opus 4.8 where they fire); the unsafeguarded Mythos 5 scores a touch higher on classifier-adjacent rows. Grok 4.5 rows below are from Artificial Analysis independent evals (2026-07-08), not vendor self-report.
 
 ## Headline Routing Scores
 
@@ -59,6 +59,29 @@ First independent, same-harness, cross-lab measurement of the active scope (ever
 
 Provenance: artificialanalysis.ai leaderboard snapshot 2026-06-11, spot-checked against the live site (Fable OI 40 / acc 61%, Opus OI 27, GPT-5.5 acc 57% — match); Omniscience columns internally validated (accuracy − confabulated share reproduces the published index ±1). Instruments: arXiv:2511.13029 (AA-Omniscience), arXiv:2507.02833 (IFBench), arXiv:2510.04374 (GDPval), arXiv:2506.07982 (τ²-bench).
 
+## Independent Measurement — Grok 4.5 (Artificial Analysis, 2026-07-08)
+
+Same-harness AA v4.1 board after SpaceXAI launch. Config: **Grok 4.5 (high)**. Numbers from operator paste of the live leaderboard 2026-07-09 (screen-grade; re-spot-check before citing as settled). Peer columns are the same paste for relative ranking.
+
+| Evaluation | Grok 4.5 | Fable 5 | Opus 4.8 | GPT-5.5 | Routing read |
+|---|---:|---:|---:|---:|---|
+| Intelligence Index v4.1 | **54** | 60 | 56 | 55 | Frontier pack; not a default-replace |
+| Coding Index | **72.4** | 76.5 | 74.3 | 74.9 | Near Opus/GPT |
+| Terminal-Bench v2.1 | **82%** | 85% | 85% | 84% | Parity |
+| AutomationBench-AA | **51%** | 49% | 49% | 42% | **Lead** — agentic SaaS/tool workflows |
+| τ³-Banking | **33%** | 27% | 28% | 31% | **Lead** — agentic tool use |
+| AA-Briefcase Elo | **1328** | 1583 | 1354 | 1158 | Strong knowledge-work agent; Fable still ahead |
+| GDPval-AA v2 Elo | **1543** | 1760 | 1600 | 1494 | Near Opus; below Fable/Sonnet |
+| CritPt | **15%** | 29% | 21% | 27 (Pro 31) | **Weak** — hard physics → Pro |
+| AA-Omniscience accuracy | **52%** | 61% | 47% | 57% | Solid recall |
+| AA-Omniscience non-hallucination | **~46%** | 45% | **64%** | 14% | Mid-pack — not a fact/epistemic pick |
+| Cost / Intelligence Index task | **~$0.31** | $2.75 | ~$1.8 | $0.86 | **Cheap frontier** |
+| Output speed (tok/s) | **~88** | 70 | ~61 | 68 | Faster than Fable/GPT |
+
+**Coding Agent Index (harness×model):** Grok Build + Grok 4.5 (high) **76** — ties Codex GPT-5.5 xhigh; Claude Code Fable max **77**. Harness still dominates; do not promote Grok as default executor from this alone.
+
+**Trust ordering update:** Grok joins Fable in the mid-calibration band (~45–46% non-hallucination) while sitting in the frontier capability pack — same cosign-to-primary rule as GPT: weight reasoning, verify facts.
+
 ## Specs And Pricing
 
 | Model | Input/MTok | Cached input/MTok | Output/MTok | Context | Max output | Knowledge cutoff | Notes |
@@ -66,6 +89,7 @@ Provenance: artificialanalysis.ai leaderboard snapshot 2026-06-11, spot-checked 
 | Claude Opus 4.8 | $5.00 | - | $25.00 | 1M | 128K | Jan 2026 | Fast mode: $10/$50, up to 2.5x output speed. |
 | GPT-5.5 | $5.00 | $0.50 | $30.00 | 1.05M | 128K | Dec 1 2025 | Batch/Flex available; Priority costs more. |
 | GPT-5.5 Pro | $30.00 | - | $180.00 | 1.05M | 128K | Dec 1 2025 | Same weights plus parallel test-time compute. |
+| Grok 4.5 | $2.00 | - | $6.00 | 500k | - | - | Cursor fast variant $4/$18. Reasoning low/med/high. |
 
 ## Model-Card Behavior Signals
 
