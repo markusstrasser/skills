@@ -659,7 +659,10 @@ End with a fenced JSON block (voi-scout.json shape):
 {packet}
 """
 
-PARALLEL_DISPATCH_WAIT_DEFAULT = 720.0
+# Must exceed the longest opt-in axis timeout.  The repo-grounded Grok xhigh
+# profile is 1200s; a shorter executor wait cancels a valid axis before its own
+# transport timeout can produce a receipt.
+PARALLEL_DISPATCH_WAIT_DEFAULT = 1230.0
 # Grace absorbed by can_start() so a budget sized EQUAL to an axis timeout (the common
 # `review_gate triage` case: budget 600s, deep_review/gpt_general resolve to 600s) does
 # not spuriously skip every axis on the sub-second setup elapsed since from_seconds().

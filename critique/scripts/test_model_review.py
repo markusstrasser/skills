@@ -448,6 +448,11 @@ class AxisResolutionTest(unittest.TestCase):
 
         self.assertEqual(PROFILES["grok_review"].model, "grok-4.5-xhigh")
         self.assertEqual(PROFILES["grok_review"].provider, "cursor")
+        self.assertEqual(model_review._resolved_axis_timeout("grok"), 1200)
+        self.assertGreater(
+            model_review.PARALLEL_DISPATCH_WAIT_DEFAULT,
+            model_review._resolved_axis_timeout("grok"),
+        )
 
     def test_call_cursor_repo_agent_writes_output(self) -> None:
         with tempfile.TemporaryDirectory() as td:
