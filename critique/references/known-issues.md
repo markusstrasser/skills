@@ -38,3 +38,8 @@
   manifest or error. `shared.git_context.run_git` now injects `--no-ext-diff` for every `git diff`
   subprocess, with a regression test that asserts the exact command. Machine-consumed Git output must
   not depend on an interactive external renderer.
+- **[2026-07-09] FIXED — repo-grounded Grok xhigh was guaranteed to time out on deep plan packets.**
+  Two parallel arc-agi plan reviews completed all four standard axes but produced empty Grok outputs
+  at exactly 600s. The profile slug was `grok-4.5-xhigh`, but its timeout remained 600s and the dispatch
+  executor itself waited only 720s. `grok_review` now gets 1200s and the executor wait is 1230s; tests
+  assert both timeout contracts so the axis cannot silently regress below its own xhigh budget.

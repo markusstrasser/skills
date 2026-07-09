@@ -268,7 +268,10 @@ PROFILES: dict[str, DispatchProfile] = {
         intent="Grok 4.5 repo-grounded adversarial review (opt-in cosigner)",
         provider="cursor",
         model="grok-4.5-xhigh",
-        timeout=600,
+        # Cursor's xhigh agent can legitimately exceed 10 minutes on a
+        # repo-grounded plan packet. Two independent arc-agi reviews hit the
+        # old 600s boundary with empty output on 2026-07-09.
+        timeout=1200,
         auth="subscription",
         mode="chat",
         input_token_limit=120000,
