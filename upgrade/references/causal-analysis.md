@@ -28,7 +28,7 @@ From the revert/retire log and concept lifecycle, compute survival statistics:
 | Research memo | 20 | 20 | — | — | — |
 ```
 
-Predictive signal: artifacts created without prior research (no RESEARCH-state concept) should have shorter survival. Artifacts created after /brainstorm or /model-review should survive longer. Verify this.
+Predictive signal: artifacts created without prior research (no RESEARCH-state concept) should have shorter survival. Artifacts created after /brainstorm or /critique should survive longer. Verify this.
 
 ## 3c. Root Cause Clustering
 
