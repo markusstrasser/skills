@@ -70,6 +70,18 @@ lesson where the next session finds it: a project memory file (+ MEMORY.md point
 at most **one** `[obs]` line in the project's improvement log / `MAINTAIN.md`. One
 destination, not several.
 
+**RSI-hindsight CLOSE (observe 2026-07-10):** if the human said "why didn't you find…" /
+RSI-meta this session, do **not** chat-apologize. Cite the file artifact:
+
+```bash
+just -f ~/Projects/agent-infra/justfile rsi-hindsight-enqueue
+# then Read artifacts/rsi-hindsight/LATEST.md — quote the matching queue row id
+```
+
+Convert the top matching row into a maintain draft or detector proposal (steward /
+`maintain-candidates.json`), then leave the row queued for `/improve maintain`.
+Do **not** expand REDISCOVERY regexes while the over_caution ablation window is open.
+
 **arc-agi MEMORY discipline (AP10):** never paste session blocks into `MEMORY.md`. Write the
 fact to `project_*.md` Revisions (or `research/` / `decisions/`), then add/update **one**
 MEMORY.md pointer line. Soft cap 8KB — see `.claude/rules/memory-write-discipline.md`.
