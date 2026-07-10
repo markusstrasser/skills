@@ -191,7 +191,13 @@ PROFILES: dict[str, DispatchProfile] = {
         intent="Claude Opus 4.8 adversarial review via subscription (opt-in cosigner)",
         provider="anthropic",
         model="claude-opus-4-8",
-        timeout=600,
+        # Opus max architecture reviews can legitimately run beyond ten minutes.
+        # A live 2026-07-10 review was killed at the old 600s boundary with zero
+        # output despite a healthy subscription probe. Keep the bound finite, but
+        # match llmx's canonical max-effort timeout instead of imposing a
+        # second, shorter profile ceiling.
+        timeout=3600,
+        reasoning_effort="max",
         input_token_limit=200000,
         auth="subscription",
         mode="chat",
