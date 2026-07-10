@@ -108,6 +108,16 @@ research_files = [
 if not research_files:
     sys.exit(0)
 
+# Prereg exemption (2026-07-10): a prereg is a PROSPECTIVE bands document — inherently the
+# author's [INFERENCE]; forcing per-claim provenance tags there is ritual, not epistemics.
+# Its real guard is verdict-lint's git-sha sequencing (bands predate results), not this gate.
+# Results/verdict memos (including a prereg later edited to carry results) are the tag gate's
+# target; a results-bearing file should live in its own memo per eval-conventions anyway.
+research_files = [f for f in research_files
+                  if not re.search(r'-prereg[^/]*\.(md|txt|org)$', os.path.basename(f))]
+if not research_files:
+    sys.exit(0)
+
 # Peer-commit attribution (2026-06-10): the base_sha diff includes commits made
 # by CONCURRENT sessions DURING this session — the baseline-dirty exclusion only
 # covers session-START state. A file that is CLEAN in the working tree and whose
@@ -250,22 +260,10 @@ if missing:
     print('[TRAINING-DATA], [PREPRINT], [FRONTIER], [UNVERIFIED], or Admiralty [A1]-[F6].', file=sys.stderr)
     sys.exit(2)
 
-# Soft reminder: files have tags, but check quality. Delivered as
-# hookSpecificOutput.additionalContext (>=2.1.163) so the AGENT sees it —
-# stderr on exit 0 never reached the agent (the checklist was theater).
-# additionalContext continues the turn, so emit ONCE per session: a per-stop
-# checklist would tax every research-session stop with an extra turn.
-marker = f'/tmp/research-checklist-shown-{session_id}.txt' if session_id else ''
-if marker and not os.path.exists(marker):
-    try:
-        open(marker, 'w').close()
-    except OSError:
-        pass
-    print(json.dumps({'hookSpecificOutput': {'hookEventName': 'Stop', 'additionalContext':
-        'Research files modified this session (source tags present). Self-check before finishing: '
-        '(1) Did you fetch primary sources or only use training data? '
-        '(2) Did you search for contradictory evidence? '
-        '(3) Are all claims source-graded? '
-        'If all three hold, no action needed.'}}))
+# Advisory checklist RETIRED 2026-07-10 (was: once-per-session additionalContext self-check,
+# wired live by 9a8678c after being silently dead). Observed live 2026-07-10: it fires only
+# when tags are ALREADY present, duplicates the block path's discipline, and costs the agent
+# a full extra turn answering it. The blocking path above is the enforcement; tags-present
+# sessions now stop silently.
 sys.exit(0)
 "
