@@ -364,3 +364,5 @@ end-knowledge-index -->
 ## Known Issues
 <!-- Append-only. Session-analyst may suggest additions. -->
 - **[2026-07-09] fetch_paper hangs indefinitely on direct arXiv DOI; parallel fetch also serial-locks after first item, requiring termination and direct arXiv PDF fallback**
+
+- **[2026-07-10] mcp__research__fetch_paper can hang beyond 60s on an arXiv PDF; terminate the transport, then use the primary-source browser or direct PDF tooling instead.**

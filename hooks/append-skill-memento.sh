@@ -25,13 +25,13 @@ ENTRY="- **[$DATE] $DESCRIPTION**"
 if grep -q '^## Known Issues' "$SKILL_MD"; then
     # Find the line number of ## Known Issues
     LINE=$(grep -n '^## Known Issues' "$SKILL_MD" | head -1 | cut -d: -f1)
-    # Find the next section header after Known Issues (or EOF)
-    NEXT=$(tail -n +"$((LINE + 1))" "$SKILL_MD" | grep -n '^## ' | head -1 | cut -d: -f1)
+    # Find the absolute line number of the next section header (or EOF).
+    # awk exits successfully when there is no later header, unlike a no-match
+    # grep pipeline under set -euo pipefail.
+    NEXT=$(awk -v line="$LINE" 'NR > line && /^## / { print NR; exit }' "$SKILL_MD")
     if [ -n "$NEXT" ]; then
-        # Insert before next section (NEXT is relative to LINE+1)
-        INSERT_AT=$((LINE + NEXT - 1))
         # Use ed for atomic insert (avoids sed -i portability issues)
-        printf '%s\n' "${INSERT_AT}i" "$ENTRY" "" "." "w" | ed -s "$SKILL_MD" >/dev/null
+        printf '%s\n' "${NEXT}i" "$ENTRY" "" "." "w" | ed -s "$SKILL_MD" >/dev/null
     else
         # No next section — append at end of file
         printf '\n%s\n' "$ENTRY" >> "$SKILL_MD"
