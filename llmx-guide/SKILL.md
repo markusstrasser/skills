@@ -14,7 +14,7 @@ effort: medium
 llmx info --write-mirror   # → ~/.claude/cache/llmx-routing.json — Read before dispatch
 ```
 
-For profile-based dispatch with a context manifest, `~/Projects/skills/scripts/llm-dispatch.py` exists — the dispatch layer behind research-ops/observe/sweep cycles, not a general recommendation; direct CLI dominates ad-hoc usage.
+For profile-based dispatch with a context manifest, `~/Projects/skills/scripts/llm-dispatch.py` exists — the dispatch layer behind research-ops/observe/sweep cycles, not a general recommendation; direct CLI dominates ad-hoc usage. Library callers wanting structured status (not exceptions alone): `from llmx import dispatch, DispatchResult`.
 
 > Detail files: [transport-routing.md](references/transport-routing.md) | [bare-lean-dispatch.md](references/bare-lean-dispatch.md) | [models.md](references/models.md) | [error-codes.md](references/error-codes.md) | [codex-dispatch.md](references/codex-dispatch.md) | [subcommands.md](references/subcommands.md) | [batch-apis.md](references/batch-apis.md)
 
@@ -77,7 +77,7 @@ llmx chat --subscription -m claude-opus-4-8 -e low \
 4. **`-o FILE`** — never `> file`; background mode requires `-o`
 5. **`--timeout` explicit** when the caller owns a tighter budget; `llmx` now defaults agent mode to
    at least 1800s and max effort to 3600s, but an explicit 1800–3600s bound remains clearer in scripts
-6. **One combined context file** for critical reviews — multi-`-f` silently drops earlier files
+6. **Context files** — repeatable `-f a.md -f b.md` concatenates with `=== File: path ===` boundaries (fixed; do not pre-merge unless you want a custom layout). Library: `llmx.api.dispatch(..., context_paths=[...])`.
 7. **Gemini = paid API** since 2026-05-31; add `--flex` for 50% off non-interactive dispatch
 8. **Exit 6 = billing exhausted (permanent)**; exit 3 = rate limit (retry/backoff)
 

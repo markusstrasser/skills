@@ -7,7 +7,7 @@ import os
 import re
 import sys
 import traceback
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -48,6 +48,7 @@ RETRYABLE_STATUSES = {
 }
 
 _LLMX_CHAT: Callable[..., Any] | None = None
+_LLMX_DISPATCH: Callable[..., Any] | None = None
 _LLMX_VERSION: str | None = None
 
 
@@ -414,18 +415,78 @@ def _remove_if_exists(path: Path | None) -> None:
         path.unlink()
 
 
+def _wrap_chat_as_dispatch(chat_fn: Callable[..., Any]) -> Callable[..., Any]:
+    """Test/compat shim: chat()-like callable → object with DispatchResult fields."""
+
+    @dataclass
+    class _ShimResult:
+        status: str
+        retryable: bool
+        text: str = ""
+        usage: dict[str, Any] = field(default_factory=dict)
+        latency: float = 0.0
+        error_type: str | None = None
+        error_message: str | None = None
+        provider: str = ""
+        model: str = ""
+
+    def _wrapped(**kwargs: Any) -> _ShimResult:
+        try:
+            response = chat_fn(**kwargs)
+            content = str(getattr(response, "content", "") or "")
+            latency = float(getattr(response, "latency", 0.0) or 0.0)
+            usage = _extract_usage(response) or {}
+            if not content.strip():
+                return _ShimResult(
+                    status="empty_output",
+                    retryable=True,
+                    text=content,
+                    usage=usage,
+                    latency=latency,
+                    error_type="empty_output",
+                    error_message="empty model output",
+                    provider=str(kwargs.get("provider") or ""),
+                    model=str(kwargs.get("model") or ""),
+                )
+            return _ShimResult(
+                status="ok",
+                retryable=False,
+                text=content,
+                usage=usage,
+                latency=latency,
+                provider=str(getattr(response, "provider", None) or kwargs.get("provider") or ""),
+                model=str(getattr(response, "model", None) or kwargs.get("model") or ""),
+            )
+        except Exception as exc:
+            status, message = classify_error(exc)
+            return _ShimResult(
+                status=status,
+                retryable=RETRYABLE_STATUSES.get(status, False),
+                error_type=status,
+                error_message=message,
+                provider=str(kwargs.get("provider") or ""),
+                model=str(kwargs.get("model") or ""),
+            )
+
+    return _wrapped
+
+
 def _bootstrap_llmx() -> tuple[Callable[..., Any], str]:
-    global _LLMX_CHAT, _LLMX_VERSION
-    cached_chat = _LLMX_CHAT
-    if cached_chat is not None:
-        return cached_chat, _LLMX_VERSION or "unknown"
+    global _LLMX_CHAT, _LLMX_DISPATCH, _LLMX_VERSION
+    # Test hook first: injected chat mock → wrap as structured dispatch (no cache,
+    # so per-test patches always apply).
+    if _LLMX_CHAT is not None:
+        return _wrap_chat_as_dispatch(_LLMX_CHAT), _LLMX_VERSION or "unknown"
+
+    if _LLMX_DISPATCH is not None:
+        return _LLMX_DISPATCH, _LLMX_VERSION or "unknown"
 
     # Phase 1: try direct import (works if llmx is installed in current venv).
-    llmx_chat: Callable[..., Any] | None = None
+    llmx_dispatch: Callable[..., Any] | None = None
     try:
-        from llmx.api import chat as _llmx_chat  # type: ignore
+        from llmx.api import dispatch as _llmx_dispatch  # type: ignore
 
-        llmx_chat = _llmx_chat
+        llmx_dispatch = _llmx_dispatch
     except ImportError:
         # Phase 2: fall back to the uv tool install. CRITICAL: must match the
         # current Python's major.minor version, otherwise we'd add a
@@ -467,9 +528,9 @@ def _bootstrap_llmx() -> tuple[Callable[..., Any], str]:
 
         site.addsitedir(str(matching_site))
         try:
-            from llmx.api import chat as _llmx_chat_2  # type: ignore
+            from llmx.api import dispatch as _llmx_dispatch_2  # type: ignore
 
-            llmx_chat = _llmx_chat_2
+            llmx_dispatch = _llmx_dispatch_2
         except ImportError as exc:
             raise ImportError(
                 f"llmx tool install at {matching_site} could not be imported: {exc}. "
@@ -477,8 +538,8 @@ def _bootstrap_llmx() -> tuple[Callable[..., Any], str]:
                 f"corrupted. Try `uv tool install --reinstall llmx`."
             ) from exc
 
-    assert llmx_chat is not None  # both branches above set or raise
-    _LLMX_CHAT = llmx_chat
+    assert llmx_dispatch is not None  # both branches above set or raise
+    _LLMX_DISPATCH = llmx_dispatch
 
     # Resolve version string. Falls back gracefully if metadata is missing
     # (e.g., when loaded from a path-injected source rather than an installed
@@ -494,7 +555,7 @@ def _bootstrap_llmx() -> tuple[Callable[..., Any], str]:
         else:
             _LLMX_VERSION = "unknown"
 
-    return llmx_chat, _LLMX_VERSION or "unknown"
+    return llmx_dispatch, _LLMX_VERSION or "unknown"
 
 
 def _add_additional_properties(schema: dict[str, Any]) -> dict[str, Any]:
@@ -772,7 +833,7 @@ def dispatch(
     )
 
     try:
-        llmx_chat, llmx_version = _bootstrap_llmx()
+        llmx_transport, llmx_version = _bootstrap_llmx()
     except Exception as exc:
         status, message = classify_error(exc)
         if status == "model_error":
@@ -857,12 +918,112 @@ def dispatch(
         call_kwargs["service_tier"] = "flex"
 
     try:
-        response = llmx_chat(**call_kwargs)
-        content = str(response.content or "")
-        latency = float(getattr(response, "latency", 0.0) or 0.0)
-        usage = _extract_usage(response)
-        if not content.strip():
-            raise ValueError("empty model output")
+        # Transport layer: llmx.api.dispatch (ADR P1). Returns structured status —
+        # does not raise on model/rate-limit failures. Profile I/O stays here.
+        transport = llmx_transport(**call_kwargs)
+        transport_status = getattr(transport, "status", "dispatch_error")
+        # Map llmx-only statuses onto the skills taxonomy.
+        if transport_status == "api_key":
+            transport_status = "dependency_error"
+        elif transport_status == "spend_cap":
+            transport_status = "quota"
+        elif transport_status == "dry_run":
+            transport_status = "config_error"
+
+        if transport_status != "ok":
+            status = transport_status if transport_status in RETRYABLE_STATUSES else "model_error"
+            message = (
+                getattr(transport, "error_message", None)
+                or getattr(transport, "error_type", None)
+                or transport_status
+            )
+            _remove_if_exists(output_path)
+            _remove_if_exists(parsed_path)
+            error_payload = {
+                "error_type": status,
+                "error_message": message,
+                "traceback": None,
+            }
+            _atomic_write_json(error_path, error_payload)
+            meta = {
+                "requested_profile": profile_def.name,
+                "profile_version": profile_def.version,
+                "profile_fingerprint": profile_def.fingerprint(),
+                "resolved_provider": profile_def.provider,
+                "resolved_model": profile_def.model,
+                "resolved_kwargs": resolved,
+                "auth": call_kwargs["auth"],
+                "mode": call_kwargs["mode"],
+                "schema_used": bool(schema),
+                "status": status,
+                "retryable": RETRYABLE_STATUSES[status],
+                "error_type": status,
+                "error_message": message,
+                "latency": float(getattr(transport, "latency", 0.0) or 0.0),
+                "started_at": started_at,
+                "finished_at": _utc_now(),
+                "context_sha256": context_sha256,
+                "context_payload_hash": context_payload_hash,
+                "context_manifest_path": str(context_manifest_path) if context_manifest_path else None,
+                "context_token_estimate": (context_manifest or {}).get("token_estimate"),
+                "context_budget_metric": (context_manifest or {}).get("budget_metric"),
+                "context_estimate_method": (context_manifest or {}).get("estimate_method"),
+                "prompt_sha256": prompt_sha256,
+                "llmx_version": llmx_version,
+                "helper_version": HELPER_VERSION,
+                "output_path": str(output_path),
+                "parsed_path": str(parsed_path) if parsed_path else None,
+                "error_path": str(error_path),
+                "llmx_transport": getattr(transport, "transport", None),
+            }
+            _atomic_write_json(meta_path, meta)
+            _write_telemetry(
+                {
+                    "started_at": started_at,
+                    "finished_at": meta["finished_at"],
+                    "requested_profile": profile_def.name,
+                    "profile_version": profile_def.version,
+                    "profile_fingerprint": profile_def.fingerprint(),
+                    "resolved_provider": profile_def.provider,
+                    "resolved_model": profile_def.model,
+                    "status": status,
+                    "retryable": RETRYABLE_STATUSES[status],
+                    "latency": meta["latency"],
+                    "context_payload_hash": context_payload_hash,
+                    "context_token_estimate": (context_manifest or {}).get("token_estimate"),
+                    "context_budget_metric": (context_manifest or {}).get("budget_metric"),
+                    "context_estimate_method": (context_manifest or {}).get("estimate_method"),
+                    "usage": getattr(transport, "usage", None) or None,
+                    "auth": call_kwargs["auth"],
+                    "mode": call_kwargs["mode"],
+                    "error_type": status,
+                }
+            )
+            _remove_if_exists(start_path)
+            return DispatchResult(
+                status=status,
+                retryable=RETRYABLE_STATUSES[status],
+                requested_profile=profile_def.name,
+                profile_version=profile_def.version,
+                profile_fingerprint=profile_def.fingerprint(),
+                provider=profile_def.provider,
+                model=profile_def.model,
+                output_path=str(output_path),
+                meta_path=str(meta_path),
+                error_path=str(error_path),
+                parsed_path=str(parsed_path) if parsed_path else None,
+                latency=float(getattr(transport, "latency", 0.0) or 0.0),
+                llmx_version=llmx_version,
+                helper_version=HELPER_VERSION,
+                error_type=status,
+                error_message=str(message),
+            )
+
+        content = str(getattr(transport, "text", None) or getattr(transport, "content", "") or "")
+        latency = float(getattr(transport, "latency", 0.0) or 0.0)
+        usage = getattr(transport, "usage", None) or None
+        if isinstance(usage, dict) and not usage:
+            usage = None
 
         _atomic_write_text(output_path, content)
         _remove_if_exists(error_path)
@@ -913,6 +1074,7 @@ def dispatch(
             "output_path": str(output_path),
             "parsed_path": str(parsed_path) if parsed_path else None,
             "error_path": str(error_path) if parsed_error else None,
+            "llmx_transport": getattr(transport, "transport", None),
         }
         _atomic_write_json(meta_path, meta)
         _write_telemetry(
@@ -933,7 +1095,7 @@ def dispatch(
                 "context_estimate_method": (context_manifest or {}).get("estimate_method"),
                 "usage": usage,
                 "auth": call_kwargs["auth"],
-            "mode": call_kwargs["mode"],
+                "mode": call_kwargs["mode"],
             }
         )
         _remove_if_exists(start_path)
