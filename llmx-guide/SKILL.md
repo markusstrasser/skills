@@ -37,7 +37,7 @@ llmx chat --dry-run --subscription -m MODEL -e max
 Critique harness (hard gate before parallel axes):
 
 ```bash
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py --preflight
+uv run python3 ~/Projects/skills/critique/scripts/model-review.py --preflight
 # writes .model-review/preflight-latest.json; exit 6 = billing dead — abort
 ```
 
