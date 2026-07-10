@@ -33,6 +33,15 @@ elif echo "$CMD_FIRST" | grep -qE '^\s*git\s+(-C\s+\S+\s+)?commit\b'; then
     if echo "$CMD" | grep -qE '\s(--only|--include|-o|--amend|-i|--interactive|-p|--patch)\b'; then
         exit 0  # explicitly scoped — safe
     fi
+    # Merge in progress: git FORBIDS --only ("cannot do a partial commit during a merge"),
+    # and `git merge --continue` commits the identical index and was never blocked — so
+    # blocking bare commit here adds friction, not safety (2026-07-10 p23-fixer merge).
+    # The agent still owes a staged-set review (git status) before committing a merge.
+    if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+        ~/Projects/skills/hooks/hook-trigger-log.sh "multiagent-commit" "allow-merge" \
+            "MERGE_HEAD present; --only impossible during merge" 2>/dev/null || true
+        exit 0
+    fi
     : # bare commit — continue to multi-agent check
 else
     exit 0  # specific-file add, log/diff/status, or non-git command — all safe
@@ -55,5 +64,5 @@ fi
 ~/Projects/skills/hooks/hook-trigger-log.sh "multiagent-commit" "block" \
     "procs=$CLAUDE_PROCS cmd=$(echo "$CMD" | head -c 60)" 2>/dev/null || true
 
-echo '{"decision": "block", "reason": "MULTI-AGENT SAFETY: '"$CLAUDE_PROCS"' claude processes active in main repo (not a worktree). For git add: use specific files (not -A/-p/.). For git commit: pass --only <files> (or --amend) so a parallel agent'\''s pre-staged files do not sweep into this commit (2026-05-27 substrate-session sweep on 486973e). For git checkout/restore (destructive): prefer Read + Edit to repair in place; if you must discard, run \"git stash push -- <files>\" first so it'\''s reversible."}'
+echo '{"decision": "block", "reason": "MULTI-AGENT SAFETY: '"$CLAUDE_PROCS"' claude processes active in main repo (not a worktree). For git add: use specific files (not -A/-p/.). For git commit: pass --only <files> (or --amend) so a parallel agent'\''s pre-staged files do not sweep into this commit (2026-05-27 substrate-session sweep on 486973e). For git checkout/restore (destructive): prefer Read + Edit to repair in place; if you must discard, run \"git stash push -- <files>\" first so it'\''s reversible. Completing a merge? bare commit is ALLOWED when MERGE_HEAD exists (git forbids --only there) — review git status first."}'
 exit 2
