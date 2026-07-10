@@ -393,6 +393,7 @@ evidence, and the DeepSWE / LifeSciBench confirmations live in
 - **Verdict = machine-checkable gate-ledger** — evals ADR 0007 + `scripts/check_verdict.py`; confidence/call is EARNED by discharged gates; a `pass` must cite a leaf.
 - **Guards** — PPI/CLT-PPI invalid below 50 labels/stratum (`just power` refuses); fitted IRT / CapBencher / CAT / noise-injection sandbagging stay deferred (`evals/docs/decisions/deferred-and-open.md`).
 - **Process reflex** (extends Pre-Build #1) — before inventing a metric or grading scheme, inventory the measurement sciences for the existing instrument.
+- **Capability CURVE over test-time compute (AISI 2026-07-02)** — a fixed-budget agentic score is a LOWER BOUND, not a point: newer models gain disproportionately from budget, so fixed budgets understate frontier gaps most exactly where you care. Sweep the budget, report the curve, label serial vs parallel allocation; a curve still rising at the cap ⇒ report "≥score @ cap", never a ceiling. (The per-arm token logging that `eval-token-costs` already mandates IS the curve's x-axis.)
 
 **Independently confirmed** by DeepSWE (withheld grader; seal-the-env-or-domain-block; the
 free-executable-oracle boundary — don't cargo-cult behavioral verifiers into oracle-free domains)
@@ -425,8 +426,11 @@ skill; LifeSciBench teardown 2026-06-18, `evals/research/2026-06-18-lifescibench
 - **Mined-tasks ⇒ task-validity sample-audit before adoption (spec↔oracle alignment).** Tasks mined
   programmatically from issue/PR/commit history are *presumptively* misaligned: their tests were written to
   validate ONE specific change, not to define an implementation-agnostic "solved" (OpenAI SWE-Bench Pro audit
-  2026-07-08: **~30% of 731 tasks broken** — agent pipeline 27.4%, 5-engineer panel 34.1%, 74% category
-  overlap). Audit a sample (≥20 items or 10%) with an investigator agent that has repo+test access, against the
+  2026-07-08: **15→34% of 731 tasks broken, bar-dependent** — agent pipeline 27.4%, 5-engineer panel 34.1%,
+  74% overlap; an independent preregistered receipts-only audit of the same tasks measured the
+  mechanically-provable spine at ~15% [June Kim, Zenodo, 2026-06-17]. **State WHICH BAR a broken-rate uses**
+  — receipts-provable vs issue-threshold — and prefer receipts-provable for headline claims; agent pipelines
+  under-flag vs humans). Audit a sample (≥20 items or 10%) with an investigator agent that has repo+test access, against the
   4-category taxonomy: **overly-strict tests** (oracle enforces unstated details → false-FAIL), **low-coverage
   tests** (incomplete fix passes → false-PASS; hardest to catch mechanically — humans found 9.4% vs agents'
   4.1%), **underspecified prompts** (hidden tests enforce non-inferable requirements), **misleading prompts**
