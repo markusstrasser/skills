@@ -143,6 +143,10 @@ Answer in writing (they become PREREGISTRATION.md fields):
 3. **Verifier regime** — deterministic ground truth (substring, recall@k, exact answer)
    or judged? Deterministic PRIMARY decides; judges corroborate. A model-as-judge proxy
    does not make taste work verifiable (constitution: bad eval is worse than none).
+   *Spec↔oracle alignment:* a deterministic oracle must enforce exactly what the task states —
+   no more (overly-strict → false-fails correct solutions; a pass then evidences contamination,
+   not skill) and no less (low-coverage → false-passes incomplete ones). Executable ≠ valid;
+   see the mined-task audit under "Grading an EXTERNAL / vendor benchmark".
    *For retrieval/ranking:* is there exactly ONE relevant item per query, or can the corpus
    hold co-relevant siblings? One-gold recall@k is valid only in the former; topically-dense
    corpora need graded multi-doc relevance, or recall@k scores label noise (see Phase 3).
@@ -418,6 +422,26 @@ skill; LifeSciBench teardown 2026-06-18, `evals/research/2026-06-18-lifescibench
   numbers (κ / correlation / MAE) are not PRINTED counts as unvalidated — don't credit it. (LifeSciBench §5.3
   promises "we report correlation, MAE, pass/fail agreement"; no value appears in the paper.) "Expert-authored"
   via an anonymous/withheld contributor pool (the DRACO pattern) is likewise face validity you cannot audit.
+- **Mined-tasks ⇒ task-validity sample-audit before adoption (spec↔oracle alignment).** Tasks mined
+  programmatically from issue/PR/commit history are *presumptively* misaligned: their tests were written to
+  validate ONE specific change, not to define an implementation-agnostic "solved" (OpenAI SWE-Bench Pro audit
+  2026-07-08: **~30% of 731 tasks broken** — agent pipeline 27.4%, 5-engineer panel 34.1%, 74% category
+  overlap). Audit a sample (≥20 items or 10%) with an investigator agent that has repo+test access, against the
+  4-category taxonomy: **overly-strict tests** (oracle enforces unstated details → false-FAIL), **low-coverage
+  tests** (incomplete fix passes → false-PASS; hardest to catch mechanically — humans found 9.4% vs agents'
+  4.1%), **underspecified prompts** (hidden tests enforce non-inferable requirements), **misleading prompts**
+  (prompt contradicts oracle). The agent's job is to distinguish *resolvable* ambiguity (answerable from repo
+  conventions) from true underspecification — give it the environment, not just the text. Two corollaries:
+  (a) **a PASS on an overly-strict item is contamination evidence, not capability** (the prompt underdetermines
+  the passing behavior, so passing implies knowledge of the hidden test); (b) an executable verifier is
+  NECESSARY, not sufficient — SWE-bench-style "real test suite, no judge" still fails if the suite enforces
+  more or less than the prompt specifies. Full grading: evals `research/2026-06-13-frontier-anti-gaming.md`
+  §addendum-2026-07-10.
+- **Vendor benchmark endorsements ROT — date them, re-verify at adoption.** OpenAI recommended SWE-Bench Pro
+  (Feb 2026) and retracted it (Jul 2026, ~4.5 months). A catalog row citing a lab's endorsement is a §6a local
+  verdict with a shelf life, never a durable invariant; before any DECISIONS row leans on one, check the
+  endorser's newest statement. (Bonus: lab-eval endorsement flips are a productive post-cutoff flip-gold feed —
+  see `flipped_2026_swe_bench_pro`.)
 
 ## Anti-patterns (each one vetoed or observed here)
 
