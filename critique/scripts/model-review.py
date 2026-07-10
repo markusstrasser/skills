@@ -659,10 +659,10 @@ End with a fenced JSON block (voi-scout.json shape):
 {packet}
 """
 
-# Must exceed the longest opt-in axis timeout.  The repo-grounded Grok xhigh
-# profile is 1200s; a shorter executor wait cancels a valid axis before its own
-# transport timeout can produce a receipt.
-PARALLEL_DISPATCH_WAIT_DEFAULT = 1230.0
+# Time for a worker result to propagate after its profile-owned transport
+# timeout. The executor wait is derived from the selected profiles below; never
+# duplicate the longest profile timeout here.
+PARALLEL_DISPATCH_COLLECTION_GRACE_SECONDS = 30.0
 # Grace absorbed by can_start() so a budget sized EQUAL to an axis timeout (the common
 # `review_gate triage` case: budget 600s, deep_review/gpt_general resolve to 600s) does
 # not spuriously skip every axis on the sub-second setup elapsed since from_seconds().
@@ -709,7 +709,7 @@ class DispatchBudget:
             return True
         return rem >= profile_timeout - _START_GRACE_SECONDS
 
-    def wait_timeout(self, default: float = PARALLEL_DISPATCH_WAIT_DEFAULT) -> float:
+    def wait_timeout(self, default: float) -> float:
         rem = self.remaining()
         if rem is None:
             return default
@@ -730,6 +730,16 @@ def _profile_resolved_timeout(profile_name: str) -> int:
 def _resolved_axis_timeout(axis: str) -> int:
     profile_name = str(AXES[axis]["profile"])
     return _profile_resolved_timeout(profile_name)
+
+
+def _parallel_dispatch_wait_default(axis_names: list[str]) -> float:
+    """Bound collection by the longest selected profile plus propagation grace."""
+    if not axis_names:
+        return PARALLEL_DISPATCH_COLLECTION_GRACE_SECONDS
+    return (
+        max(_resolved_axis_timeout(axis) for axis in axis_names)
+        + PARALLEL_DISPATCH_COLLECTION_GRACE_SECONDS
+    )
 
 
 def _axis_profile_timeout(axis: str) -> int:
@@ -1921,7 +1931,12 @@ def dispatch(
         "axes": axis_names,
         "queries": len(axis_names),
     }
-    wait_timeout = budget.wait_timeout() if budget is not None else PARALLEL_DISPATCH_WAIT_DEFAULT
+    profile_wait_timeout = _parallel_dispatch_wait_default(axis_names)
+    wait_timeout = (
+        budget.wait_timeout(profile_wait_timeout)
+        if budget is not None
+        else profile_wait_timeout
+    )
     with ThreadPoolExecutor(max_workers=len(axis_names)) as pool:
         futures = {pool.submit(_run_axis, axis): axis for axis in axis_names}
         try:

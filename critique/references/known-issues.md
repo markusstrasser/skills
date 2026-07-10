@@ -43,3 +43,11 @@
   at exactly 600s. The profile slug was `grok-4.5-xhigh`, but its timeout remained 600s and the dispatch
   executor itself waited only 720s. `grok_review` now gets 1200s and the executor wait is 1230s; tests
   assert both timeout contracts so the axis cannot silently regress below its own xhigh budget.
+- **[2026-07-10] FIXED — Opus Max review was killed at the profile boundary, then the
+  executor encoded the same ceiling independently.** A healthy subscription probe completed, but a
+  consequential genomics architecture review hit the `claude_review` 600s timeout and left a zero-byte
+  artifact. That artifact is transport failure, never reviewer evidence. `claude_review` now has a
+  finite 3600s bound at explicit `max` effort, matching llmx's canonical Max floor. The parallel
+  executor derives its collection wait from the longest selected profile plus propagation grace.
+  Tests cover the exact Opus effort/timeout
+  profile and mixed Grok/Opus headroom.

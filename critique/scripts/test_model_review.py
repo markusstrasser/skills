@@ -450,8 +450,18 @@ class AxisResolutionTest(unittest.TestCase):
         self.assertEqual(PROFILES["grok_review"].provider, "cursor")
         self.assertEqual(model_review._resolved_axis_timeout("grok"), 1200)
         self.assertGreater(
-            model_review.PARALLEL_DISPATCH_WAIT_DEFAULT,
+            model_review._parallel_dispatch_wait_default(["grok"]),
             model_review._resolved_axis_timeout("grok"),
+        )
+
+    def test_claude_axis_has_long_review_timeout_and_executor_headroom(self) -> None:
+        from shared.llm_dispatch import PROFILES
+
+        self.assertEqual(model_review._resolved_axis_timeout("claude"), 3600)
+        self.assertEqual(PROFILES["claude_review"].reasoning_effort, "max")
+        self.assertGreater(
+            model_review._parallel_dispatch_wait_default(["grok", "claude"]),
+            model_review._resolved_axis_timeout("claude"),
         )
 
     def test_call_cursor_repo_agent_writes_output(self) -> None:
@@ -1308,8 +1318,8 @@ class DispatchBudgetTest(unittest.TestCase):
         budget = model_review.DispatchBudget(
             deadline_mono=time.monotonic() + 100,
         )
-        self.assertGreaterEqual(budget.wait_timeout(), 95)
-        self.assertLessEqual(budget.wait_timeout(), 100)
+        self.assertGreaterEqual(budget.wait_timeout(1230), 95)
+        self.assertLessEqual(budget.wait_timeout(1230), 100)
 
     def test_apply_dispatch_manifest(self) -> None:
         import argparse

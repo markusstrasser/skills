@@ -217,7 +217,10 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   "$ARGUMENTS"
 ```
 
-Set `timeout: 660000` on the Bash tool call. See `references/dispatch.md` for `--questions`, `--context-files`, depth presets, effort levels, and troubleshooting.
+Set the outer tool timeout above the longest selected profile: `660000` ms for standard axes,
+`1230000` ms with Grok, or `3630000` ms with Opus Max. The executor derives its own wait from
+the selected profiles. See `references/dispatch.md` for `--questions`, `--context-files`, depth
+presets, effort levels, and troubleshooting.
 
 **Dispatch policy (manifest-first):** `review_gate triage` writes `dispatch_policy` into `dispatch.json` (scout, context_scope, budget). Pass `--dispatch-manifest` to `model-review.py`; explicit CLI flags still win.
 
