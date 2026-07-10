@@ -546,7 +546,13 @@ def main() -> None:
         "PRIOR-CONTEXT (harness-supplied, advisory): your request touches "
         f"[{', '.join(matched_kw) if matched_kw else 'rediscovery-retry'}], which already has history. "
         "READ the relevant ones before proposing/diagnosing — build on, narrow to the real gap, or "
-        "supersede them; don't re-derive."
+        "supersede them; don't re-derive.",
+        # Reply-protocol half of the answer-reflex (arc-agi row answer-reflex-surface;
+        # operator target: every suggestion bounces off the ledger, 2026-07-10):
+        "TRIAGE-VERDICT: if the prompt carries operator ideas/corrections/asks, OPEN the reply "
+        "with one verdict per item — already-done (cite artifact) · known (cite) · in-queue "
+        "(cite row) · tried-and-killed (cite verdict memo) · genuinely-new (file it, say where) — "
+        "BEFORE analysis. A suggestion absorbed without a verdict line is a silent rescue.",
     ]
     if memos:
         parts.append("Curated memo(s)/decision(s):\n" + "\n".join(f"  {m}" for m in memos))
