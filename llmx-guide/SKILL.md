@@ -50,6 +50,16 @@ llmx chat --subscription -m claude-opus-4-8 -f ctx.md -o out.md "query"
 llmx chat -p codex-cli --subscription -m gpt-5.6-sol -f ctx.md -o out.md "query"
 ```
 
+Repository-coupled agent review (caller cwd, project rules, native CLI tools):
+
+```bash
+llmx chat --subscription --mode agent -m claude-opus-4-8 -e max \
+  --timeout 3600 -o out.md "Inspect this repository read-only; cite file:line evidence."
+```
+
+`--mode agent` is a workspace agent. Legacy `--lite research` is an isolated
+research-MCP-only profile; they are intentionally not aliases.
+
 Strips API-key env on Claude/Codex subscription paths. If you see "Credit balance is too low", you hit API-key billing, not local subscription auth.
 
 ### Smoke (live, tiny)
@@ -93,7 +103,10 @@ Routing table: `critique/lenses/repo-audit-plan-review.md`. Preflight via `model
 | 7c | Grok 4.5 xAI API 403 | `API key is currently blocked` — **key status**, not EU geo (Chicago Mullvad egress still 403'd 2026-07-09). Rotate/unblock key in console; Cursor pool is the live path meanwhile. |
 | 7d | Critique `grok` vs llmx cursor | `grok` axis uses `cursor-agent --workspace` (repo). `llmx -p cursor` uses neutral empty cwd (packet-only). Don't substitute. |
 | 8 | Shelling llmx from Python: `subprocess.run(capture_output=True, timeout=)` hangs forever at 0% CPU | run()'s TimeoutExpired kills the child then blocks draining a pipe the llmx→claude-CLI grandchild holds. Use `Popen(start_new_session=True)` + `communicate(timeout)` + `os.killpg` on expiry (exemplar: arc-agi `agent/foundry_ewm.py llm()`; 27-min wedge 2026-07-04) |
+| 9 | `--mode agent` launches in `~/.cache/llmx/lite/research` with no repo tools | Fixed 2026-07-10: mode and lite profile are separate. Workspace agent preserves caller cwd; `--lite research` stays isolated. Live-smoke with `pwd` + `git log` after changes. |
+| 10 | Claude subscription call fails before dispatch when `--max-tokens` is set | Claude CLI does not expose that control. Omit `--max-tokens`; use explicit `--timeout` and let the model's native output ceiling apply. Subscription routes fail loud rather than silently billing API fallback. |
 
-Legacy: `--lite bare` still works but `--subscription` is canonical. `--lite research` for Codex research MCP profile only.
+Legacy: `--lite bare` still works but `--subscription --mode chat` is canonical.
+`--lite research` remains the isolated research-MCP profile for Claude/Codex.
 
 $ARGUMENTS
