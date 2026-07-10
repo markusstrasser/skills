@@ -25,6 +25,23 @@ assert _spec.loader is not None
 _spec.loader.exec_module(_mod)
 verdict = _mod.verdict
 
+_arc_spec = importlib.util.spec_from_file_location(
+    "pretool_arc_agi_agent_cwd_guard", _HOOKS / "pretool-arc-agi-agent-cwd-guard.py"
+)
+_arc_mod = importlib.util.module_from_spec(_arc_spec)
+assert _arc_spec.loader is not None
+_arc_spec.loader.exec_module(_arc_mod)
+arc_verdict = _arc_mod.verdict
+
+# Single-source heredoc strip (lib_bash_cmd_strip) — do not re-privatize.
+_strip_spec = importlib.util.spec_from_file_location(
+    "lib_bash_cmd_strip", _HOOKS / "lib_bash_cmd_strip.py"
+)
+_strip_mod = importlib.util.module_from_spec(_strip_spec)
+assert _strip_spec.loader is not None
+_strip_spec.loader.exec_module(_strip_mod)
+strip_heredocs = _strip_mod.strip_heredocs
+
 
 def _project_has_uv(cwd: str) -> bool:
     """True if cwd (or an ancestor) looks like a uv/python project."""
@@ -39,22 +56,8 @@ def _project_has_uv(cwd: str) -> bool:
     return False
 
 
-def _strip_heredocs(cmd: str) -> str:
-    out, skip_until = [], None
-    for ln in cmd.split("\n"):
-        if skip_until is not None:
-            if ln.strip() == skip_until:
-                skip_until = None
-            continue
-        m = re.search(r"<<-?\s*(['\"]?)(\w+)\1", ln)
-        out.append(ln)
-        if m:
-            skip_until = m.group(2)
-    return "\n".join(out)
-
-
 def _multiline_loop(cmd: str) -> bool:
-    cmd = _strip_heredocs(cmd)
+    cmd = strip_heredocs(cmd)
     return bool(re.search(r"\b(do|then)\s*\n", cmd))
 
 
@@ -93,6 +96,7 @@ def _allow(*, updated_command: str | None = None) -> None:
 
 def handle(mode: str, payload: dict) -> int:
     cmd, cwd = _parse(payload)
+    original = cmd
     if not cmd.strip():
         _allow()
         return 0
@@ -108,14 +112,27 @@ def handle(mode: str, payload: dict) -> int:
     action, msg = verdict(cmd, can_rewrite=can_rewrite)
     if action == "block":
         _deny(msg)
-    if action == "rewrite" and msg and mode in ("pretool", "preToolUse"):
-        _allow(updated_command=msg)
-        return 0
     if action == "rewrite" and msg:
+        cmd = msg  # chain: uv rewrite first, then arc-agi cwd
+    # arc-agi dual-pyproject: rewrite imports of arc_agi/arcengine/local_runner
+    # into `uv run --directory agent` when cwd is repo root (not agent/).
+    arc_action, arc_msg = arc_verdict(cmd, cwd)
+    if arc_action == "block":
+        _deny(arc_msg)
+    if arc_action == "rewrite" and arc_msg:
+        cmd = arc_msg
+
+    if cmd != original:
+        if mode in ("pretool", "preToolUse"):
+            _allow(updated_command=cmd)
+            return 0
         # beforeShellExecution cannot rewrite — block with guidance
-        _deny(
-            f"Use `uv run python3` instead of bare python. Suggested: {msg}"
-        )
+        hint = "uv run / agent cwd"
+        if action == "rewrite":
+            hint = "uv run python3"
+        elif arc_action == "rewrite":
+            hint = "uv run --directory agent"
+        _deny(f"Use `{hint}` instead. Suggested: {cmd}")
     _allow()
     return 0
 
@@ -138,14 +155,14 @@ def _selftest() -> int:
         ok = got == want
         bad += not ok
         print(f"  {'ok' if ok else 'FAIL'} want={want} got={got} {payload!r}")
-    # import sibling selftest
-    r = subprocess.run(
-        [sys.executable, str(_HOOKS / "pretool-uv-python-guard.py"), "--selftest"],
-        capture_output=True,
-        text=True,
-    )
-    print(r.stdout, end="")
-    bad += r.returncode
+    for name in ("pretool-uv-python-guard.py", "pretool-arc-agi-agent-cwd-guard.py"):
+        r = subprocess.run(
+            [sys.executable, str(_HOOKS / name), "--selftest"],
+            capture_output=True,
+            text=True,
+        )
+        print(r.stdout, end="")
+        bad += r.returncode
     print(f"{'FAIL' if bad else 'PASS'}")
     return 1 if bad else 0
 
