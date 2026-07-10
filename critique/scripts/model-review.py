@@ -3005,7 +3005,7 @@ def verify_claims(
 
 
 def run_preflight() -> int:
-    """Probe llmx CLI (info + subscription dry-run). Import is optional."""
+    """Probe llmx routing and one bounded live subscription entitlement call."""
     import shutil
     import subprocess
 
@@ -3074,6 +3074,43 @@ def run_preflight() -> int:
             checks["dry_run_plan"] = json.loads(dry.stdout)
         except json.JSONDecodeError:
             pass
+
+    live = subprocess.run(
+        [
+            llmx_bin,
+            "probe",
+            "--provider",
+            "anthropic",
+            "--model",
+            "claude-opus-4-8",
+            "--timeout",
+            "120",
+            "--cache-ttl",
+            "900",
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=150,
+    )
+    live_payload: dict = {}
+    try:
+        parsed_live = json.loads(live.stdout)
+        if isinstance(parsed_live, dict):
+            live_payload = parsed_live
+    except json.JSONDecodeError:
+        pass
+    checks["live_subscription_entitlement"] = {
+        "ok": live.returncode == 0 and live_payload.get("verdict") == "available",
+        "exit_code": live.returncode,
+        "verdict": live_payload.get("verdict", "unparseable"),
+        "cached": live_payload.get("cached"),
+        "checked_at": live_payload.get("checked_at"),
+        "expires_at": live_payload.get("expires_at"),
+        "error_type": live_payload.get("error_type"),
+        "status_code": live_payload.get("status_code"),
+        "stderr": (live.stderr or "").strip()[:400],
+    }
 
     out = Path(".model-review/preflight-latest.json")
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -3174,7 +3211,10 @@ def main() -> int:
     parser.add_argument(
         "--preflight",
         action="store_true",
-        help="Probe llmx import/info/subscription dry-run and exit (no review dispatch).",
+        help=(
+            "Probe llmx import/routing plus one cached live subscription entitlement "
+            "call and exit (no review dispatch)."
+        ),
     )
     parser.add_argument(
         "--scout",

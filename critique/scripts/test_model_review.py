@@ -1414,6 +1414,81 @@ class DispatchBudgetTest(unittest.TestCase):
             self.assertEqual(receipt["axes"]["gaps"]["status"], "skipped_budget")
 
 
+class PreflightTest(unittest.TestCase):
+    @staticmethod
+    def _completed(args: list[str], *, exit_code: int, stdout: str) -> object:
+        import subprocess
+
+        return subprocess.CompletedProcess(args, exit_code, stdout=stdout, stderr="")
+
+    def _run_preflight(self, probe_payload: dict, *, probe_exit: int) -> tuple[int, dict]:
+        import subprocess
+
+        def fake_run(args, **_kwargs):
+            if args[1:3] == ["info", "--json"]:
+                return self._completed(args, exit_code=0, stdout='{"cli_providers": {}}')
+            if args[1:3] == ["chat", "--dry-run"]:
+                return self._completed(
+                    args,
+                    exit_code=0,
+                    stdout='{"auth": "subscription", "transport": "claude-cli"}',
+                )
+            if args[1] == "probe":
+                return self._completed(
+                    args,
+                    exit_code=probe_exit,
+                    stdout=json.dumps(probe_payload),
+                )
+            raise AssertionError(f"unexpected preflight subprocess: {args}")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            old_cwd = Path.cwd()
+            os.chdir(temp_dir)
+            try:
+                with (
+                    patch("shutil.which", return_value="/usr/bin/llmx"),
+                    patch.object(subprocess, "run", side_effect=fake_run),
+                ):
+                    return_code = model_review.run_preflight()
+                payload = json.loads(
+                    (Path(temp_dir) / ".model-review/preflight-latest.json").read_text()
+                )
+            finally:
+                os.chdir(old_cwd)
+        return return_code, payload
+
+    def test_dry_run_green_does_not_hide_live_quota_failure(self) -> None:
+        return_code, payload = self._run_preflight(
+            {
+                "verdict": "unavailable",
+                "cached": False,
+                "error_type": "quota_exhausted",
+                "status_code": 429,
+            },
+            probe_exit=6,
+        )
+        self.assertEqual(return_code, 1)
+        self.assertTrue(payload["dry_run_subscription"]["ok"])
+        self.assertFalse(payload["live_subscription_entitlement"]["ok"])
+        self.assertEqual(payload["live_subscription_entitlement"]["exit_code"], 6)
+
+    def test_live_available_is_required_for_green_preflight(self) -> None:
+        return_code, payload = self._run_preflight(
+            {
+                "verdict": "available",
+                "cached": True,
+                "checked_at": "2026-07-10T17:36:35+00:00",
+                "expires_at": "2026-07-10T17:51:35+00:00",
+                "error_type": None,
+                "status_code": 0,
+            },
+            probe_exit=0,
+        )
+        self.assertEqual(return_code, 0)
+        self.assertTrue(payload["live_subscription_entitlement"]["ok"])
+        self.assertTrue(payload["live_subscription_entitlement"]["cached"])
+
+
 class VerifyClaimsAnchorResolutionTest(unittest.TestCase):
     """Regression: a finding citing a leading-slash / absolute path must not crash
     the --verify pass. Python 3.13's Path.rglob raises
