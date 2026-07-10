@@ -8,6 +8,12 @@
 
 > **Claude policy:** NEVER `anthropic-direct`/API by default. Use `--subscription` (claude-cli transport) unless the user explicitly requests metered API billing.
 
+Interaction mode is independent from billing and from the legacy lite profile:
+
+- `--mode chat`: isolated cwd, no native tools.
+- `--mode agent`: caller cwd, project instructions, native CLI tools, headless approvals.
+- `--lite research`: isolated research-MCP-only profile; not workspace agent mode.
+
 ### CLI Backends
 
 ```bash
