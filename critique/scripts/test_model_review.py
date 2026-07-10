@@ -427,7 +427,7 @@ class AxisResolutionTest(unittest.TestCase):
     def test_non_gpt_axis_sets_are_rejected(self) -> None:
         # arch/domain/alternatives are the Gemini-backed axes (mechanical is now
         # GPT-backed, gpt-5.6-luna @ low effort).
-        with self.assertRaisesRegex(ValueError, "GPT-backed axis"):
+        with self.assertRaisesRegex(ValueError, "--allow-non-gpt"):
             model_review.resolve_axes("arch,domain,alternatives")
 
     def test_internal_non_gpt_axis_sets_can_opt_in(self) -> None:
@@ -803,6 +803,17 @@ class ExtractionCoverageTest(unittest.TestCase):
 
 
 class ModelReviewMainTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self._premise_scout_guard = patch.object(
+            model_review,
+            "run_premise_scout",
+            side_effect=AssertionError(
+                "ModelReviewMainTest must never launch a live premise scout"
+            ),
+        )
+        self.mock_run_premise_scout = self._premise_scout_guard.start()
+        self.addCleanup(self._premise_scout_guard.stop)
+
     def test_main_accepts_explicit_extract_flag(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_dir = Path(temp_dir)
@@ -858,6 +869,9 @@ class ModelReviewMainTest(unittest.TestCase):
                             "explicit-extract",
                             "--project",
                             str(project_dir),
+                            "--axes",
+                            "formal",
+                            "--no-scout",
                             "--extract",
                         ],
                     ),
@@ -868,6 +882,7 @@ class ModelReviewMainTest(unittest.TestCase):
 
             self.assertEqual(rc, 0)
             mock_extract.assert_called_once()
+            self.mock_run_premise_scout.assert_not_called()
 
     def test_main_extracts_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -924,6 +939,9 @@ class ModelReviewMainTest(unittest.TestCase):
                             "default-extract",
                             "--project",
                             str(project_dir),
+                            "--axes",
+                            "formal",
+                            "--no-scout",
                         ],
                     ),
                 ):
@@ -979,6 +997,9 @@ class ModelReviewMainTest(unittest.TestCase):
                             "empty-axis",
                             "--project",
                             str(project_dir),
+                            "--axes",
+                            "formal",
+                            "--no-scout",
                         ],
                     ),
                 ):
@@ -1007,6 +1028,7 @@ class ModelReviewMainTest(unittest.TestCase):
                         "invalid",
                         "--project",
                         str(project_dir),
+                        "--no-scout",
                         "--verify",
                         "--no-extract",
                     ],
@@ -1039,6 +1061,7 @@ class ModelReviewMainTest(unittest.TestCase):
                         str(project_dir),
                         "--axes",
                         "arch,domain,alternatives",
+                        "--no-scout",
                     ],
                 ):
                     rc = model_review.main()
@@ -1071,6 +1094,7 @@ class ModelReviewMainTest(unittest.TestCase):
                         str(project_dir),
                         "--questions",
                         str(questions_path),
+                        "--no-scout",
                     ],
                 ):
                     rc = model_review.main()
