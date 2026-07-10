@@ -46,6 +46,7 @@ RESOLVED_RATE_MIN = 0.80      # advisory
 ARXIV_ONLY_RATIO_MAX = 0.60   # advisory
 
 CROSSREF = "https://api.crossref.org/works/{doi}?mailto=" + urllib.parse.quote(MAILTO)
+DOI_ORG = "https://doi.org/{doi}"  # universal content-negotiation resolver (all registrants)
 ARXIV = "http://export.arxiv.org/api/query?id_list={aid}"
 DBLP = "https://dblp.org/search/publ/api?format=json&h=3&q={q}"
 
@@ -104,6 +105,24 @@ class Cite:
     note: str = ""
 
 
+def _doi_exists_via_content_negotiation(doi: str) -> bool | None:
+    """Universal DOI resolver (doi.org content negotiation) — covers every
+    registrant (Crossref, DataCite/Zenodo/figshare/Dryad, mEDRA...), keyless.
+    Returns True if registered, False if a definitive 404, None if unreachable.
+    Crossref alone 404s on DataCite DOIs and mislabels them 'hallucinated'."""
+    url = DOI_ORG.format(doi=urllib.parse.quote(doi, safe="/"))
+    try:
+        req = urllib.request.Request(
+            url, headers={"User-Agent": UA, "Accept": "application/vnd.citationstyles.csl+json"}
+        )
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            return r.status < 400
+    except urllib.error.HTTPError as e:
+        return False if e.code == 404 else None
+    except Exception:  # noqa: BLE001 — URLError, timeout, socket, etc.
+        return None
+
+
 def resolve_doi(doi: str) -> Cite:
     c = Cite(kind="doi", raw=doi)
     try:
@@ -112,6 +131,16 @@ def resolve_doi(doi: str) -> Cite:
         c.status, c.note = "unreachable", str(e)
         return c
     if not body:
+        # Crossref 404 — could be a DataCite DOI (Zenodo/figshare/Dryad) Crossref
+        # doesn't index. Confirm non-existence with the universal resolver before
+        # declaring it hallucinated (fixes the June-Kim Zenodo false-positive).
+        exists = _doi_exists_via_content_negotiation(doi)
+        if exists is True:
+            c.status, c.venue, c.note = "resolved", "DataCite/non-Crossref", "resolved via doi.org (not Crossref-indexed)"
+            return c
+        if exists is None:
+            c.status, c.note = "unreachable", "crossref 404; doi.org resolver unreachable"
+            return c
         c.status = "hallucinated"
         return c
     msg = json.loads(body).get("message", {})
