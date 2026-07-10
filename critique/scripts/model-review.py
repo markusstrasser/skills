@@ -1275,7 +1275,9 @@ def resolve_axes(raw_axes: str, *, allow_non_gpt: bool = False) -> list[str]:
 
     if not allow_non_gpt and not any(axis_uses_gpt(axis_name) for axis_name in axis_names):
         raise ValueError(
-            "review requires at least one GPT-backed axis; add `formal` or use `standard`, `deep`, or `full`"
+            "review requires at least one GPT-backed axis by default; add `formal`, use "
+            "`standard`/`deep`/`full`, or pass `--allow-non-gpt` for an explicit "
+            "specialized review"
         )
     return axis_names
 
@@ -3138,7 +3140,14 @@ def main() -> int:
         help="Comma-separated axes or preset (standard, cross2, deep). "
         "Omit to take preset/axes from --dispatch-manifest.",
     )
-    parser.add_argument("--allow-non-gpt", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--allow-non-gpt",
+        action="store_true",
+        help=(
+            "allow an explicit specialized axis set with no GPT-backed cosigner; "
+            "the default still requires at least one GPT axis"
+        ),
+    )
     parser.add_argument(
         "--extract",
         action=argparse.BooleanOptionalAction,
