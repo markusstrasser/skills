@@ -41,7 +41,7 @@ Exists but **not recommended**. Silent model switching masks failures. If you as
 ## Cost / Usage Diagnostics
 
 - Every API-transport call appends one record to `~/.claude/llmx-usage.jsonl` (model, effort, prompt/completion/reasoning/cached tokens, latency, caller). CLI-transport calls have null tokens. Use `jq` for ad-hoc cost rollups. Override path with `LLMX_USAGE_LOG=`.
-- llmx is editable-installed (`uv tool install --editable`) — source changes in `~/Projects/llmx/` propagate to the `llmx` command instantly, no reinstall.
+- llmx is editable-installed (`uv tool install --editable`) — source changes in `~/Projects/llmx/` propagate to the command instantly. The installed distribution metadata does **not** update with each commit, and uv may reuse an older editable build even with `--force`. When `llmx --version` must attest the current source revision, refresh it with `uv tool install --editable --force --reinstall --no-cache ~/Projects/llmx`, then verify the reported commit suffix against `git -C ~/Projects/llmx rev-parse --short HEAD`.
 
 ## Python Error Handling Pattern
 
