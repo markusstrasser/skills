@@ -148,6 +148,29 @@ If a memo on the same topic was written in the last 24 hours, read it first. If 
 
 This prevents the dominant waste pattern: re-running full inventory + external search for a question that was answered hours ago.
 
+### Gap and novelty audits: mechanism-consumer completeness
+
+For “what have we not researched/mined yet?”, “what is missing?”, or “why did the scout miss this?”,
+do not treat a keyword, paper title, lever name, or broad backlog row as coverage. Build a compact
+coverage matrix across the requested surfaces (for example architecture, objective, loss,
+optimization, interpretability, data, ontology, and language) and grade each direction as
+`DONE`, `QUEUE`, `FAILED`, `CONDITIONAL`, or `GAP` from live evidence.
+
+A cell counts as covered only when all five are identifiable:
+
+1. input/output contract, including uncertainty or abstention states;
+2. mechanism or state transition, not merely a topic/name;
+3. live consumer and repository destination;
+4. cheapest discriminating gate plus held-out principal metric; and
+5. relation to prior work: consumes, supersedes, failed-at, or reopens-if.
+
+If a named local direction lacks one of these, classify it as an underspecified queue/gap and search
+using the missing **mechanism language** (“partial AST realizability”, “ontology revision after empty
+version space”, “multiple-hypothesis data association”), not only the repo's nouns. Every genuine
+gap must be routed to an existing consumer or a new dependent obligation; “interesting” without a
+consumer is not a finding. In the closeout, state why the previous discovery process missed each
+survivor and make the smallest durable process repair that would have surfaced the whole class.
+
 ## Phase 1 — Ground Truth
 
 Before external search, check what exists locally:
