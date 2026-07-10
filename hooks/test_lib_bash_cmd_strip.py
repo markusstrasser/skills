@@ -64,12 +64,27 @@ def main():
     check("681a068 pipe-masked commit survives strip_heredocs",
           lib.strip_heredocs(masked) == masked)
 
-    # Single-source guard: both sidecars must use THESE function objects
+    # Single-source guard: all consumers must use THESE function objects
     check("loop-guard imports lib strippers",
           loop_guard.strip_heredocs is lib.strip_heredocs
           and loop_guard.strip_quoted is lib.strip_quoted)
     check("no-background-commit imports lib stripper",
           no_bg_commit.strip_heredocs is lib.strip_heredocs)
+    # 3rd consumer (2026-07-10): cursor_shell_guards — was a private _strip_heredocs copy
+    import importlib.util
+    from pathlib import Path as _P
+    _cs = importlib.util.spec_from_file_location(
+        "cursor_shell_guards_test", _P(__file__).parent / "cursor_shell_guards.py")
+    _cm = importlib.util.module_from_spec(_cs)
+    assert _cs.loader is not None
+    _cs.loader.exec_module(_cm)
+    check("cursor_shell_guards binds lib strip_heredocs",
+          getattr(_cm.strip_heredocs, "__module__", "") == "lib_bash_cmd_strip"
+          or _cm.strip_heredocs.__code__.co_filename.endswith("lib_bash_cmd_strip.py"))
+    # behavioral: heredoc body with do/then must not trip multiline loop
+    edn = "uv run python3 - <<'EOF'\n:task (do\nthen more\nEOF\necho ok"
+    check("cursor multiline_loop ignores heredoc do/then",
+          not _cm._multiline_loop(edn))
 
     fails = sum(1 for _, ok in CHECKS if not ok)
     print(f"{len(CHECKS) - fails}/{len(CHECKS)} passed")
