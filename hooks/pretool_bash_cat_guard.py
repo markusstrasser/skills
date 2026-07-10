@@ -40,6 +40,8 @@ def main() -> None:
         for tok in span.split():
             if tok.startswith("-") or tok in ("<<", "<<<"):
                 continue
+            if ">" in tok or "<" in tok:
+                continue  # redirection (2>/dev/null, <file) — not a cat argument
             if any(c in tok for c in "$`*?[]{}~"):
                 continue  # not a literal path — never guess
             tok = tok.strip("\"'")
