@@ -40,7 +40,7 @@ FIX_CMD = (
     "uv run python3 ~/Projects/skills/critique/scripts/model-review.py "
     "--dispatch-manifest .model-review/dispatch.json "
     "--context .model-review/plan-close-context.md --project . "
-    "\"Review plan closeout.\""
+    "--question \"Review plan closeout.\""
 )
 
 

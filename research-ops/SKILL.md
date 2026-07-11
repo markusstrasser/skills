@@ -143,7 +143,7 @@ Run when you're at the desk (`/loop /research-ops cycle` in an open session, or 
 uv run python3 ~/Projects/skills/critique/scripts/model-review.py \
   --context /tmp/cycle-plan.md --topic "research-cycle-{N}" \
   --axes standard --project "$(pwd)" \
-  "Review for wrong assumptions, missing steps, anything that breaks existing functionality"
+  --question "Review for wrong assumptions, missing steps, anything that breaks existing functionality"
 ```
 Route `--axes` by stakes (standard / deep / full). On failure, classify before retrying (auth→retry, rate-limit→other model, timeout→shrink context); never blind-retry the same model.
 

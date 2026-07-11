@@ -18,7 +18,7 @@
 3. **Per subpart**, dispatch from triage:
    ```bash
    model-review.py --dispatch-manifest .model-review/dispatch.json \
-     --context packet.md --topic "..." "Review"
+     --context packet.md --topic "..." --question "Review"
    ```
    CLI flags override manifest fields when explicitly passed.
    - Optional: `--cross-talk` on cross2/cross4 — structure lenses first, inject
@@ -47,7 +47,7 @@ as `budget_exhausted`). When set: skip axis/extract if `remaining < profile.time
 `dispatch.json` includes `schema_version: dispatch.v1`. Triage exits **1** on blockers.
 
 ```bash
-model-review.py --budget-seconds 480 --context plan.md --topic "gateway" --axes standard,formal "Review"
+model-review.py --budget-seconds 480 --context plan.md --topic "gateway" --axes standard,formal --question "Review"
 ```
 
 After review: `review_gate.py rank` → `orchestrator-top.json` + `anchor-contradictions.json`
@@ -71,7 +71,7 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --topic "$TOPIC" \
   --project "$(pwd)" \
   --extract \
-  "What's wrong with this [thing being reviewed]"
+  --question "What's wrong with this [thing being reviewed]"
 ```
 
 Use `--verify` when the review is a plan-close packet or when you want the script
@@ -86,7 +86,7 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --context .model-review/plan-close-context.md \
   --topic "$TOPIC" \
   --project "$(pwd)" \
-  "Review this plan closeout"
+  --question "Review this plan closeout"
 ```
 
 No `--budget-seconds` unless the session is time-boxed (no wall-clock limit by default).
@@ -96,12 +96,13 @@ Other useful forms:
 ```bash
 # Deep review with per-axis overrides
 uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
-  --context-files docs/plan.md scripts/finding_ir.py:86-110 \
+  --context-file docs/plan.md \
+  --context-file scripts/finding_ir.py:86-110 \
   --topic "$TOPIC" \
   --axes arch,formal,domain,mechanical \
   --questions questions.json \
   --extract \
-  "Review this plan"
+  --question "Review this plan"
 ```
 
 ## Contract Boundaries
@@ -134,7 +135,7 @@ The script writes these artifacts:
 
 ## Context Assembly
 
-`--context-files` accepts file specs of the form `path/file.py`,
+Repeat `--context-file` for specs of the form `path/file.py`,
 `path/file.py:100-150`, or `path/file.py:100`.
 
 For plan-close review packets, prefer:
