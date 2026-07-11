@@ -7,6 +7,12 @@ dependencies = [
     "requests>=2.31",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=8.4",
+    "ruff>=0.14",
+]
+
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
