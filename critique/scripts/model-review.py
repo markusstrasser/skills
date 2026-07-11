@@ -6,16 +6,16 @@ Agent provides context + topic + question; script handles plumbing; agent reads 
 
 Usage:
     # Standard review (2 queries: arch + formal)
-    model-review.py --context plan.md --topic "hook architecture" "Review for gaps"
+    model-review.py --context plan.md --topic "hook architecture" --question "Review for gaps"
 
     # Deep review (4 queries: arch + formal + domain + mechanical)
-    model-review.py --context plan.md --topic "classification logic" --axes arch,formal,domain,mechanical "Review this"
+    model-review.py --context plan.md --topic "classification logic" --axes arch,formal,domain,mechanical --question "Review this"
 
     # With project dir for goals/governance doc discovery (docs/GOALS.md)
-    model-review.py --context plan.md --topic "data wiring" --project ~/Projects/intel "Review this plan"
+    model-review.py --context plan.md --topic "data wiring" --project ~/Projects/intel --question "Review this plan"
 
     # Default: premise scout (cursor-agent, repo workspace) then standard axes
-    model-review.py --context plan.md --topic "gateway outbox" --fork "callers exist" --axes standard "Review"
+    model-review.py --context plan.md --topic "gateway outbox" --fork "callers exist" --axes standard --question "Review"
 """
 
 from __future__ import annotations
@@ -1333,7 +1333,7 @@ def _rewrite_underspecified_prompt(question: str, topic: str) -> str:
     if not (too_short or is_verb):
         return question
     print(
-        f"warning: positional prompt {q!r} looks like slash-command leakage; "
+        f"warning: review question {q!r} looks like slash-command leakage; "
         f"substituting a structured adversarial template. Pass a concrete "
         f"review question to silence this.",
         file=sys.stderr,
@@ -1655,10 +1655,10 @@ def build_context(
 
     Context sources (additive, both may be supplied; at least one required):
       1. --context FILE — pre-assembled context file (high priority, narrative)
-      2. --context-files spec1 spec2 ... — file:range excerpts (lower priority, auxiliary)
+      2. repeated --context-file SPEC — file:range excerpts (lower priority, auxiliary)
 
     When both are supplied, --context becomes the "Provided Context" section and
-    --context-files become an additional "Context Files" section. Mutex relaxed 2026-05-07.
+    --context-file values become an additional "Context Files" section. Mutex relaxed 2026-05-07.
     """
     preamble_blocks, _ = build_review_preamble_blocks(project_dir, charter_anchor=charter_anchor)
     packet_sections = [PacketSection("Preamble", preamble_blocks)]
@@ -3147,16 +3147,18 @@ def main() -> int:
         epilog=f"Presets: {', '.join(PRESETS.keys())}. Axes: {', '.join(AXES.keys())}.",
     )
     # Context flags are additive (2026-05-07): --context provides a primary pre-assembled
-    # narrative; --context-files appends auxiliary file excerpts. Either or both may be
+    # narrative; repeated --context-file appends auxiliary excerpts. Either or both may be
     # used; at least one is required.
     parser.add_argument(
         "--context", type=Path, help="Primary pre-assembled context file (narrative)"
     )
     parser.add_argument(
-        "--context-files",
-        nargs="+",
+        "--context-file",
+        action="append",
+        dest="context_files",
+        default=[],
         metavar="FILE_SPEC",
-        help="Auxiliary file:range specs (e.g., plan.md scripts/ir.py:86-110). Additive with --context.",
+        help="Repeatable auxiliary file:range spec (e.g., --context-file plan.md). Additive with --context.",
     )
     parser.add_argument(
         "--topic",
@@ -3221,7 +3223,7 @@ def main() -> int:
     parser.add_argument(
         "--questions",
         type=Path,
-        help="JSON file mapping axis names to custom questions (overrides positional question per-axis)",
+        help="JSON file mapping axis names to custom questions (overrides --question per-axis)",
     )
     parser.add_argument(
         "--preflight",
@@ -3276,8 +3278,7 @@ def main() -> int:
         ),
     )
     parser.add_argument(
-        "question",
-        nargs="?",
+        "--question",
         default="Review this for logical gaps, missed edge cases, and principles alignment.",
         help="Review question for all models",
     )
@@ -3311,10 +3312,10 @@ def main() -> int:
                 file=sys.stderr,
             )
 
-    # At least one of --context / --context-files must be provided (mutex relaxed 2026-05-07)
+    # At least one of --context / --context-file must be provided (mutex relaxed 2026-05-07)
     if not args.context and not args.context_files:
         print(
-            "error: at least one of --context or --context-files is required",
+            "error: at least one of --context or --context-file is required",
             file=sys.stderr,
         )
         return 1

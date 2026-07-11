@@ -75,7 +75,7 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --topic "$TOPIC" \
   --project "$(pwd)" \
   --extract \
-  "$QUESTION"
+  --question "$QUESTION"
 ```
 
 Set the outer tool timeout above the longest selected profile: `660000` ms for standard axes,
@@ -86,8 +86,8 @@ and derives its internal collection wait from those profiles.
 
 - `--extract` — Auto-extract claims via cross-family models, merge into `disposition.md`, and emit `coverage.json`. Add to all standard/deep/full reviews.
 - `--verify` — After extraction, verify cited files/symbols exist. Implies `--extract`.
-- `--questions FILE` — JSON mapping axis names to custom questions. Unmapped axes use positional question.
-- `--context-files spec1 spec2` — Auto-assemble from `file.py`, `file.py:100-150`, `file.py:100` specs.
+- `--questions FILE` — JSON mapping axis names to custom questions. Unmapped axes use `--question`.
+- `--context-file SPEC` — Repeat to assemble `file.py`, `file.py:100-150`, or `file.py:100` excerpts.
 - `--axes NAME` — Preset name or comma-separated axes.
 
 ### Model Selection Contract

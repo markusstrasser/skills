@@ -160,7 +160,7 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --context .model-review/subpart-1-context.md \
   --topic "$TOPIC — subpart 1: gateway outbox" \
   --project "$(pwd)" \
-  "Adversarial review of THIS subpart only. Do not speculate about files not in context."
+  --question "Adversarial review of THIS subpart only. Do not speculate about files not in context."
 ```
 
 Repeat for subpart 2…N. **Synthesize across subparts** in the orchestrating session (you merge;
@@ -214,12 +214,12 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --topic "$TOPIC" \
   --project "$(pwd)" \
   --extract \
-  "$ARGUMENTS"
+  --question "$ARGUMENTS"
 ```
 
 Set the outer tool timeout above the longest selected profile: `660000` ms for standard axes,
 `1230000` ms with Grok, or `3630000` ms with Opus Max. The executor derives its own wait from
-the selected profiles. See `references/dispatch.md` for `--questions`, `--context-files`, depth
+the selected profiles. See `references/dispatch.md` for `--questions`, `--context-file`, depth
 presets, effort levels, and troubleshooting.
 
 **Dispatch policy (manifest-first):** `review_gate triage` writes `dispatch_policy` into `dispatch.json` (scout, context_scope, budget). Pass `--dispatch-manifest` to `model-review.py`; explicit CLI flags still win.
@@ -414,7 +414,7 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --dispatch-manifest .model-review/dispatch.json \
   --context .model-review/plan-close-context.md \
   --topic "$TOPIC" --project "$(pwd)" \
-  "Review plan closeout — design layer only."
+  --question "Review plan closeout — design layer only."
 ```
 Triage sets `extract`/`verify` on the manifest; no need to pass those flags unless overriding.
 The packet manifest's `review_targets` names `diff_target` (code-review) vs `design_target`
@@ -437,7 +437,7 @@ INCONCLUSIVE rows with `resolved_deterministic: true` are deprioritized.
 Optional on cross2 subparts: add `--cross-talk` to `model-review.py` — structure pass first,
 mechanism pass gets `structural-assumptions.json` injection.
 
-**Never pass `"close"` (or `"review"`, `"verify"`, bare verbs) as the positional prompt.** The script now detects these as slash-command leakage and substitutes a structured adversarial template (with a stderr warning), but a concrete question tailored to the plan — e.g., `"Find bugs in the new signal-merging logic introduced by $(git log -1 --format=%h); focus on boundary conditions and silent semantic failures"` — produces sharper output than the generic substitute.
+**Never pass `--question "close"` (or `"review"`, `"verify"`, bare verbs).** The script detects these as slash-command leakage and substitutes a structured adversarial template (with a stderr warning), but a concrete question tailored to the plan — e.g., `--question "Find bugs in the new signal-merging logic introduced by $(git log -1 --format=%h); focus on boundary conditions and silent semantic failures"` — produces sharper output than the generic substitute.
 
 **Phase 3: The Caught-Red-Handed Loop** — For each confirmed finding: would any Phase 1 tests have caught this? If yes, fix the test gap. If no, write a new test. Verify against pre-fix code:
 ```bash

@@ -824,6 +824,45 @@ class ModelReviewMainTest(unittest.TestCase):
         self.mock_run_premise_scout = self._premise_scout_guard.start()
         self.addCleanup(self._premise_scout_guard.stop)
 
+    def test_cli_uses_named_question_and_repeatable_context_files(self) -> None:
+        with (
+            patch.object(model_review, "run_preflight", return_value=0) as mock_preflight,
+            patch.object(
+                model_review.sys,
+                "argv",
+                [
+                    "model-review.py",
+                    "--preflight",
+                    "--context-file",
+                    "plan.md",
+                    "--context-file",
+                    "scripts/worker.py:10-20",
+                    "--question",
+                    "Review the worker boundary",
+                ],
+            ),
+        ):
+            self.assertEqual(model_review.main(), 0)
+        mock_preflight.assert_called_once_with()
+
+    def test_cli_rejects_removed_greedy_context_files_flag(self) -> None:
+        with (
+            patch.object(
+                model_review.sys,
+                "argv",
+                [
+                    "model-review.py",
+                    "--preflight",
+                    "--context-files",
+                    "plan.md",
+                    "Review text that must not become a path",
+                ],
+            ),
+            self.assertRaises(SystemExit) as raised,
+        ):
+            model_review.main()
+        self.assertEqual(raised.exception.code, 2)
+
     def test_main_accepts_explicit_extract_flag(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_dir = Path(temp_dir)
