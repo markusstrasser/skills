@@ -106,3 +106,5 @@ codex exec --full-auto -c model_reasoning_effort=medium \
 - SKILL.md → **Dispatch Economics** (which executor tier for which work-shape; the verifier rule).
 - `research-ops` skill (parallel research-dispatch orchestration).
 - `llmx-guide` skill (the llmx transport, for tool-less subscription dispatch).
+
+- **Arm a Monitor on the output log for every `codex exec` nohup dispatch** — codex is not harness-tracked; a finished/dead run is silent otherwise (2026-07-11 arc-agi: DAG build sat done for hours unnoticed; its first launch died on `-c model=` unsupported and only a log-read caught it. Effort-only overrides on ChatGPT-plan codex).
