@@ -29,6 +29,7 @@ import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from typing import NamedTuple
@@ -1698,10 +1699,14 @@ def build_context(
         file_blocks = []
         for spec_text in context_file_specs:
             spec = parse_file_spec(spec_text.strip())
+            if not spec.path.is_absolute():
+                spec = replace(spec, path=project_dir / spec.path)
             excerpt, truncated, omission_reason = read_file_excerpt(spec, max_chars=None)
-            metadata: dict[str, object] = {}
             if omission_reason:
-                metadata["omission_reason"] = omission_reason
+                raise ValueError(
+                    f"declared context file {spec.display_path!r} could not be loaded: "
+                    f"{omission_reason}"
+                )
             file_blocks.append(
                 FileBlock(
                     spec.display_path,
@@ -1712,7 +1717,7 @@ def build_context(
                     min_chars=1_000,
                     truncated=truncated,
                     truncation_reason="file_range_excerpt" if truncated else None,
-                    metadata=metadata,
+                    metadata={"path": spec.display_path},
                 )
             )
         packet_sections.append(PacketSection("Context Files", file_blocks))
@@ -1763,6 +1768,16 @@ def build_context(
         axis: ContextArtifact(content_path=content_path, manifest_path=manifest_path)
         for axis in axis_names
     }
+
+
+def create_review_dir(project_dir: Path, topic: str) -> Path:
+    """Create review artifacts under the target project, never the caller's CWD."""
+
+    slug = slugify(topic)
+    hex_id = os.urandom(3).hex()
+    review_dir = project_dir / ".model-review" / f"{date.today().isoformat()}-{slug}-{hex_id}"
+    review_dir.mkdir(parents=True, exist_ok=True)
+    return review_dir
 
 
 def dispatch(
@@ -3288,10 +3303,16 @@ def main() -> int:
     if args.preflight:
         return run_preflight()
 
-    project_dir = args.project or Path.cwd()
+    project_dir = (args.project or Path.cwd()).expanduser().resolve()
     if not project_dir.is_dir():
         print(f"error: project dir {project_dir} not found", file=sys.stderr)
         return 1
+
+    if args.context is not None:
+        context_path = args.context.expanduser()
+        if not context_path.is_absolute():
+            context_path = project_dir / context_path
+        args.context = context_path
 
     dispatch_manifest_default = project_dir / ".model-review" / "dispatch.json"
     if args.dispatch_manifest is None and dispatch_manifest_default.is_file():
@@ -3373,11 +3394,8 @@ def main() -> int:
 
     args.question = _rewrite_underspecified_prompt(args.question, args.topic)
 
-    # Create output directory (scout writes here before context assembly)
-    slug = slugify(args.topic)
-    hex_id = os.urandom(3).hex()
-    review_dir = Path(f".model-review/{date.today().isoformat()}-{slug}-{hex_id}")
-    review_dir.mkdir(parents=True, exist_ok=True)
+    # Scout and review artifacts belong to the target project, not the tool caller's CWD.
+    review_dir = create_review_dir(project_dir, args.topic)
 
     budget = DispatchBudget.from_seconds(args.budget_seconds)
     if budget.active:
@@ -3443,20 +3461,24 @@ def main() -> int:
     # must not consume dispatch budget or axes falsely skip as budget_exhausted.
     budget = DispatchBudget.from_seconds(args.budget_seconds)
 
+    # Assemble context
+    try:
+        ctx_files = build_context(
+            review_dir,
+            project_dir,
+            args.context,
+            axis_names,
+            context_file_specs=args.context_files,
+            premise_scout_path=premise_scout_path,
+            charter_anchor=args.charter_anchor,
+        )
+    except (OSError, ValueError) as error:
+        print(f"error: context assembly failed: {error}", file=sys.stderr)
+        return 1
+
     print(
         f"Dispatching {len(axis_names)} queries: {', '.join(axis_names)}",
         file=sys.stderr,
-    )
-
-    # Assemble context
-    ctx_files = build_context(
-        review_dir,
-        project_dir,
-        args.context,
-        axis_names,
-        context_file_specs=args.context_files,
-        premise_scout_path=premise_scout_path,
-        charter_anchor=args.charter_anchor,
     )
 
     # charter_anchor=False (default) → blind-adversarial: do NOT frame the per-axis
