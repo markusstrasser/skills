@@ -80,7 +80,16 @@ class MultiAgentCommitGuardTests(unittest.TestCase):
                 fake_bin=fake_bin,
             )
             self.assertEqual(main_commit.returncode, 2)
-            self.assertIn("main repo (not a worktree)", main_commit.stdout)
+            main_reason = json.loads(main_commit.stdout)["reason"]
+            self.assertIn(
+                "global Claude process count: 2 (not scoped to this repository)",
+                main_reason,
+            )
+            self.assertIn(
+                "Git target classification: shared/main checkout (not a linked worktree)",
+                main_reason,
+            )
+            self.assertNotIn("claude processes active in main repo", main_reason)
 
             main_patch_add = _run_guard(
                 f"git -C {repo} add -p tracked.txt",
@@ -89,6 +98,8 @@ class MultiAgentCommitGuardTests(unittest.TestCase):
                 fake_bin=fake_bin,
             )
             self.assertEqual(main_patch_add.returncode, 2)
+            git_c_reason = json.loads(main_patch_add.stdout)["reason"]
+            self.assertIn("Git target classification: shared/main checkout", git_c_reason)
 
             worktree_patch_add = _run_guard(
                 f"git -C {worktree} add -p tracked.txt",
