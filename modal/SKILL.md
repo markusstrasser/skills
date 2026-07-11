@@ -320,6 +320,8 @@ When account spend hits the limit, ALL running containers die instantly — no g
 
 Evidence: SBayesRC 80GB×200 parallel containers couldn't schedule. Pangenie 192GB preempted 3+ times across 3 days. Budget limit killed all 3 active apps simultaneously mid-run — 6h of SBayesRC compute, 4h of sven_sv annotation (21.8GB artifact on ephemeral disk), 5h of pangenie genotyping — all lost because ephemeral disk is wiped and the commit-at-step-boundary model saves nothing mid-step (2026-04-13).
 
+**The frozen-workspace TELL (spend-cap disable):** every endpoint returns 404 with a "workspace disabled" body, `modal app list` renders an EMPTY table, and deploys/API calls fail — indistinguishable from a slow cold boot to a naive HTTP poll, so poll loops burn their full timeout on it (2026-07-11 arc-agi: 2700s poll against a capped workspace read as "boot never ready"). Poll loops must check the 404 body for "disabled" and fail fast + distinctly (reference: arc-agi `modal_serve_lib.sh::msl_poll_ready` exit 2). Same-day `billing report` lag (gotcha 23) means the freeze usually arrives BEFORE the dashboard shows the spend that caused it.
+
 ## Progress Survivability
 
 The commit-at-step-boundary model is a trap for long subprocess steps (>30min): a 4h step that
