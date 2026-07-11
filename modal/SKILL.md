@@ -446,6 +446,8 @@ On launch failure, also inspect the subprocess stderr for `ResourceExhausted` / 
 23. **Same-day `modal billing report` lags** -- identical totals hours apart while serves burned in between. Never book same-day $ actuals as final; pull at next-day close (arc-agi `just modal-cost` reads this source).
 24. **GPU-memory-snapshot restore: vendor "5-12s" is the internal `/wake_up` only** -- full trigger→ready for a 27B (sleep level 1, ~51 GiB CPU-side snapshot) measured ~93s (still 5-10x over a compile-cache cold boot). And the vLLM compile cache (volume-mounted `~/.cache/vllm`) is keyed per engine-config hash: changing `max_inputs`/quant/spec = new hash = full recompile (~660-1100s); same-config redeploys ~200-330s.
 
+25. **flashinfer sampler JIT-compiles (ninja) during vLLM warmup -- >18min on a cold container, silently eating any readiness poll.** vLLM 0.24 defaults to the flashinfer top-k/top-p sampler; when the wheel lacks AOT kernels for the GPU arch it ninja-builds them at first sample, so `/health` never comes up inside a 1200s window and teardown SIGINTs mid-compile (arc-agi student-regret probe 2026-07-11 -- looked like a hung serve, was a compiler). Fix: bake `VLLM_USE_FLASHINFER_SAMPLER=0` into the image `.env()` (torch fallback is negligible at small batch). If flashinfer perf ever matters, bake the JIT cache at image-build time on a GPU builder -- never pay a kernel compile inside a readiness window.
+
 (Four former items — ephemeral-disk wipe, PYTHONUNBUFFERED, timeout+50%, commit-doesn't-copy — moved up into the Progress Survivability rules; one fact, one home.)
 
 ### Testing preemption handling
