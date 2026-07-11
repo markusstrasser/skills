@@ -1154,6 +1154,70 @@ class ModelReviewMainTest(unittest.TestCase):
 
 
 class ModelReviewContextBuildTest(unittest.TestCase):
+    def test_relative_context_files_resolve_from_project_not_caller_cwd(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            review_dir = root / "review"
+            review_dir.mkdir()
+            project_dir = root / "project"
+            project_dir.mkdir()
+            (project_dir / "context.txt").write_text("project-owned context")
+            foreign_cwd = root / "foreign"
+            foreign_cwd.mkdir()
+
+            old_cwd = Path.cwd()
+            os.chdir(foreign_cwd)
+            try:
+                ctx_files = model_review.build_context(
+                    review_dir,
+                    project_dir,
+                    context_file=None,
+                    axis_names=["formal"],
+                    context_file_specs=["context.txt"],
+                )
+            finally:
+                os.chdir(old_cwd)
+
+            packet = ctx_files["formal"].content_path.read_text()
+            self.assertIn("project-owned context", packet)
+            self.assertNotIn("read failed", packet)
+
+    def test_declared_missing_context_file_fails_before_dispatch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            review_dir = root / "review"
+            review_dir.mkdir()
+            project_dir = root / "project"
+            project_dir.mkdir()
+
+            with self.assertRaisesRegex(ValueError, "could not be loaded: missing"):
+                model_review.build_context(
+                    review_dir,
+                    project_dir,
+                    context_file=None,
+                    axis_names=["formal"],
+                    context_file_specs=["missing.md"],
+                )
+
+    def test_review_directory_is_owned_by_target_project(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project_dir = root / "project"
+            project_dir.mkdir()
+            foreign_cwd = root / "foreign"
+            foreign_cwd.mkdir()
+
+            old_cwd = Path.cwd()
+            os.chdir(foreign_cwd)
+            try:
+                with patch.object(model_review.os, "urandom", return_value=b"\x01\x02\x03"):
+                    review_dir = model_review.create_review_dir(project_dir, "packet ownership")
+            finally:
+                os.chdir(old_cwd)
+
+            self.assertEqual(review_dir.parent, project_dir / ".model-review")
+            self.assertTrue(review_dir.name.endswith("-packet-ownership-010203"))
+
     def test_build_context_drops_file_specs_when_budget_is_tiny(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
