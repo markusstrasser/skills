@@ -11,22 +11,24 @@ Start from the question, choose the truth surface, then reason about failure mod
 Shared status contract:
 `references/status-reconciliation.md`
 
-## Genomics baseline: Modal 1.5.1, parity required
+## Baseline: Modal 1.5.2, parity required
 
-For `/Users/alien/Projects/genomics`, the current baseline is Modal 1.5.1:
-`pyproject.toml` pins `modal>=1.5.1,<1.6`, `uv.lock` resolves `modal==1.5.1`,
-`modal --version` and `uv run python3 -m modal --version` both report
-`modal client version: 1.5.1`, and
-`uv run python3 scripts/modal_version_parity.py` passes.
+**Shell-global CLI** is a `uv tool` install (`~/.local/bin/modal` →
+`uv tool install 'modal==1.5.2'`). That is what **arc-agi** uses: it does
+**not** pin Modal in `pyproject.toml`; scripts are launched with `modal run`
+(the tool env), and local `import modal` is guarded so project-venv
+`--help` / tests still work.
 
-The old pre-1.5 freeze was superseded. The rule that survived the 1.4/1.5
-split incident is stricter and still current: keep the **shell-global
-`modal` and the project venv on the SAME version**. A `--json` key-schema
-difference across CLI planes silently breaks any poller written against the
-other. In this repo, verify:
+**Genomics** pins the project venv: `pyproject.toml` has
+`modal>=1.5.1,<1.6`, `uv.lock` resolves `modal==1.5.2`, and
+`uv run python3 scripts/modal_version_parity.py` must pass. Bumping the
+global tool without refreshing genomics (or vice versa) reopens C4.
+
+Verify both planes:
 
 ```bash
 modal --version
+# genomics only:
 uv run python3 -m modal --version
 uv run python3 scripts/modal_version_parity.py
 ```
@@ -35,9 +37,28 @@ Modal 1.5.x normalizes CLI JSON keys differently from the old 1.4.x output.
 Consumers should use the repo's normalizer where one exists and should still
 avoid raw `.get("App ID")` / `.get("app_id")` parsing.
 
+## Modal 1.5.2 Features (2026-07-10)
+
+Ops/DX patch — not an architecture power-up. Prefer unfinished **1.5.1**
+adoption (billing → named images) over chasing these.
+
+| Feature | Use when | Do not use for |
+|---|---|---|
+| `modal.Workspace.settings.list()` / `.set()` · `modal workspace settings …` | Read/set workspace-level knobs. As of 1.5.2 the live keys are `default-environment` and `image-builder-version` only (manager/owner). | Budget/spend caps, admission control, or stage readiness — **budget is not exposed here**. |
+| `modal.types` | Type-annotate wrappers around Modal return dataclasses. | Constructing these types in user code (they are API return shapes). |
+| `Function.with_options(..., routing_region=…)` | Invoke-time regional routing. Best fit for **arc-agi** GPU train/farm/serve paths that already use `with_options`. | Substituting for capacity/budget diagnosis; still check spend vs cap first. |
+| `modal container stop --graceful` | Drain: stop fetching new inputs, finish in-flight Function inputs (not cancel+reschedule). Useful for long train steps or served endpoints. | App-wide halt (`modal app stop`); budget kill; Sandbox stop. Graceful is Function/Server containers only. |
+| `modal container logs` includes startup | Debug cold-start / import crash-loops (vLLM serve, detached import failures). | Liveness or completion — still join receipts / `task_count`. |
+| `Workspace.members.list()` role `user` → `member` | Match UI/docs for lowest-privilege role when auditing membership. | Pipeline readiness. Update any code that compared role == `"user"`. |
+| `Sandbox.reload_volumes(timeout=…)` (default 55s) | Blocking reload until volumes are current; raises `modal.exception.TimeoutError` on stall. Narrow win for probe/canary sandboxes. | Stage hot path — that remains `vol.reload()` (still C2/C9; no per-call timeout on Volume.reload). |
+
+**Arc-agi lean-in (optional):** `--graceful` drain, startup logs, `routing_region` on existing `with_options` call sites.
+**Genomics lean-in (optional):** settings only if you need image-builder/default-env automation; Sandbox reload timeout on probe paths. Do not treat settings as budget API.
+
 ## Modal 1.5.1 Features: How Genomics Should Use Them
 
-Verified against `modal changelog --since 1.4.9` on 2026-06-30.
+Verified against `modal changelog --since 1.4.9` on 2026-06-30. Still the
+adoption priority over 1.5.2.
 
 | Feature | Use in genomics | Do not use for |
 |---|---|---|
@@ -417,6 +438,11 @@ On launch failure, also inspect the subprocess stderr for `ResourceExhausted` / 
 17. **Budget kill ≠ preemption** -- preemption triggers `retries`; budget kill SIGKILLs everything with no grace period, no exit handler, no retry. Only committed volume state survives.
 18. **`.map()` containers are invisible until they commit** -- PipelineLogger JSONL writes go to volume but commits happen at trait end. 10 containers running for 6h with 0 commits = 0 visibility into what they're doing. Add explicit `print()` at step transitions for stdout trace.
 19. **Artifact file watchdogs are fooled by retry leftovers** -- if a subprocess times out with a 21GB file on ephemeral disk, the retry's new container starts fresh. If the watchdog runs before the retry subprocess touches the dir, it sees `annotation_mb=21793.4` but that's the OLD file from a DIFFERENT container (Modal cleans `/tmp` between retries... usually). Verify via timestamps, not presence.
+20. **Mutating CLI verbs prompt `[y/N]` and ABORT in non-tty** -- `container stop`, `app stop`, `volume delete`... under nohup/scripts print "no interactive terminal detected" and exit non-zero; an unchecked exit reads as success while NOTHING happened. Scripts: always `-y`/`--yes` AND check the exit code. (2026-07-11 arc-agi: "1s snapshot restores" were the never-stopped container still answering -- the measurement, not just the teardown, was silently wrong.)
+21. **`container stop` is asynchronous** -- returning 0 ≠ container dead. Anything keyed on "stopped" (restore timing, port reuse) must poll `container list` until the ID is gone, and assert the answering container ID CHANGED afterward. Reference implementation: arc-agi `scripts/modal_serve_lib.sh::msl_container_stop_verified`.
+22. **`@app.server` (flash) endpoints live on `*.modal.direct`, not `*.modal.run`** -- and `modal deploy` stdout wraps at terminal width (80 in non-tty), truncating URLs mid-domain. Parse deploy output only with `COLUMNS=300` set, match BOTH domains, or skip parsing: `@modal.web_server` URLs are deterministic (`https://<workspace>--<app>-<fn>.modal.run`).
+23. **Same-day `modal billing report` lags** -- identical totals hours apart while serves burned in between. Never book same-day $ actuals as final; pull at next-day close (arc-agi `just modal-cost` reads this source).
+24. **GPU-memory-snapshot restore: vendor "5-12s" is the internal `/wake_up` only** -- full trigger→ready for a 27B (sleep level 1, ~51 GiB CPU-side snapshot) measured ~93s (still 5-10x over a compile-cache cold boot). And the vLLM compile cache (volume-mounted `~/.cache/vllm`) is keyed per engine-config hash: changing `max_inputs`/quant/spec = new hash = full recompile (~660-1100s); same-config redeploys ~200-330s.
 
 (Four former items — ephemeral-disk wipe, PYTHONUNBUFFERED, timeout+50%, commit-doesn't-copy — moved up into the Progress Survivability rules; one fact, one home.)
 
