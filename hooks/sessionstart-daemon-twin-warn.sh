@@ -57,7 +57,20 @@ for st in "$HOME"/.claude/jobs/*/state.json; do
   if [ -n "$twin" ]; then
     mtime="$(stat -f %m "$twin" 2>/dev/null || echo 0)"
     if [ $((now - mtime)) -lt "$FRESH_S" ]; then
-      warn="${warn}LIVE-TWIN: bg job $short — transcript $twin modified $((now - mtime))s ago (daemon copy still EXECUTING)."$'\n'
+      # Fresh mtime alone misgraded a 244-byte handoff stub as "EXECUTING" (arc-agi
+      # 2026-07-12 00:15 — the stub was created seconds before session start; the
+      # "twin owns the queue" assumption stood 35 min until a reviewer caught it).
+      # Liveness = GROWTH, not recency: sample size twice.
+      size1="$(stat -f %z "$twin" 2>/dev/null || echo 0)"
+      sleep 2
+      size2="$(stat -f %z "$twin" 2>/dev/null || echo 0)"
+      if [ "$size2" -gt "$size1" ]; then
+        warn="${warn}LIVE-TWIN: bg job $short — transcript $twin GROWING (${size1}→${size2}B over 2s; daemon copy still EXECUTING)."$'\n'
+      elif [ "$size2" -lt 4096 ]; then
+        warn="${warn}STUB-TWIN: bg job $short — transcript $twin is a ${size2}B stub, NOT growing — bg-handoff artifact, twin likely DEAD. Verify (recipe below), then ADOPT its queue/orphans; do not assume it owns anything."$'\n'
+      else
+        warn="${warn}IDLE-TWIN: bg job $short — transcript $twin fresh (${size2}B) but not growing over 2s — may be between turns. Verify with the recipe before assuming either way."$'\n'
+      fi
     fi
   fi
 done
