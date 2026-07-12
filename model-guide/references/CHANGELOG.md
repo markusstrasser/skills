@@ -1,5 +1,29 @@
 # Model Guide Changelog
 
+## 2026-07-12 - Verified Transport table added; Agent-tool `model:` pin bug generalizes to Opus
+
+Added a "Verified Transport" section (before Default Routing) distinguishing MEASURED serving
+facts from vendor-doc/config-level claims, and a "Role → Lane" table under Dispatch Economics
+(synthesis / briefed-execution / review-cosign / research / scout-fanout / OS-student-serving).
+
+- **New finding:** the 2026-07-12 Agent-tool routing bug (fable-high/fable-low dispatches
+  silently serving `claude-sonnet-5`, arc-agi session 41f9b649) is **not Fable-specific** — a
+  fresh probe this pass (`subagent_type: opus-low`, explicit `model:"opus"`, agent-def also
+  pinned `model: opus`) self-reported `claude-sonnet-5` too. Treat every Agent-tool model pin as
+  unverified until self-report-confirmed; transcript-grep verification is not proven sufficient.
+- Fixed stale "dormant"/"not routable" framing in `references/fable-5-dormant.md` and
+  `references/validation-checklists.md` — Fable is paid-live via llmx/headless, not dormant.
+- Fixed `references/codex-subprocess-dispatch.md`'s stale "GPT-5.5-class" (codex now serves
+  GPT-5.6; GPT-5.5 retired from the subscription allowlist 2026-07-10).
+- Added the `--subscription -m grok-4.5` → blocked-xAI-key mis-route footgun (2026-07-11) to
+  the Grok section and cosigner notes.
+- Flagged, not resolved: Fable's "$10/$50 metered, off-subscription" cost claim is unreconciled
+  against continued successful claude-cli-transport Fable calls in the llmx usage log through
+  2026-07-12 (no cost/auth-mode field in the log to confirm which billing path actually fired).
+
+### Sources checked
+- `~/.claude/llmx-usage.jsonl` (18 claude-fable-5 entries through 2026-07-12), `~/.claude/cache/llmx-routing.json`, `~/.claude/rules/llmx-routing.md`, arc-agi `.claude/rules/vetoed-decisions.md` (OS-tier verdicts), anim-workbench `2026-06-12-{fable-tier,fable-effort-architecture}` eval results, `~/Projects/evals/DECISIONS.md`.
+
 ## 2026-07-09 - GPT-5.6 Sol / Terra / Luna; GPT-5.5 fully removed
 
 - OpenAI GA 2026-07-09: `gpt-5.6-sol` (flagship, alias `gpt-5.6`), `gpt-5.6-terra` (mid), `gpt-5.6-luna` (everyday).

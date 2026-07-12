@@ -1,14 +1,21 @@
-# Claude Fable 5 — dormant-tier reference (moved from SKILL.md)
+# Claude Fable 5 — reference (specs, API shape, system-card insights)
 
 > Moved verbatim from model-guide/SKILL.md (2026-07-06, progressive disclosure).
-> Routability status lives at the top of SKILL.md (PARTIALLY RE-ROUTABLE note, 2026-07-04);
-> this file keeps the specs, API shape, system-card insights, and prompting rules.
+> Routability + cost status lives at the top of SKILL.md and in its Verified Transport
+> table (current as-of 2026-07-12); this file keeps the specs, API shape, system-card
+> insights, and prompting rules, which don't change with routing status.
 
-## Claude Fable 5 - "The Operator" (DORMANT — reference only)
+## Claude Fable 5 - "The Operator" (metered opt-in — reference only)
 
-> **Not routable (2026-06-20).** Off subscription allowlist; US access restricted. Route **Opus 4.8** instead. Section kept for benchmark/prompting reference when availability returns.
+> **Not dormant — paid and mechanism-limited (2026-07-12).** Fable is off the claude.ai
+> subscription (metered $10/$50 per MTok since 2026-07-07) but genuinely reachable via
+> `llmx chat -m claude-fable-5` (claude-cli transport, confirmed working) and headless
+> `claude -p --model claude-fable-5`. It is **not** reliably reachable via the Agent tool —
+> `fable-high`/`fable-low` dispatches currently serve `claude-sonnet-5` regardless of the
+> pin (measured 2026-07-12; SKILL.md Verified Transport). Route gated/briefed/review work
+> to **opus-low** ($0); use Fable (via llmx) only with a named capability-edge justification.
 
-**When it returns, use for:** the hardest, longest-running, most-ambiguous work — multi-day autonomous runs, codebase-scale migrations, first-shot implementation of complex well-specified systems, dense technical-image vision, and orchestrating parallel subagents.
+**Use for:** the hardest, longest-running, most-ambiguous work — multi-day autonomous runs, codebase-scale migrations, first-shot implementation of complex well-specified systems, dense technical-image vision, and orchestrating parallel subagents — when reached via a lane proven to actually deliver Fable (see SKILL.md Verified Transport).
 
 **Operational specs:** `claude-fable-5`, 1M context, 128K max output, **$10/M input and $50/M output (2× Opus 4.8)**, cache read $1 / cache write $12.50. Covered Model: **30-day data retention, no zero-data-retention option**.
 
