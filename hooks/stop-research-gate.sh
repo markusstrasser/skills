@@ -173,6 +173,7 @@ SOURCE_TAG = re.compile(
 )
 
 missing = []
+fm_only = set()  # tags exist but only in stripped frontmatter/comments (recurring miss class)
 def _is_scaffold(text):
     '''True if file body is structurally a scaffold — headers + placeholder
     tokens ([PENDING]/[TODO]/[FILL ME]/[WIP]/[DRAFT]) and no substantive
@@ -210,6 +211,10 @@ for f in research_files:
         continue  # Scaffold-only: no real claims to cite yet.
     if not SOURCE_TAG.search(content_visible):
         missing.append(f)
+        # Targeted diagnosis for the recurring miss (3 agents, 2026-07-12): tags present but
+        # ONLY inside stripped frontmatter/HTML comments — generic message hid the real fix.
+        if SOURCE_TAG.search(content):
+            fm_only.add(f)
 
 # Concurrent-agent safety: a flagged file may belong to a CONCURRENT session that
 # created it AFTER our session-start baseline (the baseline only excludes files
@@ -255,7 +260,11 @@ if missing:
             capture_output=True, timeout=5)
     print('BLOCKED: Research files modified without source tags:', file=sys.stderr)
     for f in missing:
-        print(f'  - {f}', file=sys.stderr)
+        if f in fm_only:
+            print(f'  - {f}  << tags found ONLY in YAML frontmatter/HTML comments — the gate '
+                  f'strips those; put [DATA]/[INFERENCE]/... tags in the BODY text', file=sys.stderr)
+        else:
+            print(f'  - {f}', file=sys.stderr)
     print('Add provenance tags: [SOURCE: url], [DATABASE: name], [DATA], [INFERENCE],', file=sys.stderr)
     print('[TRAINING-DATA], [PREPRINT], [FRONTIER], [UNVERIFIED], or Admiralty [A1]-[F6].', file=sys.stderr)
     sys.exit(2)
