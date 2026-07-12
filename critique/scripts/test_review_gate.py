@@ -191,6 +191,22 @@ class ReviewGateTest(unittest.TestCase):
         self.assertEqual(data["schema_version"], rg.DISPATCH_SCHEMA_VERSION)
         self.assertTrue(any("dead ref" in b for b in data["blockers"]))
 
+    def test_scan_dead_refs_ignores_diff_headers_and_resolves_nested_basenames(self) -> None:
+        nested = self.repo / "scripts" / "orchestrator" / "controller_reconcile.py"
+        nested.parent.mkdir(parents=True)
+        nested.write_text("# source\n")
+        packet = "\n".join(
+            (
+                "diff --git a/scripts/orchestrator/controller_reconcile.py "
+                "b/scripts/orchestrator/controller_reconcile.py",
+                "--- a/scripts/orchestrator/controller_reconcile.py",
+                "+++ b/scripts/orchestrator/controller_reconcile.py",
+                "The helper is in controller_reconcile.py.",
+            )
+        )
+
+        self.assertEqual(rg._scan_dead_refs(packet, self.repo), [])
+
     def test_triage_recommends_cross2_preset(self) -> None:
         manifest = {
             "review_targets": {
