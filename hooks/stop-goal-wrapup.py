@@ -88,7 +88,8 @@ CONTINUE_PROMPT = """GOAL-RUN ACTIVE (continuation {n}/{cap}) — the goal is no
 - If you just compacted: re-orient from .claude/checkpoint.md and VERIFY claimed work against git log / the checkpoint's VERIFY commands before building on it — compaction summaries hallucinate completions.
 - Advance the highest-value front. Run the portfolio (grind subagents / heretic on what just landed / scout / meta) rather than a single serial thread; don't idle, don't re-derive settled state.
 - Goal fully done AND verified → touch .claude/goal-done, write the final summary, stop.
-- Genuinely blocked on the human with no other front progressable → append the ask to HUMAN.md, touch .claude/goal-blocked, stop."""
+- Genuinely blocked on the human with no other front progressable → append the ask to HUMAN.md, touch .claude/goal-blocked, stop.
+- Nothing actionable until an armed wake event (Monitor/cron/agent return) AND the funded-front gauge is not RED → write .claude/goal-quiet as JSON {{"until": <epoch, ≤4h ahead>, "wake": "<what wakes you>", "reason": "<why the board is empty>"}} and stop; the hook honors it until expiry or a RED gauge voids it. Never use quiet to park a dead funded front."""
 
 
 def _block(reason: str) -> int:
@@ -199,6 +200,49 @@ def main() -> int:
         except Exception:
             pass
         return _block(WRAPUP_PROMPT.format(ctx=ctx, thr=threshold))
+
+    # QUIET-STATE (2026-07-12, O5 consumed with operator present): an event-wait is a
+    # LEGAL resting state when the agent DECLARES it and the funded-front gauge is not
+    # RED. Exhibit: night 2026-07-12 burned ~25 continuations (03:37-06:45) on 9.5-min
+    # foreground wait-greps for events that armed Monitors already watched — the anti-idle
+    # enforcement taxed structured waiting. Contract: .claude/goal-quiet = JSON
+    # {"until": epoch, "wake": str, "reason": str}; honored only while (a) unexpired
+    # (horizon hard-capped at 4h regardless of the written value), (b) front_gauge (where
+    # present) does not report RED — a dead funded front voids quiet instantly (AP12).
+    # Unparseable marker = NO grant (fail-closed); expired/voided markers are deleted so
+    # the next Stop re-challenges. Never reached when goal-done/blocked (handled above)
+    # and never suppresses the context-threshold wrap-up (checked above).
+    quiet = claude_dir / "goal-quiet"
+    if quiet.is_file():
+        import time as _time
+        granted = False
+        try:
+            q = json.loads(quiet.read_text())
+            until = float(q["until"])
+            now = _time.time()
+            granted = bool(str(q["wake"]).strip()) and now < until <= now + 4 * 3600
+        except Exception:
+            granted = False
+        if granted:
+            gauge = cwd / "loop" / "front_gauge.py"
+            if gauge.is_file():
+                try:
+                    import subprocess
+
+                    out = subprocess.run(
+                        ["uv", "run", "python3", str(gauge)],
+                        cwd=cwd, capture_output=True, text=True, timeout=30,
+                    ).stdout
+                    if "🔴" in out:
+                        granted = False
+                except Exception:
+                    pass  # gauge failure neither grants nor voids; marker terms stand
+        if granted:
+            return 0
+        try:
+            quiet.unlink()
+        except Exception:
+            pass
 
     # Continuation: Stop = "finished a meaningful unit" — re-kick until done/blocked.
     # Deliberately ignores stop_hook_active (the re-kick loop is the point);
