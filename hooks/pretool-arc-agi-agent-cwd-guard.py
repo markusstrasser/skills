@@ -56,6 +56,11 @@ def _needs_agent_env(cmd: str) -> bool:
     # git/cat/grep is not an import site (false-blocked git diff, 2026-07-10).
     if re.search(r"(?:^|[\s;|&])(?:uv\s+run\s+(?:python3?\s+)?|python3?\s+)agent/\S+\.py\b", cmd):
         return True
+    # pytest targeting agent/ tree from repo root (observe 2026-07-12 residual)
+    if re.search(r"\bpytest\b.*\bagent/", cmd) or re.search(
+        r"\bpython3?\s+-m\s+pytest\b.*\bagent/", cmd
+    ):
+        return True
     return False
 
 
@@ -74,6 +79,13 @@ def _insert_directory(cmd: str, agent_dir: Path) -> str | None:
     out = re.sub(
         r"(\buv\s+run\s+--directory\s+\S+\s+(?:python3?\s+)?)agent/(\S+\.py)\b",
         r"\1\2",
+        out,
+        count=1,
+    )
+    # `… -m pytest agent/tests/…` → `… -m pytest tests/…` under agent/
+    out = re.sub(
+        r"(\b(?:python3?\s+-m\s+)?pytest\s+)agent/",
+        r"\1",
         out,
         count=1,
     )
@@ -136,6 +148,8 @@ def _selftest() -> int:
         (root, "uv run agent/foundry_pilot.py", "rewrite"),
         # bare python with import → block (uv-guard should rewrite first)
         (root, 'python3 -c "import arcengine"', "block"),
+        # 2026-07-12 residual shapes
+        (root, "uv run python3 -m pytest agent/tests/test_foo.py", "rewrite"),
     ]
     bad = 0
     for cwd, cmd, want in cases:
