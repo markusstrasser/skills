@@ -65,10 +65,6 @@ else
     exit 0  # specific-file add, log/diff/status, or non-git command — all safe
 fi
 
-# Count Claude processes globally. This signal is not scoped to the Git target.
-CLAUDE_PROCS=$(pgrep -x claude 2>/dev/null | wc -l | tr -d ' ')
-[ "$CLAUDE_PROCS" -lt 2 ] && exit 0
-
 # Check the command TARGET, not the hook/session cwd. Absolute paths avoid
 # comparing `.git` with an equivalent absolute common-dir spelling.
 TARGET_ROOT=$(git -C "$TARGET_DIR" rev-parse --show-toplevel 2>/dev/null || true)
@@ -80,9 +76,18 @@ if [ -n "$GIT_DIR" ] && [ -n "$GIT_COMMON" ] && [ "$GIT_DIR" != "$GIT_COMMON" ];
     exit 0
 fi
 
-# Block: global multi-agent signal + shared/main Git target
-~/Projects/skills/hooks/hook-trigger-log.sh "multiagent-commit" "block" \
-    "global_procs=$CLAUDE_PROCS target_class=shared/main target_root=$TARGET_ROOT cmd=$(echo "$CMD" | head -c 60)" 2>/dev/null || true
+# Single-source the same checkout-scoped peer detector used by SessionStart and
+# Stop. Global process counts confuse agents in unrelated repositories with
+# writers sharing this index, producing false commit blocks.
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PEER_SESSION_COUNT_BIN="${PEER_SESSION_COUNT_BIN:-$HOOK_DIR/peer-session-count.sh}"
+PEER_COUNT=$("$PEER_SESSION_COUNT_BIN" "$TARGET_ROOT" 2>/dev/null || echo 0)
+[[ "$PEER_COUNT" =~ ^[0-9]+$ ]] || PEER_COUNT=0
+[ "$PEER_COUNT" -lt 1 ] && exit 0
 
-echo '{"decision": "block", "reason": "MULTI-AGENT SAFETY: global Claude process count: '"$CLAUDE_PROCS"' (not scoped to this repository). Git target classification: shared/main checkout (not a linked worktree). For git add: use specific files (not -A/-p/.). For git commit: pass --only <files> (or --amend) so a parallel agent'\''s pre-staged files do not sweep into this commit (2026-05-27 substrate-session sweep on 486973e). For git checkout/restore (destructive): prefer Read + Edit to repair in place; if you must discard, run \"git stash push -- <files>\" first so it'\''s reversible. Completing a merge? bare commit is ALLOWED when MERGE_HEAD exists (git forbids --only there) — review git status first."}'
+# Block: a real peer shares this main checkout.
+~/Projects/skills/hooks/hook-trigger-log.sh "multiagent-commit" "block" \
+    "repo_peers=$PEER_COUNT target_class=shared/main target_root=$TARGET_ROOT cmd=$(echo "$CMD" | head -c 60)" 2>/dev/null || true
+
+echo '{"decision": "block", "reason": "MULTI-AGENT SAFETY: '"$PEER_COUNT"' peer Claude session(s) share this repository checkout. Git target classification: shared/main checkout (not a linked worktree). For git add: use specific files (not -A/-p/.). For git commit: pass --only <files> (or --amend) so a parallel agent'\''s pre-staged files do not sweep into this commit (2026-05-27 substrate-session sweep on 486973e). For git checkout/restore (destructive): prefer Read + Edit to repair in place; if you must discard, run \"git stash push -- <files>\" first so it'\''s reversible. Completing a merge? bare commit is ALLOWED when MERGE_HEAD exists (git forbids --only there) — review git status first."}'
 exit 2
