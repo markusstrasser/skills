@@ -16,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import sys
@@ -26,8 +27,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-
-import importlib.util
 
 from shared.context_packet import estimate_tokens  # noqa: E402
 
@@ -205,15 +204,33 @@ def _diff_files(repo: Path, base: str | None, head: str | None) -> set[str]:
 def _scan_dead_refs(packet_text: str, repo: Path) -> list[str]:
     dead: list[str] = []
     seen: set[str] = set()
-    for m in PATH_LIKE.finditer(packet_text):
-        rel = m.group(1).lstrip("./")
-        if rel in seen or rel.startswith("http"):
+    for line in packet_text.splitlines():
+        # Unified-diff headers are evidence about the packet, not prose
+        # references. Their a/ and b/ prefixes are not repository paths.
+        if line.startswith(("diff --git ", "--- ", "+++ ")):
             continue
-        seen.add(rel)
-        if "/" not in rel and not rel.endswith((".py", ".md", ".json", ".sql", ".sh", ".toml", ".yaml", ".yml")):
-            continue
-        p = repo / rel
-        if not p.is_file():
+        for match in PATH_LIKE.finditer(line):
+            rel = match.group(1).lstrip("./")
+            if rel.startswith(("a/", "b/")):
+                rel = rel[2:]
+            if rel in seen or rel.startswith("http"):
+                continue
+            seen.add(rel)
+            if "/" not in rel and not rel.endswith(
+                (".py", ".md", ".json", ".sql", ".sh", ".toml", ".yaml", ".yml")
+            ):
+                continue
+            path = repo / rel
+            if path.is_file():
+                continue
+            # Review prose often uses a short basename for a nested source
+            # file. Treat a repository match as live; keep a genuinely
+            # missing basename (e.g. missing.py) blocking in close mode.
+            if "/" not in rel and any(
+                candidate.is_file() and ".git" not in candidate.parts
+                for candidate in repo.rglob(rel)
+            ):
+                continue
             dead.append(rel)
     return dead
 
