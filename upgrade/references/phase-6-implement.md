@@ -22,7 +22,7 @@ Each agent prompt MUST include:
 
 ## Multi-agent commit safety
 
-Check `OTHER ACTIVE AGENTS` in session context. If other sessions are running:
+Check SessionStart for `PEER SESSION` (same checkout). If peers share this working tree:
 - Commit after EACH script (not in a batch) — parallel agents may sweep uncommitted edits
 - Or use `isolation: "worktree"` on implementation agents to avoid conflicts
 - Run `git status` before each commit to verify only your files are staged

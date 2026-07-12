@@ -54,7 +54,7 @@ Present the plan to the user. Wait for approval before executing. If the plan ha
 
 ## Multi-agent commit safety
 
-If `OTHER ACTIVE AGENTS` was reported at session start, other agents may `git add` your uncommitted edits under wrong commit messages. Mitigations:
+If SessionStart reported `PEER SESSION` (same checkout), other agents may `git add` your uncommitted edits under wrong commit messages. Mitigations:
 - **Commit after each fix**, not batched at the end of a phase
 - Or use `isolation: worktree` for the entire dispatch-research session
 - Never leave edited files uncommitted while background agents are running
