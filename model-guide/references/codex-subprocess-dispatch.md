@@ -1,6 +1,6 @@
 # Running codex-cli as a subprocess (research / work workers)
 
-How to dispatch `codex` (GPT-5.5-class, ChatGPT-subscription, $0) as a background
+How to dispatch `codex` (GPT-5.6-class as of 2026-07-10 — GPT-5.5 retired from the subscription allowlist; the mechanics below are model-generation-independent, ChatGPT-subscription, $0) as a background
 subprocess worker — e.g. a fleet of parallel research lanes that each write a memo.
 Verified working 2026-06-18 (codex-cli 0.140.0). Pairs with **Dispatch Economics** in
 SKILL.md (executor-tier-by-verifier) — this file is the *mechanics*.

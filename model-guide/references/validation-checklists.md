@@ -12,7 +12,7 @@
 - [ ] Treat reasoning traces as diagnostics, not proof.
 - [ ] For "nothing found" or "done" claims, prefer deterministic null checks over model confidence.
 
-### After Claude Fable 5 (dormant — only if re-enabled)
+### After Claude Fable 5 (paid opt-in — llmx/headless lanes only, not Agent tool; see SKILL.md Verified Transport)
 - [ ] Bind completion to parsed evidence — Fable regresses slightly vs Opus 4.8 on self-report honesty.
 - [ ] Treat unsourced factual specifics as unverified: 55% of its closed-book misses are confident fabrications even when invited to abstain (AA-Omniscience non-hallucination 45% vs Opus 64%).
 - [ ] Confirm it didn't take an unrequested action (drafted email, backup branch) or execute a guessed command without checking.
