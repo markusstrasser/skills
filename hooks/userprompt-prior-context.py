@@ -572,7 +572,7 @@ def main() -> None:
         parts.extend(observe_lines)
     if infra_lines:
         parts.extend(infra_lines)
-    parts.append("(blindspot-miner #1 cluster; decisions/2026-06-07-state-externalization-lens.md)")
+    parts.append("(blindspot-miner #1 cluster; design provenance: ~/Projects/agent-infra/decisions/2026-06-07-state-externalization-lens.md)")
 
     _mark_surfaced(session_id, sig)
 
