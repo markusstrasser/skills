@@ -223,7 +223,7 @@ def main() -> None:
     if matches:
         commit_lines = "\n".join(f"  {h}  {subj}" for h, subj, _ in matches)
         parts.append(f"{len(matches)} recent commit(s) overlap:\n{commit_lines}")
-    parts.append("(decisions/2026-06-07-state-externalization-lens.md)")
+    parts.append("(design provenance: ~/Projects/agent-infra/decisions/2026-06-07-state-externalization-lens.md)")
     ctx = "\n".join(parts)
 
     # Best-effort trigger log for ROI measurement (Constitution Principle 3).
