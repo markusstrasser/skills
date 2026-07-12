@@ -553,6 +553,12 @@ def main() -> None:
         "with one verdict per item — already-done (cite artifact) · known (cite) · in-queue "
         "(cite row) · tried-and-killed (cite verdict memo) · genuinely-new (file it, say where) — "
         "BEFORE analysis. A suggestion absorbed without a verdict line is a silent rescue.",
+        # Same-turn dispatch reflex (re-filed arc-agi row triage-dispatch-reflex; the 07-11
+        # graded fix was lost and its class recurred 14x in 47h — supervision audit 2026-07-12):
+        "TRIAGE-DISPATCH: a verdict of in-queue/chartered/already-authorized on an actionable "
+        "item OBLIGATES dispatching that work in the SAME turn (subagent, background run, or "
+        "inline) — never end the turn holding authorized-but-undispatched work awaiting a 'go'. "
+        "'Do all/parallelize/go on' from the operator means this reflex failed on the prior turn.",
     ]
     if memos:
         parts.append("Curated memo(s)/decision(s):\n" + "\n".join(f"  {m}" for m in memos))
