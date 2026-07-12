@@ -56,9 +56,9 @@ emit() {  # threshold message — json.dumps the body so a future quote can't br
 }
 
 if (( PCT >= 80 && PREV < 80 )); then
-  emit 80 "Context at ${PCT}%${ABS}. Wrap up and commit in-flight work — if you're near the window limit an auto-compact will stop the turn. The PreCompact hook snapshots checkpoint.md, but a clean committed stopping point loses less."
+  emit 80 "Context at ${PCT}%${ABS}. Wrap up and commit in-flight work — if you're near the window limit an auto-compact will stop the turn. The PreCompact hook snapshots checkpoint.md, but a clean committed stopping point loses less. BOUNDARY-SURVIVAL MANIFEST (F14, 2026-07-12): before the boundary, mechanically enumerate live infrastructure into the checkpoint — TaskList output, CronList output, in-flight subagent names, armed Monitors (TaskList does NOT list Monitors; enumerate from your arm history), one re-arm/harvest command per item. Compaction kills monitors and agents silently; narrative memory is what boundaries destroy."
 elif (( PCT >= 40 && PREV < 40 )); then
-  emit 40 "Context at ${PCT}%${ABS}. Good point to reach a committable stopping point and consider /compact — keeping context lean now beats a mid-task compaction later. The PreCompact hook will snapshot checkpoint.md regardless."
+  emit 40 "Context at ${PCT}%${ABS}. Good point to reach a committable stopping point and consider /compact — keeping context lean now beats a mid-task compaction later. The PreCompact hook will snapshot checkpoint.md regardless. If you hold live infrastructure (monitors, crons, background agents), start the checkpoint's boundary manifest now: TaskList + CronList + in-flight agents, one re-arm/harvest command each (F14)."
 fi
 
 exit 0
