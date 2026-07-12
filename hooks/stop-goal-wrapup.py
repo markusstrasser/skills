@@ -123,7 +123,21 @@ def main() -> int:
     owner = lines[1] if len(lines) > 1 else ""
     if owner and payload.get("session_id") != owner:
         return 0
-    if (claude_dir / "goal-done").exists() or (claude_dir / "goal-blocked").exists():
+    # O2 ruling (operator 2026-07-12): guards ENFORCE during autonomous runs — an armed,
+    # owned goal run auto-drops the no-question-stop marker so the AskUserQuestion class
+    # binds (wakeup-cadence: the marker is operator-set policy; this ruling sets it for
+    # every goal run). Removed again at goal-done/blocked so interactive sessions stay
+    # advisory. Fail-open.
+    enforce_marker = claude_dir / "loop-enforce-no-question-stop"
+    done_or_blocked = (claude_dir / "goal-done").exists() or (claude_dir / "goal-blocked").exists()
+    try:
+        if done_or_blocked:
+            enforce_marker.unlink(missing_ok=True)
+        else:
+            enforce_marker.touch(exist_ok=True)
+    except Exception:
+        pass
+    if done_or_blocked:
         # Open-board challenge (fires ONCE): goal-done with unblocked A-rows still
         # open is the premature-stop class (6th manual flag 2026-07-05) — the goal
         # FILE finishing is not the board being empty. Repo-generic: only where the
