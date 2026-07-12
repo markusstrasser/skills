@@ -17,14 +17,28 @@ def _git(*args: str, cwd: Path) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
 
 
-def _run_guard(command: str, *, process_cwd: Path, tool_workdir: Path, fake_bin: Path):
+def _run_guard(
+    command: str,
+    *,
+    process_cwd: Path,
+    tool_workdir: Path,
+    fake_bin: Path,
+    peer_count: int = 1,
+):
     payload = {
         "tool_input": {
             "command": command,
             "workdir": str(tool_workdir),
         }
     }
-    env = {**os.environ, "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}"}
+    peer_counter = fake_bin / "peer-session-count"
+    peer_counter.write_text(f"#!/bin/sh\nprintf '{peer_count}\\n'\n", encoding="utf-8")
+    peer_counter.chmod(0o755)
+    env = {
+        **os.environ,
+        "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+        "PEER_SESSION_COUNT_BIN": str(peer_counter),
+    }
     return subprocess.run(
         ["bash", str(HOOK)],
         cwd=process_cwd,
@@ -82,7 +96,7 @@ class MultiAgentCommitGuardTests(unittest.TestCase):
             self.assertEqual(main_commit.returncode, 2)
             main_reason = json.loads(main_commit.stdout)["reason"]
             self.assertIn(
-                "global Claude process count: 2 (not scoped to this repository)",
+                "1 peer Claude session(s) share this repository checkout",
                 main_reason,
             )
             self.assertIn(
@@ -90,6 +104,19 @@ class MultiAgentCommitGuardTests(unittest.TestCase):
                 main_reason,
             )
             self.assertNotIn("claude processes active in main repo", main_reason)
+
+            no_repo_peer = _run_guard(
+                "git commit -m safe",
+                process_cwd=repo,
+                tool_workdir=repo,
+                fake_bin=fake_bin,
+                peer_count=0,
+            )
+            self.assertEqual(
+                no_repo_peer.returncode,
+                0,
+                no_repo_peer.stdout + no_repo_peer.stderr,
+            )
 
             main_patch_add = _run_guard(
                 f"git -C {repo} add -p tracked.txt",
