@@ -317,7 +317,7 @@ if [ -n "$PROMPT" ]; then
                 # let the dispatch proceed — same outcome, zero retry (transform > block).
                 elif [ "$PROMPT_LEN" -gt 200 ]; then
                     ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "inject" "check=7 missing=${MISSING}" 2>/dev/null || true
-                    INJECT_SUFFIX="OUTPUT DISCIPLINE (auto-added): Write your results to a file and return the file path — if no path is given, choose a descriptive one under .claude/reviews/. Your FIRST tool call MUST be Write a 'PROBE IN PROGRESS' stub at that path (if the path is under a research/ tree, include an [UNVERIFIED] provenance tag in the stub — the stop-research-gate blocks untagged research files), then append findings incrementally as you confirm them (do NOT batch and write at the end — a mid-run cutoff then loses everything)."
+                    INJECT_SUFFIX="OUTPUT DISCIPLINE (auto-added): Write your results to a file and return the file path — if no path is given, choose a descriptive one under .claude/reviews/. Your FIRST tool call MUST be Write a 'PROBE IN PROGRESS' stub at that path (if the path is under a research/ tree, include an [UNVERIFIED] provenance tag in the stub BODY TEXT, never only YAML frontmatter/HTML comments — the stop-research-gate strips those and blocks untagged research files), then append findings incrementally as you confirm them (do NOT batch and write at the end — a mid-run cutoff then loses everything)."
                 else
                     CHECK_IDS="${CHECK_IDS}7,"
                     WARNINGS="${WARNINGS}SUBAGENT OUTPUT: Dispatch prompt missing ${MISSING}. "
@@ -361,7 +361,7 @@ if [ -n "$PROMPT" ] && [ "${HAS_FILE_OUTPUT:-0}" -gt 0 ]; then
     if [ "$HAS_EARLY_WRITE" -eq 0 ]; then
         PROMPT_LEN=${#PROMPT}
         HAS_WORKTREE=$(echo "$INPUT" | grep -c '"worktree"' || true)
-        STUB_FIX="Add to your prompt: 'Your FIRST tool call MUST be Write with a PROBE IN PROGRESS stub at the output path (include an [UNVERIFIED] provenance tag if the path is under research/). Then append findings incrementally.' Guards against API-limit / turn-exhaustion producing zero output."
+        STUB_FIX="Add to your prompt: 'Your FIRST tool call MUST be Write with a PROBE IN PROGRESS stub at the output path (include an [UNVERIFIED] provenance tag in the BODY text — frontmatter-only tags are stripped by the gate — if the path is under research/). Then append findings incrementally.' Guards against API-limit / turn-exhaustion producing zero output."
         case "$STYPE" in
             Explore|observe|claude-code-guide|statusline-setup|researcher)
                 CHECK_IDS="${CHECK_IDS}10,"
@@ -380,7 +380,7 @@ if [ -n "$PROMPT" ] && [ "${HAS_FILE_OUTPUT:-0}" -gt 0 ]; then
                 elif [ "$PROMPT_LEN" -gt 200 ]; then
                     # ERGONOMIC FIX (2026-06-17): auto-inject, don't block-then-retry (see Check 7).
                     ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "inject" "check=10 missing=write-stub-first" 2>/dev/null || true
-                    [ -z "$INJECT_SUFFIX" ] && INJECT_SUFFIX="OUTPUT DISCIPLINE (auto-added): Your FIRST tool call MUST be Write a 'PROBE IN PROGRESS' stub at the output path (if under a research/ tree, include an [UNVERIFIED] provenance tag — the stop-research-gate blocks untagged research files), then append findings incrementally as you confirm them (do NOT batch and write at the end — a mid-run cutoff then loses everything)."
+                    [ -z "$INJECT_SUFFIX" ] && INJECT_SUFFIX="OUTPUT DISCIPLINE (auto-added): Your FIRST tool call MUST be Write a 'PROBE IN PROGRESS' stub at the output path (if under a research/ tree, include an [UNVERIFIED] provenance tag in BODY text (frontmatter is stripped) — the stop-research-gate blocks untagged research files), then append findings incrementally as you confirm them (do NOT batch and write at the end — a mid-run cutoff then loses everything)."
                 else
                     CHECK_IDS="${CHECK_IDS}10,"
                     WARNINGS="${WARNINGS}SUBAGENT WRITE-FIRST: Prompt specifies file output but doesn't instruct write-stub-first. ${STUB_FIX} "
