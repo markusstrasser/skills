@@ -115,6 +115,14 @@ if not research_files:
 # target; a results-bearing file should live in its own memo per eval-conventions anyway.
 research_files = [f for f in research_files
                   if not re.search(r'-prereg[^/]*\.(md|txt|org)$', os.path.basename(f))]
+
+# Preserved-external exemption (2026-07-13): a directory named external/ under a research
+# root holds VERBATIM preserved dispatch packets + model responses (arc-agi convention,
+# minted 2026-07-13; verdict-lint downgrades to warn there via _is_preserved_external).
+# Tagging would edit a by-contract-verbatim artifact — the CONSUMING memo carries the
+# provenance. Match verdict-lint's rule exactly: immediate parent dir named 'external'.
+research_files = [f for f in research_files
+                  if os.path.basename(os.path.dirname(f)) != 'external']
 if not research_files:
     sys.exit(0)
 
