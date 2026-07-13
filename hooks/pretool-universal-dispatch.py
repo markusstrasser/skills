@@ -17,6 +17,7 @@ Fail-open: any unexpected internal error exits 0 rather than blocking a tool
 call. The ONLY intentional non-zero exit is the dup-read >=4 block (exit 2),
 mirroring tool-tracker.sh exactly.
 """
+
 import json
 import os
 import re
@@ -37,6 +38,7 @@ STATE_DIR = os.environ.get("CLAUDE_HOOK_STATE_DIR", "/tmp")
 # ---------------------------------------------------------------------------
 # Shared stdin parse (was ~18 separate jq subprocess calls across both hooks)
 # ---------------------------------------------------------------------------
+
 
 def load_envelope():
     raw = sys.stdin.read()
@@ -84,6 +86,7 @@ def field(tool_input, envelope, *keys):
 # ---------------------------------------------------------------------------
 # Part 1 — tab-title + duplicate-read tracking (tool-tracker.sh port)
 # ---------------------------------------------------------------------------
+
 
 def run_tab_and_dupread(tool_name, tool_input, ppid):
     """Returns (warn_text_or_None, block_bool)."""
@@ -222,7 +225,9 @@ def run_tab_and_dupread(tool_name, tool_input, ppid):
         try:
             subprocess.run(
                 [f"{SKILLS_HOOKS}/hook-trigger-log.sh", "dup-read", level, os.path.basename(fpath)],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
             )
         except Exception:
             pass
@@ -232,13 +237,18 @@ def run_tab_and_dupread(tool_name, tool_input, ppid):
         shadow_log = os.path.join(HOME, ".claude", "dup-read-shadow.jsonl")
         try:
             with open(shadow_log, "a") as f:
-                f.write(json.dumps({
-                    "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    "file": os.path.basename(fpath),
-                    "reads": total_reads,
-                    "ppid": str(ppid),
-                    "blocked": block,
-                }) + "\n")
+                f.write(
+                    json.dumps(
+                        {
+                            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                            "file": os.path.basename(fpath),
+                            "reads": total_reads,
+                            "ppid": str(ppid),
+                            "blocked": block,
+                        }
+                    )
+                    + "\n"
+                )
         except OSError:
             pass
 
@@ -325,7 +335,9 @@ def run_companion_remind(envelope, tool_name, tool_input):
 
     # llmx-guide: Bash calls llmx (case-sensitive substring)
     if cmd and "llmx" in cmd:
-        if re.search(r"anthropic-direct|claude-opus|claude-fable|claude-cli|-p anthropic", cmd, re.I):
+        if re.search(
+            r"anthropic-direct|claude-opus|claude-fable|claude-cli|-p anthropic", cmd, re.I
+        ):
             remind(
                 "llmx-guide",
                 "Claude via llmx: use --subscription (NEVER anthropic-direct/API by default). "
@@ -339,7 +351,9 @@ def run_companion_remind(envelope, tool_name, tool_input):
             )
 
     # llmx-guide: Python code dispatching to CLI models (case-sensitive)
-    if content and re.search(r"subprocess.*(llmx|codex|gemini )|Popen.*(llmx|codex|gemini )", content):
+    if content and re.search(
+        r"subprocess.*(llmx|codex|gemini )|Popen.*(llmx|codex|gemini )", content
+    ):
         remind(
             "llmx-guide",
             "Code dispatches to CLI models. Load llmx-guide for subprocess gotchas (shell=True "
@@ -353,7 +367,8 @@ def run_companion_remind(envelope, tool_name, tool_input):
         r"rapamycin|metformin|NAD\+?|telomere|mitochondri|epigenetic|proteom|metabolom|"
         r"microbiome|statin|GLP.?1|semaglutide|autophagy|senescen|oxidative.stress|"
         r"inflammation.*marker|blood.brain.barrier",
-        query, re.I,
+        query,
+        re.I,
     ):
         remind(
             "epistemics",
@@ -362,7 +377,9 @@ def run_companion_remind(envelope, tool_name, tool_input):
         )
 
     # entity-management: query ticker/entity terms (case-sensitive, matched against already-lowered query — bug-compatible with original)
-    if query and re.search(r"\b(ticker|stock|equity|company|CEO|founder|executive|board.member)\b", query):
+    if query and re.search(
+        r"\b(ticker|stock|equity|company|CEO|founder|executive|board.member)\b", query
+    ):
         remind(
             "entity-management",
             "Entity-related search detected. Use /entity-management to create/update structured "
@@ -406,7 +423,11 @@ def run_companion_remind(envelope, tool_name, tool_input):
         )
 
     # source-grading: SQL in intel context
-    if cmd and re.search(r"duckdb|\.sql|SELECT.*FROM.*WHERE", cmd, re.I) and re.search(r"intel", project_dir, re.I):
+    if (
+        cmd
+        and re.search(r"duckdb|\.sql|SELECT.*FROM.*WHERE", cmd, re.I)
+        and re.search(r"intel", project_dir, re.I)
+    ):
         remind(
             "source-grading",
             "SQL query in intel context. Read ~/Projects/skills/references/source-grading/"
@@ -426,7 +447,8 @@ def run_companion_remind(envelope, tool_name, tool_input):
     if query and re.search(r"mcp__exa|mcp__brave|WebSearch", tool_name):
         if re.search(
             r"paper|arxiv|preprint|et al\.?|icml|neurips|emnlp|acl |iclr|cvpr|aaai|naacl|colm |iccv",
-            query, re.I,
+            query,
+            re.I,
         ):
             remind(
                 "s2-for-papers",
@@ -451,7 +473,8 @@ def run_companion_remind(envelope, tool_name, tool_input):
     if query and re.search(
         r"why (does|did|do|is|are|was|were|has|have|would|could)\b.*\b(cause|effect|impact|lead|"
         r"result|driven|because|correlation|associate)",
-        query, re.I,
+        query,
+        re.I,
     ):
         remind(
             "analyze-causal",
@@ -483,7 +506,8 @@ def run_companion_remind(envelope, tool_name, tool_input):
         r"(fraud.*(error|mistake|legitimate)|bug.*(design|feature|intentional)|"
         r"alternative.*(explanation|hypothesis|theor)|competing.*(hypothesis|explanation)|"
         r"root.cause.*(analysis|investigation)|differential.diagnosis)",
-        query, re.I,
+        query,
+        re.I,
     ):
         remind(
             "analyze-hypotheses",
@@ -517,7 +541,8 @@ def run_companion_remind(envelope, tool_name, tool_input):
         r"shell.company|beneficial.owner|money.laundering|audit.trail|follow.the.money|OSINT|"
         r"due.diligence|corporate.registry|UBO|sanctions.screen|related.party|insider.trading|"
         r"SEC.filing.*fraud|whistleblow",
-        query, re.I,
+        query,
+        re.I,
     ):
         remind(
             "analyze-investigate",
@@ -530,11 +555,26 @@ def run_companion_remind(envelope, tool_name, tool_input):
 # Entrypoint
 # ---------------------------------------------------------------------------
 
+
 def main():
     block = False
     try:
         envelope, tool_name, tool_input = load_envelope()
         ppid = os.getppid()
+
+        # Reap stale per-PPID trackers. Nothing reaped them before: 312,368 had piled up
+        # in /tmp, and genomics' staged_ownership_guard globs that dir 4x per commit, so
+        # every commit paid ~5.6s. Throttled to one scan per 10 min, so the hot-path cost
+        # here is a single stat(). Never raises. See reap_stale_trackers.py.
+        try:
+            _hook_dir = os.path.dirname(os.path.abspath(__file__))
+            if _hook_dir not in sys.path:
+                sys.path.insert(0, _hook_dir)
+            from reap_stale_trackers import maybe_reap
+
+            maybe_reap(STATE_DIR)
+        except Exception:
+            pass
 
         # Companion reminders first (advisory, stderr-only, never blocks).
         run_companion_remind(envelope, tool_name, tool_input)
