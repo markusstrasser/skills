@@ -51,3 +51,11 @@
   executor derives its collection wait from the longest selected profile plus propagation grace.
   Tests cover the exact Opus effort/timeout
   profile and mixed Grok/Opus headroom.
+- **[2026-07-13] FIXED — the repo-grounded Grok axis survived after Cursor removed the
+  model.** Two `arc-agi` architecture reviews requested `grok-4.5-xhigh`; `cursor-agent`
+  rejected the slug immediately and printed a live registry containing no Grok model. This was
+  a capability-registry failure, not evidence from a reviewer, and it contradicted the standing
+  cursor-agent contract that only Composer is supported. The `grok` axis/profile/model aliases and
+  foreign-model workspace dispatcher were deleted. `--axes ...,grok` now fails before dispatch
+  with the dated transport reason; the existing Composer premise scout remains the repo-grounded
+  falsifier. Re-enable only after a registry check, exact named-model smoke, and repo-access test.

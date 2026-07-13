@@ -436,23 +436,9 @@ class AxisResolutionTest(unittest.TestCase):
             ["arch", "domain", "alternatives"],
         )
 
-    def test_grok_axis_resolves_and_needs_repo_workspace(self) -> None:
-        axes = model_review.resolve_axes("standard,grok")
-        self.assertIn("grok", axes)
-        self.assertTrue(model_review.axis_needs_repo_workspace("grok"))
-        self.assertFalse(model_review.axis_needs_repo_workspace("composer"))
-        self.assertEqual(
-            model_review.AXES["grok"]["profile"], "grok_review"
-        )
-        from shared.llm_dispatch import PROFILES
-
-        self.assertEqual(PROFILES["grok_review"].model, "grok-4.5-xhigh")
-        self.assertEqual(PROFILES["grok_review"].provider, "cursor")
-        self.assertEqual(model_review._resolved_axis_timeout("grok"), 1200)
-        self.assertGreater(
-            model_review._parallel_dispatch_wait_default(["grok"]),
-            model_review._resolved_axis_timeout("grok"),
-        )
+    def test_grok_axis_fails_loud_before_dispatch(self) -> None:
+        with self.assertRaisesRegex(ValueError, "live model registry no longer exposes"):
+            model_review.resolve_axes("standard,grok")
 
     def test_claude_axis_has_long_review_timeout_and_executor_headroom(self) -> None:
         from shared.llm_dispatch import PROFILES
@@ -460,59 +446,9 @@ class AxisResolutionTest(unittest.TestCase):
         self.assertEqual(model_review._resolved_axis_timeout("claude"), 3600)
         self.assertEqual(PROFILES["claude_review"].reasoning_effort, "max")
         self.assertGreater(
-            model_review._parallel_dispatch_wait_default(["grok", "claude"]),
+            model_review._parallel_dispatch_wait_default(["arch", "claude"]),
             model_review._resolved_axis_timeout("claude"),
         )
-
-    def test_call_cursor_repo_agent_writes_output(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
-            ctx = root / "ctx.md"
-            ctx.write_text("# packet\nclaim: foo exists\n")
-            out = root / "grok-output.md"
-            fake_bin = root / "fake-cursor-agent"
-            fake_bin.write_text(
-                "#!/bin/sh\n"
-                "cat > /dev/null\n"  # drain stdin
-                "echo '## Premises checked'\n"
-                "echo 'OK from fake agent'\n"
-            )
-            fake_bin.chmod(0o755)
-            with patch.object(
-                model_review, "_resolve_cursor_agent_bin", return_value=str(fake_bin)
-            ):
-                result = model_review._call_cursor_repo_agent(
-                    model="grok-4.5-xhigh",
-                    project_dir=root,
-                    context_path=ctx,
-                    prompt="Review this.",
-                    output_path=out,
-                    timeout=30,
-                )
-            self.assertEqual(result["exit_code"], 0)
-            self.assertGreater(result["size"], 0)
-            self.assertIn("OK from fake agent", out.read_text())
-
-    def test_dispatch_grok_requires_project_dir(self) -> None:
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
-            review_dir = root / "review"
-            review_dir.mkdir()
-            ctx = root / "ctx.md"
-            ctx.write_text("packet")
-            ctx_files = {"grok": ctx}
-            result = model_review.dispatch(
-                review_dir,
-                ctx_files,
-                ["grok"],
-                "q",
-                False,
-                project_dir=None,
-            )
-            self.assertEqual(result["grok"]["exit_code"], 1)
-            self.assertEqual(
-                result["grok"]["failure_reason"], "repo_workspace_requires_project_dir"
-            )
 
 
 class StructuralAssumptionsTest(unittest.TestCase):

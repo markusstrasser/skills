@@ -10,9 +10,9 @@ effort: low
 
 Select between the current frontier models and prompt them correctly.
 
-**Models covered:** Claude Opus 4.8 (primary Claude), Claude Sonnet 5 (cost-tier Claude), GPT-5.6 Sol / Terra / Luna (GA 2026-07-09; GPT-5.5 removed). Claude Fable 5 — **metered opt-in** (off subscription 2026-07-07; see below). Grok 4.5 — **frontier niche** (AA 2026-07-08; Cursor pool + opt-in critique axis; see below).
-**Last updated:** 2026-07-12.
-**Active stance:** This skill no longer maintains a broad model zoo. Older GPT, Gemini, Grok-4.20-and-earlier, and Sonnet-4.6-and-earlier routes were removed from active guidance. Sonnet 5 is reinstated as a named, cost-tier Claude option (2026-06-30). Grok 4.5 is a **named niche** (agentic tool workflows + cheap/fast frontier cosign via Cursor), not a Default Routing replacement for Opus/GPT-5.6 Sol — calibration is mid-pack (AA-Omniscience non-hallucination ~46%). Use this guide for high-value frontier decisions; use repo-specific batch tooling or search tools for cheap bulk work.
+**Models covered:** Claude Opus 4.8 (primary Claude), Claude Sonnet 5 (cost-tier Claude), GPT-5.6 Sol / Terra / Luna (GA 2026-07-09; GPT-5.5 removed). Claude Fable 5 — **metered opt-in** (off subscription 2026-07-07; see below). Grok 4.5 measurements are retained historically, but no verified local transport is currently available.
+**Last updated:** 2026-07-13.
+**Active stance:** This skill no longer maintains a broad model zoo. Older GPT, Gemini, Grok-4.20-and-earlier, and Sonnet-4.6-and-earlier routes were removed from active guidance. Sonnet 5 is reinstated as a named, cost-tier Claude option (2026-06-30). Grok 4.5 is not an active route: Cursor removed it from the live registry and the xAI API key remains blocked. Use this guide for high-value frontier decisions; use repo-specific batch tooling or search tools for cheap bulk work.
 
 **OPEN QUESTION (2026-06-30, not yet resolved — operator call):** the "Architecture / design / high-reasoning critique → NEVER Sonnet" verdict below was reached against Sonnet 4.6 on 2026-06-20. Sonnet 5's system card shows large agentic/coding gains and prompt-injection robustness tying or beating Opus 4.8 in several places, but also the *worst* prefill/system-prompt-susceptibility numbers of the compared models and measurably more turns/tokens per task (system-card digest: `references/sonnet-5-system-card.md`). Whether this changes the "NEVER Sonnet" verdict for architecture/critique work is a live question, not re-litigated here — the verdict stands until the operator revisits it.
 
@@ -34,7 +34,7 @@ mechanisms drift faster than judgment.
 | `llmx chat -m claude-fable-5` (claude-cli transport) | **Genuinely Fable** | MEASURED | `~/.claude/llmx-usage.jsonl` — 18 real completions through 2026-07-12 (e.g. 34,385 completion tokens at `reasoning_effort: max`). `grep claude-fable-5 ~/.claude/llmx-usage.jsonl \| tail`. **Currently the only proven way to guarantee Fable.** |
 | Headless `claude -p --model claude-fable-5` (key-stripped) | Genuinely Fable | MEASURED (2026-07-04, arc-agi ebbeff04) | Dispatches and completes; not re-verified since — re-probe before relying on it for a batch. |
 | `llmx chat --subscription -m claude-opus-4-8` / `-m gpt-5.6*` | Named model | Config-level, not self-report-verified | `~/.claude/cache/llmx-routing.json` `lite_allowed_models` confirms *routable*; llmx has no built-in "ask the model who it is" check yet. |
-| `llmx chat --subscription -m grok-4.5` | **Mis-routes to `xai-api`** → 403 blocked key | **MEASURED, BROKEN** (2026-07-11) | `~/.claude/rules/llmx-routing.md`. Use `-p cursor -m grok-4.5-xhigh` or the critique `--axes …,grok` path instead — both confirmed live. |
+| Grok through llmx, Cursor, or `cursor-agent` | No verified route: subscription mis-routes to blocked xAI API; Cursor registry no longer exposes Grok | **MEASURED, BROKEN** (updated 2026-07-13) | `--axes …,grok` now fails before dispatch. Re-enable only after a named-model smoke test and registry check. |
 | codex-cli / `llmx --subscription -m gpt-5.6*` | `gpt-5.6` family | MEASURED | `gpt-5.5` retired from the subscription allowlist 2026-07-10 (exit 2 on attempt) — don't route or price it anywhere. |
 
 **Until the Agent-tool bug is fixed:** any Agent-tool dispatch where the model tier is
@@ -60,24 +60,24 @@ Judgment below assumes the lane you dispatch to actually delivers the named mode
 | Routine/cost-sensitive coding, security review, cyber, lab/molecular biology | **Claude Opus 4.8** | Same model — use lower effort (`low`/`medium`) when the brief has mechanical gates. |
 | Codex/terminal-heavy implementation, tool loops, structured API work | **GPT-5.6 Sol** (or **Luna** for everyday/cost) | GPT-5.6 suite GA 2026-07-09. Sol = flagship; **Luna ≈ prior GPT-5.5 perf at ~½ that price** ($1/$6); Terra = mid opt-in. Effort includes `max`. |
 | Quantitative proof, calibration math, hard science/data derivation where mistakes compound | **GPT-5.6 Sol** + API `reasoning.mode=pro` (or ChatGPT Sol Pro) | No separate `gpt-5.6-*-pro` slug — Pro is a reasoning *mode* on Sol/Terra/Luna at the same $/MTok (more tokens). Use when the answer will be checked. |
-| Cross-model review | **Opus 4.8 + GPT-5.6 Sol** (Luna OK for routine critique) (+ opt-in `grok` on PLAN packets) | Different labs, different failure profiles. Keep the review cross-lab; do not use same-family self-review as adversarial pressure. Add `--axes …,grok` when the packet needs **repo-grounded** premise falsification (Cursor workspace) — not `--subscription -m grok-4.5` (mis-routes, see Verified Transport). |
-| Architecture / design / high-reasoning critique | **Opus 4.8 `max` + GPT-5.6 Sol — NEVER Sonnet** | Operator 2026-06-20: architecture → Opus **`max`**. Sonnet is for search + bug-fixes only. A sonnet-thinking arch critique built a confident "HALT, reverse the spine" conclusion on a *search-error false premise*; Opus + GPT-5.6 (repo-grounded) got it right. For **codebase-coupled** decisions, run the critic with real repo access via `cursor-agent -p -f --mode ask --model claude-opus-4-8-thinking-max` — or `--axes …,grok` (Grok 4.5-xhigh, workspace). Cold API models can't flag "already-handled at file:line." |
-| Agentic SaaS / multi-tool workflows (AutomationBench-shaped) | **Grok 4.5** (Cursor pool) or Opus | AA 2026-07-08: Grok leads AutomationBench-AA (51%); strong τ³-Banking. Prefer when Cursor pool is free/cheap and the task is tool-loop heavy with a verifier. |
+| Cross-model review | **Opus 4.8 + GPT-5.6 Sol** (Luna OK for routine critique) | Different labs, different failure profiles. Keep the review cross-lab; do not use same-instance self-review as the sole adversarial pressure. PLAN packets get repo-grounded premise falsification from the built-in Composer scout. |
+| Architecture / design / high-reasoning critique | **Opus 4.8 `max` + GPT-5.6 Sol — NEVER Sonnet** | Operator 2026-06-20: architecture → Opus **`max`**. Sonnet is for search + bug-fixes only. A sonnet-thinking arch critique built a confident "HALT, reverse the spine" conclusion on a *search-error false premise*; Opus + GPT-5.6 got it right. For codebase-coupled decisions, rely on the review gate's repo-grounded Composer premise scout before packet-only critics. |
+| Agentic SaaS / multi-tool workflows (AutomationBench-shaped) | **Opus 4.8 or GPT-5.6 Sol** | Grok's historical benchmark result is not actionable until a verified transport returns. Use a routable frontier model with the task's verifier. |
 | Current facts, quotes, prices, law, news | **Tools first, then model synthesis** | Every model card still shows factuality limits. Retrieval/database truth beats frontier recall. **Not Grok alone** — AA-Omniscience non-hallucination ~46% (mid-pack; worse than Opus 64% / GLM 72%). |
 
 ## Quick Selection Matrix
 
 | Task | First choice | Escalate / pair when |
 |---|---|---|
-| Agentic coding | Opus 4.8 (high effort) | Drop to `low` effort when brief has mechanical gates; use GPT-5.6 Sol/Terra when terminal/Codex-heavy; **Grok 4.5 (Cursor)** when tool-loop / SaaS-workflow heavy and pool is cheap (AA AutomationBench lead; Coding Index ~72, near Opus). |
-| Codebase-scale migration / multi-day autonomous run | Opus 4.8 (`xhigh`/`max`) | Keep human checkpoints at irreversible boundaries. Grok Coding Agent Index (Grok Build) is competitive — still prefer Opus for irreversible shared-infra until dogfooded. |
+| Agentic coding | Opus 4.8 (high effort) | Drop to `low` effort when brief has mechanical gates; use GPT-5.6 Sol/Terra when terminal/Codex-heavy. |
+| Codebase-scale migration / multi-day autonomous run | Opus 4.8 (`xhigh`/`max`) | Keep human checkpoints at irreversible boundaries. |
 | Security review, exploit/vuln work, cyber, molecular biology | Opus 4.8 | Active Claude default for classifier-sensitive work (formerly Fable-refusal domain). |
-| Debugging messy repo state | GPT-5.6 Luna or Sol | Pair with Opus if the fix requires architectural judgment; Grok Cursor session is a fine third try when pool is free. |
-| Architecture decision | **Opus 4.8 `max`** | Send the selected proposal to GPT-5.6 Sol for independent cross-lab critique; add `--axes …,grok` for repo-grounded premise checks. |
+| Debugging messy repo state | GPT-5.6 Luna or Sol | Pair with Opus if the fix requires architectural judgment. |
+| Architecture decision | **Opus 4.8 `max`** | Send the selected proposal to GPT-5.6 Sol for independent cross-lab critique; use the built-in premise scout for repo-grounded checks. |
 | Quantitative audit / CritPt-hard physics | GPT-5.6 Sol (`max` / pro mode) | Grok CritPt **15%** — weak; do not route hard derivation here. |
 | Long-context document/repo synthesis | Opus 4.8 or GPT-5.6 Sol/Terra | Both 1.05M-class. Grok API context is **500k** — prefer Opus/GPT for >500k. |
 | Browser/computer use | Opus 4.8 or GPT-5.6 Sol | Both strong; Fable vision-SOTA notes apply once it's reachable via a lane that isn't paid-metered or Agent-tool-broken. |
-| PLAN critique needing repo falsification | **`--axes standard,grok`** (or cross2,grok) | Repo-grounded Cursor agent; same class as premise_scout. Prefer over packet-only `composer` when callers/joins must be checked. |
+| PLAN critique needing repo falsification | **`/critique model` with its default premise scout** | The Composer scout has repo access and checks callers/joins before packet-only cosigners. |
 | Letter-exact output constraints (exact counts, rigid templates, banned words) | Schema/validator enforcement, any model | Never rely on prose compliance — Claude family is measurably weakest at mechanical constraint-following (IFBench 62–63 vs GPT-5.6-class 76, bottom-5 of 27). Construct caveat: IFBench is majority adversarial-synthetic and high scores trade against answer quality, so this is a weak GPT preference for unschematizable cases, not a routing rule. |
 | Claim verification | Neither alone | Use primary sources and deterministic checks; use models to summarize evidence, not to establish it. |
 | Contradictory / impossible spec, epistemic guardrails | **Opus 4.8** or **GLM-5.2** (opt-in) | GPT family historically weak on abstention (re-measure GPT-5.6 TBD); DeepSeek V4 (~6%). Grok ~46% — mid-pack, **not** a calibration pick. More reasoning tokens does not fix paradox blindness — see trilemma section. |
@@ -121,7 +121,7 @@ Mechanics and footguns: `/llmx-guide`.
 - **Cheap classification / mechanical audits:** `gemini-3-flash-preview` or `gemini-3.1-flash-lite-preview`.
 - **GPT-5.6 default effort is `medium`** (suite supports `max` beyond `xhigh`) — pass `-e high`/`xhigh` for depth; reasoning bills as output.
 - **GLM-5.2 (Z.ai, NEW LAB) = opt-in review cosigner, NOT an extractor (2026-06-19).** A 4th independent training lab (Zhipu) → real cross-lab diversity for critique; request explicitly `--axes …,glm` (`glm_review` profile, routed via OpenRouter). **Calibration edge:** 72% AA-Omniscience non-hallucination (2026-06-18 independent read) — best among commonly-routed large models, ahead of Opus 64%; strong on impossibility/paradox detection in anecdotal coding probes. Accepts ONLY `high`/`xhigh` reasoning (no low tier) → structurally expensive+slow → **rejected for high-volume extraction/ingestion** (cost-dominated, no quality gain; keep gpt-5.3/gemini-3-flash). Match reasoning floor to task: GLM for occasional thorough review and epistemic guardrails, not throughput. See `agent-infra/decisions/2026-06-19-glm-5.2-integration.md`, `evals` DECISIONS `glm-5.2-extraction`.
-- **Grok 4.5 (SpaceXAI, AA 2026-07-08) = opt-in repo-grounded cosigner + agentic niche — NOT a calibration pick.** Intelligence Index **54** (frontier pack with Opus 56); **cost/task ~$0.31** (≪ GPT $0.86 / Fable $2.75); speed mid-high (~88 tok/s). **Use more:** PLAN critique with `--axes …,grok` (Cursor `--workspace`); AutomationBench/τ³-shaped tool loops when Cursor pool is cheap; cheap/fast frontier second opinion. **Use less / never alone:** unsourced facts (non-hallucination ~46%), CritPt-hard physics (15%), epistemic guardrails, sole architecture judge. `llmx chat --subscription -m grok-4.5` mis-routes to the blocked xAI API key (see Verified Transport) — use `-p cursor` or the critique axis. See Grok section below + `decisions/2026-07-09-grok-4.5-transport.md`.
+- **Grok 4.5 is unroutable locally as of 2026-07-13.** Historical AA measurements remain useful for future routing if transport returns, but the Cursor registry removed Grok and the xAI API path is blocked. The critique `grok` axis is disabled and fails loud before dispatch; do not substitute a different Cursor model under that name.
 - **`gemini-3.1-pro-preview` is RETIRED as a routing option (2026-06-13, operator).** Do not route here for critique/synthesis/review — flash-3.5 dominates and is cheaper/faster. (Benchmark records in `references/BENCHMARKS.md` are kept as evidence; this is a routing retirement, not a data scrub. Callable via explicit `-m` if a one-off ever needs ARC-AGI-2/GPQA/video, but it is not a default anywhere.)
 - **Cosigner calibration caveat (AA-Omniscience, 2026-06-11):** both cosigner defaults are bottom-quartile abstainers — non-hallucination 39% (`gemini-3.5-flash`), prior GPT class 14% (re-measure Luna/Sol TBD), despite an abstention prompt. Critique output = adversarial pressure on reasoning, never a fact source; **for fact-heavy review where calibration matters, verify novel specifics at primary and lean on a frontier model (Opus/GPT), not a cheap cosigner.** Instruments: agent-infra `research/2026-06-11-aa-benchmark-instrument-validity.md`.
 
@@ -240,11 +240,12 @@ hidden CoT, `reasoning_extraction` classifier, refusal→Opus fallback), system-
 
 **Calibration:** re-measure AA-Omniscience on 5.6 before trusting abstention. Until then, treat GPT critique as adversarial pressure on *reasoning*, not a fact source.
 
-## Grok 4.5 - "Cheap frontier agent / repo cosigner" (AA 2026-07-08)
+## Grok 4.5 - historical routing evidence, currently unavailable
 
 SpaceXAI frontier model (2026-07-08), jointly trained with Cursor. Independent AA
-measurement puts it in the **frontier pack on capability** with a **cost/speed edge**,
-and **mid-pack calibration** — route on that split, not on the Intelligence Index alone.
+measurement put it in the **frontier pack on capability** with a **cost/speed edge** and
+**mid-pack calibration**. This section preserves the evidence for a future re-enable; it is not
+current routing guidance because no verified local transport serves the model.
 
 **AA snapshot (high effort, operator paste 2026-07-09 — treat as screen, not verifier):**
 
@@ -262,11 +263,9 @@ and **mid-pack calibration** — route on that split, not on the Intelligence In
 | Cost / Intelligence task | **~$0.31** | GPT $0.86 · Opus ~$1.8 · Fable $2.75 | **Use more when $ matters** |
 | Output speed | **~88 tok/s** | Flash 167 · Fable 70 · GPT 68 | Faster than Fable/GPT |
 
-**Use more:**
-1. **PLAN critique with repo access** — `--axes standard,grok` / `cross2,grok` (Cursor `--workspace`). Prefer over packet-only `composer` when premises must be grepped.
-2. **Agentic tool / SaaS / multi-step workflows** when Cursor pool is free or cheap (AutomationBench + τ³ lead).
-3. **Cheap/fast frontier second opinion** — cost/task ~⅓ of prior GPT xhigh on AA's index; good count-delta pass, not sole judge.
-4. **Interactive Cursor sessions** on coding/agentic work when you want SpaceXAI lineage diversity vs Opus/GPT.
+**Re-enable gate:** a live registry check must expose the exact Grok slug, a named-model smoke test
+must complete, and the critique transport test must prove repo access. Until all three pass, use the
+Composer premise scout for repo falsification and Opus/GPT for cosigning.
 
 **Use less / never alone:**
 1. **Unsourced facts / "should we even do this?"** — ~46% non-hallucination; tools + Opus/GLM for epistemic guardrails.
@@ -280,14 +279,13 @@ and **mid-pack calibration** — route on that split, not on the Intelligence In
 **Surfaces:**
 | Surface | How | Status (2026-07-09) |
 |---|---|---|
-| Critique `grok` axis | `model-review.py --axes standard,grok` → `cursor-agent --model grok-4.5-xhigh --workspace <project>` | **Wired** — repo context |
-| Cursor session / `cursor-agent` | `--model grok-4.5-xhigh` (or `-medium`/`-high`; optional `-fast-`) | **Live** — smoked `OK`. Bare `grok-4.5` aliases to **fast-xhigh**. |
-| llmx Cursor pool | `llmx chat -p cursor -m grok-4.5-xhigh` | Allowlisted — **packet-only** (neutral cwd); use critique axis for repo work |
+| Critique `grok` axis | `model-review.py --axes standard,grok` | **Disabled, fail-loud** — Cursor removed model |
+| Cursor session / `cursor-agent` | formerly `--model grok-4.5-xhigh` | **Unavailable** — live registry now offers Composer/GPT-family entries, not Grok; cursor-agent policy is Composer-only |
+| llmx Cursor pool | formerly `llmx chat -p cursor -m grok-4.5-xhigh` | **Unverified/unavailable** — do not route |
 | llmx xAI API | `llmx chat -p xai -m grok-4.5 -e high` | Wired + priced; **API key currently blocked** (403) — key status, not EU geo |
 
-**Footgun (2026-07-11):** `--subscription -m grok-4.5` mis-routes to the blocked xAI API lane
-above, not the working Cursor pool, despite being allowlisted — use `-p cursor` or the critique
-axis instead. See Verified Transport.
+**Footgun (updated 2026-07-13):** `--subscription -m grok-4.5` mis-routes to the blocked xAI
+API lane, while the former Cursor alternatives no longer serve Grok. There is no fallback route.
 
 See `agent-infra/decisions/2026-07-09-grok-4.5-transport.md`.
 
