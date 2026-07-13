@@ -457,45 +457,14 @@ Ranked list of the 5 most impactful changes, each with a testable verification c
 ## 6. Blind Spots In My Own Analysis
 Where should you distrust my assessment?""",
     },
-    "grok": {
-        # Repo-grounded: model-review dispatches cursor-agent --workspace=project
-        # (NOT llmx cursor transport — that strips workspace). Same class as
-        # premise_scout / fable-subagent: falsify packet claims against real files.
-        "label": "Grok 4.5 (repo-grounded Cursor agent)",
-        "profile": "grok_review",
-        "repo_workspace": True,
-        "prompt": """\
-<system>
-You are reviewing as an independent cosigner — SpaceXAI Grok 4.5 — with READ-ONLY access to the real repo workspace (not just the design packet). Your job is to FALSIFY premises and find what packet-only reviewers miss: dead callers, missing join keys, already-shipped helpers, wrong paths. Be concrete. Cite file:line from tools, not from memory. COMMIT to verdicts. It is {date}.
-Budget: ~2000 words. Dense tables and lists over prose.
-FIRST: use Read/Grep (or equivalent) on cited paths before judging the design. Do not invent file contents.
-</system>
+}
 
-{question}
-
-RESPOND WITH EXACTLY THESE SECTIONS:
-
-## 1. Premises checked against the repo
-For each load-bearing claim in the packet: verified / falsified / unverified — with the tool evidence (path + what you saw).
-
-## 2. Strengths and Weaknesses
-What holds up and what doesn't. Reference actual code/config from the workspace.
-
-## 3. What Was Missed
-Dead dispatch sites, missing callers, join-key gaps, already-existing helpers the plan reinvents.
-
-## 4. Better Approaches
-Agree (refine) / Disagree (alternative) / Upgrade — only after premises are checked.
-
-## 5. Top 5 Priorities
-Ranked with testable verification criteria (commands or file:line checks).
-
-## 6. Goals & Principles Alignment
-{principles_instruction}
-
-## 7. Blind Spots In My Own Analysis
-Where should you distrust this assessment?""",
-    },
+DISABLED_AXES = {
+    "grok": (
+        "disabled 2026-07-13: Cursor's live model registry no longer exposes "
+        "grok-4.5-xhigh, and cursor-agent supports Composer only; use the built-in "
+        "Composer premise scout for repo-grounded falsification"
+    )
 }
 
 # 2×2 cell metadata: family × lens (inspectable in coverage.json).
@@ -591,12 +560,10 @@ def write_structural_assumptions_artifact(review_dir: Path, assumptions: list[st
 # Presets map a single name to a list of axes.
 # `claude` (Opus 4.8, $0 subscription), `composer` (Cursor Composer 2.5,
 # metered Cursor pool — "sub" but not free), `glm` (Z.ai GLM-5.2, metered
-# OpenRouter — a genuinely NEW fourth lab), and `grok` (Grok 4.5 via
-# cursor-agent --workspace — repo-grounded, NOT packet-only llmx cursor) are
-# opt-in cosigners — intentionally NOT in any preset (promotion gated on
+# OpenRouter — a genuinely NEW fourth lab) are opt-in cosigners — intentionally
+# NOT in any preset (promotion gated on
 # measurement). Request explicitly:
-# `--axes standard,claude` / `--axes standard,composer` / `--axes standard,glm`
-# / `--axes standard,grok`.
+# `--axes standard,claude` / `--axes standard,composer` / `--axes standard,glm`.
 #
 # cross2/lens2 = diagonal 2×2 (S_G + M_P). cross4/lens4/standard = full grid.
 # model-review CLI default stays `standard` until evals/critique_replay/ROUTING_VERDICT.md
@@ -1154,96 +1121,6 @@ def run_premise_scout(
     return PremiseScoutResult(False, None, md_path, json_path, conviction)
 
 
-def axis_needs_repo_workspace(axis_name: str) -> bool:
-    """True when the axis must run cursor-agent with --workspace=project.
-
-    llmx's cursor transport uses a neutral empty cwd (packet-only). Repo-grounded
-    axes (grok) bypass llmx and call cursor-agent the same way premise_scout does.
-    """
-    return bool(AXES.get(axis_name, {}).get("repo_workspace"))
-
-
-def _call_cursor_repo_agent(
-    *,
-    model: str,
-    project_dir: Path,
-    context_path: Path,
-    prompt: str,
-    output_path: Path,
-    timeout: int,
-) -> dict:
-    """Repo-grounded cursor-agent ask-mode (workspace=project). Returns llmx-shaped dict."""
-    bin_path = _resolve_cursor_agent_bin()
-    if not bin_path:
-        return {
-            "exit_code": 1,
-            "size": 0,
-            "latency": 0.0,
-            "error": "cursor-agent not installed",
-        }
-
-    packet = context_path.read_text(errors="replace")
-    if len(packet) > PREMISE_SCOUT_CONTEXT_CAP:
-        packet = packet[:PREMISE_SCOUT_CONTEXT_CAP] + "\n\n[... packet truncated for repo axis ...]"
-
-    full_prompt = (
-        f"{prompt}\n\n--- DESIGN PACKET (also verify claims against the workspace) ---\n{packet}"
-    )
-    cmd = [
-        bin_path,
-        "-p",
-        "--mode",
-        "ask",
-        "--trust",
-        "--model",
-        model,
-        "--workspace",
-        str(project_dir.resolve()),
-        "--output-format",
-        "text",
-    ]
-    print(
-        f"[repo-axis] cursor-agent model={model} workspace={project_dir}",
-        file=sys.stderr,
-    )
-    t0 = time.time()
-    try:
-        proc = subprocess.run(
-            cmd,
-            input=full_prompt,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd=str(project_dir),
-        )
-    except subprocess.TimeoutExpired:
-        return {
-            "exit_code": 1,
-            "size": 0,
-            "latency": round(time.time() - t0, 1),
-            "error": f"timeout after {timeout}s",
-        }
-
-    stdout = (proc.stdout or "").strip()
-    stderr = (proc.stderr or "").strip()
-    latency = round(time.time() - t0, 1)
-    if proc.returncode != 0 or not stdout:
-        return {
-            "exit_code": 1,
-            "size": 0,
-            "latency": latency,
-            "error": (stderr[:500] or f"exit {proc.returncode}"),
-        }
-
-    output_path.write_text(stdout + "\n")
-    return {
-        "exit_code": 0,
-        "size": output_path.stat().st_size,
-        "latency": latency,
-        "error": None,
-    }
-
-
 def context_content_path(value: Path | ContextArtifact) -> Path:
     return value.content_path if isinstance(value, ContextArtifact) else value
 
@@ -1274,6 +1151,8 @@ def resolve_axes(raw_axes: str, *, allow_non_gpt: bool = False) -> list[str]:
         for token in tokens:
             if token in PRESETS:
                 axis_names.extend(PRESETS[token])
+            elif token in DISABLED_AXES:
+                raise ValueError(f"axis '{token}' is {DISABLED_AXES[token]}")
             elif token in AXES:
                 axis_names.append(token)
             else:
@@ -1792,9 +1671,8 @@ def dispatch(
 ) -> dict:
     """Fire N review calls in parallel (one per axis), wait, return results.
 
-    Most axes go through llmx. Axes with ``repo_workspace: True`` (e.g. ``grok``)
-    call cursor-agent with ``--workspace=project`` so they can falsify packet
-    claims against real files — llmx's cursor transport uses a neutral empty cwd.
+    Cosigner axes go through llmx. Repo-grounded premise falsification is handled
+    separately by the mandatory Composer premise scout.
     """
     today = date.today().isoformat()
 
@@ -1832,36 +1710,15 @@ def dispatch(
         if budget is not None and not budget.can_start(profile_timeout):
             return axis, _budget_skipped_axis(axis, review_dir, budget, profile_timeout)
         context_artifact = ctx_files[axis]
-        if axis_needs_repo_workspace(axis):
-            if project_dir is None:
-                return axis, {
-                    "label": axis_def["label"],
-                    "requested_model": profile_def.model,
-                    "model": profile_def.model,
-                    "exit_code": 1,
-                    "output": str(out_path),
-                    "size": 0,
-                    "failure_reason": "repo_workspace_requires_project_dir",
-                    "stderr": "repo-grounded axis needs --project (workspace path)",
-                }
-            result = _call_cursor_repo_agent(
-                model=profile_def.model,
-                project_dir=project_dir,
-                context_path=context_content_path(context_artifact),
-                prompt=prompts[axis],
-                output_path=out_path,
-                timeout=profile_timeout,
-            )
-        else:
-            result = _call_llmx(
-                provider=profile_def.provider,
-                model=profile_def.model,
-                context_path=context_content_path(context_artifact),
-                context_manifest_path=context_manifest_path(context_artifact),
-                prompt=prompts[axis],
-                output_path=out_path,
-                timeout=profile_timeout,
-            )
+        result = _call_llmx(
+            provider=profile_def.provider,
+            model=profile_def.model,
+            context_path=context_content_path(context_artifact),
+            context_manifest_path=context_manifest_path(context_artifact),
+            prompt=prompts[axis],
+            output_path=out_path,
+            timeout=profile_timeout,
+        )
         entry = {
             "label": axis_def["label"],
             "requested_model": profile_def.model,
@@ -1874,14 +1731,10 @@ def dispatch(
             entry["latency"] = result["latency"]
         if result.get("error"):
             entry["stderr"] = result["error"]
-        if axis_needs_repo_workspace(axis):
-            entry["transport"] = "cursor-agent-workspace"
-
         # Primary Gemini axis rate-limited -> retry once with the runner-up
         # critique model (3.1-Pro), not the cheap classification model.
         if (
-            not axis_needs_repo_workspace(axis)
-            and profile_def.model == GEMINI_PRIMARY_MODEL
+            profile_def.model == GEMINI_PRIMARY_MODEL
             and result["exit_code"] != 0
             and result.get("error")
             and any(m in result["error"].lower() for m in GEMINI_RATE_LIMIT_MARKERS)
@@ -1911,8 +1764,7 @@ def dispatch(
         # common path is untouched. Prevents a paid-API outage from silently
         # degrading a touches-everything review to single-model (happened 2026-05-31).
         elif (
-            not axis_needs_repo_workspace(axis)
-            and profile_def.provider == "openai"
+            profile_def.provider == "openai"
             and result["exit_code"] != 0
             and result.get("error")
             and any(m in result["error"].lower() for m in GPT_QUOTA_MARKERS)

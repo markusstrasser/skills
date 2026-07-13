@@ -51,7 +51,10 @@ See `lenses/adversarial-review.md` for full dispatch methodology, axis descripti
 
 **Opt-in cheap cosigner — Cursor Composer 2.5 (`composer` axis).** `/critique model --axes standard,composer` per subpart when reviewing a **plan/design packet** (not the diff — use `/code-review` for diffs). Dispatches `composer-2.5` via llmx's `cursor` transport (**packet-only** — neutral empty cwd). Validated frontier-equal on injected-defect review (11/11). Usage-metered Cursor pool. Pair with a GPT axis if using `composer` alone (axis-resolution rule).
 
-**Opt-in repo-grounded cosigner — Grok 4.5 (`grok` axis).** `/critique model --axes standard,grok` (or `cross2,grok`). Dispatches `cursor-agent --mode ask --model grok-4.5-xhigh --workspace <project>` — **real repo access**, same class as premise_scout / fable-subagent. Use on PLAN reviews where packet-only axes miss dead callers / missing joins / already-shipped helpers. Metered Cursor first-party pool. Do **not** confuse with llmx `-p cursor` (that strips workspace). Pair with a GPT axis if using `grok` alone.
+**Repo-grounded falsification is the Composer premise scout, not a cosigner axis.** The former
+`grok` axis is disabled: Cursor's live registry no longer exposes Grok, and `cursor-agent` is
+Composer-only. `--axes ...,grok` fails before dispatch with the recorded reason. Every PLAN review
+still runs the repo-grounded premise scout before packet-only critics.
 
 > **The llmx-transport Claude axis stays on Opus 4.8 — do not switch *that* axis to Fable 5.** Over llmx, Fable costs 2×, returns only summarized CoT, and review prompts that say "explain your analysis / show your reasoning" trip Fable's `reasoning_extraction` classifier → silent fallback to Opus 4.8 anyway. The `claude` axis routes via `claude_review` → llmx `anthropic` + `--subscription` (claude-cli); never anthropic-direct/API by default. So for the script-dispatched `claude` axis, Opus 4.8 is correct + cheaper. This is a *transport* limit, not a verdict on Fable's review ability.
 
@@ -244,9 +247,8 @@ unless the subpart is formal-class.
 | `--axes deep` | standard + domain + mechanical | Structural + domain-dense |
 | `--axes full` | deep + alternatives | Shared infra, clinical, high-stakes |
 | `--axes standard,composer` | + composer (Cursor, packet-only) | Plan/design third lineage — **not** closeout diff (use `/code-review`) |
-| `--axes standard,grok` | + grok (Cursor agent, **repo workspace**) | PLAN reviews that need premise falsification against real files |
 
-`formal`, `composer`, `claude`, and `grok` are opt-in add-ons. Run `standard` on each subpart; merge in session.
+`formal`, `composer`, and `claude` are opt-in add-ons. Run `standard` on each subpart; merge in session.
 
 **Genomics classification review** (monthly or after >10 commits to LR-engine/scoring): Use
 `--axes standard,formal,domain` on LR/math subparts. GPT formal/high found 11 conceptual/mathematical

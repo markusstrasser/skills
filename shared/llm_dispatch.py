@@ -267,27 +267,6 @@ PROFILES: dict[str, DispatchProfile] = {
         input_token_limit=120000,
         allowed_overrides=("timeout",),
     ),
-    "grok_review": DispatchProfile(
-        # Opt-in repo-grounded cosigner: SpaceXAI Grok 4.5 via cursor-agent WITH
-        # --workspace=project (NOT llmx cursor transport — that uses a neutral empty
-        # cwd and is packet-only). Effort baked into Cursor slug; default xhigh.
-        # Metered Cursor first-party pool. Role: falsify premises against real files
-        # (same class as fable-subagent / premise_scout), not packet aesthetics.
-        # CRITICAL: same cursor-cli constraints as composer_review — no max_tokens/
-        # search/stream; allowed_overrides locked to timeout.
-        name="grok_review",
-        intent="Grok 4.5 repo-grounded adversarial review (opt-in cosigner)",
-        provider="cursor",
-        model="grok-4.5-xhigh",
-        # Cursor's xhigh agent can legitimately exceed 10 minutes on a
-        # repo-grounded plan packet. Two independent arc-agi reviews hit the
-        # old 600s boundary with empty output on 2026-07-09.
-        timeout=1200,
-        auth="subscription",
-        mode="chat",
-        input_token_limit=120000,
-        allowed_overrides=("timeout",),
-    ),
 }
 
 MODEL_TO_PROFILE = {
@@ -303,9 +282,6 @@ MODEL_TO_PROFILE = {
     "composer-2.5": "composer_review",
     "composer-2.5-fast": "composer_screen",
     "glm-5.2": "glm_review",
-    "grok-4.5-xhigh": "grok_review",
-    "grok-4.5-high": "grok_review",
-    "grok-4.5-medium": "grok_review",
 }
 
 
