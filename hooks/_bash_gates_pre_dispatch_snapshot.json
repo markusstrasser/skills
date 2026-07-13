@@ -1,0 +1,127 @@
+{
+  "matcher": "Bash",
+  "captured_from": "/Users/alien/.claude/settings.json",
+  "captured_at": "2026-07-13",
+  "hooks": [
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-git-noext-inject.sh",
+      "if": "Bash(git*)"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-pyunbuffered-inject.sh"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-git-add-all-guard.sh",
+      "if": "Bash(git*)"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-bash-loop-guard.sh"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-bash-cat-guard.sh"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-noext-nongit-guard.sh"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-bash-background-ampersand.py"
+    },
+    {
+      "type": "command",
+      "command": "python3 /Users/alien/Projects/skills/hooks/pretool-bg-dispatch-footgun.py"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-heavy-load-guard.sh"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-no-background-commit.sh",
+      "if": "Bash(git*)"
+    },
+    {
+      "type": "command",
+      "command": "python3 /Users/alien/Projects/skills/hooks/pretool-uv-python-guard.py"
+    },
+    {
+      "type": "command",
+      "command": "python3 /Users/alien/Projects/skills/hooks/pretool-genomics-pythonpath-guard.py"
+    },
+    {
+      "type": "command",
+      "command": "python3 /Users/alien/Projects/skills/hooks/pretool-arc-agi-agent-cwd-guard.py"
+    },
+    {
+      "type": "command",
+      "command": "python3 /Users/alien/Projects/skills/hooks/pretool-bare-modal-guard.py"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-duckdb-quote-guard.sh"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/.claude/hooks/pretool-modal-cost-guard.sh"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/.claude/hooks/pretool-modal-script-audit.sh"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-cost-guard.sh"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-cost-awareness.sh"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-ast-precommit.sh",
+      "if": "Bash(git commit*)"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-commit-check.sh",
+      "if": "Bash(git commit*)"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-multiagent-commit-guard.sh",
+      "if": "Bash(git*)"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-modal-run-guard.sh"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-timeout-modal-guard.sh"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-destructive-git-ref.sh",
+      "if": "Bash(git*)"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/precommit-plan-completion-guard.sh",
+      "if": "Bash(git commit*)"
+    },
+    {
+      "type": "command",
+      "command": "/Users/alien/Projects/skills/hooks/pretool-plan-protect.sh"
+    },
+    {
+      "type": "command",
+      "command": "python3 /Users/alien/Projects/skills/hooks/pretool-cursor-model-guard.py"
+    }
+  ]
+}
