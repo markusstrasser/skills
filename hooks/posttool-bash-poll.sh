@@ -12,7 +12,21 @@ CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
 # Matches: wc [-flags] /path, ls [-flags] /path, head/tail [-n N] /path, stat /path, cat /path, du /path
 # Also: sleep N && wc /path (strip sleep prefix)
 CMD_CLEAN=$(echo "$CMD" | sed 's/^sleep [0-9]*[smh]* *&&//' | sed 's/^ *//')
-PATH_TARGET=$(echo "$CMD_CLEAN" | grep -oE '\b(wc|ls|head|tail|stat|cat|du)\b.*' | grep -oE '(/[^ |;>&]+)' | head -1)
+# Segment-scoped extraction: a stat verb only counts with a path from its OWN pipeline/command
+# segment. Pipeline `| tail -N` / `| head -N` are output-shaping (no file arg) — the old
+# whole-line grep matched them and then grabbed a path from a LATER `&&` segment, so N distinct
+# write-CLI invocations (`... | tail -1 && git add /x`) collided into one "polled" token.
+# Evidence: 2026-07-13 arc-agi — 15 distinct idea_backlog add/edit/done calls blocked as
+# "Polled /idea_backlog.py 15x". Same extractor-degradation class as F2/binary/directory above.
+PATH_TARGET=""
+while IFS= read -r _seg; do
+  _seg=$(echo "$_seg" | sed 's/^ *//')
+  echo "$_seg" | grep -qE '^(command +)?(wc|ls|head|tail|stat|cat|du)\b' || continue
+  _p=$(echo "$_seg" | grep -oE '(/[^ |;>&]+)' | head -1)
+  [ -n "$_p" ] && { PATH_TARGET="$_p"; break; }
+done <<EOF_SEGS
+$(echo "$CMD_CLEAN" | sed 's/&&/\n/g; s/||/\n/g' | tr '|;' '\n')
+EOF_SEGS
 [ -z "$PATH_TARGET" ] && exit 0
 
 # Shared read-only batch artifacts — parallel refute/extract fan-out reads these
