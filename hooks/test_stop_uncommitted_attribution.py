@@ -34,6 +34,18 @@ from pathlib import Path
 SCRIPT = Path(__file__).resolve().parent / "stop-uncommitted-warn.sh"
 
 
+def _clean_env() -> dict:
+    """Env with GIT_* stripped — hermetic temp-repo subprocesses.
+
+    `git commit --only` runs its pre-commit hook (which runs this test) with
+    GIT_INDEX_FILE exported, pointing at the OUTER repo's temporary lock index.
+    Inherited by the test's temp-repo git calls, every add/commit/show operates
+    on that locked outer index: commits silently no-op and HEAD reads return
+    empty (3 false failures, first seen 2026-07-13; plain `git commit` does not
+    export it, which is why earlier gate runs were green)."""
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
 class StopUncommittedAttributionTest(unittest.TestCase):
     def setUp(self) -> None:
         self.repo = Path(tempfile.mkdtemp(prefix="stop-uncommitted-test-"))
@@ -55,7 +67,7 @@ class StopUncommittedAttributionTest(unittest.TestCase):
     def _git(self, *args: str) -> str:
         return subprocess.run(
             ["git", "-C", str(self.repo), *args],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, timeout=10, env=_clean_env(),
         ).stdout.strip()
 
     def _tmp_ledger(self, sid: str, *rels: str) -> None:
@@ -83,7 +95,8 @@ class StopUncommittedAttributionTest(unittest.TestCase):
     def _fire_as(self, sid: str) -> None:
         stdin = '{"cwd":"%s","session_id":"%s"}' % (self.repo, sid)
         subprocess.run(["bash", str(SCRIPT)], input=stdin,
-                       capture_output=True, text=True, timeout=20)
+                       capture_output=True, text=True, timeout=20,
+                       env=_clean_env())
 
     def _head_files(self) -> str:
         return self._git("show", "--name-only", "--format=", "HEAD")

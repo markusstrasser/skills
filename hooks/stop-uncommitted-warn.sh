@@ -208,9 +208,26 @@ else:
 # [wip] commit repeatedly until this guard.)
 import time as _time
 _now = _time.time()
+# Widen the window to 900s when THIS session has recently-active subagents
+# (tasks/*.output mtime < 900s): a subagent writes repo files in bursts minutes
+# apart, so mid-build files look mtime-settled at 90s and get swept (2026-07-12
+# arc-agi 73bf44c8: goal_probe_adapter.py + 2 siblings frozen into a [wip] ~18min
+# into an active subagent build). Conditioning on live subagent activity keeps
+# solo session-end checkpoints intact; fail-safe both ways (defer, never drop).
+_IN_FLIGHT_S = 90
+try:
+    _tasks_dir = os.path.join(
+        "/private/tmp", f"claude-{os.getuid()}",
+        os.path.abspath(cwd).replace("/", "-"), session_id, "tasks")
+    for _t in os.listdir(_tasks_dir):
+        if (_now - os.path.getmtime(os.path.join(_tasks_dir, _t))) < 900:
+            _IN_FLIGHT_S = 900
+            break
+except OSError:
+    pass
 def _in_flight(path):
     try:
-        return (_now - os.path.getmtime(os.path.join(cwd, path))) < 90
+        return (_now - os.path.getmtime(os.path.join(cwd, path))) < _IN_FLIGHT_S
     except OSError:
         return False
 in_flight = sorted(f for f in new_changes if _in_flight(f))
@@ -381,7 +398,7 @@ try:
         if in_flight:
             k = len(in_flight)
             kplural = "s" if k != 1 else ""  # precompute plural — NO inline single quotes here, they break the bash-embedded program (see L191 NB)
-            inflight_msg = f" Deferred {k} in-flight file{kplural} (mtime<90s, still being written) to the next checkpoint."
+            inflight_msg = f" Deferred {k} in-flight file{kplural} (mtime<{_IN_FLIGHT_S}s, still being written) to the next checkpoint."
         output = {
             "hookSpecificOutput": {
                 "hookEventName": "Stop",
