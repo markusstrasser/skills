@@ -1867,6 +1867,62 @@ class GrokPreflightTest(unittest.TestCase):
         self.assertEqual(return_code, 1)
         self.assertFalse(payload["repo_canary"]["response_exact_ok"])
 
+    def test_repo_canary_clears_receipts_and_uses_exact_first_twelve(self) -> None:
+        full_head = "abc123def4567890abc123def4567890abc123de"
+
+        def fake_cursor(args, **kwargs):
+            if args[1:] == ["models"]:
+                return self._completed(
+                    args,
+                    exit_code=0,
+                    stdout="cursor-grok-4.5-high - Cursor Grok 4.5\n",
+                )
+            project_dir = Path(kwargs["cwd"])
+            self.assertFalse(
+                (project_dir / ".model-review/grok-preflight-latest.json").exists()
+            )
+            self.assertFalse(
+                (project_dir / ".model-review/preflight-latest.json").exists()
+            )
+            return self._completed(
+                args, exit_code=0, stdout="GROK45_REPO_OK abc123def456\n"
+            )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = Path(temp_dir)
+            receipt_dir = project_dir / ".model-review"
+            receipt_dir.mkdir()
+            for name in ("grok-preflight-latest.json", "preflight-latest.json"):
+                (receipt_dir / name).write_text(
+                    json.dumps({"expected": f"GROK45_REPO_OK {full_head[:12]}"})
+                )
+            with (
+                patch.object(
+                    model_review,
+                    "_resolve_cursor_agent_bin",
+                    return_value="/usr/bin/cursor-agent",
+                ),
+                patch.object(
+                    model_review, "_run_cursor_command", side_effect=fake_cursor
+                ),
+                patch.object(
+                    model_review.subprocess,
+                    "run",
+                    return_value=self._completed(
+                        ["git"], exit_code=0, stdout=f"{full_head}\n"
+                    ),
+                ) as git_run,
+            ):
+                return_code, payload = model_review.run_grok_preflight(project_dir)
+
+        self.assertEqual(return_code, 0)
+        self.assertEqual(payload["workspace_hygiene"]["prior_receipts_removed"], 2)
+        self.assertEqual(payload["repo_head"]["challenge_length"], 12)
+        self.assertNotIn(full_head[:12], json.dumps(payload))
+        self.assertEqual(
+            git_run.call_args.args[0][-3:], ["rev-parse", "--verify", "HEAD"]
+        )
+
 
 class VerifyClaimsAnchorResolutionTest(unittest.TestCase):
     """Regression: a finding citing a leading-slash / absolute path must not crash
