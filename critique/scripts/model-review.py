@@ -1757,6 +1757,14 @@ def rerun_gpt_axis_via_subscription(
         }
 
 
+def _subscription_extraction_prompt(prompt: str) -> str:
+    """Replace transport-enforced schema with an explicit CLI-safe JSON contract."""
+    return (
+        prompt + '\n\nReturn ONLY a JSON object of the form {"findings": [ ... ]} with no '
+        "prose and no markdown fences."
+    )
+
+
 def rerun_extraction_via_subscription(
     axis: str,
     model: str,
@@ -1782,10 +1790,7 @@ def rerun_extraction_via_subscription(
         f"ChatGPT subscription (llmx --subscription, $0)",
         file=sys.stderr,
     )
-    sub_prompt = (
-        prompt + '\n\nReturn ONLY a JSON object of the form {"findings": [ ... ]} with no '
-        "prose and no markdown fences."
-    )
+    sub_prompt = _subscription_extraction_prompt(prompt)
     cmd = [
         "llmx",
         "chat",
@@ -2520,14 +2525,22 @@ def extract_claims(
             )
             return axis, None
         extraction_path = review_dir / f"{axis}-extraction.json"
+        subscription_transport = profile_def.auth == "subscription"
+        extraction_prompt = (
+            _subscription_extraction_prompt(EXTRACTION_PROMPT)
+            if subscription_transport
+            else EXTRACTION_PROMPT
+        )
         result = _call_llmx(
             provider=profile_def.provider,
             model=profile_def.model,
             context_path=output_path,
             context_manifest_path=None,
-            prompt=EXTRACTION_PROMPT,
+            prompt=extraction_prompt,
             output_path=extraction_path,
-            schema=FINDING_SCHEMA,
+            # CLI transports cannot enforce a response schema. They receive the
+            # same JSON-only contract in prompt form and are parsed locally below.
+            schema=None if subscription_transport else FINDING_SCHEMA,
             timeout=profile_timeout,
         )
         # GPT API billing/quota fallback to ChatGPT subscription ($0). Mirrors the

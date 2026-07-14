@@ -125,7 +125,6 @@ PROFILES: dict[str, DispatchProfile] = {
         model="gpt-5.6-luna",
         timeout=600,
         reasoning_effort="medium",
-        max_tokens=16384,
         # 2026-07-14: operator default — Luna low/medium via codex-cli
         # subscription ($0) for most tasks; API metering is opt-in.
         auth="subscription",
@@ -144,7 +143,6 @@ PROFILES: dict[str, DispatchProfile] = {
         model="gpt-5.6-luna",
         timeout=300,
         reasoning_effort="low",
-        max_tokens=16384,
         # 2026-07-14: subscription lane (codex-cli, $0) — see gpt_general.
         auth="subscription",
         input_token_limit=120000,
