@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
-# pre-commit-no-large-binaries.sh — Reject PDFs and large binary artefacts.
+# pre-commit-no-large-binaries.sh — Reject PDFs, large binaries, and large
+# TEXT files (jsonl/csv/etc.) that don't belong in git.
 #
 # Rationale:
 #   - PDFs in git: rejected universally. Canonical store is ~/Projects/corpus/.
 #   - Other large binary blobs (.docx, .pptx, .xlsx, .zip, .tar, .tar.gz,
 #     .tgz) are almost always a mistake; tracked over a small threshold.
+#   - Any file (incl. large TEXT — .jsonl/.csv/.parquet/derived logs) over the
+#     generic limit: almost always regenerable data that bloats the pack. This
+#     rule was added after intel's *_work_queue.csv / claim_graph_imports.jsonl
+#     (9.5–21 MB each, 45 tracked versions ≈ 367 MB) grew the pack daily, unseen
+#     by the binaries-only guard (2026-07-14, storage-dossier).
 #
 # Install:
 #   ln -sf ~/Projects/skills/hooks/pre-commit-no-large-binaries.sh \
 #          .git/hooks/pre-commit
 #
-# Bypass (genuine cases like a tiny test fixture):
+# Bypass (genuine cases like a tiny test fixture, or a real large asset):
 #   GIT_ALLOW_BINARIES=1 git commit ...
 #
 # Size thresholds:
+#   Any file (incl. text): > 5 MB (5242880 bytes) — the generic bloat guard
 #   PDF: > 1 KB (1024 bytes) — anything larger than a stub
 #   Other binaries: > 100 KB (102400 bytes)
 #
@@ -28,6 +35,7 @@ if [[ -n "${GIT_ALLOW_BINARIES:-}" ]]; then
   exit 0
 fi
 
+GENERIC_LARGE_LIMIT=5242880   # 5 MB — catches large regenerable text/data
 PDF_LIMIT=1024
 BIG_BINARY_LIMIT=102400
 
@@ -42,6 +50,13 @@ while IFS= read -r path; do
   # Size of the staged blob (not the working-tree file).
   size=$(git cat-file -s ":$path" 2>/dev/null || echo 0)
   [[ "$size" -eq 0 ]] && continue
+
+  # Generic large-file guard FIRST — catches large text (jsonl/csv/…) that the
+  # type-specific rules below miss. One violation per file (continue after).
+  if (( size > GENERIC_LARGE_LIMIT )); then
+    violations+=("LARGE $size B  $path")
+    continue
+  fi
 
   # PDFs — strict 1KB threshold.
   case "$path" in
@@ -71,10 +86,11 @@ if (( ${#violations[@]} > 0 )); then
     echo "  $v" >&2
   done
   echo "" >&2
-  echo "PDFs do not belong in git. Canonical corpus store:" >&2
-  echo "  ~/Projects/corpus/" >&2
+  echo "Large/binary data does not belong in git — gitignore it and store the" >&2
+  echo "generator + source instead. PDFs -> ~/Projects/corpus/. Large text/data" >&2
+  echo "(LARGE rows) is almost always a regenerable derivative (index, log, dump)." >&2
   echo "" >&2
-  echo "If this is a genuine exception (tiny test fixture, etc.), override:" >&2
+  echo "If this is a genuine exception (tiny test fixture, real large asset), override:" >&2
   echo "  GIT_ALLOW_BINARIES=1 git commit ..." >&2
   echo "" >&2
   exit 1
