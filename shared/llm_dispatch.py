@@ -78,10 +78,15 @@ PROFILES: dict[str, DispatchProfile] = {
     "fast_extract": DispatchProfile(
         name="fast_extract",
         intent="Low-cost extraction, triage, and short synthesis",
-        provider="google",
-        model="gemini-3-flash-preview",
-        timeout=180,
-        input_token_limit=900000,
+        provider="openai",
+        # 2026-07-14: Gemini is critique-only (operator policy, agent-infra
+        # decisions/2026-07-14-gemini-critique-only-policy.md); default cheap
+        # lane is Luna low via codex-cli subscription ($0).
+        model="gpt-5.6-luna",
+        timeout=300,
+        reasoning_effort="low",
+        auth="subscription",
+        input_token_limit=120000,
     ),
     "deep_review": DispatchProfile(
         name="deep_review",
@@ -121,6 +126,9 @@ PROFILES: dict[str, DispatchProfile] = {
         timeout=600,
         reasoning_effort="medium",
         max_tokens=16384,
+        # 2026-07-14: operator default — Luna low/medium via codex-cli
+        # subscription ($0) for most tasks; API metering is opt-in.
+        auth="subscription",
         input_token_limit=120000,
     ),
     "mechanical_review": DispatchProfile(
@@ -137,6 +145,8 @@ PROFILES: dict[str, DispatchProfile] = {
         timeout=300,
         reasoning_effort="low",
         max_tokens=16384,
+        # 2026-07-14: subscription lane (codex-cli, $0) — see gpt_general.
+        auth="subscription",
         input_token_limit=120000,
     ),
     "search_grounded": DispatchProfile(
@@ -153,21 +163,28 @@ PROFILES: dict[str, DispatchProfile] = {
     "cheap_tick": DispatchProfile(
         name="cheap_tick",
         intent="Low-cost maintenance or cycle tick synthesis",
-        provider="google",
-        model="gemini-3-flash-preview",
-        timeout=120,
-        input_token_limit=900000,
+        provider="openai",
+        # 2026-07-14: repointed off gemini-3-flash (critique-only policy) to
+        # Luna low via codex-cli subscription ($0).
+        model="gpt-5.6-luna",
+        timeout=300,
+        reasoning_effort="low",
+        auth="subscription",
+        input_token_limit=120000,
     ),
     "observe_bulk": DispatchProfile(
         name="observe_bulk",
-        intent="Headless /observe bulk classification — cheap wide context; verify before promotion",
-        provider="google",
+        intent="Headless /observe bulk classification — cheap context; verify before promotion",
+        provider="openai",
         # 2026-06-21: observe repointed off deep_review (3.5-flash — too expensive at volume).
-        # Bulk transcript triage only; NOT a /critique cosigner. Cursor default is subagents.
-        # No standalone gemini-3.1-flash text SKU — Flash-Lite is the 3.1 cheap tier.
-        model="gemini-3.1-flash-lite-preview",
+        # 2026-07-14: repointed off gemini flash-lite (critique-only policy) to Luna low
+        # via codex-cli subscription ($0). NOTE the context drop 900K→120K: callers
+        # already size-cap via `just observe-context`; chunk rather than stuff.
+        model="gpt-5.6-luna",
         timeout=300,
-        input_token_limit=900000,
+        reasoning_effort="low",
+        auth="subscription",
+        input_token_limit=120000,
     ),
     "legacy_pro_review": DispatchProfile(
         # Pre-2026-05-24 default for deep_review. Kept available for
