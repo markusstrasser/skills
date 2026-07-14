@@ -3342,6 +3342,11 @@ def run_preflight(project_dir: Path | None = None, *, include_grok: bool = False
 
 
 def main() -> int:
+    # Gemini is critique-only by operator policy (2026-07-14, llmx
+    # spend_guard.enforce_gemini_policy). This engine IS the allowed lane —
+    # authorize its own llmx subprocess dispatches (gemini axes: arch/gaps).
+    os.environ.setdefault("LLMX_GEMINI_OK", "1")
+
     parser = argparse.ArgumentParser(
         description="Model-review dispatch: context assembly + parallel llmx + output collection",
         formatter_class=argparse.RawDescriptionHelpFormatter,
