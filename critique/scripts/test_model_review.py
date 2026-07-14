@@ -260,7 +260,7 @@ class CallLlmxTest(unittest.TestCase):
             with patched_llmx_chat(capture_chat):
                 model_review._call_llmx(
                     provider="openai",
-                    model="gpt-5.6-luna",
+                    model="gpt-5.6-sol",
                     context_path=ctx,
                     prompt="test",
                     output_path=out,
@@ -346,7 +346,7 @@ class CallLlmxTest(unittest.TestCase):
             with patched_llmx_chat(capture_chat):
                 model_review._call_llmx(
                     provider="openai",
-                    model="gpt-5.6-luna",
+                    model="gpt-5.6-sol",
                     context_path=ctx,
                     prompt="test",
                     output_path=out,
@@ -614,6 +614,43 @@ class UnderspecifiedPromptTest(unittest.TestCase):
 
 
 class ExtractionCoverageTest(unittest.TestCase):
+    def test_subscription_extraction_omits_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            review_dir = Path(td)
+            arch_output = review_dir / "arch-output.md"
+            arch_output.write_text("arch output")
+            captured: list[dict] = []
+
+            def mock_call_llmx(**kwargs):
+                captured.append(kwargs)
+                output_path = Path(kwargs["output_path"])
+                output_path.write_text('{"findings": []}')
+                return {
+                    "exit_code": 0,
+                    "size": output_path.stat().st_size,
+                    "latency": 0.1,
+                    "error": None,
+                }
+
+            dispatch_result = {
+                "review_dir": str(review_dir),
+                "axes": ["arch"],
+                "queries": 1,
+                "elapsed_seconds": 1.0,
+                "arch": {
+                    "model": "gemini-3.5-flash",
+                    "exit_code": 0,
+                    "size": arch_output.stat().st_size,
+                    "output": str(arch_output),
+                },
+            }
+            with patch.object(model_review, "_call_llmx", side_effect=mock_call_llmx):
+                self.assertIsNone(model_review.extract_claims(review_dir, dispatch_result))
+
+            self.assertEqual(len(captured), 1)
+            self.assertIsNone(captured[0]["schema"])
+            self.assertIn("Return ONLY a JSON object", captured[0]["prompt"])
+
     def test_extract_claims_writes_coverage_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             review_dir = Path(td)

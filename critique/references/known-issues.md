@@ -68,3 +68,10 @@
   enforces exact registry plus the unrevealed repo canary before dispatch. The July-13 entry
   remains the evidence for why registry and serve checks are mandatory rather than inferred from
   old aliases.
+- **[2026-07-14] FIXED — subscription review profiles inherited API-only output controls.**
+  Moving `gpt_general` and `mechanical_review` to the Codex CLI subscription transport left their
+  old `max_tokens` defaults in place, so `/critique` correctness/contracts failed before sampling.
+  Removing that field exposed the same latent mismatch in extraction: the subscription path also
+  cannot enforce JSON Schema. Subscription extraction now uses a strict JSON-only prompt and local
+  parsing, while an all-profile invariant test rejects future subscription defaults that request
+  `max_tokens` or search. The llmx fail-safe against silent metered fallback remains unchanged.

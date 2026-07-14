@@ -10,6 +10,14 @@ from shared import llm_dispatch
 
 
 class DispatchCoreTest(unittest.TestCase):
+    def test_subscription_profile_defaults_are_cli_capable(self) -> None:
+        for name, profile in llm_dispatch.PROFILES.items():
+            if profile.auth != "subscription":
+                continue
+            _, resolved = llm_dispatch.resolve_profile(name)
+            self.assertNotIn("max_tokens", resolved, name)
+            self.assertFalse(resolved.get("search"), name)
+
     def test_dispatch_success_writes_output_and_meta(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
