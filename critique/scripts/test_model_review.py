@@ -436,9 +436,20 @@ class AxisResolutionTest(unittest.TestCase):
             ["arch", "domain", "alternatives"],
         )
 
-    def test_grok_axis_fails_loud_before_dispatch(self) -> None:
-        with self.assertRaisesRegex(ValueError, "live model registry no longer exposes"):
-            model_review.resolve_axes("standard,grok")
+    def test_grok_axis_resolves_to_exact_repo_workspace_profile(self) -> None:
+        axes = model_review.resolve_axes("standard,grok")
+        self.assertIn("grok", axes)
+        self.assertTrue(model_review.axis_needs_repo_workspace("grok"))
+        self.assertFalse(model_review.axis_needs_repo_workspace("composer"))
+        self.assertEqual(model_review.AXES["grok"]["profile"], "grok_review")
+        profile = model_review.dispatch_core.PROFILES["grok_review"]
+        self.assertEqual(profile.model, "cursor-grok-4.5-high")
+        self.assertEqual(profile.provider, "cursor")
+        self.assertEqual(model_review._resolved_axis_timeout("grok"), 1200)
+        self.assertGreater(
+            model_review._parallel_dispatch_wait_default(["grok"]),
+            model_review._resolved_axis_timeout("grok"),
+        )
 
     def test_claude_axis_has_long_review_timeout_and_executor_headroom(self) -> None:
         from shared.llm_dispatch import PROFILES
@@ -446,8 +457,103 @@ class AxisResolutionTest(unittest.TestCase):
         self.assertEqual(model_review._resolved_axis_timeout("claude"), 3600)
         self.assertEqual(PROFILES["claude_review"].reasoning_effort, "max")
         self.assertGreater(
-            model_review._parallel_dispatch_wait_default(["arch", "claude"]),
+            model_review._parallel_dispatch_wait_default(["grok", "claude"]),
             model_review._resolved_axis_timeout("claude"),
+        )
+
+    def test_call_cursor_repo_agent_uses_exact_read_only_workspace_command(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            context_path = root / "context.md"
+            context_path.write_text("# packet\nclaim: foo exists\n")
+            output_path = root / "grok-output.md"
+            completed = model_review.subprocess.CompletedProcess(
+                [], 0, stdout="## Premises checked\nOK\n", stderr=""
+            )
+            with (
+                patch.object(
+                    model_review,
+                    "_resolve_cursor_agent_bin",
+                    return_value="/usr/bin/cursor-agent",
+                ),
+                patch.object(
+                    model_review, "_run_cursor_command", return_value=completed
+                ) as run,
+            ):
+                result = model_review._call_cursor_repo_agent(
+                    model="cursor-grok-4.5-high",
+                    project_dir=root,
+                    context_path=context_path,
+                    prompt="Review this.",
+                    output_path=output_path,
+                    timeout=30,
+                )
+
+            self.assertEqual(result["exit_code"], 0)
+            command = run.call_args.args[0]
+            self.assertIn("--mode", command)
+            self.assertEqual(command[command.index("--mode") + 1], "ask")
+            self.assertEqual(
+                command[command.index("--model") + 1], "cursor-grok-4.5-high"
+            )
+            self.assertEqual(
+                command[command.index("--workspace") + 1], str(root.resolve())
+            )
+            self.assertEqual(run.call_args.kwargs["cwd"], root)
+            self.assertIn("OK", output_path.read_text())
+
+    def test_call_cursor_repo_agent_refuses_retired_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            context_path = root / "context.md"
+            context_path.write_text("packet")
+            result = model_review._call_cursor_repo_agent(
+                model="grok-4.5-xhigh",
+                project_dir=root,
+                context_path=context_path,
+                prompt="Review this.",
+                output_path=root / "output.md",
+                timeout=30,
+            )
+        self.assertEqual(result["exit_code"], 1)
+        self.assertIn("non-canonical", result["error"])
+
+    def test_cursor_runner_uses_isolated_popen_not_subprocess_run(self) -> None:
+        process = MagicMock()
+        process.returncode = 0
+        process.communicate.return_value = ("OK\n", "")
+        with patch.object(model_review.subprocess, "Popen", return_value=process) as popen:
+            completed = model_review._run_cursor_command(
+                ["/usr/bin/cursor-agent", "models"],
+                input_text="probe",
+                timeout=30,
+                cwd=Path("/tmp/workspace"),
+            )
+
+        self.assertEqual(completed.returncode, 0)
+        self.assertEqual(completed.stdout, "OK\n")
+        self.assertTrue(popen.call_args.kwargs["start_new_session"])
+        self.assertEqual(popen.call_args.kwargs["cwd"], "/tmp/workspace")
+        process.communicate.assert_called_once_with(input="probe", timeout=30)
+
+    def test_dispatch_grok_requires_project_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            review_dir = root / "review"
+            review_dir.mkdir()
+            context_path = root / "context.md"
+            context_path.write_text("packet")
+            result = model_review.dispatch(
+                review_dir,
+                {"grok": context_path},
+                ["grok"],
+                "Review this",
+                False,
+                project_dir=None,
+            )
+        self.assertEqual(result["grok"]["exit_code"], 1)
+        self.assertEqual(
+            result["grok"]["failure_reason"], "repo_workspace_requires_project_dir"
         )
 
 
@@ -779,7 +885,32 @@ class ModelReviewMainTest(unittest.TestCase):
             ),
         ):
             self.assertEqual(model_review.main(), 0)
-        mock_preflight.assert_called_once_with()
+            mock_preflight.assert_called_once_with(
+                Path.cwd().resolve(), include_grok=False
+            )
+
+    def test_cli_preflight_opts_into_grok_for_requested_project(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = Path(temp_dir)
+            with (
+                patch.object(model_review, "run_preflight", return_value=0) as preflight,
+                patch.object(
+                    model_review.sys,
+                    "argv",
+                    [
+                        "model-review.py",
+                        "--preflight",
+                        "--axes",
+                        "grok",
+                        "--project",
+                        str(project_dir),
+                    ],
+                ),
+            ):
+                self.assertEqual(model_review.main(), 0)
+            preflight.assert_called_once_with(
+                project_dir.resolve(), include_grok=True
+            )
 
     def test_cli_rejects_removed_greedy_context_files_flag(self) -> None:
         with (
@@ -798,6 +929,35 @@ class ModelReviewMainTest(unittest.TestCase):
         ):
             model_review.main()
         self.assertEqual(raised.exception.code, 2)
+
+    def test_grok_preflight_failure_blocks_before_review_dispatch(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = Path(temp_dir)
+            context_path = project_dir / "context.md"
+            context_path.write_text("# review packet\n")
+            with (
+                patch.object(
+                    model_review.sys,
+                    "argv",
+                    [
+                        "model-review.py",
+                        "--project",
+                        str(project_dir),
+                        "--context",
+                        str(context_path),
+                        "--axes",
+                        "standard,grok",
+                    ],
+                ),
+                patch.object(
+                    model_review,
+                    "run_grok_preflight",
+                    return_value=(1, {"ok": False, "registry": {"ok": False}}),
+                ),
+                patch.object(model_review, "create_review_dir") as create_review_dir,
+            ):
+                self.assertEqual(model_review.main(), 1)
+            create_review_dir.assert_not_called()
 
     def test_main_accepts_explicit_extract_flag(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1498,7 +1658,7 @@ class PreflightTest(unittest.TestCase):
                     patch("shutil.which", return_value="/usr/bin/llmx"),
                     patch.object(subprocess, "run", side_effect=fake_run),
                 ):
-                    return_code = model_review.run_preflight()
+                    return_code = model_review.run_preflight(Path(temp_dir))
                 payload = json.loads(
                     (Path(temp_dir) / ".model-review/preflight-latest.json").read_text()
                 )
@@ -1536,6 +1696,176 @@ class PreflightTest(unittest.TestCase):
         self.assertEqual(return_code, 0)
         self.assertTrue(payload["live_subscription_entitlement"]["ok"])
         self.assertTrue(payload["live_subscription_entitlement"]["cached"])
+        self.assertNotIn("grok_preflight", payload)
+
+    def test_grok_probe_is_opt_in_and_uses_requested_project(self) -> None:
+        import subprocess
+
+        def fake_run(args, **_kwargs):
+            if args[1:3] == ["info", "--json"]:
+                return self._completed(args, exit_code=0, stdout='{"cli_providers": {}}')
+            if args[1:3] == ["chat", "--dry-run"]:
+                return self._completed(
+                    args,
+                    exit_code=0,
+                    stdout='{"auth": "subscription", "transport": "claude-cli"}',
+                )
+            if args[1] == "probe":
+                return self._completed(
+                    args,
+                    exit_code=0,
+                    stdout='{"verdict": "available", "status_code": 0}',
+                )
+            raise AssertionError(f"unexpected preflight subprocess: {args}")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = Path(temp_dir)
+            with (
+                patch("shutil.which", return_value="/usr/bin/llmx"),
+                patch.object(subprocess, "run", side_effect=fake_run),
+                patch.object(
+                    model_review,
+                    "run_grok_preflight",
+                    return_value=(0, {"ok": True, "model": "cursor-grok-4.5-high"}),
+                ) as grok_preflight,
+            ):
+                return_code = model_review.run_preflight(project_dir, include_grok=True)
+            payload = json.loads(
+                (project_dir / ".model-review/preflight-latest.json").read_text()
+            )
+
+        self.assertEqual(return_code, 0)
+        grok_preflight.assert_called_once_with(project_dir.resolve())
+        self.assertTrue(payload["grok_preflight"]["ok"])
+
+
+class GrokPreflightTest(unittest.TestCase):
+    @staticmethod
+    def _completed(args: list[str], *, exit_code: int, stdout: str = "", stderr: str = ""):
+        return model_review.subprocess.CompletedProcess(
+            args, exit_code, stdout=stdout, stderr=stderr
+        )
+
+    def test_exact_registry_and_unrevealed_repo_canary_are_required(self) -> None:
+        calls: list[tuple[list[str], dict]] = []
+
+        def fake_cursor(args, **kwargs):
+            calls.append((list(args), dict(kwargs)))
+            if args[1:] == ["models"]:
+                return self._completed(
+                    args,
+                    exit_code=0,
+                    stdout="cursor-grok-4.5-high - Cursor Grok 4.5\n",
+                )
+            prompt = str(kwargs.get("input_text") or "")
+            if "current git commit" in prompt:
+                self.assertNotIn("abc123def456", prompt)
+                return self._completed(
+                    args, exit_code=0, stdout="GROK45_REPO_OK abc123def456\n"
+                )
+            raise AssertionError(f"unexpected preflight subprocess: {args}")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = Path(temp_dir)
+            with (
+                patch.object(
+                    model_review,
+                    "_resolve_cursor_agent_bin",
+                    return_value="/usr/bin/cursor-agent",
+                ),
+                patch.object(
+                    model_review, "_run_cursor_command", side_effect=fake_cursor
+                ) as cursor_run,
+                patch.object(
+                    model_review.subprocess,
+                    "run",
+                    return_value=self._completed(
+                        ["git"], exit_code=0, stdout="abc123def456\n"
+                    ),
+                ),
+            ):
+                return_code, payload = model_review.run_grok_preflight(project_dir)
+
+        self.assertEqual(return_code, 0)
+        self.assertTrue(payload["registry"]["exact_slug_present"])
+        self.assertTrue(payload["repo_canary"]["response_exact_ok"])
+        cursor_dispatches = [args for args, _ in calls if "--model" in args]
+        self.assertEqual(len(cursor_dispatches), 1)
+        for command in cursor_dispatches:
+            self.assertEqual(command[command.index("--mode") + 1], "ask")
+            self.assertEqual(
+                command[command.index("--model") + 1], "cursor-grok-4.5-high"
+            )
+            self.assertEqual(
+                command[command.index("--workspace") + 1], str(project_dir.resolve())
+            )
+        cursor_calls = [
+            call for call in cursor_run.call_args_list if "--model" in call.args[0]
+        ]
+        self.assertEqual(len(cursor_calls), 1)
+        self.assertTrue(
+            all(call.kwargs["cwd"] == project_dir.resolve() for call in cursor_calls)
+        )
+
+    def test_missing_exact_registry_slug_stops_before_model_dispatch(self) -> None:
+        completed = self._completed(
+            ["cursor-agent", "models"],
+            exit_code=0,
+            stdout="composer-2.5 - Composer 2.5\n",
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with (
+                patch.object(
+                    model_review,
+                    "_resolve_cursor_agent_bin",
+                    return_value="/usr/bin/cursor-agent",
+                ),
+                patch.object(
+                    model_review, "_run_cursor_command", return_value=completed
+                ) as run,
+            ):
+                return_code, payload = model_review.run_grok_preflight(Path(temp_dir))
+
+        self.assertEqual(return_code, 1)
+        self.assertFalse(payload["registry"]["exact_slug_present"])
+        self.assertEqual(run.call_count, 1)
+
+    def test_repo_canary_cannot_pass_by_echoing_a_prompted_hash(self) -> None:
+        def fake_cursor(args, **kwargs):
+            if args[1:] == ["models"]:
+                return self._completed(
+                    args,
+                    exit_code=0,
+                    stdout="cursor-grok-4.5-high - Cursor Grok 4.5\n",
+                )
+            prompt = str(kwargs.get("input_text") or "")
+            self.assertNotIn("abc123def456", prompt)
+            return self._completed(
+                args, exit_code=0, stdout="GROK45_REPO_OK 000000000000\n"
+            )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with (
+                patch.object(
+                    model_review,
+                    "_resolve_cursor_agent_bin",
+                    return_value="/usr/bin/cursor-agent",
+                ),
+                patch.object(
+                    model_review, "_run_cursor_command", side_effect=fake_cursor
+                ),
+                patch.object(
+                    model_review.subprocess,
+                    "run",
+                    return_value=self._completed(
+                        ["git"], exit_code=0, stdout="abc123def456\n"
+                    ),
+                ),
+            ):
+                return_code, payload = model_review.run_grok_preflight(Path(temp_dir))
+
+        self.assertEqual(return_code, 1)
+        self.assertFalse(payload["repo_canary"]["response_exact_ok"])
 
 
 class VerifyClaimsAnchorResolutionTest(unittest.TestCase):

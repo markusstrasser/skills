@@ -24,6 +24,7 @@ import argparse
 import json
 import os
 import re
+import signal
 import shutil
 import subprocess
 import sys
@@ -457,14 +458,45 @@ Ranked list of the 5 most impactful changes, each with a testable verification c
 ## 6. Blind Spots In My Own Analysis
 Where should you distrust my assessment?""",
     },
-}
+    "grok": {
+        # Repo-grounded: dispatch through cursor-agent --workspace=project, not
+        # llmx's neutral packet-only Cursor cwd. Preflight binds this axis to the
+        # exact live registry slug and proves a read-only repo canary first.
+        "label": "Grok 4.5 (repo-grounded Cursor agent)",
+        "profile": "grok_review",
+        "repo_workspace": True,
+        "prompt": """\
+<system>
+You are reviewing as an independent cosigner — SpaceXAI Grok 4.5 — with READ-ONLY access to the real repo workspace (not just the design packet). Your job is to FALSIFY premises and find what packet-only reviewers miss: dead callers, missing join keys, already-shipped helpers, wrong paths. Be concrete. Cite file:line from tools, not from memory. COMMIT to verdicts. It is {date}.
+Budget: ~2000 words. Dense tables and lists over prose.
+FIRST: use Read/Grep (or equivalent) on cited paths before judging the design. Do not invent file contents.
+</system>
 
-DISABLED_AXES = {
-    "grok": (
-        "disabled 2026-07-13: Cursor's live model registry no longer exposes "
-        "grok-4.5-xhigh, and cursor-agent supports Composer only; use the built-in "
-        "Composer premise scout for repo-grounded falsification"
-    )
+{question}
+
+RESPOND WITH EXACTLY THESE SECTIONS:
+
+## 1. Premises checked against the repo
+For each load-bearing claim in the packet: verified / falsified / unverified — with the tool evidence (path + what you saw).
+
+## 2. Strengths and Weaknesses
+What holds up and what doesn't. Reference actual code/config from the workspace.
+
+## 3. What Was Missed
+Dead dispatch sites, missing callers, join-key gaps, already-existing helpers the plan reinvents.
+
+## 4. Better Approaches
+Agree (refine) / Disagree (alternative) / Upgrade — only after premises are checked.
+
+## 5. Top 5 Priorities
+Ranked with testable verification criteria (commands or file:line checks).
+
+## 6. Goals & Principles Alignment
+{principles_instruction}
+
+## 7. Blind Spots In My Own Analysis
+Where should you distrust this assessment?""",
+    },
 }
 
 # 2×2 cell metadata: family × lens (inspectable in coverage.json).
@@ -560,10 +592,9 @@ def write_structural_assumptions_artifact(review_dir: Path, assumptions: list[st
 # Presets map a single name to a list of axes.
 # `claude` (Opus 4.8, $0 subscription), `composer` (Cursor Composer 2.5,
 # metered Cursor pool — "sub" but not free), `glm` (Z.ai GLM-5.2, metered
-# OpenRouter — a genuinely NEW fourth lab) are opt-in cosigners — intentionally
-# NOT in any preset (promotion gated on
-# measurement). Request explicitly:
-# `--axes standard,claude` / `--axes standard,composer` / `--axes standard,glm`.
+# OpenRouter — a genuinely NEW fourth lab), and `grok` (Grok 4.5 via a
+# read-only cursor-agent repo workspace) are opt-in cosigners — intentionally
+# NOT in any preset. Request explicitly with `--axes standard,<axis>`.
 #
 # cross2/lens2 = diagonal 2×2 (S_G + M_P). cross4/lens4/standard = full grid.
 # model-review CLI default stays `standard` until evals/critique_replay/ROUTING_VERDICT.md
@@ -968,6 +999,155 @@ def _resolve_cursor_agent_bin() -> str | None:
     return None
 
 
+def parse_cursor_model_ids(output: str) -> set[str]:
+    """Parse stable `<model-id> - <label>` rows from `cursor-agent models`."""
+    return {
+        line.split(" - ", 1)[0].strip()
+        for line in output.splitlines()
+        if " - " in line and line.split(" - ", 1)[0].strip()
+    }
+
+
+def _grok_cursor_command(binary: str, project_dir: Path, model: str) -> list[str]:
+    """Build the one allowed Grok critique transport: read-only repo ask mode."""
+    return [
+        binary,
+        "-p",
+        "--mode",
+        "ask",
+        "--trust",
+        "--model",
+        model,
+        "--workspace",
+        str(project_dir.resolve()),
+        "--output-format",
+        "text",
+    ]
+
+
+def _run_cursor_command(
+    command: list[str],
+    *,
+    input_text: str | None = None,
+    timeout: int,
+    cwd: Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run Cursor without subprocess.run's macOS/grandchild teardown wedge."""
+    process = subprocess.Popen(
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=str(cwd) if cwd is not None else None,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = process.communicate(input=input_text, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except OSError:
+            process.kill()
+        stdout, stderr = process.communicate()
+        raise subprocess.TimeoutExpired(
+            command,
+            timeout,
+            output=stdout,
+            stderr=stderr,
+        ) from exc
+    return subprocess.CompletedProcess(
+        command,
+        process.returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
+def run_grok_preflight(project_dir: Path) -> tuple[int, dict]:
+    """Prove the exact registry slug and an unrevealed repo read before dispatch."""
+    project_dir = project_dir.expanduser().resolve()
+    profile = dispatch_core.PROFILES["grok_review"]
+    model = profile.model
+    checks: dict = {
+        "model": model,
+        "workspace": str(project_dir),
+        "read_only_mode": "ask",
+    }
+    binary = _resolve_cursor_agent_bin()
+    checks["cursor_agent"] = {"ok": bool(binary), "path": binary}
+    if not binary:
+        checks["ok"] = False
+        checks["failure"] = "cursor-agent not installed"
+        return 1, checks
+
+    try:
+        registry = _run_cursor_command(
+            [binary, "models"],
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        checks["registry"] = {"ok": False, "error": "timeout after 30s"}
+        checks["ok"] = False
+        return 1, checks
+    live_models = parse_cursor_model_ids(registry.stdout or "")
+    checks["registry"] = {
+        "ok": registry.returncode == 0 and model in live_models,
+        "exit_code": registry.returncode,
+        "exact_slug_present": model in live_models,
+        "stderr": (registry.stderr or "").strip()[:400],
+    }
+    if not checks["registry"]["ok"]:
+        checks["ok"] = False
+        return 1, checks
+
+    head = subprocess.run(
+        ["git", "-C", str(project_dir), "rev-parse", "--short=12", "HEAD"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    expected_head = (head.stdout or "").strip()
+    checks["repo_head"] = {
+        "ok": head.returncode == 0 and bool(expected_head),
+        "exit_code": head.returncode,
+        "expected": expected_head,
+        "stderr": (head.stderr or "").strip()[:400],
+    }
+    if not checks["repo_head"]["ok"]:
+        checks["ok"] = False
+        return 1, checks
+
+    repo_expected = f"GROK45_REPO_OK {expected_head}"
+    repo_prompt = (
+        "Use read-only workspace tools to determine the current git commit. Do not modify "
+        "any file. Reply with GROK45_REPO_OK, one space, and exactly the first 12 hexadecimal "
+        "characters of the commit hash. Do not add markdown or explanation."
+    )
+    command = _grok_cursor_command(binary, project_dir, model)
+    try:
+        repo = _run_cursor_command(
+            command,
+            input_text=repo_prompt,
+            timeout=240,
+            cwd=project_dir,
+        )
+    except subprocess.TimeoutExpired:
+        checks["repo_canary"] = {"ok": False, "error": "timeout after 240s"}
+        checks["ok"] = False
+        return 1, checks
+    repo_output = (repo.stdout or "").strip()
+    checks["repo_canary"] = {
+        "ok": repo.returncode == 0 and repo_output == repo_expected,
+        "exit_code": repo.returncode,
+        "response_exact_ok": repo_output == repo_expected,
+        "expected": repo_expected,
+        "stderr": (repo.stderr or "").strip()[:400],
+    }
+    checks["ok"] = bool(checks["repo_canary"]["ok"])
+    return (0 if checks["ok"] else 1), checks
+
+
 def _extract_json_block(text: str) -> dict | None:
     for match in re.finditer(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL | re.IGNORECASE):
         try:
@@ -1121,6 +1301,86 @@ def run_premise_scout(
     return PremiseScoutResult(False, None, md_path, json_path, conviction)
 
 
+def axis_needs_repo_workspace(axis_name: str) -> bool:
+    """True when an axis must use cursor-agent against the actual project."""
+    return bool(AXES.get(axis_name, {}).get("repo_workspace"))
+
+
+def _call_cursor_repo_agent(
+    *,
+    model: str,
+    project_dir: Path,
+    context_path: Path,
+    prompt: str,
+    output_path: Path,
+    timeout: int,
+) -> dict:
+    """Run the exact registry-bound Grok model in read-only workspace ask mode."""
+    expected_model = dispatch_core.PROFILES["grok_review"].model
+    if model != expected_model:
+        return {
+            "exit_code": 1,
+            "size": 0,
+            "latency": 0.0,
+            "error": f"refusing non-canonical Grok model {model!r}; expected {expected_model!r}",
+        }
+    binary = _resolve_cursor_agent_bin()
+    if not binary:
+        return {
+            "exit_code": 1,
+            "size": 0,
+            "latency": 0.0,
+            "error": "cursor-agent not installed",
+        }
+
+    packet = context_path.read_text(errors="replace")
+    if len(packet) > PREMISE_SCOUT_CONTEXT_CAP:
+        packet = packet[:PREMISE_SCOUT_CONTEXT_CAP] + "\n\n[... packet truncated for repo axis ...]"
+    full_prompt = (
+        f"{prompt}\n\n--- DESIGN PACKET (verify claims against the read-only workspace) ---\n"
+        f"{packet}"
+    )
+    command = _grok_cursor_command(binary, project_dir, model)
+    print(
+        f"[repo-axis] cursor-agent model={model} workspace={project_dir}",
+        file=sys.stderr,
+    )
+    started_at = time.time()
+    try:
+        completed = _run_cursor_command(
+            command,
+            input_text=full_prompt,
+            timeout=timeout,
+            cwd=project_dir,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "exit_code": 1,
+            "size": 0,
+            "latency": round(time.time() - started_at, 1),
+            "error": f"timeout after {timeout}s",
+        }
+
+    stdout = (completed.stdout or "").strip()
+    stderr = (completed.stderr or "").strip()
+    latency = round(time.time() - started_at, 1)
+    if completed.returncode != 0 or not stdout:
+        return {
+            "exit_code": 1,
+            "size": 0,
+            "latency": latency,
+            "error": (stderr[:500] or f"exit {completed.returncode}"),
+        }
+
+    output_path.write_text(stdout + "\n")
+    return {
+        "exit_code": 0,
+        "size": output_path.stat().st_size,
+        "latency": latency,
+        "error": None,
+    }
+
+
 def context_content_path(value: Path | ContextArtifact) -> Path:
     return value.content_path if isinstance(value, ContextArtifact) else value
 
@@ -1151,8 +1411,6 @@ def resolve_axes(raw_axes: str, *, allow_non_gpt: bool = False) -> list[str]:
         for token in tokens:
             if token in PRESETS:
                 axis_names.extend(PRESETS[token])
-            elif token in DISABLED_AXES:
-                raise ValueError(f"axis '{token}' is {DISABLED_AXES[token]}")
             elif token in AXES:
                 axis_names.append(token)
             else:
@@ -1671,8 +1929,8 @@ def dispatch(
 ) -> dict:
     """Fire N review calls in parallel (one per axis), wait, return results.
 
-    Cosigner axes go through llmx. Repo-grounded premise falsification is handled
-    separately by the mandatory Composer premise scout.
+    Most axes go through llmx. Repo-workspace axes use cursor-agent ask mode so
+    their file/caller premises are checked against the actual project.
     """
     today = date.today().isoformat()
 
@@ -1710,15 +1968,36 @@ def dispatch(
         if budget is not None and not budget.can_start(profile_timeout):
             return axis, _budget_skipped_axis(axis, review_dir, budget, profile_timeout)
         context_artifact = ctx_files[axis]
-        result = _call_llmx(
-            provider=profile_def.provider,
-            model=profile_def.model,
-            context_path=context_content_path(context_artifact),
-            context_manifest_path=context_manifest_path(context_artifact),
-            prompt=prompts[axis],
-            output_path=out_path,
-            timeout=profile_timeout,
-        )
+        if axis_needs_repo_workspace(axis):
+            if project_dir is None:
+                return axis, {
+                    "label": axis_def["label"],
+                    "requested_model": profile_def.model,
+                    "model": profile_def.model,
+                    "exit_code": 1,
+                    "output": str(out_path),
+                    "size": 0,
+                    "failure_reason": "repo_workspace_requires_project_dir",
+                    "stderr": "repo-grounded axis needs --project (workspace path)",
+                }
+            result = _call_cursor_repo_agent(
+                model=profile_def.model,
+                project_dir=project_dir,
+                context_path=context_content_path(context_artifact),
+                prompt=prompts[axis],
+                output_path=out_path,
+                timeout=profile_timeout,
+            )
+        else:
+            result = _call_llmx(
+                provider=profile_def.provider,
+                model=profile_def.model,
+                context_path=context_content_path(context_artifact),
+                context_manifest_path=context_manifest_path(context_artifact),
+                prompt=prompts[axis],
+                output_path=out_path,
+                timeout=profile_timeout,
+            )
         entry = {
             "label": axis_def["label"],
             "requested_model": profile_def.model,
@@ -1731,10 +2010,13 @@ def dispatch(
             entry["latency"] = result["latency"]
         if result.get("error"):
             entry["stderr"] = result["error"]
+        if axis_needs_repo_workspace(axis):
+            entry["transport"] = "cursor-agent-workspace"
         # Primary Gemini axis rate-limited -> retry once with the runner-up
         # critique model (3.1-Pro), not the cheap classification model.
         if (
-            profile_def.model == GEMINI_PRIMARY_MODEL
+            not axis_needs_repo_workspace(axis)
+            and profile_def.model == GEMINI_PRIMARY_MODEL
             and result["exit_code"] != 0
             and result.get("error")
             and any(m in result["error"].lower() for m in GEMINI_RATE_LIMIT_MARKERS)
@@ -1764,7 +2046,8 @@ def dispatch(
         # common path is untouched. Prevents a paid-API outage from silently
         # degrading a touches-everything review to single-model (happened 2026-05-31).
         elif (
-            profile_def.provider == "openai"
+            not axis_needs_repo_workspace(axis)
+            and profile_def.provider == "openai"
             and result["exit_code"] != 0
             and result.get("error")
             and any(m in result["error"].lower() for m in GPT_QUOTA_MARKERS)
@@ -2886,8 +3169,8 @@ def verify_claims(
     return str(out_path)
 
 
-def run_preflight() -> int:
-    """Probe llmx routing and one bounded live subscription entitlement call."""
+def run_preflight(project_dir: Path | None = None, *, include_grok: bool = False) -> int:
+    """Probe llmx readiness; optionally prove the repo-bound Grok transport."""
     import shutil
     import subprocess
 
@@ -2994,7 +3277,15 @@ def run_preflight() -> int:
         "stderr": (live.stderr or "").strip()[:400],
     }
 
-    out = Path(".model-review/preflight-latest.json")
+    project_dir = (project_dir or Path.cwd()).expanduser().resolve()
+    if include_grok:
+        grok_exit, grok_checks = run_grok_preflight(project_dir)
+        checks["grok_preflight"] = {
+            **grok_checks,
+            "ok": grok_exit == 0 and bool(grok_checks.get("ok")),
+        }
+
+    out = project_dir / ".model-review" / "preflight-latest.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(checks, indent=2) + "\n")
     print(json.dumps(checks, indent=2))
@@ -3097,7 +3388,8 @@ def main() -> int:
         action="store_true",
         help=(
             "Probe llmx import/routing plus one cached live subscription entitlement "
-            "call and exit (no review dispatch)."
+            "call and exit (no review dispatch). Add --axes grok to also prove the "
+            "exact Cursor registry slug and repo workspace."
         ),
     )
     parser.add_argument(
@@ -3153,7 +3445,14 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.preflight:
-        return run_preflight()
+        preflight_project = (args.project or Path.cwd()).expanduser().resolve()
+        requested_preflight_axes = {
+            token.strip() for token in (args.axes or "").split(",") if token.strip()
+        }
+        return run_preflight(
+            preflight_project,
+            include_grok="grok" in requested_preflight_axes,
+        )
 
     project_dir = (args.project or Path.cwd()).expanduser().resolve()
     if not project_dir.is_dir():
@@ -3239,6 +3538,19 @@ def main() -> int:
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+
+    if "grok" in axis_names:
+        grok_exit, grok_checks = run_grok_preflight(project_dir)
+        grok_preflight_path = project_dir / ".model-review" / "grok-preflight-latest.json"
+        grok_preflight_path.parent.mkdir(parents=True, exist_ok=True)
+        grok_preflight_path.write_text(json.dumps(grok_checks, indent=2) + "\n")
+        if grok_exit != 0:
+            print(
+                "error: Grok axis preflight failed before dispatch; "
+                f"inspect {grok_preflight_path}",
+                file=sys.stderr,
+            )
+            return 1
 
     if not args.extract and args.verify:
         print("error: --verify cannot be combined with --no-extract", file=sys.stderr)

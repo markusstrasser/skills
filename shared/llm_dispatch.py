@@ -267,6 +267,21 @@ PROFILES: dict[str, DispatchProfile] = {
         input_token_limit=120000,
         allowed_overrides=("timeout",),
     ),
+    "grok_review": DispatchProfile(
+        # Opt-in repo-grounded cosigner. model-review.py invokes cursor-agent
+        # directly with --mode ask and --workspace; llmx's Cursor chat transport
+        # is intentionally packet-only. The exact slug is registry-bound and
+        # preflighted before every Grok-axis dispatch.
+        name="grok_review",
+        intent="Grok 4.5 repo-grounded adversarial review (opt-in cosigner)",
+        provider="cursor",
+        model="cursor-grok-4.5-high",
+        timeout=1200,
+        auth="subscription",
+        mode="chat",
+        input_token_limit=120000,
+        allowed_overrides=("timeout",),
+    ),
 }
 
 MODEL_TO_PROFILE = {
@@ -282,6 +297,7 @@ MODEL_TO_PROFILE = {
     "composer-2.5": "composer_review",
     "composer-2.5-fast": "composer_screen",
     "glm-5.2": "glm_review",
+    "cursor-grok-4.5-high": "grok_review",
 }
 
 
