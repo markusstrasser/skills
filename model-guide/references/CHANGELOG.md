@@ -1,5 +1,22 @@
 # Model Guide Changelog
 
+## 2026-07-14 - Grok 4.5 Cursor transport restored under exact slugs
+
+Supersedes the dated 2026-07-13 disable after a fresh live registry and serve audit.
+
+- Cursor now exposes `cursor-grok-4.5-{low,medium,high}` and matching trailing-`-fast`
+  variants; the retired unprefixed/xhigh aliases remain invalid.
+- A named `cursor-grok-4.5-high` ask-mode smoke returned the exact token, and a second
+  read-only workspace canary returned the exact current repo HEAD without receiving that
+  expected hash in its prompt.
+- llmx binds only those exact slugs to Cursor subscription and refuses any
+  `auth=subscription` plan resolving to xAI API. Bare `grok-4.5` remains the xAI model.
+- Critique restores the opt-in repo-grounded `grok` axis at exact high effort and enforces
+  registry plus the unrevealed repo canary before dispatch.
+
+The 2026-07-13 disable remains in history: it is the incident that made live registry and
+serve checks mandatory rather than inferring availability from yesterday's aliases.
+
 ## 2026-07-12 - Verified Transport table added; Agent-tool `model:` pin bug generalizes to Opus
 
 Added a "Verified Transport" section (before Default Routing) distinguishing MEASURED serving
