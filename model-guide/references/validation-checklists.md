@@ -52,7 +52,8 @@
 - [ ] Weight its reasoning on impossibility/contradiction flags; don't treat its factual recall as ground truth without sources.
 
 ### After Grok 4.5 (repo-grounded critique / Cursor pool / agentic niche)
-- [ ] Confirm transport was `cursor-agent --workspace` for critique (receipt `transport: cursor-agent-workspace`) — not llmx packet-only cursor.
+- [ ] Confirm preflight passed exact registry slug `cursor-grok-4.5-high` and the unrevealed repo-HEAD canary.
+- [ ] Confirm transport was `cursor-agent --mode ask --workspace` for critique (receipt `transport: cursor-agent-workspace`) — not llmx packet-only cursor.
 - [ ] Re-run 1–2 of its load-bearing greps yourself; weight reasoning, not asserted facts (~46% AA-Omniscience non-hallucination).
 - [ ] Do not treat CursorBench / vendor coding scores as decisive (Cursor blog: training contamination).
 - [ ] Hard physics / CritPt-shaped claims: distrust — AA CritPt 15%; escalate to GPT-5.6 Sol max/pro.

@@ -32,7 +32,7 @@ Default provider model: **Sol**. Pro = `reasoning.mode=pro` (same rates). Contex
 | Claude Sonnet 4.6 | `claude-sonnet-4-6` | Hyphens, not dots. Superseded by Sonnet 5 (2026-06-30) — prefer the newer ID for new work. |
 | GLM-5.2 | `glm-5.2` | Z.ai via OpenRouter (`zai` provider). **Reasoning: high/xhigh only** (no low tier). Opt-in critique cosigner — see `/model-guide` trilemma + `agent-infra/decisions/2026-06-19-glm-5.2-integration.md`. |
 | **Grok 4.5** (SpaceXAI, 2026-07-08) | `grok-4.5` | **Current xAI default** (`-p xai`). API: $2/$6 per MTok, 500k context, reasoning `low`/`medium`/`high` (default high). Live smoke may 403 with `API key is currently blocked` — key status, not geo (US egress still blocked 2026-07-09). Prefer Cursor pool / critique `grok` axis. |
-| Grok 4.5 (Cursor pool) | `grok-4.5-{medium,high,xhigh}` / `grok-4.5-fast-{medium,high,xhigh}` | Cursor-native slugs bake effort into the id. **Do not pass bare `grok-4.5` to cursor-agent** — it aliases to `grok-4.5-fast-xhigh`. Fast tier $4/$18. Route via `-p cursor -m grok-4.5-xhigh` (subscription allowlist includes `grok-4.5`). |
+| Grok 4.5 (Cursor pool) | `cursor-grok-4.5-{low,medium,high}` / `cursor-grok-4.5-{low,medium,high}-fast` | Exact live Cursor registry slugs (2026-07-14); effort precedes the optional `-fast` suffix and there is no xhigh slug. Route via `--subscription -m cursor-grok-4.5-high`. Bare `grok-4.5` remains the xAI API model. |
 | Grok 4.20 Reasoning | `grok-4.20-0309-reasoning` | Legacy. Use `-p xai`. **Not in `_RECOMMENDED_MODELS`** — pass full name explicitly. |
 | Grok 4.20 Non-Reasoning | `grok-4.20-0309-non-reasoning` | Latency tier, same backbone/price |
 | Grok 4.20 Multi-Agent | `grok-4.20-multi-agent-0309` | `reasoning.effort` controls **agent count** (low/med→4, high/xhigh→16), not depth |
@@ -73,7 +73,7 @@ Default provider model: **Sol**. Pro = `reasoning.mode=pro` (same rates). Contex
 | Gemini 3.5 Flash | low, medium, high | high (server-side, via `thinking_config`) |
 | Gemini 3.x (Pro/Flash) | low, medium, high | high (server-side, via `thinking_config`) |
 | Grok 4.5 (API) | **low, medium, high** | high |
-| Grok 4.5 (Cursor) | effort baked into slug (`-medium`/`-high`/`-xhigh`; optional `-fast-`) | pass explicit slug — bare `grok-4.5` → fast-xhigh |
+| Grok 4.5 (Cursor) | effort baked into exact slug (`-low`/`-medium`/`-high`; optional trailing `-fast`) | pass an exact `cursor-grok-4.5-*` registry slug |
 | Grok 4.20 Reasoning | **NONE — passing `reasoning_effort` errors** | auto (model reasons internally) |
 | Grok 4.20 Multi-Agent | low, medium, high, xhigh — **selects agent count, not depth** (low/med→4 agents, high/xhigh→16) | -- |
 | Grok 4.20 Non-Reasoning | n/a (no thinking) | -- |
