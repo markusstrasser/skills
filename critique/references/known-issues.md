@@ -59,3 +59,12 @@
   foreign-model workspace dispatcher were deleted. `--axes ...,grok` now fails before dispatch
   with the dated transport reason; the existing Composer premise scout remains the repo-grounded
   falsifier. Re-enable only after a registry check, exact named-model smoke, and repo-access test.
+- **[2026-07-14] SUPERSEDES the 2026-07-13 Grok disable — Cursor restored Grok 4.5
+  under new exact slugs.** Live `cursor-agent models` exposes
+  `cursor-grok-4.5-{low,medium,high}` and matching `-fast` variants; there is no xhigh slug.
+  A named `cursor-grok-4.5-high` ask-mode smoke and an exact repo-HEAD canary both passed;
+  the expected HEAD is withheld from the prompt so a compliant echo cannot fake repo access.
+  The opt-in `grok` axis is restored only through the read-only workspace dispatcher and now
+  enforces exact registry plus the unrevealed repo canary before dispatch. The July-13 entry
+  remains the evidence for why registry and serve checks are mandatory rather than inferred from
+  old aliases.
