@@ -1,0 +1,37 @@
+{
+  "name": "doe",
+  "kind": "worker",
+  "intent_class": "design-generation",
+  "summary": "Generates experiment designs (arms/shams/controls/bands/power/stopping-rule) from a hypothesis + budget, checked against a dated catalogue of this project's own attack-caught design defects.",
+  "entrypoint": {
+    "type": "skill_doc",
+    "path": "doe/SKILL.md"
+  },
+  "modes": {
+    "default": {
+      "intent_class": "design-generation",
+      "requires_packet": false,
+      "requires_gpt": false,
+      "artifacts": [
+        "design-doc.md"
+      ]
+    }
+  },
+  "uses": {
+    "dispatch_profiles": [],
+    "packet_builders": [],
+    "artifact_schemas": []
+  },
+  "follow_on": [
+    "eval",
+    "critique"
+  ],
+  "references": [
+    "doe/SKILL.md",
+    "doe/references/failure-catalogue.md",
+    "doe/references/house-rules.md",
+    "doe/references/classical-doe.md",
+    "doe/examples/worked-constructed-h.md"
+  ],
+  "registration_status": "NOT REGISTERED — this manifest describes the skill for internal consistency with existing skill directories; it is intentionally absent from ~/Projects/skills/skill_manifest.jsonl. Registration into that central list is the operator's call, per the 2026-07-14 charter."
+}
