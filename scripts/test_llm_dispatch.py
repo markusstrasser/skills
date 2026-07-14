@@ -18,8 +18,10 @@ class DispatchCoreTest(unittest.TestCase):
             context_path.write_text("context")
 
             def mock_chat(**kwargs):
-                self.assertEqual(kwargs["provider"], "google")
-                self.assertEqual(kwargs["model"], "gemini-3-flash-preview")
+                # fast_extract → Luna low via codex-cli subscription (2026-07-14,
+                # Gemini critique-only policy).
+                self.assertEqual(kwargs["provider"], "openai")
+                self.assertEqual(kwargs["model"], "gpt-5.6-luna")
                 response = MagicMock()
                 response.content = "hello"
                 response.latency = 0.25
@@ -40,7 +42,7 @@ class DispatchCoreTest(unittest.TestCase):
             self.assertEqual(output_path.read_text(), "hello")
             meta = json.loads((root / "out.meta.json").read_text())
             self.assertEqual(meta["status"], "ok")
-            self.assertEqual(meta["resolved_model"], "gemini-3-flash-preview")
+            self.assertEqual(meta["resolved_model"], "gpt-5.6-luna")
             self.assertEqual(meta["usage"]["prompt_tokens"], 12)
             telemetry = [json.loads(line) for line in (root / "telemetry.jsonl").read_text().splitlines()]
             self.assertEqual(len(telemetry), 1)

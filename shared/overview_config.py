@@ -7,7 +7,9 @@ from pathlib import Path
 # Default model for overview generation (code-structure summarization — a
 # cheap, high-volume job, so the cheap tier is correct). Single source of truth
 # for both the live path (per-project config) and the cross-project batch path.
-DEFAULT_OVERVIEW_MODEL = "gemini-3-flash-preview"
+# 2026-07-14: Luna low via codex-cli subscription ($0) — Gemini is critique-only
+# (agent-infra decisions/2026-07-14-gemini-critique-only-policy.md).
+DEFAULT_OVERVIEW_MODEL = "gpt-5.6-luna"
 
 
 @dataclass(frozen=True)
