@@ -37,8 +37,7 @@ corpus ingest --pdf path/to/doc.pdf --parser mineru
 ```
 
 `DEFAULT_PARSER["paper"|"preprint"] = "marker-modal"` lives in
-`substrate/packages/corpus-core/corpus_core/extract/__init__.py` (corpus-core moved
-out of agent-infra into the `substrate` workspace on 2026-06-10).
+`research-mcp/src/research_mcp/corpus/extract/__init__.py`.
 Existing parses are immutable/content-addressed, so this only affects NEW ingests.
 
 If `corpus` isn't appropriate (e.g., you need raw markdown + image crops
