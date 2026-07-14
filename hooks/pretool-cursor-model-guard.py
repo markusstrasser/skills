@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 # Gov-ID: hook:cursor-model-guard
-# goal: cursor-agent must only ever run its native Composer model — never a
-#       proxied frontier model (opus/gpt/claude/gemini/sonnet/o*)
+# goal: cursor-agent may run native Composer or exact admitted Cursor Grok
+#       slugs — never generic proxied frontier models
 # verifier: selftest
 # blast_radius: shared
-"""BLOCK `cursor-agent`/`agent` invocations that pin a non-Composer model.
+"""BLOCK `cursor-agent` model pins outside the admitted Cursor-native set.
 
 Cursor's CLI can proxy frontier models (opus, gpt, claude, …) at their own
-metered rates. Operator rule (2026-06-17, stated twice in-session): cursor is
-the *Composer* lane — always `composer-2.5`/`-fast`, never another model. Using
-opus/gpt through cursor is both off-policy and wasteful (Composer is the cheap
-included-usage tier; proxied models bill separately).
+metered rates. Composer remains the default lane. On 2026-07-14 the live Cursor
+registry and named/repo smokes admitted exact `cursor-grok-4.5-{low,medium,high}`
+slugs (plus trailing `-fast`) for deliberate opt-in use. Bare `grok-4.5`, retired
+aliases, and generic opus/gpt/claude/gemini/sonnet pins remain off-policy.
 
 Enforcement, not instruction: a prior session called cursor with a foreign
 model anyway. No explicit `--model` is fine — the account default is Composer.
-We only block an EXPLICIT non-composer model.
+We only block an explicit model outside the admitted set.
 """
 from __future__ import annotations
 
@@ -34,17 +34,24 @@ _MODEL = re.compile(r"(?:--model[=\s]+|(?<![\w-])-m\s+)([\"']?)([A-Za-z0-9._/-]+
 # dispatch-cursor-arm.sh <workspace> <model> ask "<prompt>" — model is arg #2
 _ARM_MODEL = re.compile(r"\bdispatch-cursor-arm\.sh\s+\S+\s+([A-Za-z0-9._/-]+)")
 
-# Composer is the only allowed family (any tier: composer-2.5, -fast, future).
-_ALLOWED = re.compile(r"^composer(?:[-.]|$)", re.IGNORECASE)
+# Composer stays open to native future tiers. Grok is deliberately exact: registry
+# drift previously made stale aliases silently unsafe, so no wildcard family match.
+_COMPOSER = re.compile(r"^composer(?:[-.]|$)", re.IGNORECASE)
+_CURSOR_GROK = re.compile(
+    r"^cursor-grok-4\.5-(?:low|medium|high)(?:-fast)?$", re.IGNORECASE
+)
 
 _MSG = (
-    "BLOCKED: cursor-agent must use its native Composer model only "
-    "(composer-2.5 / composer-2.5-fast) — never '{model}'. "
-    "Cursor proxies frontier models (opus/gpt/claude) at separate metered rates "
-    "and that's off-policy here. Drop the foreign --model (account default is "
-    "Composer) or pass --model composer-2.5. For opus/gpt use `claude -p` / "
-    "`codex exec` / `llmx`, not cursor."
+    "BLOCKED: cursor-agent model '{model}' is not admitted. Use native Composer "
+    "(composer-2.5 / composer-2.5-fast) or an exact live Cursor Grok slug "
+    "cursor-grok-4.5-{{low,medium,high}} with optional trailing -fast. Bare grok-4.5 "
+    "is xAI API; retired xhigh/fast-prefix aliases are forbidden. For opus/gpt use "
+    "`claude -p` / `codex exec` / `llmx`, not cursor."
 )
+
+
+def _model_allowed(model: str) -> bool:
+    return bool(_COMPOSER.match(model) or _CURSOR_GROK.fullmatch(model))
 
 
 def _is_cursor(cmd: str) -> bool:
@@ -71,7 +78,7 @@ def verdict(cmd: str) -> tuple[str, str]:
             if arm:
                 models.append(arm.group(1))
         for model in models:
-            if not _ALLOWED.match(model):
+            if not _model_allowed(model):
                 return "block", _MSG.format(model=model)
     return "pass", ""
 
@@ -80,6 +87,12 @@ def _selftest() -> int:
     cases = [
         ("agent -p --mode ask --trust --model composer-2.5 'hi'", "pass"),
         ("agent -p --trust --model composer-2.5-fast 'x'", "pass"),
+        ("agent -p --mode ask --trust --model cursor-grok-4.5-low 'x'", "pass"),
+        ("agent -p --mode ask --trust --model cursor-grok-4.5-medium-fast 'x'", "pass"),
+        ("agent -p --mode ask --trust --model cursor-grok-4.5-high 'x'", "pass"),
+        ("agent -p --trust --model grok-4.5 'x'", "block"),
+        ("agent -p --trust --model cursor-grok-4.5-xhigh 'x'", "block"),
+        ("agent -p --trust --model cursor-grok-4.5-fast-high 'x'", "block"),
         ("cursor-agent --model opus 'review this'", "block"),
         ("agent -p --trust --model gpt-5.5 'do it'", "block"),
         ("agent -p --trust -m claude-opus-4-8 'x'", "block"),
