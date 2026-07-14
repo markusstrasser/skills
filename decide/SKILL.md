@@ -237,3 +237,7 @@ This skill encodes one operator's process (n=1 origin). After 2-3 real uses, run
 session-analyst over its transcripts and tune the checklists against what actually recurs — not what
 the author guessed would. If an arc hits a skill defect or fresh friction, log it in the moment:
 `~/Projects/skills/hooks/append-skill-memento.sh decide '<one-line issue>'`.
+
+## Known Issues
+<!-- Append-only. Session-analyst may suggest additions. -->
+- **[2026-07-14] SKILL.md requires disagree-self-check.md, critique-loop.md, and completeness-and-capture.md, but those reference files are absent**
