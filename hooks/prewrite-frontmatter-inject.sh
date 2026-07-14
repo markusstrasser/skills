@@ -25,7 +25,7 @@ printf '%s' "$INPUT" | grep -q '"---\\n' && exit 0
 # Determine project from path
 if echo "$FPATH" | grep -q "Projects/intel"; then
     TEMPLATE="Entity files need YAML frontmatter: ticker, name, sector, conviction, last_reviewed, conviction_journal. See .claude/rules/doc-format.md."
-elif echo "$FPATH" | grep -q "Projects/phenome"; then
+elif echo "$FPATH" | grep -Eq 'Projects/personal/(health|apps/phenome)(/|$)'; then
     TEMPLATE="Research memos need YAML frontmatter: title, date, status, tags, summary. Follow MEMO_CONTRACT.md structure. See .claude/rules/doc-format.md."
 elif echo "$FPATH" | grep -q "Projects/agent-infra"; then
     TEMPLATE="Research memos need YAML frontmatter: title, date. See .claude/rules/doc-format.md."

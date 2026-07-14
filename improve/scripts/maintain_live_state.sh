@@ -15,7 +15,7 @@ DB_HASH=$(for db in ClinVar gnomAD PharmCAT CPIC; do
   f=$(find "$HOME/Projects/genomics/databases/" -iname "*${db}*" 2>/dev/null | head -1)
   [ -n "$f" ] && stat -f%m "$f" 2>/dev/null
 done | md5 || echo "na")
-GIT_HASH=$(for p in agent-infra intel genomics phenome hutter substrate; do
+GIT_HASH=$(for p in agent-infra intel genomics personal hutter substrate; do
   cd "$HOME/Projects/$p" 2>/dev/null && git log --oneline -1 2>/dev/null
 done | md5 || echo "na")
 CURRENT_HASH="${RECEIPT_HASH}|${FINDING_HASH}|${MAINTAIN_HASH}|${PROPOSAL_HASH}|${DB_HASH}|${GIT_HASH}"
@@ -86,7 +86,7 @@ tail -5 "$(pwd)/maintenance-actions.jsonl" 2>/dev/null || echo "(none yet)"
 
 echo ""
 echo "=== GIT (last 2h) ==="
-for proj in agent-infra intel genomics phenome hutter substrate; do
+for proj in agent-infra intel genomics personal hutter substrate; do
   dir="$HOME/Projects/$proj"
   [ -d "$dir/.git" ] || continue
   out=$(cd "$dir" && git log --oneline --since="2 hours ago" 2>/dev/null | head -3)

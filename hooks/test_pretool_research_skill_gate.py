@@ -114,6 +114,21 @@ class ResearchSkillGateTests(unittest.TestCase):
         finally:
             os.unlink(tx)
 
+    def test_personal_remains_a_science_project_after_merge(self):
+        tx = _transcript_user_then_search("maybe /research")
+        try:
+            code = self._run(
+                {
+                    "tool_name": "WebSearch",
+                    "transcript_path": tx,
+                    "cwd": "/Users/alien/Projects/personal",
+                }
+            )
+            self.assertEqual(code, 2)
+            self.assertIn("Skill(research)", self._last_stderr)
+        finally:
+            os.unlink(tx)
+
     def test_shadow_mode(self):
         tx = _transcript_user_then_search("do /research on benchmark design")
         try:

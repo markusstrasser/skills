@@ -22,7 +22,6 @@ regen() {  # regen <project_dir> — log stderr + a failure marker; never abort 
 # Projects to check (add more as they opt in)
 PROJECTS=(
   "$HOME/Projects/intel"
-  "$HOME/Projects/phenome"
   "$HOME/Projects/genomics"
   "$HOME/Projects/agent-infra"
 )
