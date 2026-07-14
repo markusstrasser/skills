@@ -1064,6 +1064,33 @@ def _run_cursor_command(
     )
 
 
+def _clear_prior_grok_canary_receipts(project_dir: Path) -> int:
+    """Remove prior canary answers before granting repo-workspace access.
+
+    The preflight receipt is written after the canary.  Leaving that receipt in
+    the workspace would let a later run at the same HEAD copy the old answer
+    instead of reading the repository.  Refuse symlinked receipt locations so
+    cleanup cannot escape the target project.
+    """
+
+    review_dir = project_dir / ".model-review"
+    if review_dir.is_symlink():
+        raise RuntimeError(".model-review must not be a symlink")
+    removed = 0
+    for name in ("grok-preflight-latest.json", "preflight-latest.json"):
+        receipt = review_dir / name
+        if receipt.is_symlink():
+            raise RuntimeError(f"{receipt} must not be a symlink")
+        try:
+            receipt.unlink()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            raise RuntimeError(f"cannot clear prior Grok receipt {receipt}: {exc}") from exc
+        removed += 1
+    return removed
+
+
 def run_grok_preflight(project_dir: Path) -> tuple[int, dict]:
     """Prove the exact registry slug and an unrevealed repo read before dispatch."""
     project_dir = project_dir.expanduser().resolve()
@@ -1101,17 +1128,34 @@ def run_grok_preflight(project_dir: Path) -> tuple[int, dict]:
         checks["ok"] = False
         return 1, checks
 
+    try:
+        removed_receipts = _clear_prior_grok_canary_receipts(project_dir)
+    except RuntimeError as exc:
+        checks["workspace_hygiene"] = {"ok": False, "error": str(exc)}
+        checks["ok"] = False
+        return 1, checks
+    checks["workspace_hygiene"] = {
+        "ok": True,
+        "prior_receipts_removed": removed_receipts,
+    }
+
     head = subprocess.run(
-        ["git", "-C", str(project_dir), "rev-parse", "--short=12", "HEAD"],
+        ["git", "-C", str(project_dir), "rev-parse", "--verify", "HEAD"],
         capture_output=True,
         text=True,
         timeout=15,
     )
-    expected_head = (head.stdout or "").strip()
+    full_head = (head.stdout or "").strip()
+    expected_head = full_head[:12]
     checks["repo_head"] = {
-        "ok": head.returncode == 0 and bool(expected_head),
+        "ok": (
+            head.returncode == 0
+            and len(full_head) >= 12
+            and bool(re.fullmatch(r"[0-9a-fA-F]+", full_head))
+        ),
         "exit_code": head.returncode,
-        "expected": expected_head,
+        "full_hash_length": len(full_head),
+        "challenge_length": len(expected_head),
         "stderr": (head.stderr or "").strip()[:400],
     }
     if not checks["repo_head"]["ok"]:
@@ -1141,7 +1185,6 @@ def run_grok_preflight(project_dir: Path) -> tuple[int, dict]:
         "ok": repo.returncode == 0 and repo_output == repo_expected,
         "exit_code": repo.returncode,
         "response_exact_ok": repo_output == repo_expected,
-        "expected": repo_expected,
         "stderr": (repo.stderr or "").strip()[:400],
     }
     checks["ok"] = bool(checks["repo_canary"]["ok"])
