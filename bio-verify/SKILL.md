@@ -9,7 +9,11 @@ effort: high
 
 Systematic sweep of Python scripts and config files for hardcoded biological claims, cross-checked against authoritative APIs. Empirical error rate: ~10-15% of manually-entered constants have detectable errors. Coordinates and ref/alt alleles are the highest-error category. Config JSON files have higher error rates than scripts.
 
-**This skill produces an audit report.** Fixes are applied only if `--fix` is specified or user confirms.
+**This skill produces an audit report and, after the audit is complete, immutable
+`VerificationEvent` records bound to the exact verified file bytes.** Fixes are
+applied only if `--fix` is specified or the user confirms. Never write the
+retired `bio_verify_state.json` store or treat a stale-evidence refresh as
+verification of hardcoded constants.
 
 **Reference files** (loaded on demand, not needed for dispatch):
 - `references/known-issues.md` — 17 documented gotchas from prior audits
@@ -60,8 +64,12 @@ If `--sweep`, find files containing hardcoded biological claims. **Scan both scr
 
 ```bash
 # Scripts AND config files with variant dicts, gene lists, coordinate tuples, rsIDs
-grep -rlE '(rs[0-9]{4,}|chr[0-9XY]+:[0-9]|"ref"|"alt"|ACMG|gnomAD|ClinVar|HDFN|severity|inheritance|"chrom"|"pos"|"gene")' scripts/*.py config/*.json \
-  | grep -v modal_utils | grep -v __pycache__ | grep -v pipeline_stages | grep -v pipeline_cli
+rg -l \
+  -g '*.py' -g '*.json' \
+  -g '!scripts/modal_utils.py' -g '!scripts/pipeline_stages.py' \
+  -g '!scripts/pipeline_cli.py' -g '!**/__pycache__/**' \
+  '(rs[0-9]{4,}|chr[0-9XY]+:[0-9]|"ref"|"alt"|ACMG|gnomAD|ClinVar|HDFN|severity|inheritance|"chrom"|"pos"|"gene")' \
+  scripts config
 ```
 
 Exclude: `modal_utils.py` (config only), `pipeline_stages.py` / `pipeline_cli.py` (DAG metadata), `*_benchmark.py` (test data), external catalogs (e.g., `expansion_hunter_catalog_grch38.json` — unmodified Broad catalog).
@@ -187,22 +195,41 @@ If errors were found and fixed, write a decision journal entry:
 **Fix:** Corrected in commit [hash]
 ```
 
-### Step 9: Update tracking state
+### Step 9: Emit exact-subject verification events
 
-After verification (whether errors were found or not), update the bio-verify state file:
+The retired state-file updater is fail-closed. After the audit exists and each
+verified asset is at its final bytes, use the canonical producer. First inspect
+the dry-run plan; then repeat the same command with `--apply`:
 
 ```bash
-uv run python scripts/bio_verify_status.py --update <filepath> <YYYY-MM-DD> [errors_found] [audit_path]
+uv run python3 scripts/emit_hardcoded_constants_event.py \
+  --asset scripts/generate_pgx_card.py \
+  --audit-path docs/audit/biomedical-fact-check-2026-03-24/pgx-card-verification.md \
+  --release-id 2026-03-24 \
+  --claims-checked 12 \
+  --operator-id codex-bio-verify-2026-03-24 \
+  --model-id <actual-model-id>
+
+# After checking the planned genesis/supersede relation:
+uv run python3 scripts/emit_hardcoded_constants_event.py \
+  --asset scripts/generate_pgx_card.py \
+  --audit-path docs/audit/biomedical-fact-check-2026-03-24/pgx-card-verification.md \
+  --release-id 2026-03-24 \
+  --claims-checked 12 \
+  --operator-id codex-bio-verify-2026-03-24 \
+  --model-id <actual-model-id> \
+  --apply
 ```
 
-For each file verified in this session:
-```bash
-uv run python scripts/bio_verify_status.py --update scripts/generate_pgx_card.py 2026-03-24 0 docs/audit/biomedical-fact-check-2026-03-24/pgx-card-verification.md
-```
+One invocation may repeat `--asset` for files covered by the same audit and
+source-version evidence. The producer hashes each current asset, emits one
+content-addressed event per file plus a terminating batch event, and advances
+the manifest pointer through the typed callback. Do not hand-edit manifest
+event IDs.
 
-This feeds the `/maintain` rotation queue. Run `just bio-verify-queue` to see what's next.
-
-When using `--sweep`, also run `just bio-verify-status` at the end to show overall coverage.
+Finally run `just bio-verify-validate`, `just bio-verify-status --strict`, and
+`just bio-verify-tier-audit`. For a sweep, also run `just bio-verify-queue` to
+show the remaining exact-subject backlog.
 
 ## Known Issues Summary
 
