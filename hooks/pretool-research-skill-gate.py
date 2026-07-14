@@ -66,7 +66,7 @@ EXPLICIT_CMD = re.compile(
 )
 
 SCIENCE_PROJECT = re.compile(
-    r"(?:^|/)(?:genomics|phenome|intel|emb|evals|hutter)(?:/|$)",
+    r"(?:^|/)(?:genomics|phenome|personal|intel|emb|evals|hutter)(?:/|$)",
     re.I,
 )
 
