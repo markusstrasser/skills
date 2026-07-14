@@ -1,17 +1,17 @@
 ---
 name: cursor-agent
-description: "Use when: headless `agent` CLI from shell/CI/scripts, Composer install/auth/dispatch. NOT in-editor Cursor agent or llmx/claude-cli."
+description: "Use when: headless `agent` CLI from shell/CI/scripts, Composer install/auth/dispatch, or exact Cursor Grok 4.5 read-only repo review. NOT in-editor Cursor agent or llmx/claude-cli."
 user-invocable: true
 argument-hint: '[install|probe|dispatch|models] [prompt or model id]'
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit]
 effort: low
 ---
 
-# Cursor Agent CLI — Composer 2.5 lane
+# Cursor Agent CLI — Composer + admitted Grok lane
 
 Headless Cursor Agent from any terminal. Announced [2025-08-07](https://cursor.com/blog/cli); docs: [cursor.com/docs/cli](https://cursor.com/docs/cli).
 
-**Only model here: `composer-2.5`** (also `composer-2.5-fast`). Cursor subscription auth — not llmx, not `claude -p`. **NEVER pass a foreign model** (opus/gpt/claude/gemini/sonnet) to `cursor-agent` — cursor proxies them at separate metered rates and it's off-policy. Enforced by `hooks/pretool-cursor-model-guard.py` (blocks any non-Composer `--model`). For frontier models use `claude -p` / `codex exec` / `llmx`, not cursor.
+**Default model: `composer-2.5`** (also `composer-2.5-fast`). Exact Cursor-native Grok 4.5 slugs are an opt-in read-only review lane: `cursor-grok-4.5-{low,medium,high}` and matching trailing `-fast` variants. Cursor subscription auth — not xAI API, llmx, or `claude -p`. **Never pass generic proxied models** (opus/gpt/claude/gemini/sonnet) or bare `grok-4.5`; the guard admits Composer plus only those exact live Grok slugs. For Opus/GPT use `claude -p` / `codex exec` / `llmx`.
 
 ## Install & auth
 
@@ -30,7 +30,7 @@ Binary aliases: `agent` → `cursor-agent` (same binary).
 | Shape | When | Command skeleton |
 |---|---|---|
 | **Interactive** | Human in the loop | `agent` or `agent "fix the auth bug"` |
-| **Headless ask** | Read-only probes, reviews, Q&A | `agent -p --mode ask --trust --model composer-2.5 "…"` |
+| **Headless ask** | Read-only probes, reviews, Q&A | `agent -p --mode ask --trust --model composer-2.5 "…"` or exact Cursor Grok slug |
 | **Headless agent** | Writes + shell (trusted env only) | `agent -p --trust --force --model composer-2.5 --workspace "$WT" "…"` |
 
 ### Flags that matter
@@ -38,7 +38,7 @@ Binary aliases: `agent` → `cursor-agent` (same binary).
 - **`-p` / `--print`** — headless; stdout is the deliverable (scripts/CI).
 - **`--trust`** — skip workspace-trust prompt (required with `-p`).
 - **`--mode ask|plan`** — read-only; default agent mode edits + runs shell.
-- **`--model composer-2.5`** — pin model; omit → account default (often `composer-2.5-fast`).
+- **`--model MODEL`** — pin `composer-2.5`, `composer-2.5-fast`, or an exact live `cursor-grok-4.5-*` slug; omit → account default (often Composer fast).
 - **`--workspace PATH`** — isolate cwd (use a throwaway dir for evals/dispatch).
 - **`--output-format text|json`** — `json` for usage/token forensics in evals.
 - **`--force` / `--yolo`** — auto-approve shell unless explicitly denied.
@@ -63,6 +63,17 @@ agent -p --mode ask --trust --model composer-2.5 \
   --output-format text \
   "Reply with exactly: COMPOSER_OK"
 ```
+
+### Grok 4.5 repo-read probe (opt-in, fail closed)
+
+```bash
+agent models | rg '^cursor-grok-4\.5-high - '
+agent -p --mode ask --trust --model cursor-grok-4.5-high \
+  --workspace "$PWD" --output-format text \
+  "Read the current git HEAD with read-only tools and report its first 12 hex characters."
+```
+
+The critique harness enforces exact registry + an unrevealed repo-HEAD canary before every `grok` axis dispatch. Current evidence covers ask-mode repo review; it does not license Grok for autonomous writes.
 
 ### Uniform eval arm (evals repo)
 
@@ -101,7 +112,7 @@ Cloud handoff (interactive only): prefix message with `&` → continues on curso
 
 1. **Forgot `--trust` with `-p`** — hangs on workspace prompt in scripts.
 2. **Ask mode for writes** — agent can read/grep but won't edit; use default agent mode + `--force` for implementation arms.
-3. **Default model drift** — always pass `--model composer-2.5` when comparing; `composer-2.5-fast` is the speed tier, not interchangeable in evals.
+3. **Default model drift** — always pass the exact model when comparing. Grok slugs put effort before an optional trailing `-fast`; there is no xhigh slug, and bare `grok-4.5` is xAI API rather than Cursor subscription.
 4. **Empty stdout** — check exit code + stderr; wrap with timeout in orchestrators (`timeout 120 agent …`).
    Observed 2026-06-18: **`--mode plan` returned empty `-p` stdout 2/3 runs** (exit 0, no stderr) on
    open-ended critique prompts; **`--mode ask --trust` was 2/2 reliable**. For headless review/critique
