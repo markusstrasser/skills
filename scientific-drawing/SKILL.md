@@ -100,5 +100,6 @@ convert -density 300 diagram.pdf diagram.png
 | ImageMagick policy error | Edit `/etc/ImageMagick-7/policy.xml` — allow PDF read |
 
 For detailed tool guides: `references/tikz.md`, `references/d2-guide.md`, `references/asymptote.md`, `references/penrose.md`.
+For CI/Docker/batch automation: `references/advanced-workflows.md`. Worked examples per tool: `examples/`.
 
 $ARGUMENTS
