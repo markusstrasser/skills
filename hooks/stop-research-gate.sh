@@ -262,6 +262,32 @@ if missing:
                 print(f'  ~ {f}', file=sys.stderr)
 
 if missing:
+    # Defer files still being WRITTEN (mtime < 900s) — same deferral the auto-checkpoint
+    # hook applies. A live subagent draft gets rewritten repeatedly; blocking the parent's
+    # stop on it forces repeated no-op tag patches on a file whose final version carries
+    # proper tags anyway (2026-07-15: one design draft was hand-patched 4x in one session,
+    # pure iatrogenic churn). Deferral is not a pass: the file re-enters the gate on every
+    # later stop and blocks normally once it settles.
+    import time as _time
+    _now = _time.time()
+    _deferred = []
+    _still = []
+    for f in missing:
+        try:
+            if _now - os.path.getmtime(f) < 900:
+                _deferred.append(f)
+            else:
+                _still.append(f)
+        except OSError:
+            _still.append(f)
+    if _deferred:
+        print('NOTE: untagged research files still being written (mtime<900s) — deferred '
+              'to a later stop, not blocking now:', file=sys.stderr)
+        for f in _deferred:
+            print(f'  ~ {f}', file=sys.stderr)
+    missing = _still
+
+if missing:
     import subprocess as _sp
     _sp.run([os.path.expanduser('~/Projects/skills/hooks/hook-trigger-log.sh'),
              'research-gate', 'block', f'{len(missing)} files without tags'],
