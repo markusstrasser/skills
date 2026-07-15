@@ -495,7 +495,13 @@ Detailed docs in `references/`:
   `modal run` tears down the ephemeral app mid-cold-start. For heavy cold starts
   (model downloads), `modal deploy` once + call via `Cls.from_name` from a separate
   client process — the deployed container survives local timeouts and a retry hits
-  it warm.
+  it warm. **Subagent corollary (2026-07-15, elwr double-death):** an AGENT going
+  idle/yielding kills its backgrounded `modal run` children the same way — any
+  agent-launched run expected >10 min MUST use `modal run --detach` (server-side,
+  survives client death) plus per-unit `vol.commit()` checkpoints, so a dead client
+  loses at most one unit and the parent can grade from volume artifacts. Two
+  launches died to this in one day before the detach; brief templates should cite
+  this bullet, not restate it.
 
 **Hit a fresh Modal gotcha or a defect in THIS skill?** Log it so the next deploy inherits the fix:
 `~/Projects/skills/hooks/append-skill-memento.sh modal '<one-line issue>'`.
