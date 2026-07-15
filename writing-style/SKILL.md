@@ -98,7 +98,7 @@ Different register. Em-dashes are fine. Lists are fine. Banned vocab still appli
 
 **Load `references/long-form.md` when writing or reviewing essay-register prose.** It covers form & mechanics (TL;DR opener, inline footnote integers, `ie.`/`eg.` style, Unicode `…`, `From [source]:` block-quote intros), rhetorical moves (strong-negation punchlines, `right?` tags, self-quoting as anti-example, geographic+temporal anchoring, specific dollar/salary figures, confessional sections), closing conventions (essays end on a punchline, never a summary), and an explicit negative-space list of patterns to avoid.
 
-Deeper guide with multi-sample analysis and humor patterns: `~/Projects/phenome/docs/derived/writing-style-guide.md` (435 lines). The `long-form.md` reference is the focused subset; phenome is the corpus.
+Deeper guide with multi-sample analysis and humor patterns: `~/Projects/personal/life/research/phenome-derived/writing-style-guide.md` (435 lines). The `long-form.md` reference is the focused subset; personal is the corpus.
 
 ## Multilingual
 

@@ -217,7 +217,7 @@ Search across all three projects for the concept:
 
 ```bash
 # Header-grep FIRST — finds files where concept is a primary topic
-grep -r "^#.*{concept}" ~/Projects/phenome/docs/ ~/Projects/genomics/docs/ ~/Projects/agent-infra/research/ --include="*.md" -l
+rg -l "^#.*{concept}" ~/Projects/personal/health ~/Projects/personal/life ~/Projects/personal/synthoria ~/Projects/personal/apps/phenome/docs ~/Projects/genomics/docs ~/Projects/agent-infra/research -g '*.md'
 
 # MCP search for section-level matches
 search_meta("{concept}", scope="all", max_tokens=500)
