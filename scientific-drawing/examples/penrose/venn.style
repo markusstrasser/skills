@@ -1,0 +1,30 @@
+canvas {
+  width = 400
+  height = 300
+}
+
+forall Set x {
+  x.shape = Circle {
+    strokeWidth: 2
+    strokeColor: rgba(0, 0, 0, 1)
+    fillColor: rgba(100, 150, 200, 0.3)
+    r: 60
+  }
+
+  x.label = Text {
+    string: x.label
+    fontSize: "18px"
+  }
+
+  ensure contains(x.shape, x.label)
+}
+
+forall Set A; Set B
+where Intersect(A, B) {
+  encourage overlapping(A.shape, B.shape, 30)
+}
+
+forall Set A; Set B
+where Disjoint(A, B) {
+  encourage disjoint(A.shape, B.shape, 20)
+}
