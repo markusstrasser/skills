@@ -1,6 +1,6 @@
 # Long-Form Register — Markus Strasser
 
-Patterns for essays, blog posts, and other long-form pieces written in Markus's voice. Load this when writing or reviewing long-form prose; short-form rules in `SKILL.md` apply additionally (banned vocabulary, opinion markers, agreement words). The deeper guide with multi-sample analysis lives in `~/Projects/phenome/docs/derived/writing-style-guide.md` — this file is the focused subset for the essay register.
+Patterns for essays, blog posts, and other long-form pieces written in Markus's voice. Load this when writing or reviewing long-form prose; short-form rules in `SKILL.md` apply additionally (banned vocabulary, opinion markers, agreement words). The deeper guide with multi-sample analysis lives in `~/Projects/personal/life/research/phenome-derived/writing-style-guide.md` — this file is the focused subset for the essay register.
 
 **Source data:** Three essays sampled so far, deliberately covering different sub-registers:
 
