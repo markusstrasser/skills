@@ -168,3 +168,20 @@ caught before the attack.
 A planner's credit/elimination bookkeeping was written to use what an action route was SUPPOSED
 to touch, rather than what it ACTUALLY touched when executed — a design-vs-realization gap that,
 left unchecked, silently corrupts every downstream belief-update computed from it.
+
+## `fixed-wall-as-cost-ceiling`
+
+**Source:** operator feedback, 2026-07-16, during the microscale-Mealy direct-K ceiling sequence;
+measured parent runs completed in 221 seconds under a 1,200-second breaker and 111 seconds under a
+600-second breaker.
+
+> "Cost ceiling: 1 local CPU × ≤600 s × $0/hr = $0 external — this should be more dynamic ...
+> might be counterproductive rule tbh"
+
+A fixed wall was being repeated as a "cost ceiling" even though local CPU external spend was
+exactly zero. The number protected against hangs, not cost, but its scientific placement could
+invalidate a progressing run under transient contention and encourage ritual reuse of 240/600/
+1,200-second constants. The repair is to type the controls: hard circuit breaker for external
+spend; measured expected runtime plus a derived, preferably progress-aware stall watchdog for `$0`
+local work. A watchdog kill is runtime invalidity, never evidence that the mechanism lacks
+capacity.
