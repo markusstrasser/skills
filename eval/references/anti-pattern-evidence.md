@@ -153,12 +153,14 @@
   X holds*; stage validation (small held-out first → full run only if it holds).
 - **LatchBio bio-agent benchmark audit (scBench/SpatialBench/SB-Long, 3 readers — 2 on code + 1 on
   papers — 2026-06-15; excellent constructs, flawed leaderboard). The anti-patterns:**
-  - **Model×agent-harness confound — the confound that hides in AGENT bake-offs.** All three leaderboards
+  - **Model×agent-harness estimand slippage — the confound that hides in AGENT bake-offs.** All three leaderboards
     rank models across DIFFERENT scaffolds (claude-code / mini-swe / codex / "pi"); the measured harness
     swing for one model was ~8× the model-to-model gap — the SCAFFOLD explained more variance than the
-    model, so the ranking is uninterpretable. A worked example of the ≥2-differ rule above: hold the
-    harness CONSTANT across compared models, or report model×harness as a 2-factor grid — never a single
-    ranked column. (Same shape as our critique_replay arms differing in model×effort×transport at once.)
+    model, so a MODEL ranking is uninterpretable. A configuration leaderboard is still a valid descriptive
+    answer to "which exact deployable system?"; label it configuration-bound. A MODEL-effect claim must
+    hold the harness constant or use a connected model×harness grid with interaction — never silently turn
+    best-harness-per-model into a model ranking. (Same shape as critique_replay arms differing in
+    model×effort×transport at once.)
   - **A pass window that admits a known wrong-method answer is not a discriminating grader.** Released
     numeric_tolerance windows were wide enough to pass the trap value the eval's OWN notes flag as wrong
     (n_significant GT=1 ±1 admits {0,1,2}; n_hvgs ±10000 passes any count). The tolerance must EXCLUDE
@@ -180,6 +182,17 @@
     a fixed answer surface penalizes valid answers the authors didn't anticipate ⇒ false-negatives GROW
     WITH CAPABILITY. Generalizes absence≠negative to the grading surface — re-adjudicate high-rubric FAILS
     by hand; pair with the GOLD_INVALID escape.
+  - **VariantBench delta (2026-07-16; paper-only release).** Real additions: publish the full
+    category/subcategory counts; stage a plausible superset of input files so availability is not a hidden
+    answer key; freeze one workflow at several stage boundaries; show real 0/3–3/3 item consistency. New
+    anti-patterns: future-tense code/data at a 404 earns DESIGN credit only, never RESULT auditability;
+    unparseable outputs rerun outside the denominator create an adaptive treatment unless capped/logged/
+    charged; a static public-source suite with live internet ROTS; `p>0.05` on a sandbox ablation is not
+    equivalence without a preregistered margin + paired effect interval. Do NOT "fix" that ablation by
+    dropping items whose outcomes happened not to change — that conditions on the observed result; define
+    any tool-dependent stratum from task requirements before outcomes. Finally, a real-patient exhibit is
+    criterion evidence only to the level its primary sources support: the paper's vaccine-caused-remission
+    wording exceeded both cited sources, so retain the pipeline stress case and drop the causal outcome claim.
 - **Asserted negative-class gold + substring-matched free-text grading — BOTH fail, from one root, and
   cross-arm CONVERGENCE catches both** (critique_replay, 2026-06-15; ADR `evals/docs/decisions/0004`).
   A `clean`/`abstain`/`no-finding` gold label is a UNIVERSAL NEGATIVE ("no defect here") — the hardest

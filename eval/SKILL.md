@@ -124,13 +124,19 @@ ADAPT-DESIGN-ONLY / REJECT** plus a **contamination–durability** sub-verdict (
 — does it rot as a standing instrument re-run per model release?). Use it before adopting a
 third-party benchmark *and* before greenlighting a from-scratch build — its most common output,
 ADAPT-DESIGN-ONLY with a precise BORROW list, is what stops both a needless rebuild and a naive
-adoption of a rotting benchmark.
+adoption of a rotting benchmark. **Promise-to-release is not released:** grade DESIGN from the
+paper if useful, but RESULT stays non-auditable until the task/grader/record-level ledger and exact
+run manifest are actually available. A future-tense repository link earns no reproducibility credit.
 
 ## Phase 1 — Design (the questions that decide if the eval should exist)
 
 Answer in writing (they become PREREGISTRATION.md fields):
 
 1. **Construct** — what ability/property, operationalized how? One sentence.
+   *Estimand before leaderboard:* declare whether the unit is a **model**, a **harness**, or the
+   deployable **model×harness configuration**. A configuration leaderboard is valid for exact-system
+   routing; it does not identify a model effect. Model claims need a common harness or a connected
+   factorial grid with model, harness, and interaction effects reported separately.
 2. **Decision + consumer** — which production default / routing rule does the verdict
    change, and where is that recorded (DECISIONS.md row)? **No consumer → don't build.**
    *Criterion validity (the NASA-recruiter test):* name the real-world outcome the score is a
@@ -147,6 +153,10 @@ Answer in writing (they become PREREGISTRATION.md fields):
    no more (overly-strict → false-fails correct solutions; a pass then evidences contamination,
    not skill) and no less (low-coverage → false-passes incomplete ones). Executable ≠ valid;
    see the mined-task audit under "Grading an EXTERNAL / vendor benchmark".
+   *Input availability is part of the prompt:* for file/tool agents, the presence or absence of one
+   special file can reveal the intended method. Stage a realistic **superset** of plausible inputs
+   and run a cue-only baseline. Pre-register the distractor policy and match production clutter;
+   excessive or semantically alien distractors change the construct into triage/context management.
    *For retrieval/ranking:* is there exactly ONE relevant item per query, or can the corpus
    hold co-relevant siblings? One-gold recall@k is valid only in the former; topically-dense
    corpora need graded multi-doc relevance, or recall@k scores label noise (see Phase 3).
@@ -282,7 +292,7 @@ in fact *unpersisted*, traces; the trace audit found a led judge + no specificit
 - **SE + n on every decision-grade number.** CLT `sqrt(Var/n)`; Bernoulli `sqrt(p(1-p)/n)` ONLY for strict 0/1 scores — it's WRONG (too wide) on F1/partial-credit/judge scores (the Llama-3 report shipped this error). A comparison without an SE is not decision-grade.
 - **Cluster the SE when items are grouped** (shared passage, one prompt × N langs/paraphrases, multi-turn on one scenario) — up to **3.05× wider** on real data; an unclustered grouped CI lies about precision.
 - **≥2 seeds/temps; report mean + variance; NO single-run headline** (Miller + Biderman + BetterBench: 14/24 benchmarks fail this). Cut variance by resample K=4–10 or next-token-probs — **never by lowering temperature** (that changes what you measure).
-- **Separate format-compliance from correctness**: log RAW and extracted output; a regex extractor can 0-score a correct answer. Pin the harness (exact prompts + extraction code + model-version + commit) — a score without it isn't reproducible.
+- **Separate format-compliance from correctness**: log RAW and extracted output; a regex extractor can 0-score a correct answer. Pin the harness (exact prompts + extraction code + model-version + commit) — a score without it isn't reproducible. Any parse/format rerun is part of the treatment: predeclare a cap, preserve the first attempt, charge every retry to tokens/time/cost, report per-arm retry counts, and never silently remove unparseable outputs from the intended correctness denominator.
 
 **Don't trust vendor leaderboards as rankings** (`research/2026-06-14-benchmark-leaderboard-methodology-critique.md`): LMArena's Bradley-Terry is sound but the board is structurally captured (Leaderboard Illusion — Meta tested 27 private variants; data-access = +112%); Artificial Analysis is a SOLID screen but 33% of weight flows through LLM judges (use per-axis, not the composite); CursorBench/OpenRouter measure cherry-pick/spend, not capability; SWE-bench **Verified ≫ original**. Steal the contamination-resistant DESIGNS (temporal holdout > canary > fuzzy-dedup), not the leaderboards.
 
@@ -386,7 +396,7 @@ evidence, and the DeepSWE / LifeSciBench confirmations live in
 - **Read ≥5 traces** — ≥1 pass + ≥1 fail per top arm against the 4 questions (mirror-read / loophole / dangerous action / scaffold limit); cite verifiable trace anchors.
 - **Metamorphic vocabulary** — state §6b invariants as `source_relation ⇒ output_relation`; the oracle-free invariance tier is discovery-only.
 - **Q-matrix tags** — gold-only 3–5-dim capability ontology per case; do NOT fit IRT at N=10–60.
-- **Deterministic-grader constructs** (LatchBio) — per-item separation table, sentinel gold fields, before-step snapshot gold, method-name suppression, reproduce-or-discard gold, cost+trajectory as first-class axes.
+- **Deterministic-grader constructs** (LatchBio) — per-item separation table, sentinel gold fields, before-step snapshot gold, method-name suppression, reproduce-or-discard gold, anti-hint input supersets, cost+trajectory as first-class axes.
 - **Measurement-science canon** — anchor-equate a drifting SUT (NEAT), SDT d′-vs-criterion split (`critique_replay/sdt.py`), proper scoring rules for confidence outputs, RoB-2-style graded pre-flight.
 - **Peer prediction (gold-free scoring)** — `evalcore.elicit` + anchor jury; validated ρ=1.0 vs gold ordering; FAILS under ≥50% colluding pool (enforced in code, never assumed).
 - **Capability is the LAST-RESORT hypothesis** — a score is capability evidence only after contamination/shortcut/memorization are affirmatively excluded (named hard gate).
@@ -472,7 +482,7 @@ re-litigating or rebuilding anything named here.
 - **Router/heuristic without the per-doc ORACLE** — compute the oracle first; if naive is within ε, the router is wasted complexity.
 - **Reporting the metric at the producer's stage** — measure through the production pipeline; report at the consumer's stage.
 - **Slow-feedback validation when a fast staged check exists** — batch-async (opaque ≤24h) never answers "does it hold"; stage a small held-out first.
-- **LatchBio leaderboard class** — model×harness confound (hold the harness constant or report a 2-factor grid); tolerance windows must exclude every trap in the separation table; byte-identical "3 runs" ≠ replication; answer text in public artifact fields leaks to the next scrape; withheld items still need published strata counts; deterministic grading under-rates the BEST model (re-adjudicate high-rubric FAILS).
+- **LatchBio leaderboard class** — declare the estimand: exact model×harness configuration results are descriptive, but model-effect claims need a common harness or connected factorial grid; tolerance windows must exclude every trap in the separation table; byte-identical "3 runs" ≠ replication; answer text in public artifact fields leaks to the next scrape; withheld items still need published strata counts; deterministic grading under-rates the BEST model (re-adjudicate high-rubric FAILS).
 - **Asserted negative-class gold + substring-matched free-text grading** — certify a negative item by cross-family ensemble NON-convergence; audit positive anchors for paraphrase false-negatives; never widen anchors against the responses you're scoring.
 
 ### /eval skill vs evals repo (recurring question — settle it here)
