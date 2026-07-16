@@ -132,6 +132,21 @@ different regime (a different agent, a different corpus, an earlier calibration 
 valid floor for THIS arm's power calculation until checked. (`negative-control-cannot-pass`,
 `zero-context-floor-invalidity`.)
 
+### 4a. Dependency-claim verification — grep every "already exists / already provides" claim
+
+Any design-doc sentence of the shape "the hook/vocabulary/representation/extractor already
+exists in [artifact X]," "X already carries Y," or "the converter closes blocked items N-M" is a
+CODE FACT, not a design decision — it must be grep-verified AT THAT ARTIFACT before the claim is
+used to justify a formula, a launch-checklist item, or a ratification. Verify the ENUMERATION,
+not just the field's presence: a contract that declares a field but never enumerates its legal
+values is a standing hazard — every downstream consumer will fill the hole differently, and each
+will believe its filling is the ratified one. Re-run this check at LAUNCH time, not only at
+design time, for any dependency that did not yet exist when the design was written — a claim
+that was aspirational ("will carry X") at design time silently reads as achieved by launch time
+unless someone re-checks. (`dependency-claim-unverified`; `prose-asserts-a-code-fact`,
+arc-agi `eval-conventions-exhibits.md` §C; real cascade: 6 artifacts / 4 incompatible fillings /
+3 false "already exists" claims over one unenumerated `confidence` field, 2026-07-16.)
+
 ### 5. Screen-entailment check
 
 If any venue/task parameter was TUNED until a baseline arm failed (a difficulty knob raised until
@@ -151,11 +166,45 @@ single consistent rule). (`termination-semantics-unstated`.)
 
 Before trusting ANY pass/fail from a code-based (non-live-replay) verifier, run an adversarial
 mutation suite: no-op, unrelated-field/random-value padding, hedged-disjunction, delete-to-
-vagueness (collapse to near-empty content), evidence-copying, and one KNOWN-VALID case. The
-scorer must reject the gaming mutations and accept the valid case. **If it cannot, stop — the
-endpoint is invalid**, full stop, before any live query runs. Report which mutations were fixed
-and which remain acknowledged, unfixed limitations — do not claim full validity you didn't
-achieve. (`scorer-mutation-suite`.)
+vagueness (collapse to near-empty content), evidence-copying, **polarity/negation-flip (flip a
+clause's truth value while holding every other token fixed — absent from this list until
+2026-07-16, and exactly the mutation type that would have caught a stopword-stripped "not"
+labeling truth-flips as PERSIST)**, and one KNOWN-VALID case.
+
+Classify every mutation into one of two tiers, not one flat pass/fail list: **MUST-REJECT**
+(no-op, delete-to-vagueness, and any mutation whose acceptance makes the instrument STRUCTURALLY
+invalid as a reward/gating input — accepting even one of these voids the instrument for that
+role; stop before any live query runs) vs **NAMED-RESIDUAL** (a mutation the scorer fails but
+whose acceptance only CAPS the instrument's role — e.g. fabricated-but-well-formed padding). An
+instrument may ship with NAMED-RESIDUAL failures acknowledged, but **never as a reward-signal
+input** — only as a screen/instrumentation/triage tool — and the suite's headline MUST report
+"N residuals accepted, capped at [screen/instrumentation-only]" beside the match count. A bare
+"X/X passed" headline that silences an accepted residual is itself a defect.
+
+Separately: a **LABELING instrument** (a miner/filter/converter whose output feeds a persistent
+dataset label) is a different hazard class from a single-trajectory pass/fail scorer — it
+additionally owes (i) a HAND-GRADED calibration sample against its own labels before the dataset
+ships, and (ii) a DIFFERING-INPUT positive control (two inputs whose upstream ground truth
+differs must produce outputs that track the difference — a passthrough that hardcodes the label
+passes every same-input smoke while fabricating at scale). (`scorer-mutation-suite`,
+`polarity-blind-labeling-instrument`, `dependency-claim-unverified`.)
+
+### 7a. Objective dry-run — before trusting a composed reward/score, run it on hand-built trajectories
+
+If the design composes a reward or score from multiple branches/factors (a ternary reward, a
+gated `+1/0/−λ`, any formula with an `∀`/`∃` over a set the design does not yet have a working
+extractor/computer for), **do not trust the formula's validity proof in isolation.** Hand-
+construct at least three trajectories — (i) a genuine win with full, real process content, (ii)
+a silent/degenerate win (the exact pathology the gating exists to prevent), (iii) an
+empty/no-op trajectory — and evaluate the ACTUAL composed formula, using the ACTUAL shipped
+computer for every quantified-over artifact (not a described-but-unbuilt stand-in), on all
+three. Verify the ORDERING matches intent: (i) strictly above (ii), (ii) at or above (iii).
+**If any input the formula quantifies over does not yet exist as working code, the dry-run is
+not yet dischargeable — the formula's own adversarial re-check (step 7) may proceed on paper,
+but no launch checklist may cite the formula as "closed" or "reward-safe" until the dry-run has
+run against the artifact that actually shipped.** (`dependency-claim-unverified` — the
+`non_silent` inversion: `∀e: ∃claim` was FALSE on every real decision point and vacuously TRUE
+on the empty set once the shipped extractor emitted `claims=[]`.)
 
 ### 8. Bands and power — state the decision rule before data, size it honestly
 
@@ -211,6 +260,32 @@ fable-dispatch.md` for the two-stage frontier-attack protocol in this repo; `eva
 exhibits.md` §C "Heretic-before-results"). A design this skill produces is a draft until it has
 survived one adversarial pass — the catalogue exists because that pass reliably finds real holes,
 including in designs written with this exact checklist in hand (see the worked example).
+
+## Scope the protocol to the spend — not every step earns its keep at every tier
+
+Retrodicted 2026-07-16 (arc-agi `research/2026-07-16-doe-calibration.md`): at FULL weight
+against a $18-30, two-round-attacked component design (microvideo-wm), the 11 steps showed
+**zero dead weight** — every step fired usefully. Against $0, n≈4-arm screening probes and
+reused-instrument calibrations, roughly HALF the steps are disproportionate as literally
+written:
+
+- **Steps 2 (rule-privilege) and 5 (screen-entailment)** collapse to a one-line confirmation
+  when there is no paired-arm contest or difficulty-tuned venue — do not manufacture rework.
+- **Steps 3 (sham ladder) and 6 (termination semantics)** are N/A for single-instrument
+  calibration tasks (no episode/attempt boundary, no bundled treatment to decompose).
+- **Step 8 (bands/power)** downscales to a single hand-graded sample with a Wilson CI at
+  instrument/$0-probe tier — full TOST/`seq_stop.py` sequential-boundary apparatus is for
+  experiments sizing a real decision at $50+ tier, not a same-day calibration check.
+- **Steps 9 (effect transport) and 10 (escape-a-kill)** are usually N/A at probe tier UNLESS
+  the probe sits adjacent to a standing KILL — in which case step 10 becomes the single MOST
+  important step (state explicitly how the probe's object differs from the killed one, and
+  name the observable that would show it quietly becoming the killed thing).
+- **Step 11 (heretic-before-results)** downscales from a frontier-max dispatch to a cheap-lane
+  sanity pass when the design is "grading against frozen hand-graded bands" — the same
+  economics as "When NOT to spend Fable," applied to this skill's own step 11.
+
+Steps 1 (construct), 4/4a (controls + dependency claims), and 7/7a (scorer validation +
+objective dry-run) are load-bearing at EVERY tier measured — never skip these.
 
 ## Where the depth lives
 
