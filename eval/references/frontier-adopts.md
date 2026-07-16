@@ -47,9 +47,9 @@ third validity pillar; `arXiv:2604.15149` isomorphic verifiers, causal). Adopt:
   (retrieval/inference/abstention/binding/query, + `unknown`) as **gold-only** metadata (never in a
   SUT/judge prompt — it's on the leak deny-list). Enables a diagnostic mIRT capability profile *later*;
   do NOT fit IRT params at N=10–60 (needs ≥100 items × ≥20 arms).
-- **Deterministic-grader constructs (LatchBio bio-agent benchmarks scBench/SpatialBench/SB-Long, audited
-  2026-06-15, 3 readers).** For an eval with a deterministic numeric/structured grader (not a judge),
-  four primitives we lacked: **(1) per-item separation table** — every item documents which WRONG method
+- **Deterministic-grader constructs (LatchBio bio-agent benchmarks; audited 2026-06-15,
+  extended by VariantBench 2026-07-16).** For an eval with a deterministic numeric/structured grader (not a judge),
+  five primitives we lacked: **(1) per-item separation table** — every item documents which WRONG method
   yields which number, and the tolerance is set to clear the nearest trap by a STATED margin
   (pre-registered discrimination bound to the ITEM, not the suite); **(2) sentinel/diagnostic gold
   fields** — grade a probe of the pipeline DECISION (does PC2–5 still correlate with depth ⇒ catches a
@@ -57,7 +57,10 @@ third validity pillar; `arXiv:2604.15149` isomorphic verifiers, causal). Adopt:
   the isomorphic verifier; **(3) before-step snapshot gold** — freeze the analysis state just before the
   target step so the oracle is a real re-run of standard tools (contamination-resistant, cheaply
   re-derivable); **(4) method-name suppression** — never name the expected method in the prompt (no
-  "regress_out"/"pseudobulk"), forcing capability over memorized recipe. Plus **reproduce-or-discard
+  "regress_out"/"pseudobulk"), forcing capability over memorized recipe; **(5) anti-hint input
+  supersets** (VariantBench, audited 2026-07-16) — stage plausible extra files so the presence or
+  absence of one artifact does not reveal the expected workflow, then run a cue-only baseline and
+  bound distractor load so the construct does not silently become file triage. Plus **reproduce-or-discard
   candidate gold** (admit a literature claim as gold only after independent reproduction yields a stable
   answer; log the excluded) and logging **cost + trajectory length** beside accuracy as first-class axes.
   (Item-difficulty rank-stability is another diagnostic use; the deferral on FITTING IRT at our N stands.)
