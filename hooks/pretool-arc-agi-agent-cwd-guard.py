@@ -21,8 +21,15 @@ import sys
 from pathlib import Path
 
 _ARC_ROOT_NAME = "arc-agi"
+# Bug fix (arc-agi docs/audit/2026-07-16-bughunt-dossier.md finding D-P2-15): the plain
+# `from`/`import` form missed the two dynamic-import shapes Python offers for the exact
+# same modules — `importlib.import_module('arc_agi')` and `__import__('arc_agi')` — both
+# real bypasses (no `import`/`from` keyword token for the static regex to anchor on), and
+# both produce the identical ModuleNotFoundError this hook exists to prevent.
 _IMPORT = re.compile(
     r"\b(?:from|import)\s+(arc_agi|arcengine|local_runner)\b"
+    r"|\bimportlib\.import_module\(\s*['\"](arc_agi|arcengine|local_runner)['\"]"
+    r"|\b__import__\(\s*['\"](arc_agi|arcengine|local_runner)['\"]"
 )
 _UV_RUN = re.compile(r"\buv\s+run\b")
 _ALREADY_DIR = re.compile(
@@ -134,6 +141,12 @@ def _selftest() -> int:
         (root, 'uv run python3 -c "import local_runner"', "rewrite"),
         (root, "uv run python3 agent/foundry_pilot.py", "rewrite"),
         (f"{root}/experiments", 'uv run python3 -c "import arcengine"', "rewrite"),
+        # D-P2-15: dynamic-import bypass shapes (importlib.import_module / __import__) —
+        # must be caught the same as a static `import`/`from` statement.
+        (root, 'uv run python3 -c "import importlib; importlib.import_module(\'arc_agi\')"', "rewrite"),
+        (root, "uv run python3 -c \"import importlib; importlib.import_module('arcengine')\"", "rewrite"),
+        (root, 'uv run python3 -c "__import__(\'local_runner\')"', "rewrite"),
+        (root, "uv run python3 -c \"__import__('arc_agi')\"", "rewrite"),
         # already correct
         (agent, 'uv run python3 -c "import arc_agi"', "pass"),
         (root, f'uv run --directory {agent} python3 -c "import arc_agi"', "pass"),
@@ -148,6 +161,7 @@ def _selftest() -> int:
         (root, "uv run agent/foundry_pilot.py", "rewrite"),
         # bare python with import → block (uv-guard should rewrite first)
         (root, 'python3 -c "import arcengine"', "block"),
+        (root, "python3 -c \"__import__('arcengine')\"", "block"),
         # 2026-07-12 residual shapes
         (root, "uv run python3 -m pytest agent/tests/test_foo.py", "rewrite"),
     ]
