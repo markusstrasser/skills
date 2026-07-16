@@ -185,3 +185,43 @@ invalidate a progressing run under transient contention and encourage ritual reu
 spend; measured expected runtime plus a derived, preferably progress-aware stall watchdog for `$0`
 local work. A watchdog kill is runtime invalidity, never evidence that the mechanism lacks
 capacity.
+
+## `dependency-claim-unverified` (2026-07-16)
+
+**Source:** arc-agi `research/2026-07-16-contract-drift-audit.md`, `research/2026-07-14-
+certificate-gated-distill-design.md` R2 repair, `research/2026-07-16-doe-calibration.md` FN-1/FN-2.
+
+> "the representational hook already existed in §1's context digest" — FALSE, grep-verified
+> 0 occurrences in the cited schema SSOT.
+
+A design's own adversarial re-check attacked a reward FORMULA's logic in isolation, using
+language ("machinery this design already owns") whose truth depended on a claim-atom extractor
+that did not yet exist. When the extractor shipped 13+ hours later with `claims=[]` by design,
+the formula's `∀e: ∃claim` gate was FALSE for every real decision point (zeroing genuine wins)
+and vacuously TRUE for the empty set (rewarding the degenerate case) — the exact inversion the
+repair believed it had closed. Three further artifacts (a ratified schema SSOT, a converter
+build, a grading pass) each asserted a fact about a NAMED sibling file's content that was false
+on direct grep; six artifacts filled one unenumerated `confidence` value-set four incompatible
+ways. Verify "already exists / already provides" claims against the literal artifact, at design
+time AND again at launch time for any dependency that did not yet exist when first claimed.
+Closed by steps 4a + 7a.
+
+## `polarity-blind-labeling-instrument` (2026-07-16)
+
+**Source:** arc-agi `research/2026-07-16-polarity-handgrade-calibration.md`,
+`experiments/structural_diff_filter.py`, `research/2026-07-16-doe-calibration.md` FN-4.
+
+> "`structural_diff_filter.py` strips `not`/`no` as stopwords, so a negation-only edit can
+> tokenize identically on both instruments" — 1/25 hand-graded high-Jaccard `persist` rows
+> confirmed a genuine truth-value flip mislabeled `persist`, Wilson CI up to 19.5%.
+
+A deterministic labeling instrument passed its own hand-checked calibration for the direction it
+was built to fix and honestly flagged the reverse direction as unverified — but neither
+direction's calibration included a POLARITY/NEGATION-FLIP mutation, because that mutation type
+was absent from this catalogue's own `scorer-mutation-suite` enumeration. **A labeling
+instrument feeding a persistent dataset is a different hazard class from a single-trajectory
+pass/fail scorer**: it additionally owes a hand-graded calibration sample against its own labels
+before the dataset ships, and a differing-input positive control (a passthrough that hardcodes a
+label passes every same-input smoke while fabricating at scale — see arc-agi
+`contradiction_kind`, 55.8% of rows fabricated). Closed by the step-7 split + the polarity-flip
+mutation type.
