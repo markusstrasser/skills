@@ -169,6 +169,24 @@ achieve. (`scorer-mutation-suite`.)
   implementations if a sequential design is the right shape; state explicitly whether you're
   using fixed-n or sequential stopping and why.
 
+### 8a. Runtime semantics — separate spend ceilings from stall watchdogs
+
+A wall-clock number is not automatically a cost budget. For paid APIs/GPUs, freeze a hard external
+spend circuit breaker. For local `$0` CPU work, derive expected runtime from a measured calibration
+and declared workload units, then use a **stall watchdog** sized from that estimate—not a ritual
+round number that turns a slow machine into an `INVALID` scientific result.
+
+- Record `calibration × workload ratio × safety factor`, or a startup throughput probe, so the
+  wall is reproducible and challengeable.
+- Prefer progress-aware watchdogs: verified new checkpoints extend the total wall; lack of progress
+  for the derived inactivity window kills the worker.
+- A watchdog kill is transport/runtime invalidity, never capability zero. Resume from the last
+  immutable checkpoint when semantics permit; do not silently shrink the scientific budget.
+- If fixed total wall is genuinely part of the construct (latency/online-decision task), label it a
+  measured treatment variable and match it across arms. Otherwise keep it out of capability bands.
+
+(`fixed-wall-as-cost-ceiling`.)
+
 ### 9. Effect-target transport — never assume Δ_here = Δ_there without justifying it
 
 If the target effect size for a power calculation is measured in a DIFFERENT venue/instrument's
