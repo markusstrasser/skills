@@ -225,6 +225,23 @@ try:
             break
 except OSError:
     pass
+# Teammate/mailbox agents (SendMessage-driven) write repo files with NO
+# tasks/*.output heartbeat, so the widening above misses them: their mid-burst
+# build files look mtime-settled at 90s, flow into auto-commit, and when a repo
+# pre-commit gate rejects the half-written artifact the hook BLOCKS the parent
+# demanding it commit files it does not own (2026-07-17 arc-agi: 5 firings in
+# one session, 100% correctly declined -> O2 retune, not obey-around). Reuse the
+# single-source peer detector: any peer claude on this checkout means a settled-
+# looking file may be a teammates in-flight work. Fail-safe: defer, never drop.
+if _IN_FLIGHT_S == 90:
+    try:
+        _r = subprocess.run(
+            ["/Users/alien/Projects/skills/hooks/peer-session-count.sh", cwd],
+            capture_output=True, text=True, timeout=8)
+        if int((_r.stdout or "0").strip() or 0) >= 1:
+            _IN_FLIGHT_S = 900
+    except Exception:
+        pass
 def _in_flight(path):
     try:
         return (_now - os.path.getmtime(os.path.join(cwd, path))) < _IN_FLIGHT_S
@@ -415,6 +432,23 @@ try:
     subprocess.run(["git", "reset", "HEAD"], cwd=cwd, capture_output=True, timeout=5)
 except Exception:
     pass
+
+# Commit failure on a RECENTLY-written file usually means a repo pre-commit gate
+# rejected a half-built artifact (mailbox teammates share this session-id and
+# ledger, so their mid-build files are indistinguishable from ours and no
+# heartbeat/peer detector sees them — verified absent 2026-07-17). Blocking the
+# parent over files it cannot finish is a 100%-force-rate guard (5/5 declined,
+# arc-agi 2026-07-17) -> O2 retune: defer any <900s-mtime file non-blockingly;
+# block ONLY on genuinely settled uncommitted work, where the block is signal.
+_settled = [f for f in new_changes if not ((_now - (os.path.getmtime(os.path.join(cwd, f)) if os.path.exists(os.path.join(cwd, f)) else 0)) < 900)]
+_recent = [f for f in new_changes if f not in _settled]
+if not _settled:
+    k = len(_recent)
+    kplural = "s" if k != 1 else ""
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext":
+        f"Auto-commit FAILED on {k} file{kplural} written <15min ago (likely in-flight teammate/subagent work rejected by a pre-commit gate) — deferred non-blocking, files remain in tree: " + ", ".join(_recent[:8])}}))
+    sys.exit(0)
+new_changes = _settled
 
 changes = "\n".join(new_changes)
 n = len(new_changes)
