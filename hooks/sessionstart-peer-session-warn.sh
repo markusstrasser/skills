@@ -52,6 +52,9 @@ if [ "$peers" -ge 1 ]; then
   echo "   commit each logical edit immediately (stage specific paths, never sweep), re-check"
   echo "   'git status' before touching shared docs (MEMORY.md / checkpoint / rules), and state"
   echo "   ONCE in your next reply that you're staying shared — never skip this warning silently."
+  echo "   Re-check peer LIVENESS any time (deferring to a 'peer lane'? verify it's alive first,"
+  echo "   never ask the operator): ~/Projects/skills/hooks/peer-session-count.sh \"${cwd}\""
+  echo "   → 0 = peers gone; their quiescent lanes + measured rows are released to you."
   # Per-peer WORK detail: what's uncommitted-dirty + recent peer commit topics, so "pick another
   # front or coordinate" is an informed choice (2026-06-18: a full /decide arc duplicated a
   # concurrent session's build because live peer work is uncommitted -> invisible to git-log).
