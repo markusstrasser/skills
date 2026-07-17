@@ -177,3 +177,7 @@ inside N parallel workers.
 - **Does not fix everything** — only CONFIRMED straightforward fixes get committed.
 
 $ARGUMENTS
+
+## Known Issues
+<!-- Append-only. Session-analyst may suggest additions. -->
+- **[2026-07-14] Diff-scoped module dry-run silently omitted oversized changed files direct_table_online.py and test_direct_table_online.py while reporting success; scout must list/fail-loud on skipped files or chunk them.**
