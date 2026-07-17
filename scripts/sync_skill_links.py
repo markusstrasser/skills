@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Synchronize skill symlinks: Codex and Gemini mirror Claude Code.
+"""Synchronize skill symlinks: Codex, Gemini, and Kimi mirror Claude Code.
 
 Policy:
 - Claude Code is the source of truth. Skills visible to Claude — at user level
   (~/.claude/skills/) and per-project (<proj>/.claude/skills/) — are mirrored
-  into the Codex and Gemini discovery paths.
+  into the Codex, Gemini, and Kimi discovery paths.
 - Codex reads ~/.agents/skills/ (user) and <proj>/.agents/skills/ (project).
 - Gemini reads ~/.gemini/skills/ (user). Per-project Gemini scoping not yet wired.
+- Kimi reads ~/.kimi/skills/ (user) and reuses <proj>/.claude/skills/ (project),
+  so only the user level needs mirroring.
 - The old full-tree ~/.agents/skills -> ~/Projects/skills symlink is replaced
   with a selective directory matching ~/.claude/skills/, because Codex enforces
   the same skill-description context budget as Claude.
@@ -29,6 +31,7 @@ PROJECTS = HOME / "Projects"
 CLAUDE_USER_DIR = HOME / ".claude" / "skills"
 AGENTS_USER_DIR = HOME / ".agents" / "skills"
 GEMINI_USER_DIR = HOME / ".gemini" / "skills"
+KIMI_USER_DIR = HOME / ".kimi" / "skills"
 
 
 def _ensure_dir(path: Path) -> None:
@@ -170,10 +173,12 @@ def main() -> int:
 
     messages: list[str] = []
 
-    # User level: mirror ~/.claude/skills/ into ~/.agents/skills/ and ~/.gemini/skills/.
+    # User level: mirror ~/.claude/skills/ into ~/.agents/skills/, ~/.gemini/skills/,
+    # and ~/.kimi/skills/.
     messages.extend(_sync_agents_user_root(dry_run=args.dry_run))
     messages.extend(_mirror(CLAUDE_USER_DIR, AGENTS_USER_DIR, "agents", dry_run=args.dry_run))
     messages.extend(_mirror(CLAUDE_USER_DIR, GEMINI_USER_DIR, "gemini", dry_run=args.dry_run))
+    messages.extend(_mirror(CLAUDE_USER_DIR, KIMI_USER_DIR, "kimi", dry_run=args.dry_run))
 
     # Per project: mirror <proj>/.claude/skills/ into <proj>/.agents/skills/.
     for proj in _iter_projects():

@@ -1,5 +1,33 @@
 # Model Guide Changelog
 
+## 2026-07-16 - Kimi K3 added as open-weight long-horizon coding opt-in
+
+Moonshot released Kimi K3 (kimi.com research announcement, operator paste): 2.8T-param
+open model (Kimi Delta Attention + Attention Residuals), native vision, 1M context,
+weights promised by 2026-07-27. First open 3T-class model; frontier-adjacent posture —
+trails Fable 5 / GPT-5.6 Sol overall, leads the table on SWE Marathon (42.0) and
+BrowseComp (91.2).
+
+- New skill section with specs, constraints, and routing read: opt-in third-lab coding
+  lane, **not a default anywhere** (metered, locally unprobed, no subscription path).
+- llmx: provider default `kimi` → `kimi-k3`; `_KNOWN_MODELS` gains k3/k2.6/k2.7-code
+  (±highspeed); K3 restriction entry is `reasoning_effort: False` — launch thinking is
+  max-only server-side, low/high effort modes announced but not yet exposed.
+- llmx kimi base URL flipped `api.moonshot.cn` → `api.moonshot.ai` (measured: the local
+  `MOONSHOT_API_KEY` 401s on .cn, 200s on .ai — the lane was broken before this pass).
+- Pricing registered at the conservative cache-miss rate ($3.00/$15.00 per MTok;
+  cache-hit input is $0.30, >90% hit rate claimed for coding workloads) in llmx
+  `usage_report.py` + agent-infra `usage-check.py` (drift-test now also re-derives
+  Cursor-Grok loop pricing from `model_ids.py`).
+- Vendor-disclosed constraints carried into the skill: thinking-history sensitivity
+  (verified harness only, no mid-session model switch), excessive proactiveness (bind
+  via AGENTS.md), conceded UX gap vs Fable 5/Sol.
+- Kimi Code CLI side (same pass): `~/.kimi` default already `moonshot-ai/kimi-k3`;
+  dead MCPs removed (genomics-consumer path gone; paperclip auth-gated unloadable),
+  exa synced to the current key + `get_code_context_exa`, dead K2-0905/K2-thinking
+  model blocks dropped (removed from the Moonshot API), `~/.kimi/skills` added to
+  `sync_skill_links.py` and re-mirrored from `~/.claude/skills` (21 added, 3 stale pruned).
+
 ## 2026-07-14 - Grok 4.5 Cursor transport restored under exact slugs
 
 Supersedes the dated 2026-07-13 disable after a fresh live registry and serve audit.

@@ -113,3 +113,7 @@ Legacy: `--lite bare` still works but `--subscription --mode chat` is canonical.
 `--lite research` remains the isolated research-MCP profile for Claude/Codex.
 
 $ARGUMENTS
+
+## Known Issues
+<!-- Append-only. Session-analyst may suggest additions. -->
+- **[2026-07-16] codex-cli --subscription gpt-5.6 lane runs with NO tools/web/file access (transport banner confirmed 2026-07-16) — "verify via search" instructions in dispatch prompts are silently no-ops on this lane; route search-dependent verification to researcher-type curators or claude lanes with MCP**

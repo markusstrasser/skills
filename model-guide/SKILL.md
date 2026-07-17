@@ -1,6 +1,6 @@
 ---
 name: model-guide
-description: "Use when: choosing frontier model/effort for a task class (Claude Opus 4.8, GPT-5.6 Sol/Terra/Luna, Grok 4.5 Cursor repo-review opt-in). Fable 5 METERED since 2026-07-07 (off subscription, 2× Opus) — fable lanes are paid opt-ins, and the Agent tool currently can't reach Fable at all (routing bug, see Verified Transport). NOT transport flags (/llmx-guide)."
+description: "Use when: choosing frontier model/effort for a task class (Claude Opus 4.8, GPT-5.6 Sol/Terra/Luna, Kimi K3 open-weight coding opt-in, Grok 4.5 Cursor repo-review opt-in). Fable 5 METERED since 2026-07-07 (off subscription, 2× Opus) — fable lanes are paid opt-ins, and the Agent tool currently can't reach Fable at all (routing bug, see Verified Transport). NOT transport flags (/llmx-guide)."
 user-invocable: true
 argument-hint: '[task description or model name]'
 effort: low
@@ -10,8 +10,8 @@ effort: low
 
 Select between the current frontier models and prompt them correctly.
 
-**Models covered:** Claude Opus 4.8 (primary Claude), Claude Sonnet 5 (cost-tier Claude), GPT-5.6 Sol / Terra / Luna (GA 2026-07-09; GPT-5.5 removed), and Grok 4.5 through the Cursor subscription pool. Claude Fable 5 remains a **metered opt-in** (off subscription 2026-07-07; see below).
-**Last updated:** 2026-07-14.
+**Models covered:** Claude Opus 4.8 (primary Claude), Claude Sonnet 5 (cost-tier Claude), GPT-5.6 Sol / Terra / Luna (GA 2026-07-09; GPT-5.5 removed), Kimi K3 (Moonshot open-weight, 2026-07-16), and Grok 4.5 through the Cursor subscription pool. Claude Fable 5 remains a **metered opt-in** (off subscription 2026-07-07; see below).
+**Last updated:** 2026-07-16.
 **Active stance:** This skill no longer maintains a broad model zoo. Older GPT, Gemini, Grok-4.20-and-earlier, and Sonnet-4.6-and-earlier routes were removed from active guidance. Sonnet 5 is reinstated as a named, cost-tier Claude option (2026-06-30). Grok 4.5 is an opt-in read-only repo critique lane through exact Cursor slugs; the xAI API path remains separate and blocked/unverified locally. Use this guide for high-value frontier decisions; use repo-specific batch tooling or search tools for cheap bulk work.
 
 **OPEN QUESTION (2026-06-30, not yet resolved — operator call):** the "Architecture / design / high-reasoning critique → NEVER Sonnet" verdict below was reached against Sonnet 4.6 on 2026-06-20. Sonnet 5's system card shows large agentic/coding gains and prompt-injection robustness tying or beating Opus 4.8 in several places, but also the *worst* prefill/system-prompt-susceptibility numbers of the compared models and measurably more turns/tokens per task (system-card digest: `references/sonnet-5-system-card.md`). Whether this changes the "NEVER Sonnet" verdict for architecture/critique work is a live question, not re-litigated here — the verdict stands until the operator revisits it.
@@ -156,7 +156,7 @@ When dispatching subagents to execute work (Agent tool, headless `claude -p`, co
 
 **Codex lane mechanics** (from codex-lane eval): `codex exec --full-auto -C <out-of-repo-worktree> -c model_reasoning_effort="low"` — the `-c` override is verified per-invocation (resolved effort confirmed in rollout logs). Gotchas: pre-install deps (the *shell* sandbox has no network); `git commit` fails inside worktrees (gitfile points outside workspace) — grade the dirty tree, commit from outside; require a final-message manifest (the `-o` empty-output gotcha).
 
-**Codex as a research/work subprocess** (verified 2026-06-18): codex carries the **same skills + MCP stack** as Claude (`~/.codex/skills/`, `~/.codex/config.toml`) — invoke a skill in the prompt via its `$name` keyword (single-quote the prompt). **Network-backed MCP tools (research-mcp, exa, brave, scite) DO work under `--full-auto`** — MCP servers are separate processes, so the shell-sandbox "no network" gotcha above does NOT apply to MCP calls. So a codex worker can do real (not training-memory) research and write its own memo, at $0 on the subscription. Full pattern — `$skill` invocation, canary-first discipline, stub-first/intern-rule briefs, the `commit`-word hook false-positive, benign MCP-teardown noise, llmx-is-not-the-vehicle: **`references/codex-subprocess-dispatch.md`**.
+**Codex as a research/work subprocess** (verified 2026-06-18): codex carries the **same skills + MCP stack** as Claude (`~/.agents/skills/`, `~/.codex/config.toml`) — invoke a skill in the prompt via its `$name` keyword (single-quote the prompt). **Network-backed MCP tools (research-mcp, exa, brave, scite) DO work under `--full-auto`** — MCP servers are separate processes, so the shell-sandbox "no network" gotcha above does NOT apply to MCP calls. So a codex worker can do real (not training-memory) research and write its own memo, at $0 on the subscription. Full pattern — `$skill` invocation, canary-first discipline, stub-first/intern-rule briefs, the `commit`-word hook false-positive, benign MCP-teardown noise, llmx-is-not-the-vehicle: **`references/codex-subprocess-dispatch.md`**.
 
 **The conditioning rule:** low effort doesn't mean less verification — both eval arms ran every gate *because the gates were written in the brief*. Self-initiated checking is what higher effort buys; an explicit verifier in the brief makes that purchase unnecessary. So the brief MUST carry: verification commands (exact, runnable), cleanup directives (worktree/scratch teardown), and a files-touched manifest requirement. A cheap executor on a gate-less brief is the worst quadrant.
 
@@ -240,6 +240,39 @@ hidden CoT, `reasoning_extraction` classifier, refusal→Opus fallback), system-
 - Subscription path: `llmx chat --subscription -m gpt-5.6-sol` (codex-cli)
 
 **Calibration:** re-measure AA-Omniscience on 5.6 before trusting abstention. Until then, treat GPT critique as adversarial pressure on *reasoning*, not a fact source.
+
+## Kimi K3 — open-weight long-horizon coding opt-in (Moonshot, 2026-07-16)
+
+Moonshot's 2.8T-parameter open model — first open 3T-class model — built on Kimi Delta
+Attention + Attention Residuals, native vision, **1M context**. Weights promised by
+2026-07-27. Posture: frontier-adjacent, self-admittedly trailing Fable 5 / GPT-5.6 Sol
+overall, but with table-leading long-horizon agentic results (SWE Marathon **42.0**, best
+of table; BrowseComp **91.2**, best; Terminal-Bench 2.1 88.3 ≈ Sol's 88.8; 24h
+kernel-optimization parity with Fable 5). 2.5× scaling-efficiency gain over K2 claimed.
+
+**Operational specs:** `kimi-k3` via `llmx chat -p kimi -m kimi-k3` (metered,
+`MOONSHOT_API_KEY`; provider now targets api.moonshot.**ai** — the .cn endpoint 401s the
+local key, flipped 2026-07-16). **$3.00/MTok cache-miss input, $0.30 cache-hit input,
+$15.00/MTok output** (>90% cache-hit rate claimed on coding workloads → effective input
+cost can be ~10× under Opus/Sol on repeat-context sweeps). Launch thinking is
+**max-only** — low/high effort modes announced, not yet shipped; llmx encodes
+`reasoning_effort: False`, don't pass an effort. Also the default model of the local
+Kimi Code CLI (`~/.kimi/config.toml` → `moonshot-ai/kimi-k3`).
+
+**Routing read (opt-in, unprobed locally):** a third-lab (Moonshot) long-context
+coding lane — worth a measured probe where prompt-cache makes repeat-context work cheap,
+and as the open-weight self-serve option once weights land. **Not a default anywhere:**
+metered, locally unverified, and no subscription path exists.
+
+**Vendor-disclosed constraints (load-bearing):**
+1. **Thinking-history sensitivity** — the harness must return all historical thinking
+   content; never switch K3 into an ongoing session from another model. Use Kimi Code or
+   a verified-compatible harness.
+2. **Excessive proactiveness** — trained for long-horizon autonomy; on ambiguous intent it
+   may make decisions on the user's behalf. Bind it with explicit AGENTS.md/system-prompt
+   constraints for bounded work.
+3. **UX gap** — the vendor concedes a noticeable user-experience gap vs Fable 5 / Sol
+   despite competitive scores.
 
 ## Grok 4.5 - repo-grounded Cursor opt-in
 
@@ -351,3 +384,5 @@ Log it for the next reader: `~/Projects/skills/hooks/append-skill-memento.sh mod
 
 - **[2026-07-13] 2026-07-13 live llmx mirror includes claude-fable-5 in the subscription allowlist; dry-run reports auth=subscription, transport=claude-cli, model=claude-fable-5, effort=max. Reconcile the stale off-subscription default with this live route and operator confirmation.**
 - **[2026-07-14] SUPERSEDES the 2026-07-13 Grok-unavailable finding:** Cursor now exposes exact `cursor-grok-4.5-{low,medium,high}` and trailing-`-fast` slugs. Named high and repo-HEAD smokes passed; critique restores only the preflight-gated read-only workspace axis. Keep the July-13 failure as evidence that registry state can change overnight.
+
+- **[2026-07-17] Kimi K3 first local fix-probe (2026-07-17, arc-agi): 2/2 gated small-slice fixes clean (falsifiers+regression controls+consumer check, spec-faithful), $1.30 / 2.98M tok (97% cache-read; kimi --print --afk headless works). Positive evidence for K3 on briefed+gated small slices.**
