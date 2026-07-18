@@ -1108,6 +1108,258 @@ def make_subprocess_gate(path: str):
 
 
 # ─────────────────────────────────────────────────────────────────────────
+# POST-CONSOLIDATION ADDITIONS (2026-07-18) — new gates with no
+# pre-consolidation standalone original; the "28 gates" / "Total: 28"
+# accounting above is a historical fact about the original port and is left
+# unchanged. Each of these still gets a same-named on-disk .sh sibling
+# (repo convention: every live gate has an on-disk copy for independent
+# testing/documentation/rollback, wired into settings.json or not — see
+# pretool-heavy-load-guard.sh, pretool-plan-protect.sh for precedent); the
+# function below is the LIVE path, exactly like every gate above it. Native
+# (not SUBPROCESS-KEPT) because the triggering condition is a cheap string
+# check that costs ~nothing on the non-matching majority of Bash calls — a
+# subprocess-kept gate would pay a `bash` + `python3` spawn on EVERY single
+# Bash call, which is the exact cost this dispatcher exists to avoid. Where
+# a gate genuinely needs OS-level peer/process introspection (git-stash
+# guard's peer count), it shells out to the existing proven helper binary
+# ONLY on the rare branch where the cheap check already matched — never
+# reimplementing that binary's own logic natively (same "porting risks
+# silent drift on a safety-critical guard" reasoning the multiagent-commit
+# gate above states for keeping ITS peer-count call as a live subprocess).
+# ─────────────────────────────────────────────────────────────────────────
+
+# --- 29. pretool-git-stash-guard.sh (BLOCKER+ADVISORY, no if — the "stash"
+# substring check below IS the cheap gate) ----------------------------------
+
+_STASH_READONLY_SUBCMDS = {"list", "show"}
+
+
+def _git_stash_call(seg: str):
+    """Mirrors pretool-git-stash-guard.sh's stash_call(): (is_git_stash, args)."""
+    seg = seg.strip()
+    try:
+        parts = shlex.split(seg)
+    except ValueError:
+        if re.match(r"(?:[A-Za-z_]\w*=\S+\s+)*git\s+(-\S+\s+)*stash\b", seg):
+            return True, None
+        return False, None
+    i = 0
+    while i < len(parts) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", parts[i]):
+        i += 1
+    if i >= len(parts) or parts[i] != "git":
+        return False, None
+    j = i + 1
+    while j < len(parts) and parts[j].startswith("-"):
+        j += 2 if parts[j] in ("-C", "-c") else 1
+    if j >= len(parts) or parts[j] != "stash":
+        return False, None
+    return True, parts[j + 1:]
+
+
+def _git_stash_is_safe(args) -> bool:
+    """Two allowed shapes, everything else is peer-gated — see
+    pretool-git-stash-guard.sh's is_safe_pathlimited_push() for the full
+    rationale (kept in sync; that file is this function's on-disk twin)."""
+    if args is None:
+        return False
+    if not args:
+        return False  # bare `git stash` == `git stash push` on the WHOLE tree
+    sub = args[0]
+    if sub in _STASH_READONLY_SUBCMDS:
+        return True
+    if sub not in ("push", "save"):
+        return False
+    return "--" in args[1:]
+
+
+def gate_git_stash_guard(raw_payload: str) -> GateResult:
+    try:
+        data = json.loads(raw_payload)
+    except Exception:
+        return GateResult(0, "", "")
+    ti = data.get("tool_input") or {}
+    cmd = ti.get("command", "") or ""
+    if not cmd or "stash" not in cmd:
+        return GateResult(0, "", "")
+    segments = re.split(r"&&|\|\||;|\||\n", cmd)
+    offending = False
+    for seg in segments:
+        hit, args = _git_stash_call(seg)
+        if hit and not _git_stash_is_safe(args):
+            offending = True
+            break
+    if not offending:
+        return GateResult(0, "", "")
+
+    cwd = ti.get("workdir") or data.get("cwd") or os.getcwd()
+    peer_bin = os.environ.get("PEER_SESSION_COUNT_BIN") or str(HOOKS_DIR / "peer-session-count.sh")
+    try:
+        peer_out = subprocess.run([peer_bin, cwd], capture_output=True, text=True, timeout=10).stdout.strip()
+        peer_count = int(peer_out) if peer_out.isdigit() else 0
+    except Exception:
+        peer_count = 0
+
+    if peer_count < 1:
+        # Solo session: never block your own stash — advisory nudge only, so
+        # the habit is corrected before a peer ever joins this checkout.
+        advisory = (
+            "git-stash-guard: bare `git stash` is tree-wide and cannot be path-limited "
+            "by default (no peer detected right now, so this is allowed) — prefer "
+            "`git stash push -- <paths>` so it stays safe if a peer joins this checkout "
+            "later (global <git_rules>, CLAUDE.md 2026-07-16 entry)."
+        )
+        return GateResult(0, "", json.dumps({"additionalContext": advisory}))
+
+    _log_trigger("git-stash-guard", "block", f"peers={peer_count} cmd={cmd[:80]}")
+    msg = (
+        f"BLOCK: bare `git stash` (or stash pop/apply/drop/clear) is banned in a "
+        f"checkout with {peer_count} live peer Claude session(s) sharing it (global "
+        "<git_rules> — CLAUDE.md, 2026-07-16 entry). `git stash` is tree-wide and "
+        "cannot be path-limited by default; it silently rips a peer's in-flight edits "
+        "out from under a live session, and `stash pop` against whatever the peer "
+        "commits meanwhile FAILS (leaves UU conflict markers) rather than restoring "
+        "anything.\n\nSafe alternatives:\n"
+        "  - `git stash push -- <your-paths>`   (path-limited to files you own — ALWAYS allowed)\n"
+        "  - a git worktree for the A/B you're trying to do\n"
+        "  - `git show HEAD:<file>`             (read the committed version without touching the tree)\n\n"
+        "If you already ran a bare stash: do NOT resolve a peer's conflict yourself — "
+        "`git checkout HEAD -- <file>` to clear it, leave their stash entry intact, "
+        "save `git stash show -p` to a patch outside git, and tell the operator.\n"
+    )
+    return GateResult(2, msg, "")
+
+
+# --- 30. pretool-pkill-anchor-guard.sh (ADVISORY, no if) --------------------
+
+def _pkill_f_patterns(seg: str):
+    """Mirrors pretool-pkill-anchor-guard.sh's find_pkill_f_patterns():
+    yields (pattern, has_dash_x) for a `pkill ... -f <pattern>` call."""
+    seg = seg.strip()
+    try:
+        parts = shlex.split(seg)
+    except ValueError:
+        return
+    i = 0
+    while i < len(parts):
+        tok = parts[i].rsplit("/", 1)[-1]
+        if tok != "pkill":
+            i += 1
+            continue
+        args = parts[i + 1:]
+        has_dash_x = "-x" in args
+        pattern = None
+        j = 0
+        while j < len(args):
+            a = args[j]
+            if a == "-f":
+                if j + 1 < len(args) and not args[j + 1].startswith("-"):
+                    pattern = args[j + 1]
+                j += 2
+                continue
+            if a.startswith("-f") and len(a) > 2 and not a.startswith("--"):
+                pattern = a[2:]
+                j += 1
+                continue
+            if a == "--full":
+                if j + 1 < len(args) and not args[j + 1].startswith("-"):
+                    pattern = args[j + 1]
+                j += 2
+                continue
+            j += 1
+        if pattern is not None:
+            yield pattern, has_dash_x
+        break
+
+
+def _pkill_is_anchored(pattern: str, has_dash_x: bool) -> bool:
+    if has_dash_x:
+        return True
+    if pattern.startswith("^"):
+        return True
+    if "/" in pattern:
+        return True
+    return False
+
+
+def gate_pkill_anchor_guard(raw_payload: str) -> GateResult:
+    try:
+        data = json.loads(raw_payload)
+    except Exception:
+        return GateResult(0, "", "")
+    cmd = (data.get("tool_input") or {}).get("command", "") or ""
+    if not cmd or "pkill" not in cmd:
+        return GateResult(0, "", "")
+    segments = re.split(r"&&|\|\||;|\||\n", cmd)
+    hits: list[str] = []
+    for seg in segments:
+        for pattern, has_dash_x in _pkill_f_patterns(seg):
+            if not _pkill_is_anchored(pattern, has_dash_x):
+                hits.append(pattern)
+    if not hits:
+        return GateResult(0, "", "")
+    pat_list = ", ".join(f"'{p}'" for p in hits)
+    msg = (
+        f"ADVISORY: pkill -f pattern(s) [{pat_list}] look unanchored (no `/` path segment, "
+        "no leading `^`, no paired `-x`) — `-f` matches by SUBSTRING against the full command "
+        "line. Run `pgrep -fl '<pattern>'` FIRST and read every match before killing anything; "
+        "anchor to a unique token (full path, `^`, or `-x`) once you've confirmed the match set. "
+        "(wakeup-cadence.md pkill discipline — 2 same-day incidents 2026-07-12, one killed a "
+        "healthy training client via `*forkDC*` matching the unrelated `forkDCH`.)"
+    )
+    out = json.dumps({"additionalContext": msg})
+    return GateResult(0, "", out)
+
+
+# --- 31. opus-concurrency-advisory (ADVISORY, no if) -------------------------
+# Reuses arc-agi's `just opus-load` recipe's EXACT pgrep pattern and threshold
+# verbatim (arc-agi justfile:823 `opus-load`) rather than reinventing a count —
+# see that recipe's own comment for the measured basis (6+ concurrent streams
+# -> 72% dead rounds, arc-agi 2026-07-18 Stage-0 burn) and its stated throttle
+# ("keep <=2-3; stagger launches above that"). Cited, not duplicated logic:
+# the pattern string below IS the recipe's pattern string, kept identical on
+# purpose so the two never silently drift apart.
+_OPUS_LOAD_PGREP_PATTERN = "claude-opus-4-8|claude-fable-5|claude -p"
+_OPUS_TRIGGER_LLMX_RE = re.compile(r"\bllmx\b", re.I)
+_OPUS_TRIGGER_MODEL_RE = re.compile(r"claude-opus-4-8|claude-fable-5", re.I)
+_OPUS_TRIGGER_CLAUDE_P_RE = re.compile(r"(?:^|[;&|(]\s*)claude\s+-p\b")
+
+
+def gate_opus_concurrency_advisory(raw_payload: str) -> GateResult:
+    try:
+        data = json.loads(raw_payload)
+    except Exception:
+        return GateResult(0, "", "")
+    cmd = (data.get("tool_input") or {}).get("command", "") or ""
+    if not cmd:
+        return GateResult(0, "", "")
+    is_llmx_opus = bool(_OPUS_TRIGGER_LLMX_RE.search(cmd) and _OPUS_TRIGGER_MODEL_RE.search(cmd))
+    is_claude_p = bool(_OPUS_TRIGGER_CLAUDE_P_RE.search(cmd))
+    if not (is_llmx_opus or is_claude_p):
+        return GateResult(0, "", "")
+    pgrep_bin = os.environ.get("OPUS_LOAD_PGREP_BIN") or "pgrep"
+    try:
+        out = subprocess.run(
+            [pgrep_bin, "-f", _OPUS_LOAD_PGREP_PATTERN], capture_output=True, text=True, timeout=5,
+        ).stdout
+        count = len([ln for ln in out.splitlines() if ln.strip()])
+    except Exception:
+        return GateResult(0, "", "")
+    if count < 3:
+        return GateResult(0, "", "")
+    _log_trigger("opus-concurrency-advisory", "warn", f"count={count} cmd={cmd[:80]}")
+    msg = (
+        f"ADVISORY: {count} concurrent opus-family streams already live (pgrep -f "
+        f"'{_OPUS_LOAD_PGREP_PATTERN}', same pattern as `just opus-load` in arc-agi) — "
+        "measured: 6+ concurrent -> 72% dead rounds (arc-agi 2026-07-18 Stage-0 burn: heavy "
+        "induction calls slow past --llm-timeout and die as EMPTY/nonzero 'transport errors' "
+        "under contention). Stagger or throttle this launch (throttle: keep <=2-3 concurrent; "
+        "feedback_concurrency_throttle)."
+    )
+    out_json = json.dumps({"additionalContext": msg})
+    return GateResult(0, "", out_json)
+
+
+# ─────────────────────────────────────────────────────────────────────────
 # MANIFEST — EXACT settings.json order. Each entry: name, if_pattern (None =
 # always run), run(raw_payload)->GateResult.
 # ─────────────────────────────────────────────────────────────────────────
@@ -1151,6 +1403,10 @@ MANIFEST: list[dict] = [
     {"name": "plan-protect", "if": None, "run": gate_plan_protect},
     {"name": "cursor-model-guard", "if": None,
      "run": make_native_gate("pretool-cursor-model-guard.py", "pretool_cursor_model_guard")},
+    # --- post-consolidation additions (2026-07-18), see section above ------
+    {"name": "git-stash-guard", "if": None, "run": gate_git_stash_guard},
+    {"name": "pkill-anchor-guard", "if": None, "run": gate_pkill_anchor_guard},
+    {"name": "opus-concurrency-advisory", "if": None, "run": gate_opus_concurrency_advisory},
 ]
 
 
