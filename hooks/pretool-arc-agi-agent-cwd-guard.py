@@ -63,11 +63,20 @@ def _needs_agent_env(cmd: str) -> bool:
     # git/cat/grep is not an import site (false-blocked git diff, 2026-07-10).
     if re.search(r"(?:^|[\s;|&])(?:uv\s+run\s+(?:python3?\s+)?|python3?\s+)agent/\S+\.py\b", cmd):
         return True
-    # pytest targeting agent/ tree from repo root (observe 2026-07-12 residual)
-    if re.search(r"\bpytest\b.*\bagent/", cmd) or re.search(
-        r"\bpython3?\s+-m\s+pytest\b.*\bagent/", cmd
-    ):
-        return True
+    # pytest targeting agent/ tree from repo root (observe 2026-07-12 residual).
+    # Segment-scoped + invocation-anchored: `pytest` must be the invoked command of a
+    # segment whose OWN arguments reference agent/. The old cross-command form
+    # (`\bpytest\b.*\bagent/` over the whole string) false-blocked a read-only status
+    # compound where an `echo "== pytest lastfailed =="` preceded an unrelated
+    # `cat agent/.pytest_cache/...` (2026-07-18) — same class as the 2026-07-10
+    # git-diff false block that anchored the .py branch above.
+    for seg in re.split(r"[;|&\n]+", cmd):
+        if re.match(
+            r"\s*(?:\S+=\S+\s+)*(?:uv\s+run\s+(?:--\S+(?:\s+\S+)?\s+)*)?"
+            r"(?:python3?\s+-m\s+)?pytest\b",
+            seg,
+        ) and re.search(r"\bagent/", seg):
+            return True
     return False
 
 
@@ -164,6 +173,12 @@ def _selftest() -> int:
         (root, "python3 -c \"__import__('arcengine')\"", "block"),
         # 2026-07-12 residual shapes
         (root, "uv run python3 -m pytest agent/tests/test_foo.py", "rewrite"),
+        (root, "pytest agent/tests/test_foo.py", "block"),
+        (root, "PYTHONUNBUFFERED=1 pytest agent/tests/", "block"),
+        # 2026-07-18 false block: "pytest" in echo TEXT + unrelated agent/ path in a
+        # LATER segment must not fire (read-only status compound, blocked live).
+        (root, 'echo "== pytest lastfailed =="; cat agent/.pytest_cache/v/cache/lastfailed; git status --short', "pass"),
+        (root, 'echo "pytest agent/tests broken?"', "pass"),
     ]
     bad = 0
     for cwd, cmd, want in cases:
