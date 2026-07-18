@@ -143,6 +143,15 @@ REDISCOVERY = re.compile(
     re.I,
 )
 
+# External URL pointers — operator-free triage (RSI-hindsight CONVERT 2026-07-18).
+# Bare "https://… / is this relevant?" must fire WITHOUT INTENT; prior-context's
+# own-work scans miss this class entirely.
+URL_RE = re.compile(r"https?://[^\s<>\"')\]]+", re.I)
+POINTER_LEDGER = (
+    Path.home() / "Projects" / "agent-infra"
+    / "artifacts" / "pointer-dispositions" / "ledger.jsonl"
+)
+
 
 def _kw(text: str) -> list[str]:
     """Distinctive topic keywords (>=5 chars, not generic), longest first."""
@@ -452,6 +461,78 @@ def _scan_git_head(cwd: str, n: int = 12) -> list[str]:
     return hits
 
 
+def _normalize_pointer_url(url: str) -> str:
+    """Match scripts/pointer_disposition.normalize_url (kept local — hooks fail-open)."""
+    from urllib.parse import urlparse, urlunparse
+
+    raw = url.strip().rstrip(").,;\"'")
+    p = urlparse(raw)
+    scheme = (p.scheme or "https").lower()
+    netloc = (p.netloc or "").lower()
+    path = p.path or ""
+    m = re.match(r"^/([^/]+)/([^/]+)/(?:blob|tree|raw)/[^/]+/(.*)$", path)
+    if netloc in ("github.com", "www.github.com") and m:
+        path = f"/{m.group(1)}/{m.group(2)}/{m.group(3)}"
+    m2 = re.match(r"^/([^/]+)/([^/]+)/[^/]+/(.*)$", path)
+    if netloc == "raw.githubusercontent.com" and m2:
+        netloc = "github.com"
+        path = f"/{m2.group(1)}/{m2.group(2)}/{m2.group(3)}"
+    return urlunparse((scheme, netloc, path.rstrip("/"), "", "", ""))
+
+
+def _pointer_disposition_lines(prompt: str) -> list[str]:
+    """Front-load external URL dispositions from the pointer ledger."""
+    urls = [_normalize_pointer_url(u) for u in URL_RE.findall(prompt or "")]
+    if not urls:
+        return []
+    by_url: dict[str, dict] = {}
+    try:
+        if POINTER_LEDGER.is_file():
+            for line in POINTER_LEDGER.read_text(errors="ignore").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                key = _normalize_pointer_url(row.get("url") or "")
+                if key:
+                    by_url[key] = row
+    except Exception:
+        return []
+    lines = [
+        "POINTER-DISPOSITION (external URL triage — answer from ledger, don't cold-eval):",
+    ]
+    any_hit = False
+    seen: set[str] = set()
+    for u in urls:
+        if u in seen:
+            continue
+        seen.add(u)
+        row = by_url.get(u)
+        if row:
+            any_hit = True
+            disp = row.get("disposition", "?")
+            reason = (row.get("reason") or "")[:180]
+            lines.append(f"  [{disp}] {u} — {reason}")
+        else:
+            lines.append(
+                f"  [pending] {u} — not in ledger; evaluate AND record: "
+                f"`cd ~/Projects/agent-infra && uv run python3 "
+                f"scripts/pointer_disposition.py record <url> "
+                f"--disposition <d> --reason <r>` (bare `just "
+                f"pointer-disposition` fails outside agent-infra; the "
+                f"just varargs form also strips quotes)."
+            )
+    lines.append(
+        "Reply vocab: known · in_queue · doesnt_apply · tried · adopted "
+        "(operator-free target; RSI-hindsight CONVERT 2026-07-18)."
+    )
+    # Always surface when URLs present — pending is the miss signal.
+    return lines if (any_hit or seen) else []
+
+
 def _dedup_path(session_id: str) -> Path:
     sid = re.sub(r"[^A-Za-z0-9_-]", "", session_id or "nosession")[:64] or "nosession"
     return Path.home() / ".claude" / f".prior-context-seen-{sid}.txt"
@@ -494,14 +575,46 @@ def main() -> None:
     if not prompt or len(prompt) < 8:
         return
 
-    # --- Cheap gate FIRST: no propose/diagnose/rediscovery intent -> exit before I/O.
+    # External URLs: fire even without INTENT (bare paste + "relevant?").
+    pointer_lines = _pointer_disposition_lines(prompt)
+
+    # --- Cheap gate FIRST: no propose/diagnose/rediscovery/URL intent -> exit before I/O.
     rediscovery = bool(REDISCOVERY.search(prompt))
-    if not INTENT.search(prompt) and not rediscovery and not OBSERVE_RSI.search(prompt):
+    if (
+        not INTENT.search(prompt)
+        and not rediscovery
+        and not OBSERVE_RSI.search(prompt)
+        and not pointer_lines
+    ):
+        return
+
+    # URL-only prompts: inject POINTER-DISPOSITION and skip own-work scans.
+    if pointer_lines and not (
+        INTENT.search(prompt) or rediscovery or OBSERVE_RSI.search(prompt)
+    ):
+        sig = hashlib.sha1("|".join(pointer_lines).encode()).hexdigest()[:12]
+        if not _already_surfaced(session_id, sig):
+            _mark_surfaced(session_id, sig)
+            try:
+                subprocess.run(
+                    [str(Path.home() / "Projects/skills/hooks/hook-trigger-log.sh"),
+                     "pointer-disposition", "warn",
+                     f"urls={len(pointer_lines)}"],
+                    timeout=1.0, capture_output=True,
+                )
+            except Exception:
+                pass
+            print(json.dumps({
+                "hookSpecificOutput": {
+                    "hookEventName": "UserPromptSubmit",
+                    "additionalContext": "\n".join(pointer_lines),
+                }
+            }))
         return
 
     kw = _kw(prompt)
     infra_only = bool(INFRA_DESIGN.search(prompt) or OBSERVE_RSI.search(prompt))
-    if not kw and not infra_only and not rediscovery:
+    if not kw and not infra_only and not rediscovery and not pointer_lines:
         return
 
     base = Path(cwd)
@@ -513,7 +626,10 @@ def main() -> None:
     infra_lines = _infra_design_lines(base, prompt, kw)
     if rediscovery and not (memos or ideas or commits or siblings):
         commits = _scan_git_head(cwd, 12)
-    if not (memos or ideas or commits or siblings or observe_lines or infra_lines):
+    if not (
+        memos or ideas or commits or siblings or observe_lines
+        or infra_lines or pointer_lines
+    ):
         return  # intent present but no prior work -> nothing to front-load
 
     # De-dup within the session on the surfaced reference-set: a focused session
@@ -532,7 +648,9 @@ def main() -> None:
     ideas = _dedup(ideas)[:4]
     commits = _dedup(commits)[:6]
     siblings = _dedup(siblings)[:5]
-    sig = hashlib.sha1("|".join(memos + ideas + commits + siblings + observe_lines + infra_lines).encode()).hexdigest()[:12]
+    sig = hashlib.sha1("|".join(
+        memos + ideas + commits + siblings + observe_lines + infra_lines + pointer_lines
+    ).encode()).hexdigest()[:12]
     if _already_surfaced(session_id, sig):
         return
 
@@ -560,6 +678,8 @@ def main() -> None:
         "inline) — never end the turn holding authorized-but-undispatched work awaiting a 'go'. "
         "'Do all/parallelize/go on' from the operator means this reflex failed on the prior turn.",
     ]
+    if pointer_lines:
+        parts.extend(pointer_lines)
     if memos:
         parts.append("Curated memo(s)/decision(s):\n" + "\n".join(f"  {m}" for m in memos))
     if commits:
