@@ -150,6 +150,64 @@ def test_llmx_explicit_provider_flag_silences_subscription_warning(tmp_path):
     assert "BILLS per-token" not in proc.stderr
 
 
+def _read_trigger_log(home):
+    log_path = Path(home) / ".claude" / "hook-triggers.jsonl"
+    if not log_path.is_file():
+        return []
+    rows = []
+    with open(log_path, "rb") as f:
+        for raw in f:
+            line = raw.decode("utf-8", "replace").strip()
+            if line:
+                rows.append(json.loads(line))
+    return rows
+
+
+def test_llmx_gpt56_without_subscription_logs_warn_fire_with_fingerprint(tmp_path):
+    """T1/T3 (guard-forcerate-study / rescue-class-surface-closure-loop):
+    remind() is stderr-only, so before 2026-07-18 this fire never reached
+    ~/.claude/hook-triggers.jsonl at all — this is the first test proving it
+    does now, WITH a command fingerprint and WITHOUT the raw command."""
+    home, state = _isolated(tmp_path)
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m gpt-5.6 -e xhigh 'hi'"}}
+    proc = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": "test-fp-warn"}, home_dir=home, state_dir=state)
+    assert proc.returncode == 0
+    rows = _read_trigger_log(home)
+    warns = [r for r in rows if r.get("hook") == "llmx-subscription-flag" and r.get("action") == "warn"]
+    assert len(warns) == 1
+    assert warns[0].get("cmd_tok") == "llmx"
+    assert len(warns[0].get("cmd_fp", "")) == 8
+    assert "cmd" not in warns[0]
+    assert "gpt-5.6" in warns[0].get("detail", "")
+
+
+def test_llmx_gpt56_with_subscription_flag_logs_exposure_clean(tmp_path):
+    """The eligible-and-clean denominator row for this guard: the
+    precondition (llmx + a subscription-eligible model) matched, but the
+    routing flag was already present, so nothing fired."""
+    home, state = _isolated(tmp_path)
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat --subscription -m gpt-5.6 -e xhigh 'hi'"}}
+    proc = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": "test-fp-exposure"}, home_dir=home, state_dir=state)
+    assert proc.returncode == 0
+    rows = _read_trigger_log(home)
+    exposures = [r for r in rows if r.get("hook") == "llmx-subscription-flag" and r.get("action") == "exposure-clean"]
+    assert len(exposures) == 1
+    assert exposures[0].get("cmd_tok") == "llmx"
+    assert len(exposures[0].get("cmd_fp", "")) == 8
+
+
+def test_llmx_model_not_in_allowlist_logs_nothing_for_subscription_flag(tmp_path):
+    """Precondition never matched (model not in the subscription-eligible
+    set) -> no fire, no exposure row either — this guard structurally does
+    not apply to this call at all."""
+    home, state = _isolated(tmp_path)
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m gpt-5.5 'hi'"}}
+    proc = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": "test-fp-notlisted"}, home_dir=home, state_dir=state)
+    assert proc.returncode == 0
+    rows = _read_trigger_log(home)
+    assert not [r for r in rows if r.get("hook") == "llmx-subscription-flag"]
+
+
 def test_llmx_claude_opus_no_flag_fires_both_claude_and_subscription_reminders(tmp_path):
     """claude-opus-4-8/claude-fable-5 are in BOTH the coarse Claude-cli check
     (fires regardless of --subscription presence) and the precise
