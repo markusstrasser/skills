@@ -80,6 +80,23 @@ class StopUncommittedAttributionTest(unittest.TestCase):
         d.mkdir(parents=True, exist_ok=True)
         (d / f"{sid}.touched-files").write_text("".join(r + "\n" for r in rels))
 
+    def _stage_foreign_add(self, rel: str, content: str) -> None:
+        """Simulate a PEER's own prior `git add` -- outside this hook and
+        outside the ledger system entirely -- leaving new content staged but
+        uncommitted in the shared index. This is the exact mechanism behind
+        incident 754b702c: a peer staged something via their own git
+        invocation, then a DIFFERENT session's Stop-hook checkpoint ran and
+        (pre-fix) swept it into its [wip] commit via `git add` + bare
+        `git commit` (bare commit always commits the FULL index)."""
+        (self.repo / rel).write_text(content)
+        self._git("add", rel)
+
+    def _stage_foreign_deletion(self, rel: str) -> None:
+        """Same as _stage_foreign_add but for a staged DELETION of an
+        already-committed tracked file -- the literal incident shape
+        (754b702c: noinject.json)."""
+        self._git("rm", "-q", rel)
+
     def _write_settled(self, rel: str, content: str) -> None:
         """Write a repo file and backdate its mtime past the hook's 90s in-flight
         window. The Stop hook defers files written in the last 90s as still-being-
@@ -154,6 +171,68 @@ class StopUncommittedAttributionTest(unittest.TestCase):
         self.assertIn("mine_only.py", head)        # solely mine -> committed
         self.assertNotIn("shared.py", head)        # contested -> NOT swept
         self.assertIn("shared.py", self._git("status", "--short", "shared.py"))
+
+    def test_peer_staged_new_file_survives_untouched(self) -> None:
+        """754b702c-class incident, polarity (a): a peer's OWN `git add`
+        (outside this hook, outside any ledger) leaves a new file staged but
+        uncommitted. This session's checkpoint of a DIFFERENT file must commit
+        ONLY its own file -- the peer's staged file must survive staged,
+        byte-identical, untouched, NOT committed, NOT lost. This is the
+        `git commit --only` fix: `--only` disregards anything staged for
+        paths outside its own pathspec, regardless of who staged it or when."""
+        self._stage_foreign_add("peer_new.txt", "peer content\n")
+        before_cached = self._git("diff", "--cached", "--name-status")
+        self._tmp_ledger(self.mine, "mine.py")
+        self._write_settled("mine.py", "m\n")
+        self._fire_as(self.mine)
+        head = self._head_files()
+        self.assertIn("mine.py", head)
+        self.assertNotIn("peer_new.txt", head)
+        after_cached = self._git("diff", "--cached", "--name-status")
+        self.assertEqual(before_cached, after_cached)
+        self.assertIn("peer_new.txt", self._git("status", "--short", "peer_new.txt"))
+
+    def test_peer_staged_deletion_survives_untouched(self) -> None:
+        """754b702c's literal shape: a peer stages a DELETION of a tracked
+        file (git rm, not git add), leaves it uncommitted. This session's
+        checkpoint of a different file must not sweep the deletion into its
+        own commit -- the deletion must stay staged-but-uncommitted, and the
+        working tree must still reflect it (file stays removed on disk)."""
+        (self.repo / "doomed.txt").write_text("will be deleted\n")
+        self._git("add", "doomed.txt")
+        self._git("commit", "-qm", "add doomed")
+        self._stage_foreign_deletion("doomed.txt")
+        self._tmp_ledger(self.mine, "mine.py")
+        self._write_settled("mine.py", "m\n")
+        self._fire_as(self.mine)
+        head = self._head_files()
+        self.assertIn("mine.py", head)
+        self.assertNotIn("doomed.txt", head)
+        self.assertIn("doomed.txt", self._git("diff", "--cached", "--name-status"))
+        self.assertFalse((self.repo / "doomed.txt").exists())
+
+    def test_normal_checkpoint_clean_index_unchanged(self) -> None:
+        """Polarity (b): with NO foreign staged content at all (clean index
+        before the hook runs, the common case), behavior is unchanged from
+        before the --only migration -- both a modified tracked file and a
+        brand-new untracked file commit correctly with their REAL content
+        (regression coverage for the `git add -N` intent-to-add step: --only
+        refuses a pathspec it does not already know, so untracked files need
+        -N first; this asserts the committed content is the real bytes, not
+        an empty -N placeholder)."""
+        (self.repo / "tracked.txt").write_text("base\n")
+        self._git("add", "tracked.txt")
+        self._git("commit", "-qm", "seed tracked")
+        self._tmp_ledger(self.mine, "tracked.txt", "brand_new.py")
+        self._write_settled("tracked.txt", "modified by me\n")
+        self._write_settled("brand_new.py", "real content here\n")
+        self._fire_as(self.mine)
+        head = self._head_files()
+        self.assertIn("tracked.txt", head)
+        self.assertIn("brand_new.py", head)
+        self.assertEqual(self._git("show", "HEAD:brand_new.py"), "real content here")
+        self.assertEqual(self._git("show", "HEAD:tracked.txt"), "modified by me")
+        self.assertEqual(self._git("status", "--short"), "")
 
     # NB: parse-safety of the embedded `python3 -c` program (the inline-single-quote
     # idiom that silently kills this hook) is enforced separately and faithfully by
