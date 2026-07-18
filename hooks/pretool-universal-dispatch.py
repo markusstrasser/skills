@@ -280,6 +280,26 @@ _LLMX_HAS_SUBSCRIPTION_ROUTING_RE = re.compile(
 )
 
 
+def _log_trigger_cmd(hook: str, action: str, detail: str, cmd: str) -> None:
+    """Fire-and-forget telemetry with command fingerprinting — the
+    Part-2/companion-remind twin of pretool-bash-dispatch.py's
+    _log_trigger(cmd=...). `remind()` below only ever wrote to stderr, so
+    none of Part 2's reminders (incl. the llmx-subscription-flag guard) were
+    reaching ~/.claude/hook-triggers.jsonl at all before 2026-07-18 — this is
+    the first call site that puts one of them on the record (T1/T3,
+    guard-forcerate-study / rescue-class-surface-closure-loop, arc-agi
+    loop/backlog.jsonl rows 906/909). `cmd` is fingerprinted by
+    hook-trigger-log.sh into cmd_tok/cmd_fp; the raw command is never
+    persisted. Never affects hook behavior."""
+    try:
+        subprocess.run(
+            [f"{SKILLS_HOOKS}/hook-trigger-log.sh", hook, action, detail, cmd],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
+        )
+    except Exception:
+        pass
+
+
 def run_companion_remind(envelope, tool_name, tool_input):
     session_id = os.environ.get("CLAUDE_SESSION_ID", "default")
     reminder_dir = f"{STATE_DIR}/companion-remind-{session_id}"
@@ -375,17 +395,24 @@ def run_companion_remind(envelope, tool_name, tool_input):
     # always-fires-once Claude reminder above.
     if cmd and "llmx" in cmd:
         mflag = _LLMX_MODEL_FLAG_RE.search(cmd)
-        if (
-            mflag
-            and mflag.group(1) in _LLMX_SUBSCRIPTION_MODELS
-            and not _LLMX_HAS_SUBSCRIPTION_ROUTING_RE.search(cmd)
-        ):
-            remind(
-                "llmx-subscription-flag",
-                f"llmx -m {mflag.group(1)} has NO --subscription/--lite/-p/--provider flag — "
-                "this call routes API-direct and BILLS per-token. `--subscription` IS the $0 "
-                "(llmx-routing.md); add it if this is meant to be the free lane.",
-            )
+        if mflag and mflag.group(1) in _LLMX_SUBSCRIPTION_MODELS:
+            # T3 exposure/fire split (rescue-class-surface-closure-loop): the
+            # guard's precondition (llmx + a subscription-eligible -m model)
+            # matched either way — what differs is whether a routing flag was
+            # already present. Both branches are logged so the outcome
+            # analyzer has both the fire AND the eligible-and-clean
+            # denominator for this guard (previously NEITHER reached the
+            # trigger log — remind() below is stderr-only).
+            if not _LLMX_HAS_SUBSCRIPTION_ROUTING_RE.search(cmd):
+                remind(
+                    "llmx-subscription-flag",
+                    f"llmx -m {mflag.group(1)} has NO --subscription/--lite/-p/--provider flag — "
+                    "this call routes API-direct and BILLS per-token. `--subscription` IS the $0 "
+                    "(llmx-routing.md); add it if this is meant to be the free lane.",
+                )
+                _log_trigger_cmd("llmx-subscription-flag", "warn", mflag.group(1), cmd)
+            else:
+                _log_trigger_cmd("llmx-subscription-flag", "exposure-clean", mflag.group(1), cmd)
 
     # llmx-guide: Python code dispatching to CLI models (case-sensitive)
     if content and re.search(
