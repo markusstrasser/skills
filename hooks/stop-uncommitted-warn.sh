@@ -43,6 +43,13 @@ try:
 except Exception:
     sys.exit(0)
 
+# Snapshot of untracked paths at hook start -- consulted later (once
+# new_changes is settled) to decide which committed paths need `git add -N`
+# before `git commit --only` (untracked paths are not yet "known to git",
+# which --only requires). Filtering/deferral below only REMOVES paths from
+# consideration, never adds one outside this set, so this snapshot stays valid.
+untracked_set = set(f for f in untracked.split("\n") if f.strip())
+
 all_changes = []
 for section in [staged, unstaged, untracked]:
     if section:
@@ -373,14 +380,33 @@ if not new_changes:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": "\n\n".join(parts)}}))
     sys.exit(0)
 
-# Auto-commit session changes
+# Auto-commit session changes. `git commit --only` takes HEAD + the CURRENT
+# WORKING-TREE content of the named paths ONLY, disregarding anything staged
+# for other paths -- unlike the old `git add` + bare `git commit`, it cannot
+# sweep a peer pre-staged file into this sessions [wip] commit even when a
+# peer staged it via their own `git add` outside this hook entirely
+# (2026-07-18 incident 754b702c: a peer staged deletion of
+# experiments/sol_diff_injection/payloads/noinject.json rode along under the
+# checkpointing sessions ID -- the old code staged new_changes into
+# whatever the index already held, then a bare `git commit` committed the
+# WHOLE index. Verified via `git help commit`: a pathspec given to `git
+# commit` with no --only/-i already defaults to the --only behavior; also
+# verified empirically in a throwaway repo 2026-07-18 that a peer staged
+# file or deletion survives byte-for-byte after an --only commit of
+# unrelated paths). --only requires paths already known to git ("pathspec
+# did not match any file(s) known to git" -- also verified empirically);
+# untracked new files get `git add -N` (intent-to-add: an EMPTY placeholder,
+# never the real content) first so the pathspec resolves, scoped to exactly
+# the untracked subset of new_changes so it cannot touch any other path
+# either. --only itself then reads the REAL working-tree content of every
+# named path at commit time, same content the old `git add` would have staged.
+untracked_in_new = [f for f in new_changes if f in untracked_set]
 try:
-    # Stage only session files
-    subprocess.run(
-        ["git", "add", "--"] + new_changes,
-        cwd=cwd, capture_output=True, text=True, timeout=10,
-        check=True
-    )
+    if untracked_in_new:
+        subprocess.run(
+            ["git", "add", "-N", "--"] + untracked_in_new,
+            cwd=cwd, capture_output=True, text=True, timeout=10, check=True
+        )
     # Build commit message from file extensions/dirs
     dirs = sorted(set(f.split("/")[0] if "/" in f else "." for f in new_changes))
     scope = dirs[0] if len(dirs) == 1 else "multi"
@@ -398,7 +424,7 @@ try:
     full_msg = f"{msg}\n\n{body}\n\nUngated checkpoint: no compile/test ran. Squash into a real commit before building on it."
 
     result = subprocess.run(
-        ["git", "commit", "-m", full_msg],
+        ["git", "commit", "--only", "-m", full_msg, "--"] + new_changes,
         cwd=cwd, capture_output=True, text=True, timeout=15
     )
     if result.returncode == 0:
@@ -427,9 +453,17 @@ try:
 except Exception:
     pass  # Fall through to blocking advisory
 
-# Fallback: auto-commit failed, block and ask agent to commit manually
+# Fallback: auto-commit failed. Roll back ONLY our own `-N` intent-to-add
+# placeholders (path-scoped to untracked_in_new) -- never a bare `git reset
+# HEAD`, which would un-stage legitimately staged peer content too (the
+# same sweep hazard in reverse: cleaning up OUR failed attempt must not
+# touch what a peer staged before we ever ran). Tracked-modified files in
+# new_changes were never staged by this hook (--only reads them straight
+# from the working tree, no `git add` involved), so there is nothing to
+# reset for those -- only the -N placeholders are our own index side effect.
 try:
-    subprocess.run(["git", "reset", "HEAD"], cwd=cwd, capture_output=True, timeout=5)
+    if untracked_in_new:
+        subprocess.run(["git", "reset", "HEAD", "--"] + untracked_in_new, cwd=cwd, capture_output=True, timeout=5)
 except Exception:
     pass
 
