@@ -162,6 +162,14 @@ silently graded under different implicit rules — this produces headline number
 individually plausible but **jointly impossible** (three claims that cannot all be true under any
 single consistent rule). (`termination-semantics-unstated`.)
 
+For any CROSS-HARNESS or cross-system comparison, additionally pin each arm's TRANSPORT
+PROVENANCE from artifacts (the reference run's own config/run.json — which client, which system
+prompt, session persistence), not from assumption. A "same model" comparison where one arm rides
+a different client is a silent confound; conversely, verifying both arms share the client
+converts a feared confound into a shared constant. (arc-agi 2026-07-18: the operator had to ask
+whether codex-vs-API system prompts broke a model-matched A/B — the answer sat in the reference
+trace's run.json the whole time and belonged in the prereg.)
+
 ### 7. Scorer validation — if the verifier is a deterministic/mechanical extractor, attack it FIRST
 
 Before trusting ANY pass/fail from a code-based (non-live-replay) verifier, run an adversarial
