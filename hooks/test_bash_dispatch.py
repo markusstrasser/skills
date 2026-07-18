@@ -303,6 +303,76 @@ def test_git_stash_compound_command_still_caught(sandbox, tmp_path):
     assert disp["exit_code"] == 2
 
 
+def _read_trigger_log(sandbox):
+    log_path = os.path.join(sandbox["home"], ".claude", "hook-triggers.jsonl")
+    if not os.path.isfile(log_path):
+        return []
+    rows = []
+    with open(log_path, "rb") as f:
+        for raw in f:
+            line = raw.decode("utf-8", "replace").strip()
+            if line:
+                rows.append(json.loads(line))
+    return rows
+
+
+def test_git_stash_list_readonly_with_peer_logs_exposure_clean(sandbox, tmp_path):
+    """T3 (rescue-class-surface-closure-loop): a safe stash form with a peer
+    present is the eligible-and-clean denominator row — the guard's
+    precondition (stash-shaped, peer present) matched but nothing fired."""
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "git stash list"}}
+    env = dict(sandbox["env"])
+    env["PEER_SESSION_COUNT_BIN"] = _fake_peer_bin(tmp_path, 1)
+    disp = run_dispatcher(envelope, env, sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    rows = _read_trigger_log(sandbox)
+    exposures = [r for r in rows if r.get("hook") == "git-stash-guard" and r.get("action") == "exposure-clean"]
+    assert len(exposures) == 1
+    assert exposures[0].get("cmd_tok") == "git"
+    assert len(exposures[0].get("cmd_fp", "")) == 8
+    assert "cmd" not in exposures[0]  # raw command never persisted
+
+
+def test_git_stash_push_pathlimited_with_peer_logs_exposure_clean(sandbox, tmp_path):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "git stash push -- file.txt"}}
+    env = dict(sandbox["env"])
+    env["PEER_SESSION_COUNT_BIN"] = _fake_peer_bin(tmp_path, 2)
+    disp = run_dispatcher(envelope, env, sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    rows = _read_trigger_log(sandbox)
+    exposures = [r for r in rows if r.get("hook") == "git-stash-guard" and r.get("action") == "exposure-clean"]
+    assert len(exposures) == 1
+    assert "peers=2" in exposures[0].get("detail", "")
+
+
+def test_git_stash_safe_no_peer_logs_nothing(sandbox, tmp_path):
+    """No peer -> the guard's precondition never applied (same scoping as the
+    advisory branch) -> no exposure row, not even a false 'clean' one."""
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "git stash list"}}
+    env = dict(sandbox["env"])
+    env["PEER_SESSION_COUNT_BIN"] = _fake_peer_bin(tmp_path, 0)
+    disp = run_dispatcher(envelope, env, sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    rows = _read_trigger_log(sandbox)
+    assert not [r for r in rows if r.get("hook") == "git-stash-guard"]
+
+
+def test_git_stash_block_row_carries_cmd_fingerprint(sandbox, tmp_path):
+    """T1 enrichment applied to the pre-existing block path: the block row
+    now also carries cmd_tok/cmd_fp, never the raw command."""
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "git stash"}}
+    env = dict(sandbox["env"])
+    env["PEER_SESSION_COUNT_BIN"] = _fake_peer_bin(tmp_path, 1)
+    disp = run_dispatcher(envelope, env, sandbox["cwd"])
+    assert disp["exit_code"] == 2
+    rows = _read_trigger_log(sandbox)
+    blocks = [r for r in rows if r.get("hook") == "git-stash-guard" and r.get("action") == "block"]
+    assert len(blocks) == 1
+    assert blocks[0].get("cmd_tok") == "git"
+    assert len(blocks[0].get("cmd_fp", "")) == 8
+    assert "cmd" not in blocks[0]
+
+
 def test_pkill_unanchored_advises(sandbox):
     envelope = {"tool_name": "Bash", "tool_input": {"command": "pkill -f forkDC"}}
     disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])

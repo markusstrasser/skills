@@ -128,13 +128,18 @@ class GateResult(NamedTuple):
     stdout: str
 
 
-def _log_trigger(hook: str, action: str, detail: str) -> None:
+def _log_trigger(hook: str, action: str, detail: str, cmd: str = "") -> None:
     """Fire-and-forget telemetry — mirrors each gate's own
-    `~/Projects/skills/hooks/hook-trigger-log.sh "$name" "$action" "$detail"`
-    call. Never affects gate behavior."""
+    `~/Projects/skills/hooks/hook-trigger-log.sh "$name" "$action" "$detail" "$cmd"`
+    call. Never affects gate behavior. `cmd` (optional, 2026-07-18) is
+    fingerprinted by hook-trigger-log.sh into cmd_tok/cmd_fp — the RAW
+    command is never persisted, only the two derived fields (see
+    hook_cmd_fingerprint.py). Omit `cmd` for fires that aren't
+    command-shaped (e.g. cost-awareness, which fires on a call counter, not
+    on any one command)."""
     try:
         subprocess.run(
-            [TRIGGER_LOG, hook, action, detail],
+            [TRIGGER_LOG, hook, action, detail, cmd],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
         )
     except Exception:
@@ -292,7 +297,7 @@ def gate_git_noext_inject(raw_payload: str) -> GateResult:
         return GateResult(0, "", "")
     updated = dict(ti)
     updated["command"] = val
-    _log_trigger("git-noext-inject", "rewrite", "git diff/show/log")
+    _log_trigger("git-noext-inject", "rewrite", "git diff/show/log", ti.get("command", "") or "")
     out = json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": updated}})
     return GateResult(0, "", out)
 
@@ -323,7 +328,7 @@ def gate_pyunbuffered_inject(raw_payload: str) -> GateResult:
         return GateResult(0, "", "")
     updated = dict(ti)
     updated["command"] = val
-    _log_trigger("pyunbuffered-inject", "rewrite", "bg python")
+    _log_trigger("pyunbuffered-inject", "rewrite", "bg python", ti.get("command", "") or "")
     out = json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": updated}})
     return GateResult(0, "", out)
 
@@ -370,7 +375,7 @@ def gate_git_add_all_guard(raw_payload: str) -> GateResult:
         "(global <git_rules>) — they sweep in untracked scratch/temp files. "
         "Stage specific files (`git add path/to/file`) or use `git add -p`.\n"
     )
-    _log_trigger("git-add-all-guard", "block", cmd[:80])
+    _log_trigger("git-add-all-guard", "block", cmd[:80], cmd)
     return GateResult(2, msg, "")
 
 
@@ -484,7 +489,7 @@ def gate_noext_nongit_guard(raw_payload: str) -> GateResult:
         "2>/dev/null this is a SILENT FALSE-ZERO (0 hits for content that exists, the worst trap).\n"
         f"Fix: drop --no-ext-diff from the '{hit}' command (it is auto-injected for git ONLY).\n"
     )
-    _log_trigger("noext-nongit-guard", "block", hit)
+    _log_trigger("noext-nongit-guard", "block", hit, cmd)
     return GateResult(2, msg, "")
 
 
@@ -572,7 +577,7 @@ def gate_heavy_load_guard(raw_payload: str) -> GateResult:
         warn = mps_note + warn
         if not warn:
             return GateResult(0, "", "")
-        _log_trigger("heavy-load-guard", "warn", f"load={load1} cores={cores} claudes={claudes}")
+        _log_trigger("heavy-load-guard", "warn", f"load={load1} cores={cores} claudes={claudes}", cmd)
         out = json.dumps({"additionalContext": warn})
         return GateResult(0, "", out)
     except Exception:
@@ -722,11 +727,11 @@ def gate_cost_guard(raw_payload: str) -> GateResult:
         return GateResult(0, "", "")
     spend_int = int(total)
     if spend_int >= 25:
-        _log_trigger("cost-guard", "block", f"daily_spend=${total:.2f} cmd={cmd[:80]}")
+        _log_trigger("cost-guard", "block", f"daily_spend=${total:.2f} cmd={cmd[:80]}", cmd)
         out = json.dumps({"decision": "block", "reason": f"Daily API spend ${total:.2f} exceeds the $25 constitutional cap. Defer non-essential API calls, or set LLMX_SPEND_OVERRIDE=1 for an intended llmx job / get human approval."})
         return GateResult(2, "", out)
     if spend_int >= 10:
-        _log_trigger("cost-guard", "warn", f"daily_spend=${total:.2f} cmd={cmd[:80]}")
+        _log_trigger("cost-guard", "warn", f"daily_spend=${total:.2f} cmd={cmd[:80]}", cmd)
         out = json.dumps({"decision": "allow", "additionalContext": f"Cost warning: daily spend at ${total:.2f} (warn at $10, block at $25). Consider batching or deferring."})
         return GateResult(0, "", out)
     return GateResult(0, "", "")
@@ -898,6 +903,10 @@ def gate_ast_precommit(raw_payload: str) -> GateResult:
 
 def gate_commit_check(raw_payload: str) -> GateResult:
     try:
+        cmd = (json.loads(raw_payload).get("tool_input") or {}).get("command", "") or ""
+    except Exception:
+        cmd = ""
+    try:
         mod = _load_module(HOOKS_DIR / "commit-check-parse.py", "commit_check_parse")
         result = _run_entry(mod.main, raw_payload)
     except Exception:
@@ -907,7 +916,7 @@ def gate_commit_check(raw_payload: str) -> GateResult:
         return GateResult(0, "", "")
     if text.startswith("BLOCK:"):
         msg = text[len("BLOCK:"):]
-        _log_trigger("commit-check", "block", msg[:100])
+        _log_trigger("commit-check", "block", msg[:100], cmd)
         return GateResult(2, f"[commit-check]: BLOCKED: {msg}\n{msg}\n", "")
     if not text.startswith("WARN:"):
         return GateResult(0, "", "")
@@ -937,7 +946,7 @@ def gate_commit_check(raw_payload: str) -> GateResult:
     warn_text = re.sub(r"\|\s*\|\s*\|", "|", warn_text)
     if not warn_text.strip():
         return GateResult(0, "", "")
-    _log_trigger("commit-check", "warn", warn_text[:100])
+    _log_trigger("commit-check", "warn", warn_text[:100], cmd)
     out = json.dumps({"additionalContext": f"COMMIT CHECK: {warn_text}"})
     return GateResult(0, "", out)
 
@@ -1083,7 +1092,7 @@ def gate_plan_protect(raw_payload: str) -> GateResult:
     hit = any(_PLAN_DESTRUCTIVE_RE.search(seg) and _PLAN_PROTECTED_RE.search(seg) for seg in segments)
     if not hit:
         return GateResult(0, "", "")
-    _log_trigger("plan-protect", "block", cmd)
+    _log_trigger("plan-protect", "block", cmd, cmd)
     reason = ('BLOCKED: rm/mv/trash targets a plan or checkpoint markdown (.claude/plans/, docs/ops/plans/, '
                '.claude/checkpoint.md). These are usually untracked agent state; recovery needs user paste-back. '
                'Use git mv for tracked files, or include PLAN-PROTECT-OVERRIDE to acknowledge the risk.')
@@ -1188,8 +1197,6 @@ def gate_git_stash_guard(raw_payload: str) -> GateResult:
         if hit and not _git_stash_is_safe(args):
             offending = True
             break
-    if not offending:
-        return GateResult(0, "", "")
 
     cwd = ti.get("workdir") or data.get("cwd") or os.getcwd()
     peer_bin = os.environ.get("PEER_SESSION_COUNT_BIN") or str(HOOKS_DIR / "peer-session-count.sh")
@@ -1198,6 +1205,19 @@ def gate_git_stash_guard(raw_payload: str) -> GateResult:
         peer_count = int(peer_out) if peer_out.isdigit() else 0
     except Exception:
         peer_count = 0
+
+    if not offending:
+        # T3 exposure probe (guard-forcerate-study / rescue-class-surface-
+        # closure-loop, arc-agi loop/backlog.jsonl rows 906/909): the guard's
+        # precondition (a stash-shaped call with a peer sharing this checkout)
+        # matched, but the shape was already safe (list/show, or
+        # push -- <paths>) — log the eligible-and-clean row the
+        # rescues-per-100-eligible-exposures denominator needs. No peer means
+        # the precondition never applied (same scoping as the advisory branch
+        # below), so there is nothing to log.
+        if peer_count >= 1:
+            _log_trigger("git-stash-guard", "exposure-clean", f"peers={peer_count}", cmd)
+        return GateResult(0, "", "")
 
     if peer_count < 1:
         # Solo session: never block your own stash — advisory nudge only, so
@@ -1210,7 +1230,7 @@ def gate_git_stash_guard(raw_payload: str) -> GateResult:
         )
         return GateResult(0, "", json.dumps({"additionalContext": advisory}))
 
-    _log_trigger("git-stash-guard", "block", f"peers={peer_count} cmd={cmd[:80]}")
+    _log_trigger("git-stash-guard", "block", f"peers={peer_count} cmd={cmd[:80]}", cmd)
     msg = (
         f"BLOCK: bare `git stash` (or stash pop/apply/drop/clear) is banned in a "
         f"checkout with {peer_count} live peer Claude session(s) sharing it (global "
@@ -1346,7 +1366,7 @@ def gate_opus_concurrency_advisory(raw_payload: str) -> GateResult:
         return GateResult(0, "", "")
     if count < 3:
         return GateResult(0, "", "")
-    _log_trigger("opus-concurrency-advisory", "warn", f"count={count} cmd={cmd[:80]}")
+    _log_trigger("opus-concurrency-advisory", "warn", f"count={count} cmd={cmd[:80]}", cmd)
     msg = (
         f"ADVISORY: {count} concurrent opus-family streams already live (pgrep -f "
         f"'{_OPUS_LOAD_PGREP_PATTERN}', same pattern as `just opus-load` in arc-agi) — "
