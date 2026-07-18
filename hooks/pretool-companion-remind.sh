@@ -71,6 +71,23 @@ if [ -n "$CMD" ] && echo "$CMD" | grep -q 'llmx'; then
   fi
 fi
 
+# --- llmx subscription-flag guard: -m <model> is subscription-eligible but no
+# --subscription/--lite/-p/--provider flag -> silently bills API per-token.
+# GPT-side mirror of the claude-cli check above, generalized to the FULL
+# llmx-routing.md allowlist (kept in sync with pretool-universal-dispatch.py's
+# run_companion_remind() — this file is the un-wired rollback fallback; that
+# one is the live path, see its own header). ---
+if [ -n "$CMD" ] && echo "$CMD" | grep -q 'llmx'; then
+  MODEL_ARG=$(echo "$CMD" | grep -oE '(^|[[:space:]])-m[=[:space:]]+[A-Za-z0-9._-]+' | grep -oE '[A-Za-z0-9._-]+$' | tail -1)
+  case "$MODEL_ARG" in
+    claude-fable-5|claude-opus-4-8|composer-2.5|gemini-3-flash-preview|gpt-5.6|gpt-5.6-luna|gpt-5.6-sol|gpt-5.6-terra|grok-4.5)
+      if ! echo "$CMD" | grep -qE -- '--subscription|--lite|--provider|(^|[[:space:]])-p([[:space:]]|=|$)'; then
+        remind "llmx-subscription-flag" "llmx -m $MODEL_ARG has NO --subscription/--lite/-p/--provider flag — this call routes API-direct and BILLS per-token. \`--subscription\` IS the \$0 (llmx-routing.md); add it if this is meant to be the free lane."
+      fi
+      ;;
+  esac
+fi
+
 # --- llmx-guide: Python code dispatching to CLI models ---
 if [ -n "$CONTENT" ] && echo "$CONTENT" | grep -qE 'subprocess.*(llmx|codex|gemini )|Popen.*(llmx|codex|gemini )'; then
   remind "llmx-guide" "Code dispatches to CLI models. Load llmx-guide for subprocess gotchas (shell=True breaks on parens, output capture, timeouts)."
