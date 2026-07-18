@@ -233,6 +233,19 @@ def main() -> None:
     check("RSI-meta rediscovery steer emits prior-context", bool(c_meta))
     red_td.cleanup()
 
+    # 12. RSI-hindsight CONVERT 2026-07-18: bare URL paste (no INTENT) → POINTER-DISPOSITION.
+    out_url = run({
+        "prompt": (
+            "https://github.com/agno-agi/agno/blob/main/cookbook/"
+            "data_labeling/_05_text_pairwise_preference/dpo_jury.py\n\nThis relevant?"
+        ),
+        "cwd": str(Path.home() / "Projects" / "arc-agi"),
+        "session_id": "s_pointer_url",
+    })
+    c_url = ctx(out_url)
+    check("bare URL paste emits POINTER-DISPOSITION", "POINTER-DISPOSITION" in c_url)
+    check("Agno dpo_jury is doesnt_apply from ledger", "doesnt_apply" in c_url)
+
     td.cleanup()
     print(f"\n{passed} passed, {failed} failed")
     sys.exit(1 if failed else 0)
