@@ -264,6 +264,21 @@ SEARCH_TOOL_RE = re.compile(
     r"mcp__perplexity|WebSearch|WebFetch"
 )
 
+# llmx subscription-eligible allowlist (llmx-routing.md, as-of 2026-07-17;
+# rederive by tripping the transport error or `llmx info`). A call naming one
+# of these WITHOUT --subscription/--lite/-p/--provider silently routes
+# API-direct and BILLS per-token — "the --subscription flag IS the $0"
+# (llmx-routing.md). Caught live once already: a scout's flagless gpt-5.6
+# dispatch billed API rate, 2026-07-15, ~$1.
+_LLMX_SUBSCRIPTION_MODELS = {
+    "claude-fable-5", "claude-opus-4-8", "composer-2.5", "gemini-3-flash-preview",
+    "gpt-5.6", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "grok-4.5",
+}
+_LLMX_MODEL_FLAG_RE = re.compile(r"(?:^|\s)-m[=\s]+([A-Za-z0-9._-]+)")
+_LLMX_HAS_SUBSCRIPTION_ROUTING_RE = re.compile(
+    r"--subscription\b|--lite\b|--provider\b|(?<!\S)-p(?:\s|=|$)"
+)
+
 
 def run_companion_remind(envelope, tool_name, tool_input):
     session_id = os.environ.get("CLAUDE_SESSION_ID", "default")
@@ -348,6 +363,28 @@ def run_companion_remind(envelope, tool_name, tool_input):
                 "llmx-guide",
                 "You're calling llmx. Load the llmx-guide skill if you haven't — it has valid "
                 "model names, flags, and gotchas.",
+            )
+
+    # llmx subscription-flag guard: -m <model> is subscription-eligible but
+    # neither --subscription/--lite nor an explicit -p/--provider is present
+    # -> this call will bill API per-token instead of routing $0. GPT-side
+    # mirror of the claude-cli check above, generalized to the FULL
+    # allowlist (llmx-routing.md) since the gap is the missing FLAG, not the
+    # model family — a claude-opus-4-8/claude-fable-5 call with the flag
+    # genuinely missing is caught here too, in addition to the coarser
+    # always-fires-once Claude reminder above.
+    if cmd and "llmx" in cmd:
+        mflag = _LLMX_MODEL_FLAG_RE.search(cmd)
+        if (
+            mflag
+            and mflag.group(1) in _LLMX_SUBSCRIPTION_MODELS
+            and not _LLMX_HAS_SUBSCRIPTION_ROUTING_RE.search(cmd)
+        ):
+            remind(
+                "llmx-subscription-flag",
+                f"llmx -m {mflag.group(1)} has NO --subscription/--lite/-p/--provider flag — "
+                "this call routes API-direct and BILLS per-token. `--subscription` IS the $0 "
+                "(llmx-routing.md); add it if this is meant to be the free lane.",
             )
 
     # llmx-guide: Python code dispatching to CLI models (case-sensitive)
