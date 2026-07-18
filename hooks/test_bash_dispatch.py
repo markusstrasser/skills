@@ -244,6 +244,130 @@ def test_duckdb_double_quote_advisory_matches(sandbox):
     assert disp["exit_code"] == 0
 
 
+# ---------------------------------------------------------------------------
+# Post-consolidation additions (2026-07-18) — new gates, no pre-consolidation
+# oracle to parity-test against, so these call run_dispatcher() directly.
+# ---------------------------------------------------------------------------
+
+def _fake_peer_bin(tmp_path, count):
+    p = tmp_path / f"fake_peer_{count}.sh"
+    p.write_text(f"#!/bin/sh\necho {count}\n")
+    p.chmod(0o755)
+    return str(p)
+
+
+def test_git_stash_bare_blocks_when_peer_present(sandbox, tmp_path):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "git stash"}}
+    env = dict(sandbox["env"])
+    env["PEER_SESSION_COUNT_BIN"] = _fake_peer_bin(tmp_path, 1)
+    disp = run_dispatcher(envelope, env, sandbox["cwd"])
+    assert disp["exit_code"] == 2
+    assert "peer Claude session" in disp["block_msg"]
+
+
+def test_git_stash_push_pathlimited_allowed_even_with_peer(sandbox, tmp_path):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "git stash push -- file.txt"}}
+    env = dict(sandbox["env"])
+    env["PEER_SESSION_COUNT_BIN"] = _fake_peer_bin(tmp_path, 1)
+    disp = run_dispatcher(envelope, env, sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert not disp.get("additionalContext")
+
+
+def test_git_stash_list_readonly_never_blocked(sandbox, tmp_path):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "git stash list"}}
+    env = dict(sandbox["env"])
+    env["PEER_SESSION_COUNT_BIN"] = _fake_peer_bin(tmp_path, 1)
+    disp = run_dispatcher(envelope, env, sandbox["cwd"])
+    assert disp["exit_code"] == 0
+
+
+def test_git_stash_no_peer_is_advisory_not_block(sandbox, tmp_path):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "git stash"}}
+    env = dict(sandbox["env"])
+    env["PEER_SESSION_COUNT_BIN"] = _fake_peer_bin(tmp_path, 0)
+    disp = run_dispatcher(envelope, env, sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert disp.get("additionalContext") and "no peer detected" in disp["additionalContext"]
+
+
+def test_git_stash_compound_command_still_caught(sandbox, tmp_path):
+    """Native port (if=None) catches `cd x && git stash`, unlike a hypothetical
+    if="Bash(git*)" gate which would never see a non-git-prefixed compound
+    command — this is the coverage the native-vs-subprocess-kept design choice
+    buys over cloning git-add-all-guard.sh's if="Bash(git*)" verbatim."""
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "cd /tmp && git stash"}}
+    env = dict(sandbox["env"])
+    env["PEER_SESSION_COUNT_BIN"] = _fake_peer_bin(tmp_path, 1)
+    disp = run_dispatcher(envelope, env, sandbox["cwd"])
+    assert disp["exit_code"] == 2
+
+
+def test_pkill_unanchored_advises(sandbox):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "pkill -f forkDC"}}
+    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert disp.get("additionalContext") and "unanchored" in disp["additionalContext"]
+
+
+def test_pkill_anchored_by_path_silent(sandbox):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "pkill -f /usr/bin/foo"}}
+    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert not disp.get("additionalContext")
+
+
+def test_pkill_anchored_by_dash_x_silent(sandbox):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "pkill -x -f process_name"}}
+    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert not disp.get("additionalContext")
+
+
+def test_pkill_bare_name_no_dash_f_not_flagged(sandbox):
+    """Not the -f substring-danger case the rule targets — bare `pkill name`
+    matches by process name only, a different (less risky) mode."""
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "pkill forkDCH"}}
+    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert not disp.get("additionalContext")
+
+
+def _fake_pgrep_bin(tmp_path, n_lines):
+    p = tmp_path / f"fake_pgrep_{n_lines}.sh"
+    body = "\n".join(f"echo '{1000+i} line{i}'" for i in range(n_lines))
+    p.write_text(f"#!/bin/sh\n{body}\n")
+    p.chmod(0o755)
+    return str(p)
+
+
+def test_opus_concurrency_advises_at_three_or_more(sandbox, tmp_path):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m claude-opus-4-8 -e max hi"}}
+    env = dict(sandbox["env"])
+    env["OPUS_LOAD_PGREP_BIN"] = _fake_pgrep_bin(tmp_path, 3)
+    disp = run_dispatcher(envelope, env, sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert disp.get("additionalContext") and "concurrent opus-family streams" in disp["additionalContext"]
+
+
+def test_opus_concurrency_silent_below_three(sandbox, tmp_path):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m claude-opus-4-8 -e max hi"}}
+    env = dict(sandbox["env"])
+    env["OPUS_LOAD_PGREP_BIN"] = _fake_pgrep_bin(tmp_path, 1)
+    disp = run_dispatcher(envelope, env, sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert not disp.get("additionalContext")
+
+
+def test_opus_concurrency_ignores_non_opus_models(sandbox, tmp_path):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m gpt-5.6 -e max hi"}}
+    env = dict(sandbox["env"])
+    env["OPUS_LOAD_PGREP_BIN"] = _fake_pgrep_bin(tmp_path, 5)
+    disp = run_dispatcher(envelope, env, sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert not disp.get("additionalContext")
+
+
 def test_settings_json_is_valid_after_edit():
     """Guards the deliverable's final step (this test only meaningful after
     settings.json has been repointed at the dispatcher; harmless no-op check
