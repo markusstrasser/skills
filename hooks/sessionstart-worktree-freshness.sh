@@ -29,10 +29,23 @@ if git -C "$cwd" rev-parse --verify --quiet origin/main >/dev/null 2>&1; then
   behind="$(git -C "$cwd" rev-list --count HEAD..origin/main 2>/dev/null || echo 0)"
   if [ "${behind:-0}" -ge "$THRESH" ] 2>/dev/null; then
     branch="$(git -C "$cwd" branch --show-current 2>/dev/null || echo detached)"
-    msgs+=("⚠  CHECKOUT STALE — ${behind} commits behind origin/main on branch '${branch}':")
-    msgs+=("       ${cwd}")
-    msgs+=("   Cross-repo dispatch / worktree isolation may be blind to recent main.")
-    msgs+=("   ▶  git -C \"${cwd}\" pull --rebase origin main   (or merge) before heavy work")
+    ahead="$(git -C "$cwd" rev-list --count origin/main..HEAD 2>/dev/null || echo 0)"
+    rewrite_ref="$(git -C "$cwd" for-each-ref --format='%(refname:short)' 'refs/heads/archive/*' 'refs/heads/*-pre-rewrite' 2>/dev/null | head -1)"
+    if [ "${ahead:-0}" -ge "$THRESH" ] 2>/dev/null || [ -n "$rewrite_ref" ]; then
+      # Large ahead AND behind (or an archive/pre-rewrite ref) = rewritten-history
+      # signature, NOT a stale pull. A blind pull/rebase replays the old lineage onto
+      # the rewritten one — can reintroduce exactly what the rewrite removed.
+      msgs+=("⚠  HISTORY-DIVERGENCE — ${behind} behind AND ${ahead} ahead of origin/main on '${branch}':")
+      msgs+=("       ${cwd}")
+      msgs+=("   This looks like a REWRITTEN origin history, not a stale checkout${rewrite_ref:+ (ref: ${rewrite_ref})}.")
+      msgs+=("   ▶  Do NOT pull/rebase blind. Check docs/ops/*rewrite* + archive refs; reconciliation")
+      msgs+=("      across a rewrite is an operator-ruling action (map old→new SHAs, never a bare pull).")
+    else
+      msgs+=("⚠  CHECKOUT STALE — ${behind} commits behind origin/main on branch '${branch}':")
+      msgs+=("       ${cwd}")
+      msgs+=("   Cross-repo dispatch / worktree isolation may be blind to recent main.")
+      msgs+=("   ▶  git -C \"${cwd}\" pull --rebase origin main   (or merge) before heavy work")
+    fi
   fi
 fi
 
