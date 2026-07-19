@@ -462,7 +462,7 @@ if inj:
 warn = (os.environ.get("WARN", "") or "").strip()
 if os.environ.get("MODEL_UNSET"):
     ti["model"] = "opus"
-    warn = (warn + " MODEL-GUARD: no model set -> injected model:opus (harness default claude-sonnet-4-6 is #g-vetoed). Pass model explicitly to override.").strip()
+    warn = (warn + " MODEL-GUARD: no model set -> injected model:opus AS A DEFENSIVE DEFAULT ONLY. WARNING (measured 2026-07-19, ~15/15): the Agent tool currently serves claude-sonnet-5 REGARDLESS of any model pin (opus/fable/injected all ignored). For a genuine frontier agent use headless `env -u ANTHROPIC_API_KEY claude -p --model claude-opus-4-8` (verified) or `codex exec` (gpt-5.6); any tier-sensitive Agent-tool dispatch owes a first-line model self-report, read back.").strip()
 out = {"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": ti}}
 if warn:
     out["hookSpecificOutput"]["additionalContext"] = warn
