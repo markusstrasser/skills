@@ -404,6 +404,7 @@ evidence, and the DeepSWE / LifeSciBench confirmations live in
 - **Guards** — PPI/CLT-PPI invalid below 50 labels/stratum (`just power` refuses); fitted IRT / CapBencher / CAT / noise-injection sandbagging stay deferred (`evals/docs/decisions/deferred-and-open.md`).
 - **Process reflex** (extends Pre-Build #1) — before inventing a metric or grading scheme, inventory the measurement sciences for the existing instrument.
 - **Capability CURVE over test-time compute (AISI 2026-07-02)** — a fixed-budget agentic score is a LOWER BOUND, not a point: newer models gain disproportionately from budget, so fixed budgets understate frontier gaps most exactly where you care. Sweep the budget, report the curve, label serial vs parallel allocation; a curve still rising at the cap ⇒ report "≥score @ cap", never a ceiling. (The per-arm token logging that `eval-token-costs` already mandates IS the curve's x-axis.)
+- **Exhaustive/completeness constructs — three adopts (Harvey LAB: Diligence, `evals/research/2026-07-19-lab-diligence-rating.md`)** — for any eval where "found 95% but missed one material item = wrong" (needle-in-haystack recall, deal-killer provisions, exhaustive enumeration): (1) **all-pass co-primary + diagnostic pair** — report `all_pass` (every item found) *beside* the criterion/recall rate; the gap between "almost complete" and "complete" is the signal, and all-pass is the construct-honest headline (but a stricter bar — at hard-task N it may not discriminate, so keep the graded rate as the small-N decider, cf. wandr_exhaustive §A2.1). (2) **scoped per-criterion judge context** — an LLM judge for item _i_ sees ONLY the output file(s) that item declares relevant, not the full deliverable — measurably cuts cross-item verdict contamination (extends "rubric decomposition"; N/A to deterministic graders). (3) **source-traceable planted gold** — each gold item carries a pointer to the specific document/source it was planted in (LAB's `sources` field), making gold auditable to a source rather than to judge inference — the deterministic-grader analog is a per-member re-derivation query (wandr_exhaustive §A2.2).
 
 **Independently confirmed** by DeepSWE (withheld grader; seal-the-env-or-domain-block; the
 free-executable-oracle boundary — don't cargo-cult behavioral verifiers into oracle-free domains)
@@ -425,6 +426,16 @@ skill; LifeSciBench teardown 2026-06-18, `evals/research/2026-06-18-lifescibench
   rubric can be genuinely borrow-worthy while its RANKING is non-transferable (the launch model tops a
   self-graded board). ADAPT-DESIGN-ONLY is the common right answer; never carry a vendor ranking to a
   DECISIONS row until an independent cross-lab grader reproduces it.
+- **Distinguish MODEL-vendor from SERVICE-vendor COI — the second is diffuser but still real.** The
+  canonical self-eval is "lab fields a model in the pool AND grades it" (OpenAI-grades-OpenAI). A
+  service/infra vendor that ships no model but benchmarks the exact capability it SELLS is a different,
+  weaker-but-present shape: the benchmark doubles as a sales instrument and (often) a customer training-data
+  pipeline. Mitigants that actually move the verdict: independent third-party REPRODUCTION on a private
+  held-out set (not just a re-graded public sample), unflattering headline results (frontier failure, churn
+  at #1 across labs), open + independently κ-audited grading. Absent all three for a given SLICE (e.g. a
+  brand-new extension), that slice's numbers stay uncorroborated regardless of the parent benchmark's
+  standing. (Harvey LAB: Diligence — service-vendor shape, base LAB well-reproduced, diligence slice 0 days
+  of independent reproduction; `evals/research/2026-07-19-lab-diligence-rating.md` Q6.)
 - **Grader-named-or-fail.** If a model-graded benchmark does not NAME the grader model in the paper, treat
   judge family-neutrality as FAILED by default — you cannot rule out a same-family judge. (LifeSciBench's
   grader is GPT-5.5, same family as the winning GPT-Rosalind, and surfaces only in a press quote; the paper
