@@ -269,6 +269,20 @@ exhibits.md` §C "Heretic-before-results"). A design this skill produces is a dr
 survived one adversarial pass — the catalogue exists because that pass reliably finds real holes,
 including in designs written with this exact checklist in hand (see the worked example).
 
+**Decision tables freeze as EXECUTABLE CODE, prose demotes to documentation (2026-07-19).** Any
+prereg whose §-sections restate a decision calculus (aggregation rules, label predicates, row
+selection) in prose across multiple sections WILL grow seam divergences two implementers read
+differently — measured: the SAME defect class three times in one 12-round attack cycle
+(arc-agi wave-2, rounds 5/6b: S2, S10, S11), retired only when the full label pipeline became
+one module with an EXHAUSTIVE property test over its enumerable state space (row totality over
+all 3^k label states; guards proved as theorems) and the prose sections were stamped
+"documentation — module wins on divergence," module sha pinned in the launch descriptor. Default
+for every new prereg with a decision table. Corollary for multi-round attacks at PROBE tier
+(n=1/cell, $0): the arc-agi cycle took 12 rounds because each repair minted fresh attack surface
+— budget ~2 dual-lane rounds for probe-tier preregs and accept residual risk the executable
+tests carry, reserving convergence-to-clean cycles for decision-gating or spend-bearing designs.
+(Evidence: arc-agi freeze b5c69c06; dual-lane convergence measured 3× on same-defect rounds.)
+
 ## Scope the protocol to the spend — not every step earns its keep at every tier
 
 Retrodicted 2026-07-16 (arc-agi `research/2026-07-16-doe-calibration.md`): at FULL weight
