@@ -439,6 +439,19 @@ if [ -n "$PROMPT" ]; then
     fi
 fi
 
+# SELF-REPORT INJECT (2026-07-19, arc-agi session 6f4a8626): the Agent tool serves
+# claude-sonnet-5 regardless of any model pin (~15/15 measured), and model-guide has required
+# per-dispatch self-reports since 07-12 — but dispatchers forget (a full session dispatched ~10
+# agents without one). Make it structural: every dispatched prompt gets the clause unless it
+# already asks for a self-report.
+if ! printf '%s' "$PROMPT" | grep -qi "self-report"; then
+    SR_INJECT="MODEL SELF-REPORT (auto-added): the first line of your FIRST output (file or report message) MUST be your exact model ID copied verbatim from your own environment-info block. Model pins on this dispatch surface are known-unreliable; the parent reads this line back before trusting tier-sensitive work."
+    if [ -z "$INJECT_SUFFIX" ]; then INJECT_SUFFIX="$SR_INJECT"; else INJECT_SUFFIX="$INJECT_SUFFIX
+
+$SR_INJECT"; fi
+    CHECK_IDS="${CHECK_IDS}selfreport,"
+fi
+
 # MODEL-GUARD (2026-07-08, arc-agi #g): an Agent dispatch with no explicit `model` defaults to
 # claude-sonnet-4-6 (operator veto — "no outdated models"; it silently stalled 5 subagents
 # mid-writeup in one session). Auto-inject model:opus ($0 subscription, current, strong) via
