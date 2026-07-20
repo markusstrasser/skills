@@ -79,6 +79,13 @@ See `~/Projects/intel/.scratch/x_api_features_research.md` for full feature map
   more accurate than text regex (skips `$` in money figures and quoted text).
 - **Material-claim regex** is a starting heuristic. Replace with LLM
   classification (Haiku/Flash) once enough volume justifies the cost.
+- **Materiality is domain-configurable.** The finance/8-K keyword set is the
+  default; pass an optional `"material_keywords": [...]` list in the config
+  JSON to override it for a non-finance domain (e.g. AI-research account
+  monitoring). Config-driven keywords match as a leading-`\b`-anchored
+  PREFIX (not whole-word) — a stem like `"distill"` also catches
+  "distillation"/"distilled". No `material_keywords` key in the config ⇒
+  the finance default is unchanged (`pull.py::build_material_pattern`).
 
 ## What this skill does NOT do
 
