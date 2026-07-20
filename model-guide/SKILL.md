@@ -386,3 +386,7 @@ Log it for the next reader: `~/Projects/skills/hooks/append-skill-memento.sh mod
 - **[2026-07-14] SUPERSEDES the 2026-07-13 Grok-unavailable finding:** Cursor now exposes exact `cursor-grok-4.5-{low,medium,high}` and trailing-`-fast` slugs. Named high and repo-HEAD smokes passed; critique restores only the preflight-gated read-only workspace axis. Keep the July-13 failure as evidence that registry state can change overnight.
 
 - **[2026-07-17] Kimi K3 first local fix-probe (2026-07-17, arc-agi): 2/2 gated small-slice fixes clean (falsifiers+regression controls+consumer check, spec-faithful), $1.30 / 2.98M tok (97% cache-read; kimi --print --afk headless works). Positive evidence for K3 on briefed+gated small slices.**
+
+- **[2026-07-19] Grok repo review: llmx chat -m cursor-grok-4.5-* is a CHAT lane with NO repo access — a repo-grounded review dispatched there produced 0 bytes in 15 min (2026-07-19 arc-agi). The workspace surface is cursor-agent --model cursor-grok-4.5-high --mode ask --workspace <repo> (as the Surfaces table says); route repo-access tasks there, chat lane only for packet-in-prompt review.**
+
+- **[2026-07-19] codex exec cyber-classifier false-positives on adversarial/security-flavored review vocabulary in long sessions (2026-07-19 arc-agi wave3-R8: killed at 472K tokens AT REPORT TIME, work intact on disk) — phrase formal attack rounds as 'formal correctness review / counterexample construction'; recovery = grade the tree, not the report**
