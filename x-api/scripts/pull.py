@@ -48,6 +48,12 @@ from x_api import (
 # slip through here — server-side entities.cashtags is the primary path
 # anyway and X's own tagger correctly handles single-letter tickers.
 CASHTAG_FALLBACK = re.compile(r"\$([A-Za-z][A-Za-z0-9.]{1,6})\b")
+
+# Default materiality vocabulary — finance/8-K-style claims. This is the
+# fallback used when a caller's config has no "material_keywords" key, and
+# its behavior is unchanged from the original hardcoded regex (byte-identical
+# default for every existing consumer). Domains outside finance (e.g.
+# AI-research account monitoring) override via build_material_pattern().
 MATERIAL_KEYWORDS = re.compile(
     r"\b(earnings|guidance|contract|deal|partnership|acquisition|"
     r"merger|order|qualified|customer win|design win|FDA|clinical|"
@@ -55,6 +61,28 @@ MATERIAL_KEYWORDS = re.compile(
     r"dilution|ATM|RFQ|tender|warrant|IPO|listing|10-K|10-Q|8-K)\b",
     re.IGNORECASE,
 )
+
+
+def build_material_pattern(keywords: list[str] | None) -> re.Pattern[str]:
+    """Compile the materiality regex used by is_material().
+
+    keywords=None/empty -> MATERIAL_KEYWORDS (the finance default), unchanged.
+
+    keywords=[...] -> OR of the given terms, anchored on a leading \\b only
+    (no trailing \\b). This is deliberately prefix matching, not whole-word:
+    it lets a caller pass a stem ("distill", "fine-tun") and catch every
+    inflection (distillation/distilled/distilling; fine-tune/fine-tuning/
+    fine-tuned) without enumerating each form, and it catches compounds like
+    "RLHF" off the "RL" stem. A tweet that is neither material nor
+    ticker-tagged is dropped from the digest entirely (see main()), so a
+    false negative here is a silent content loss, while a false positive
+    only reclassifies a tweet into a different digest section — this path is
+    intentionally recall-biased.
+    """
+    if not keywords:
+        return MATERIAL_KEYWORDS
+    terms = "|".join(re.escape(kw) for kw in keywords)
+    return re.compile(rf"\b(?:{terms})", re.IGNORECASE)
 
 
 def load_tracked(path: Path | None) -> set[str]:
@@ -90,8 +118,8 @@ def extract_cashtags(tweet: dict) -> set[str]:
     return tags
 
 
-def is_material(text: str) -> bool:
-    return bool(MATERIAL_KEYWORDS.search(text))
+def is_material(text: str, pattern: re.Pattern[str] = MATERIAL_KEYWORDS) -> bool:
+    return bool(pattern.search(text))
 
 
 def format_tweet(t: dict, username: str) -> str:
@@ -144,6 +172,7 @@ def main() -> int:
 
     cfg = json.loads(Path(args.config).read_text())
     accounts = cfg["accounts"]
+    material_pattern = build_material_pattern(cfg.get("material_keywords"))
     print(f"[accounts] {len(accounts)} curated")
 
     projected = project_max_cost(accounts, args.max_pages)
@@ -232,7 +261,7 @@ def main() -> int:
             total_spend += tally.usd
             continue
 
-        material = [t for t in tweets if is_material(t["text"])]
+        material = [t for t in tweets if is_material(t["text"], material_pattern)]
         ticker_hits = []
         for t in tweets:
             tags = extract_cashtags(t)
@@ -263,8 +292,8 @@ def main() -> int:
             digest.append("_No new tweets in window._\n")
             continue
 
-        priority = [t for t, _ in ticker_hits if is_material(t["text"])]
-        ticker_only = [t for t, _ in ticker_hits if not is_material(t["text"])]
+        priority = [t for t, _ in ticker_hits if is_material(t["text"], material_pattern)]
+        ticker_only = [t for t, _ in ticker_hits if not is_material(t["text"], material_pattern)]
         material_no_ticker = [t for t in material if not extract_cashtags(t)]
 
         if priority:
