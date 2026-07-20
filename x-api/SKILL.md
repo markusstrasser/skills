@@ -86,6 +86,17 @@ See `~/Projects/intel/.scratch/x_api_features_research.md` for full feature map
   PREFIX (not whole-word) — a stem like `"distill"` also catches
   "distillation"/"distilled". No `material_keywords` key in the config ⇒
   the finance default is unchanged (`pull.py::build_material_pattern`).
+- **Zero tweets pulled for an active account is usually not a bug** — the
+  default `get_user_tweets` excludes replies and retweets, and a short
+  (24-48h) window can simply miss an account's last original post. Before
+  assuming a resolution/pagination/API bug, run `probe.py USERNAME N
+  START_ISO` with a wide window (e.g. 7d) and read the raw response: it
+  prints the resolved user id/name/follower count (catches wrong-account
+  resolution) and each tweet's exact timestamp (catches window-vs-cadence
+  mismatches). For accounts whose signal is mostly in-thread commentary,
+  set per-account `"include_replies": true` in the config — confirmed case
+  2026-07-20: an account's only post in a 7-day window was a reply, silently
+  excluded until this flag was added (`get_user_tweets(include_replies=)`).
 
 ## What this skill does NOT do
 
