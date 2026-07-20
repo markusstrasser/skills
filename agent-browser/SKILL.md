@@ -49,5 +49,8 @@ Also: `eval <js>` · `set viewport <w> <h>` / `set device <name>` · `network re
 ## Gotchas
 
 - Bundled-Chrome download (`agent-browser install`) can time out; system-Chrome fallback works — don't block on it.
-- Daemon persists between commands; `close --all` to reset every session.
+- Interactive and JSON snapshots can omit state attributes even when the page exposes them. If a decision depends on state such as `aria-pressed`, query the principal value directly (`agent-browser get attr @eN aria-pressed`) instead of inferring it from the snapshot.
+- `close` closes the browser pages, but the session daemon may remain active. In `session info --json`, distinguish daemon `active` from `runtime.browserLaunched` and `pageCount`; use `close --all` only when every session should be reset.
 - Observability dashboard on port 4848 (independent of sessions).
+
+Calibration history: [references/calibration.md](references/calibration.md).
