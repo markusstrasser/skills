@@ -14,4 +14,7 @@ claims.
    `references/output-templates.md`.
 
 Stop if any control is a descendant of treatment or a collider opened by
-conditioning.
+conditioning — **including conditioning via SELECTION INTO THE MEASURED SAMPLE
+itself: eligibility, arrival, survival, inclusion, and streak/repeat membership
+are all variables a design can condition on implicitly. Stop if any of these is
+a descendant of an arm's own behavior.**

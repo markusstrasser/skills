@@ -119,7 +119,7 @@ single treatment-vs-control arm cannot attribute the effect to any one of them. 
 - **SHAM-A / SHAM-B / SHAM-C**: each strips exactly ONE component (e.g., gate-off/schema-on,
   gate-on/read-back-off, everything-on-but-content-scrambled) — run cheapest-and-most-damning
   first (a content-scramble sham is usually the sharpest single test of "does the SPECIFIC
-  content matter, or just its presence/structure"). (`sham-ladder`, `research/2026-07-14-
+  content matter, or just its presence/structure"). (`sham-integrity`, `research/2026-07-14-
   composed-microloop-design.md`.)
 
 ### 4. Controls — can the negative control possibly pass?
@@ -146,6 +146,36 @@ that was aspirational ("will carry X") at design time silently reads as achieved
 unless someone re-checks. (`dependency-claim-unverified`; `prose-asserts-a-code-fact`,
 arc-agi `eval-conventions-exhibits.md` §C; real cascade: 6 artifacts / 4 incompatible fillings /
 3 false "already exists" claims over one unenumerated `confidence` field, 2026-07-16.)
+
+Not every dependency claim is discharged the same way — name which VERIFICATION MODE applies:
+**grep** (a static existence/enumeration claim, verified by literal search against the cited
+artifact — the existing check above); **derivation** (a structural/mathematical relationship
+claim — nesting, coarsening, equivalence between two representations — verified by comparing
+their actual definitions, not asserted from a resemblance); or **runtime assert with a declared
+fallback** (a claim about a resource whose existence depends on a stochastic process and may hold
+now but not on a future run — verified by a runtime check with a stated behavior if it fails,
+never silently assumed to persist). A claim naming no mode is unverified by default. (arc-agi
+2026-07-20: an "objectbasis's key is a strict coarsening of exact-shape hash" claim was a math
+error caught only by deriving both keys' actual feature sets — derivation mode; a cited
+win-condition's presence in a fresh induction run was asserted from a past run without a runtime
+check — runtime-assert mode, absent; a validation set's coverage against the design's own cited
+taxonomy went unchecked — an enumeration sub-case of grep mode.)
+
+### 4b. Eligibility-provenance and witness-pair tables
+
+**Eligibility-provenance table** (one row per measured quantity the design relies on): what
+determines an observation's inclusion in this quantity's scored/denominator set; is that
+inclusion rule fixed independent of any arm's own behavior; if not, state the
+treatment-independence argument explicitly or flag the quantity INADMISSIBLE as a primary
+observable on the affected stratum.
+
+**Witness-pair table** (one row per gate/bound/threshold/falsifier the design relies on): one
+concrete input on which the surface would PASS, one concrete input on which it would FAIL, both
+constructed from reachable states — not merely asserted as possible in prose.
+
+Both tables are mandatory; "N/A — this design has no gates/no arm-dependent quantities" is a
+legal row, not an exemption from stating it. Presence is checked by the project's own
+refuse-to-launch gate, if one exists (arc-agi: `just dispatch-lint`), before any spend.
 
 ### 5. Screen-entailment check
 
@@ -214,6 +244,18 @@ run against the artifact that actually shipped.** (`dependency-claim-unverified`
 `non_silent` inversion: `∀e: ∃claim` was FALSE on every real decision point and vacuously TRUE
 on the empty set once the shipped extractor emitted `claims=[]`.)
 
+The dry-run obligation extends to every SUMMARY STATISTIC and ENCODING a design relies on, not
+only its composed reward/score formula — hand-evaluate the statistic at its actual operating
+point (the regime the design expects to run in), not only in the abstract. A dispersion measure
+that degenerates to a constant when most mass sits at one value, or a sentinel/legend value that
+collides with a legitimate value in the domain, passes an abstract sanity check while failing
+exactly where it matters. (arc-agi 2026-07-20: MAD = median(|xᵢ−median|) collapses to exactly 0
+whenever >50% of mass sits at the modal value — precisely the certified-champion regime
+(exact-match fidelity = 1.0) the detector was built to operate in, silently degrading a "robust,
+noise-adaptive" margin into a bare miss-counter; a fog/dark sentinel legend value collided with a
+legitimate background tile, silently excluding every sprite-arrival transition from scoring with
+no adversarial model required.)
+
 ### 8. Bands and power — state the decision rule before data, size it honestly
 
 - State SIGNAL / NULL / DEGENERATE (or equivalent) thresholds against a REAL, measured floor —
@@ -261,13 +303,22 @@ merely argued in the packet's prose. Name the specific observable that would fir
 were illusory (the killed mechanism reappearing under a different name), and check for it.
 (`escape-by-assertion-not-observable`.)
 
+After drafting any MUST-NOT/exclusion principle anywhere in the design, mechanically re-apply it
+to every OTHER mechanism named in the same packet — not only the one it was written against.
+(arc-agi 2026-07-20: two same-day instances of a designer's own stated exclusion applied
+inconsistently to their own preferred mechanism, `research/2026-07-20-goalterm-successor-
+design.md` F6 and `research/2026-07-20-perception-identity-contract.md` CAP-re-entry.)
+
 ### 11. Heretic-before-results
 
-Once the design clears 1-10, get it attacked BEFORE any results land (`.claude/rules/verified-
-fable-dispatch.md` for the two-stage frontier-attack protocol in this repo; `eval-conventions-
-exhibits.md` §C "Heretic-before-results"). A design this skill produces is a draft until it has
-survived one adversarial pass — the catalogue exists because that pass reliably finds real holes,
-including in designs written with this exact checklist in hand (see the worked example).
+Once the design clears 1-10, get it attacked BEFORE any results land — use the project's own
+dispatch-protocol file, if it has one (arc-agi instance: `.claude/rules/verified-fable-
+dispatch.md`; it wins on divergence), else the generic six-step mechanism inlined in
+`references/house-rules.md`. Grade the attack's findings against the project's own verdict
+grammar, if it has one (arc-agi instance: `eval-conventions-exhibits.md` §C
+"Heretic-before-results"). A design this skill produces is a draft until it has survived one
+adversarial pass — the catalogue exists because that pass reliably finds real holes, including in
+designs written with this exact checklist in hand (see the worked example).
 
 **Decision tables freeze as EXECUTABLE CODE, prose demotes to documentation (2026-07-19).** Any
 prereg whose §-sections restate a decision calculus (aggregation rules, label predicates, row
@@ -315,8 +366,11 @@ objective dry-run) are load-bearing at EVERY tier measured — never skip these.
   above cites by tag. Read the entries, not just the tag names — the exact quoted language is
   what makes each one checkable against a new design.
 - **`references/house-rules.md`** — pointers (not copies, per the single-invariant-definition
-  discipline) into `eval-conventions.md` §0 four-axis grammar, the exhibits §A-D tables,
-  `loop/seq_stop.py`, and `vetoed-decisions.md`'s verdict grammar (KILL[measured]/CAP/ARG).
+  discipline) into the project's own verdict grammar, exhibits/phase-rule library,
+  sequential-testing library, and standing-kill ledger, if it has them (arc-agi instances:
+  `eval-conventions.md` §0, `eval-conventions-exhibits.md` §A-D, `loop/seq_stop.py`,
+  `vetoed-decisions.md`'s KILL/CAP/ARG grammar) — plus an inlined, project-agnostic six-step
+  heretic-before-results mechanism for projects without their own dispatch-protocol file.
 - **`references/classical-doe.md`** — the short canon pass (Fisher, TOST, sequential/optimal
   design) with each citation mapped to the catalogue failure class it formally backs.
 - **`examples/worked-constructed-h.md`** — the protocol applied end-to-end to a real, live
