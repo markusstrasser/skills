@@ -309,7 +309,7 @@ The growth/research worker is `/research` (one-shot) and `/research-ops {compile
 (non-loop tools); their old `cycle` loop is now this skill's Generate lane. **Never ask for input.**
 
 **Scope (optional repo arg).** Default = **all active repos** (agent-infra intel genomics phenome
-hutter substrate) — run it repo-agnostic and let it find the highest-leverage work anywhere. Pass a
+hutter substrate arc-agi) — run it repo-agnostic and let it find the highest-leverage work anywhere. Pass a
 single repo to scope a tick: `/improve maintain genomics` targets that repo's findings/rotation.
 The SWEEP always covers all repos (it's cheap and a red job anywhere is the priority); the scope arg
 only narrows which repo the tick's *rotation/fixes* act on. So:
@@ -339,7 +339,7 @@ just -f ~/Projects/agent-infra/justfile freshness 2>&1 | grep -E "DUE|source"  #
 **Composer per-repo drift screen** (parallel, cheap — runs after deterministic checks pass):
 
 ```bash
-REPOS="agent-infra intel genomics phenome skills hutter"
+REPOS="agent-infra intel genomics phenome skills hutter arc-agi"
 for repo in $REPOS; do
   (
     diff=$(cd ~/Projects/$repo 2>/dev/null && git diff HEAD~1 --stat 2>/dev/null | tail -5)
