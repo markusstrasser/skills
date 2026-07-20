@@ -1,6 +1,6 @@
 ---
 name: data-acquisition
-description: Web scraping and data download toolkit — curl_cffi, Scrapfly, Firecrawl, Browserbase, claude-in-chrome, Exa, Playwright. Covers which tool for which situation, API keys, fallback chains, structured extraction, authenticated session approaches, and what doesn't work on macOS. Use when downloading data, scraping websites, or automating browser interactions.
+description: Web scraping and data download toolkit — curl_cffi, Scrapfly, Firecrawl, Browserbase, claude-in-chrome, Exa, agent-browser. Covers which tool for which situation, API keys, fallback chains, structured extraction, authenticated session approaches, and what doesn't work on macOS. Use when downloading data, scraping websites, or automating browser interactions.
 user-invocable: true
 argument-hint: '[URL, site name, or scraping problem]'
 effort: medium
@@ -42,12 +42,12 @@ What are you downloading?
 5. Need to render JavaScript?
    → Scrapfly with render_js=True
    → Browserbase (full cloud Chromium)
-   → Playwright local — only if site doesn't block automation
+   → agent-browser local — only if site doesn't block automation
 
 6. Need to interact (click, fill forms, navigate)?
    → claude-in-chrome for authenticated sites
    → Browserbase for non-authenticated complex flows
-   → Playwright local for simple non-protected sites
+   → agent-browser local for simple non-protected sites (/agent-browser skill; snapshot → @eN refs)
 
 7. Stuck after 2-3 attempts?
    → STOP. Tell the user what you tried and what failed.
@@ -85,7 +85,7 @@ Per-tool details, code examples, and setup in `references/`.
 | WebFetch | Quick URL probe (built-in) | Free | [webfetch.md](references/webfetch.md) |
 | Exa | Search + content extraction via MCP | Free | [exa.md](references/exa.md) |
 | Firecrawl | Structured extraction, site crawl/map | Paid | [firecrawl.md](references/firecrawl.md) |
-| Playwright | Local headless browser, simple sites | Free | [playwright.md](references/playwright.md) |
+| agent-browser | Local headless browser, simple sites (replaced Playwright lane 2026-07-20) | Free | /agent-browser skill; `agent-browser skills get core` |
 | Software artifacts | Git repos, HF models, packages | Free | [software-artifacts.md](references/software-artifacts.md) |
 
 ## The Fallback Chain
@@ -134,7 +134,7 @@ Always verify downloads — HTML traps, truncated files, wrong schemas are commo
 
 ## Anti-Patterns
 
-1. **Don't build Playwright automation for SSO sites.** Use claude-in-chrome.
+1. **Don't build agent-browser/Playwright automation for SSO sites.** Use claude-in-chrome.
 2. **Don't retry a wall with fancier code.** If the blocker is access-tier (not technical), stop coding.
 3. **Don't accumulate probe/download scripts.** Document the lesson, delete the script.
 4. **Don't use `browser_cookie3`.** Use `chrome_cookies` module instead (selve/scripts/tools/chrome_cookies.py). Same Keychain+AES approach but maintained, with auto-profile detection. Neither works for SSO.

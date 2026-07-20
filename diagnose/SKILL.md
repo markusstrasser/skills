@@ -24,7 +24,7 @@ Construct a loop — try in roughly this order, stop at the first that reaches t
 1. **Failing test** at whatever seam reaches it (unit / integration / e2e).
 2. **Curl / HTTP script** against a running dev server.
 3. **CLI invocation** on a fixture, diffing stdout vs a known-good snapshot.
-4. **Headless-browser script** (Playwright) asserting DOM/console/network.
+4. **Headless-browser script** (`agent-browser` CLI: `eval`/`console`/`network requests`) asserting DOM/console/network.
 5. **Replay a captured trace** — save a real request/payload/event to disk, replay it through the path.
 6. **Throwaway harness** — minimal subset (one service, mocked deps) exercising the bug in one call.
 7. **Property / fuzz loop** — for "sometimes wrong", run 1000 random inputs.
