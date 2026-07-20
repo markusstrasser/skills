@@ -110,6 +110,15 @@ contradiction the design's own author had the evidence for and didn't check. Thi
 "powered null implies construct-validity gap" headline down to "local-scale equivalence, cross-
 venue transport unresolved" — the single most consequential correction of that session.
 
+**Broadened (2026-07-20):** the same transport check applies to QUALITATIVE/categorical claims,
+not only numeric effect sizes — citing a prior result as support requires verifying it measured
+the SAME construct/axis being claimed, not an adjacent one. **Source:** arc-agi
+`research/2026-07-20-perception-identity-contract.md`, W1-composition finding — a cited
+"aliveness" result measured TYPE-level discrimination (same-color regions split into behaviorally
+distinct types); the claim it was cited to support was an INSTANCE-level discrimination question
+a prior kill had specifically scoped and closed — different axis, untested at the kill's own
+rigor.
+
 ## `escape-by-assertion-not-observable`
 
 **Source:** `research/external/2026-07-14-active-goalid-fable-response.md`.
@@ -225,3 +234,92 @@ before the dataset ships, and a differing-input positive control (a passthrough 
 label passes every same-input smoke while fabricating at scale — see arc-agi
 `contradiction_kind`, 55.8% of rows fabricated). Closed by the step-7 split + the polarity-flip
 mutation type.
+
+## `one-sided-instrument` (2026-07-20)
+
+Every decision surface a design relies on — a control arm, a promotion gate, a bound, a
+falsifier — must exhibit, at design time, a concrete would-PASS witness and a concrete would-FAIL
+witness on reachable inputs. A surface that can only produce one of the two outcomes regardless
+of the underlying truth is as broken as a control that always fails, whether the failure mode is
+"never passes" (a control arm), "never fails" (a bound anchored at the metric's own ceiling), or
+"sign-inverted" (a gate that fires precisely when the target phenomenon is ABSENT, because its
+trigger condition is what a null case looks like, not what the true positive looks like). Check
+both witnesses explicitly before trusting the surface.
+
+**Source (arc-agi, 2026-07-20):** a promotion gate fired only when refit COULD NOT recover
+pre-burst fidelity — but a genuine re-bind is by definition a learnable stationary rule on its
+own window, so refit SUCCEEDING is what a true positive looks like; the gate demoted every real
+case and could only ever fire on non-targets (`research/2026-07-20-mode-rebinding-design.md`
+FLIP1). Companion instances the same day: a 0/0 undefined baseline outcome misdescribed as a
+fireable "could win"; a negative control unable to distinguish correctly-silent from
+structurally-dead; a falsifier bound anchored at a metric's own 100% ceiling.
+
+**Cousin already in-house:** this project's own watcher-filter rule (arc-agi
+`wakeup-cadence.md`, "F12," promoted 2026-07-12) requires exactly this witness pair — synthetic
+positive + current-state zero-match — for a different object class (log-watching filters); this
+entry generalizes the same invariant to experiment-design gates/bounds/falsifiers. Broadens
+`negative-control-cannot-pass` (below) from the control-arm case to gates/bounds/falsifiers
+generally.
+
+## `sham-integrity` (2026-07-20)
+
+A sham/placebo arm is not automatically clean just because it strips the treatment's stated
+content — check it against two failure modes before trusting a T-vs-SHAM comparison: (1) **cue
+leak** — does the sham's own residual structure (format, obligation, framing) still trigger the
+mechanism under test via a side channel, independent of the stripped content? (2)
+**detectability** — can the subject tell the sham apart from the real treatment through a channel
+the sham's designer didn't anticipate (e.g. internal-consistency checks on synthetically altered
+content), such that the comparison measures distrust of an obviously-broken artifact rather than
+the content's true effect? A sham failing either check biases the T-vs-SHAM gap; name which
+failure mode was checked and how before citing the comparison as clean.
+
+**Source (arc-agi, 2026-07-20):** an obligation-prompt sham could act as a retrieval cue on a
+history-retaining scaffold, eliciting genuine self-consumption of information already present but
+never echoed (cue leak); a full-permutation content sham was a detectable lie via
+logical-consistency channels (an entry referencing an affordance absent from the current frame),
+so the true-content effect was overstated by a distrust delta (detectability)
+(`research/2026-07-20-wm-consumption-repair-design.md` §5).
+
+Fills a dangling `sham-ladder` reference in `SKILL.md` step 3 (the catalogue never had a
+`sham-ladder` entry; step 3's citation now points here).
+
+## `sutva-cross-arm-interference` (2026-07-20) — `ARG[pending: a confirming arc-agi incident]`
+
+**[ARG-PENDING — no confirming arc-agi incident yet; entered on external canonicity, the field's
+standard name for this failure class in causal inference (SUTVA, the Stable Unit Treatment Value
+Assumption). Per `vetoed-decisions.md`'s verdict grammar, an ARG-grade entry should carry
+different evidentiary weight than a retrodicted KILL/CAP entry until a confirming instance or a
+stronger canonicity argument lands.]**
+
+Arms in a comparison are not automatically independent — shared caches, shared scaffold/session
+state, shared rate limits, shared RNG streams, or a model/dependency version drifting mid-campaign
+can let one arm's behavior leak into another's measured outcome. Name explicitly, before launch,
+what state (if any) is shared across arms and why it can't carry information between them.
+
+**Source:** entered on external canonicity (SUTVA), not a local retrodicted incident — see
+`research/2026-07-20-doe-analyze-skill-audit.md` §9.3(i).
+
+## `curator-informed-selection` (2026-07-20) — pointer
+
+If a row/arm/candidate selection was made by an agent who had already seen outcome-correlated
+information, the fix is structural quarantine — the same shape as this project's own HINDSIGHT
+blind-replay discipline (fresh headless processes, pre-registered bands, quarantine-unique-string
+verification), repurposed to the SELECTION decision rather than the external-find-derivability
+judgment it was originally built for.
+
+**Source:** arc-agi `research/2026-07-20-goalterm-successor-design.md` F9.
+
+## `unchecked-fire-rate-vs-threshold` (2026-07-20) — pointer, not a full entry
+
+A new gate/filter/automation proposal states its projected fire rate against the project's own
+standing operational thresholds, if any exist, before the gate is proposed — not a catalogue
+entry in its own right so much as a required number in the design-packet schema, plus a citation
+to the operator's own global pre-build discipline: bulk-test any hard veto/filter on real data
+first (a plausible rule can hit a high false-positive rate), and a guard whose force-rate exceeds
+its stated bar gets retuned, not obeyed-around. General by construction — both source rules live
+in the user's global config, not any one project's.
+
+**Source:** arc-agi 2026-07-20 venue-power-prescreen design finding #4 — a proposed WARN gate
+would have tripped on 58.5% of the venue roster, past this project's own retune-not-obeyed-around
+bar, computed but never checked against that bar before the gate was proposed
+(`research/2026-07-20-venue-power-prescreen-design.md`).

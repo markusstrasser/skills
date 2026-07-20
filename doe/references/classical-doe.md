@@ -53,9 +53,10 @@ naive per-test alpha would inflate the false-equivalence rate.
 
 ## Sequential and optimal design
 
-`loop/seq_stop.py` (see `house-rules.md`) already implements Wald SPRT and O'Brien-Fleming
-group-sequential boundaries in-repo — use those directly rather than re-deriving. For the
-broader modern framing:
+The project's own sequential-testing library, if it has one (see `house-rules.md`; arc-agi
+instance: `loop/seq_stop.py`, which already implements Wald SPRT and O'Brien-Fleming
+group-sequential boundaries) — use it directly rather than re-deriving. For the broader modern
+framing:
 
 **[SOURCE]** X. Huan, J. Jagalur, Y. Marzouk, "Optimal experimental design: Formulations and
 computations," *Acta Numerica* (2024), 116 citations. Modern systematic treatment of "how best to
