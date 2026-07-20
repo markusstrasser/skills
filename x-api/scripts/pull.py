@@ -246,6 +246,7 @@ def main() -> int:
                 start_time=start_time,
                 max_pages=args.max_pages,
                 tally=tally,
+                include_replies=bool(acct.get("include_replies", False)),
             )
         except RateLimitExceeded as e:
             print(f"  RATE-LIMITED: skipping (reset in {e.wait_seconds}s)")

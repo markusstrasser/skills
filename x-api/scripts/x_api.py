@@ -166,16 +166,23 @@ def get_user_tweets(
     start_time: str | None = None,
     max_pages: int = 5,
     tally: CostTally | None = None,
+    include_replies: bool = False,
 ) -> list[dict]:
-    """Pull a user's recent tweets (excludes replies and retweets).
+    """Pull a user's recent tweets (always excludes bare retweets; excludes
+    replies too unless include_replies=True).
 
     `start_time`: ISO 8601, e.g. "2026-04-01T00:00:00Z".
     Hard-capped at `max_pages * max_results` tweets to bound cost.
+    include_replies=False (default) is the original hardcoded behavior,
+    byte-identical for every existing caller. Set True for accounts whose
+    signal is mostly in-thread commentary rather than fresh original posts
+    (confirmed case: an AI-research figure's only post in a 7-day window was
+    a reply, silently excluded — see x-api SKILL.md).
     """
     params: dict = {
         "max_results": max_results,
         "tweet.fields": "created_at,public_metrics,entities,referenced_tweets,lang",
-        "exclude": "replies,retweets",
+        "exclude": "retweets" if include_replies else "replies,retweets",
     }
     if start_time:
         params["start_time"] = start_time
