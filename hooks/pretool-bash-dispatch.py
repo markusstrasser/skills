@@ -1385,6 +1385,8 @@ def gate_opus_concurrency_advisory(raw_payload: str) -> GateResult:
 # ─────────────────────────────────────────────────────────────────────────
 
 MANIFEST: list[dict] = [
+    {"name": "secret-output-guard", "if": None,
+     "run": make_native_gate("pretool-secret-output-guard.py", "pretool_secret_output_guard")},
     {"name": "git-noext-inject", "if": "Bash(git*)", "run": gate_git_noext_inject},
     {"name": "pyunbuffered-inject", "if": None, "run": gate_pyunbuffered_inject},
     {"name": "git-add-all-guard", "if": "Bash(git*)", "run": gate_git_add_all_guard},
