@@ -58,6 +58,7 @@ PROMPT = """CONTEXT NEAR AUTO-COMPACT ({ctx:,} tokens; trigger fires ≈{trigger
 1. COMMIT everything finished (granular, semantic). Post-compaction verification trusts git, not memory — uncommitted work risks being hallucinated-as-done after the summary.
 2. Loose ends only this context can tie off: in-flight edits, promised follow-ups, doc/index updates for files this session touched.
 3. Rewrite .claude/checkpoint.md as the re-entry brief: STATE (what's done, with commit SHAs/paths), NEXT (2-3 actions with exact commands), VERIFY (commands that re-derive claimed state — never bare numbers across the boundary).
+4. Every LIVE local PID in the checkpoint gets a HARNESS-TRACKED watcher armed (run_in_background exit-watch — its completion auto-wakes the session) or an explicit "no-watcher: <reason>" line. Untracked nohup pollers write status files but wake nobody; a session that goes quiet with only those can sleep through its own job's completion until a human checks (measured: addon-2 exited overnight 2026-07-20, consumed only at the operator's morning "ok check").
 Then end your turn normally; native auto-compact proceeds on a subsequent turn."""
 
 
