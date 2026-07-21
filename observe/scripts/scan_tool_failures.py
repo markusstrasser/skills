@@ -91,13 +91,16 @@ def scan(days: int = 21) -> list[dict]:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
     con = sqlite3.connect(f"file://{DB}?mode=ro", uri=True)
     con.row_factory = sqlite3.Row
+    # Keys must match invoker_kind() return values (interactive_agent|harness|unknown).
+    # Pre-2026-07-21 bug: bucket used "interactive" while increments used "interactive_agent"
+    # → all interactive_agent counts stayed 0 and invoker_primary was untrustworthy.
     agg: dict[str, dict] = defaultdict(
         lambda: {
             "tool_calls": set(),
             "days": set(),
             "runs": set(),
             "sessions": set(),
-            "interactive": 0,
+            "interactive_agent": 0,
             "harness": 0,
             "unknown": 0,
             "sample": "",
@@ -142,12 +145,12 @@ def scan(days: int = 21) -> list[dict]:
             "distinct_days": len(v["days"]),
             "distinct_runs": len(v["runs"]),
             "distinct_sessions": len(v["sessions"]),
-            "interactive_agent": v["interactive"],
+            "interactive_agent": v["interactive_agent"],
             "harness": v["harness"],
             "unknown": v["unknown"],
             "invoker_primary": (
-                "interactive_agent" if v["interactive"] >= v["harness"]
-                else "harness" if v["harness"] > v["interactive"]
+                "interactive_agent" if v["interactive_agent"] >= v["harness"]
+                else "harness" if v["harness"] > v["interactive_agent"]
                 else "mixed"
             ),
             "last_seen": v["last"][:16],
