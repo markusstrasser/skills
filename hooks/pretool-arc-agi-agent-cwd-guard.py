@@ -55,13 +55,62 @@ def _find_agent_dir(cwd: str) -> Path | None:
     return None
 
 
-def _needs_agent_env(cmd: str) -> bool:
-    if _IMPORT.search(cmd):
+# experiments/*.py often `import arc_agi` internally — the shell command has no
+# import token, so static import regex misses it (observe 2026-07-20: render_trace,
+# smoke_novelty_divergence, residue selftests from repo root).
+_EXPERIMENTS_PY = re.compile(
+    r"(?:^|[\s;|&])(?:uv\s+run\s+(?:python3?\s+)?|python3?\s+)"
+    r"((?:\S+/)?experiments/\S+\.py|\S+/arc-agi/experiments/\S+\.py)\b"
+)
+
+# The _IMPORT text branch needs an actual python/uv invocation in the command —
+# otherwise `rg -n "import arc_agi" f.py` (pattern TEXT, not an import site) gets
+# hard-blocked (live false block 2026-07-21, same class as the 2026-07-10 git-diff one).
+_EXEC_TOKEN = re.compile(r"\b(?:uv\s+run|python3?)\b")
+
+
+def _experiments_script_needs_agent(cmd: str, cwd: str) -> bool | None:
+    """None = not an experiments/*.py invocation. Else: does the SCRIPT itself
+    import agent packages? Reads the file (first 64KB); unresolvable/unreadable
+    paths stay True (conservative — old blanket behavior). Transitive imports are
+    NOT chased: a false pass just surfaces the original loud ModuleNotFoundError
+    this hook exists to pre-empt, which is fail-open, not silent corruption.
+    (2026-07-21: the A/B converter suite — zero agent imports, pure stdlib+
+    transformers — was blanket-rewritten; lane had to dodge via cwd.)"""
+    m = _EXPERIMENTS_PY.search(cmd)
+    if not m:
+        return None
+    path_txt = m.group(1)
+    p = Path(path_txt)
+    if not p.is_absolute():
+        cands = []
+        agent = _find_agent_dir(cwd)
+        if agent is not None:
+            cands.append(agent.parent / path_txt)
+        if cwd:
+            cands.append(Path(cwd) / path_txt)
+        p = next((c for c in cands if c.exists()), None)
+        if p is None:
+            return True
+    elif not p.exists():
+        return True
+    try:
+        content = p.read_text(errors="replace")[:65536]
+    except OSError:
+        return True
+    return bool(_IMPORT.search(content))
+
+
+def _needs_agent_env(cmd: str, *, cwd: str = "") -> bool:
+    if _IMPORT.search(cmd) and _EXEC_TOKEN.search(cmd):
         return True
     # `uv run python3 agent/foo.py` from root — script lives under agent/.
     # The execution prefix is REQUIRED: a bare ` agent/foo.py` argument to
     # git/cat/grep is not an import site (false-blocked git diff, 2026-07-10).
     if re.search(r"(?:^|[\s;|&])(?:uv\s+run\s+(?:python3?\s+)?|python3?\s+)agent/\S+\.py\b", cmd):
+        return True
+    exp = _experiments_script_needs_agent(cmd, cwd)
+    if exp is not None and exp:
         return True
     # pytest targeting agent/ tree from repo root (observe 2026-07-12 residual).
     # Segment-scoped + invocation-anchored: `pytest` must be the invoked command of a
@@ -70,17 +119,30 @@ def _needs_agent_env(cmd: str) -> bool:
     # compound where an `echo "== pytest lastfailed =="` preceded an unrelated
     # `cat agent/.pytest_cache/...` (2026-07-18) — same class as the 2026-07-10
     # git-diff false block that anchored the .py branch above.
+    #
+    # 2026-07-20 residual: cwd under experiments/… running pytest tests/ (no
+    # agent/ in argv) — tests import arc_agi. Narrow: experiments path in argv
+    # OR cwd contains /experiments (not all root-level pytest).
+    cwd_norm = (cwd or "").replace("\\", "/")
+    cwd_under_experiments = "/experiments/" in (cwd_norm + "/") or cwd_norm.rstrip("/").endswith(
+        "/experiments"
+    )
     for seg in re.split(r"[;|&\n]+", cmd):
-        if re.match(
-            r"\s*(?:\S+=\S+\s+)*(?:uv\s+run\s+(?:--\S+(?:\s+\S+)?\s+)*)?"
-            r"(?:python3?\s+-m\s+)?pytest\b",
-            seg,
-        ) and re.search(r"\bagent/", seg):
+        is_pytest = bool(
+            re.match(
+                r"\s*(?:\S+=\S+\s+)*(?:uv\s+run\s+(?:--\S+(?:\s+\S+)?\s+)*)?"
+                r"(?:python3?\s+-m\s+)?pytest\b",
+                seg,
+            )
+        )
+        if not is_pytest:
+            continue
+        if re.search(r"\bagent/", seg) or re.search(r"\bexperiments/", seg) or cwd_under_experiments:
             return True
     return False
 
 
-def _insert_directory(cmd: str, agent_dir: Path) -> str | None:
+def _insert_directory(cmd: str, agent_dir: Path, *, cwd: str = "") -> str | None:
     """Insert `uv run --directory <agent>` after first `uv run`, or None if no uv run."""
     m = _UV_RUN.search(cmd)
     if not m:
@@ -105,6 +167,27 @@ def _insert_directory(cmd: str, agent_dir: Path) -> str | None:
         out,
         count=1,
     )
+    # experiments/*.py is NOT under agent/ — absolutize so --directory agent still finds it
+    root = agent_dir.parent
+    out = re.sub(
+        r"(\buv\s+run\s+--directory\s+\S+\s+(?:python3?\s+)?)experiments/",
+        rf"\1{root}/experiments/",
+        out,
+        count=1,
+    )
+    # pytest from cwd under experiments/foo: relative tests/ → absolute
+    cwd_norm = (cwd or "").replace("\\", "/")
+    if "/experiments/" in (cwd_norm + "/") or cwd_norm.rstrip("/").endswith("/experiments"):
+        try:
+            cwd_abs = str(Path(cwd).expanduser().resolve())
+        except OSError:
+            cwd_abs = cwd
+        out = re.sub(
+            r"(\b(?:python3?\s+-m\s+)?pytest\s+)(?!/)",
+            rf"\1{cwd_abs}/",
+            out,
+            count=1,
+        )
     return out
 
 
@@ -123,11 +206,11 @@ def verdict(cmd: str, cwd: str = "") -> tuple[str, str]:
         pass
     if _ALREADY_DIR.search(cmd):
         return "pass", ""
-    if not _needs_agent_env(cmd):
+    if not _needs_agent_env(cmd, cwd=cwd):
         return "pass", ""
 
     if _UV_RUN.search(cmd):
-        new = _insert_directory(cmd, agent)
+        new = _insert_directory(cmd, agent, cwd=cwd)
         if new and new != cmd:
             return "rewrite", new
         return "pass", ""
@@ -179,6 +262,18 @@ def _selftest() -> int:
         # LATER segment must not fire (read-only status compound, blocked live).
         (root, 'echo "== pytest lastfailed =="; cat agent/.pytest_cache/v/cache/lastfailed; git status --short', "pass"),
         (root, 'echo "pytest agent/tests broken?"', "pass"),
+        # 2026-07-20: experiments/*.py imports arc_agi internally (no import token in shell)
+        (root, "uv run python3 experiments/render_trace.py traces/x.json --steps 0", "rewrite"),
+        (root, "uv run python3 experiments/gate_goal_term/smoke_novelty_divergence.py --help", "rewrite"),
+        (f"{root}/experiments/probe_selector_abc", "uv run python3 -m pytest tests/test_bridge2.py -q", "rewrite"),
+        (root, "cat experiments/render_trace.py", "pass"),
+        # 2026-07-21: experiments script PROVEN agent-import-free must pass (A/B converter suite);
+        # unresolvable script stays conservative (rewrite); non-execution rg with import-shaped
+        # pattern TEXT must pass (live false block same day).
+        (root, "uv run --with transformers python3 experiments/harness_format_ab/converter/gate2_admission.py", "pass"),
+        (root, "uv run python3 experiments/nonexistent_selftest_dummy_xyz.py", "rewrite"),
+        (root, 'rg -n "(import|from) (arc_agi|arcengine|local_runner)" experiments/render_trace.py', "pass"),
+        (root, 'rg -n "import arc_agi" agent/foo.py', "pass"),
     ]
     bad = 0
     for cwd, cmd, want in cases:
@@ -189,6 +284,10 @@ def _selftest() -> int:
             if "agent/foundry_pilot.py" in cmd:
                 tail_part = msg.split("--directory", 1)[-1]
                 ok = ok and "foundry_pilot.py" in tail_part and "agent/foundry_pilot.py" not in tail_part
+            if "experiments/render_trace" in cmd:
+                ok = ok and f"{root}/experiments/render_trace.py" in msg
+            if "probe_selector_abc" in cwd and "pytest" in cmd:
+                ok = ok and f"{cwd}/tests/test_bridge2.py" in msg
         bad += not ok
         print(f"  {'ok' if ok else 'FAIL'} want={want} got={got} cwd={cwd!r} cmd={cmd!r}")
         if want == "rewrite" and got == "rewrite":
