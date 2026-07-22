@@ -143,11 +143,22 @@ Mechanics and footguns: `/llmx-guide`.
   ~17% output-token reduction, i.e. roughly -30% on cosigner spend. NOT changed unilaterally — the
   `gemini-3.5-flash` cosigner default was set operator-empirical (2026-06-13, re-confirmed), and a
   vendor claim is not evidence that it reviews as well. Swap is one line in the critique axes.
-- **`llmx vision` is currently dead, and separately stale.** It builds a `genai.Client()` directly
-  rather than going through the llmx funnel, so under the critique-only key scoping
-  (`GEMINI_API_KEY_CRITIQUE_ONLY` only) it fails on the missing key like every other direct-SDK
-  consumer. It also hard-pins `gemini-3-flash-preview` for `-m flash`, so 3.6 Flash's improved
-  multimodal is unreachable there without a code change. Fix the key path before judging the lane.
+- **`llmx vision` is multi-provider as of 2026-07-22 (llmx `2b12289`) — it used to be Gemini-only
+  and off-ledger.** It now routes through the normal dispatch path, so `-m` takes any
+  vision-capable model id (`gemini-3.6-flash`, `gpt-5.6-sol`, `gpt-5.6-luna`, `claude-opus-4-8`),
+  provider is inferred, and `-e` effort works. Three consequences worth knowing:
+  (1) it is **spend-guarded and policy-gated** like everything else — a Gemini vision call now
+  needs `LLMX_GEMINI_OK=1`, where it previously dispatched freely;
+  (2) it **writes real token counts to the usage ledger**, so vision cost no longer has to be
+  estimated (evals/figure_vision_bakeoff had been substituting a `len(response)/4` proxy);
+  (3) media **fails loud** rather than being dropped — video to an OpenAI-compat endpoint, an
+  oversized inline upload, or any media sent through a CLI transport (claude-cli/codex/cursor)
+  raises, because a model asked about a figure it never received invents an answer.
+  Footgun retained for back-compat with the documented convention: in `llmx vision`, `-p` is the
+  PROMPT, not `--provider` (use `--provider` to override the inferred one).
+  **This unblocks a cross-family vision judge**, which the figure-vision eval previously could not
+  have — its qualitative judge was Gemini-flash grading a Gemini-flash candidate, a same-family
+  COI it documented as forced by the tool. Pass `--judge gpt-5.6-sol` there now.
 - **`gemini-3.1-pro-preview` is RETIRED as a routing option (2026-06-13, operator).** Do not route here for critique/synthesis/review — flash-3.5 dominates and is cheaper/faster. (Benchmark records in `references/BENCHMARKS.md` are kept as evidence; this is a routing retirement, not a data scrub. Callable via explicit `-m` if a one-off ever needs ARC-AGI-2/GPQA/video, but it is not a default anywhere.)
 - **Cosigner calibration caveat (AA-Omniscience, 2026-06-11):** both cosigner defaults are bottom-quartile abstainers — non-hallucination 39% (`gemini-3.5-flash`), prior GPT class 14% (re-measure Luna/Sol TBD), despite an abstention prompt. Critique output = adversarial pressure on reasoning, never a fact source; **for fact-heavy review where calibration matters, verify novel specifics at primary and lean on a frontier model (Opus/GPT), not a cheap cosigner.** Instruments: agent-infra `research/2026-06-11-aa-benchmark-instrument-validity.md`.
 
