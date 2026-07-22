@@ -11,7 +11,7 @@ effort: low
 Select between the current frontier models and prompt them correctly.
 
 **Models covered:** Claude Opus 4.8 (primary Claude), Claude Sonnet 5 (cost-tier Claude), GPT-5.6 Sol / Terra / Luna (GA 2026-07-09; GPT-5.5 removed), Kimi K3 (Moonshot open-weight, 2026-07-16), and Grok 4.5 through the Cursor subscription pool. Claude Fable 5 remains a **metered opt-in** (off subscription 2026-07-07; see below).
-**Last updated:** 2026-07-16.
+**Last updated:** 2026-07-22 (Gemini 3.6 Flash / 3.5 Flash-Lite registered-not-routed; Gemini flash pricing corrected).
 **Active stance:** This skill no longer maintains a broad model zoo. Older GPT, Gemini, Grok-4.20-and-earlier, and Sonnet-4.6-and-earlier routes were removed from active guidance. Sonnet 5 is reinstated as a named, cost-tier Claude option (2026-06-30). Grok 4.5 is an opt-in read-only repo critique lane through exact Cursor slugs; the xAI API path remains separate and blocked/unverified locally. Use this guide for high-value frontier decisions; use repo-specific batch tooling or search tools for cheap bulk work.
 
 **OPEN QUESTION (2026-06-30, not yet resolved — operator call):** the "Architecture / design / high-reasoning critique → NEVER Sonnet" verdict below was reached against Sonnet 4.6 on 2026-06-20. Sonnet 5's system card shows large agentic/coding gains and prompt-injection robustness tying or beating Opus 4.8 in several places, but also the *worst* prefill/system-prompt-susceptibility numbers of the compared models and measurably more turns/tokens per task (system-card digest: `references/sonnet-5-system-card.md`). Whether this changes the "NEVER Sonnet" verdict for architecture/critique work is a live question, not re-litigated here — the verdict stands until the operator revisits it.
@@ -123,6 +123,31 @@ Mechanics and footguns: `/llmx-guide`.
 - **GPT-5.6 default effort is `medium`** (suite supports `max` beyond `xhigh`) — pass `-e high`/`xhigh` for depth; reasoning bills as output.
 - **GLM-5.2 (Z.ai, NEW LAB) = opt-in review cosigner, NOT an extractor (2026-06-19).** A 4th independent training lab (Zhipu) → real cross-lab diversity for critique; request explicitly `--axes …,glm` (`glm_review` profile, routed via OpenRouter). **Calibration edge:** 72% AA-Omniscience non-hallucination (2026-06-18 independent read) — best among commonly-routed large models, ahead of Opus 64%; strong on impossibility/paradox detection in anecdotal coding probes. Accepts ONLY `high`/`xhigh` reasoning (no low tier) → structurally expensive+slow → **rejected for high-volume extraction/ingestion** (cost-dominated, no quality gain; keep gpt-5.3/gemini-3-flash). Match reasoning floor to task: GLM for occasional thorough review and epistemic guardrails, not throughput. See `agent-infra/decisions/2026-06-19-glm-5.2-integration.md`, `evals` DECISIONS `glm-5.2-extraction`.
 - **Grok 4.5 is routable through Cursor subscription as of 2026-07-14.** Use exact `cursor-grok-4.5-{low,medium,high}` or matching trailing-`-fast` slugs. The opt-in critique `grok` axis pins `cursor-grok-4.5-high` in a read-only repo workspace and fails closed on registry or unrevealed repo-canary drift. The bare `grok-4.5` xAI API lane remains separate.
+- **Gemini 3.6 Flash / 3.5 Flash-Lite (launched 2026-07-21) are REGISTERED, NOT ROUTED (2026-07-22).**
+  Live API ids `gemini-3.6-flash`, `gemini-3.5-flash-lite` (GA, no `-preview` suffix; verified
+  against `models.list`, not guessed). Registered in llmx (`652d1ed`) purely so the spend guard
+  stops refusing them as *unpriced* — **the 2026-07-14 critique-only policy is unchanged and no
+  default moved.** Prices (verified at ai.google.dev/gemini-api/docs/pricing 2026-07-22):
+  3.6 Flash **$1.50/$7.50**, 3.5 Flash-Lite **$0.30/$2.50**, 3.1 Flash-Lite **$0.25/$1.50**.
+  Same pass corrected two badly stale entries — `gemini-3-flash` was priced in llmx at $0.075/$0.30
+  against an actual **$0.50/$3.00**, so cost dashboards were understating Gemini ~7-10x. Note
+  3.5 Flash-Lite is **6x input / 12.5x output the price of 3.1 Flash-Lite** — the "Lite" tier is no
+  longer a rounding error. Effort ladders probed live: 3.5-Flash-Lite accepts `minimal`,
+  3.1-Flash-Lite **rejects** it (do not pin `minimal` on the older one).
+- **Do NOT reach for Flash-Lite as the cheap extraction lane — `gpt-5.6-luna` stays it.** Luna is
+  **$0 on the ChatGPT subscription**; Flash-Lite is metered under a policy that only permits
+  /critique. A metered lane cannot beat a $0 lane on cost, so Flash-Lite would have to win big on
+  quality, and our own screening probe says it does not (see below).
+- **Open, operator's call — 3.6 Flash as the /critique cosigner in place of 3.5 Flash.** Strictly
+  cheaper on the one lane Gemini is still allowed on: **$7.50 vs $9.00 output** *and* a vendor-claimed
+  ~17% output-token reduction, i.e. roughly -30% on cosigner spend. NOT changed unilaterally — the
+  `gemini-3.5-flash` cosigner default was set operator-empirical (2026-06-13, re-confirmed), and a
+  vendor claim is not evidence that it reviews as well. Swap is one line in the critique axes.
+- **`llmx vision` is currently dead, and separately stale.** It builds a `genai.Client()` directly
+  rather than going through the llmx funnel, so under the critique-only key scoping
+  (`GEMINI_API_KEY_CRITIQUE_ONLY` only) it fails on the missing key like every other direct-SDK
+  consumer. It also hard-pins `gemini-3-flash-preview` for `-m flash`, so 3.6 Flash's improved
+  multimodal is unreachable there without a code change. Fix the key path before judging the lane.
 - **`gemini-3.1-pro-preview` is RETIRED as a routing option (2026-06-13, operator).** Do not route here for critique/synthesis/review — flash-3.5 dominates and is cheaper/faster. (Benchmark records in `references/BENCHMARKS.md` are kept as evidence; this is a routing retirement, not a data scrub. Callable via explicit `-m` if a one-off ever needs ARC-AGI-2/GPQA/video, but it is not a default anywhere.)
 - **Cosigner calibration caveat (AA-Omniscience, 2026-06-11):** both cosigner defaults are bottom-quartile abstainers — non-hallucination 39% (`gemini-3.5-flash`), prior GPT class 14% (re-measure Luna/Sol TBD), despite an abstention prompt. Critique output = adversarial pressure on reasoning, never a fact source; **for fact-heavy review where calibration matters, verify novel specifics at primary and lean on a frontier model (Opus/GPT), not a cheap cosigner.** Instruments: agent-infra `research/2026-06-11-aa-benchmark-instrument-validity.md`.
 
@@ -389,4 +414,5 @@ Log it for the next reader: `~/Projects/skills/hooks/append-skill-memento.sh mod
 
 - **[2026-07-19] Grok repo review: llmx chat -m cursor-grok-4.5-* is a CHAT lane with NO repo access — a repo-grounded review dispatched there produced 0 bytes in 15 min (2026-07-19 arc-agi). The workspace surface is cursor-agent --model cursor-grok-4.5-high --mode ask --workspace <repo> (as the Surfaces table says); route repo-access tasks there, chat lane only for packet-in-prompt review.**
 
+- **[2026-07-22] GEMINI CRITIQUE-ONLY LAYER 1 IS LEAKING — operator's call, not auto-fixed.** The 2026-07-14 ADR's first enforcement layer was "the key is the funnel": store the key ONLY as `GEMINI_API_KEY_CRITIQUE_ONLY` so every direct-SDK consumer in every repo fails loud by construction. As of today `~/.env` (mtime 2026-07-19, i.e. **5 days after the ADR**) sets `GEMINI_API_KEY` **and** `GOOGLE_API_KEY` **and** the scoped var, all to the same key — observed live via an llmx stderr warning ("Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY"). So the off-ledger direct-SDK surfaces the ADR named (research-mcp `ask_papers`/`deep_research`, phenome/intel extractors, `llmx vision`) can bill again, bypassing both the usage ledger and the $25/day cap — the exact shape that drove June's ~€700 bill. Layer 2 (llmx `enforce_gemini_policy`, exit 7) still holds, but it only covers llmx dispatch, which was never the leak. NOT reverted here: the ADR itself contemplates "permanently by loosening this policy," so this may be a deliberate re-enable, and unscoping it back would break whatever needed it. Verify intent, then either re-scope the key or amend the ADR — right now the recorded policy and the live environment disagree.
 - **[2026-07-19] codex exec cyber-classifier false-positives on adversarial/security-flavored review vocabulary in long sessions (2026-07-19 arc-agi wave3-R8: killed at 472K tokens AT REPORT TIME, work intact on disk) — phrase formal attack rounds as 'formal correctness review / counterexample construction'; recovery = grade the tree, not the report**
