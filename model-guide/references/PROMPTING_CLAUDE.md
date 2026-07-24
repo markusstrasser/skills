@@ -1,9 +1,29 @@
-# Claude Fable 5 & Opus 4.8 Prompting Guide
+# Claude Opus 5, Fable 5 & Opus 4.8 Prompting Guide
 
-**Last updated:** 2026-06-09
-**Scope:** Claude Fable 5 (primary) and Claude Opus 4.8 (fallback).
+**Last updated:** 2026-07-24
+**Scope:** Claude Opus 5 (primary default), Fable 5 (metered opt-in), Opus 4.8 (cyber fallback).
 
-## Fable 5 vs Opus 4.8 — when to reach for which
+
+## Opus 5 vs Fable 5 vs Opus 4.8 — when to reach for which
+
+- **Opus 5** (`claude-opus-5`): **default Claude.** Near-Fable capability at $5/$25. Long-horizon agentic coding, architecture, review, professional work, bio (Fable bio blocks route here). Prefer over Fable for daily work; re-sweep effort — `low`/`medium` often enough.
+- **Fable 5** (`claude-fable-5`): metered $10/$50 — only when a named edge justifies 2× price (or Mythos-class cyber/bio capability is required and accessible).
+- **Opus 4.8** (`claude-opus-4-8`): cyber-classifier fallback target (vendor default on flagged cyber); keep for that path only — not a general default.
+
+## Opus 5 prompting deltas (vs 4.8)
+
+- Prompt for **concision** if responses run long — effort controls thinking volume, not reply length.
+- **Remove redundant verification scaffolding** ("final verify step", "double-check") — model already self-verifies; extras cause over-verification.
+- **Constrain scope** on narrow tasks; cap subagent spawn counts.
+- Prefer **thinking on + lower effort** over thinking off (thinking-off can leak tool calls / internal XML).
+- Coding/agentic start: effort **`xhigh`**; architecture **`max`**; gated mechanical **`low`**.
+- Full vendor guide: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5
+
+## Fable 5 vs Opus 4.8 — historical (pre-Opus-5)
+
+_Superseded for routing by the Opus 5 section above. Kept for Fable API shape._
+
+### Fable 5 vs Opus 4.8 (historical)
 
 - **Fable 5** (`claude-fable-5`): hardest/longest/most-ambiguous work — multi-day autonomous runs, codebase-scale migrations, first-shot complex systems, dense-image vision, parallel-subagent orchestration. 2× the price; summarized thinking only; classifiers refuse cyber/bio/reasoning-extraction and fall back to Opus 4.8.
 - **Opus 4.8** (`claude-opus-4-8`): the Fable fallback target, plus deliberate routing of routine/cost-sensitive work, security/cyber/biology tasks (which Fable refuses anyway), and anything needing raw chain-of-thought. Half the price; slightly more careful on self-report honesty.
@@ -34,13 +54,13 @@ client.messages.create(
     max_tokens=64000,
     thinking={"type": "adaptive", "display": "summarized"},
     output_config={"effort": "high"},   # lower effort still strong; raise to xhigh/max for hard work
-    # fallbacks=["claude-opus-4-8"],     # beta: server-side fallback on stop_reason:"refusal"
+    # fallbacks=["claude-opus-5"],     # or claude-opus-4-8 for cyber-classifier default
     messages=[...],
 )
 
-# Opus 4.8 (fallback / raw-CoT / cost-sensitive)
+# Opus 5 (primary default)
 client.messages.create(
-    model="claude-opus-4-8",
+    model="claude-opus-5",
     max_tokens=64000,
     thinking={"type": "adaptive", "display": "summarized"},
     output_config={"effort": "xhigh"},

@@ -101,7 +101,7 @@ Cloud handoff (interactive only): prefix message with `&` → continues on curso
 | Need | Route |
 |---|---|
 | Cursor subscription, terminal/Neovim/JetBrains | **this skill** (`agent`) |
-| Claude subscription, headless CC | `claude -p` (strip `ANTHROPIC_API_KEY`) or `llmx chat --subscription -m claude-opus-4-8` |
+| Claude subscription, headless CC | `claude -p` (strip `ANTHROPIC_API_KEY`) or `llmx chat --subscription -m claude-opus-5` |
 | GPT/Codex subscription | `codex exec` or `llmx chat --subscription` |
 | API billing, batch, schema | `llmx chat` without `--subscription` (`/llmx-guide`; probe with `--dry-run`) |
 | In-editor agent with hooks/skills | native Cursor / Claude Code Agent tool |

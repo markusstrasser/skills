@@ -366,7 +366,7 @@ Generate 3-5 genuinely different approaches to the same problem. For each:
 Do NOT critique the existing plan — generate alternatives. Different mechanisms, not tweaks.""",
     },
     "claude": {
-        "label": "Claude Opus 4.8 (third-family adversarial)",
+        "label": "Claude Opus 5 (third-family adversarial)",
         "profile": "claude_review",
         "prompt": """\
 <system>
@@ -3277,7 +3277,7 @@ def run_preflight(project_dir: Path | None = None, *, include_grok: bool = False
             "--dry-run",
             "--subscription",
             "-m",
-            "claude-opus-4-8",
+            "claude-opus-5",
             "-e",
             "max",
         ],
@@ -3303,7 +3303,7 @@ def run_preflight(project_dir: Path | None = None, *, include_grok: bool = False
             "--provider",
             "anthropic",
             "--model",
-            "claude-opus-4-8",
+            "claude-opus-5",
             "--timeout",
             "120",
             "--cache-ttl",

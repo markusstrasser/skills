@@ -1,6 +1,6 @@
 ---
 name: model-guide
-description: "Use when: choosing frontier model/effort for a task class (Claude Opus 4.8, GPT-5.6 Sol/Terra/Luna, Kimi K3 open-weight coding opt-in, Grok 4.5 Cursor repo-review opt-in). Fable 5 METERED since 2026-07-07 (off subscription, 2× Opus) — fable lanes are paid opt-ins, and the Agent tool currently can't reach Fable at all (routing bug, see Verified Transport). NOT transport flags (/llmx-guide)."
+description: "Use when: choosing frontier model/effort for a task class (Claude Opus 5, GPT-5.6 Sol/Terra/Luna, Kimi K3 open-weight coding opt-in, Grok 4.5 Cursor repo-review opt-in). Fable 5 METERED since 2026-07-07 (off subscription, 2× Opus) — fable lanes are paid opt-ins, and the Agent tool currently can't reach Fable at all (routing bug, see Verified Transport). NOT transport flags (/llmx-guide)."
 user-invocable: true
 argument-hint: '[task description or model name]'
 effort: low
@@ -10,15 +10,15 @@ effort: low
 
 Select between the current frontier models and prompt them correctly.
 
-**Models covered:** Claude Opus 4.8 (primary Claude), Claude Sonnet 5 (cost-tier Claude), GPT-5.6 Sol / Terra / Luna (GA 2026-07-09; GPT-5.5 removed), Kimi K3 (Moonshot open-weight, 2026-07-16), and Grok 4.5 through the Cursor subscription pool. Claude Fable 5 remains a **metered opt-in** (off subscription 2026-07-07; see below).
-**Last updated:** 2026-07-22 (Gemini 3.6 Flash / 3.5 Flash-Lite registered-not-routed; Gemini flash pricing corrected).
+**Models covered:** Claude Opus 5 (primary Claude), Claude Sonnet 5 (cost-tier Claude), GPT-5.6 Sol / Terra / Luna (GA 2026-07-09; GPT-5.5 removed), Kimi K3 (Moonshot open-weight, 2026-07-16), and Grok 4.5 through the Cursor subscription pool. Claude Fable 5 remains a **metered opt-in** (off subscription 2026-07-07; see below).
+**Last updated:** 2026-07-24 (Claude Opus 5 replaces Opus 5 as primary Claude default).
 **Active stance:** This skill no longer maintains a broad model zoo. Older GPT, Gemini, Grok-4.20-and-earlier, and Sonnet-4.6-and-earlier routes were removed from active guidance. Sonnet 5 is reinstated as a named, cost-tier Claude option (2026-06-30). Grok 4.5 is an opt-in read-only repo critique lane through exact Cursor slugs; the xAI API path remains separate and blocked/unverified locally. Use this guide for high-value frontier decisions; use repo-specific batch tooling or search tools for cheap bulk work.
 
 **OPEN QUESTION (2026-06-30, not yet resolved — operator call):** the "Architecture / design / high-reasoning critique → NEVER Sonnet" verdict below was reached against Sonnet 4.6 on 2026-06-20. Sonnet 5's system card shows large agentic/coding gains and prompt-injection robustness tying or beating Opus 4.8 in several places, but also the *worst* prefill/system-prompt-susceptibility numbers of the compared models and measurably more turns/tokens per task (system-card digest: `references/sonnet-5-system-card.md`). Whether this changes the "NEVER Sonnet" verdict for architecture/critique work is a live question, not re-litigated here — the verdict stands until the operator revisits it.
 
-**Claude Fable 5 — status (2026-07-12).** Off the claude.ai Pro/Max/Team subscription since 2026-07-07: continued access is priced at metered usage credits, $10/$50 per MTok (2× Opus 4.8) — press/pricing-page sourced (techtimes.com, bleepingcomputer.com, claude.com/pricing); reconciliation against observed usage is open, see Verified Transport below. Fable is reachable via `llmx chat -m claude-fable-5` (claude-cli transport, confirmed working) and headless `claude -p --model claude-fable-5` (confirmed 2026-07-04) — **not reliably via the Agent tool**, where `fable-high`/`fable-low`-style dispatches currently serve `claude-sonnet-5` regardless of the pin (measured 2026-07-12, see Verified Transport — this is a mechanism bug, not a re-dormancy). Route gated/briefed/review dispatch to **opus-low** ($0 subscription); reach for Fable (via llmx, not the Agent tool) only with a named Fable-specific capability-edge justification over Opus `max`. Re-license trigger: Anthropic restores Fable to subscription plans.
+**Claude Fable 5 — status (2026-07-12).** Off the claude.ai Pro/Max/Team subscription since 2026-07-07: continued access is priced at metered usage credits, $10/$50 per MTok (2× Opus 5) — press/pricing-page sourced (techtimes.com, bleepingcomputer.com, claude.com/pricing); reconciliation against observed usage is open, see Verified Transport below. Fable is reachable via `llmx chat -m claude-fable-5` (claude-cli transport, confirmed working) and headless `claude -p --model claude-fable-5` (confirmed 2026-07-04) — **not reliably via the Agent tool**, where `fable-high`/`fable-low`-style dispatches currently serve `claude-sonnet-5` regardless of the pin (measured 2026-07-12, see Verified Transport — this is a mechanism bug, not a re-dormancy). Route gated/briefed/review dispatch to **opus-low** ($0 subscription); reach for Fable (via llmx, not the Agent tool) only with a named Fable-specific capability-edge justification over Opus `max`. Re-license trigger: Anthropic restores Fable to subscription plans.
 
-**Opus 4.8** (`claude-opus-4-8`) is Anthropic's active top-tier model: 1M context, raw/summarized CoT, adaptive thinking, no reasoning-extraction classifier. Best measured calibration among routable Claude models (64% AA-Omniscience non-hallucination). Default for hardest Claude work, security/cyber/biology, and cross-lab review. **Architecture → `max` effort.**
+**Opus 5** (`claude-opus-5`) is Anthropic's active top-tier model (released 2026-07-24): near-Fable intelligence at Opus price ($5/$25), 1M context, adaptive thinking on by default, SOTA on Frontier-Bench / GDPval-AA / ARC-AGI 3 / AutomationBench / OSWorld 2.0 cost-efficiency. Default for hardest Claude work, security/cyber/biology (Fable bio blocks now route here), and cross-lab review. **Architecture → `max` effort.** Keep `claude-opus-5` only as the documented cyber-classifier fallback target.
 
 ## Verified Transport — what actually serves what (as-of 2026-07-14)
 
@@ -29,11 +29,11 @@ mechanisms drift faster than judgment.
 
 | Lane | Actually serves | Status | Evidence / rederive |
 |---|---|---|---|
-| **Agent tool, any `subagent_type`, WITH an explicit `model:` param or agent-def `model:` frontmatter** (`fable-high`, `fable-low`, `opus-low`, custom agents) | **`claude-sonnet-5`** — the pin is silently ignored | **MEASURED, BROKEN — RECONFIRMED 2026-07-19 at scale** | arc-agi session 41f9b649, 2026-07-12: fable pin **5/5 self-reports**; opus pin **1/1**. **Re-measured 2026-07-19 (arc-agi team-lead 6f4a8626): explicit `model:"fable"` param → sonnet-5; explicit `model:"opus"` and hook-injected opus → sonnet-5 on every checked dispatch (raw-readers, builders) — ~15/15 cumulative. The Agent tool is currently a sonnet-only surface, full stop.** Frontier-agent alternative VERIFIED same day: headless `env -u ANTHROPIC_API_KEY claude -p --model claude-opus-4-8` self-reports opus correctly (key-strip mandatory — with ANTHROPIC_API_KEY set it bills API and can fail "Credit balance too low"). Rederive: open the dispatch with "self-report your model ID from your own environment-info block, first line," read the answer back. |
+| **Agent tool, any `subagent_type`, WITH an explicit `model:` param or agent-def `model:` frontmatter** (`fable-high`, `fable-low`, `opus-low`, custom agents) | **`claude-sonnet-5`** — the pin is silently ignored | **MEASURED, BROKEN — RECONFIRMED 2026-07-19 at scale** | arc-agi session 41f9b649, 2026-07-12: fable pin **5/5 self-reports**; opus pin **1/1**. **Re-measured 2026-07-19 (arc-agi team-lead 6f4a8626): explicit `model:"fable"` param → sonnet-5; explicit `model:"opus"` and hook-injected opus → sonnet-5 on every checked dispatch (raw-readers, builders) — ~15/15 cumulative. The Agent tool is currently a sonnet-only surface, full stop.** Frontier-agent alternative VERIFIED same day: headless `env -u ANTHROPIC_API_KEY claude -p --model claude-opus-5` self-reports opus correctly (key-strip mandatory — with ANTHROPIC_API_KEY set it bills API and can fail "Credit balance too low"). Rederive: open the dispatch with "self-report your model ID from your own environment-info block, first line," read the answer back. |
 | Agent tool, no `model:` param (bare `general-purpose` etc.) | `claude-sonnet-5` (`CLAUDE_CODE_SUBAGENT_MODEL`) | MEASURED, **correct** — this is the documented default, not the bug above | 2026-06-29 finding, unchanged |
 | `llmx chat -m claude-fable-5` (claude-cli transport) | **Genuinely Fable** | MEASURED | `~/.claude/llmx-usage.jsonl` — 18 real completions through 2026-07-12 (e.g. 34,385 completion tokens at `reasoning_effort: max`). `grep claude-fable-5 ~/.claude/llmx-usage.jsonl \| tail`. **Currently the only proven way to guarantee Fable.** |
 | Headless `claude -p --model claude-fable-5` (key-stripped) | Genuinely Fable | MEASURED (2026-07-04, arc-agi ebbeff04) | Dispatches and completes; not re-verified since — re-probe before relying on it for a batch. |
-| `llmx chat --subscription -m claude-opus-4-8` / `-m gpt-5.6*` | Named model | Config-level, not self-report-verified | `~/.claude/cache/llmx-routing.json` `lite_allowed_models` confirms *routable*; llmx has no built-in "ask the model who it is" check yet. |
+| `llmx chat --subscription -m claude-opus-5` / `-m gpt-5.6*` | Named model | Config-level, not self-report-verified | `~/.claude/cache/llmx-routing.json` `lite_allowed_models` confirms *routable*; llmx has no built-in "ask the model who it is" check yet. |
 | `cursor-agent --model cursor-grok-4.5-high --mode ask --workspace <repo>`; llmx exact `cursor-grok-4.5-*` slugs | Grok 4.5 through Cursor subscription | **MEASURED, CURRENT** (2026-07-14) | Live registry exposes low/medium/high plus trailing `-fast`; named high smoke and an unrevealed exact repo-HEAD canary passed. Critique preflight enforces registry + canary before dispatch. Bare `grok-4.5` remains xAI API, never Cursor subscription. |
 | codex-cli / `llmx --subscription -m gpt-5.6*` | `gpt-5.6` family | MEASURED | `gpt-5.5` retired from the subscription allowlist 2026-07-10 (exit 2 on attempt) — don't route or price it anywhere. |
 
@@ -57,31 +57,31 @@ Judgment below assumes the lane you dispatch to actually delivers the named mode
 | Situation | Use | Why |
 |---|---|---|
 | **Most headless/dispatch tasks — the default cheap lane** (extraction, triage, ticks, bulk classification, mechanical audit) | **GPT-5.6 Luna via codex-cli subscription** (`llmx chat --subscription -m gpt-5.6-luna`), effort `low` (mechanical/bulk) or `medium` (general) | Operator directive 2026-07-14: $0 on the ChatGPT plan; replaces the Gemini cheap tier (Gemini is critique-only — agent-infra `decisions/2026-07-14-gemini-critique-only-policy.md`). `shared/llm_dispatch.py` profiles `fast_extract`/`cheap_tick`/`observe_bulk`/`gpt_general`/`mechanical_review` all route here. |
-| Hardest / longest / most-ambiguous Claude work: multi-day autonomous runs, codebase-scale migrations, first-shot on complex well-specified systems, dense-image vision, architecture | **Claude Opus 4.8** (`max` for architecture) | Active Claude frontier. Fable metered at 2× Opus (off-subscription 2026-07-07) — Opus keeps all default Claude routing. Pair GPT-5.6 Sol for cross-lab on the hardest judgment calls. |
-| Routine/cost-sensitive coding, security review, cyber, lab/molecular biology | **Claude Opus 4.8** | Same model — use lower effort (`low`/`medium`) when the brief has mechanical gates. |
+| Hardest / longest / most-ambiguous Claude work: multi-day autonomous runs, codebase-scale migrations, first-shot on complex well-specified systems, dense-image vision, architecture | **Claude Opus 5** (`max` for architecture) | Active Claude frontier. Fable metered at 2× Opus (off-subscription 2026-07-07) — Opus keeps all default Claude routing. Pair GPT-5.6 Sol for cross-lab on the hardest judgment calls. |
+| Routine/cost-sensitive coding, security review, cyber, lab/molecular biology | **Claude Opus 5** | Same model — use lower effort (`low`/`medium`) when the brief has mechanical gates. |
 | Codex/terminal-heavy implementation, tool loops, structured API work | **GPT-5.6 Sol** (or **Luna** for everyday/cost) | GPT-5.6 suite GA 2026-07-09. Sol = flagship; **Luna ≈ prior GPT-5.5 perf at ~½ that price** ($1/$6); Terra = mid opt-in. Effort includes `max`. |
 | Quantitative proof, calibration math, hard science/data derivation where mistakes compound | **GPT-5.6 Sol** + API `reasoning.mode=pro` (or ChatGPT Sol Pro) | No separate `gpt-5.6-*-pro` slug — Pro is a reasoning *mode* on Sol/Terra/Luna at the same $/MTok (more tokens). Use when the answer will be checked. |
-| Cross-model review | **Opus 4.8 + GPT-5.6 Sol** (Luna OK for routine critique) | Different labs, different failure profiles. Keep the review cross-lab; do not use same-instance self-review as the sole adversarial pressure. PLAN packets get repo-grounded premise falsification from the built-in Composer scout. |
-| Architecture / design / high-reasoning critique | **Opus 4.8 `max` + GPT-5.6 Sol — NEVER Sonnet** | Operator 2026-06-20: architecture → Opus **`max`**. Sonnet is for search + bug-fixes only. A sonnet-thinking arch critique built a confident "HALT, reverse the spine" conclusion on a *search-error false premise*; Opus + GPT-5.6 got it right. For codebase-coupled decisions, rely on the review gate's repo-grounded Composer premise scout before packet-only critics. |
-| Agentic SaaS / multi-tool workflows (AutomationBench-shaped) | **Opus 4.8 or GPT-5.6 Sol** | Grok led the historical model screen, but the verified local Cursor admission currently covers read-only repo review, not autonomous write/tool workflows. |
-| Current facts, quotes, prices, law, news | **Tools first, then model synthesis** | Every model card still shows factuality limits. Retrieval/database truth beats frontier recall. **Not Grok alone** — AA-Omniscience non-hallucination ~46% (mid-pack; worse than Opus 64% / GLM 72%). |
+| Cross-model review | **Opus 5 + GPT-5.6 Sol** (Luna OK for routine critique) | Different labs, different failure profiles. Keep the review cross-lab; do not use same-instance self-review as the sole adversarial pressure. PLAN packets get repo-grounded premise falsification from the built-in Composer scout. |
+| Architecture / design / high-reasoning critique | **Opus 5 `max` + GPT-5.6 Sol — NEVER Sonnet** | Operator 2026-06-20: architecture → Opus **`max`**. Sonnet is for search + bug-fixes only. A sonnet-thinking arch critique built a confident "HALT, reverse the spine" conclusion on a *search-error false premise*; Opus + GPT-5.6 got it right. For codebase-coupled decisions, rely on the review gate's repo-grounded Composer premise scout before packet-only critics. |
+| Agentic SaaS / multi-tool workflows (AutomationBench-shaped) | **Opus 5 or GPT-5.6 Sol** | Grok led the historical model screen, but the verified local Cursor admission currently covers read-only repo review, not autonomous write/tool workflows. |
+| Current facts, quotes, prices, law, news | **Tools first, then model synthesis** | Every model card still shows factuality limits. Retrieval/database truth beats frontier recall. **Not Grok alone** — AA-Omniscience non-hallucination ~46% (mid-pack; worse than Opus 4.8 64% / GLM 72%). |
 
 ## Quick Selection Matrix
 
 | Task | First choice | Escalate / pair when |
 |---|---|---|
-| Agentic coding | Opus 4.8 (high effort) | Drop to `low` effort when brief has mechanical gates; use GPT-5.6 Sol/Terra when terminal/Codex-heavy. |
-| Codebase-scale migration / multi-day autonomous run | Opus 4.8 (`xhigh`/`max`) | Keep human checkpoints at irreversible boundaries. |
-| Security review, exploit/vuln work, cyber, molecular biology | Opus 4.8 | Active Claude default for classifier-sensitive work (formerly Fable-refusal domain). |
+| Agentic coding | Opus 5 (high effort) | Drop to `low` effort when brief has mechanical gates; use GPT-5.6 Sol/Terra when terminal/Codex-heavy. |
+| Codebase-scale migration / multi-day autonomous run | Opus 5 (`xhigh`/`max`) | Keep human checkpoints at irreversible boundaries. |
+| Security review, exploit/vuln work, cyber, molecular biology | Opus 5 | Active Claude default for classifier-sensitive work (formerly Fable-refusal domain). |
 | Debugging messy repo state | GPT-5.6 Luna or Sol | Pair with Opus if the fix requires architectural judgment. |
-| Architecture decision | **Opus 4.8 `max`** | Send the selected proposal to GPT-5.6 Sol for independent cross-lab critique; use the built-in premise scout for repo-grounded checks. |
+| Architecture decision | **Opus 5 `max`** | Send the selected proposal to GPT-5.6 Sol for independent cross-lab critique; use the built-in premise scout for repo-grounded checks. |
 | Quantitative audit / CritPt-hard physics | GPT-5.6 Sol (`max` / pro mode) | Grok CritPt **15%** — weak; do not route hard derivation here. |
-| Long-context document/repo synthesis | Opus 4.8 or GPT-5.6 Sol/Terra | Both 1.05M-class. Grok API context is **500k** — prefer Opus/GPT for >500k. |
-| Browser/computer use | Opus 4.8 or GPT-5.6 Sol | Both strong; Fable vision-SOTA notes apply once it's reachable via a lane that isn't paid-metered or Agent-tool-broken. |
+| Long-context document/repo synthesis | Opus 5 or GPT-5.6 Sol/Terra | Both 1.05M-class. Grok API context is **500k** — prefer Opus/GPT for >500k. |
+| Browser/computer use | Opus 5 or GPT-5.6 Sol | Both strong; Fable vision-SOTA notes apply once it's reachable via a lane that isn't paid-metered or Agent-tool-broken. |
 | PLAN critique needing repo falsification | **`/critique model` with its default premise scout; add opt-in `grok` for an independent repo cosigner** | Composer checks callers/joins by default; Grok high adds a separately preflighted read-only repo pass when the extra axis is worth the latency. |
 | Letter-exact output constraints (exact counts, rigid templates, banned words) | Schema/validator enforcement, any model | Never rely on prose compliance — Claude family is measurably weakest at mechanical constraint-following (IFBench 62–63 vs GPT-5.6-class 76, bottom-5 of 27). Construct caveat: IFBench is majority adversarial-synthetic and high scores trade against answer quality, so this is a weak GPT preference for unschematizable cases, not a routing rule. |
 | Claim verification | Neither alone | Use primary sources and deterministic checks; use models to summarize evidence, not to establish it. |
-| Contradictory / impossible spec, epistemic guardrails | **Opus 4.8** or **GLM-5.2** (opt-in) | GPT family historically weak on abstention (re-measure GPT-5.6 TBD); DeepSeek V4 (~6%). Grok ~46% — mid-pack, **not** a calibration pick. More reasoning tokens does not fix paradox blindness — see trilemma section. |
+| Contradictory / impossible spec, epistemic guardrails | **Opus 5** or **GLM-5.2** (opt-in) | GPT family historically weak on abstention (re-measure GPT-5.6 TBD); DeepSeek V4 (~6%). Grok ~46% — mid-pack, **not** a calibration pick. More reasoning tokens does not fix paradox blindness — see trilemma section. |
 
 For full score tables, read `references/BENCHMARKS.md`.
 
@@ -110,7 +110,7 @@ Benchmark **capability** (Intelligence Index, SWE scores) and **parameter count*
 **Probe subscription path before critique batches:**
 
 ```bash
-llmx chat --dry-run --subscription -m claude-opus-4-8 -e max
+llmx chat --dry-run --subscription -m claude-opus-5 -e max
 # or: uv run python3 ~/Projects/skills/critique/scripts/model-review.py --preflight
 ```
 
@@ -121,7 +121,7 @@ Mechanics and footguns: `/llmx-guide`.
 - **Cosigner / critique / synthesis:** `gemini-3.5-flash` (inverted from 3.1 Pro 2026-05-24, operator-empirical; re-confirmed 2026-06-13 — flash-3.5 ≈ GPT-high ≫ 3.1-pro on the ADR-0009 spine critique). **Always in the 2G+2GPT mix — never the only reviewer.** Probe flags invention on clean packets; orchestrator dispositions via `--extract --verify` (see agentlogs evidence).
 - **Cheap classification / mechanical audits:** `gpt-5.6-luna` at `low` via codex-cli subscription ($0). ~~gemini-3-flash / flash-lite~~ — Gemini is critique-only since 2026-07-14 (metered gemini-* refuses outside the /critique engine; agent-infra `decisions/2026-07-14-gemini-critique-only-policy.md`).
 - **GPT-5.6 default effort is `medium`** (suite supports `max` beyond `xhigh`) — pass `-e high`/`xhigh` for depth; reasoning bills as output.
-- **GLM-5.2 (Z.ai, NEW LAB) = opt-in review cosigner, NOT an extractor (2026-06-19).** A 4th independent training lab (Zhipu) → real cross-lab diversity for critique; request explicitly `--axes …,glm` (`glm_review` profile, routed via OpenRouter). **Calibration edge:** 72% AA-Omniscience non-hallucination (2026-06-18 independent read) — best among commonly-routed large models, ahead of Opus 64%; strong on impossibility/paradox detection in anecdotal coding probes. Accepts ONLY `high`/`xhigh` reasoning (no low tier) → structurally expensive+slow → **rejected for high-volume extraction/ingestion** (cost-dominated, no quality gain; keep gpt-5.3/gemini-3-flash). Match reasoning floor to task: GLM for occasional thorough review and epistemic guardrails, not throughput. See `agent-infra/decisions/2026-06-19-glm-5.2-integration.md`, `evals` DECISIONS `glm-5.2-extraction`.
+- **GLM-5.2 (Z.ai, NEW LAB) = opt-in review cosigner, NOT an extractor (2026-06-19).** A 4th independent training lab (Zhipu) → real cross-lab diversity for critique; request explicitly `--axes …,glm` (`glm_review` profile, routed via OpenRouter). **Calibration edge:** 72% AA-Omniscience non-hallucination (2026-06-18 independent read) — best among commonly-routed large models, ahead of Opus 4.8 64%; strong on impossibility/paradox detection in anecdotal coding probes. Accepts ONLY `high`/`xhigh` reasoning (no low tier) → structurally expensive+slow → **rejected for high-volume extraction/ingestion** (cost-dominated, no quality gain; keep gpt-5.3/gemini-3-flash). Match reasoning floor to task: GLM for occasional thorough review and epistemic guardrails, not throughput. See `agent-infra/decisions/2026-06-19-glm-5.2-integration.md`, `evals` DECISIONS `glm-5.2-extraction`.
 - **Grok 4.5 is routable through Cursor subscription as of 2026-07-14.** Use exact `cursor-grok-4.5-{low,medium,high}` or matching trailing-`-fast` slugs. The opt-in critique `grok` axis pins `cursor-grok-4.5-high` in a read-only repo workspace and fails closed on registry or unrevealed repo-canary drift. The bare `grok-4.5` xAI API lane remains separate.
 - **Gemini 3.6 Flash / 3.5 Flash-Lite (launched 2026-07-21) are REGISTERED, NOT ROUTED (2026-07-22).**
   Live API ids `gemini-3.6-flash`, `gemini-3.5-flash-lite` (GA, no `-preview` suffix; verified
@@ -145,7 +145,7 @@ Mechanics and footguns: `/llmx-guide`.
   vendor claim is not evidence that it reviews as well. Swap is one line in the critique axes.
 - **`llmx vision` is multi-provider as of 2026-07-22 (llmx `2b12289`) — it used to be Gemini-only
   and off-ledger.** It now routes through the normal dispatch path, so `-m` takes any
-  vision-capable model id (`gemini-3.6-flash`, `gpt-5.6-sol`, `gpt-5.6-luna`, `claude-opus-4-8`),
+  vision-capable model id (`gemini-3.6-flash`, `gpt-5.6-sol`, `gpt-5.6-luna`, `claude-opus-5`),
   provider is inferred, and `-e` effort works. Three consequences worth knowing:
   (1) it is **spend-guarded and policy-gated** like everything else — a Gemini vision call now
   needs `LLMX_GEMINI_OK=1`, where it previously dispatched freely;
@@ -168,13 +168,13 @@ When dispatching subagents to execute work (Agent tool, headless `claude -p`, co
 
 | Work shape | Executor | Evidence / boundary |
 |---|---|---|
-| FULL brief + mechanical gates (tests, typecheck, deterministic verify script) — greenfield OR port/re-author against an existing oracle | **Opus 4.8 effort low, or codex reasoning-low ($0)** | Effort-tier: low matched medium on all 5 gates at 0.59× tokens. Effort-integration (the pre-registered replication): low matched DEFAULT on an integration-shaped port — same gates, independently convergent design decisions, 0.574× tokens. Codex-lane: GPT reasoning-low passed all gates at $0 (subscription) and resolved a self-contradictory brief *within spec*. Revocation trigger (registered): first cheap-lane gate failure on a task classified fully-briefed → fall back to default effort for that class + record. |
-| Design-from-scratch integration, no oracle to check against | **Opus 4.8, default effort** | The effort-integration license covers port/re-author shapes only (its own caveat: "ports are the friendliest integration shape"). Dispatch-tier still holds: Sonnet 4.6 changed the measurement procedure under gate pressure until the gate passed (reward-hacking-shaped); Opus was deviation-free. "Opus is token-efficient so cheaper" was REJECTED (~2.4× Sonnet cost) — the premium buys spec fidelity, not efficiency. |
+| FULL brief + mechanical gates (tests, typecheck, deterministic verify script) — greenfield OR port/re-author against an existing oracle | **Opus 5 effort low, or codex reasoning-low ($0)** | Effort-tier: low matched medium on all 5 gates at 0.59× tokens. Effort-integration (the pre-registered replication): low matched DEFAULT on an integration-shaped port — same gates, independently convergent design decisions, 0.574× tokens. Codex-lane: GPT reasoning-low passed all gates at $0 (subscription) and resolved a self-contradictory brief *within spec*. Revocation trigger (registered): first cheap-lane gate failure on a task classified fully-briefed → fall back to default effort for that class + record. |
+| Design-from-scratch integration, no oracle to check against | **Opus 5, default effort** | The effort-integration license covers port/re-author shapes only (its own caveat: "ports are the friendliest integration shape"). Dispatch-tier still holds: Sonnet 4.6 changed the measurement procedure under gate pressure until the gate passed (reward-hacking-shaped); Opus was deviation-free. "Opus is token-efficient so cheaper" was REJECTED (~2.4× Sonnet cost) — the premium buys spec fidelity, not efficiency. |
 | Mechanical no-gate tasks (rename sweeps, boilerplate) | **Claude Sonnet 5** (`claude-sonnet-5`) or haiku tier | Cheap and gameable-gate risk is moot when there's no gate to game. (Row previously said "Sonnet/haiku tier" with no live model — resolved 2026-06-30 now that Sonnet 5 exists.) |
-| Cost-sensitive coding/agentic work WITH a mechanical gate (tests, typecheck) — not architecture | **Claude Sonnet 5**, default effort | System card: beats Sonnet 4.6 broadly, ties Opus 4.8 on several real-world benchmarks (Real-World Finance, GDPval-AA), at ~40-60% of Opus 4.8's per-token price. Runs more turns/tokens per task than Opus though — re-measure cost on your own workload before assuming the $/token saving holds end-to-end. |
+| Cost-sensitive coding/agentic work WITH a mechanical gate (tests, typecheck) — not architecture | **Claude Sonnet 5**, default effort | System card: beats Sonnet 4.6 broadly, ties Opus 4.8 on several real-world benchmarks (Real-World Finance, GDPval-AA), at ~40-60% of Opus 5's per-token price. Runs more turns/tokens per task than Opus though — re-measure cost on your own workload before assuming the $/token saving holds end-to-end. |
 | Search/read fan-out | Explore agent | No executor risk; output is consumed, not shipped. |
 | Partial/noisy verifier (research synthesis, memos, judgment-coupled work) | **Don't downgrade** — frontier model, normal effort | The Sonnet finding gets WORSE here: gate-gaming in regime-2 is exactly what you can't detect cheaply. Verifier-conditioned scope (constitution) applies. |
-| Judgment gaps in the spec | Yourself / Opus 4.8 | Cheap executors fill ambiguity with guesses; the savings are repaid as corrections. Codex-lane's reasoning-HIGH arm is the same lesson from the other side: on a spec-complete task, more reasoning bought one extra unnecessary spec deviation, not better conformance — spec + gates do the thinking, so buy reasoning only where the spec leaves thinking to do. |
+| Judgment gaps in the spec | Yourself / Opus 5 | Cheap executors fill ambiguity with guesses; the savings are repaid as corrections. Codex-lane's reasoning-HIGH arm is the same lesson from the other side: on a spec-complete task, more reasoning bought one extra unnecessary spec deviation, not better conformance — spec + gates do the thinking, so buy reasoning only where the spec leaves thinking to do. |
 
 **Every row above assumes the lane delivers the named model** — false for Agent-tool pins as of
 2026-07-12 (Verified Transport). Self-report-check any row where the tier is what's being measured.
@@ -183,9 +183,9 @@ When dispatching subagents to execute work (Agent tool, headless `claude -p`, co
 
 | Role | Current-best lane | Cost class | Evidence |
 |---|---|---|---|
-| **Synthesis** (open design problem, no oracle) | Opus 4.8 `max` | $0 subscription | Fable's synthesis edge is real (2026-06-12 fable-effort-architecture eval, low missed the orthogonal factoring high shipped) but currently unreachable via Agent tool — llmx-only, paid, until the routing bug is fixed. |
+| **Synthesis** (open design problem, no oracle) | Opus 5 `max` | $0 subscription | Fable's synthesis edge is real (2026-06-12 fable-effort-architecture eval, low missed the orthogonal factoring high shipped) but currently unreachable via Agent tool — llmx-only, paid, until the routing bug is fixed. |
 | **Briefed execution** (full brief + mechanical gates) | `opus-low` or codex reasoning-low | $0 subscription | anim-workbench 2026-06-12 effort-tier/effort-integration/codex-lane (low ≈ medium/default, 0.57-0.59× tokens). |
-| **Review / cosign** | Opus 4.8 + GPT-5.6 Sol, cross-lab; opt-in GLM-5.2 or Grok-4.5 axis | $0 subscription (+~$0.30-1/call opt-in) | `evals/DECISIONS.md` `cross-lab-review-margin` (margin≈0, count-delta real); GLM decision 2026-06-19. |
+| **Review / cosign** | Opus 5 + GPT-5.6 Sol, cross-lab; opt-in GLM-5.2 or Grok-4.5 axis | $0 subscription (+~$0.30-1/call opt-in) | `evals/DECISIONS.md` `cross-lab-review-margin` (margin≈0, count-delta real); GLM decision 2026-06-19. |
 | **Research / literature** | Cross-model fan-out by default: codex (`--lite research`) + Claude researcher — not single-model | $0 subscription | arc-agi feedback 2026-07-07: codex arm found a paper (PRISM, 2605.26998) the Claude arm missed. |
 | **Scout fan-out** (parallel audits/debug scouts) | Cross-model default, concurrency-capped ≤2 concurrent opus subagents / ≤2 concurrent model workers each, else sequential | $0 subscription | arc-agi feedback 2026-07-08: 4 concurrent opus agents × openrouter fan-out (28-way) killed 3/4 mid-run — opus session-limit + provider contention, both real ceilings. |
 | **OS-student serving** (open-weight model as trainee/actor under test) | Project-specific — measure, don't assume | GPU $/hr | Example only, not a universal verdict: arc-agi killed mistral-small-3.2-24B as an OS-tier base (dominated on every axis, 2026-07-11), rehabbed qwen3.6-27b via a no-think serving config, kept gemma-4-31B alive. Check your own project's standing-kills doc before reusing a verdict cross-project. Serving mechanics: `/modal` skill. |
@@ -206,16 +206,13 @@ When dispatching subagents to execute work (Agent tool, headless `claude -p`, co
 
 **Reasoning escalation guard (calibration × effort):** the cheap-lane evals show *less* reasoning is fine when the verifier is in the brief. The inverse also holds outside regime-1: escalating effort on poorly calibrated models (GPT family until re-measured, DeepSeek V4) on paradox/impossibility or unsourced-fact tasks tends to produce more confident fabrication, not more abstention — see Selection trilemma. Effort buys depth only where calibration is already adequate (Opus, GLM for review).
 
-## Claude Opus 4.8 - "The Investigator" (primary Claude)
+## Claude Opus 5 - "Near-Fable daily driver" (primary Claude)
 
 **Use for:** all active Claude frontier work — hardest autonomous runs, codebase-scale migrations, architecture, code review, security/cyber/biology, professional analysis, legal/financial reasoning, long autonomous loops, and cross-lab critique. Keeps Fable-tier routing by default: Fable is metered+paid and unreachable via the Agent tool (Verified Transport), so Opus is the practical default even where Fable might otherwise win on capability.
 
-**Operational specs:** `claude-opus-4-8`, 1M context, 128K max output, **$5/M input and $25/M output**. Fast mode is the same model at up to 2.5x output speed for $10/$50. Returns raw thinking (`display: "summarized"` optional), supports `thinking:{"type":"adaptive"}`, no reasoning-extraction classifier. **Subscription-routable** (`lite_allowed_models`).
+**Operational specs:** `claude-opus-5`, 1M context (default = max), 128K max output (300k batch beta), **$5/M input and $25/M output** (same as 4.8). Fast mode ~2.5× speed at 2× price ($10/$50). Adaptive thinking on by default; effort default `high` on API/Code. Knowledge cutoff **May 2026** (training). **Subscription-routable** (`lite_allowed_models`). Cyber-classifier refusals can auto-fallback to `claude-opus-4-8`; bio refusals on Fable now route here.
 
-**System-card routing line:** improves on 4.7 across coding/agentic/long-context/professional
-evals; best-calibrated routable Claude (64% AA-Omniscience non-hallucination), ~4× fewer unreported
-self-code flaws — still bind verification to ground truth (git, parsed tests, exit codes) and keep
-tool outputs untrusted. Full parsed card: [references/opus-4-8-system-card.md](references/opus-4-8-system-card.md).
+**Launch routing line (2026-07-24):** near-Fable capability at half Fable's price; Anthropic claims SOTA on Frontier-Bench, GDPval-AA, and best cost-efficiency on OSWorld 2.0 / AutomationBench / ARC-AGI 3 (≈3× next-best). Efficiency at `low`/`medium` effort is a real lever — re-sweep effort defaults. **Most aligned** of recent Claude models on Anthropic's automated behavioral audit (misalignment score 2.3). Prompting deltas vs 4.8: longer default verbosity (prompt for concision), stronger self-verification (remove redundant "verify again" scaffolding — it over-verifies), more subagent-eager (cap delegation), thinking-disabled capped at `high` effort. Digest: [references/opus-5-system-card.md](references/opus-5-system-card.md). Prior 4.8 card kept for calibration history: [references/opus-4-8-system-card.md](references/opus-4-8-system-card.md).
 
 **Prompting and API rules:**
 - Use XML tags; adaptive thinking explicit (`thinking:{"type":"adaptive"}`); no manual `budget_tokens`.
@@ -230,23 +227,23 @@ Full guide: `references/PROMPTING_CLAUDE.md`.
 
 **Use for:** cost-sensitive coding and agentic work with a mechanical gate (tests, typecheck), mechanical no-gate dispatch (rename sweeps, boilerplate), and anything where untrusted tool output / prompt-injection exposure is the dominant risk — Sonnet 5 has the strongest measured prompt-injection robustness in its own system card, tying or beating Opus 4.8. **Not** a default for architecture/design/high-reasoning critique — see the OPEN QUESTION note above; that verdict has not been revisited for Sonnet 5. **Also the model the Agent tool silently substitutes when a `fable`/`opus` pin is dropped** (Verified Transport) — a result that "looks like Sonnet 5" (more turns/tokens, tying Opus on some benchmarks) may simply BE Sonnet 5 wearing another model's label; self-report before attributing quality to the pinned tier.
 
-**Operational specs:** `claude-sonnet-5`, 1M context, 128K max output, **$3/M input and $15/M output** ($2/$10 introductory through 2026-08-31, vs Opus 4.8's $5/$25). Adaptive thinking on by default (unlike Sonnet 4.6, which ran thinking-off by default — omitting `thinking` now runs adaptive). First Sonnet-tier model with `xhigh` effort. New tokenizer vs Sonnet 4.6 (~30% more tokens for the same text — partially offsets the lower $/token). **Not yet on the subscription allowlist** (`lite_allowed_models` in `~/.claude/cache/llmx-routing.json` has no Sonnet entry, 4.6 or 5) — `llmx chat --subscription -m claude-sonnet-5` will not route until that allowlist is updated (llmx's own config, not this skill).
+**Operational specs:** `claude-sonnet-5`, 1M context, 128K max output, **$3/M input and $15/M output** ($2/$10 introductory through 2026-08-31, vs Opus 5's $5/$25). Adaptive thinking on by default (unlike Sonnet 4.6, which ran thinking-off by default — omitting `thinking` now runs adaptive). First Sonnet-tier model with `xhigh` effort. New tokenizer vs Sonnet 4.6 (~30% more tokens for the same text — partially offsets the lower $/token). **Not yet on the subscription allowlist** (`lite_allowed_models` in `~/.claude/cache/llmx-routing.json` has no Sonnet entry, 4.6 or 5) — `llmx chat --subscription -m claude-sonnet-5` will not route until that allowlist is updated (llmx's own config, not this skill).
 
 **System-card routing line** (digest: [references/sonnet-5-system-card.md](references/sonnet-5-system-card.md)):
-strongest measured prompt-injection robustness (ties/beats Opus 4.8); beats Sonnet 4.6 on nearly
+strongest measured prompt-injection robustness (ties/beats Opus 5); beats Sonnet 4.6 on nearly
 every coding/agentic benchmark; watch-items — worst-of-cohort prefill/system-prompt susceptibility,
 disclosed training-health issue (highest closed-book abstention of compared models), ~6%
 evaluation-awareness, and more turns/tokens per task than Opus 4.8 (cheaper $/token ≠ cheaper
 $/task on long loops — measure on your own workload).
 
-**Prompting and API rules:** same XML-tag, no-prefill, no-non-default-sampling-param rules as Opus 4.8 (see `references/PROMPTING_CLAUDE.md` — written for Claude generally, applies here). Effort: default `high`; use `xhigh` for the hardest coding/agentic work in this tier (first Sonnet model to support it); `low`/`medium` for routine/mechanical dispatch per Dispatch Economics above.
+**Prompting and API rules:** same XML-tag, no-prefill, no-non-default-sampling-param rules as Opus 5 (see `references/PROMPTING_CLAUDE.md` — written for Claude generally, applies here). Effort: default `high`; use `xhigh` for the hardest coding/agentic work in this tier (first Sonnet model to support it); `low`/`medium` for routine/mechanical dispatch per Dispatch Economics above.
 
 ## Claude Fable 5 - "The Operator" (metered opt-in — reference only)
 
 Routability + economics: see the status note at the top of this skill (metered usage
 credits 2026-07-07; llmx/headless lanes confirmed live and paid, Agent tool currently can't
 reach it at all — see Verified Transport). Specs ($10/$50, 2× Opus), API shape (adaptive-only thinking,
-hidden CoT, `reasoning_extraction` classifier, refusal→Opus fallback), system-card insights
+hidden CoT, `reasoning_extraction` classifier, refusal→Opus 5 (bio) / Opus 4.8 (cyber classifier default) fallback), system-card insights
 (two-source honesty regression vs Opus: AA-Omniscience 45% vs 64%), and prompting rules:
 [references/fable-5-dormant.md](references/fable-5-dormant.md).
 
@@ -365,7 +362,7 @@ See `agent-infra/decisions/2026-07-09-grok-4.5-transport.md`.
 Use independent parallel reviews, then synthesize yourself:
 
 ```text
-Opus 4.8 (max for architecture): architectural/professional judgment and implementation critique.
+Opus 5 (max for architecture): architectural/professional judgment and implementation critique.
 GPT-5.6 Sol: terminal/tool/process critique and structured failure search (hard).
 GPT-5.6 Luna: everyday critique / mechanical (medium/low).
 GPT-5.6 Sol + reasoning.mode=pro: quantitative or high-irreversibility decisions.
@@ -379,7 +376,7 @@ That verdict, calibrated: the cross-lab-vs-same-lab MARGIN is **≈0** — a sec
 
 ## Validation Checklists
 
-Post-output verification lists — All Outputs + per-model (Fable 5, Sonnet 5, Opus 4.8, GPT-5.6 Sol/Terra/Luna,
+Post-output verification lists — All Outputs + per-model (Fable 5, Sonnet 5, Opus 5, GPT-5.6 Sol/Terra/Luna,
 GLM-5.2, Grok 4.5): [references/validation-checklists.md](references/validation-checklists.md).
 Consult after receiving output from a routed model, not at routing time.
 
@@ -390,7 +387,7 @@ Primary sources consulted for this update:
 - Anthropic Fable 5 system card: `https://www.anthropic.com/claude-fable-5-mythos-5-system-card`
 - Anthropic docs: `https://platform.claude.com/docs/en/about-claude/models/introducing-claude-fable-5-and-claude-mythos-5`
 - Anthropic Fable prompting guide: `https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5`
-- Anthropic: `https://www.anthropic.com/news/claude-opus-4-8`
+- Anthropic: `https://www.anthropic.com/news/claude-opus-5`
 - OpenAI GPT-5.6: `https://openai.com/index/gpt-5-6/`, pricing/models docs on developers.openai.com
 - Cross-repo harness analysis: `agent-infra/research/2026-06-09-fable-5-mythos-5-harness-impact.md`
 - Independent benchmarks: artificialanalysis.ai (2026-06-11) with instrument-validity reads of AA-Omniscience/IFBench/GDPval/τ² — `agent-infra/research/2026-06-11-aa-benchmark-instrument-validity.md`

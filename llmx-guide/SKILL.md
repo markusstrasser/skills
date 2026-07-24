@@ -46,7 +46,7 @@ uv run python3 ~/Projects/skills/critique/scripts/model-review.py --preflight
 **Claude: NEVER `anthropic-direct`/API by default.** Subscription only unless the user explicitly requests metered API billing.
 
 ```bash
-llmx chat --subscription -m claude-opus-4-8 -f ctx.md -o out.md "query"
+llmx chat --subscription -m claude-opus-5 -f ctx.md -o out.md "query"
 llmx chat -p codex-cli --subscription -m gpt-5.6-sol -f ctx.md -o out.md "query"
 llmx chat --subscription -m cursor-grok-4.5-high -f ctx.md -o out.md "query"
 ```
@@ -54,7 +54,7 @@ llmx chat --subscription -m cursor-grok-4.5-high -f ctx.md -o out.md "query"
 Repository-coupled agent review (caller cwd, project rules, native CLI tools):
 
 ```bash
-llmx chat --subscription --mode agent -m claude-opus-4-8 -e max \
+llmx chat --subscription --mode agent -m claude-opus-5 -e max \
   --timeout 3600 -o out.md "Inspect this repository read-only; cite file:line evidence."
 ```
 
@@ -66,7 +66,7 @@ Strips API-key env on Claude/Codex subscription paths. If you see "Credit balanc
 ### Smoke (live, tiny)
 
 ```bash
-llmx chat --subscription -m claude-opus-4-8 -e low \
+llmx chat --subscription -m claude-opus-5 -e low \
   -o /tmp/llmx-claude-smoke.md "Reply exactly OK."
 ```
 
