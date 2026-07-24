@@ -61,7 +61,7 @@ Before dispatching lanes:
 - **llmx billing smoke** (hard gate before background critics):
 
 ```bash
-llmx chat --dry-run --subscription -m claude-opus-4-8 -e low \
+llmx chat --dry-run --subscription -m claude-opus-5 -e low \
   -o /tmp/llmx-claude-smoke.md "Reply exactly OK."
 # exit 6 = billing dead — do not dispatch 8 lanes + 2 critics
 ```
@@ -154,7 +154,7 @@ Claude/Codex disagree.
 
 | Critic | Lens | Dispatch |
 |--------|------|----------|
-| Claude Opus | Sequencing / unification | `llmx chat --subscription -m claude-opus-4-8` |
+| Claude Opus | Sequencing / unification | `llmx chat --subscription -m claude-opus-5` |
 | Codex | Premise-soundness / false-positive risk | `llmx chat -p codex-cli -m gpt-5.6-sol` |
 
 ```bash
@@ -162,7 +162,7 @@ cd "$REPO"
 cat .model-review/<topic>-critique-context.md path/to/plan.md \
   > .model-review/<topic>-critique-combined.md
 
-llmx chat --subscription -m claude-opus-4-8 \
+llmx chat --subscription -m claude-opus-5 \
   -f .model-review/<topic>-critique-combined.md \
   -e high \
   -o .model-review/critique-claude-opus-subscription.md \

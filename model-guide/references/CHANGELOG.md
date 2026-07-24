@@ -1,5 +1,33 @@
 # Model Guide Changelog
 
+## 2026-07-24 - Claude Opus 5 replaces Opus 4.8 as primary Claude default
+
+Anthropic released Claude Opus 5 (2026-07-24): near-Fable intelligence at Opus price
+($5/$25), model id `claude-opus-5`. Default on Claude Max; strongest on Pro.
+
+### Changed
+- **Default Claude routing:** all live `claude-opus-4-8` pins → `claude-opus-5`
+  (llmx allowlist + provider defaults, model-guide Default Routing / Dispatch Economics /
+  critique `claude` axis, `shared/llm_dispatch.py` claude_review, anim outer-loop RSI,
+  agent-infra headless examples, detector/pricing tables).
+- **Keep 4.8 on allowlist:** Anthropic documents Opus 4.8 as the cyber-classifier
+  fallback target for Opus 5 / Fable 5 — do not auto-upgrade away explicit 4.8 pins.
+- New digest: `references/opus-5-system-card.md`. BENCHMARKS.md vendor Pareto section
+  (no invented AA numbers — 4.8 independent rows retained until remeasure).
+- Prompting: verbosity, over-verification, subagent eagerness, effort re-sweep notes
+  in SKILL + PROMPTING_CLAUDE.
+
+### Not changed
+- Fable 5 remains metered opt-in at $10/$50 (2× Opus).
+- GPT-5.6 Sol/Terra/Luna, Grok 4.5 Cursor axis, Sonnet 5 cost-tier.
+- Interactive `~/.claude/settings.json` model pin left alone (may still be Fable).
+
+### Sources
+- https://www.anthropic.com/news/claude-opus-5
+- https://platform.claude.com/docs/en/about-claude/models
+- https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5
+
+
 ## 2026-07-16 - Kimi K3 added as open-weight long-horizon coding opt-in
 
 Moonshot released Kimi K3 (kimi.com research announcement, operator paste): 2.8T-param

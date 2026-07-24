@@ -13,13 +13,13 @@ This skill helps you build LLM-powered applications with Claude. Choose the righ
 
 Unless the user requests otherwise:
 
-Use Claude Opus 4.8 via the exact model string `claude-opus-4-8` (the app-building default: $5/$25, raw chain-of-thought available, no offensive-content classifiers to route around). Set `thinking: {type: "adaptive"}` explicitly when you want thinking — adaptive is off by default on Opus 4.8. Effort **defaults to `high`** on 4.8; set `output_config: {effort: "xhigh"}` for coding and agentic tasks and `max` for the hardest problems. Default to streaming for any request that may involve long input, long output, or high `max_tokens` — it prevents hitting request timeouts. Use the SDK's `.get_final_message()` / `.finalMessage()` helper to get the complete response if you don't need to handle individual stream events.
+Use Claude Opus 5 via the exact model string `claude-opus-5` (the app-building default: $5/$25, adaptive thinking on by default, near-Fable capability at Opus price). Effort **defaults to `high`**; set `output_config: {effort: "xhigh"}` for coding and agentic tasks and `max` for the hardest problems. Re-sweep effort on your evals — low/medium often hold quality at fewer tokens than on 4.8. Default to streaming for any request that may involve long input, long output, or high `max_tokens` — it prevents hitting request timeouts. Use the SDK's `.get_final_message()` / `.finalMessage()` helper to get the complete response if you don't need to handle individual stream events.
 
-> **When to reach for Claude Fable 5** (`claude-fable-5`, released 2026-06-09 — Anthropic's most capable widely-released model): the hardest, longest-running, most-ambiguous workloads (multi-day autonomous agents, codebase-scale migrations, first-shot complex systems, dense-image vision). It is **2× the price** ($10/$50), and differs from Opus 4.8 at the API level — see the Fable 5 note below. For most app-building, Opus 4.8 remains the right default; opt into Fable 5 deliberately when the task is at the top of your difficulty range, and **keep Opus 4.8 as the fallback** (Fable's safety classifiers refuse offensive-cyber / bio-life-sciences / reasoning-extraction requests with `stop_reason: "refusal"`, and you retry those on Opus 4.8).
+> **When to reach for Claude Fable 5** (`claude-fable-5`, released 2026-06-09 — Anthropic's most capable widely-released model): the hardest, longest-running, most-ambiguous workloads (multi-day autonomous agents, codebase-scale migrations, first-shot complex systems, dense-image vision). It is **2× the price** ($10/$50), and differs from Opus 5 at the API level — see the Fable 5 note below. For most app-building, Opus 5 remains the right default; opt into Fable 5 deliberately when the task is at the top of your difficulty range, and **keep Opus 5 as the fallback** (Fable's safety classifiers refuse offensive-cyber / bio-life-sciences / reasoning-extraction requests with `stop_reason: "refusal"`, and you retry those on Opus 5).
 >
-> **Claude Fable 5 API differences (read before using it):** adaptive thinking is **always on and the only mode** (no `disabled`, no `budget_tokens`, no `task_budget` thinking budgets beyond the beta task-budgets header); **raw CoT is never returned** — `thinking.display` is `"omitted"` by default, set `"summarized"` for summaries, and **never instruct the model to echo/explain its reasoning as response text** (trips the `reasoning_extraction` classifier → refusal/fallback). Effort low→max, default `high` (lower effort often exceeds prior-model `xhigh`). Turns run longer by default — raise client timeouts and stream. Use the `fallbacks` param (beta) or SDK middleware to auto-retry refusals on `claude-opus-4-8`. Covered Model: 30-day retention, no zero-data-retention.
+> **Claude Fable 5 API differences (read before using it):** adaptive thinking is **always on and the only mode** (no `disabled`, no `budget_tokens`, no `task_budget` thinking budgets beyond the beta task-budgets header); **raw CoT is never returned** — `thinking.display` is `"omitted"` by default, set `"summarized"` for summaries, and **never instruct the model to echo/explain its reasoning as response text** (trips the `reasoning_extraction` classifier → refusal/fallback). Effort low→max, default `high` (lower effort often exceeds prior-model `xhigh`). Turns run longer by default — raise client timeouts and stream. Use the `fallbacks` param (beta) or SDK middleware to auto-retry refusals on `claude-opus-5`. Covered Model: 30-day retention, no zero-data-retention.
 
-> **Opus 4.8 migration note** (verified against the official 4.7→4.8 [migration guide](https://platform.claude.com/docs/en/about-claude/models/migration-guide#migrating-from-claude-opus-47)). **There are no breaking API changes from Opus 4.7** — 4.8 supports the same feature set. The version-specific behaviors documented below all carry over from 4.7 *unchanged*: `budget_tokens`/`temperature`/`top_p`/`top_k` → 400, assistant-prefill → 400, adaptive-thinking-off-by-default, `thinking.display: "omitted"` default, the 4.7 tokenizer (1.0–1.35× more tokens than 4.6), fewer-tools-by-default, 2576px vision. (The sampling/extended-thinking/tokenizer breaking changes belong to the *4.6→4.7* step — if you're already on 4.7 they need no further action.)
+> **Opus 5 migration note** (2026-07-24): model id `claude-opus-5`, same $5/$25 as 4.8. Thinking is **on by default**; disabling thinking is only allowed at effort `high` or below. Prompting deltas: longer default verbosity (prompt for concision), stronger self-verification (remove redundant "verify again" scaffolding), more subagent-eager (cap delegation). Cyber-classifier refusals fall back to `claude-opus-4-8` by default; Fable bio blocks route to Opus 5. Full guide: [prompting-claude-opus-5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5) · [migration](https://platform.claude.com/docs/en/about-claude/models/migration-guide#migrating-from-claude-opus-4-8-to-claude-opus-5).
 >
 > **Genuinely new in 4.8:**
 > - **Effort defaults to `high`** on all surfaces (API + Claude Code). Set `xhigh` explicitly for coding/high-autonomy work.
@@ -149,14 +149,14 @@ Everything goes through `POST /v1/messages`. Tools and output constraints are fe
 
 | Model             | Model ID            | Context        | Input $/1M | Output $/1M | Notes |
 | ----------------- | ------------------- | -------------- | ---------- | ----------- | ----- |
-| Claude Fable 5    | `claude-fable-5`    | 1M             | $10.00     | $50.00      | Most capable; adaptive-only, summarized-CoT-only, safety classifiers → fallback to Opus 4.8. |
-| Claude Opus 4.8   | `claude-opus-4-8`   | 1M             | $5.00      | $25.00      | App-building default. |
+| Claude Fable 5    | `claude-fable-5`    | 1M             | $10.00     | $50.00      | Most capable; adaptive-only, summarized-CoT-only, safety classifiers → fallback to Opus 5. |
+| Claude Opus 5   | `claude-opus-5`   | 1M             | $5.00      | $25.00      | App-building default. |
 | Claude Sonnet 4.6 | `claude-sonnet-4-6` | 200K (1M beta) | $3.00      | $15.00      | |
 | Claude Haiku 4.5  | `claude-haiku-4-5`  | 200K           | $1.00      | $5.00       | |
 
 `claude-mythos-5` (same weights as Fable 5, classifiers lifted) exists but is Project-Glasswing-only — not generally callable.
 
-**Default to `claude-opus-4-8` for app-building unless the user names another model or the task is at the top of your difficulty range (then `claude-fable-5`, with Opus 4.8 as the fallback).** Never downgrade for cost on the user's behalf — that's their decision, not yours.
+**Default to `claude-opus-5` for app-building unless the user names another model or the task is at the top of your difficulty range (then `claude-fable-5`, with Opus 5 as the fallback).** Never downgrade for cost on the user's behalf — that's their decision, not yours.
 
 **Use only the exact model ID strings from the table above.** Do not append date suffixes. If the user requests a model not in the table, read `shared/models.md` or WebFetch the Anthropic Models Overview — do not construct an ID yourself.
 
@@ -166,21 +166,21 @@ A note: if any of the model strings above look unfamiliar to you, that's to be e
 
 ## Thinking & Effort (Quick Reference)
 
-**Adaptive thinking is off by default on Opus 4.8.** Set it explicitly: `thinking: {type: "adaptive"}`. Claude then decides when and how much to think. Adaptive thinking also automatically enables interleaved thinking (no beta header needed). `budget_tokens` returns a 400 error on Opus 4.8 — do not use it; do not fall back to an older model just because the user asks for a "thinking budget."
+**Adaptive thinking is off by default on Opus 5.** Set it explicitly: `thinking: {type: "adaptive"}`. Claude then decides when and how much to think. Adaptive thinking also automatically enables interleaved thinking (no beta header needed). `budget_tokens` returns a 400 error on Opus 5 — do not use it; do not fall back to an older model just because the user asks for a "thinking budget."
 
-**Effort levels (GA, no beta header):** `output_config: {effort: "low"|"medium"|"high"|"xhigh"|"max"}`. Opus 4.8 added `xhigh` between `high` and `max`.
+**Effort levels (GA, no beta header):** `output_config: {effort: "low"|"medium"|"high"|"xhigh"|"max"}`. Opus 5 added `xhigh` between `high` and `max`.
 
 - `xhigh` — **start here for coding and agentic use cases.**
 - `high` — minimum for most intelligence-sensitive work.
 - `medium` — cost-sensitive tasks where intelligence tradeoff is acceptable.
-- `low` — short, scoped, latency-sensitive tasks only. Opus 4.8 respects low strictly — it will under-think on complex problems at this level. If you see shallow reasoning, raise effort; don't prompt around it.
+- `low` — short, scoped, latency-sensitive tasks only. Opus 5 respects low strictly — it will under-think on complex problems at this level. If you see shallow reasoning, raise effort; don't prompt around it.
 - `max` — deepest reasoning; can overthink on simpler tasks. Test before committing.
 
 With `xhigh` or `max` effort, start with `max_tokens: 64000` or higher — 4.8 uses more output tokens at these levels.
 
-**Thinking display:** `thinking.display` defaults to `"omitted"` on Opus 4.8 — thinking blocks appear in the stream but their `thinking` field is empty. Set `thinking: {type: "adaptive", display: "summarized"}` to restore visible reasoning progress. Important for UIs that show thinking to users — otherwise the UI appears frozen until first output token.
+**Thinking display:** `thinking.display` defaults to `"omitted"` on Opus 5 — thinking blocks appear in the stream but their `thinking` field is empty. Set `thinking: {type: "adaptive", display: "summarized"}` to restore visible reasoning progress. Important for UIs that show thinking to users — otherwise the UI appears frozen until first output token.
 
-**Sampling parameters are removed.** `temperature`, `top_p`, and `top_k` return 400 on Opus 4.8. Omit them from request payloads. Use prompting to guide behavior.
+**Sampling parameters are removed.** `temperature`, `top_p`, and `top_k` return 400 on Opus 5. Omit them from request payloads. Use prompting to guide behavior.
 
 **Task budgets (beta):** For agentic loops, set an advisory token cap the model uses to pace itself:
 ```
@@ -188,7 +188,7 @@ output_config = {"effort": "high", "task_budget": {"type": "tokens", "total": 12
 ```
 Beta header: `task-budgets-2026-03-13`. Minimum 20,000 tokens. Don't set for open-ended tasks where quality matters more than speed. `task_budget` is advisory (the model sees it and paces itself); `max_tokens` is a hard per-request ceiling.
 
-**Assistant-message prefills return a 400 error on Opus 4.8.** Use structured outputs (`output_config.format`), system prompt instructions, or continuation-as-user-turn patterns instead.
+**Assistant-message prefills return a 400 error on Opus 5.** Use structured outputs (`output_config.format`), system prompt instructions, or continuation-as-user-turn patterns instead.
 
 ---
 
@@ -267,17 +267,17 @@ Live documentation URLs are in `shared/live-sources.md`.
 ## Common Pitfalls
 
 - Don't truncate inputs when passing files or content to the API. If the content is too long to fit in the context window, notify the user and discuss options (chunking, summarization, etc.) rather than silently truncating.
-- **Thinking:** Use `thinking: {type: "adaptive"}` on Opus 4.8 and Sonnet 4.6. `budget_tokens` returns a 400 error on Opus 4.8.
-- **Opus 4.8 prefill removed:** Assistant message prefills return a 400 error. Use structured outputs (`output_config.format`), system prompt instructions, or continuation-as-user-turn patterns instead.
-- **Opus 4.8 sampling parameters removed:** `temperature`, `top_p`, `top_k` return 400 on Opus 4.8. Omit them. Use prompting to guide behavior.
-- **Opus 4.8 thinking.display default is "omitted":** Thinking field is empty unless you set `display: "summarized"`. UIs showing thinking progress need the explicit opt-in or they appear frozen.
-- **Opus 4.8 tokenizer shift:** The same text maps to 1.0–1.35× more tokens than Opus 4.6. Re-baseline `max_tokens`, compaction triggers, and any client-side token estimators. Use `/v1/messages/count_tokens` on 4.8 specifically.
-- **Opus 4.8 is more literal:** It follows instructions precisely and won't silently generalize. Remove scaffolding like "summarize after every 3 tool calls" — 4.8 gives higher-quality built-in progress updates. It also spawns fewer subagents and uses tools less often by default; raise effort to `xhigh` if you need more tool usage.
-- **Opus 4.8 effort calibration is strict:** `low` and `medium` strictly scope work to what was asked — good for latency and cost, but can under-think on complex problems. If you see shallow reasoning, raise effort rather than prompting around it.
-- **128K output tokens:** Opus 4.8 supports up to 128K `max_tokens`, but SDKs require streaming for large `max_tokens` to avoid HTTP timeouts. Use `.stream()` with `.get_final_message()` / `.finalMessage()`. At `xhigh` or `max`, start with `max_tokens: 64000` or higher.
+- **Thinking:** Use `thinking: {type: "adaptive"}` on Opus 5 and Sonnet 4.6. `budget_tokens` returns a 400 error on Opus 5.
+- **Opus 5 prefill removed:** Assistant message prefills return a 400 error. Use structured outputs (`output_config.format`), system prompt instructions, or continuation-as-user-turn patterns instead.
+- **Opus 5 sampling parameters removed:** `temperature`, `top_p`, `top_k` return 400 on Opus 5. Omit them. Use prompting to guide behavior.
+- **Opus 5 thinking.display default is "omitted":** Thinking field is empty unless you set `display: "summarized"`. UIs showing thinking progress need the explicit opt-in or they appear frozen.
+- **Opus 5 tokenizer shift:** The same text maps to 1.0–1.35× more tokens than Opus 4.6. Re-baseline `max_tokens`, compaction triggers, and any client-side token estimators. Use `/v1/messages/count_tokens` on 4.8 specifically.
+- **Opus 5 is more literal:** It follows instructions precisely and won't silently generalize. Remove scaffolding like "summarize after every 3 tool calls" — 4.8 gives higher-quality built-in progress updates. It also spawns fewer subagents and uses tools less often by default; raise effort to `xhigh` if you need more tool usage.
+- **Opus 5 effort calibration is strict:** `low` and `medium` strictly scope work to what was asked — good for latency and cost, but can under-think on complex problems. If you see shallow reasoning, raise effort rather than prompting around it.
+- **128K output tokens:** Opus 5 supports up to 128K `max_tokens`, but SDKs require streaming for large `max_tokens` to avoid HTTP timeouts. Use `.stream()` with `.get_final_message()` / `.finalMessage()`. At `xhigh` or `max`, start with `max_tokens: 64000` or higher.
 - **Tool call JSON parsing:** Claude may produce different JSON string escaping in tool call `input` fields (Unicode or forward-slash escaping). Always parse tool inputs with `json.loads()` / `JSON.parse()` — never raw string matching on the serialized input. Opus 4.5+ preserves trailing newlines in tool string parameters.
 - **Structured outputs:** Use `output_config: {format: {...}}` on `messages.create()`. The `output_format` parameter is deprecated.
-- **High-resolution images (Opus 4.8):** Full-resolution images can use up to ~3× more image tokens than on prior models (up to 4784 per image, up from ~1600). Re-budget `max_tokens` for image-heavy workloads or downsample before sending. Pointing and bounding-box coordinates from the model are 1:1 with actual image pixels — remove any scale-factor conversion from prior versions.
+- **High-resolution images (Opus 5):** Full-resolution images can use up to ~3× more image tokens than on prior models (up to 4784 per image, up from ~1600). Re-budget `max_tokens` for image-heavy workloads or downsample before sending. Pointing and bounding-box coordinates from the model are 1:1 with actual image pixels — remove any scale-factor conversion from prior versions.
 - **New stop reasons:** Handle `refusal` (safety refusal — output may not match your schema) and `model_context_window_exceeded` (hit context window, not `max_tokens`) in addition to standard values.
 - **Don't reimplement SDK functionality:** The SDK provides high-level helpers — use them instead of building from scratch. Specifically: use `stream.finalMessage()` instead of wrapping `.on()` events in `new Promise()`; use typed exception classes (`Anthropic.RateLimitError`, etc.) instead of string-matching error messages; use SDK types (`Anthropic.MessageParam`, `Anthropic.Tool`, `Anthropic.Message`, etc.) instead of redefining equivalent interfaces.
 - **Don't define custom types for SDK data structures:** The SDK exports types for all API objects. Use `Anthropic.MessageParam` for messages, `Anthropic.Tool` for tool definitions, `Anthropic.ToolUseBlock` / `Anthropic.ToolResultBlockParam` for tool results, `Anthropic.Message` for responses. Defining your own `interface ChatMessage { role: string; content: unknown }` duplicates what the SDK already provides and loses type safety.

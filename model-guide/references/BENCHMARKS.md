@@ -1,10 +1,31 @@
 # Frontier Model Benchmarks
 
-**Last updated:** 2026-07-09
-**Active scope:** Claude Fable 5, Claude Opus 4.8, GPT-5.6 Sol/Terra/Luna, Grok 4.5 (AA niche).
+**Last updated:** 2026-07-24
+**Active scope:** Claude Fable 5, Claude Opus 5 (primary), Claude Opus 4.8 (cyber fallback / historical AA), GPT-5.6 Sol/Terra/Luna, Grok 4.5 (AA niche).
 **Note:** GPT-5.5 columns below are historical AA/vendor snapshots (pre-5.6); do not route to GPT-5.5.
 
 Older GPT/Gemini/Grok-4.20-and-earlier/Sonnet routing rows were removed from the active benchmark surface. Historical comparisons remain only where a vendor used them as a baseline. Fable 5 numbers are the GA-configuration scores (production safety classifiers on, fallback to Opus 4.8 where they fire); the unsafeguarded Mythos 5 scores a touch higher on classifier-adjacent rows. Grok 4.5 rows below are from Artificial Analysis independent evals (2026-07-08), not vendor self-report.
+
+
+## Claude Opus 5 launch (2026-07-24) — vendor Pareto claims
+
+Anthropic did **not** publish a full fixed-score table like prior system cards for every public bench row. Launch post emphasizes **effort × cost Pareto** charts. Until Artificial Analysis remeasures, treat the following as **vendor-reported direction**, not independent scores.
+
+| Signal | Vendor claim | Routing read |
+|---|---|---|
+| Frontier-Bench v0.1 | SOTA; >2× Opus 4.8 reward at lower $/task | Default agentic coding → Opus 5 |
+| CursorBench 3.2 | Within 0.5% of Fable 5 peak @ max, ½ $/task | Prefer Opus 5 over Fable for daily coding |
+| ARC-AGI 3 | ~3× next-best | Novel problem-solving → Opus 5 |
+| AutomationBench (Zapier) | ~1.5× next-best at same $/task; low effort still leads | Agentic SaaS → Opus 5 |
+| OSWorld 2.0 | Best cost curve; beats Fable best at ~⅓ cost | Computer use → Opus 5 |
+| GDPval-AA / HLE / DeepSearchQA | Launch charts claim best / most efficient | Knowledge work → Opus 5 |
+| Life sciences (internal suite) | Beats 4.8 all rows; +10.2pp org chem, +7.7pp protein | Bio research (non-Mythos) → Opus 5 |
+| Alignment audit score | 2.3 misalignment (lowest of recent Claude) | Prefer for long autonomous runs |
+| Cyber (OSS-Fuzz) | Near Mythos at find; far behind at exploit | Keep cyber classifiers; fallback 4.8 |
+
+**Price:** $5/$25 (same as 4.8). Fast mode $10/$50. Model ID `claude-opus-5`.
+
+**Historical tables below still list Opus 4.8** — those are the last independent AA numbers (2026-06-11). Do not overwrite them with invented Opus 5 scores. Re-measure: AA Intelligence Index, AA-Omniscience non-hallucination, Coding Agent Index.
 
 ## Headline Routing Scores
 
@@ -87,7 +108,8 @@ Same-harness AA v4.1 board after SpaceXAI launch. Config: **Grok 4.5 (high)**. N
 
 | Model | Input/MTok | Cached input/MTok | Output/MTok | Context | Max output | Knowledge cutoff | Notes |
 |---|---:|---:|---:|---:|---:|---|---|
-| Claude Opus 4.8 | $5.00 | - | $25.00 | 1M | 128K | Jan 2026 | Fast mode: $10/$50, up to 2.5x output speed. |
+| Claude Opus 5 | $5.00 | - | $25.00 | 1M | 128K | May 2026 | Primary default 2026-07-24. Fast mode $10/$50 ~2.5×. |
+| Claude Opus 4.8 | $5.00 | - | $25.00 | 1M | 128K | Jan 2026 | Cyber fallback + historical AA rows. |
 | GPT-5.6 Sol | $5.00 | (cache 90% off) | $30.00 | 1.05M | 128K | Feb 16 2026 | Flagship; Pro = reasoning.mode=pro. |
 | GPT-5.6 Terra | $2.50 | (cache 90% off) | $15.00 | 1.05M | 128K | Feb 16 2026 | Mid opt-in. |
 | GPT-5.6 Luna | $1.00 | (cache 90% off) | $6.00 | 1.05M | 128K | Feb 16 2026 | Everyday GPT (≈ prior 5.5 perf). |

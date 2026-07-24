@@ -17,14 +17,14 @@
 
 **Use for:** the hardest, longest-running, most-ambiguous work — multi-day autonomous runs, codebase-scale migrations, first-shot implementation of complex well-specified systems, dense technical-image vision, and orchestrating parallel subagents — when reached via a lane proven to actually deliver Fable (see SKILL.md Verified Transport).
 
-**Operational specs:** `claude-fable-5`, 1M context, 128K max output, **$10/M input and $50/M output (2× Opus 4.8)**, cache read $1 / cache write $12.50. Covered Model: **30-day data retention, no zero-data-retention option**.
+**Operational specs:** `claude-fable-5`, 1M context, 128K max output, **$10/M input and $50/M output (2× Opus 5)**, cache read $1 / cache write $12.50. Covered Model: **30-day data retention, no zero-data-retention option**.
 
 **API shape (differs from Opus — read before migrating):**
 - **Adaptive thinking is always on and the only mode.** `thinking:{"type":"disabled"}` is unsupported; there are no extended-thinking budgets.
 - **Raw chain-of-thought is never returned.** `thinking.display` defaults to `"omitted"` (empty thinking field); set `"summarized"` for readable summaries. Pass thinking blocks back unchanged in multi-turn on the same model. If you need reasoning visibility, read the structured `thinking` blocks — do **not** instruct the model to recite its reasoning as response text (that trips the `reasoning_extraction` classifier; see below).
 - **Effort** is the primary intelligence/latency/cost dial (low/medium/high/xhigh/max). Default **high**; **xhigh** for capability-sensitive work; **medium/low** for routine. Lower effort on Fable often exceeds `xhigh` on prior models.
 - **Longer turns by default.** Hard tasks can run many minutes per request at higher effort; autonomous runs can go hours. Adjust client timeouts, streaming, and progress indicators; prefer async check-ins over blocking.
-- **Refusals + fallback:** classifier hit → HTTP 200 with `stop_reason:"refusal"` naming the classifier. Use the `fallbacks` param (beta) or SDK middleware to retry on **Opus 4.8**. Not billed for a refusal that produced no output; fallback credit refunds the prompt-cache switch cost.
+- **Refusals + fallback:** classifier hit → HTTP 200 with `stop_reason:"refusal"` naming the classifier. Use the `fallbacks` param (beta) or SDK middleware to retry — **Opus 5** for bio (vendor default as of 2026-07-24); **Opus 4.8** remains the cyber-classifier default fallback. Not billed for a refusal that produced no output; fallback credit refunds the prompt-cache switch cost.
 
 **System-card insights to carry forward:**
 - Most capable model Anthropic has released; SOTA across coding, reasoning, long-context agentic, vision, and life-sciences benchmarks. Fable's published scores dip below Mythos 5's only where its classifiers fire and it falls back to Opus 4.8.
