@@ -32,20 +32,22 @@ Mutator chaining
 5 of the 28 gates rewrite tool_input.command via the PreToolUse `updatedInput`
 contract: pretool-git-noext-inject.sh, pretool-pyunbuffered-inject.sh,
 pretool-uv-python-guard.py, pretool-arc-agi-agent-cwd-guard.py,
-pretool-bare-modal-guard.py. Two of these are adjacent in settings.json order
-(uv-python-guard at position 11, arc-agi-agent-cwd-guard at position 13) and
-arc-agi-agent-cwd-guard's OWN selftest encodes an explicit assumption that it
-runs AFTER uv-python-guard's rewrite has already landed — its selftest has a
-case literally commented "# bare python with import -> block (uv-guard should
-rewrite first)": a bare `python3 -c "import arcengine"` (no `uv run` yet)
-verdicts to BLOCK, not REWRITE, because _insert_directory() requires `uv run`
-to already be present in the command to insert `--directory agent` into. For
-arc-agi-agent-cwd-guard to ever reach its REWRITE branch on a bare-python
-arc-agi command, it must see uv-python-guard's rewritten command, not the
-original. This dispatcher therefore CHAINS mutations: each gate (native,
-ported, or subprocess) is fed the CURRENT (possibly already-rewritten)
-envelope, and a mutation updates that running envelope before the next gate
-runs. This was not independently verified against a Claude Code release note
+pretool-emb-project-guard.py, pretool-bare-modal-guard.py. Two of these are
+adjacent in settings.json order (uv-python-guard at position 11,
+arc-agi-agent-cwd-guard at position 13) and arc-agi-agent-cwd-guard's OWN
+selftest encodes an explicit assumption that it runs AFTER uv-python-guard's
+rewrite has already landed — its selftest has a case literally commented
+"# bare python with import -> block (uv-guard should rewrite first)": a bare
+`python3 -c "import arcengine"` (no `uv run` yet) verdicts to BLOCK, not
+REWRITE, because _insert_directory() requires `uv run` to already be present
+in the command to insert `--directory agent` into. For arc-agi-agent-cwd-guard
+to ever reach its REWRITE branch on a bare-python arc-agi command, it must see
+uv-python-guard's rewritten command, not the original. emb-project-guard is
+the same shape for `blindspot_miner` / `emb.embed` → `--project ~/Projects/emb`.
+This dispatcher therefore CHAINS mutations: each gate (native, ported, or
+subprocess) is fed the CURRENT (possibly already-rewritten) envelope, and a
+mutation updates that running envelope before the next gate runs. This was not
+independently verified against a Claude Code release note
 (none found in this repo) — it is the only interpretation consistent with how
 the two adjacent gates were authored. If live Claude Code does NOT chain
 hook mutations, the current un-consolidated 28-hook fleet already has this
@@ -57,8 +59,8 @@ Bash-vs-Python port classification (report this table on delivery)
 NATIVE  (zero-edit importable — already .py with a stdin-JSON `main()`):
   pretool-bash-background-ampersand.py, pretool-bg-dispatch-footgun.py,
   pretool-uv-python-guard.py, pretool-genomics-pythonpath-guard.py,
-  pretool-arc-agi-agent-cwd-guard.py, pretool-bare-modal-guard.py,
-  pretool-cursor-model-guard.py                                   (7 gates)
+  pretool-arc-agi-agent-cwd-guard.py, pretool-emb-project-guard.py,
+  pretool-bare-modal-guard.py, pretool-cursor-model-guard.py      (8 gates)
 
 PORTED  (bash driver + embedded logic transcribed into Python; sidecar .py
   files are imported directly where they already exist):
@@ -1399,12 +1401,18 @@ MANIFEST: list[dict] = [
      "run": make_native_gate("pretool-bg-dispatch-footgun.py", "pretool_bg_dispatch_footgun")},
     {"name": "heavy-load-guard", "if": None, "run": gate_heavy_load_guard},
     {"name": "no-background-commit", "if": "Bash(git*)", "run": gate_no_background_commit},
+    # `if: None` on purpose — a compound command (`cd x && git worktree add /tmp/y`)
+    # does not match Bash(git*), and that is exactly the shape that leaked.
+    {"name": "worktree-location-guard", "if": None,
+     "run": make_native_gate("pretool-worktree-location-guard.py", "pretool_worktree_location_guard")},
     {"name": "uv-python-guard", "if": None,
      "run": make_native_gate("pretool-uv-python-guard.py", "pretool_uv_python_guard")},
     {"name": "genomics-pythonpath-guard", "if": None,
      "run": make_native_gate("pretool-genomics-pythonpath-guard.py", "pretool_genomics_pythonpath_guard")},
     {"name": "arc-agi-agent-cwd-guard", "if": None,
      "run": make_native_gate("pretool-arc-agi-agent-cwd-guard.py", "pretool_arc_agi_agent_cwd_guard")},
+    {"name": "emb-project-guard", "if": None,
+     "run": make_native_gate("pretool-emb-project-guard.py", "pretool_emb_project_guard")},
     {"name": "bare-modal-guard", "if": None,
      "run": make_native_gate("pretool-bare-modal-guard.py", "pretool_bare_modal_guard")},
     {"name": "duckdb-quote-guard", "if": None, "run": gate_duckdb_quote_guard},
