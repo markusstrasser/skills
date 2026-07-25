@@ -79,7 +79,15 @@ while IFS= read -r tgt; do
   # (genomics 2026-07-25: two backstamps blocked; broadening the guard's generated
   # allowlist to decisions/ was the alternative and would have gutted it for the most
   # human-owned docs in the repo.)
+  # Two tracker conventions exist and only ONE is read by the guard: it globs
+  # `claude-session-touched-<sid>-*.txt` (written by repo-local
+  # .claude/hooks/posttool-session-touch-log.sh). The older un-prefixed
+  # `session-touched-<sid>.txt` from the global posttool-session-touched-log.sh is NOT
+  # read by it. Write both — the prefixed one is what makes the commit work, the legacy
+  # one keeps any other consumer whole. Verified by reading the guard's globs, not by
+  # assuming the write landed somewhere useful.
   if [ -n "${BACKSTAMP_SID:-}" ]; then
+    printf '%s\n' "$tf" >> "/tmp/claude-session-touched-${BACKSTAMP_SID}-${PPID}.txt" 2>/dev/null || true
     printf '%s\n' "$tf" >> "/tmp/session-touched-${BACKSTAMP_SID}.txt" 2>/dev/null || true
   fi
   stamped="$stamped\n  ${tf##*/} ← Superseded-by [[$SELF_ID]]"
