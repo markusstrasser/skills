@@ -13,6 +13,14 @@ trap 'exit 0' ERR
 # Small delay to let sessionend-log.sh finish writing the receipt
 sleep 1
 
-uv run --project ~/Projects/agent-infra agentlogs index 2>/dev/null
+# BOUNDED, not a full pass. This hook's job is only "get the session that just
+# closed into the index" — but an unflagged `agentlogs index` enumerates the ENTIRE
+# raw corpus (16k+ files across claude/codex/cursor) under the 600s default budget,
+# once per session end. At ~1400 sessions/week that is 1400 full enumerations all
+# contending for the single writer lock, which is how the launchd job ended up
+# starved behind a permanent queue (2026-07-25: 16h with no successful index).
+# Newest-first ordering means a 1-day window reaches the just-closed session first.
+uv run --project ~/Projects/agent-infra agentlogs index \
+  --since-days 1 --limit-sources 5 --max-run-seconds 60 2>/dev/null
 
 exit 0
