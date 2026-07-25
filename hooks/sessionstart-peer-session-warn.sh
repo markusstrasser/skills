@@ -29,6 +29,17 @@ except Exception: print("")' 2>/dev/null)"
 # canonicalize so /tmp vs /private/tmp etc. compare equal
 cwd="$(cd "$cwd" 2>/dev/null && pwd -P || printf '%s' "$cwd")"
 
+# The entire premise — shared .claude/ state clobbers, commits get mis-stamped,
+# isolate via `claude --worktree` — presupposes a real git checkout. Ephemeral
+# dispatch sandboxes (llmx writes one per `--subscription` call under
+# ~/.cache/llmx/lite-bare-<hex>) have no work tree, nothing to isolate, and
+# concurrent dispatches sharing that dir is normal rather than a hazard. Warning
+# there was 95% of this hook's volume: 1,420 of 1,493 fires over 7d came from two
+# such cache workspaces, against ~50 from real repos (arc-agi 42, genomics 8).
+cache_root="$(cd "${HOME}/.cache" 2>/dev/null && pwd -P || printf '%s' "${HOME}/.cache")"
+case "$cwd" in "$cache_root"/*) exit 0 ;; esac
+git -C "$cwd" rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
+
 # Peer detection is SINGLE-SOURCED in peer-session-count.sh (epistemic-#9) — the
 # exact same detector the Stop hook (stop-uncommitted-warn.sh) uses, so both hooks
 # agree on "does a peer share this checkout". It counts INDEPENDENT claude trees
