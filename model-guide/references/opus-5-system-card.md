@@ -49,6 +49,25 @@ From Anthropic's Opus 5 prompting guide:
 5. **Thinking disabled only at effort ≤ high** — prefer lower effort with thinking on over thinking off. Thinking-off can leak tool calls as text or internal XML tags.
 6. **Code review** — if prompt says "only high-severity," it may under-report; ask for everything and filter later.
 7. **Efficiency at low/medium effort** is a real primary control — re-run effort sweeps; do not carry 4.8 effort defaults blindly. For coding/agentic, `xhigh` remains the recommended starting point.
+8. **Tools before effort** (§8.12, card text): *"agentic tool-use is generally a more cost-effective method of scaling test-time compute than adaptive thinking by itself."* Adding a verification command/probe to the brief beats bumping an effort tier — on cost and on quality.
+9. **Hand it images, not descriptions** — SWE-bench Multimodal 38.4→**59.4 (+21pp)**, the largest coding delta in the release; OSWorld 2.0 55.7→70.6. Screenshot the render/plot/UI and attach the source.
+
+## Verifier-conditioning — the liveness rule (§2.2 vs §8.14.2)
+
+Two results from the same card, read together (`agent-infra research/2026-07-25-opus5-arc-agi-generalization.md`):
+
+| Setting | Verifier | Result |
+|---|---|---|
+| ARC-AGI-3 interactive game envs | dense score every action | **30.2%** — 4× next-best (GPT-5.6 Sol 7.8 @ max), 20× Opus 4.8 |
+| §2.2 24h/$10k autonomous protein-design campaign | none in-loop | both arms failed; one shipped 17 unranked designs, the other **shipped nothing and went silent for 8 hours** in self-verification loops (Mythos 5 delivered all 30) |
+
+Same model. The discriminator is whether something scores each step. Consequences:
+
+- Stripping over-verification scaffolding (delta 2) is a **liveness** fix, not token hygiene.
+- Long autonomous runs need an **artifact-advance** watchdog, not just process liveness — `ps -p <pid>` stays green while the agent verifies in circles.
+- Card caveats it as an early snapshot, not run at scale, presented as a *safety* result.
+
+Note also §6.1.3: the model **relays subagent claims to users without verifying them**, and Anthropic concedes limited multi-agent coverage. Manifest-diff subagent returns; do not accept a summary as a result.
 
 ## API / product notes
 
