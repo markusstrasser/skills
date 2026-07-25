@@ -12,9 +12,11 @@ Covers the three live-fire defects found 2026-07-06 (genomics be0657a9:
 """
 import json
 import os
+import re
 import subprocess
 import tempfile
 import unittest
+from pathlib import Path
 
 HOOKS = os.path.dirname(os.path.abspath(__file__))
 STOP = os.path.join(HOOKS, "stop-goal-wrapup.py")
@@ -214,6 +216,69 @@ class TestPostcompactRearm(GoalNightBase):
         rc, _ = run_hook(REARM, self.payload(sid=PEER))
         self.assertEqual(rc, 0)
         self.assertFalse(self.has("goal-wrapup-fired"))
+
+
+class TestMarkerClearList(unittest.TestCase):
+    """`just goal-night` must clear every run-scoped marker the hooks read.
+
+    A hook that adds a "did this once already" suppression flag without adding it
+    to the recipe's rm -f list disarms itself from the SECOND run onward — the flag
+    survives the re-arm, so the guard sees "already handled" forever. That is not
+    hypothetical: arc-agi carried goal-done-challenged and goal-done-debt-challenged
+    from 2026-07-12 into the run armed 07-13, silently disabling both premature-stop
+    challenges (found 2026-07-25). This test fails when a new marker appears in a
+    hook until it is classified as run-scoped (add to the recipe) or operator-owned
+    (add below), so the two lists cannot drift apart again."""
+
+    # Operator-armed config, deliberately NOT cleared by a re-arm.
+    OPERATOR_OWNED = {"goal-deliverable"}
+    # Written by the arm step itself, after the clear.
+    SELF_WRITTEN = {"goal-run"}
+
+    HOOKS = ("stop-goal-wrapup.py", "precompact-goal-guard.py", "postcompact-goal-rearm.sh")
+    JUSTFILE = Path.home() / "Projects" / "agent-infra" / "justfile"
+
+    def _clear_list(self) -> set[str]:
+        text = self.JUSTFILE.read_text()
+        m = re.search(r"^\s*rm -f (\.claude/goal-\S+(?: \.claude/goal-\S+)*)", text, re.M)
+        if m is None:
+            self.fail("goal-night rm -f line not found in justfile")
+        return {tok.split("/")[-1] for tok in m.group(1).split()}
+
+    # Only FILE references count — a bare `goal-night` in prose or the string
+    # "precompact-goal-guard.py" in a docstring is not a marker. Match the two
+    # forms the hooks actually use to name one.
+    _PY_MARKER = re.compile(r'claude_dir\s*/\s*["\'](goal-[a-z][a-z-]*)["\']')
+    _SH_MARKER = re.compile(r'(?:\.claude|\$CLAUDE_DIR|\$\{CLAUDE_DIR\})/(goal-[a-z][a-z-]*)')
+
+    def _markers_read(self) -> set[str]:
+        found: set[str] = set()
+        here = Path(__file__).resolve().parent
+        for name in self.HOOKS:
+            p = here / name
+            if not p.is_file():
+                continue
+            text = p.read_text()
+            found |= set(self._PY_MARKER.findall(text))
+            found |= set(self._SH_MARKER.findall(text))
+        return found
+
+    def test_every_marker_is_classified(self):
+        read = self._markers_read()
+        cleared = self._clear_list()
+        unclassified = read - cleared - self.OPERATOR_OWNED - self.SELF_WRITTEN
+        self.assertEqual(
+            unclassified, set(),
+            f"marker(s) read by a goal hook but neither cleared on arm nor declared "
+            f"operator-owned: {sorted(unclassified)}. Add to the goal-night rm -f list "
+            f"(run state) or to OPERATOR_OWNED (operator config).",
+        )
+
+    def test_regression_challenge_flags_are_cleared(self):
+        cleared = self._clear_list()
+        for m in ("goal-done-challenged", "goal-done-debt-challenged"):
+            self.assertIn(m, cleared, f"{m} must be cleared on arm — it is a once-per-run "
+                                      "suppression flag; leaving it disarms the guard")
 
 
 if __name__ == "__main__":
