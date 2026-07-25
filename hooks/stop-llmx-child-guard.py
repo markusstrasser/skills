@@ -48,12 +48,17 @@ def _find_scratchpads(cwd: str) -> list[Path]:
         p = root / name
         if p.is_dir():
             cands.append(p)
-    # Claude worktree scratchpads under /tmp/claude-*
+    # Claude session scratchpads under /tmp/claude-<uid>/<cwd-slug>/<session>/scratchpad.
+    # Addressed directly, NOT by recursive walk: `glob("claude-*/**")` descends every
+    # directory of every session tree on the box (scratchpads AND task output dirs for
+    # every project) and only then filters on the slug — measured 49.6s on an empty
+    # envelope, which blew the 8s hooks-smoke timeout and made every SubagentStop pay
+    # ~50s. The slug filter it applied is exactly the second path segment, so the same
+    # candidate set is reachable in one shallow glob.
     tmp = Path("/tmp")
     if tmp.is_dir():
-        for p in tmp.glob("claude-*/**"):
-            if p.is_dir() and p.name in ("scratchpad",) and cwd.replace("/", "-") in str(p):
-                cands.append(p)
+        slug = cwd.replace("/", "-")
+        cands.extend(p for p in tmp.glob(f"claude-*/{slug}/*/scratchpad") if p.is_dir())
     return cands
 
 
