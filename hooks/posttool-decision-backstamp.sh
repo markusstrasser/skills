@@ -18,6 +18,9 @@
 set -euo pipefail
 INPUT=$(cat)
 FILE=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // ""' 2>/dev/null || true)
+# Session that triggered this stamp — used below to claim the stamped file in the
+# session-touch tracker so the ownership guard will let someone commit it.
+BACKSTAMP_SID=$(printf '%s' "$INPUT" | jq -r '.session_id // ""' 2>/dev/null || true)
 [ -z "$FILE" ] && exit 0
 case "$FILE" in
   */decisions/*.md|*/docs/decisions/*.md) ;;
@@ -67,6 +70,18 @@ while IFS= read -r tgt; do
   # Idempotent: already stamped by THIS adr?
   grep -qF "Superseded-by [[$SELF_ID]]" "$tf" 2>/dev/null && continue
   printf '\n> **⚠ Superseded-by [[%s]] (%s):** a later decision supersedes/reverses this one. This ADR is NOT a current direction — see [[%s]] and REFRAMINGS. (auto-stamped: posttool-decision-backstamp)\n' "$SELF_ID" "$DATE" "$SELF_ID" >> "$tf"
+  # Claim the stamp in the session-touch tracker, or nothing can ever commit it.
+  # staged_ownership_guard attributes files by Edit/Write tool-touches; a file written
+  # by a hook has NO owning session, so the guard reports it "foreign" and refuses the
+  # commit — for every session, permanently, leaving the stamp dirty in the tree. Safe
+  # by construction: the guard intersects tracker entries with actual working-tree
+  # modifications, so this can only claim a path this hook genuinely just modified.
+  # (genomics 2026-07-25: two backstamps blocked; broadening the guard's generated
+  # allowlist to decisions/ was the alternative and would have gutted it for the most
+  # human-owned docs in the repo.)
+  if [ -n "${BACKSTAMP_SID:-}" ]; then
+    printf '%s\n' "$tf" >> "/tmp/session-touched-${BACKSTAMP_SID}.txt" 2>/dev/null || true
+  fi
   stamped="$stamped\n  ${tf##*/} ← Superseded-by [[$SELF_ID]]"
 done <<< "$targets"
 
