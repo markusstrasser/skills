@@ -17,8 +17,18 @@ import re
 import sys
 
 
+_SHELL_OP = re.compile(r"[|;&]")
+
+
 def find_cat_spans(cmd: str):
-    """Yield the argument text of each $(cat ...) with naive paren matching."""
+    """Yield the cat ARGUMENTS of each $(cat ...) with naive paren matching.
+
+    The span stops at the first shell operator, so `$(cat f.md | wc -c)` yields
+    "f.md " and never "f.md | wc -c". Tokens after a pipe are a downstream
+    command, not cat arguments: scanning them as paths blocked valid commands
+    with phantom "missing: |" / "missing: wc" (2026-07-26). Truncating fails
+    OPEN — an unchecked argument is a missed block, never a false one.
+    """
     for m in re.finditer(r"\$\(\s*cat\s+", cmd):
         depth, i = 1, m.end()
         start = i
@@ -28,7 +38,7 @@ def find_cat_spans(cmd: str):
             elif cmd[i] == ")":
                 depth -= 1
             i += 1
-        yield cmd[start : i - 1]
+        yield _SHELL_OP.split(cmd[start : i - 1], 1)[0]
 
 
 def main() -> None:
