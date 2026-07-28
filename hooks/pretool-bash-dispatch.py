@@ -404,6 +404,27 @@ def gate_bash_loop_guard(raw_payload: str) -> GateResult:
         return GateResult(0, "", "")
 
 
+# --- 4b. bash-backtick-guard (BLOCKER, no if) — imports sidecar ------------
+# Markdown `inline code` inside a double-quoted data field is executed by the shell and the
+# span is silently deleted. 5 incidents / 4 sessions / 3 weeks before this guard existed; the
+# hook is the only layer that still holds the un-expanded text (see sidecar docstring).
+
+def gate_bash_backtick_guard(raw_payload: str) -> GateResult:
+    try:
+        mod = _load_module(HOOKS_DIR / "pretool_bash_backtick_guard.py",
+                           "pretool_bash_backtick_guard")
+        data = json.loads(raw_payload)
+        cmd = _jqlike_cmd(data)
+        if not cmd or "`" not in cmd:
+            return GateResult(0, "", "")
+        flag = mod.offending_flag(cmd)
+        if flag:
+            return GateResult(2, mod.reason(flag), "")
+        return GateResult(0, "", "")
+    except Exception:
+        return GateResult(0, "", "")
+
+
 # --- 5. pretool-bash-cat-guard.sh (BLOCKER, no if) — imports sidecar -------
 
 def gate_bash_cat_guard(raw_payload: str) -> GateResult:
@@ -1394,6 +1415,7 @@ MANIFEST: list[dict] = [
     {"name": "git-add-all-guard", "if": "Bash(git*)", "run": gate_git_add_all_guard},
     {"name": "bash-loop-guard", "if": None, "run": gate_bash_loop_guard},
     {"name": "bash-cat-guard", "if": None, "run": gate_bash_cat_guard},
+    {"name": "bash-backtick-guard", "if": None, "run": gate_bash_backtick_guard},
     {"name": "noext-nongit-guard", "if": None, "run": gate_noext_nongit_guard},
     {"name": "bash-background-ampersand", "if": None,
      "run": make_native_gate("pretool-bash-background-ampersand.py", "pretool_bash_background_ampersand")},
