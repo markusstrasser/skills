@@ -76,7 +76,10 @@ COUNT=$(grep -cF "$PATH_TARGET" "$TRACKER" 2>/dev/null || echo 0)
 # TaskOutput is a deferred tool — must be loaded via ToolSearch before
 # the agent can call it. Including the exact ToolSearch query in the
 # block / advisory message saves the agent a guess-and-fail cycle.
-LOAD_HINT='Load TaskOutput first: ToolSearch(query="select:TaskOutput,TaskList,TaskGet"). Then call TaskOutput with block=true to wait for the background task without polling.'
+# SUBAGENT sessions have no TaskOutput/ToolSearch at all (measured: routing-ab-rerun
+# lane, arc-agi 2026-07-29) — name their working fallback explicitly so the remedy
+# is never a tool the reader cannot load.
+LOAD_HINT='Parent sessions: ToolSearch(query="select:TaskOutput,TaskList,TaskGet") then TaskOutput with block=true. Subagent sessions (no ToolSearch/TaskOutput): arm ONE run_in_background watcher that exits on the awaited condition, or Read the file once when ready — do not Bash-poll.'
 
 if [ "$COUNT" -ge 15 ]; then
   echo "BLOCKED: Polled ${PATH_TARGET} ${COUNT}x via Bash this session." >&2
