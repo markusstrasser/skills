@@ -307,3 +307,11 @@ CC-native lanes verified live (interactive session model, fable-high/low agent d
 headless `claude -p`) in arc-agi session ebbeff04; dormancy header softened accordingly. llmx
 subscription + paid-API routing still unverified. Dispatch-economics fable-tier verdicts re-activated
 for CC-dispatched subagents.
+
+## 2026-07-31 — GPT-5.6 price cut (2026-07-30) folded in
+- Luna -80%: $1/$6 → **$0.20/$1.20**; Terra -20%: $2.50/$15 → **$2/$12**; Sol unchanged $5/$30.
+  Source: openai.com/index/advancing-the-price-performance-frontier-with-gpt-5-6 (+ CNBC/VentureBeat 2026-07-30), search-verified.
+- Consequence: Luna API-direct is now viable for BULK long-context fan-out (full raw-transcript
+  reads ≈ $0.20/MTok input) without drawing on the codex subscription quota — the subscription
+  lane stays $0 but is capacity-limited (dark 07-25→07-29 on quota). llmx price table updated
+  same day (llmx 2f7abfc; stale entries were overstating Luna est_cost 5×).
