@@ -121,6 +121,15 @@ single treatment-vs-control arm cannot attribute the effect to any one of them. 
   first (a content-scramble sham is usually the sharpest single test of "does the SPECIFIC
   content matter, or just its presence/structure"). (`sham-integrity`, `research/2026-07-14-
   composed-microloop-design.md`.)
+- **Treatment information budget** (any arm that compresses/summarizes/re-represents context):
+  compute the per-unit token budget the treatment actually grants (total ÷ units) and NAME the
+  decision-relevant primitives the observable needs — if the primitives cannot physically fit
+  the per-unit budget, the treatment arm is STARVED and the design measures compression loss,
+  not the mechanism. Simple division, checkable at design time; no heretic round type covers it
+  by default. (`treatment-starvation`, arc-agi rcm_topology 2026-08-01: 600 tok ÷ 16-25 segments
+  ≈ 40 tok/child = stats header, zero micro-log — treatment scored at the no-context floor on
+  8/9 cells and the topology question was never posed, despite 5 other defects caught by 2
+  pre-results attack rounds.)
 
 ### 4. Controls — can the negative control possibly pass?
 
