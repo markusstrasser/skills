@@ -61,7 +61,19 @@ import json
 import re
 import subprocess
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
+
+# Turn-level retrieval SHADOW (operator yes 2026-08-01 on
+# decisions-pending/2026-07-16-turn-retrieval-hook-activation.md):
+# call prior-context-index search on INTENT/REDISCOVERY hits, LOG only —
+# never inject into additionalContext until precision ≥70% (step 3 of plan).
+_SHADOW_LOG = Path.home() / ".claude" / "prior-context-shadow.jsonl"
+_SHADOW_INDEX = Path.home() / ".cache" / "agent-infra" / "prior-context" / "index"
+_SHADOW_TIMEOUT_S = 2.0
+_AGENT_INFRA = Path.home() / "Projects" / "agent-infra"
+_EMB_ROOT = Path.home() / "Projects" / "emb"
 
 # Generic scaffolding / verb tokens that carry no topic signal. Mirrors the
 # sibling inventory-dispatch STOP set; intentionally keeps domain nouns OUT of
@@ -557,6 +569,79 @@ def _mark_surfaced(session_id: str, sig: str) -> None:
         pass
 
 
+def _project_slug(cwd: str) -> str:
+    try:
+        return Path(cwd).resolve().name
+    except OSError:
+        return ""
+
+
+def _shadow_turn_retrieval(
+    prompt: str, *, session_id: str, project: str
+) -> None:
+    """Log turn-level semantic hits; never inject (shadow only). Fail-open."""
+    if not (_SHADOW_INDEX / "current.json").is_file():
+        return
+    search_py = _AGENT_INFRA / "scripts" / "search_prior_context.py"
+    if not search_py.is_file() or not _EMB_ROOT.is_dir():
+        return
+    cmd = [
+        "uv", "run", "--project", str(_EMB_ROOT),
+        "python3", str(search_py),
+        "--index", str(_SHADOW_INDEX),
+        "--json", "--top-k", "5",
+    ]
+    if project:
+        cmd.extend(["--project", project])
+    # query is positional nargs="+"
+    cmd.append(prompt[:400])
+    t0 = time.monotonic()
+    status = "ok"
+    rows: list = []
+    err = ""
+    try:
+        r = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=_SHADOW_TIMEOUT_S,
+        )
+        if r.returncode != 0:
+            status = f"exit_{r.returncode}"
+            err = (r.stderr or "")[:300]
+        else:
+            try:
+                rows = json.loads(r.stdout or "[]")
+            except json.JSONDecodeError:
+                status = "bad_json"
+                err = (r.stdout or "")[:200]
+    except subprocess.TimeoutExpired:
+        status = "timeout"
+    except OSError as e:
+        status = "os_error"
+        err = str(e)[:200]
+    latency_ms = int((time.monotonic() - t0) * 1000)
+    rec = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "session_id": session_id[:16] if session_id else "",
+        "project": project,
+        "prompt_sha1": hashlib.sha1(prompt.encode()).hexdigest()[:12],
+        "status": status,
+        "latency_ms": latency_ms,
+        "n_hits": len(rows) if isinstance(rows, list) else 0,
+        "handles": [
+            h.get("source_handle")
+            for h in (rows if isinstance(rows, list) else [])[:5]
+            if isinstance(h, dict)
+        ],
+        "error": err or None,
+        "mode": "shadow",  # never inject
+    }
+    try:
+        _SHADOW_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with _SHADOW_LOG.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
+
+
 def main() -> None:
     raw = sys.stdin.read()
     if not raw.strip():
@@ -580,13 +665,20 @@ def main() -> None:
 
     # --- Cheap gate FIRST: no propose/diagnose/rediscovery/URL intent -> exit before I/O.
     rediscovery = bool(REDISCOVERY.search(prompt))
+    intent_hit = bool(INTENT.search(prompt))
     if (
-        not INTENT.search(prompt)
+        not intent_hit
         and not rediscovery
         and not OBSERVE_RSI.search(prompt)
         and not pointer_lines
     ):
         return
+
+    # Turn-level retrieval shadow: INTENT/REDISCOVERY only (do not widen gate).
+    if intent_hit or rediscovery:
+        _shadow_turn_retrieval(
+            prompt, session_id=session_id, project=_project_slug(cwd),
+        )
 
     # URL-only prompts: inject POINTER-DISPOSITION and skip own-work scans.
     if pointer_lines and not (
