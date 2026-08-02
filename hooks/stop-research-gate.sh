@@ -207,7 +207,10 @@ for f in research_files:
     fpath = os.path.join(cwd, f)
     if not os.path.isfile(fpath):
         continue
-    with open(fpath) as fh:
+    # Research intake may preserve verbatim external responses in a legacy single-byte
+    # encoding. The gate is a provenance scanner, not a UTF-8 validator: decode lossily so
+    # one byte sequence cannot crash Stop before the source-tag decision runs.
+    with open(fpath, encoding='utf-8', errors='replace') as fh:
         content = fh.read()
     if not content.strip():
         continue  # Skip empty files (e.g., llmx -o placeholder before model finishes)
