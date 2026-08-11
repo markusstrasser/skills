@@ -7,14 +7,8 @@ import json
 import sys
 from pathlib import Path
 from typing import Any
-
-try:
-    import requests
-except ImportError as exc:  # pragma: no cover
-    requests = None
-    REQUESTS_IMPORT_ERROR = exc
-else:
-    REQUESTS_IMPORT_ERROR = None
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 ENDPOINT = "https://gnomad.broadinstitute.org/api"
 
@@ -88,21 +82,32 @@ def parse_input(payload: Any) -> dict[str, Any]:
 
 
 def execute(payload: Any) -> dict[str, Any]:
-    if requests is None:
-        return error("missing_dependency", f"`requests` is required: {REQUESTS_IMPORT_ERROR}")
     config = parse_input(payload)
+    request = Request(
+        ENDPOINT,
+        data=json.dumps(
+            {"query": config["query"], "variables": config["variables"]}
+        ).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "personal-life-science-research/1.0",
+        },
+        method="POST",
+    )
     try:
-        response = requests.post(
-            ENDPOINT,
-            json={"query": config["query"], "variables": config["variables"]},
-            timeout=config["timeout_sec"],
+        with urlopen(request, timeout=config["timeout_sec"]) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")[:500]
+        hint = " Check the User-Agent policy." if exc.code == 403 else ""
+        return error(
+            "network_error",
+            f"gnomAD HTTP {exc.code}: {body}{hint}",
         )
-        response.raise_for_status()
-        data = response.json()
-    except ValueError as exc:
-        return error("invalid_response", str(exc))
-    except requests.RequestException as exc:
+    except (URLError, TimeoutError, OSError) as exc:
         return error("network_error", f"GraphQL request failed: {exc}")
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return error("invalid_response", f"Could not decode GraphQL response: {exc}")
 
     raw_output_path = None
     if config["save_raw"]:
