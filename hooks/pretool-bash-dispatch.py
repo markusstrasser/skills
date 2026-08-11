@@ -102,6 +102,7 @@ Fail-open safety net: every gate call (native, ported, subprocess) is wrapped
 so an uncaught exception in gate logic exits that gate 0 (pass) rather than
 crashing the dispatcher or blocking the tool call.
 """
+
 from __future__ import annotations
 
 import ast
@@ -142,7 +143,9 @@ def _log_trigger(hook: str, action: str, detail: str, cmd: str = "") -> None:
     try:
         subprocess.run(
             [TRIGGER_LOG, hook, action, detail, cmd],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
         )
     except Exception:
         pass
@@ -242,6 +245,7 @@ def make_native_gate(rel_path: str, mod_name: str, base: Path = HOOKS_DIR):
 
 # --- 1. pretool-git-noext-inject.sh (MUTATOR, if=Bash(git*)) ---------------
 
+
 def _git_noext_inject_verdict(ti: dict) -> tuple[str, str]:
     cmd = ti.get("command", "") or ""
     if not cmd:
@@ -254,8 +258,12 @@ def _git_noext_inject_verdict(ti: dict) -> tuple[str, str]:
         return "pass", ""
     redirect_suffix: list[str] = []
     if ">" in cmd:
-        if (len(parts) >= 3 and parts[-2] in (">", ">>") and ">" not in parts[-1]
-                and not any(">" in p for p in parts[:-2])):
+        if (
+            len(parts) >= 3
+            and parts[-2] in (">", ">>")
+            and ">" not in parts[-1]
+            and not any(">" in p for p in parts[:-2])
+        ):
             redirect_suffix = parts[-2:]
             parts = parts[:-2]
         else:
@@ -276,7 +284,7 @@ def _git_noext_inject_verdict(ti: dict) -> tuple[str, str]:
     if "--no-pager" not in new:
         new = new + ["--no-pager"]
     new = new + [subcmd]
-    rest = parts[i + 1:]
+    rest = parts[i + 1 :]
     if "--no-ext-diff" not in rest:
         new = new + ["--no-ext-diff"]
     new = new + rest
@@ -300,11 +308,14 @@ def gate_git_noext_inject(raw_payload: str) -> GateResult:
     updated = dict(ti)
     updated["command"] = val
     _log_trigger("git-noext-inject", "rewrite", "git diff/show/log", ti.get("command", "") or "")
-    out = json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": updated}})
+    out = json.dumps(
+        {"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": updated}}
+    )
     return GateResult(0, "", out)
 
 
 # --- 2. pretool-pyunbuffered-inject.sh (MUTATOR, no if) --------------------
+
 
 def _pyunbuffered_verdict(ti: dict) -> tuple[str, str]:
     cmd = ti.get("command", "") or ""
@@ -331,18 +342,61 @@ def gate_pyunbuffered_inject(raw_payload: str) -> GateResult:
     updated = dict(ti)
     updated["command"] = val
     _log_trigger("pyunbuffered-inject", "rewrite", "bg python", ti.get("command", "") or "")
-    out = json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": updated}})
+    out = json.dumps(
+        {"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": updated}}
+    )
     return GateResult(0, "", out)
 
 
+# --- 2b. bg-buffering-pipe guard (WARNER) ----------------------------------
+# A background command whose FINAL segment pipes through tail/head/grep loses
+# output: tail buffers until EOF (a reap swallows everything) and grep block-
+# buffers to pipes (results arrive scrambled at exit). Bit 2x on 2026-08-10
+# (genomics storage reclaim) despite the written wakeup-cadence rule — pair-
+# rule promoted to a hook. Redirect the full stream to a log; filter at READ.
+
+_BUFFERING_TAIL_RE = re.compile(
+    r"\|\s*(tail|head)\s+-?\w*\s*$|\|\s*grep\s+(?!.*--line-buffered)[^|]*$"
+)
+
+
+def gate_bg_buffering_pipe(raw_payload: str) -> GateResult:
+    try:
+        data = json.loads(raw_payload)
+    except Exception:
+        return GateResult(0, "", "")
+    ti = data.get("tool_input") or {}
+    cmd = (ti.get("command", "") or "").strip()
+    if not cmd or not ti.get("run_in_background"):
+        return GateResult(0, "", "")
+    # Only the final pipeline segment matters; ignore redirected-to-file forms.
+    last_line = cmd.splitlines()[-1]
+    if ">" in last_line.split("|")[-1]:
+        return GateResult(0, "", "")
+    if _BUFFERING_TAIL_RE.search(last_line):
+        _log_trigger("bg-buffering-pipe", "warn", "buffered filter on bg output", cmd)
+        return GateResult(
+            0,
+            "",
+            "[bg-buffering-pipe] WARNING: run_in_background output piped through tail/head/grep "
+            "— tail buffers until EOF (a reap swallows ALL output) and grep block-buffers "
+            "(output arrives scrambled at exit). Redirect the FULL stream to a log file and "
+            "filter when reading, or add --line-buffered to grep.\n",
+        )
+    return GateResult(0, "", "")
+
+
 # --- 3. pretool-git-add-all-guard.sh (BLOCKER, if=Bash(git*)) -------------
+
 
 def _git_add_all_offends(seg: str) -> bool:
     seg = seg.strip()
     try:
         parts = shlex.split(seg)
     except ValueError:
-        return bool(re.match(r"(?:[A-Za-z_]\w*=\S+\s+)*git\s+add\b.*(\s-A\b|\s--all\b|\s\.(\s|$))", seg))
+        return bool(
+            re.match(r"(?:[A-Za-z_]\w*=\S+\s+)*git\s+add\b.*(\s-A\b|\s--all\b|\s\.(\s|$))", seg)
+        )
     i = 0
     while i < len(parts) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", parts[i]):
         i += 1
@@ -353,7 +407,7 @@ def _git_add_all_offends(seg: str) -> bool:
         j += 2 if parts[j] in ("-C", "-c") else 1
     if j >= len(parts) or parts[j] != "add":
         return False
-    for a in parts[j + 1:]:
+    for a in parts[j + 1 :]:
         if a in ("-A", "--all", "."):
             return True
         if re.fullmatch(r"-[A-Za-z]*A[A-Za-z]*", a):
@@ -383,6 +437,7 @@ def gate_git_add_all_guard(raw_payload: str) -> GateResult:
 
 # --- 4. pretool-bash-loop-guard.sh (BLOCKER, no if) — imports sidecar ------
 
+
 def gate_bash_loop_guard(raw_payload: str) -> GateResult:
     try:
         mod = _load_module(HOOKS_DIR / "pretool_bash_loop_guard.py", "pretool_bash_loop_guard")
@@ -393,8 +448,8 @@ def gate_bash_loop_guard(raw_payload: str) -> GateResult:
         if mod.has_multiline_block(cmd):
             msg = (
                 "BLOCKED: Multiline for/while/if blocks cause zsh parse errors. Use single-line syntax:\n"
-                "  for x in *.txt; do echo \"$x\"; done\n"
-                "  while read line; do echo \"$line\"; done\n"
+                '  for x in *.txt; do echo "$x"; done\n'
+                '  while read line; do echo "$line"; done\n'
                 "  if [ -f x ]; then echo yes; else echo no; fi\n"
                 "Or write a script file and run it.\n"
             )
@@ -409,10 +464,12 @@ def gate_bash_loop_guard(raw_payload: str) -> GateResult:
 # span is silently deleted. 5 incidents / 4 sessions / 3 weeks before this guard existed; the
 # hook is the only layer that still holds the un-expanded text (see sidecar docstring).
 
+
 def gate_bash_backtick_guard(raw_payload: str) -> GateResult:
     try:
-        mod = _load_module(HOOKS_DIR / "pretool_bash_backtick_guard.py",
-                           "pretool_bash_backtick_guard")
+        mod = _load_module(
+            HOOKS_DIR / "pretool_bash_backtick_guard.py", "pretool_bash_backtick_guard"
+        )
         data = json.loads(raw_payload)
         cmd = _jqlike_cmd(data)
         if not cmd or "`" not in cmd:
@@ -426,6 +483,7 @@ def gate_bash_backtick_guard(raw_payload: str) -> GateResult:
 
 
 # --- 5. pretool-bash-cat-guard.sh (BLOCKER, no if) — imports sidecar -------
+
 
 def gate_bash_cat_guard(raw_payload: str) -> GateResult:
     try:
@@ -454,9 +512,13 @@ def gate_bash_cat_guard(raw_payload: str) -> GateResult:
         missing = list(dict.fromkeys(missing))
         if not missing:
             return GateResult(0, "", "")
-        lines = ["BLOCKED: $(cat ...) references file(s) that do not exist — the command would silently run with a truncated/empty substitution:"]
+        lines = [
+            "BLOCKED: $(cat ...) references file(s) that do not exist — the command would silently run with a truncated/empty substitution:"
+        ]
         lines += [f"  missing: {m}" for m in missing]
-        lines.append("Create the file first (verify with wc -c), or fix the path. If the file is created earlier in this same command via a redirect, this guard skips it — heredocs inside $( ) are not detected, restructure instead.")
+        lines.append(
+            "Create the file first (verify with wc -c), or fix the path. If the file is created earlier in this same command via a redirect, this guard skips it — heredocs inside $( ) are not detected, restructure instead."
+        )
         return GateResult(2, "\n".join(lines) + "\n", "")
     except Exception:
         return GateResult(0, "", "")
@@ -464,9 +526,30 @@ def gate_bash_cat_guard(raw_payload: str) -> GateResult:
 
 # --- 6. pretool-noext-nongit-guard.sh (BLOCKER, no if) ---------------------
 
-_NONGIT_TOOLS = {'rg', 'grep', 'egrep', 'fgrep', 'ag', 'ack', 'fd', 'find', 'sed', 'awk', 'zoekt',
-                 'cat', 'head', 'tail', 'wc', 'cut', 'tr', 'sort', 'uniq', 'ast-grep', 'sg'}
-_SHELL_RESET = {'|', '||', '&&', ';', '&', '|&', '(', ')', '{', '}'}
+_NONGIT_TOOLS = {
+    "rg",
+    "grep",
+    "egrep",
+    "fgrep",
+    "ag",
+    "ack",
+    "fd",
+    "find",
+    "sed",
+    "awk",
+    "zoekt",
+    "cat",
+    "head",
+    "tail",
+    "wc",
+    "cut",
+    "tr",
+    "sort",
+    "uniq",
+    "ast-grep",
+    "sg",
+}
+_SHELL_RESET = {"|", "||", "&&", ";", "&", "|&", "(", ")", "{", "}"}
 
 
 def _noext_nongit_hit(cmd: str) -> str | None:
@@ -484,13 +567,13 @@ def _noext_nongit_hit(cmd: str) -> str | None:
             expect_cmd, seg_nongit = True, False
             continue
         if expect_cmd:
-            if re.match(r'^[A-Za-z_][A-Za-z0-9_]*=', t):
+            if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", t):
                 continue
-            cur = t.rsplit('/', 1)[-1]
+            cur = t.rsplit("/", 1)[-1]
             seg_nongit = cur in _NONGIT_TOOLS
             expect_cmd = False
             continue
-        if t == '--no-ext-diff' and seg_nongit:
+        if t == "--no-ext-diff" and seg_nongit:
             return cur
     return None
 
@@ -521,13 +604,14 @@ def gate_noext_nongit_guard(raw_payload: str) -> GateResult:
 # --- 9. pretool-heavy-load-guard.sh (ADVISORY+BLOCKER, no if) --------------
 
 _HEAVY_RE = re.compile(
-    r'generate_unified_embeddings|generate_gemini_embeddings|extract_media|extract_media_phenotype|'
-    r'rebuild_identity|identity[._]rebuild|20260610j|p4_identity|marker_single|local.*marker|ffmpeg|'
-    r'transcribe|voxtral|whisper|late_chunking|build_certs|rebuild_image_embeddings|sentence-transformers|'
-    r'\.embed\b|embed\.py|rerank=True|CrossEncoder|reranker|SearchEngine|fs_recall|fs_hard|emb_rerank|'
-    r'recall_eval|recall_bakeoff|fs_ab', re.I,
+    r"generate_unified_embeddings|generate_gemini_embeddings|extract_media|extract_media_phenotype|"
+    r"rebuild_identity|identity[._]rebuild|20260610j|p4_identity|marker_single|local.*marker|ffmpeg|"
+    r"transcribe|voxtral|whisper|late_chunking|build_certs|rebuild_image_embeddings|sentence-transformers|"
+    r"\.embed\b|embed\.py|rerank=True|CrossEncoder|reranker|SearchEngine|fs_recall|fs_hard|emb_rerank|"
+    r"recall_eval|recall_bakeoff|fs_ab",
+    re.I,
 )
-_OFFLOAD_RE = re.compile(r'modal (run|deploy)|--remote', re.I)
+_OFFLOAD_RE = re.compile(r"modal (run|deploy)|--remote", re.I)
 
 
 def gate_heavy_load_guard(raw_payload: str) -> GateResult:
@@ -540,7 +624,9 @@ def gate_heavy_load_guard(raw_payload: str) -> GateResult:
             return GateResult(0, "", "")
 
         try:
-            ps_out = subprocess.run(["ps", "-axo", "rss=,pid=,comm="], capture_output=True, text=True, timeout=5).stdout
+            ps_out = subprocess.run(
+                ["ps", "-axo", "rss=,pid=,comm="], capture_output=True, text=True, timeout=5
+            ).stdout
         except Exception:
             ps_out = ""
         huge = []
@@ -566,25 +652,39 @@ def gate_heavy_load_guard(raw_payload: str) -> GateResult:
 
         mps_note = ""
         if "PYTORCH_ENABLE_MPS_FALLBACK" in cmd:
-            mps_note = ("PYTORCH_ENABLE_MPS_FALLBACK=1 silently spills oversized tensors into CPU RAM "
-                         "(14GB/proc, 2026-06-10) — drop it so they error cleanly. ")
+            mps_note = (
+                "PYTORCH_ENABLE_MPS_FALLBACK=1 silently spills oversized tensors into CPU RAM "
+                "(14GB/proc, 2026-06-10) — drop it so they error cleanly. "
+            )
 
         try:
-            cores = float(subprocess.run(["sysctl", "-n", "hw.ncpu"], capture_output=True, text=True, timeout=3).stdout.strip() or 8)
+            cores = float(
+                subprocess.run(
+                    ["sysctl", "-n", "hw.ncpu"], capture_output=True, text=True, timeout=3
+                ).stdout.strip()
+                or 8
+            )
         except Exception:
             cores = 8.0
         load1 = 0.0
         try:
-            raw = subprocess.run(["sysctl", "-n", "vm.loadavg"], capture_output=True, text=True, timeout=3).stdout
+            raw = subprocess.run(
+                ["sysctl", "-n", "vm.loadavg"], capture_output=True, text=True, timeout=3
+            ).stdout
             load1 = float(raw.strip().strip("{}").split()[0])
         except Exception:
             try:
                 up = subprocess.run(["uptime"], capture_output=True, text=True, timeout=3).stdout
-                load1 = float(re.split(r'averages?:\s*', up)[-1].split()[0].rstrip(','))
+                load1 = float(re.split(r"averages?:\s*", up)[-1].split()[0].rstrip(","))
             except Exception:
                 load1 = 0.0
         try:
-            claudes = int(subprocess.run(["pgrep", "-c", "-f", "claude"], capture_output=True, text=True, timeout=3).stdout.strip() or 1)
+            claudes = int(
+                subprocess.run(
+                    ["pgrep", "-c", "-f", "claude"], capture_output=True, text=True, timeout=3
+                ).stdout.strip()
+                or 1
+            )
         except Exception:
             claudes = 1
 
@@ -594,13 +694,15 @@ def gate_heavy_load_guard(raw_payload: str) -> GateResult:
                 f"Compute preflight: 1-min load {load1:.1f} on {int(cores)} cores"
                 + (f", {claudes} claude procs" if claudes >= 4 else "")
                 + ". This is a HEAVY LOCAL job — launching now risks thrash/starvation "
-                  "(see reference_throttle_heavy_local_batches: a prior such launch hard-rebooted the Mac). "
-                  f"Prefer: throttle workers to 4-6, defer until load < {int(cores)}, or offload to Modal."
+                "(see reference_throttle_heavy_local_batches: a prior such launch hard-rebooted the Mac). "
+                f"Prefer: throttle workers to 4-6, defer until load < {int(cores)}, or offload to Modal."
             )
         warn = mps_note + warn
         if not warn:
             return GateResult(0, "", "")
-        _log_trigger("heavy-load-guard", "warn", f"load={load1} cores={cores} claudes={claudes}", cmd)
+        _log_trigger(
+            "heavy-load-guard", "warn", f"load={load1} cores={cores} claudes={claudes}", cmd
+        )
         out = json.dumps({"additionalContext": warn})
         return GateResult(0, "", out)
     except Exception:
@@ -609,17 +711,28 @@ def gate_heavy_load_guard(raw_payload: str) -> GateResult:
 
 # --- 10. pretool-no-background-commit.sh (BLOCKER, if=Bash(git*)) — imports sidecar ---
 
+
 def gate_no_background_commit(raw_payload: str) -> GateResult:
     try:
-        mod = _load_module(HOOKS_DIR / "pretool_no_background_commit.py", "pretool_no_background_commit")
+        mod = _load_module(
+            HOOKS_DIR / "pretool_no_background_commit.py", "pretool_no_background_commit"
+        )
         data = json.loads(raw_payload)
         verdict = mod.classify(data)
     except Exception:
         return GateResult(0, "", "")
     if verdict == "BG":
-        return GateResult(2, "BLOCKED: git commit inside run_in_background=true — a hook-blocked commit reports success while nothing lands. Run the commit FOREGROUND (background the slow step, then commit in a separate foreground call).\n", "")
+        return GateResult(
+            2,
+            "BLOCKED: git commit inside run_in_background=true — a hook-blocked commit reports success while nothing lands. Run the commit FOREGROUND (background the slow step, then commit in a separate foreground call).\n",
+            "",
+        )
     if verdict == "PIPE":
-        return GateResult(2, "BLOCKED: git commit piped into tail/head/grep/... masks git's exit code (the pipeline returns the reader's rc), so a hook-blocked commit reads rc=0 while nothing lands. Capture the exit code explicitly instead: 'git commit -F msg > /tmp/c.txt 2>&1; echo COMMIT_RC=$?; tail /tmp/c.txt' — then verify with 'git log --oneline -1'.\n", "")
+        return GateResult(
+            2,
+            "BLOCKED: git commit piped into tail/head/grep/... masks git's exit code (the pipeline returns the reader's rc), so a hook-blocked commit reads rc=0 while nothing lands. Capture the exit code explicitly instead: 'git commit -F msg > /tmp/c.txt 2>&1; echo COMMIT_RC=$?; tail /tmp/c.txt' — then verify with 'git log --oneline -1'.\n",
+            "",
+        )
     return GateResult(0, "", "")
 
 
@@ -635,16 +748,19 @@ _DUCKDB_CMD_RE = re.compile(r'"command"\s*:\s*"([^"]*)"')
 def gate_duckdb_quote_guard(raw_payload: str) -> GateResult:
     m = _DUCKDB_CMD_RE.search(raw_payload)
     cmd = m.group(1) if m else ""
-    if not re.search(r'duckdb|\.execute\(|SELECT |INSERT |UPDATE |WHERE ', cmd, re.I):
+    if not re.search(r"duckdb|\.execute\(|SELECT |INSERT |UPDATE |WHERE ", cmd, re.I):
         return GateResult(0, "", "")
     if re.search(r'= "[a-zA-Z_]+"', cmd) and not re.search(r'= "[a-zA-Z_]+"\)', cmd):
-        msg = ("DuckDB gotcha: double quotes = column identifier, not string literal. Use single "
-               "quotes for string values (e.g., WHERE col = 'value' not WHERE col = \"value\").")
+        msg = (
+            "DuckDB gotcha: double quotes = column identifier, not string literal. Use single "
+            "quotes for string values (e.g., WHERE col = 'value' not WHERE col = \"value\")."
+        )
         return GateResult(0, "", msg)
     return GateResult(0, "", "")
 
 
 # --- 16. ~/.claude/hooks/pretool-modal-cost-guard.sh (BLOCKER+ADVISORY, no if) ---
+
 
 def gate_modal_cost_guard(raw_payload: str) -> GateResult:
     try:
@@ -652,9 +768,9 @@ def gate_modal_cost_guard(raw_payload: str) -> GateResult:
         cmd = (data.get("tool_input") or data).get("command", "") or ""
     except Exception:
         return GateResult(0, "", "")
-    if not re.search(r'modal run', cmd):
+    if not re.search(r"modal run", cmd):
         return GateResult(0, "", "")
-    m = re.search(r'[^ ]+\.py', cmd)
+    m = re.search(r"[^ ]+\.py", cmd)
     if not m:
         return GateResult(0, "", "")
     script = m.group(0)
@@ -665,16 +781,22 @@ def gate_modal_cost_guard(raw_payload: str) -> GateResult:
     except Exception:
         return GateResult(0, "", "")
     warnings, is_block = [], False
-    if re.search(r'gpu=', src):
-        if not re.search(r'timeout=', src):
-            warnings.append("WARNING: GPU function has no timeout= set. Add timeout = 1.5x expected duration as cost circuit breaker.")
+    if re.search(r"gpu=", src):
+        if not re.search(r"timeout=", src):
+            warnings.append(
+                "WARNING: GPU function has no timeout= set. Add timeout = 1.5x expected duration as cost circuit breaker."
+            )
         else:
-            tm = re.search(r'timeout=([0-9]+)', src)
+            tm = re.search(r"timeout=([0-9]+)", src)
             if tm and int(tm.group(1)) > 43200:
-                warnings.append(f"WARNING: timeout={tm.group(1)} ({int(tm.group(1)) // 3600}h) is very high. Is this intentional?")
-        if re.search(r'\.(starmap|map)\(', src):
-            if 'max_containers' not in src:
-                warnings.append("BLOCK: Script uses .starmap()/.map() with GPU but no max_containers set. Unbounded auto-scaling will burn money. Add max_containers= to the @app.function decorator.")
+                warnings.append(
+                    f"WARNING: timeout={tm.group(1)} ({int(tm.group(1)) // 3600}h) is very high. Is this intentional?"
+                )
+        if re.search(r"\.(starmap|map)\(", src):
+            if "max_containers" not in src:
+                warnings.append(
+                    "BLOCK: Script uses .starmap()/.map() with GPU but no max_containers set. Unbounded auto-scaling will burn money. Add max_containers= to the @app.function decorator."
+                )
                 is_block = True
     if not warnings:
         return GateResult(0, "", "")
@@ -686,15 +808,16 @@ def gate_modal_cost_guard(raw_payload: str) -> GateResult:
 
 # --- 17. ~/.claude/hooks/pretool-modal-script-audit.sh (ADVISORY, no if) ---
 
+
 def gate_modal_script_audit(raw_payload: str) -> GateResult:
     try:
         data = json.loads(raw_payload)
         cmd = (data.get("tool_input") or data).get("command", "") or ""
     except Exception:
         return GateResult(0, "", "")
-    if not re.search(r'modal run.*--detach|modal run.*\.py', cmd):
+    if not re.search(r"modal run.*--detach|modal run.*\.py", cmd):
         return GateResult(0, "", "")
-    m = re.search(r'[^ ]+\.py', cmd)
+    m = re.search(r"[^ ]+\.py", cmd)
     if not m:
         return GateResult(0, "", "")
     script = m.group(0)
@@ -705,15 +828,21 @@ def gate_modal_script_audit(raw_payload: str) -> GateResult:
     except Exception:
         return GateResult(0, "", "")
     warnings = []
-    if re.search(r'@app\.function|@stage', src):
-        cap_count = len(re.findall(r'capture_output=True', src))
+    if re.search(r"@app\.function|@stage", src):
+        cap_count = len(re.findall(r"capture_output=True", src))
         if cap_count > 0:
-            warnings.append(f"WARNING: {cap_count} subprocess call(s) use capture_output=True — output invisible in modal app logs (gotcha #16). Use stdout=subprocess.PIPE, stderr=subprocess.STDOUT instead.")
-    if re.search(r'@stage', src):
-        if re.search(r'for .* in .*:', src) and 'vol.commit()' not in src:
-            warnings.append("WARNING: Script has loops in @stage functions but no vol.commit() — intermediate results lost on crash (gotcha #20). Add vol.commit() after each iteration.")
-    if '--detach' in cmd and re.search(r'subprocess\.run\(.*timeout=', src):
-        warnings.append("WARNING: subprocess.run(timeout=) in a --detach script can create orphan apps (gotcha #32). Remove subprocess timeouts for detached runs.")
+            warnings.append(
+                f"WARNING: {cap_count} subprocess call(s) use capture_output=True — output invisible in modal app logs (gotcha #16). Use stdout=subprocess.PIPE, stderr=subprocess.STDOUT instead."
+            )
+    if re.search(r"@stage", src):
+        if re.search(r"for .* in .*:", src) and "vol.commit()" not in src:
+            warnings.append(
+                "WARNING: Script has loops in @stage functions but no vol.commit() — intermediate results lost on crash (gotcha #20). Add vol.commit() after each iteration."
+            )
+    if "--detach" in cmd and re.search(r"subprocess\.run\(.*timeout=", src):
+        warnings.append(
+            "WARNING: subprocess.run(timeout=) in a --detach script can create orphan apps (gotcha #32). Remove subprocess timeouts for detached runs."
+        )
     if not warnings:
         return GateResult(0, "", "")
     return GateResult(0, "\n".join(warnings) + "\n", "")
@@ -721,13 +850,14 @@ def gate_modal_script_audit(raw_payload: str) -> GateResult:
 
 # --- 18. pretool-cost-guard.sh (BLOCKER $25 / ADVISORY $10, no if) ---------
 
+
 def gate_cost_guard(raw_payload: str) -> GateResult:
     try:
         data = json.loads(raw_payload)
     except Exception:
         return GateResult(0, "", "")
     cmd = _jqlike_cmd(data)
-    if not cmd or not re.search(r'llmx|modal run|curl.*api|python.*openai|python.*anthropic', cmd):
+    if not cmd or not re.search(r"llmx|modal run|curl.*api|python.*openai|python.*anthropic", cmd):
         return GateResult(0, "", "")
     receipts = os.path.expanduser("~/.claude/session-receipts.jsonl")
     if not os.path.isfile(receipts):
@@ -751,16 +881,27 @@ def gate_cost_guard(raw_payload: str) -> GateResult:
     spend_int = int(total)
     if spend_int >= 25:
         _log_trigger("cost-guard", "block", f"daily_spend=${total:.2f} cmd={cmd[:80]}", cmd)
-        out = json.dumps({"decision": "block", "reason": f"Daily API spend ${total:.2f} exceeds the $25 constitutional cap. Defer non-essential API calls, or set LLMX_SPEND_OVERRIDE=1 for an intended llmx job / get human approval."})
+        out = json.dumps(
+            {
+                "decision": "block",
+                "reason": f"Daily API spend ${total:.2f} exceeds the $25 constitutional cap. Defer non-essential API calls, or set LLMX_SPEND_OVERRIDE=1 for an intended llmx job / get human approval.",
+            }
+        )
         return GateResult(2, "", out)
     if spend_int >= 10:
         _log_trigger("cost-guard", "warn", f"daily_spend=${total:.2f} cmd={cmd[:80]}", cmd)
-        out = json.dumps({"decision": "allow", "additionalContext": f"Cost warning: daily spend at ${total:.2f} (warn at $10, block at $25). Consider batching or deferring."})
+        out = json.dumps(
+            {
+                "decision": "allow",
+                "additionalContext": f"Cost warning: daily spend at ${total:.2f} (warn at $10, block at $25). Consider batching or deferring.",
+            }
+        )
         return GateResult(0, "", out)
     return GateResult(0, "", "")
 
 
 # --- 19. pretool-cost-awareness.sh (ADVISORY, every 50 calls, no if) -------
+
 
 def gate_cost_awareness(raw_payload: str) -> GateResult:
     try:
@@ -781,7 +922,12 @@ def gate_cost_awareness(raw_payload: str) -> GateResult:
 
         cwd = os.getcwd()
         try:
-            r = subprocess.run(["git", "-C", cwd, "rev-parse", "--show-toplevel"], capture_output=True, text=True, timeout=5)
+            r = subprocess.run(
+                ["git", "-C", cwd, "rev-parse", "--show-toplevel"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
             root = r.stdout.strip()
         except Exception:
             root = ""
@@ -814,9 +960,11 @@ def gate_cost_awareness(raw_payload: str) -> GateResult:
         median = costs[n // 2]
         if current <= p95:
             return GateResult(0, "", "")
-        advisory = (f"Cost awareness: this session (${current:.2f}) has exceeded P95 "
-                    f"(${p95:.2f}) for project {project}. Project median: ${median:.2f}. "
-                    "Consider whether this session should continue or checkpoint.")
+        advisory = (
+            f"Cost awareness: this session (${current:.2f}) has exceeded P95 "
+            f"(${p95:.2f}) for project {project}. Project median: ${median:.2f}. "
+            "Consider whether this session should continue or checkpoint."
+        )
         _log_trigger("cost-awareness", "warn", f"project={project}")
         out = json.dumps({"additionalContext": advisory})
         return GateResult(0, "", out)
@@ -825,6 +973,7 @@ def gate_cost_awareness(raw_payload: str) -> GateResult:
 
 
 # --- 20. pretool-ast-precommit.sh (BLOCKER, if=Bash(git commit*)) ----------
+
 
 def _extract_inline_python_blocks(src: str):
     """Mirrors the original's fragile single-quote python3 -c scanner
@@ -843,7 +992,7 @@ def _extract_inline_python_blocks(src: str):
         m = re.search(r"python3\s+-c\s+\$?'", line)
         if m:
             start_line = i + 1
-            after_quote = line[m.end():]
+            after_quote = line[m.end() :]
             close_idx = after_quote.find("'")
             if close_idx >= 0:
                 code = after_quote[:close_idx]
@@ -874,13 +1023,21 @@ def gate_ast_precommit(raw_payload: str) -> GateResult:
     except Exception:
         return GateResult(0, "", "")
     cmd = (data.get("tool_input") or {}).get("command", "") or ""
-    if not re.match(r'^\s*git\s+commit', cmd):
+    if not re.match(r"^\s*git\s+commit", cmd):
         return GateResult(0, "", "")
     try:
-        staged_py = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM", "--", "*.py"],
-                                    capture_output=True, text=True, timeout=10).stdout.splitlines()
-        staged_sh = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM", "--", "*.sh"],
-                                    capture_output=True, text=True, timeout=10).stdout.splitlines()
+        staged_py = subprocess.run(
+            ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM", "--", "*.py"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout.splitlines()
+        staged_sh = subprocess.run(
+            ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM", "--", "*.sh"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        ).stdout.splitlines()
     except Exception:
         return GateResult(0, "", "")
     staged_py = [f for f in staged_py if f]
@@ -924,6 +1081,7 @@ def gate_ast_precommit(raw_payload: str) -> GateResult:
 
 # --- 21. pretool-commit-check.sh (BLOCKER+ADVISORY, if=Bash(git commit*)) --
 
+
 def gate_commit_check(raw_payload: str) -> GateResult:
     try:
         cmd = (json.loads(raw_payload).get("tool_input") or {}).get("command", "") or ""
@@ -938,26 +1096,42 @@ def gate_commit_check(raw_payload: str) -> GateResult:
     if text in ("SKIP", "OK", ""):
         return GateResult(0, "", "")
     if text.startswith("BLOCK:"):
-        msg = text[len("BLOCK:"):]
+        msg = text[len("BLOCK:") :]
         _log_trigger("commit-check", "block", msg[:100], cmd)
         return GateResult(2, f"[commit-check]: BLOCKED: {msg}\n{msg}\n", "")
     if not text.startswith("WARN:"):
         return GateResult(0, "", "")
-    warn_text = text[len("WARN:"):]
+    warn_text = text[len("WARN:") :]
     try:
-        staged = subprocess.run(["git", "diff", "--cached", "--name-only"], capture_output=True, text=True, timeout=10).stdout.splitlines()
+        staged = subprocess.run(
+            ["git", "diff", "--cached", "--name-only"], capture_output=True, text=True, timeout=10
+        ).stdout.splitlines()
         staged = [f for f in staged if f]
     except Exception:
         staged = []
-    concept_files = sum(1 for f in staged if re.match(r'^(research/|decisions/|docs/research/)', f))
+    concept_files = sum(1 for f in staged if re.match(r"^(research/|decisions/|docs/research/)", f))
     if concept_files > 0:
-        warn_text = warn_text.replace("NOBODY", "Concept files (research/decisions) staged — body REQUIRED. Name the concept affected and what changed.")
+        warn_text = warn_text.replace(
+            "NOBODY",
+            "Concept files (research/decisions) staged — body REQUIRED. Name the concept affected and what changed.",
+        )
     elif len(staged) <= 1:
-        warn_text = warn_text.replace(" | NOBODY", "").replace("NOBODY | ", "").replace("NOBODY", "")
+        warn_text = (
+            warn_text.replace(" | NOBODY", "").replace("NOBODY | ", "").replace("NOBODY", "")
+        )
     else:
-        warn_text = warn_text.replace("NOBODY", f"{len(staged)} files staged but no body — add trigger, changes, impact.")
+        warn_text = warn_text.replace(
+            "NOBODY", f"{len(staged)} files staged but no body — add trigger, changes, impact."
+        )
 
-    gov = next((f for f in staged if re.search(r'(CLAUDE\.md|MEMORY\.md|improvement-log|hooks/)', f, re.I)), None)
+    gov = next(
+        (
+            f
+            for f in staged
+            if re.search(r"(CLAUDE\.md|MEMORY\.md|improvement-log|hooks/)", f, re.I)
+        ),
+        None,
+    )
     if gov:
         if "Evidence:" not in text:
             warn_text += f" | Governance file ({gov}) needs Evidence: trailer."
@@ -976,10 +1150,15 @@ def gate_commit_check(raw_payload: str) -> GateResult:
 
 # --- 23. pretool-modal-run-guard.sh (BLOCKER, no if) -----------------------
 
+
 def _kw_value(node):
     if isinstance(node, ast.Constant):
         return node.value
-    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
+    if (
+        isinstance(node, ast.UnaryOp)
+        and isinstance(node.op, ast.USub)
+        and isinstance(node.operand, ast.Constant)
+    ):
         return -node.operand.value
     if isinstance(node, ast.Name):
         return f"<name:{node.id}>"
@@ -1023,22 +1202,36 @@ def gate_modal_run_guard(raw_payload: str) -> GateResult:
             if not isinstance(dec, ast.Call):
                 continue
             fn = dec.func
-            name = fn.attr if isinstance(fn, ast.Attribute) else (fn.id if isinstance(fn, ast.Name) else "")
+            name = (
+                fn.attr
+                if isinstance(fn, ast.Attribute)
+                else (fn.id if isinstance(fn, ast.Name) else "")
+            )
             if name not in ("function", "cls"):
                 continue
             kwargs = {kw.arg: _kw_value(kw.value) for kw in dec.keywords if kw.arg is not None}
             line = dec.lineno
             ed = kwargs.get("ephemeral_disk")
             if isinstance(ed, int) and not (524288 <= ed <= 3145728):
-                findings.append(f"{os.path.basename(target)}:{line} @app.{name} has ephemeral_disk={ed} — Modal requires [524288, 3145728] MiB. Use ephemeral_disk=524288 (512 GB min).")
+                findings.append(
+                    f"{os.path.basename(target)}:{line} @app.{name} has ephemeral_disk={ed} — Modal requires [524288, 3145728] MiB. Use ephemeral_disk=524288 (512 GB min)."
+                )
             np_val, gpu_val = kwargs.get("nonpreemptible"), kwargs.get("gpu")
             if np_val is True and gpu_val not in (None, False):
-                findings.append(f"{os.path.basename(target)}:{line} @app.{name} has nonpreemptible=True AND gpu={gpu_val!r} — Modal does not support nonpreemptible for GPU functions. Drop one.")
+                findings.append(
+                    f"{os.path.basename(target)}:{line} @app.{name} has nonpreemptible=True AND gpu={gpu_val!r} — Modal does not support nonpreemptible for GPU functions. Drop one."
+                )
     if not findings:
         return GateResult(0, "", "")
-    reason = "MODAL LAUNCH BLOCKED — invalid config in target script:\n\n" + "\n".join(f"  - {f}" for f in findings) + "\n\nFix in the script, then re-run."
+    reason = (
+        "MODAL LAUNCH BLOCKED — invalid config in target script:\n\n"
+        + "\n".join(f"  - {f}" for f in findings)
+        + "\n\nFix in the script, then re-run."
+    )
     out = json.dumps({"decision": "block", "reason": reason})
-    return GateResult(0, "", out)  # original always exits 0; the JSON decision field carries the block
+    return GateResult(
+        0, "", out
+    )  # original always exits 0; the JSON decision field carries the block
 
 
 # --- 24. pretool-timeout-modal-guard.sh (BLOCKER, no if) -------------------
@@ -1095,8 +1288,10 @@ def gate_timeout_modal_guard(raw_payload: str) -> GateResult:
 
 # --- 27. pretool-plan-protect.sh (BLOCKER, no if) --------------------------
 
-_PLAN_DESTRUCTIVE_RE = re.compile(r'^\s*(?:sudo\s+)?(?:rm|mv|trash)(?:\s|$)')
-_PLAN_PROTECTED_RE = re.compile(r'\.claude/plans/[^\s]*\.md|docs/ops/plans/[^\s]*\.md|\.claude/checkpoint\.md')
+_PLAN_DESTRUCTIVE_RE = re.compile(r"^\s*(?:sudo\s+)?(?:rm|mv|trash)(?:\s|$)")
+_PLAN_PROTECTED_RE = re.compile(
+    r"\.claude/plans/[^\s]*\.md|docs/ops/plans/[^\s]*\.md|\.claude/checkpoint\.md"
+)
 
 
 def gate_plan_protect(raw_payload: str) -> GateResult:
@@ -1111,14 +1306,18 @@ def gate_plan_protect(raw_payload: str) -> GateResult:
         return GateResult(0, "", "")
     if os.environ.get("PLAN_PROTECT_OVERRIDE", "") == "ALLOW":
         return GateResult(0, "", "")
-    segments = re.split(r'(?:&&|\|\||[;|\n])', cmd)
-    hit = any(_PLAN_DESTRUCTIVE_RE.search(seg) and _PLAN_PROTECTED_RE.search(seg) for seg in segments)
+    segments = re.split(r"(?:&&|\|\||[;|\n])", cmd)
+    hit = any(
+        _PLAN_DESTRUCTIVE_RE.search(seg) and _PLAN_PROTECTED_RE.search(seg) for seg in segments
+    )
     if not hit:
         return GateResult(0, "", "")
     _log_trigger("plan-protect", "block", cmd, cmd)
-    reason = ('BLOCKED: rm/mv/trash targets a plan or checkpoint markdown (.claude/plans/, docs/ops/plans/, '
-               '.claude/checkpoint.md). These are usually untracked agent state; recovery needs user paste-back. '
-               'Use git mv for tracked files, or include PLAN-PROTECT-OVERRIDE to acknowledge the risk.')
+    reason = (
+        "BLOCKED: rm/mv/trash targets a plan or checkpoint markdown (.claude/plans/, docs/ops/plans/, "
+        ".claude/checkpoint.md). These are usually untracked agent state; recovery needs user paste-back. "
+        "Use git mv for tracked files, or include PLAN-PROTECT-OVERRIDE to acknowledge the risk."
+    )
     out = json.dumps({"decision": "block", "reason": reason})
     return GateResult(2, out + "\n", "")
 
@@ -1129,13 +1328,17 @@ def gate_plan_protect(raw_payload: str) -> GateResult:
 # was not ported.
 # ─────────────────────────────────────────────────────────────────────────
 
+
 def make_subprocess_gate(path: str):
     def run(raw_payload: str) -> GateResult:
         try:
-            proc = subprocess.run([path], input=raw_payload, capture_output=True, text=True, timeout=30)
+            proc = subprocess.run(
+                [path], input=raw_payload, capture_output=True, text=True, timeout=30
+            )
         except Exception:
             return GateResult(0, "", "")
         return GateResult(proc.returncode, proc.stderr or "", proc.stdout or "")
+
     return run
 
 
@@ -1185,7 +1388,7 @@ def _git_stash_call(seg: str):
         j += 2 if parts[j] in ("-C", "-c") else 1
     if j >= len(parts) or parts[j] != "stash":
         return False, None
-    return True, parts[j + 1:]
+    return True, parts[j + 1 :]
 
 
 def _git_stash_is_safe(args) -> bool:
@@ -1224,7 +1427,9 @@ def gate_git_stash_guard(raw_payload: str) -> GateResult:
     cwd = ti.get("workdir") or data.get("cwd") or os.getcwd()
     peer_bin = os.environ.get("PEER_SESSION_COUNT_BIN") or str(HOOKS_DIR / "peer-session-count.sh")
     try:
-        peer_out = subprocess.run([peer_bin, cwd], capture_output=True, text=True, timeout=10).stdout.strip()
+        peer_out = subprocess.run(
+            [peer_bin, cwd], capture_output=True, text=True, timeout=10
+        ).stdout.strip()
         peer_count = int(peer_out) if peer_out.isdigit() else 0
     except Exception:
         peer_count = 0
@@ -1274,6 +1479,7 @@ def gate_git_stash_guard(raw_payload: str) -> GateResult:
 
 # --- 30. pretool-pkill-anchor-guard.sh (ADVISORY, no if) --------------------
 
+
 def _pkill_f_patterns(seg: str):
     """Mirrors pretool-pkill-anchor-guard.sh's find_pkill_f_patterns():
     yields (pattern, has_dash_x) for a `pkill ... -f <pattern>` call."""
@@ -1288,7 +1494,7 @@ def _pkill_f_patterns(seg: str):
         if tok != "pkill":
             i += 1
             continue
-        args = parts[i + 1:]
+        args = parts[i + 1 :]
         has_dash_x = "-x" in args
         pattern = None
         j = 0
@@ -1382,7 +1588,10 @@ def gate_opus_concurrency_advisory(raw_payload: str) -> GateResult:
     pgrep_bin = os.environ.get("OPUS_LOAD_PGREP_BIN") or "pgrep"
     try:
         out = subprocess.run(
-            [pgrep_bin, "-f", _OPUS_LOAD_PGREP_PATTERN], capture_output=True, text=True, timeout=5,
+            [pgrep_bin, "-f", _OPUS_LOAD_PGREP_PATTERN],
+            capture_output=True,
+            text=True,
+            timeout=5,
         ).stdout
         count = len([ln for ln in out.splitlines() if ln.strip()])
     except Exception:
@@ -1408,35 +1617,71 @@ def gate_opus_concurrency_advisory(raw_payload: str) -> GateResult:
 # ─────────────────────────────────────────────────────────────────────────
 
 MANIFEST: list[dict] = [
-    {"name": "secret-output-guard", "if": None,
-     "run": make_native_gate("pretool-secret-output-guard.py", "pretool_secret_output_guard")},
+    {
+        "name": "secret-output-guard",
+        "if": None,
+        "run": make_native_gate("pretool-secret-output-guard.py", "pretool_secret_output_guard"),
+    },
     {"name": "git-noext-inject", "if": "Bash(git*)", "run": gate_git_noext_inject},
     {"name": "pyunbuffered-inject", "if": None, "run": gate_pyunbuffered_inject},
+    {"name": "bg-buffering-pipe", "if": None, "run": gate_bg_buffering_pipe},
     {"name": "git-add-all-guard", "if": "Bash(git*)", "run": gate_git_add_all_guard},
     {"name": "bash-loop-guard", "if": None, "run": gate_bash_loop_guard},
     {"name": "bash-cat-guard", "if": None, "run": gate_bash_cat_guard},
     {"name": "bash-backtick-guard", "if": None, "run": gate_bash_backtick_guard},
     {"name": "noext-nongit-guard", "if": None, "run": gate_noext_nongit_guard},
-    {"name": "bash-background-ampersand", "if": None,
-     "run": make_native_gate("pretool-bash-background-ampersand.py", "pretool_bash_background_ampersand")},
-    {"name": "bg-dispatch-footgun", "if": None,
-     "run": make_native_gate("pretool-bg-dispatch-footgun.py", "pretool_bg_dispatch_footgun")},
+    {
+        "name": "bash-background-ampersand",
+        "if": None,
+        "run": make_native_gate(
+            "pretool-bash-background-ampersand.py", "pretool_bash_background_ampersand"
+        ),
+    },
+    {
+        "name": "bg-dispatch-footgun",
+        "if": None,
+        "run": make_native_gate("pretool-bg-dispatch-footgun.py", "pretool_bg_dispatch_footgun"),
+    },
     {"name": "heavy-load-guard", "if": None, "run": gate_heavy_load_guard},
     {"name": "no-background-commit", "if": "Bash(git*)", "run": gate_no_background_commit},
     # `if: None` on purpose — a compound command (`cd x && git worktree add /tmp/y`)
     # does not match Bash(git*), and that is exactly the shape that leaked.
-    {"name": "worktree-location-guard", "if": None,
-     "run": make_native_gate("pretool-worktree-location-guard.py", "pretool_worktree_location_guard")},
-    {"name": "uv-python-guard", "if": None,
-     "run": make_native_gate("pretool-uv-python-guard.py", "pretool_uv_python_guard")},
-    {"name": "genomics-pythonpath-guard", "if": None,
-     "run": make_native_gate("pretool-genomics-pythonpath-guard.py", "pretool_genomics_pythonpath_guard")},
-    {"name": "arc-agi-agent-cwd-guard", "if": None,
-     "run": make_native_gate("pretool-arc-agi-agent-cwd-guard.py", "pretool_arc_agi_agent_cwd_guard")},
-    {"name": "emb-project-guard", "if": None,
-     "run": make_native_gate("pretool-emb-project-guard.py", "pretool_emb_project_guard")},
-    {"name": "bare-modal-guard", "if": None,
-     "run": make_native_gate("pretool-bare-modal-guard.py", "pretool_bare_modal_guard")},
+    {
+        "name": "worktree-location-guard",
+        "if": None,
+        "run": make_native_gate(
+            "pretool-worktree-location-guard.py", "pretool_worktree_location_guard"
+        ),
+    },
+    {
+        "name": "uv-python-guard",
+        "if": None,
+        "run": make_native_gate("pretool-uv-python-guard.py", "pretool_uv_python_guard"),
+    },
+    {
+        "name": "genomics-pythonpath-guard",
+        "if": None,
+        "run": make_native_gate(
+            "pretool-genomics-pythonpath-guard.py", "pretool_genomics_pythonpath_guard"
+        ),
+    },
+    {
+        "name": "arc-agi-agent-cwd-guard",
+        "if": None,
+        "run": make_native_gate(
+            "pretool-arc-agi-agent-cwd-guard.py", "pretool_arc_agi_agent_cwd_guard"
+        ),
+    },
+    {
+        "name": "emb-project-guard",
+        "if": None,
+        "run": make_native_gate("pretool-emb-project-guard.py", "pretool_emb_project_guard"),
+    },
+    {
+        "name": "bare-modal-guard",
+        "if": None,
+        "run": make_native_gate("pretool-bare-modal-guard.py", "pretool_bare_modal_guard"),
+    },
     {"name": "duckdb-quote-guard", "if": None, "run": gate_duckdb_quote_guard},
     {"name": "modal-cost-guard", "if": None, "run": gate_modal_cost_guard},
     {"name": "modal-script-audit", "if": None, "run": gate_modal_script_audit},
@@ -1444,17 +1689,29 @@ MANIFEST: list[dict] = [
     {"name": "cost-awareness", "if": None, "run": gate_cost_awareness},
     {"name": "ast-precommit", "if": "Bash(git commit*)", "run": gate_ast_precommit},
     {"name": "commit-check", "if": "Bash(git commit*)", "run": gate_commit_check},
-    {"name": "multiagent-commit-guard", "if": "Bash(git*)",
-     "run": make_subprocess_gate(str(HOOKS_DIR / "pretool-multiagent-commit-guard.sh"))},
+    {
+        "name": "multiagent-commit-guard",
+        "if": "Bash(git*)",
+        "run": make_subprocess_gate(str(HOOKS_DIR / "pretool-multiagent-commit-guard.sh")),
+    },
     {"name": "modal-run-guard", "if": None, "run": gate_modal_run_guard},
     {"name": "timeout-modal-guard", "if": None, "run": gate_timeout_modal_guard},
-    {"name": "destructive-git-ref", "if": "Bash(git*)",
-     "run": make_subprocess_gate(str(HOOKS_DIR / "pretool-destructive-git-ref.sh"))},
-    {"name": "plan-completion-guard", "if": "Bash(git commit*)",
-     "run": make_subprocess_gate(str(HOOKS_DIR / "precommit-plan-completion-guard.sh"))},
+    {
+        "name": "destructive-git-ref",
+        "if": "Bash(git*)",
+        "run": make_subprocess_gate(str(HOOKS_DIR / "pretool-destructive-git-ref.sh")),
+    },
+    {
+        "name": "plan-completion-guard",
+        "if": "Bash(git commit*)",
+        "run": make_subprocess_gate(str(HOOKS_DIR / "precommit-plan-completion-guard.sh")),
+    },
     {"name": "plan-protect", "if": None, "run": gate_plan_protect},
-    {"name": "cursor-model-guard", "if": None,
-     "run": make_native_gate("pretool-cursor-model-guard.py", "pretool_cursor_model_guard")},
+    {
+        "name": "cursor-model-guard",
+        "if": None,
+        "run": make_native_gate("pretool-cursor-model-guard.py", "pretool_cursor_model_guard"),
+    },
     # --- post-consolidation additions (2026-07-18), see section above ------
     {"name": "git-stash-guard", "if": None, "run": gate_git_stash_guard},
     {"name": "pkill-anchor-guard", "if": None, "run": gate_pkill_anchor_guard},
@@ -1470,6 +1727,7 @@ MANIFEST: list[dict] = [
 # (modal-run-guard's always-exit-0 shape), hookSpecificOutput.updatedInput,
 # top-level/hookSpecificOutput additionalContext, and bare advisory text.
 # ─────────────────────────────────────────────────────────────────────────
+
 
 def _classify(result: GateResult) -> tuple[str, str | dict]:
     stdout, stderr = result.stdout.strip(), result.stderr.strip()
@@ -1493,7 +1751,9 @@ def _classify(result: GateResult) -> tuple[str, str | dict]:
             hso = obj.get("hookSpecificOutput") or {}
             if isinstance(hso, dict) and "updatedInput" in hso:
                 return "mutate", hso["updatedInput"]
-            ctx = (hso.get("additionalContext") if isinstance(hso, dict) else None) or obj.get("additionalContext")
+            ctx = (hso.get("additionalContext") if isinstance(hso, dict) else None) or obj.get(
+                "additionalContext"
+            )
             if ctx:
                 return "advise", ctx
             return "pass", ""
