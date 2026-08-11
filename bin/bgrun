@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# bgrun — reaper-proof background dispatch with a done-marker contract.
+#
+#   bgrun <name> -- <command ...>
+#
+# Runs the command under nohup+disown with PYTHONUNBUFFERED=1, redirecting all
+# output to <dir>/<name>.log (never pipe background output through tail/grep —
+# buffering swallows it on kill). Writes <dir>/<name>.pid at launch and
+# <dir>/<name>.done containing the exit code at completion. Prints the paths
+# and a ready-to-paste watch loop.
+#
+# Dir: $BGRUN_DIR if set, else ${TMPDIR:-/tmp}/bgrun. Existing markers for the
+# same name are cleared at launch.
+set -euo pipefail
+
+if [ "$#" -lt 3 ] || [ "$2" != "--" ]; then
+  echo "usage: bgrun <name> -- <command ...>" >&2
+  exit 2
+fi
+name="$1"; shift 2
+case "$name" in (*/*|*" "*) echo "bgrun: name must be a plain token" >&2; exit 2;; esac
+
+dir="${BGRUN_DIR:-${TMPDIR:-/tmp}/bgrun}"
+mkdir -p "$dir"
+log="$dir/$name.log"; done_marker="$dir/$name.done"; pid_file="$dir/$name.pid"
+rm -f "$done_marker" "$pid_file"
+
+nohup env PYTHONUNBUFFERED=1 bash -c '
+  "$@" > "$0.log.tmp" 2>&1
+  rc=$?
+  cat "$0.log.tmp" >> "$0.log" 2>/dev/null || true
+  rm -f "$0.log.tmp"
+  echo "$rc" > "$0.done"
+' "$dir/$name" "$@" >/dev/null 2>&1 &
+launch_pid=$!
+disown "$launch_pid" 2>/dev/null || true
+echo "$launch_pid" > "$pid_file"
+
+echo "bgrun: $name pid=$launch_pid"
+echo "  log:  $log"
+echo "  done: $done_marker (contains exit code)"
+echo "  watch: until [ -f $done_marker ]; do sleep 15; done; echo \"$name rc=\$(cat $done_marker) tail=\$(tail -1 $log)\""
