@@ -23,7 +23,9 @@ case "$name" in (*/*|*" "*) echo "bgrun: name must be a plain token" >&2; exit 2
 dir="${BGRUN_DIR:-${TMPDIR:-/tmp}/bgrun}"
 mkdir -p "$dir"
 log="$dir/$name.log"; done_marker="$dir/$name.done"; pid_file="$dir/$name.pid"
-rm -f "$done_marker" "$pid_file"
+# Truncate the log too: appending across same-name runs made a STALE error read
+# as the current run's outcome (genomics kernel live-proof loop, 2026-08-11).
+rm -f "$done_marker" "$pid_file" "$log"
 
 nohup env PYTHONUNBUFFERED=1 bash -c '
   "$@" > "$0.log.tmp" 2>&1
