@@ -29,6 +29,13 @@ try:
     # writes 'import openai' in a comment/docstring. Method-call matches (.chat.completions
     # .create / OpenAI() ) were dropped: they appear in prose/examples → false-block risk.
     hit = bool(re.search(r'^\s*(import openai\b|from openai\b)', body, re.M))
+    # Exemption (2026-08-11): the OpenAI IMAGES API (gpt-image-2 generate/edit) has no
+    # llmx/subscription lane — imagegen's stage-1 (src/imagegen/gen.py) bills it
+    # deliberately. Only CHAT completions have the free lane this hook protects.
+    # A body that drives the images endpoint is legitimate raw-SDK use.
+    img_api = bool(re.search(r'images\.(edit|generate)\(|gpt-image', body))
+    if img_api:
+        hit = False
     print(fp, '1' if hit else '0')
 except Exception:
     print('', '0')
