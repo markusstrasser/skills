@@ -32,20 +32,17 @@ research_pattern = os.environ.get('RESEARCH_PATHS', 'docs/research/|analysis/|do
 exclude_pattern = os.environ.get('EXCLUDE_PATTERN', r'MEMORY\.md|CLAUDE\.md|maintenance-checklist\.md|improvement-log\.md|README\.md|HUMAN\.md')
 
 # Session-scoped diff: only check files modified THIS session, not pre-existing dirty files.
-# Resolve the session id the SAME way the attribution path below does: prefer the
-# hook-authoritative stdin session_id (per-invocation, race-immune). The file
-# .claude/current-session-id is shared by every concurrent agent — under clobber it
-# points at a peer's baseline (confirmed 2026-06-01). File is a last-resort fallback
-# for headless inputs that lack a stdin session_id; a wrong/missing key degrades
-# safely to base_sha='HEAD' (check everything).
+# Use the hook-authoritative stdin session_id only (per-invocation, race-immune).
+# Do NOT fall back to .claude/current-session-id. That file is shared by every
+# concurrent Claude agent and by other products (Grok) that run this same Stop
+# hook with an empty stdin session_id. Inheriting it pulls a peer session's
+# base_sha and false-blocks their committed untagged research as ours
+# (2026-06-01 Claude clobber; 2026-08-12 Grok bookmark-pull inherited a
+# genome-session baseline and blocked stop on a memo this session never wrote).
+# Missing stdin session_id degrades to base_sha='HEAD' — only worktree-dirty
+# files can be attributed.
 base_sha = 'HEAD'
 session_id = (data.get('session_id') or '').strip()
-if not session_id:
-    try:
-        with open(os.path.join(cwd, '.claude', 'current-session-id')) as f:
-            session_id = f.read().strip()
-    except (OSError, FileNotFoundError):
-        pass
 baseline_dirty = set()
 try:
     with open(f'/tmp/session-base-sha-{session_id}.txt') as f:
@@ -238,14 +235,11 @@ for f in research_files:
 #       safe floor; this change is never weaker than the pre-fix behavior).
 if missing:
     touched = set()
-    # Attribute via the hook-authoritative session_id ONLY. The file-derived
-    # session_id (cwd/.claude/current-session-id) is a SHARED repo file that
-    # CONCURRENT sessions clobber; unioning its manifest pulls a PEER session's
-    # touched files into the touched-set and mis-blocks their untagged in-flight
-    # research as ours. Fall back to the file-derived id only when the hook
-    # input lacks session_id (e.g. headless). Confirmed clobber 2026-06-01:
-    # current-session-id pointed at a peer; 4 of its files blocked our stop.
-    _attrib_sid = data.get('session_id', '') or session_id
+    # Attribute via the hook-authoritative stdin session_id ONLY. Never union
+    # cwd/.claude/current-session-id — that file is shared across concurrent
+    # Claude agents and other products, and pulling its touched-set false-blocks
+    # a peer's untagged research as ours (2026-06-01; 2026-08-12 Grok).
+    _attrib_sid = session_id
     for _sid in ([_attrib_sid] if _attrib_sid else []):
         if not _sid:
             continue
