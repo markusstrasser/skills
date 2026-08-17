@@ -391,3 +391,7 @@ end-knowledge-index -->
 - **[2026-07-10] mcp__research__fetch_paper can hang beyond 60s on an arXiv PDF; terminate the transport, then use the primary-source browser or direct PDF tooling instead.**
 
 - **[2026-07-14] 2026-07-14: mcp__research__search_papers backend=s2 hung over 45s on exact new arXiv id 2607.07508; direct primary arXiv PDF worked.**
+
+- **[2026-08-17] Exa web_search_advanced_exa date filter unreliable for category=publication (null dates, 2024/25 leakage) — for dated arXiv sweeps use the arXiv Atom API with submittedDate ranges (2026-08-17 design-agents lane)**
+
+- **[2026-08-17] verify_citations.py regex misses bare arXiv IDs like "2607.20767" without an "arXiv:" prefix — reports vacuous PASS; curl-loop the abs pages as backstop until fixed (2026-08-17)**
