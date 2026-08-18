@@ -17,13 +17,28 @@ CASES = [
     # (name, command, run_in_background, expect_block)
     ("real bg commit", "git add x && git commit -m 'y'", True, True),
     ("real bg commit chained", "make build && git commit -m done", True, True),
-    ("heredoc mention (2026-07-04 false positive)",
-     "cat > brief.md <<'EOF'\nDo NOT git commit anything.\nEOF\ncodex exec --full-auto 'x'", True, False),
+    (
+        "heredoc mention (2026-07-04 false positive)",
+        "cat > brief.md <<'EOF'\nDo NOT git commit anything.\nEOF\ncodex exec --full-auto 'x'",
+        True,
+        False,
+    ),
     ("prose mention in echo", "echo 'never git commit here' > note.txt", True, False),
     ("fg commit (no bg)", "git commit -m ok", False, False),
     ("bg commit after heredoc", "cat > b.md <<'EOF'\nhello\nEOF\ngit commit -m real", True, True),
     ("pipe mask fg", "git commit -m x 2>&1 | tail -2", False, True),
     ("dry run bg", "git commit --dry-run", True, False),
+    # The PIPE rule was anchored to a LEADING `git`, so every one of these ran
+    # unblocked — and `cd <repo>; git commit ... | tail` is the DOMINANT form for
+    # any agent using absolute paths, not the rare one the code comment assumed.
+    # Observed live 2026-08-18 (genomics): a 342-file commit was reported landed
+    # on tail's rc=0 while the gate had actually rejected it.
+    ("pipe mask after cd;", "cd /r; git commit -m x 2>&1 | tail -2", False, True),
+    ("pipe mask after &&", "cd /r && git commit -m x | head -5", False, True),
+    ("pipe mask after newline", "cd /r\ngit commit -F m.txt 2>&1 | tail -25", False, True),
+    # Command-position anchoring must not re-open the prose/data false positive.
+    ("pipe pattern quoted in echo", "echo 'git commit -m x | tail' > n.txt", False, False),
+    ("pipe pattern in heredoc", "cat > b.md <<'EOF'\ngit commit -m x | tail\nEOF\n", False, False),
 ]
 
 

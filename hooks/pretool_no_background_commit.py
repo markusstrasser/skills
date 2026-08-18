@@ -8,6 +8,7 @@ loop-guard's scanner diverged 4× in 3 days; see lib header).
 Contract: read the PreToolUse JSON envelope on stdin; print "BG" or "PIPE" if the
 command is a masked commit (shell wrapper then blocks), print nothing if clean.
 """
+
 import json
 import re
 import sys
@@ -25,18 +26,32 @@ def classify(envelope: dict) -> str | None:
     cmd = strip_heredocs(cmd)
     # A real git commit INVOCATION: git at a command position (start, after ; && || | & or $( ),
     # not a mention of the words inside prose/echo arguments. Not --dry-run.
-    if not re.search(r"(?:^|[;&|]\s*|\$\(\s*)git\b[^|;&\n]*\bcommit\b", cmd, flags=re.M) or "--dry-run" in cmd:
+    if (
+        not re.search(r"(?:^|[;&|]\s*|\$\(\s*)git\b[^|;&\n]*\bcommit\b", cmd, flags=re.M)
+        or "--dry-run" in cmd
+    ):
         return None
     if ti.get("run_in_background"):
         return "BG"
-    # The commits own pipe into an exit-code-masking reader. Anchored to a LEADING
-    # `git ... commit` (the dominant real trap: `git commit -F m | tail`) so that a
-    # mere mention of the pattern inside an echo / heredoc / test harness — which
-    # starts with echo/cat/etc., not git — is not a false positive. The segment
-    # between commit and the pipe allows a single & (so `2>&1 |` is caught) but
-    # breaks on ; or && (a later `... | tail` on a *chained* command is not us).
-    # Misses X && git commit | tail (non-leading); rarer, and git log still catches it.
-    if re.search(r"^\s*git\b[^|;&]*\bcommit\b(?:[^|;&]|&(?!&))*\|\s*(tail|head|grep|sed|awk|cat|tee|less|more|wc)\b", cmd):
+    # The commit's own pipe into an exit-code-masking reader. Anchored to git at a
+    # COMMAND POSITION — start of string, or after ; && || or a newline — not to a
+    # leading git. The previous leading-only anchor called the non-leading case
+    # "rarer"; it is in fact the dominant one, because `cd <repo>; git commit ... |
+    # tail` is what any agent working with absolute paths writes. That miss let a
+    # 342-file commit report success on tail's rc=0 while the gate had rejected it
+    # (genomics, 2026-08-18).
+    #
+    # Command position (not bare `|`) is what keeps the 2026-07-04 prose/heredoc
+    # false positives dead: in `echo 'git commit -m x | tail'` the git is preceded
+    # by a quote, so it never sits at a command position. Heredocs are stripped
+    # above. The segment between commit and the pipe allows a single & (so `2>&1 |`
+    # is caught) but breaks on ; or && (a later `... | tail` on a *chained*
+    # command is not this commit's pipe).
+    if re.search(
+        r"(?:^|[;\n]|&&|\|\|)\s*git\b[^|;&]*\bcommit\b(?:[^|;&]|&(?!&))*"
+        r"\|\s*(tail|head|grep|sed|awk|cat|tee|less|more|wc)\b",
+        cmd,
+    ):
         return "PIPE"
     return None
 
