@@ -161,13 +161,47 @@ def _log_trigger(hook: str, action: str, detail: str, cmd: str = "") -> None:
 _IF_RE = re.compile(r"^Bash\((.*)\)$")
 
 
+_IF_SEGMENT_RE = re.compile(r"&&|\|\||;|\||\n")
+
+
 def _if_matches(if_pattern: str | None, cmd: str) -> bool:
+    """Match a gate predicate against every COMMAND POSITION, not just the string start.
+
+    `Bash(git*)` used to fnmatch the whole lstripped command, so a gate fired on
+    `git add -A` and was silently skipped on `cd /repo; git add -A`. Every
+    git-predicated gate inherited that hole — including the `git add -A` ban, the
+    destructive-ref guard, the multiagent-commit guard, and the masked-commit
+    guard — and `cd <repo>; git ...` is the DOMINANT phrasing for any agent using
+    absolute paths. Demonstrated 2026-08-18 (genomics): `git add -A --dry-run`
+    blocked; `cd /repo; git add -A --dry-run` ran unblocked.
+
+    The gates themselves already segment and match precisely (see
+    gate_git_add_all_guard), so widening the predicate restores their intended
+    reach rather than making them coarser.
+
+    Heredoc bodies AND quoted strings are stripped before segmenting. Splitting on
+    newlines/;/&& would otherwise expose DATA as a command position — the
+    2026-07-04 false-positive class (a brief containing "git commit" blocking the
+    write that would have created it). Caught during this very change: a test
+    command carrying 'git add -A' inside a quoted argument tripped the add-all ban
+    until strip_quoted was applied here too.
+    """
     if not if_pattern:
         return True
     m = _IF_RE.match(if_pattern)
     if not m:
         return True
-    return fnmatch.fnmatchcase((cmd or "").lstrip(), m.group(1))
+    glob = m.group(1)
+    text = cmd or ""
+    if fnmatch.fnmatchcase(text.lstrip(), glob):
+        return True
+    try:
+        from lib_bash_cmd_strip import strip_heredocs, strip_quoted
+
+        text = strip_quoted(strip_heredocs(text))
+    except Exception:  # fallback-ok — a missing stripper must not disable gating
+        pass
+    return any(fnmatch.fnmatchcase(segment.strip(), glob) for segment in _IF_SEGMENT_RE.split(text))
 
 
 def _jqlike_cmd(data: dict) -> str:
