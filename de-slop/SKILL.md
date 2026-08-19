@@ -198,6 +198,25 @@ Two corollaries:
 - **Don't over-flag.** 5-10 issues per 1000 words is a useful density. 30 flags becomes noise.
 - **Respect intentional style.** Gonzo journalism, personal essays, and poetry break these rules on purpose. Flag only when the pattern seems unintentional — regression to mean rather than a deliberate choice.
 
+## Procedural Text: Switch to the STE Catalog
+
+De-slop's default lens is *voice* — regression toward statistical-mean prose. That lens is wrong for
+**procedural text**: runbooks, error messages, install steps, incident procedures, API how-tos. There the
+failure is ambiguity for a tired reader, not blandness.
+
+For those, load `references/ste-rules.md` (ASD-STE100 Issue 9 paraphrase, 53 numbered rules in 9 sections)
+and flag against it: 20-word cap on instructions / 25 on description, one instruction per sentence,
+condition before command, one word one meaning, simple tenses, active voice. `references/ste-checklist.md`
+is the pre-delivery pass. `scripts/ste_lint.py` is a regex pre-screen (no passive/POS detection — it
+undercounts; use it to locate, never to certify).
+
+**Cite rule numbers only from the file.** The numbering is unintuitive and models invent it — an agent
+without the catalog cited "Rule 3.1: short sentences"; the real 3.1 is about verb forms.
+
+**Do NOT apply STE to:** research memos, decision journals, `.claude/rules/*`, commit bodies, or anything
+argumentative. Those carry conditional logic in subordinate clauses and domain terms that a 20-word cap and
+a controlled vocabulary destroy. Global `canonical-answer-format.md` already governs that class.
+
 ## Evidence Anchors
 
 The patterns in this skill are not folk wisdom; the 2024–2026 literature has formalized most of them. Brief anchors so future revisions have a falsifiable trail:
