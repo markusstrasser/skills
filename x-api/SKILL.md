@@ -28,6 +28,27 @@ python3 ~/Projects/skills/x-api/scripts/probe.py aleabitoreddit 10
 python3 ~/Projects/skills/x-api/scripts/probe.py aleabitoreddit 100 2026-04-01T00:00:00Z
 ```
 
+### `search.py query|verify|thread` — full-archive search (added 2026-08-20)
+
+Promoted after being hand-rolled 4× across two research sessions. Wraps
+`/2/tweets/search/all` with ledger discipline and the operational lessons baked in.
+
+```
+python3 ~/Projects/skills/x-api/scripts/search.py query '"greater male variability" lang:en' --out hits.jsonl --label mytopic
+python3 ~/Projects/skills/x-api/scripts/search.py verify StuartJRitchie lakens cremieuxrecueil
+python3 ~/Projects/skills/x-api/scripts/search.py thread 1234567890 --author whyvert
+```
+
+Rules it encodes (learned the expensive way):
+- **verify handles BEFORE `from:` queries** — a wrong training-data handle reads as a
+  silent zero, and squatters shadow real names (<100-follower flag printed).
+- **Quotes in, pure RTs out by default** (`-is:retweet` auto-appended; quotes carry the
+  commentary). `--with-retweets` to override.
+- **A zero result means "not keyword-reachable in this phrasing," never "doesn't exist"**
+  — search the discourse's own vocabulary, not your methods jargon.
+- 402 = vendor credit balance (developer.x.com), NOT the local $100/mo ledger cap.
+- Every returned post bills $0.005 — `--pages` caps spend deliberately.
+
 ### `pull --config FILE [--since-hours 24] [--max-pages 2] [--digest-out PATH] [--tracked-tickers-file PATH] [--themes-dir PATH]`
 
 Read a JSON account-list, pull tweets since N hours ago, filter for cashtags
