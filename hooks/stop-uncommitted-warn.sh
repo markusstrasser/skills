@@ -372,10 +372,32 @@ if not new_changes:
         u = len(unattributable_fresh)
         uplural = "s" if u != 1 else ""
         ulist = "\n".join(unattributable_fresh[:10])
-        parts.append(f"{u} changed file{uplural} were written by a background subprocess (a codex/llmx "
-               f"worker YOU launched, or local automation), NOT via the Edit/Write tool, so this "
-               f"session did not auto-commit them. No peer claude shares this checkout, so they are "
-               f"most likely YOURS: review and commit explicitly:\n{ulist}")
+        # Peer detection above only sees peer CLAUDE sessions. A live INTERACTIVE codex
+        # session editing the same checkout is invisible to it, so "most likely YOURS"
+        # misattributed in-flight codex kernel edits 3x in one evening
+        # (genomics 2026-08-23: exomiser/lirical, rs17822931 audit, receipt_realization).
+        # Cheap liveness proxy: any codex rollout written in the last 15 min. Message-only
+        # branch -- never changes commit behavior. NOTE: this whole program lives inside a
+        # single-quoted python3 -c string -- NO apostrophes anywhere in it.
+        codex_live = False
+        try:
+            _codex_root = os.path.join(os.path.expanduser("~"), ".codex", "sessions")
+            codex_live = bool(subprocess.run(
+                ["find", _codex_root, "-name", "*.jsonl", "-mmin", "-15", "-print", "-quit"],
+                capture_output=True, text=True, timeout=5,
+            ).stdout.strip())
+        except Exception:
+            pass
+        if codex_live:
+            parts.append(f"{u} changed file{uplural} were written outside the Edit/Write tools of "
+                   f"this session, so this session did not auto-commit them. A codex session was "
+                   f"ACTIVE in the last 15 min and may own these as in-flight edits -- verify "
+                   f"ownership before committing; do NOT sweep the work of a live peer:\n{ulist}")
+        else:
+            parts.append(f"{u} changed file{uplural} were written by a background subprocess (a codex/llmx "
+                   f"worker YOU launched, or local automation), NOT via the Edit/Write tool, so this "
+                   f"session did not auto-commit them. No peer claude shares this checkout, so they are "
+                   f"most likely YOURS: review and commit explicitly:\n{ulist}")
     if parts:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": "\n\n".join(parts)}}))
     sys.exit(0)
