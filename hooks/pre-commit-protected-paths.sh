@@ -11,7 +11,7 @@
 # Config: <repo-root>/.precommit-guards.env, parsed as INERT key=value (NEVER
 # sourced — sourcing repo-controlled content is an RCE + lets an agent disable the
 # guard; cross-model review 2026-06-07). Recognized keys (others ignored):
-#   PRECOMMIT_APPENDONLY_PATHS  ERE regex; matching files may only GROW BY APPEND
+#   PRECOMMIT_APPENDONLY_PATHS  ERE regex; matching files may only GROW (insert anywhere; never remove/reorder a line)
 #                               (block delete/rename, and any change to existing
 #                                bytes — byte-prefix check, not line count)
 #   PRECOMMIT_PROTECTED_PATHS   ERE regex; matching files immutable-once-written
@@ -67,21 +67,42 @@ while IFS= read -r path; do
 done < <(git diff --cached --name-only --diff-filter=MDTR -- 2>/dev/null)
 
 if [ -n "$APPENDONLY" ]; then
-    # Deletion / rename of an append-only file (--no-renames so a move shows as D).
-    while IFS= read -r path; do
-        [ -z "$path" ] && continue
-        echo "$path" | grep -qE "$APPENDONLY" && violations+=("APPEND-ONLY deleted: $path")
-    done < <(git diff --cached --name-only --no-renames --diff-filter=DT -- 2>/dev/null)
+    # Pure renames (R100) keep every byte; collect their sources so the deletion
+    # check below does not read a `git mv` as a loss. (2026-08-24: a 35-file
+    # directory move of dispatch dumps was blocked as 35 deletions.)
+    renamed_from=()
+    while IFS=$'\t' read -r status src dst; do
+        [ -z "$status" ] && continue
+        case "$status" in R100) renamed_from+=("$src") ;; esac
+    done < <(git diff --cached --name-status -M100% -- 2>/dev/null)
+    is_pure_rename_source() {
+        local p="$1" r
+        for r in ${renamed_from[@]+"${renamed_from[@]}"}; do [ "$r" = "$p" ] && return 0; done
+        return 1
+    }
 
-    # Modification: the staged blob must START WITH the full HEAD blob (pure append).
-    # Byte-prefix check — catches same-line-count rewrites that a line count misses.
+    # Deletion / retype of an append-only file (--no-renames so a lossy move shows as D).
     while IFS= read -r path; do
         [ -z "$path" ] && continue
         echo "$path" | grep -qE "$APPENDONLY" || continue
-        old_size=$(git cat-file -s "HEAD:$path" 2>/dev/null || echo 0)
-        if ! cmp -s <(git cat-file blob "HEAD:$path" 2>/dev/null) \
-                    <(git cat-file blob ":$path" 2>/dev/null | head -c "$old_size"); then
-            violations+=("APPEND-ONLY existing content changed (not a pure append): $path")
+        is_pure_rename_source "$path" && continue
+        violations+=("APPEND-ONLY deleted: $path")
+    done < <(git diff --cached --name-only --no-renames --diff-filter=DT -- 2>/dev/null)
+
+    # Modification: append-only means "expand, never shrink" — every HEAD line must
+    # survive, in order, in the staged blob (ordered subsequence). Insertions
+    # anywhere pass (a frontmatter key, a dated entry at the top of a changelog);
+    # a removed, rewritten, or reordered line fails. The previous byte-prefix
+    # check rejected every insertion that was not at EOF, which forced
+    # GIT_ALLOW_GUARD_BYPASS on three legitimate edits in one day (2026-08-24) —
+    # a guard that trains bypass reflexes protects nothing.
+    while IFS= read -r path; do
+        [ -z "$path" ] && continue
+        echo "$path" | grep -qE "$APPENDONLY" || continue
+        if ! awk 'BEGIN { i = 0; n = 0 } NR==FNR { old[n++] = $0; next } { if (i < n && $0 == old[i]) i++ } END { exit (i == n) ? 0 : 1 }' \
+                <(git cat-file blob "HEAD:$path" 2>/dev/null) \
+                <(git cat-file blob ":$path" 2>/dev/null); then
+            violations+=("APPEND-ONLY existing content removed, rewritten, or reordered (insertions are fine): $path")
         fi
     done < <(git diff --cached --name-only --no-renames --diff-filter=M -- 2>/dev/null)
 fi
