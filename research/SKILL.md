@@ -42,7 +42,7 @@ If 3+ sessions active: keep questions shorter, batch ambiguous items.
 - **Factual lookup (need the number):** Exa `web_search_advanced_exa` → Brave. `perplexity_ask` ONLY for biomedical exact numbers (bp/OR/gene sizes; 5-0 vs Exa on the genomics eval) after Exa/Brave miss.
 - **Factual verification (have the number):** `verify_claim` (Exa /answer, ~$0.005, cached 7d).
 - **Academic papers:** `search_papers` (S2) → `fetch_paper` + `read_paper` before citing.
-- **Recent papers (<6mo):** `web_search_advanced_exa` `category:"research paper"` + date filter (S2 has no date filter).
+- **Recent papers (<6mo):** `web_search_advanced_exa` `category:"publication"` + date filter (S2 has no date filter; the enum is `publication` — `"research paper"` is rejected by the tool schema).
 - **Recent preprints:** `search_preprints` (bioRxiv/medRxiv, free, date-range).
 - **Citation stance:** `search_literature` (scite). **Patents/grants/FDA 510(k)/MHRA:** scite Pro (no fleet equivalent).
 - **Entity enrichment:** `web_search_advanced_exa` `type:"deep"` + `outputSchema` (per-field citations).
@@ -395,3 +395,5 @@ end-knowledge-index -->
 - **[2026-08-17] Exa web_search_advanced_exa date filter unreliable for category=publication (null dates, 2024/25 leakage) — for dated arXiv sweeps use the arXiv Atom API with submittedDate ranges (2026-08-17 design-agents lane)**
 
 - **[2026-08-17] verify_citations.py regex misses bare arXiv IDs like "2607.20767" without an "arXiv:" prefix — reports vacuous PASS; curl-loop the abs pages as backstop until fixed (2026-08-17)**
+
+- **[2026-08-24] fetch_paper 0/8 on 2026 open-access DOIs (Nature/BMC/MDPI/Cambridge: Sci-Hub has no 2026 content, Unpaywall missed; 3 of the 8 hung >120s). Working route for anything with a PMCID: EuropePMC `https://www.ebi.ac.uk/europepmc/webservices/rest/<PMCID>/fullTextXML` (6/6, no wall; S2 `search_papers` returns the PMCID). Publisher HTML via urllib → 3 KB cookie walls; bioRxiv 429; Sage/T&F 403; `crawling_exa` OK on nature.com/mdpi/BMC HTML but times out on Springer PDFs and OSF downloads (plain `curl -L` gets the OSF PDF). `search_preprints` returned [] on 3 well-formed queries the same day (2026-08-24, iq-sex-differences)**
