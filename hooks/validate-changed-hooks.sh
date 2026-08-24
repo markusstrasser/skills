@@ -130,14 +130,17 @@ fi
 # runnable. Opt-in by design: a test with no trigger line is never run here (so an unrelated
 # or pre-existing-failing test can't block hook commits). Repo-agnostic — reads triggers from
 # whatever test_*.py live beside the changed hooks. Tests are stdlib + fast.
-# bash 3.2 has no associative arrays — dedupe dirs with a plain list.
-_testdirs=""
+# bash 3.2 has no associative arrays — dedupe dirs with a linear scan over a plain
+# array (quoted expansion keeps a spaced path intact; a string list would split it).
+_testdirs=()
 for f in "${STAGED[@]}"; do
     is_hook_path "$f" || continue
     _d=$(dirname "$f")
-    case " $_testdirs " in *" $_d "*) ;; *) _testdirs="$_testdirs $_d" ;; esac
+    _seen=0
+    for _e in ${_testdirs[@]+"${_testdirs[@]}"}; do [ "$_e" = "$_d" ] && { _seen=1; break; }; done
+    [ "$_seen" -eq 0 ] && _testdirs+=("$_d")
 done
-for d in $_testdirs; do
+for d in ${_testdirs[@]+"${_testdirs[@]}"}; do
     for t in "$d"/test_*.py; do
         [ -f "$t" ] || continue
         trig=$(grep -m1 '^# precommit-trigger:' "$t" 2>/dev/null | sed 's/^# precommit-trigger://')
