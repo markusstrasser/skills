@@ -11,9 +11,12 @@
 # Config: <repo-root>/.precommit-guards.env, parsed as INERT key=value (NEVER
 # sourced — sourcing repo-controlled content is an RCE + lets an agent disable the
 # guard; cross-model review 2026-06-07). Recognized keys (others ignored):
-#   PRECOMMIT_APPENDONLY_PATHS  ERE regex; matching files may only GROW (insert anywhere; never remove/reorder a line)
-#                               (block delete/rename, and any change to existing
-#                                bytes — byte-prefix check, not line count)
+#   PRECOMMIT_APPENDONLY_PATHS  ERE regex; matching files may only GROW: every HEAD line
+#                               must survive, in order, in the staged blob (ordered
+#                               subsequence — insertions anywhere pass; a removed,
+#                               rewritten, or reordered line fails). Delete/retype is
+#                               blocked; a pure rename (R100) passes only when the
+#                               destination also matches the pattern.
 #   PRECOMMIT_PROTECTED_PATHS   ERE regex; matching files immutable-once-written
 #                               (block staged M/D/T/rename; new adds A allowed)
 # The config file itself is ALWAYS protected (hardcoded) so it can't be neutered.
@@ -69,15 +72,20 @@ done < <(git diff --cached --name-only --diff-filter=MDTR -- 2>/dev/null)
 if [ -n "$APPENDONLY" ]; then
     # Pure renames (R100) keep every byte; collect their sources so the deletion
     # check below does not read a `git mv` as a loss. (2026-08-24: a 35-file
-    # directory move of dispatch dumps was blocked as 35 deletions.)
-    renamed_from=()
+    # directory move of dispatch dumps was blocked as 35 deletions.) Only a rename
+    # whose DESTINATION is also append-only is exempt — moving a file out of the
+    # stream would let the next commit rewrite it unguarded (review finding,
+    # 2026-08-24), so that reads as the deletion it is.
+    renamed_within=()
     while IFS=$'\t' read -r status src dst; do
         [ -z "$status" ] && continue
-        case "$status" in R100) renamed_from+=("$src") ;; esac
+        case "$status" in
+            R100) echo "$dst" | grep -qE "$APPENDONLY" && renamed_within+=("$src") ;;
+        esac
     done < <(git diff --cached --name-status -M100% -- 2>/dev/null)
-    is_pure_rename_source() {
+    is_pure_rename_within_stream() {
         local p="$1" r
-        for r in ${renamed_from[@]+"${renamed_from[@]}"}; do [ "$r" = "$p" ] && return 0; done
+        for r in ${renamed_within[@]+"${renamed_within[@]}"}; do [ "$r" = "$p" ] && return 0; done
         return 1
     }
 
@@ -85,8 +93,8 @@ if [ -n "$APPENDONLY" ]; then
     while IFS= read -r path; do
         [ -z "$path" ] && continue
         echo "$path" | grep -qE "$APPENDONLY" || continue
-        is_pure_rename_source "$path" && continue
-        violations+=("APPEND-ONLY deleted: $path")
+        is_pure_rename_within_stream "$path" && continue
+        violations+=("APPEND-ONLY deleted or moved out of the append-only stream: $path")
     done < <(git diff --cached --name-only --no-renames --diff-filter=DT -- 2>/dev/null)
 
     # Modification: append-only means "expand, never shrink" — every HEAD line must
@@ -99,6 +107,10 @@ if [ -n "$APPENDONLY" ]; then
     while IFS= read -r path; do
         [ -z "$path" ] && continue
         echo "$path" | grep -qE "$APPENDONLY" || continue
+        if ! git cat-file -e "HEAD:$path" 2>/dev/null; then
+            violations+=("APPEND-ONLY HEAD blob unreadable, cannot prove nothing was lost: $path")
+            continue
+        fi
         if ! awk 'BEGIN { i = 0; n = 0 } NR==FNR { old[n++] = $0; next } { if (i < n && $0 == old[i]) i++ } END { exit (i == n) ? 0 : 1 }' \
                 <(git cat-file blob "HEAD:$path" 2>/dev/null) \
                 <(git cat-file blob ":$path" 2>/dev/null); then
