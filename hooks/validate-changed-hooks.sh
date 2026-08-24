@@ -27,7 +27,11 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 
 # Staged, added/copied/modified files (skip deletions).
-mapfile -t STAGED < <(git diff --cached --name-only --diff-filter=ACM 2>/dev/null)
+# bash 3.2 (macOS system bash) has no `mapfile` — read the list portably.
+STAGED=()
+while IFS= read -r _staged_line; do
+    [ -n "$_staged_line" ] && STAGED+=("$_staged_line")
+done < <(git diff --cached --name-only --diff-filter=ACM 2>/dev/null)
 [ "${#STAGED[@]}" -eq 0 ] && exit 0
 
 is_hook_path() {
@@ -126,9 +130,14 @@ fi
 # runnable. Opt-in by design: a test with no trigger line is never run here (so an unrelated
 # or pre-existing-failing test can't block hook commits). Repo-agnostic — reads triggers from
 # whatever test_*.py live beside the changed hooks. Tests are stdlib + fast.
-declare -A _testdirs=()
-for f in "${STAGED[@]}"; do is_hook_path "$f" && _testdirs["$(dirname "$f")"]=1; done
-for d in "${!_testdirs[@]}"; do
+# bash 3.2 has no associative arrays — dedupe dirs with a plain list.
+_testdirs=""
+for f in "${STAGED[@]}"; do
+    is_hook_path "$f" || continue
+    _d=$(dirname "$f")
+    case " $_testdirs " in *" $_d "*) ;; *) _testdirs="$_testdirs $_d" ;; esac
+done
+for d in $_testdirs; do
     for t in "$d"/test_*.py; do
         [ -f "$t" ] || continue
         trig=$(grep -m1 '^# precommit-trigger:' "$t" 2>/dev/null | sed 's/^# precommit-trigger://')
