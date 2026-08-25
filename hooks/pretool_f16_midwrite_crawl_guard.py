@@ -19,19 +19,17 @@ from dataclasses import dataclass
 from typing import Any
 
 
-_CRAWL_COMMANDS = re.compile(
-    r"\bjust\s+(?:sample-remediation|sample-state|sample-readiness)\b"
-)
+# `just sample-remediation` left this set on 2026-08-25: its ledger is served
+# from the PG realization index (genomics 603d1f3ac deleted the volume crawl),
+# and a listdir tripwire over a full markus build recorded zero VolumeListFiles
+# calls. Re-add a recipe here only with a measured listing count, never by name.
+_CRAWL_COMMANDS = re.compile(r"\bjust\s+(?:sample-state|sample-readiness)\b")
 _TARGET_SCOPE = re.compile(r"--target\b|--stage\b")
 _PULL_COMMAND = re.compile(r"modal_sync_results\.py\s+pull\b")
 _ALL_SCOPE = re.compile(r"--all\b")
 _SUMMARY_ONLY = re.compile(r"--summaries-only\b")
-_RECURSIVE_VOLUME_LIST = re.compile(
-    r"\bmodal\s+volume\s+ls\b.*(?:\s-R\b|--recursive\b)"
-)
-_RESULTS_ROOT_LIST = re.compile(
-    r"\bmodal\s+volume\s+ls\b[^|;&]*samples/\S+/results/?\s*$"
-)
+_RECURSIVE_VOLUME_LIST = re.compile(r"\bmodal\s+volume\s+ls\b.*(?:\s-R\b|--recursive\b)")
+_RESULTS_ROOT_LIST = re.compile(r"\bmodal\s+volume\s+ls\b[^|;&]*samples/\S+/results/?\s*$")
 _CANONICAL_STAGE_IDENTITY = "--gcpid-"
 
 
@@ -49,12 +47,9 @@ def is_full_dag_crawl(command: str) -> bool:
         and not _TARGET_SCOPE.search(command)
         and not _SUMMARY_ONLY.search(command)
     )
-    broad_status = bool(
-        _CRAWL_COMMANDS.search(command) and not _TARGET_SCOPE.search(command)
-    )
+    broad_status = bool(_CRAWL_COMMANDS.search(command) and not _TARGET_SCOPE.search(command))
     recursive_list = bool(
-        _RECURSIVE_VOLUME_LIST.search(command)
-        or _RESULTS_ROOT_LIST.search(command)
+        _RECURSIVE_VOLUME_LIST.search(command) or _RESULTS_ROOT_LIST.search(command)
     )
     return broad_pull or broad_status or recursive_list
 
@@ -116,9 +111,7 @@ def evaluate(
     command = str(tool_input.get("command") or "")
     if not command or not is_full_dag_crawl(command):
         return GuardDecision(blocked=False)
-    if os.environ.get("GENOMICS_F16_ACK") or re.search(
-        r"\bGENOMICS_F16_ACK=1\b", command
-    ):
+    if os.environ.get("GENOMICS_F16_ACK") or re.search(r"\bGENOMICS_F16_ACK=1\b", command):
         return GuardDecision(blocked=False)
     rows = app_loader()
     if rows is None:

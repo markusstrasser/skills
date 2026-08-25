@@ -30,35 +30,27 @@ def _stage_app(*, state: str = "ephemeral", tasks: str = "1") -> dict[str, str]:
 
 class F16GuardTests(unittest.TestCase):
     def test_crawl_classifier_distinguishes_list_free_and_scoped_commands(self) -> None:
-        self.assertTrue(is_full_dag_crawl("just sample-remediation syn4sr --json"))
+        self.assertTrue(is_full_dag_crawl("just sample-state syn4sr"))
         self.assertTrue(
+            is_full_dag_crawl("uv run python3 scripts/modal_sync_results.py pull syn4sr --all")
+        )
+        # Index-served since the crawl deletion: zero VolumeListFiles per build.
+        self.assertFalse(is_full_dag_crawl("just sample-remediation syn4sr --json"))
+        self.assertFalse(is_full_dag_crawl("just sample-state syn4sr --target deepvariant"))
+        self.assertFalse(
             is_full_dag_crawl(
-                "uv run python3 scripts/modal_sync_results.py pull syn4sr --all"
+                "uv run python3 scripts/modal_sync_results.py pull syn4sr --all --summaries-only"
             )
         )
         self.assertFalse(
             is_full_dag_crawl(
-                "just sample-remediation syn4sr --target deepvariant"
-            )
-        )
-        self.assertFalse(
-            is_full_dag_crawl(
-                "uv run python3 scripts/modal_sync_results.py pull syn4sr --all "
-                "--summaries-only"
-            )
-        )
-        self.assertFalse(
-            is_full_dag_crawl(
-                "uv run python3 scripts/modal_sync_results.py freshness "
-                "--sample syn4sr --all"
+                "uv run python3 scripts/modal_sync_results.py freshness --sample syn4sr --all"
             )
         )
 
     def test_writer_requires_canonical_identity_and_positive_task_count(self) -> None:
         self.assertTrue(is_genomics_stage_writer(_stage_app()))
-        self.assertTrue(
-            is_genomics_stage_writer(_stage_app(state="ephemeral (detached)"))
-        )
+        self.assertTrue(is_genomics_stage_writer(_stage_app(state="ephemeral (detached)")))
         self.assertFalse(is_genomics_stage_writer(_stage_app(tasks="0")))
         self.assertFalse(is_genomics_stage_writer(_stage_app(state="stopped")))
         self.assertFalse(
@@ -82,25 +74,21 @@ class F16GuardTests(unittest.TestCase):
             },
             _stage_app(state="ephemeral (detached)", tasks="0"),
         ]
-        decision = evaluate(
-            _payload("just sample-remediation syn4sr --json"), app_loader=lambda: rows
-        )
+        decision = evaluate(_payload("just sample-state syn4sr"), app_loader=lambda: rows)
         self.assertFalse(decision.blocked)
         self.assertEqual(decision.writers, ())
 
     def test_task_bearing_detached_stage_app_blocks(self) -> None:
         writer = _stage_app(state="ephemeral (detached)", tasks="1")
         decision = evaluate(
-            _payload("just sample-remediation syn4sr --json"),
+            _payload("just sample-state syn4sr"),
             app_loader=lambda: [writer],
         )
         self.assertTrue(decision.blocked)
         self.assertEqual(decision.writers, (writer,))
 
     def test_modal_inventory_failure_is_fail_open(self) -> None:
-        decision = evaluate(
-            _payload("just sample-remediation syn4sr --json"), app_loader=lambda: None
-        )
+        decision = evaluate(_payload("just sample-state syn4sr"), app_loader=lambda: None)
         self.assertFalse(decision.blocked)
 
 
