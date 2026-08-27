@@ -23,6 +23,10 @@ while IFS= read -r _seg; do
   _seg=$(echo "$_seg" | sed 's/^ *//')
   echo "$_seg" | grep -qE '^(command +)?(wc|ls|head|tail|stat|cat|du)\b' || continue
   _p=$(echo "$_seg" | grep -oE '(/[^ |;>&]+)' | head -1)
+  # A path that is the segment's REDIRECT TARGET is being written, not polled:
+  # `cat >> /x/checkpoint.md <<'EOF'` is an append. 15 checkpoint appends in one
+  # session (genomics 2026-08-27) tripped the counter as "Polled /checkpoint.md 15x".
+  [ -n "$_p" ] && echo "$_seg" | grep -qE ">>?[[:space:]]*\"?${_p}" && continue
   [ -n "$_p" ] && { PATH_TARGET="$_p"; break; }
 done <<EOF_SEGS
 $(echo "$CMD_CLEAN" | sed 's/&&/\n/g; s/||/\n/g' | tr '|;' '\n')
