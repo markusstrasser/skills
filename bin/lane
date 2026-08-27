@@ -9,9 +9,10 @@ usage() {
   cat >&2 <<'EOF'
 usage:
   lane run <name> --repo <path> --brief <file> [--worker codex|claude] [--no-worktree] [--base <ref>]
+  lane review <name> [--model <m>] [--effort <e>] [--focus <file>] [--out <file>] [--bg]
   lane ls [--stall-min <minutes>]
   lane stop <name>
-  lane resume <name>
+  lane resume <name> [--note <file>|--no-note]
   lane reap <name> [--force]
 EOF
 }
@@ -47,9 +48,10 @@ validate_plain_value() {
 
 absolute_file() {
   local path="$1"
+  local label="${2:-brief}"
   local dir
   local base
-  [ -f "$path" ] || die "brief does not exist: $path"
+  [ -f "$path" ] || die "$label does not exist: $path"
   dir=$(cd "$(dirname "$path")" && pwd -P)
   base=$(basename "$path")
   printf '%s/%s\n' "$dir" "$base"
@@ -65,6 +67,18 @@ log_path() {
 
 done_path() {
   printf '%s/%s.done\n' "$LANE_HOME" "$1"
+}
+
+review_done_path() {
+  printf '%s/%s.review.done\n' "$LANE_HOME" "$1"
+}
+
+review_pid_path() {
+  printf '%s/%s.review.pid\n' "$LANE_HOME" "$1"
+}
+
+review_lock_path() {
+  printf '%s/%s.review.lock\n' "$LANE_HOME" "$1"
 }
 
 json_write() {
@@ -85,6 +99,7 @@ import sys
     brief,
     pid,
     started_at,
+    started_epoch,
     worker,
     base,
     branch,
@@ -97,6 +112,7 @@ payload = {
     "brief": brief,
     "pid": int(pid),
     "started_at": started_at,
+    "started_epoch": int(started_epoch) if started_epoch else "",
     "worker": worker,
     "base": base,
     "branch": branch,
@@ -129,6 +145,23 @@ PY
 
 lane_group_is_alive() {
   local pid="$1"
+  local started_epoch="${2:-}"
+  local current_started_epoch
+  case "$pid" in
+    "" | *[!0-9]*) return 1 ;;
+  esac
+  [ "$pid" -gt 1 ] 2>/dev/null || return 1
+  kill -0 -- "-$pid" 2>/dev/null || return 1
+  if [ -z "$started_epoch" ]; then
+    echo "lane: warning: no recorded started_epoch for process group $pid; falling back to pid liveness" >&2
+    return 0
+  fi
+  current_started_epoch=$(process_started_epoch "$pid")
+  [ -n "$current_started_epoch" ] && [ "$current_started_epoch" = "$started_epoch" ]
+}
+
+process_group_exists() {
+  local pid="$1"
   case "$pid" in
     "" | *[!0-9]*) return 1 ;;
   esac
@@ -136,15 +169,58 @@ lane_group_is_alive() {
   kill -0 -- "-$pid" 2>/dev/null
 }
 
+review_process_is_alive() {
+  local pid="$1"
+  local started_epoch="${2:-}"
+  local current_started_epoch
+  case "$pid" in
+    "" | *[!0-9]*) return 1 ;;
+  esac
+  [ "$pid" -gt 1 ] 2>/dev/null || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  if [ -z "$started_epoch" ]; then
+    echo "lane: warning: no recorded started_epoch for review pid $pid; falling back to pid liveness" >&2
+    return 0
+  fi
+  current_started_epoch=$(process_started_epoch "$pid")
+  [ -n "$current_started_epoch" ] && [ "$current_started_epoch" = "$started_epoch" ]
+}
+
+process_started_epoch() {
+  local pid="$1"
+  local lstart
+  local epoch
+  case "$pid" in
+    "" | *[!0-9]*)
+      echo ""
+      return
+      ;;
+  esac
+  lstart=$(LC_ALL=C ps -o lstart= -p "$pid" 2>/dev/null | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' || true)
+  [ -n "$lstart" ] || {
+    echo ""
+    return
+  }
+  epoch=$(LC_ALL=C date -j -f '%a %b %e %T %Y' "$lstart" '+%s' 2>/dev/null || true)
+  if [ -z "$epoch" ]; then
+    epoch=$(LC_ALL=C date -d "$lstart" '+%s' 2>/dev/null || true)
+  fi
+  case "$epoch" in
+    "" | *[!0-9]*) echo "" ;;
+    *) echo "$epoch" ;;
+  esac
+}
+
 wait_for_group_exit() {
   local pid="$1"
-  local attempts="$2"
+  local started_epoch="$2"
+  local attempts="$3"
   local count=0
-  while lane_group_is_alive "$pid" && [ "$count" -lt "$attempts" ]; do
+  while lane_group_is_alive "$pid" "$started_epoch" && [ "$count" -lt "$attempts" ]; do
     sleep 0.1
     count=$((count + 1))
   done
-  ! lane_group_is_alive "$pid"
+  ! lane_group_is_alive "$pid" "$started_epoch"
 }
 
 file_mtime() {
@@ -191,7 +267,8 @@ format_age() {
 lane_state() {
   local name="$1"
   local pid="$2"
-  local stall_min="$3"
+  local started_epoch="$3"
+  local stall_min="$4"
   local marker
   local marker_value
   local age
@@ -204,7 +281,7 @@ lane_state() {
     esac
     return
   fi
-  if lane_group_is_alive "$pid"; then
+  if lane_group_is_alive "$pid" "$started_epoch"; then
     age=$(log_age_seconds "$(log_path "$name")")
     if [ "$age" -gt $((stall_min * 60)) ]; then
       echo "STALLED"
@@ -261,15 +338,15 @@ ensure_worktree() {
 build_prompt() {
   local worker="$1"
   local brief="$2"
-  local resume_mode="$3"
+  local resume_note="$3"
   local prompt
   if [ "$worker" = "claude" ]; then
     prompt=$(<"$brief")
   else
     prompt="Do the task in $brief."
   fi
-  if [ "$resume_mode" = "true" ]; then
-    prompt="$(<"$LANE_HOME/resume-note.md")
+  if [ -n "$resume_note" ]; then
+    prompt="$(<"$resume_note")
 
 $prompt"
   fi
@@ -297,11 +374,13 @@ launch_worker() {
   local branch="$7"
   local no_worktree="$8"
   local resume_mode="$9"
+  local resume_note="${10}"
   local metadata
   local log
   local marker
   local prompt
   local started_at
+  local started_epoch
   local launch_pid
 
   metadata=$(metadata_path "$name")
@@ -309,8 +388,10 @@ launch_worker() {
   marker=$(done_path "$name")
   if [ -f "$metadata" ]; then
     local old_pid
+    local old_started_epoch
     old_pid=$(json_get "$metadata" pid 2>/dev/null || true)
-    if [ -n "$old_pid" ] && lane_group_is_alive "$old_pid" && [ ! -f "$marker" ]; then
+    old_started_epoch=$(json_get "$metadata" started_epoch 2>/dev/null || true)
+    if [ -n "$old_pid" ] && lane_group_is_alive "$old_pid" "$old_started_epoch" && [ ! -f "$marker" ]; then
       die "$name is already running as pid $old_pid"
     fi
   fi
@@ -318,7 +399,7 @@ launch_worker() {
   mkdir -p "$LANE_HOME"
   rm -f "$marker"
   : >"$log"
-  prompt=$(build_prompt "$worker" "$brief" "$resume_mode")
+  prompt=$(build_prompt "$worker" "$brief" "$resume_note")
   started_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
   # Job control makes the nohup wrapper a process-group leader on macOS, where
@@ -363,11 +444,15 @@ launch_worker() {
   set +m
   disown "$launch_pid" 2>/dev/null || true
 
-  if ! lane_group_is_alive "$launch_pid"; then
+  if ! process_group_exists "$launch_pid"; then
     kill "$launch_pid" 2>/dev/null || true
     die "could not isolate worker process group for pid $launch_pid"
   fi
-  if ! json_write "$metadata" "$name" "$repo" "$worktree" "$brief" "$launch_pid" "$started_at" "$worker" "$base" "$branch" "$no_worktree"; then
+  started_epoch=$(process_started_epoch "$launch_pid")
+  if [ -z "$started_epoch" ]; then
+    echo "lane: warning: could not record started_epoch for process group $launch_pid" >&2
+  fi
+  if ! json_write "$metadata" "$name" "$repo" "$worktree" "$brief" "$launch_pid" "$started_at" "$started_epoch" "$worker" "$base" "$branch" "$no_worktree"; then
     kill -TERM -- "-$launch_pid" 2>/dev/null || true
     die "could not write metadata: $metadata"
   fi
@@ -395,6 +480,7 @@ cmd_run() {
   local existing_repo
   local existing_no_worktree
   local existing_pid
+  local existing_started_epoch
 
   validate_name "$name"
   while [ "$#" -gt 0 ]; do
@@ -440,7 +526,8 @@ cmd_run() {
     existing_repo=$(json_get "$(metadata_path "$name")" repo) || die "invalid metadata for $name"
     existing_no_worktree=$(json_get "$(metadata_path "$name")" no_worktree) || die "invalid metadata for $name"
     existing_pid=$(json_get "$(metadata_path "$name")" pid) || die "invalid metadata for $name"
-    if [ ! -f "$(done_path "$name")" ] && lane_group_is_alive "$existing_pid"; then
+    existing_started_epoch=$(json_get "$(metadata_path "$name")" started_epoch 2>/dev/null || true)
+    if [ ! -f "$(done_path "$name")" ] && lane_group_is_alive "$existing_pid" "$existing_started_epoch"; then
       die "$name is already running as pid $existing_pid"
     fi
     [ "$existing_repo" = "$repo_root" ] || die "$name already belongs to repository $existing_repo"
@@ -449,7 +536,299 @@ cmd_run() {
   worktree_and_branch=$(ensure_worktree "$name" "$repo_root" "$base" "$no_worktree")
   worktree=${worktree_and_branch%%$'\t'*}
   branch=${worktree_and_branch#*$'\t'}
-  launch_worker "$name" "$repo_root" "$worktree" "$brief" "$worker" "$base" "$branch" "$no_worktree" false
+  launch_worker "$name" "$repo_root" "$worktree" "$brief" "$worker" "$base" "$branch" "$no_worktree" false ""
+}
+
+newest_audit_report() {
+  local worktree="$1"
+  require_python
+  python3 - "$worktree/docs/audit" <<'PY'
+import os
+import sys
+
+root = sys.argv[1]
+candidates = []
+if os.path.isdir(root):
+    for directory, _, files in os.walk(root):
+        for filename in files:
+            if filename.endswith("-report.md"):
+                path = os.path.join(directory, filename)
+                candidates.append((os.stat(path).st_mtime_ns, path))
+if candidates:
+    print(max(candidates)[1])
+PY
+}
+
+build_review_patch() {
+  local name="$1"
+  local worktree="$2"
+  local report="${3:-}"
+  local patch="$LANE_HOME/$name.patch"
+  local header="${patch}.header.tmp.$$"
+  local body="${patch}.body.tmp.$$"
+  local file_diff="${patch}.file.tmp.$$"
+  local output="${patch}.tmp.$$"
+  local path
+  local full_path
+  local report_relative=""
+  local kind
+  local size
+  local rc
+
+  printf '# lane review patch: %s\n# worktree: %s\n' "$name" "$worktree" >"$header"
+  case "$report" in
+    "$worktree"/*) report_relative=${report#"$worktree"/} ;;
+  esac
+  git -C "$worktree" diff --no-ext-diff HEAD -- >"$body"
+  while IFS= read -r -d '' path; do
+    if [ -n "$report_relative" ] && [ "$path" = "$report_relative" ]; then
+      printf '# report attached separately; omitted untracked hunk: %s\n' "$path" >>"$header"
+      continue
+    fi
+    full_path="$worktree/$path"
+    if [ ! -f "$full_path" ] || [ -L "$full_path" ]; then
+      if [ -L "$full_path" ]; then
+        if [ -e "$full_path" ]; then kind="symlink"; else kind="broken symlink"; fi
+      elif [ -p "$full_path" ]; then
+        kind="fifo"
+      elif [ -S "$full_path" ]; then
+        kind="socket"
+      elif [ -b "$full_path" ]; then
+        kind="block device"
+      elif [ -c "$full_path" ]; then
+        kind="character device"
+      else
+        kind="non-regular file"
+      fi
+      printf '# skipped: %s (%s)\n' "$path" "$kind" >>"$header"
+      continue
+    fi
+    size=$(wc -c <"$full_path" | tr -d '[:space:]')
+    if [ "$size" -gt 1048576 ]; then
+      printf '# skipped oversized untracked file (>1 MB): %s\n' "$path" >>"$header"
+      continue
+    fi
+    if git -C "$worktree" diff --no-ext-diff --no-index -- /dev/null "$path" >"$file_diff"; then
+      rc=0
+    else
+      rc=$?
+    fi
+    [ "$rc" -eq 0 ] || [ "$rc" -eq 1 ] || die "could not diff untracked file: $path"
+    if LC_ALL=C grep -q '^Binary files ' "$file_diff"; then
+      printf '# skipped binary untracked file: %s\n' "$path" >>"$header"
+    else
+      cat "$file_diff" >>"$body"
+    fi
+  done < <(git -C "$worktree" ls-files --others --exclude-standard -z)
+  while IFS= read -r -d '' full_path; do
+    path=${full_path#"$worktree"/}
+    if git -C "$worktree" check-ignore -q -- "$path"; then
+      continue
+    fi
+    if [ -p "$full_path" ]; then
+      kind="fifo"
+    elif [ -S "$full_path" ]; then
+      kind="socket"
+    elif [ -b "$full_path" ]; then
+      kind="block device"
+    else
+      kind="character device"
+    fi
+    printf '# skipped: %s (%s)\n' "$path" "$kind" >>"$header"
+  done < <(find "$worktree" -path "$worktree/.git" -prune -o \( -type p -o -type s -o -type b -o -type c \) -print0)
+  printf '\n' >>"$header"
+  cat "$header" "$body" >"$output"
+  mv "$output" "$patch"
+  rm -f "$header" "$body" "$file_diff"
+  printf '%s\n' "$patch"
+}
+
+write_review_marker() {
+  local marker="$1"
+  local rc="$2"
+  local tmp="${marker}.tmp.$$"
+  printf 'EXIT=%s\n' "$rc" >"$tmp"
+  mv "$tmp" "$marker"
+}
+
+write_review_pid() {
+  local output="$1"
+  local pid="$2"
+  local started_epoch="$3"
+  local tmp="${output}.tmp.$$"
+  printf '%s\n%s\n' "$pid" "$started_epoch" >"$tmp"
+  mv "$tmp" "$output"
+}
+
+cmd_review() {
+  [ "$#" -ge 1 ] || die "review requires a name"
+  local name="$1"
+  shift
+  local model="gpt-5.6"
+  local effort="high"
+  local focus=""
+  local out="$LANE_HOME/$name.review.md"
+  local bg="false"
+  local metadata
+  local worktree
+  local patch
+  local patch_lines
+  local report=""
+  local prompt
+  local marker
+  local pid_file
+  local lock
+  local review_pid
+  local review_started_epoch
+  local rc
+  local -a llmx_args
+
+  validate_name "$name"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --model)
+        [ "$#" -ge 2 ] || die "--model requires a value"
+        model="$2"
+        shift 2
+        ;;
+      --effort)
+        [ "$#" -ge 2 ] || die "--effort requires a value"
+        effort="$2"
+        shift 2
+        ;;
+      --focus)
+        [ "$#" -ge 2 ] || die "--focus requires a file"
+        focus=$(absolute_file "$2" "focus file")
+        shift 2
+        ;;
+      --out)
+        [ "$#" -ge 2 ] || die "--out requires a file"
+        out="$2"
+        shift 2
+        ;;
+      --bg)
+        bg="true"
+        shift
+        ;;
+      *) die "unknown review option: $1" ;;
+    esac
+  done
+  validate_plain_value "model" "$model"
+  validate_plain_value "effort" "$effort"
+  validate_plain_value "out" "$out"
+  metadata=$(metadata_path "$name")
+  [ -f "$metadata" ] || die "unknown lane: $name"
+  worktree=$(json_get "$metadata" worktree) || die "invalid metadata: $metadata"
+  [ -d "$worktree" ] || die "worktree no longer exists: $worktree"
+  git -C "$worktree" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "recorded worktree is not a git repository: $worktree"
+  marker=$(review_done_path "$name")
+  pid_file=$(review_pid_path "$name")
+  lock=$(review_lock_path "$name")
+  if [ ! -f "$marker" ] && [ -f "$pid_file" ]; then
+    review_pid=$(sed -n '1p' "$pid_file")
+    review_started_epoch=$(sed -n '2p' "$pid_file")
+    if review_process_is_alive "$review_pid" "$review_started_epoch"; then
+      die "$name review already running as pid $review_pid"
+    fi
+  fi
+  mkdir "$lock" 2>/dev/null || die "$name review already running"
+  trap 'rmdir "$lock" 2>/dev/null || true' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  if [ -n "$focus" ]; then
+    case "$(basename "$focus")" in
+      *-report.md) report="$focus" ;;
+      *) report=$(newest_audit_report "$worktree") ;;
+    esac
+  else
+    report=$(newest_audit_report "$worktree")
+  fi
+  patch=$(build_review_patch "$name" "$worktree" "$report")
+  patch_lines=$(wc -l <"$patch" | tr -d '[:space:]')
+  echo "lane: patch: $patch ($patch_lines lines)"
+  prompt='Review the attached patch for correctness across these axes: functional behavior, edge cases and failure handling, concurrency and state safety, and test/contract coverage.
+Return severity-ranked findings under each axis. Every finding must cite file:line from the patch and give a concrete failure scenario. If an axis has no finding, say exactly "no defect found" for that axis. Do not restate the diff.'
+  if [ -n "$focus" ] && [ "$focus" != "$report" ]; then
+    prompt="$prompt
+
+Additional review axes:
+$(<"$focus")"
+  fi
+
+  llmx_args=(chat --subscription -m "$model" -e "$effort" --timeout 900 -f "$patch")
+  if [ -n "$report" ]; then
+    llmx_args+=(-f "$report")
+  fi
+  llmx_args+=(-o "$out" "$prompt")
+  rm -f "$marker" "$pid_file"
+  if [ "$bg" = "true" ]; then
+    nohup bash -c '
+      lock=$1
+      marker=$2
+      shift 2
+      cleanup() { rmdir "$lock" 2>/dev/null || true; }
+      trap cleanup EXIT
+      trap "exit 130" INT
+      trap "exit 143" TERM
+      if "$@"; then rc=0; else rc=$?; fi
+      tmp="${marker}.tmp.$$"
+      printf "EXIT=%s\n" "$rc" >"$tmp"
+      mv "$tmp" "$marker"
+      exit "$rc"
+    ' lane-review "$lock" "$marker" llmx "${llmx_args[@]}" </dev/null >/dev/null 2>&1 &
+    review_pid=$!
+    trap - EXIT INT TERM
+    review_started_epoch=$(process_started_epoch "$review_pid")
+    if [ -z "$review_started_epoch" ]; then
+      echo "lane: warning: could not record started_epoch for review pid $review_pid" >&2
+    fi
+    write_review_pid "$pid_file" "$review_pid" "$review_started_epoch"
+    echo "lane: review pid=$review_pid"
+    echo "  out:  $out"
+    echo "  done: $marker (contains EXIT=<rc>)"
+    return
+  fi
+
+  echo "lane: review out: $out"
+  review_started_epoch=$(process_started_epoch "$$")
+  if [ -z "$review_started_epoch" ]; then
+    echo "lane: warning: could not record started_epoch for review pid $$" >&2
+  fi
+  write_review_pid "$pid_file" "$$" "$review_started_epoch"
+  if llmx "${llmx_args[@]}"; then
+    rc=0
+  else
+    rc=$?
+  fi
+  write_review_marker "$marker" "$rc"
+  rmdir "$lock" 2>/dev/null || true
+  trap - EXIT INT TERM
+  return "$rc"
+}
+
+review_state() {
+  local name="$1"
+  local marker
+  local pid_file
+  local marker_value
+  local pid
+  local started_epoch
+  marker=$(review_done_path "$name")
+  pid_file=$(review_pid_path "$name")
+  if [ -f "$marker" ]; then
+    marker_value=$(sed -n '1s/^EXIT=//p' "$marker")
+    case "$marker_value" in
+      "" | *[!0-9]*) echo "DONE:?" ;;
+      *) echo "DONE:$marker_value" ;;
+    esac
+  elif [ -f "$pid_file" ]; then
+    pid=$(sed -n '1p' "$pid_file")
+    started_epoch=$(sed -n '2p' "$pid_file")
+    if review_process_is_alive "$pid" "$started_epoch"; then echo "RUNNING"; else echo "-"; fi
+  else
+    echo "-"
+  fi
 }
 
 cmd_ls() {
@@ -458,10 +837,12 @@ cmd_ls() {
   local name
   local pid
   local started_at
+  local started_epoch
   local worktree
   local state
   local age
   local dirty
+  local review
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --stall-min)
@@ -474,17 +855,19 @@ cmd_ls() {
   done
   case "$stall_min" in "" | *[!0-9]*) die "--stall-min must be a non-negative integer" ;; esac
   mkdir -p "$LANE_HOME"
-  printf '%-20s %-10s %-8s %-21s %s\n' "NAME" "STATE" "LOG-AGE" "STARTED" "DIRTY"
+  printf '%-20s %-10s %-8s %-21s %-5s %s\n' "NAME" "STATE" "LOG-AGE" "STARTED" "DIRTY" "REVIEW"
   for metadata in "$LANE_HOME"/*.json; do
     [ -e "$metadata" ] || continue
     name=$(json_get "$metadata" name) || die "invalid metadata: $metadata"
     pid=$(json_get "$metadata" pid) || die "invalid metadata: $metadata"
     started_at=$(json_get "$metadata" started_at) || die "invalid metadata: $metadata"
+    started_epoch=$(json_get "$metadata" started_epoch 2>/dev/null || true)
     worktree=$(json_get "$metadata" worktree) || die "invalid metadata: $metadata"
-    state=$(lane_state "$name" "$pid" "$stall_min")
+    state=$(lane_state "$name" "$pid" "$started_epoch" "$stall_min")
     age=$(format_age "$(log_age_seconds "$(log_path "$name")")")
     dirty=$(dirty_count "$worktree")
-    printf '%-20s %-10s %-8s %-21s %s\n' "$name" "$state" "$age" "$started_at" "$dirty"
+    review=$(review_state "$name")
+    printf '%-20s %-10s %-8s %-21s %-5s %s\n' "$name" "$state" "$age" "$started_at" "$dirty" "$review"
   done
 }
 
@@ -508,17 +891,19 @@ stop_lane() {
   local name="$1"
   local metadata
   local pid
+  local started_epoch
   local marker
   metadata=$(metadata_path "$name")
   [ -f "$metadata" ] || die "unknown lane: $name"
   pid=$(json_get "$metadata" pid) || die "invalid metadata: $metadata"
+  started_epoch=$(json_get "$metadata" started_epoch 2>/dev/null || true)
   marker=$(done_path "$name")
   if [ -f "$marker" ]; then
     echo "lane: $name already completed; no process signalled"
-  elif lane_group_is_alive "$pid"; then
+  elif lane_group_is_alive "$pid" "$started_epoch"; then
     kill -TERM -- "-$pid"
     echo "lane: signalled process group $pid"
-    wait_for_group_exit "$pid" 50 || die "process group $pid did not stop after SIGTERM"
+    wait_for_group_exit "$pid" "$started_epoch" 50 || die "process group $pid did not stop after SIGTERM"
   else
     echo "lane: process group $pid is not running"
   fi
@@ -532,17 +917,10 @@ cmd_stop() {
   stop_lane "$1"
 }
 
-ensure_resume_note() {
-  local note="$LANE_HOME/resume-note.md"
-  mkdir -p "$LANE_HOME"
-  if [ ! -e "$note" ]; then
-    printf '%s\n' 'Start with git status and git diff in the worktree. Keep sound edits, finish the task, and write the report.' >"$note"
-  fi
-}
-
 cmd_resume() {
-  [ "$#" -eq 1 ] || die "resume requires exactly one name"
+  [ "$#" -ge 1 ] || die "resume requires a name"
   local name="$1"
+  shift
   local metadata
   local repo
   local worktree
@@ -551,7 +929,28 @@ cmd_resume() {
   local base
   local branch
   local no_worktree
+  local note_source=""
+  local note_path=""
+  local no_note="false"
+  local consumed
+  local consumed_number=1
   validate_name "$name"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --note)
+        [ "$#" -ge 2 ] || die "--note requires a file"
+        [ "$no_note" = "false" ] && [ -z "$note_source" ] || die "pass only one of --note or --no-note"
+        note_source=$(absolute_file "$2" "resume note")
+        shift 2
+        ;;
+      --no-note)
+        [ "$no_note" = "false" ] && [ -z "$note_source" ] || die "pass only one of --note or --no-note"
+        no_note="true"
+        shift
+        ;;
+      *) die "unknown resume option: $1" ;;
+    esac
+  done
   metadata=$(metadata_path "$name")
   [ -f "$metadata" ] || die "unknown lane: $name"
   repo=$(json_get "$metadata" repo) || die "invalid metadata: $metadata"
@@ -563,9 +962,25 @@ cmd_resume() {
   no_worktree=$(json_get "$metadata" no_worktree) || die "invalid metadata: $metadata"
   [ -f "$brief" ] || die "brief no longer exists: $brief"
   [ -d "$worktree" ] || die "worktree no longer exists: $worktree"
-  ensure_resume_note
+  if [ "$no_note" = "false" ]; then
+    note_path="$LANE_HOME/$name.resume-note.md"
+    if [ -n "$note_source" ]; then
+      [ "$note_source" = "$note_path" ] || cp "$note_source" "$note_path"
+    elif [ ! -f "$note_path" ]; then
+      die "no resume note for $name (pass --note <file> or --no-note)"
+    fi
+    while [ -e "$LANE_HOME/$name.resume-note.consumed-$consumed_number.md" ]; do
+      consumed_number=$((consumed_number + 1))
+    done
+    consumed="$LANE_HOME/$name.resume-note.consumed-$consumed_number.md"
+    if ! mv "$note_path" "$consumed"; then
+      die "resume note for $name was already claimed"
+    fi
+    note_path="$consumed"
+    echo "lane: claimed resume note: $consumed"
+  fi
   stop_lane "$name"
-  launch_worker "$name" "$repo" "$worktree" "$brief" "$worker" "$base" "$branch" "$no_worktree" true
+  launch_worker "$name" "$repo" "$worktree" "$brief" "$worker" "$base" "$branch" "$no_worktree" true "$note_path"
 }
 
 cmd_reap() {
@@ -575,6 +990,7 @@ cmd_reap() {
   local force="false"
   local metadata
   local pid
+  local started_epoch
   local state
   local repo
   local worktree
@@ -593,7 +1009,8 @@ cmd_reap() {
   metadata=$(metadata_path "$name")
   [ -f "$metadata" ] || die "unknown lane: $name"
   pid=$(json_get "$metadata" pid) || die "invalid metadata: $metadata"
-  state=$(lane_state "$name" "$pid" "$DEFAULT_STALL_MIN")
+  started_epoch=$(json_get "$metadata" started_epoch 2>/dev/null || true)
+  state=$(lane_state "$name" "$pid" "$started_epoch" "$DEFAULT_STALL_MIN")
   case "$state" in DONE:\?) die "refusing to reap $name with an invalid completion marker" ;; DONE:*) ;; *) die "refusing to reap $name in state $state" ;; esac
   repo=$(json_get "$metadata" repo) || die "invalid metadata: $metadata"
   worktree=$(json_get "$metadata" worktree) || die "invalid metadata: $metadata"
@@ -612,8 +1029,8 @@ cmd_reap() {
     echo "lane: retained $name; pass --force to remove its worktree and branch"
     return
   fi
-  if lane_group_is_alive "$pid"; then
-    wait_for_group_exit "$pid" 10 || die "refusing to reap while process group $pid is still exiting"
+  if lane_group_is_alive "$pid" "$started_epoch"; then
+    wait_for_group_exit "$pid" "$started_epoch" 10 || die "refusing to reap while process group $pid is still exiting"
   fi
   git -C "$repo" worktree remove --force "$worktree"
   if git -C "$repo" show-ref --verify --quiet "refs/heads/$branch"; then
@@ -632,10 +1049,11 @@ main() {
   shift
   case "$command" in
     -h | --help | help) usage ;;
-    run | ls | stop | resume | reap)
+    run | review | ls | stop | resume | reap)
       init_lane_home
       case "$command" in
         run) cmd_run "$@" ;;
+        review) cmd_review "$@" ;;
         ls) cmd_ls "$@" ;;
         stop) cmd_stop "$@" ;;
         resume) cmd_resume "$@" ;;
