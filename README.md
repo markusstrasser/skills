@@ -101,6 +101,26 @@ use budget-safe core top-level skill symlinks so large nested source bundles and
 low-frequency skills do not consume the skills context budget. Use
 `--full` only for a session profile where discovery matters more than context.
 
+## Lane CLI
+
+`bin/lane` dispatches and supervises headless workers in recorded Git worktrees.
+The review command builds a patch containing both tracked and untracked text
+changes without touching the lane's index, then sends it to `llmx`:
+
+```bash
+bin/lane run fix-auth --repo ~/Projects/app --brief /tmp/fix-auth.md
+bin/lane review fix-auth --model gpt-5.6 --effort high --bg
+bin/lane ls
+bin/lane resume fix-auth --note /tmp/fix-auth-resume.md
+```
+
+Review output defaults to `$LANE_HOME/<name>.review.md`; background completion
+is recorded in `$LANE_HOME/<name>.review.done`, and a per-lane lock rejects
+overlapping reviews. Worker and review liveness bind the PID to its recorded
+process start time. Resume notes are lane-specific and atomically renamed to
+`*.resume-note.consumed-<n>.md` before launch. Pass `--no-note` to resume
+explicitly without a note.
+
 ## Archive
 
 `archive/` contains superseded skill versions.
