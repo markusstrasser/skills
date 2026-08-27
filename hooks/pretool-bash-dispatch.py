@@ -13,7 +13,7 @@ below), in the EXACT settings.json order, preserving:
   2. Mutator (updatedInput) rewrites — see "Mutator chaining" below.
   3. Every "if": "Bash(<glob>)" per-hook condition from settings.json — Claude
      Code itself only invokes a subset of these 28 hooks depending on whether
-     the command matches a glob (git* / git commit*); 8 of 28 entries carry
+     the command matches a glob (git* / git commit*); 7 of 28 entries carry
      this condition. Skipping a gate whose `if` doesn't match is NOT a
      shortcut — it is the ORIGINAL behavior (Claude Code never spawned that
      hook's process for a non-matching command either). See _if_matches().
@@ -152,7 +152,7 @@ def _log_trigger(hook: str, action: str, detail: str, cmd: str = "") -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────
-# "if": "Bash(<glob>)" per-hook condition (8 of 28 entries carry this in
+# "if": "Bash(<glob>)" per-hook condition (7 of 28 entries carry this in
 # settings.json). Only observed shapes are "Bash(git*)" and
 # "Bash(git commit*)"; an unrecognized shape fails open to RUNNING the gate
 # (skipping a safety gate is the worse failure mode).
@@ -162,6 +162,17 @@ _IF_RE = re.compile(r"^Bash\((.*)\)$")
 
 
 _IF_SEGMENT_RE = re.compile(r"&&|\|\||;|\||\n")
+_IF_COMMAND_PREFIX_RE = re.compile(
+    r"^(?:(?:[A-Za-z_][A-Za-z0-9_]*=\S*)|!|time|command|exec)\s+"
+)
+
+
+def _strip_if_command_prefixes(segment: str) -> str:
+    """Expose a command behind assignment and shell prefix words to glob matching."""
+    view = segment.strip()
+    while match := _IF_COMMAND_PREFIX_RE.match(view):
+        view = view[match.end() :]
+    return view
 
 
 def _if_matches(if_pattern: str | None, cmd: str) -> bool:
@@ -201,7 +212,10 @@ def _if_matches(if_pattern: str | None, cmd: str) -> bool:
         text = strip_quoted(strip_heredocs(text))
     except Exception:  # fallback-ok — a missing stripper must not disable gating
         pass
-    return any(fnmatch.fnmatchcase(segment.strip(), glob) for segment in _IF_SEGMENT_RE.split(text))
+    return any(
+        fnmatch.fnmatchcase(_strip_if_command_prefixes(segment), glob)
+        for segment in _IF_SEGMENT_RE.split(text)
+    )
 
 
 def _jqlike_cmd(data: dict) -> str:
@@ -277,57 +291,560 @@ def make_native_gate(rel_path: str, mod_name: str, base: Path = HOOKS_DIR):
 # stdout/stderr/exit-code shape the original bash script produced.
 # ─────────────────────────────────────────────────────────────────────────
 
-# --- 1. pretool-git-noext-inject.sh (MUTATOR, if=Bash(git*)) ---------------
+# --- 1. pretool-git-noext-inject.sh (MUTATOR, no if) -----------------------
+
+
+def _after_heredoc_bodies(
+    command: str, start: int, delimiters: list[tuple[str, bool]]
+) -> int:
+    """Return the offset after sequential, exactly matched heredoc terminators."""
+    cursor = start
+    for delimiter, strip_tabs in delimiters:
+        while cursor < len(command):
+            line_end = command.find("\n", cursor)
+            if line_end < 0:
+                line_end = len(command)
+            line = command[cursor:line_end]
+            candidate = line.lstrip("\t") if strip_tabs else line
+            if candidate == delimiter:
+                cursor = min(line_end + 1, len(command))
+                break
+            cursor = min(line_end + 1, len(command))
+    return cursor
+
+
+def _is_shell_redirection_fd(raw: str) -> bool:
+    """Return whether a raw word is a numeric or Bash dynamic-FD prefix."""
+    return raw.isdigit() or bool(re.fullmatch(r"\{[A-Za-z_][A-Za-z0-9_]*\}", raw))
+
+
+def _shell_heredoc_declaration(
+    command: str, start: int
+) -> tuple[int, str, bool] | None:
+    """Parse one heredoc operator as ``(end, delimiter, strip_tabs)``."""
+    if command[start : start + 2] != "<<" or command[start : start + 3] == "<<<":
+        return None
+    delimiter_start = start + 2
+    strip_tabs = command[delimiter_start : delimiter_start + 1] == "-"
+    if strip_tabs:
+        delimiter_start += 1
+    while command[delimiter_start : delimiter_start + 1] in (" ", "\t"):
+        delimiter_start += 1
+    delimiter_token = next(_iter_shell_syntax(command[delimiter_start:]), None)
+    if delimiter_token is None or delimiter_token[0] != "word":
+        return None
+    raw_delimiter, relative_start, relative_end = delimiter_token[1:]
+    if relative_start != 0:
+        return None
+    delimiter_parts = shlex.split(raw_delimiter, comments=False, posix=True)
+    if len(delimiter_parts) != 1:
+        return None
+    return delimiter_start + relative_end, delimiter_parts[0], strip_tabs
+
+
+def _shell_expansion_end(command: str, start: int) -> int:
+    """Return the end of one balanced opaque shell expansion.
+
+    Parameter and command substitutions can contain shell separators that do
+    not delimit the surrounding command.  Scan their balanced braces or
+    parentheses without yielding internal syntax.  Legacy backticks are
+    similarly opaque.  Any missing closer or quote raises ``ValueError`` so
+    the caller fails open for the whole command.
+    """
+    if command.startswith("${", start):
+        kind = "parameter"
+        closer = "}"
+        i = start + 2
+    elif command.startswith("$((", start):
+        kind = "arithmetic"
+        closer = ")"
+        i = start + 2
+    elif command.startswith("$(", start):
+        kind = "command"
+        closer = ")"
+        i = start + 2
+    elif command.startswith("`", start):
+        kind = "backtick"
+        closer = "`"
+        i = start + 1
+    else:
+        raise ValueError("not a shell expansion")
+
+    if kind == "backtick":
+        while i < len(command):
+            if command[i] == "\\":
+                if i + 1 >= len(command):
+                    raise ValueError("unbalanced shell expansion")
+                i += 2
+                continue
+            if command[i] == closer:
+                return i + 1
+            if command.startswith("${", i) or command.startswith("$(", i):
+                i = _shell_expansion_end(command, i)
+                continue
+            i += 1
+        raise ValueError("unbalanced shell expansion")
+
+    depth = 1
+    quote: str | None = None
+    at_word_start = True
+    pending_heredocs: list[tuple[str, bool]] = []
+    while i < len(command):
+        ch = command[i]
+        if quote == "'":
+            if ch == "'":
+                quote = None
+            i += 1
+            continue
+        if quote == '"':
+            if ch == "\\":
+                if i + 1 >= len(command):
+                    raise ValueError("unbalanced shell expansion")
+                i += 2
+                continue
+            if ch == '"':
+                quote = None
+                i += 1
+                continue
+            if command.startswith("${", i) or command.startswith("$(", i):
+                i = _shell_expansion_end(command, i)
+                continue
+            if ch == "`":
+                i = _shell_expansion_end(command, i)
+                continue
+            i += 1
+            continue
+        if kind == "command" and ch == "#" and at_word_start:
+            line_end = command.find("\n", i)
+            if line_end < 0:
+                raise ValueError("unbalanced shell expansion")
+            i = line_end
+            continue
+        if kind == "command":
+            heredoc = _shell_heredoc_declaration(command, i)
+            if heredoc is not None:
+                delimiter_end, delimiter, strip_tabs = heredoc
+                pending_heredocs.append((delimiter, strip_tabs))
+                at_word_start = False
+                i = delimiter_end
+                continue
+            if ch == "\n":
+                i += 1
+                if pending_heredocs:
+                    i = _after_heredoc_bodies(command, i, pending_heredocs)
+                    pending_heredocs.clear()
+                at_word_start = True
+                continue
+        if ch == "\\":
+            if i + 1 >= len(command):
+                raise ValueError("unbalanced shell expansion")
+            at_word_start = False
+            i += 2
+            continue
+        if ch in ("'", '"'):
+            quote = ch
+            at_word_start = False
+            i += 1
+            continue
+        if command.startswith("${", i) or command.startswith("$(", i):
+            i = _shell_expansion_end(command, i)
+            at_word_start = False
+            continue
+        if ch == "`":
+            i = _shell_expansion_end(command, i)
+            at_word_start = False
+            continue
+        if kind == "parameter" and ch == "{":
+            depth += 1
+        elif kind in {"arithmetic", "command"} and ch == "(":
+            depth += 1
+        elif ch == closer:
+            if pending_heredocs:
+                raise ValueError("unbalanced shell heredoc")
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        if kind == "command":
+            if ch.isspace() or ch in ";|&()":
+                at_word_start = True
+            else:
+                at_word_start = False
+        i += 1
+    raise ValueError("unbalanced shell expansion")
+
+
+def _iter_shell_syntax(command: str):
+    """Lex raw word and separator spans without normalizing any shell bytes.
+
+    Both segment discovery and git-word discovery consume this one scanner, so
+    their quote and backslash rules cannot drift.  Words retain their original
+    quoting. Separators are ``;``, ``&&``, ``||``, ``|``, standalone ``&``, and
+    newline. Redirection forms such as ``2>&1``, ``&>``, and ``|&`` are classified
+    before standalone ``&``. Comments, heredoc bodies, parameter expansions,
+    command substitutions, and backticks are opaque. Unbalanced quoting or
+    expansion raises ``ValueError`` so the mutator fails open for the whole command.
+    """
+    redirection_operators = (
+        "<<<",
+        "&>>",
+        ">>",
+        "<>",
+        ">|",
+        ">&",
+        "<&",
+        "&>",
+        "<<",
+        ">",
+        "<",
+    )
+    word_start: int | None = None
+    redirect_target = False
+    quote: str | None = None
+    escaped = False
+    pending_heredocs: list[tuple[str, bool]] = []
+    i = 0
+    while i < len(command):
+        ch = command[i]
+        if escaped:
+            escaped = False
+            i += 1
+            continue
+        if quote == "'":
+            if ch == "'":
+                quote = None
+            i += 1
+            continue
+        if quote == '"':
+            if ch == "\\":
+                escaped = True
+            elif command.startswith("${", i) or command.startswith("$(", i):
+                i = _shell_expansion_end(command, i)
+                continue
+            elif ch == "`":
+                i = _shell_expansion_end(command, i)
+                continue
+            elif ch == '"':
+                quote = None
+            i += 1
+            continue
+        if ch in ("'", '"'):
+            if word_start is None:
+                word_start = i
+            quote = ch
+            i += 1
+            continue
+        if ch == "\\":
+            if word_start is None:
+                word_start = i
+            escaped = True
+            i += 1
+            continue
+        if command.startswith("${", i) or command.startswith("$(", i) or ch == "`":
+            if word_start is None:
+                word_start = i
+            i = _shell_expansion_end(command, i)
+            continue
+
+        if ch == "#" and word_start is None:
+            redirect_target = False
+            line_end = command.find("\n", i)
+            if line_end < 0:
+                i = len(command)
+                break
+            separator_end = line_end + 1
+            if pending_heredocs:
+                separator_end = _after_heredoc_bodies(
+                    command, separator_end, pending_heredocs
+                )
+                pending_heredocs.clear()
+            yield "separator", command[line_end:separator_end], line_end, separator_end
+            i = separator_end
+            continue
+        heredoc = _shell_heredoc_declaration(command, i)
+        if heredoc is not None:
+            if word_start is not None:
+                raw = command[word_start:i]
+                kind = (
+                    "redirect"
+                    if redirect_target or _is_shell_redirection_fd(raw)
+                    else "word"
+                )
+                yield kind, raw, word_start, i
+                word_start = None
+                redirect_target = False
+            delimiter_end, delimiter, strip_tabs = heredoc
+            yield "redirect", command[i:delimiter_end], i, delimiter_end
+            pending_heredocs.append((delimiter, strip_tabs))
+            i = delimiter_end
+            continue
+
+        redirection = next(
+            (op for op in redirection_operators if command.startswith(op, i)), None
+        )
+        if redirection is not None:
+            if word_start is not None:
+                raw = command[word_start:i]
+                kind = (
+                    "redirect"
+                    if redirect_target or _is_shell_redirection_fd(raw)
+                    else "word"
+                )
+                yield kind, raw, word_start, i
+                word_start = None
+                redirect_target = False
+            redirection_end = i + len(redirection)
+            yield "redirect", command[i:redirection_end], i, redirection_end
+            redirect_target = True
+            i = redirection_end
+            continue
+
+        if ch in "()":
+            if word_start is not None:
+                raw = command[word_start:i]
+                kind = "redirect" if redirect_target else "word"
+                yield kind, raw, word_start, i
+                word_start = None
+                redirect_target = False
+            yield "structure", ch, i, i + 1
+            i += 1
+            continue
+
+        separator_len = 0
+        if ch in (";", "\n"):
+            separator_len = 1
+        elif ch == "|":
+            separator_len = 2 if command[i : i + 2] in ("||", "|&") else 1
+        elif ch == "&":
+            separator_len = 2 if command[i : i + 2] == "&&" else 1
+        if separator_len:
+            if word_start is not None:
+                raw = command[word_start:i]
+                kind = "redirect" if redirect_target else "word"
+                yield kind, raw, word_start, i
+                word_start = None
+            redirect_target = False
+            separator_end = i + separator_len
+            if ch == "\n" and pending_heredocs:
+                separator_end = _after_heredoc_bodies(
+                    command, separator_end, pending_heredocs
+                )
+                pending_heredocs.clear()
+            yield "separator", command[i:separator_end], i, separator_end
+            i = separator_end
+            continue
+        if ch.isspace():
+            if word_start is not None:
+                raw = command[word_start:i]
+                kind = "redirect" if redirect_target else "word"
+                yield kind, raw, word_start, i
+                word_start = None
+                redirect_target = False
+            i += 1
+            continue
+        if word_start is None:
+            word_start = i
+        i += 1
+
+    if quote is not None or escaped:
+        raise ValueError("unbalanced shell quoting")
+    if word_start is not None:
+        kind = "redirect" if redirect_target else "word"
+        yield kind, command[word_start:], word_start, len(command)
+        redirect_target = False
+    if redirect_target:
+        raise ValueError("incomplete shell redirection")
+
+
+def _iter_shell_segments(command: str):
+    """Yield raw ``(text, start, end)`` spans between scanned separators."""
+    start = 0
+    for kind, _raw, token_start, token_end in _iter_shell_syntax(command):
+        if kind != "separator":
+            continue
+        yield command[start:token_start], start, token_start
+        start = token_end
+    yield command[start:], start, len(command)
+
+
+_SHELL_COMPLEX_COMMAND_WORDS = {
+    "{",
+    "}",
+    "case",
+    "do",
+    "done",
+    "elif",
+    "else",
+    "esac",
+    "fi",
+    "for",
+    "function",
+    "if",
+    "in",
+    "select",
+    "then",
+    "until",
+    "while",
+}
+
+
+def _git_noext_has_complex_shell(command: str) -> bool:
+    """Reject grouped/compound grammar before separators expose nested git words."""
+    command_start = True
+    for kind, raw, _start, _end in _iter_shell_syntax(command):
+        if kind == "structure":
+            return True
+        if kind == "separator":
+            command_start = True
+            continue
+        if kind != "word" or not command_start:
+            continue
+        if raw in {"!", "time", "command", "exec"} or re.match(
+            r"^[A-Za-z_][A-Za-z0-9_]*=", raw
+        ):
+            continue
+        if raw in _SHELL_COMPLEX_COMMAND_WORDS:
+            return True
+        command_start = False
+    return False
+
+
+def _shlex_unquote_word(raw: str) -> str | None:
+    """Normalize one scanner word for classification, never for re-emission.
+
+    ``shlex`` does not understand unquoted shell substitutions, so a scanner
+    word such as ``$(printf '%s' a)`` can appear to contain multiple tokens.
+    Such a word is not classifiable here; callers leave that segment alone.
+    """
+    try:
+        parts = shlex.split(raw, comments=False, posix=True)
+    except ValueError:
+        return None
+    if len(parts) != 1:
+        return None
+    return parts[0]
+
+
+def _git_noext_command_index(words: list[tuple[str, int, int]]) -> int | None:
+    """Skip assignments plus supported shell prefix words and their options."""
+    i = 0
+    while i < len(words):
+        value = _shlex_unquote_word(words[i][0])
+        if value is None:
+            return None
+        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", value):
+            i += 1
+            continue
+        if value == "!":
+            i += 1
+            continue
+        if value == "time":
+            i += 1
+            next_value = (
+                _shlex_unquote_word(words[i][0]) if i < len(words) else None
+            )
+            if next_value == "-p":
+                i += 1
+            continue
+        if value == "command":
+            i += 1
+            while i < len(words):
+                next_value = _shlex_unquote_word(words[i][0])
+                if next_value in {"-v", "-V"}:
+                    return None
+                if next_value != "-p":
+                    break
+                i += 1
+            continue
+        if value == "exec":
+            i += 1
+            if i < len(words) and _shlex_unquote_word(words[i][0]) == "-a":
+                i += 1
+                if i >= len(words):
+                    return i
+                i += 1
+            continue
+        return i
+    return i
+
+
+def _git_noext_rewrite_segment(segment: str) -> str | None:
+    """Insert safety flags at raw word offsets, preserving every existing byte."""
+    words = [
+        (raw, start, end)
+        for kind, raw, start, end in _iter_shell_syntax(segment)
+        if kind == "word"
+    ]
+    git_index = _git_noext_command_index(words)
+    if (
+        git_index is None
+        or git_index >= len(words)
+        or _shlex_unquote_word(words[git_index][0]) != "git"
+    ):
+        return None
+    i = git_index + 1
+    has_no_pager = False
+    while i < len(words):
+        value = _shlex_unquote_word(words[i][0])
+        if value is None:
+            return None
+        if not value.startswith("-"):
+            break
+        if value == "--":
+            return None
+        has_no_pager = has_no_pager or value == "--no-pager"
+        i += 2 if value in ("-C", "-c") else 1
+    if i >= len(words):
+        return None
+    subcmd = _shlex_unquote_word(words[i][0])
+    subcmd_end = words[i][2]
+    if subcmd not in ("diff", "show", "log"):
+        return None
+    has_no_ext_diff = False
+    for raw, _start, _end in words[i + 1 :]:
+        value = _shlex_unquote_word(raw)
+        if value == "--":
+            break
+        if value == "--no-ext-diff":
+            has_no_ext_diff = True
+            break
+    if has_no_pager and has_no_ext_diff:
+        return None
+
+    insertions: list[tuple[int, str]] = []
+    if not has_no_pager:
+        insertions.append((words[i - 1][2], " --no-pager"))
+    if not has_no_ext_diff:
+        insertions.append((subcmd_end, " --no-ext-diff"))
+    rewritten = segment
+    for offset, text in reversed(insertions):
+        rewritten = rewritten[:offset] + text + rewritten[offset:]
+    return rewritten
 
 
 def _git_noext_inject_verdict(ti: dict) -> tuple[str, str]:
     cmd = ti.get("command", "") or ""
     if not cmd:
         return "pass", ""
-    if any(tok in cmd for tok in ("|", "&&", "||", ";", "$(", "`", "<", "\n")):
-        return "pass", ""
+    replacements: list[tuple[int, int, str]] = []
     try:
-        parts = shlex.split(cmd)
+        if _git_noext_has_complex_shell(cmd):
+            return "pass", ""
+        segments = list(_iter_shell_segments(cmd))
+        for segment, start, end in segments:
+            rewritten = _git_noext_rewrite_segment(segment)
+            if rewritten is not None:
+                replacements.append((start, end, rewritten))
     except ValueError:
         return "pass", ""
-    redirect_suffix: list[str] = []
-    if ">" in cmd:
-        if (
-            len(parts) >= 3
-            and parts[-2] in (">", ">>")
-            and ">" not in parts[-1]
-            and not any(">" in p for p in parts[:-2])
-        ):
-            redirect_suffix = parts[-2:]
-            parts = parts[:-2]
-        else:
-            return "pass", ""
-    if not parts or parts[0] != "git":
+    if not replacements:
         return "pass", ""
-    i = 1
-    while i < len(parts) and parts[i].startswith("-"):
-        i += 2 if parts[i] in ("-C", "-c") else 1
-    if i >= len(parts):
-        return "pass", ""
-    subcmd = parts[i]
-    if subcmd not in ("diff", "show", "log"):
-        return "pass", ""
-    if "--no-ext-diff" in parts and "--no-pager" in parts:
-        return "pass", ""
-    new = parts[:i]
-    if "--no-pager" not in new:
-        new = new + ["--no-pager"]
-    new = new + [subcmd]
-    rest = parts[i + 1 :]
-    if "--no-ext-diff" not in rest:
-        new = new + ["--no-ext-diff"]
-    new = new + rest
-    new_cmd = " ".join(shlex.quote(p) for p in new)
-    if redirect_suffix:
-        new_cmd += " " + redirect_suffix[0] + " " + shlex.quote(redirect_suffix[1])
-    if new_cmd == cmd:
-        return "pass", ""
-    return "mutate", new_cmd
+    pieces: list[str] = []
+    cursor = 0
+    for start, end, rewritten in replacements:
+        pieces.extend((cmd[cursor:start], rewritten))
+        cursor = end
+    pieces.append(cmd[cursor:])
+    return "mutate", "".join(pieces)
 
 
 def gate_git_noext_inject(raw_payload: str) -> GateResult:
@@ -1656,7 +2173,7 @@ MANIFEST: list[dict] = [
         "if": None,
         "run": make_native_gate("pretool-secret-output-guard.py", "pretool_secret_output_guard"),
     },
-    {"name": "git-noext-inject", "if": "Bash(git*)", "run": gate_git_noext_inject},
+    {"name": "git-noext-inject", "if": None, "run": gate_git_noext_inject},
     {"name": "pyunbuffered-inject", "if": None, "run": gate_pyunbuffered_inject},
     {"name": "bg-buffering-pipe", "if": None, "run": gate_bg_buffering_pipe},
     {"name": "git-add-all-guard", "if": "Bash(git*)", "run": gate_git_add_all_guard},
