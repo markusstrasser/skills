@@ -1,0 +1,652 @@
+#!/usr/bin/env bash
+# lane — dispatch and supervise headless workers in isolated git worktrees.
+set -euo pipefail
+
+LANE_HOME="${LANE_HOME:-${HOME:?lane: HOME is not set}/.cache/lanes}"
+DEFAULT_STALL_MIN=20
+
+usage() {
+  cat >&2 <<'EOF'
+usage:
+  lane run <name> --repo <path> --brief <file> [--worker codex|claude] [--no-worktree] [--base <ref>]
+  lane ls [--stall-min <minutes>]
+  lane stop <name>
+  lane resume <name>
+  lane reap <name> [--force]
+EOF
+}
+
+die() {
+  echo "lane: $*" >&2
+  exit 2
+}
+
+require_python() {
+  command -v python3 >/dev/null 2>&1 || die "python3 is required for lane metadata"
+}
+
+init_lane_home() {
+  validate_plain_value "LANE_HOME" "$LANE_HOME"
+  mkdir -p "$LANE_HOME"
+  LANE_HOME=$(cd "$LANE_HOME" && pwd -P)
+}
+
+validate_name() {
+  case "$1" in
+    "" | *[!A-Za-z0-9._-]* | [.-]*) die "name must start with an alphanumeric and contain only A-Z, a-z, 0-9, dot, underscore, or dash" ;;
+  esac
+}
+
+validate_plain_value() {
+  local label="$1"
+  local value="$2"
+  case "$value" in
+    *$'\n'* | *$'\r'* | *$'\t'*) die "$label must not contain tabs or newlines" ;;
+  esac
+}
+
+absolute_file() {
+  local path="$1"
+  local dir
+  local base
+  [ -f "$path" ] || die "brief does not exist: $path"
+  dir=$(cd "$(dirname "$path")" && pwd -P)
+  base=$(basename "$path")
+  printf '%s/%s\n' "$dir" "$base"
+}
+
+metadata_path() {
+  printf '%s/%s.json\n' "$LANE_HOME" "$1"
+}
+
+log_path() {
+  printf '%s/%s.log\n' "$LANE_HOME" "$1"
+}
+
+done_path() {
+  printf '%s/%s.done\n' "$LANE_HOME" "$1"
+}
+
+json_write() {
+  local output="$1"
+  local tmp="${output}.tmp.$$"
+  shift
+  require_python
+  python3 - "$tmp" "$@" <<'PY'
+import json
+import os
+import sys
+
+(
+    output,
+    name,
+    repo,
+    worktree,
+    brief,
+    pid,
+    started_at,
+    worker,
+    base,
+    branch,
+    no_worktree,
+) = sys.argv[1:]
+payload = {
+    "name": name,
+    "repo": repo,
+    "worktree": worktree,
+    "brief": brief,
+    "pid": int(pid),
+    "started_at": started_at,
+    "worker": worker,
+    "base": base,
+    "branch": branch,
+    "no_worktree": no_worktree == "true",
+}
+with open(output, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2, sort_keys=True)
+    handle.write("\n")
+os.chmod(output, 0o600)
+PY
+  mv "$tmp" "$output"
+}
+
+json_get() {
+  local input="$1"
+  local key="$2"
+  require_python
+  python3 - "$input" "$key" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    value = json.load(handle)[sys.argv[2]]
+if isinstance(value, bool):
+    print("true" if value else "false")
+else:
+    print(value)
+PY
+}
+
+lane_group_is_alive() {
+  local pid="$1"
+  case "$pid" in
+    "" | *[!0-9]*) return 1 ;;
+  esac
+  [ "$pid" -gt 1 ] 2>/dev/null || return 1
+  kill -0 -- "-$pid" 2>/dev/null
+}
+
+wait_for_group_exit() {
+  local pid="$1"
+  local attempts="$2"
+  local count=0
+  while lane_group_is_alive "$pid" && [ "$count" -lt "$attempts" ]; do
+    sleep 0.1
+    count=$((count + 1))
+  done
+  ! lane_group_is_alive "$pid"
+}
+
+file_mtime() {
+  local mtime
+  mtime=$(stat -c %Y "$1" 2>/dev/null || true)
+  case "$mtime" in
+    "" | *[!0-9]*) ;;
+    *)
+      echo "$mtime"
+      return
+      ;;
+  esac
+  stat -f %m "$1"
+}
+
+log_age_seconds() {
+  local log="$1"
+  local now
+  local mtime
+  [ -e "$log" ] || {
+    echo -1
+    return
+  }
+  now=$(date +%s)
+  mtime=$(file_mtime "$log")
+  echo $((now - mtime))
+}
+
+format_age() {
+  local seconds="$1"
+  if [ "$seconds" -lt 0 ]; then
+    echo "-"
+  elif [ "$seconds" -lt 60 ]; then
+    printf '%ss\n' "$seconds"
+  elif [ "$seconds" -lt 3600 ]; then
+    printf '%sm\n' "$((seconds / 60))"
+  elif [ "$seconds" -lt 86400 ]; then
+    printf '%sh\n' "$((seconds / 3600))"
+  else
+    printf '%sd\n' "$((seconds / 86400))"
+  fi
+}
+
+lane_state() {
+  local name="$1"
+  local pid="$2"
+  local stall_min="$3"
+  local marker
+  local marker_value
+  local age
+  marker=$(done_path "$name")
+  if [ -f "$marker" ]; then
+    marker_value=$(sed -n '1s/^EXIT=//p' "$marker")
+    case "$marker_value" in
+      "" | *[!0-9]*) echo "DONE:?" ;;
+      *) echo "DONE:$marker_value" ;;
+    esac
+    return
+  fi
+  if lane_group_is_alive "$pid"; then
+    age=$(log_age_seconds "$(log_path "$name")")
+    if [ "$age" -gt $((stall_min * 60)) ]; then
+      echo "STALLED"
+    else
+      echo "RUNNING"
+    fi
+  else
+    echo "DEAD"
+  fi
+}
+
+dirty_count() {
+  local worktree="$1"
+  local count
+  if [ ! -d "$worktree" ] || ! git -C "$worktree" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "?"
+    return
+  fi
+  count=$(git -C "$worktree" status --porcelain | wc -l | tr -d '[:space:]')
+  echo "${count:-0}"
+}
+
+ensure_worktree() {
+  local name="$1"
+  local repo="$2"
+  local base="$3"
+  local no_worktree="$4"
+  local worktree
+  local branch
+  local actual_branch
+
+  if [ "$no_worktree" = "true" ]; then
+    printf '%s\t\n' "$repo"
+    return
+  fi
+
+  worktree="$repo/.claude/worktrees/codex-$name"
+  branch="codex/$name"
+  if [ -e "$worktree" ]; then
+    git -C "$worktree" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "existing path is not a git worktree: $worktree"
+    actual_branch=$(git -C "$worktree" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+    [ "$actual_branch" = "$branch" ] || die "existing worktree is on $actual_branch, expected $branch"
+  else
+    mkdir -p "$(dirname "$worktree")"
+    if git -C "$repo" show-ref --verify --quiet "refs/heads/$branch"; then
+      git -C "$repo" worktree add "$worktree" "$branch" >&2
+    else
+      git -C "$repo" worktree add -b "$branch" "$worktree" "$base" >&2
+    fi
+  fi
+  printf '%s\t%s\n' "$worktree" "$branch"
+}
+
+build_prompt() {
+  local worker="$1"
+  local brief="$2"
+  local resume_mode="$3"
+  local prompt
+  if [ "$worker" = "claude" ]; then
+    prompt=$(<"$brief")
+  else
+    prompt="Do the task in $brief."
+  fi
+  if [ "$resume_mode" = "true" ]; then
+    prompt="$(<"$LANE_HOME/resume-note.md")
+
+$prompt"
+  fi
+  printf '%s' "$prompt"
+}
+
+print_watch() {
+  local name="$1"
+  local log="$2"
+  local marker="$3"
+  local quoted_log
+  local quoted_marker
+  printf -v quoted_log '%q' "$log"
+  printf -v quoted_marker '%q' "$marker"
+  echo "watch: while [ ! -f $quoted_marker ]; do sleep 15; done; echo \"$name \$(cat $quoted_marker) tail=\$(tail -1 $quoted_log)\""
+}
+
+launch_worker() {
+  local name="$1"
+  local repo="$2"
+  local worktree="$3"
+  local brief="$4"
+  local worker="$5"
+  local base="$6"
+  local branch="$7"
+  local no_worktree="$8"
+  local resume_mode="$9"
+  local metadata
+  local log
+  local marker
+  local prompt
+  local started_at
+  local launch_pid
+
+  metadata=$(metadata_path "$name")
+  log=$(log_path "$name")
+  marker=$(done_path "$name")
+  if [ -f "$metadata" ]; then
+    local old_pid
+    old_pid=$(json_get "$metadata" pid 2>/dev/null || true)
+    if [ -n "$old_pid" ] && lane_group_is_alive "$old_pid" && [ ! -f "$marker" ]; then
+      die "$name is already running as pid $old_pid"
+    fi
+  fi
+
+  mkdir -p "$LANE_HOME"
+  rm -f "$marker"
+  : >"$log"
+  prompt=$(build_prompt "$worker" "$brief" "$resume_mode")
+  started_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+  # Job control makes the nohup wrapper a process-group leader on macOS, where
+  # setsid(1) is not available. Stop can therefore target exactly -$launch_pid.
+  set -m
+  nohup env PYTHONUNBUFFERED=1 bash -c '
+    log=$1
+    marker=$2
+    worker=$3
+    prompt=$4
+    brief=$5
+    worktree=$6
+    resume_mode=$7
+    cd "$worktree" || exit 125
+    case "$worker" in
+      codex)
+        codex exec -m gpt-5.6-sol -s workspace-write --skip-git-repo-check "$prompt" < /dev/null
+        ;;
+      claude)
+        env -u ANTHROPIC_API_KEY claude -p --model claude-opus-4-8 "$prompt" < /dev/null
+        ;;
+      fake)
+        if [ "$resume_mode" = true ]; then printf "%s\n" "$prompt"; fi
+        sleep 1
+        echo hi
+        ;;
+      fake-hang)
+        sleep 30
+        ;;
+      *)
+        echo "lane: unsupported worker: $worker" >&2
+        exit 2
+        ;;
+    esac > "$log" 2>&1
+    rc=$?
+    marker_tmp="${marker}.tmp.$$"
+    printf "EXIT=%s\n" "$rc" > "$marker_tmp"
+    mv "$marker_tmp" "$marker"
+    exit "$rc"
+  ' lane-worker "$log" "$marker" "$worker" "$prompt" "$brief" "$worktree" "$resume_mode" </dev/null >/dev/null 2>&1 &
+  launch_pid=$!
+  set +m
+  disown "$launch_pid" 2>/dev/null || true
+
+  if ! lane_group_is_alive "$launch_pid"; then
+    kill "$launch_pid" 2>/dev/null || true
+    die "could not isolate worker process group for pid $launch_pid"
+  fi
+  if ! json_write "$metadata" "$name" "$repo" "$worktree" "$brief" "$launch_pid" "$started_at" "$worker" "$base" "$branch" "$no_worktree"; then
+    kill -TERM -- "-$launch_pid" 2>/dev/null || true
+    die "could not write metadata: $metadata"
+  fi
+
+  echo "lane: $name pid=$launch_pid worker=$worker"
+  echo "  worktree: $worktree"
+  echo "  log:      $log"
+  echo "  done:     $marker (contains EXIT=<rc>)"
+  print_watch "$name" "$log" "$marker"
+}
+
+cmd_run() {
+  [ "$#" -ge 1 ] || die "run requires a name"
+  local name="$1"
+  shift
+  local repo=""
+  local brief=""
+  local worker="codex"
+  local base="HEAD"
+  local no_worktree="false"
+  local repo_root
+  local worktree_and_branch
+  local worktree
+  local branch
+  local existing_repo
+  local existing_no_worktree
+  local existing_pid
+
+  validate_name "$name"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --repo)
+        [ "$#" -ge 2 ] || die "--repo requires a path"
+        repo="$2"
+        shift 2
+        ;;
+      --brief)
+        [ "$#" -ge 2 ] || die "--brief requires a file"
+        brief="$2"
+        shift 2
+        ;;
+      --worker)
+        [ "$#" -ge 2 ] || die "--worker requires a value"
+        worker="$2"
+        shift 2
+        ;;
+      --base)
+        [ "$#" -ge 2 ] || die "--base requires a ref"
+        base="$2"
+        shift 2
+        ;;
+      --no-worktree)
+        no_worktree="true"
+        shift
+        ;;
+      *) die "unknown run option: $1" ;;
+    esac
+  done
+  [ -n "$repo" ] || die "run requires --repo"
+  [ -n "$brief" ] || die "run requires --brief"
+  case "$worker" in codex | claude | fake | fake-hang) ;; *) die "worker must be codex or claude" ;; esac
+  validate_plain_value "repo" "$repo"
+  validate_plain_value "brief" "$brief"
+  validate_plain_value "base" "$base"
+  brief=$(absolute_file "$brief")
+  repo_root=$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null) || die "not a git repository: $repo"
+  repo_root=$(cd "$repo_root" && pwd -P)
+  git -C "$repo_root" check-ref-format --branch "codex/$name" >/dev/null 2>&1 || die "name does not form a valid git branch: codex/$name"
+  if [ -f "$(metadata_path "$name")" ]; then
+    existing_repo=$(json_get "$(metadata_path "$name")" repo) || die "invalid metadata for $name"
+    existing_no_worktree=$(json_get "$(metadata_path "$name")" no_worktree) || die "invalid metadata for $name"
+    existing_pid=$(json_get "$(metadata_path "$name")" pid) || die "invalid metadata for $name"
+    if [ ! -f "$(done_path "$name")" ] && lane_group_is_alive "$existing_pid"; then
+      die "$name is already running as pid $existing_pid"
+    fi
+    [ "$existing_repo" = "$repo_root" ] || die "$name already belongs to repository $existing_repo"
+    [ "$existing_no_worktree" = "$no_worktree" ] || die "$name cannot change its --no-worktree mode"
+  fi
+  worktree_and_branch=$(ensure_worktree "$name" "$repo_root" "$base" "$no_worktree")
+  worktree=${worktree_and_branch%%$'\t'*}
+  branch=${worktree_and_branch#*$'\t'}
+  launch_worker "$name" "$repo_root" "$worktree" "$brief" "$worker" "$base" "$branch" "$no_worktree" false
+}
+
+cmd_ls() {
+  local stall_min="$DEFAULT_STALL_MIN"
+  local metadata
+  local name
+  local pid
+  local started_at
+  local worktree
+  local state
+  local age
+  local dirty
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --stall-min)
+        [ "$#" -ge 2 ] || die "--stall-min requires minutes"
+        stall_min="$2"
+        shift 2
+        ;;
+      *) die "unknown ls option: $1" ;;
+    esac
+  done
+  case "$stall_min" in "" | *[!0-9]*) die "--stall-min must be a non-negative integer" ;; esac
+  mkdir -p "$LANE_HOME"
+  printf '%-20s %-10s %-8s %-21s %s\n' "NAME" "STATE" "LOG-AGE" "STARTED" "DIRTY"
+  for metadata in "$LANE_HOME"/*.json; do
+    [ -e "$metadata" ] || continue
+    name=$(json_get "$metadata" name) || die "invalid metadata: $metadata"
+    pid=$(json_get "$metadata" pid) || die "invalid metadata: $metadata"
+    started_at=$(json_get "$metadata" started_at) || die "invalid metadata: $metadata"
+    worktree=$(json_get "$metadata" worktree) || die "invalid metadata: $metadata"
+    state=$(lane_state "$name" "$pid" "$stall_min")
+    age=$(format_age "$(log_age_seconds "$(log_path "$name")")")
+    dirty=$(dirty_count "$worktree")
+    printf '%-20s %-10s %-8s %-21s %s\n' "$name" "$state" "$age" "$started_at" "$dirty"
+  done
+}
+
+archive_log() {
+  local name="$1"
+  local log
+  local archive
+  local number=1
+  log=$(log_path "$name")
+  [ -e "$log" ] || return 0
+  while :; do
+    archive="$LANE_HOME/$name.stalled-$number.log"
+    [ -e "$archive" ] || break
+    number=$((number + 1))
+  done
+  mv "$log" "$archive"
+  echo "lane: archived log to $archive"
+}
+
+stop_lane() {
+  local name="$1"
+  local metadata
+  local pid
+  local marker
+  metadata=$(metadata_path "$name")
+  [ -f "$metadata" ] || die "unknown lane: $name"
+  pid=$(json_get "$metadata" pid) || die "invalid metadata: $metadata"
+  marker=$(done_path "$name")
+  if [ -f "$marker" ]; then
+    echo "lane: $name already completed; no process signalled"
+  elif lane_group_is_alive "$pid"; then
+    kill -TERM -- "-$pid"
+    echo "lane: signalled process group $pid"
+    wait_for_group_exit "$pid" 50 || die "process group $pid did not stop after SIGTERM"
+  else
+    echo "lane: process group $pid is not running"
+  fi
+  archive_log "$name"
+  rm -f "$(done_path "$name")"
+}
+
+cmd_stop() {
+  [ "$#" -eq 1 ] || die "stop requires exactly one name"
+  validate_name "$1"
+  stop_lane "$1"
+}
+
+ensure_resume_note() {
+  local note="$LANE_HOME/resume-note.md"
+  mkdir -p "$LANE_HOME"
+  if [ ! -e "$note" ]; then
+    printf '%s\n' 'Start with git status and git diff in the worktree. Keep sound edits, finish the task, and write the report.' >"$note"
+  fi
+}
+
+cmd_resume() {
+  [ "$#" -eq 1 ] || die "resume requires exactly one name"
+  local name="$1"
+  local metadata
+  local repo
+  local worktree
+  local brief
+  local worker
+  local base
+  local branch
+  local no_worktree
+  validate_name "$name"
+  metadata=$(metadata_path "$name")
+  [ -f "$metadata" ] || die "unknown lane: $name"
+  repo=$(json_get "$metadata" repo) || die "invalid metadata: $metadata"
+  worktree=$(json_get "$metadata" worktree) || die "invalid metadata: $metadata"
+  brief=$(json_get "$metadata" brief) || die "invalid metadata: $metadata"
+  worker=$(json_get "$metadata" worker) || die "invalid metadata: $metadata"
+  base=$(json_get "$metadata" base) || die "invalid metadata: $metadata"
+  branch=$(json_get "$metadata" branch) || die "invalid metadata: $metadata"
+  no_worktree=$(json_get "$metadata" no_worktree) || die "invalid metadata: $metadata"
+  [ -f "$brief" ] || die "brief no longer exists: $brief"
+  [ -d "$worktree" ] || die "worktree no longer exists: $worktree"
+  ensure_resume_note
+  stop_lane "$name"
+  launch_worker "$name" "$repo" "$worktree" "$brief" "$worker" "$base" "$branch" "$no_worktree" true
+}
+
+cmd_reap() {
+  [ "$#" -ge 1 ] || die "reap requires a name"
+  local name="$1"
+  shift
+  local force="false"
+  local metadata
+  local pid
+  local state
+  local repo
+  local worktree
+  local branch
+  local no_worktree
+  validate_name "$name"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --force)
+        force="true"
+        shift
+        ;;
+      *) die "unknown reap option: $1" ;;
+    esac
+  done
+  metadata=$(metadata_path "$name")
+  [ -f "$metadata" ] || die "unknown lane: $name"
+  pid=$(json_get "$metadata" pid) || die "invalid metadata: $metadata"
+  state=$(lane_state "$name" "$pid" "$DEFAULT_STALL_MIN")
+  case "$state" in DONE:\?) die "refusing to reap $name with an invalid completion marker" ;; DONE:*) ;; *) die "refusing to reap $name in state $state" ;; esac
+  repo=$(json_get "$metadata" repo) || die "invalid metadata: $metadata"
+  worktree=$(json_get "$metadata" worktree) || die "invalid metadata: $metadata"
+  branch=$(json_get "$metadata" branch) || die "invalid metadata: $metadata"
+  no_worktree=$(json_get "$metadata" no_worktree) || die "invalid metadata: $metadata"
+  [ "$no_worktree" = "false" ] || die "refusing to reap a --no-worktree lane"
+  [ "$worktree" = "$repo/.claude/worktrees/codex-$name" ] || die "refusing unexpected worktree path: $worktree"
+  [ "$branch" = "codex/$name" ] || die "refusing unexpected branch: $branch"
+  [ -d "$worktree" ] || die "worktree no longer exists: $worktree"
+
+  echo "lane: git diff --stat for $worktree"
+  git -C "$worktree" diff HEAD --stat --
+  echo "lane: untracked files"
+  git -C "$worktree" ls-files --others --exclude-standard
+  if [ "$force" != "true" ]; then
+    echo "lane: retained $name; pass --force to remove its worktree and branch"
+    return
+  fi
+  if lane_group_is_alive "$pid"; then
+    wait_for_group_exit "$pid" 10 || die "refusing to reap while process group $pid is still exiting"
+  fi
+  git -C "$repo" worktree remove --force "$worktree"
+  if git -C "$repo" show-ref --verify --quiet "refs/heads/$branch"; then
+    git -C "$repo" branch -D -- "$branch"
+  fi
+  rm -f "$metadata" "$(done_path "$name")" "$(log_path "$name")"
+  echo "lane: reaped $name"
+}
+
+main() {
+  [ "$#" -ge 1 ] || {
+    usage
+    exit 2
+  }
+  local command="$1"
+  shift
+  case "$command" in
+    -h | --help | help) usage ;;
+    run | ls | stop | resume | reap)
+      init_lane_home
+      case "$command" in
+        run) cmd_run "$@" ;;
+        ls) cmd_ls "$@" ;;
+        stop) cmd_stop "$@" ;;
+        resume) cmd_resume "$@" ;;
+        reap) cmd_reap "$@" ;;
+      esac
+      ;;
+    *)
+      usage
+      die "unknown command: $command"
+      ;;
+  esac
+}
+
+main "$@"
