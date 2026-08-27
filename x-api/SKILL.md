@@ -24,8 +24,8 @@ Smoke-test auth, pull recent tweets from a single account, dump JSON to
 `.scratch/x_probe_<username>.json`. Reports cost.
 
 ```
-python3 ~/Projects/skills/x-api/scripts/probe.py aleabitoreddit 10
-python3 ~/Projects/skills/x-api/scripts/probe.py aleabitoreddit 100 2026-04-01T00:00:00Z
+uv run --project ~/Projects/skills python3 ~/Projects/skills/x-api/scripts/probe.py aleabitoreddit 10
+uv run --project ~/Projects/skills python3 ~/Projects/skills/x-api/scripts/probe.py aleabitoreddit 100 2026-04-01T00:00:00Z
 ```
 
 ### `search.py query|verify|thread` — full-archive search (added 2026-08-20)
@@ -34,9 +34,9 @@ Promoted after being hand-rolled 4× across two research sessions. Wraps
 `/2/tweets/search/all` with ledger discipline and the operational lessons baked in.
 
 ```
-python3 ~/Projects/skills/x-api/scripts/search.py query '"greater male variability" lang:en' --out hits.jsonl --label mytopic
-python3 ~/Projects/skills/x-api/scripts/search.py verify StuartJRitchie lakens cremieuxrecueil
-python3 ~/Projects/skills/x-api/scripts/search.py thread 1234567890 --author whyvert
+uv run --project ~/Projects/skills python3 ~/Projects/skills/x-api/scripts/search.py query '"greater male variability" lang:en' --out hits.jsonl --label mytopic
+uv run --project ~/Projects/skills python3 ~/Projects/skills/x-api/scripts/search.py verify StuartJRitchie lakens cremieuxrecueil
+uv run --project ~/Projects/skills python3 ~/Projects/skills/x-api/scripts/search.py thread 1234567890 --author whyvert
 ```
 
 Rules it encodes (learned the expensive way):
@@ -59,7 +59,7 @@ wallet-scoped at `~/.local/state/x-api/cost_ledger.jsonl` (NOT CWD-scoped —
 spend from every repo counts against the one monthly cap).
 
 ```
-python3 ~/Projects/skills/x-api/scripts/pull.py \
+uv run --project ~/Projects/skills python3 ~/Projects/skills/x-api/scripts/pull.py \
     --config .claude/config/x_curated_accounts.json \
     --tracked-tickers-file <(ls analysis/entities/*.md | xargs -I {} basename {} .md) \
     --themes-dir analysis/themes \
