@@ -17,6 +17,7 @@ from __future__ import annotations
 import fnmatch
 import json
 import os
+import runpy
 import subprocess
 import sys
 
@@ -25,6 +26,8 @@ import pytest
 HOOKS_DIR = os.path.dirname(os.path.abspath(__file__))
 DISPATCHER = os.path.join(HOOKS_DIR, "pretool-bash-dispatch.py")
 SNAPSHOT = os.path.join(HOOKS_DIR, "_bash_gates_pre_dispatch_snapshot.json")
+_DISPATCHER_NAMESPACE = runpy.run_path(DISPATCHER)
+_GIT_NOEXT_VERDICT = _DISPATCHER_NAMESPACE["_git_noext_inject_verdict"]
 
 
 def _if_matches(if_pattern, cmd):
@@ -131,6 +134,10 @@ def _both(envelope, sb):
     return oracle, disp
 
 
+def _noext_verdict(command: str) -> tuple[str, str]:
+    return _GIT_NOEXT_VERDICT({"command": command})
+
+
 # ---------------------------------------------------------------------------
 
 def test_benign_git_status_passes_both(git_sandbox):
@@ -165,7 +172,513 @@ def test_git_diff_injects_no_ext_diff_both(git_sandbox):
     assert disp["exit_code"] == 0
     assert "--no-ext-diff" in oracle["final_command"]
     assert "--no-ext-diff" in disp["final_command"]
-    assert oracle["final_command"] == disp["final_command"]
+    # The frozen shell oracle re-quotes every shlex token; that legacy behavior
+    # is the defect, not a parity contract for the raw-splice dispatcher.
+    assert oracle["final_command"] == "git --no-pager diff --no-ext-diff 'HEAD~1'"
+    assert disp["final_command"] == "git --no-pager diff --no-ext-diff HEAD~1"
+
+
+def test_git_noext_injects_into_compound_segments(git_sandbox):
+    command = "cd /repo; git -C /w diff --stat main -- f | grep '^[+-]'"
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, git_sandbox["env"], git_sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert disp["final_command"] == (
+        "cd /repo; git -C /w --no-pager diff --no-ext-diff --stat main -- f | grep '^[+-]'"
+    )
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        (
+            'true && git diff "$BASE" -- "$FILE"',
+            'true && git --no-pager diff --no-ext-diff "$BASE" -- "$FILE"',
+        ),
+        (
+            'GIT_DIR="$PWD/.git" git log -1',
+            'GIT_DIR="$PWD/.git" git --no-pager log --no-ext-diff -1',
+        ),
+        (
+            "echo before; git diff --stat & wait",
+            "echo before; git --no-pager diff --no-ext-diff --stat & wait",
+        ),
+        (
+            "git status; cat <<'EOF'\n EOF\ngit diff data;\nEOF\ngit log -1",
+            "git status; cat <<'EOF'\n EOF\ngit diff data;\nEOF\n"
+            "git --no-pager log --no-ext-diff -1",
+        ),
+    ],
+)
+def test_git_noext_splice_only_regressions(sandbox, command, expected):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert disp["final_command"] == expected
+
+
+def test_git_noext_keeps_git_globals_and_quoted_pipe_data(sandbox):
+    command = 'cd /r; git -C /w diff main -- "$F" | grep \'^[+-]\''
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert disp["final_command"] == (
+        'cd /r; git -C /w --no-pager diff --no-ext-diff main -- "$F" | grep \'^[+-]\''
+    )
+
+
+@pytest.mark.parametrize("prefix", ["!", "time", "command", "exec"])
+def test_git_noext_skips_shell_prefix_words(sandbox, prefix):
+    command = f'{prefix} GIT_DIR="$PWD/.git" git diff "$BASE"'
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert disp["final_command"] == (
+        f'{prefix} GIT_DIR="$PWD/.git" git --no-pager diff --no-ext-diff "$BASE"'
+    )
+
+
+def test_git_noext_changes_only_the_two_splice_points(sandbox):
+    command = (
+        'time GIT_DIR="$PWD/.git" command git -C "/w d"\tdiff "$BASE" -- "$FILE" '
+        '2> "$ERR" & wait # keep ; $TAIL'
+    )
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    rewritten = disp["final_command"]
+    assert rewritten == (
+        'time GIT_DIR="$PWD/.git" command git -C "/w d" --no-pager\tdiff'
+        ' --no-ext-diff "$BASE" -- "$FILE" 2> "$ERR" & wait # keep ; $TAIL'
+    )
+    assert rewritten.replace(" --no-pager", "", 1).replace(
+        " --no-ext-diff", "", 1
+    ) == command
+
+
+def test_git_noext_heredoc_dash_strips_only_leading_tabs(sandbox):
+    command = "git status; cat <<-'EOF'\n\tbody;\n\tEOF\ngit show HEAD"
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert disp["final_command"] == (
+        "git status; cat <<-'EOF'\n\tbody;\n\tEOF\n"
+        "git --no-pager show --no-ext-diff HEAD"
+    )
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        '( git diff HEAD )',
+        '( echo x; git diff HEAD )',
+        '{ git diff HEAD; }',
+        '{ echo x; git show HEAD; }',
+        'for ref in HEAD; do git diff "$ref"; done',
+        'for ref in HEAD; do echo "$ref"; git diff "$ref"; done',
+        'git diff "unterminated',
+    ],
+)
+def test_git_noext_ambiguous_shell_forms_fail_open(sandbox, command):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert disp["final_command"] == command
+
+
+def test_git_noext_accepts_nonword_heredoc_delimiter(sandbox):
+    command = (
+        "git status; cat <<'END-DATA'\n"
+        "git diff data;\n"
+        "END-DATA\n"
+        "git log -1"
+    )
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert disp["final_command"] == (
+        "git status; cat <<'END-DATA'\n"
+        "git diff data;\n"
+        "END-DATA\n"
+        "git --no-pager log --no-ext-diff -1"
+    )
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        (
+            ">out git diff HEAD",
+            ">out git --no-pager diff --no-ext-diff HEAD",
+        ),
+        (
+            "git 2>/dev/null diff HEAD",
+            "git --no-pager 2>/dev/null diff --no-ext-diff HEAD",
+        ),
+        (
+            "git -C /w 2>err diff HEAD",
+            "git -C /w --no-pager 2>err diff --no-ext-diff HEAD",
+        ),
+        (
+            "{fd}>out git diff HEAD",
+            "{fd}>out git --no-pager diff --no-ext-diff HEAD",
+        ),
+    ],
+)
+def test_git_noext_skips_redirects_before_subcommand(sandbox, command, expected):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert disp["final_command"] == expected
+    assert disp["final_command"].replace(" --no-pager", "", 1).replace(
+        " --no-ext-diff", "", 1
+    ) == command
+
+
+def test_git_noext_skips_c_and_generic_git_globals(sandbox):
+    command = "git -c color.ui=always --literal-pathspecs diff HEAD"
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert disp["final_command"] == (
+        "git -c color.ui=always --literal-pathspecs --no-pager "
+        "diff --no-ext-diff HEAD"
+    )
+
+
+@pytest.mark.parametrize(
+    ("command", "expected", "injection_count"),
+    [
+        (
+            "echo x; git --no-pager diff --cached --stat",
+            "echo x; git --no-pager diff --no-ext-diff --cached --stat",
+            1,
+        ),
+        (
+            "git diff main -- a && git diff main -- b",
+            "git --no-pager diff --no-ext-diff main -- a"
+            " && git --no-pager diff --no-ext-diff main -- b",
+            2,
+        ),
+        (
+            "echo before; git show HEAD | git log --oneline; echo after",
+            "echo before; git --no-pager show --no-ext-diff HEAD"
+            " | git --no-pager log --no-ext-diff --oneline; echo after",
+            2,
+        ),
+        (
+            "false || git log -1\ngit show HEAD",
+            "false || git --no-pager log --no-ext-diff -1\n"
+            "git --no-pager show --no-ext-diff HEAD",
+            2,
+        ),
+    ],
+)
+def test_git_noext_compound_forms_rewrite_only_git_segments(
+    sandbox, command, expected, injection_count
+):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert disp["final_command"] == expected
+    assert disp["final_command"].count("--no-ext-diff") == injection_count
+
+
+def test_git_noext_quoted_command_text_is_not_rewritten(sandbox):
+    command = 'echo "git diff x; y"'
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert disp["final_command"] == command
+
+
+def test_git_noext_keeps_heredoc_and_comment_data_opaque(sandbox):
+    command = (
+        "git status; cat <<'EOF'\n"
+        "git diff data; git show data\n"
+        "EOF\n"
+        "# git diff comment; git show comment\n"
+        "git log -1"
+    )
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert disp["final_command"] == (
+        "git status; cat <<'EOF'\n"
+        "git diff data; git show data\n"
+        "EOF\n"
+        "# git diff comment; git show comment\n"
+        "git --no-pager log --no-ext-diff -1"
+    )
+
+
+def test_git_noext_compound_rewrite_is_idempotent(sandbox):
+    command = "echo x; git diff main -- a && git --no-pager log --no-ext-diff -1"
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    first = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert first["exit_code"] == 0
+    second_envelope = {
+        "tool_name": "Bash",
+        "tool_input": {"command": first["final_command"]},
+    }
+    second = run_dispatcher(second_envelope, sandbox["env"], sandbox["cwd"])
+    assert second["exit_code"] == 0
+    assert second["final_command"] == first["final_command"]
+    proc = subprocess.run(
+        ["python3", DISPATCHER],
+        input=json.dumps(second_envelope),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env=sandbox["env"],
+        cwd=sandbox["cwd"],
+    )
+    assert proc.returncode == 0
+    assert proc.stdout.strip() == ""
+
+
+def test_git_noext_compound_keeps_nongit_guard_behavior(sandbox):
+    simple_envelope = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "grep --no-ext-diff needle file"},
+    }
+    simple = run_dispatcher(simple_envelope, sandbox["env"], sandbox["cwd"])
+    command = "git diff main -- a; grep --no-ext-diff needle file"
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+    assert simple["exit_code"] == 2
+    assert disp["exit_code"] == 2
+    assert disp["block_msg"] == simple["block_msg"]
+    assert "GIT-ONLY flag" in disp["block_msg"]
+    assert "applied it to 'grep'" in disp["block_msg"]
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        (
+            "printf '%s\\n' ${fallback:-plain;git diff HEAD}",
+            ("pass", ""),
+        ),
+        (
+            "${x:-a}; git diff",
+            ("mutate", "${x:-a}; git --no-pager diff --no-ext-diff"),
+        ),
+        (
+            "${outer:-${inner:-a;git diff HEAD}}; git log -1",
+            (
+                "mutate",
+                "${outer:-${inner:-a;git diff HEAD}}; "
+                "git --no-pager log --no-ext-diff -1",
+            ),
+        ),
+        (
+            "printf %s $(git diff HEAD); git log -1",
+            (
+                "mutate",
+                "printf %s $(git diff HEAD); "
+                "git --no-pager log --no-ext-diff -1",
+            ),
+        ),
+        (
+            "printf %s $(printf x # )\n); git diff HEAD",
+            (
+                "mutate",
+                "printf %s $(printf x # )\n); "
+                "git --no-pager diff --no-ext-diff HEAD",
+            ),
+        ),
+        (
+            "printf %s $( (printf x)# comment )\n); git diff HEAD",
+            (
+                "mutate",
+                "printf %s $( (printf x)# comment )\n); "
+                "git --no-pager diff --no-ext-diff HEAD",
+            ),
+        ),
+        (
+            "printf %s $(cat <<'EOF'\n)\nEOF\n); git diff HEAD",
+            (
+                "mutate",
+                "printf %s $(cat <<'EOF'\n)\nEOF\n); "
+                "git --no-pager diff --no-ext-diff HEAD",
+            ),
+        ),
+        (
+            'printf "%s\\n" "$((1 << 2))"; git diff HEAD',
+            (
+                "mutate",
+                'printf "%s\\n" "$((1 << 2))"; '
+                "git --no-pager diff --no-ext-diff HEAD",
+            ),
+        ),
+        (
+            "printf %s `git diff HEAD`; git log -1",
+            (
+                "mutate",
+                "printf %s `git diff HEAD`; "
+                "git --no-pager log --no-ext-diff -1",
+            ),
+        ),
+    ],
+)
+def test_git_noext_keeps_expansions_opaque(command, expected):
+    assert _noext_verdict(command) == expected
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "printf %s ${fallback:-plain;git diff HEAD",
+        "printf %s $(git diff HEAD",
+        "printf %s `git diff HEAD",
+        'echo "$(printf x"; git diff HEAD',
+        'echo "${x:-y"; git diff HEAD',
+        'echo "`printf x"; git diff HEAD',
+    ],
+)
+def test_git_noext_unbalanced_expansions_fail_open(command):
+    assert _noext_verdict(command) == ("pass", "")
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        (
+            "git diff HEAD & printf '%s\\n' --no-ext-diff",
+            "git --no-pager diff --no-ext-diff HEAD & "
+            "printf '%s\\n' --no-ext-diff",
+        ),
+        (
+            "sleep 1 & git log -1",
+            "sleep 1 & git --no-pager log --no-ext-diff -1",
+        ),
+        (
+            "git diff HEAD 2>&1 | head",
+            "git --no-pager diff --no-ext-diff HEAD 2>&1 | head",
+        ),
+        (
+            "git diff HEAD |& head",
+            "git --no-pager diff --no-ext-diff HEAD |& head",
+        ),
+        (
+            "git diff HEAD &>out",
+            "git --no-pager diff --no-ext-diff HEAD &>out",
+        ),
+        (
+            "git diff HEAD &>>out",
+            "git --no-pager diff --no-ext-diff HEAD &>>out",
+        ),
+        (
+            "git diff HEAD >&2",
+            "git --no-pager diff --no-ext-diff HEAD >&2",
+        ),
+        (
+            "git diff HEAD <&0",
+            "git --no-pager diff --no-ext-diff HEAD <&0",
+        ),
+    ],
+)
+def test_git_noext_distinguishes_background_separators_from_redirects(
+    command, expected
+):
+    verdict, rewritten = _noext_verdict(command)
+    assert verdict == "mutate"
+    assert rewritten == expected
+    assert rewritten.replace(" --no-pager", "", 1).replace(
+        " --no-ext-diff", "", 1
+    ) == command
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        (
+            'git "diff" HEAD',
+            'git --no-pager "diff" --no-ext-diff HEAD',
+        ),
+        (
+            '"git" diff HEAD',
+            '"git" --no-pager diff --no-ext-diff HEAD',
+        ),
+        (
+            r"g\it d\iff HEAD",
+            r"g\it --no-pager d\iff --no-ext-diff HEAD",
+        ),
+        (
+            "time -p git diff HEAD",
+            "time -p git --no-pager diff --no-ext-diff HEAD",
+        ),
+        (
+            "command -p git show HEAD",
+            "command -p git --no-pager show --no-ext-diff HEAD",
+        ),
+        (
+            "exec -a git-alias git log -1",
+            "exec -a git-alias git --no-pager log --no-ext-diff -1",
+        ),
+        (
+            "git diff HEAD -- --no-ext-diff",
+            "git --no-pager diff --no-ext-diff HEAD -- --no-ext-diff",
+        ),
+    ],
+)
+def test_git_noext_classifies_unquoted_words_and_prefix_options(command, expected):
+    verdict, rewritten = _noext_verdict(command)
+    assert verdict == "mutate"
+    assert rewritten == expected
+    assert rewritten.replace(" --no-pager", "", 1).replace(
+        " --no-ext-diff", "", 1
+    ) == command
+
+
+def test_git_noext_recognizes_quoted_existing_flag():
+    command = 'git --no-pager diff "--no-ext-diff" HEAD'
+    assert _noext_verdict(command) == ("pass", "")
+
+
+@pytest.mark.parametrize("option", ["-v", "-V"])
+def test_git_noext_leaves_command_query_modes_unchanged(option):
+    command = f"command {option} git show HEAD"
+    assert _noext_verdict(command) == ("pass", "")
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        (
+            "git -C --no-ext-diff diff HEAD",
+            "git -C --no-ext-diff --no-pager diff --no-ext-diff HEAD",
+        ),
+        (
+            "git -C -- diff HEAD",
+            "git -C -- --no-pager diff --no-ext-diff HEAD",
+        ),
+    ],
+)
+def test_git_noext_ignores_global_option_operands_during_flag_detection(
+    command, expected
+):
+    assert _noext_verdict(command) == ("mutate", expected)
+    assert _noext_verdict(expected) == ("pass", "")
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "${x:-a}; git diff",
+        "git diff HEAD & printf '%s\\n' --no-ext-diff",
+        "sleep 1 & git log -1",
+        'git "diff" HEAD',
+        '"git" diff HEAD',
+        "time -p git diff HEAD",
+        "git diff HEAD -- --no-ext-diff",
+    ],
+)
+def test_git_noext_pass2_round_trips_are_idempotent(command):
+    verdict, rewritten = _noext_verdict(command)
+    assert verdict == "mutate"
+    assert _noext_verdict(rewritten) == ("pass", "")
 
 
 def test_backgrounded_python_gets_pythonunbuffered_both(sandbox):
