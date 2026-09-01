@@ -26,6 +26,15 @@ log="$dir/$name.log"; done_marker="$dir/$name.done"; pid_file="$dir/$name.pid"
 # Truncate the log too: appending across same-name runs made a STALE error read
 # as the current run's outcome (genomics kernel live-proof loop, 2026-08-11).
 rm -f "$done_marker" "$pid_file" "$log"
+# Relative paths and `just` recipes resolve against the caller's cwd. A session whose shell
+# had drifted into a lane worktree launched `just prune-source-epochs` there: it rebuilt that
+# worktree's venv and pruned nothing (genomics, 2026-09-01). Record the cwd in the log header
+# and shout when it is a worktree.
+case "$PWD" in
+  */.claude/worktrees/*)
+    echo "bgrun: WARNING cwd is a lane worktree: $PWD — recipes and relative paths resolve THERE; prefix the command with 'cd <main-checkout> &&' if that is not intended" >&2 ;;
+esac
+printf 'bgrun: cwd=%s\n' "$PWD" > "$log"
 
 nohup env PYTHONUNBUFFERED=1 bash -c '
   "$@" > "$0.log.tmp" 2>&1
@@ -38,7 +47,7 @@ launch_pid=$!
 disown "$launch_pid" 2>/dev/null || true
 echo "$launch_pid" > "$pid_file"
 
-echo "bgrun: $name pid=$launch_pid"
+echo "bgrun: $name pid=$launch_pid cwd=$PWD"
 echo "  log:  $log"
 echo "  done: $done_marker (contains exit code)"
 echo "  watch: until [ -f $done_marker ]; do sleep 15; done; echo \"$name rc=\$(cat $done_marker) tail=\$(tail -1 $log)\""
