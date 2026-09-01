@@ -405,7 +405,10 @@ launch_worker() {
   # Job control makes the nohup wrapper a process-group leader on macOS, where
   # setsid(1) is not available. Stop can therefore target exactly -$launch_pid.
   set -m
-  nohup env PYTHONUNBUFFERED=1 bash -c '
+  # UV_CACHE_DIR + --add-dir: the codex sandbox cannot write ~/.cache/uv by default, so uv
+  # silently fell back to a per-worktree .uv-cache and re-downloaded the world per lane
+  # (13G + 9.7G in two lanes; .claude hit 60G, 2026-09-01). One shared, writable cache.
+  nohup env PYTHONUNBUFFERED=1 UV_CACHE_DIR="$HOME/.cache/uv" bash -c '
     log=$1
     marker=$2
     worker=$3
@@ -416,7 +419,7 @@ launch_worker() {
     cd "$worktree" || exit 125
     case "$worker" in
       codex)
-        codex exec -m gpt-5.6-sol -s workspace-write --skip-git-repo-check "$prompt" < /dev/null
+        codex exec -m gpt-5.6-sol -s workspace-write --add-dir "$HOME/.cache/uv" --skip-git-repo-check "$prompt" < /dev/null
         ;;
       claude)
         env -u ANTHROPIC_API_KEY claude -p --model claude-opus-4-8 "$prompt" < /dev/null
@@ -435,6 +438,11 @@ launch_worker() {
         ;;
     esac > "$log" 2>&1
     rc=$?
+    # A finished lane keeps its diff, never its package caches: strip .uv-cache/.venv on
+    # exit (rederivable; resume re-syncs from the shared cache). Real worktrees only.
+    case "$worktree" in
+      */.claude/worktrees/codex-*) rm -rf "$worktree/.uv-cache" "$worktree/.venv" 2>/dev/null || true ;;
+    esac
     marker_tmp="${marker}.tmp.$$"
     printf "EXIT=%s\n" "$rc" > "$marker_tmp"
     mv "$marker_tmp" "$marker"
