@@ -10,6 +10,13 @@ if [ "${CODEX_HOOK_COMPAT_SMOKE:-0}" = "1" ] || [ "${CLAUDE_HOOK_SMOKE:-0}" = "1
   exit 0
 fi
 
+# A headless lane worker (`lane run --worker claude`) answered THIS nudge instead of its brief
+# and exited "done" having landed nothing (genomics land-lanes, 2026-09-01). Workers never get
+# housekeeping nudges; the parent session that dispatched them owns /rsi close.
+if [ "${LANE_WORKER:-0}" = "1" ]; then
+  exit 0
+fi
+
 # Background drain — do not block session start
 ( python3 "$SCRIPT" --drain --limit 5 >/dev/null 2>&1 ) &
 

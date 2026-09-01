@@ -408,7 +408,7 @@ launch_worker() {
   # UV_CACHE_DIR + --add-dir: the codex sandbox cannot write ~/.cache/uv by default, so uv
   # silently fell back to a per-worktree .uv-cache and re-downloaded the world per lane
   # (13G + 9.7G in two lanes; .claude hit 60G, 2026-09-01). One shared, writable cache.
-  nohup env PYTHONUNBUFFERED=1 UV_CACHE_DIR="$HOME/.cache/uv" bash -c '
+  nohup env PYTHONUNBUFFERED=1 LANE_WORKER=1 UV_CACHE_DIR="$HOME/.cache/uv" bash -c '
     log=$1
     marker=$2
     worker=$3
