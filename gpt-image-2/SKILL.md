@@ -1,5 +1,5 @@
 ---
-name: gpt-image-2-prompt-generation/modifying
+name: gpt-image-2
 description: "Use when: improving a gpt-image-2 prompt before generation. NOT scene injection (/person-into-scene)."
 ---
 
