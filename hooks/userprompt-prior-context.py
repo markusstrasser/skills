@@ -119,6 +119,15 @@ INFRA_DESIGN = re.compile(
     re.I,
 )
 
+# LIVE-BOOK slice (2026-09-01): a prompt about the operator's REAL positions. Only fires
+# when the IBKR projection exists under cwd (intel), so the regex can stay broad.
+LIVE_BOOK = re.compile(
+    r"\b(my (positions?|portfolio|holdings?|book|account)|real[- ]book|ibkr|"
+    r"(which|what)\b[^.?\n]{0,60}\b(sell|buy|trim|add to)|"
+    r"margin (loan|call|balance)|de-?lever(age|ing)?)\b",
+    re.I,
+)
+
 PROJECTS_ROOT = Path.home() / "Projects"
 SKILLS_HOOKS = PROJECTS_ROOT / "skills" / "hooks"
 SIBLING_SCAN_MAX = 5
@@ -401,6 +410,41 @@ def _scan_local_scripts_infra(base: Path, prompt: str) -> list[str]:
     return hits
 
 
+def _live_book_lines(base: Path, prompt: str) -> list[str]:
+    """LIVE-BOOK: route real-position questions to the live IBKR projection.
+
+    Evidence (2026-09-01, intel): 4th stale-book read of the summer — an agent ran
+    `ls indexed/` at the repo root, missed the nested `intel/indexed/ibkr_flex.duckdb`,
+    fell back to a 08-26 XML and told the operator the 08-27 sells were unexecuted while
+    those trades sat in the projection. Operator: "can't you use the IBKR api to see my
+    portfolio?" Advisory only; gated on the projection existing under cwd.
+    """
+    if not LIVE_BOOK.search(prompt):
+        return []
+    db = base / "intel" / "indexed" / "ibkr_flex.duckdb"
+    if not db.exists():
+        return []
+    import datetime as _dt
+
+    pulls = sorted((base / "intel" / "data" / "ibkr" / "flex").glob("*-intel_activity_ytd.xml"))
+    last_pull = pulls[-1].name[:10] if pulls else "unknown"
+    age = ""
+    try:
+        age = f", {(_dt.date.today() - _dt.date.fromisoformat(last_pull)).days}d ago"
+    except ValueError:
+        pass
+    return [
+        "LIVE-BOOK (advisory): the prompt is about the operator's REAL positions. Principal "
+        "check = `just ibkr-portfolio` over intel/indexed/ibkr_flex.duckdb (last Flex pull "
+        f"{last_pull}{age}). Positions lag one business day — ALSO read `trades` after the "
+        "snapshot date before saying anything was or wasn't executed. Pull older than the last "
+        "business day → run `just ibkr-sync ytd` FIRST (token-only, no login; the 05:15Z launchd "
+        "run fails on DNS when the laptop is offline). The book proves PRESENCE, never ABSENCE — "
+        "eToro/Revolut/Nexo are not in it. Never read a ~/Documents/exports XML while the "
+        "projection exists.",
+    ]
+
+
 def _infra_design_lines(base: Path, prompt: str, kw: list[str]) -> list[str]:
     if not INFRA_DESIGN.search(prompt):
         return []
@@ -666,11 +710,13 @@ def main() -> None:
     # --- Cheap gate FIRST: no propose/diagnose/rediscovery/URL intent -> exit before I/O.
     rediscovery = bool(REDISCOVERY.search(prompt))
     intent_hit = bool(INTENT.search(prompt))
+    live_book_hit = bool(LIVE_BOOK.search(prompt))
     if (
         not intent_hit
         and not rediscovery
         and not OBSERVE_RSI.search(prompt)
         and not pointer_lines
+        and not live_book_hit
     ):
         return
 
@@ -682,7 +728,7 @@ def main() -> None:
 
     # URL-only prompts: inject POINTER-DISPOSITION and skip own-work scans.
     if pointer_lines and not (
-        INTENT.search(prompt) or rediscovery or OBSERVE_RSI.search(prompt)
+        INTENT.search(prompt) or rediscovery or OBSERVE_RSI.search(prompt) or live_book_hit
     ):
         sig = hashlib.sha1("|".join(pointer_lines).encode()).hexdigest()[:12]
         if not _already_surfaced(session_id, sig):
@@ -705,7 +751,7 @@ def main() -> None:
         return
 
     kw = _kw(prompt)
-    infra_only = bool(INFRA_DESIGN.search(prompt) or OBSERVE_RSI.search(prompt))
+    infra_only = bool(INFRA_DESIGN.search(prompt) or OBSERVE_RSI.search(prompt) or live_book_hit)
     if not kw and not infra_only and not rediscovery and not pointer_lines:
         return
 
@@ -716,11 +762,12 @@ def main() -> None:
     siblings = _scan_sibling_repos(base, kw) if not (memos or ideas or commits) else []
     observe_lines = _observe_self_check_lines() if OBSERVE_RSI.search(prompt) else []
     infra_lines = _infra_design_lines(base, prompt, kw)
+    book_lines = _live_book_lines(base, prompt)
     if rediscovery and not (memos or ideas or commits or siblings):
         commits = _scan_git_head(cwd, 12)
     if not (
         memos or ideas or commits or siblings or observe_lines
-        or infra_lines or pointer_lines
+        or infra_lines or pointer_lines or book_lines
     ):
         return  # intent present but no prior work -> nothing to front-load
 
@@ -742,6 +789,7 @@ def main() -> None:
     siblings = _dedup(siblings)[:5]
     sig = hashlib.sha1("|".join(
         memos + ideas + commits + siblings + observe_lines + infra_lines + pointer_lines
+        + book_lines
     ).encode()).hexdigest()[:12]
     if _already_surfaced(session_id, sig):
         return
@@ -784,6 +832,10 @@ def main() -> None:
         parts.extend(observe_lines)
     if infra_lines:
         parts.extend(infra_lines)
+    if book_lines:
+        if not (memos or ideas or commits or siblings or observe_lines or infra_lines or pointer_lines):
+            parts = []  # book-only hit: the routing line, not a prior-work header with nothing under it
+        parts.extend(book_lines)
     parts.append("(blindspot-miner #1 cluster; design provenance: ~/Projects/agent-infra/decisions/2026-06-07-state-externalization-lens.md)")
 
     _mark_surfaced(session_id, sig)
