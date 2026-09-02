@@ -69,7 +69,6 @@ from pathlib import Path
 # decisions-pending/2026-07-16-turn-retrieval-hook-activation.md):
 # call prior-context-index search on INTENT/REDISCOVERY hits, LOG only —
 # never inject into additionalContext until precision ≥70% (step 3 of plan).
-_SHADOW_LOG = Path.home() / ".claude" / "prior-context-shadow.jsonl"
 _SHADOW_INDEX = Path.home() / ".cache" / "agent-infra" / "prior-context" / "index"
 _SHADOW_TIMEOUT_S = 2.0
 _AGENT_INFRA = Path.home() / "Projects" / "agent-infra"
@@ -678,12 +677,7 @@ def _shadow_turn_retrieval(
         "error": err or None,
         "mode": "shadow",  # never inject
     }
-    try:
-        _SHADOW_LOG.parent.mkdir(parents=True, exist_ok=True)
-        with _SHADOW_LOG.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    except OSError:
-        pass
+    return  # no-op: prior-context-shadow.jsonl had no reader (2026-09-01 hooks audit)
 
 
 def main() -> None:

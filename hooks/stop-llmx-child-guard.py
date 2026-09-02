@@ -25,7 +25,6 @@ import sys
 import time
 from pathlib import Path
 
-SHADOW_LOG = Path.home() / ".claude" / "llmx-child-guard-shadow.jsonl"
 MODE = os.environ.get("LLMX_CHILD_GUARD_MODE", "shadow").strip().lower()
 
 
@@ -145,12 +144,8 @@ def verdict(cwd: str = "", env: dict | None = None) -> tuple[str, str]:
 
 
 def _shadow(row: dict) -> None:
-    try:
-        SHADOW_LOG.parent.mkdir(parents=True, exist_ok=True)
-        with SHADOW_LOG.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(row) + "\n")
-    except OSError:
-        pass
+    """No-op: llmx-child-guard-shadow.jsonl had no reader (2026-09-01 hooks audit). Call sites kept."""
+    return
 
 
 def main() -> int:
