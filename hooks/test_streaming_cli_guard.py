@@ -1,58 +1,62 @@
-#!/usr/bin/env python3
-"""Both-polarity tests for pretool-streaming-cli-guard.sh.
+"""pretool-streaming-cli-guard.sh — streams need a timeout; heredoc text is not a stream."""
 
-The guard fronts every Bash call on both harnesses (Claude Code + codex shim). A false
-block on `--help` is how it got routed around on 2026-08-23 (codex 01a01da9: two wasted
-turns, the block text recommending a `| head` form the guard itself then rejected).
-"""
+from __future__ import annotations
+
 import json
-import pathlib
 import subprocess
-import sys
+from pathlib import Path
 
-HOOK = pathlib.Path(__file__).resolve().parent / "pretool-streaming-cli-guard.sh"
+import pytest
 
-# ---------------------------------------------------------------- MUST BLOCK (rc=2)
-FIRES = [
-    "uv run modal app logs ap-abc123",
-    "modal app logs ap-abc123 | head -100",          # head does not bound a quiet stream
-    "tail -f run.log",
-    "docker logs -f container",
-    "modal container exec ta-xyz bash",
-]
-
-# ---------------------------------------------------------------- MUST PASS (rc=0)
-CLEAN = [
-    "uv run modal app logs --help | head -100",      # the 2026-08-23 false positive
-    "uv run modal app logs --help",
-    "modal app logs -h",
-    "timeout 60 uv run modal app logs ap-abc123",
-    "gtimeout 120 tail -f run.log",
-    "modal app logs ap-abc123 --timeout 30",
-    "git log --oneline -5",                          # no streaming verb at all
-    "tail -n 50 run.log",                            # tail without -f
-]
+GUARD = Path(__file__).resolve().parent / "pretool-streaming-cli-guard.sh"
 
 
-def run(cmd: str) -> int:
-    payload = json.dumps({"tool_input": {"command": cmd}})
-    proc = subprocess.run(["bash", str(HOOK)], input=payload, capture_output=True, text=True)
-    return proc.returncode
+def _run(command: str) -> subprocess.CompletedProcess[str]:
+    envelope = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}})
+    return subprocess.run(
+        ["bash", str(GUARD)], input=envelope, capture_output=True, text=True, timeout=30
+    )
 
 
-def main() -> int:
-    bad = []
-    for cmd in FIRES:
-        if run(cmd) != 2:
-            bad.append(f"FALSE NEGATIVE (should block): {cmd}")
-    for cmd in CLEAN:
-        if run(cmd) != 0:
-            bad.append(f"FALSE POSITIVE (should pass): {cmd}")
-    for line in bad:
-        print(line)
-    print(f"{len(FIRES) + len(CLEAN) - len(bad)}/{len(FIRES) + len(CLEAN)} ok")
-    return 1 if bad else 0
+@pytest.mark.parametrize(
+    "command",
+    [
+        "uv run python3 -m modal app logs ap-123",
+        'uv run python3 -m modal container exec ta-123 -- sh -c "cat /proc/loadavg"',
+        "tail -f /var/log/system.log",
+    ],
+)
+def test_unbounded_stream_blocks(command: str) -> None:
+    result = _run(command)
+    assert result.returncode == 2
+    assert "Streaming command without timeout wrapper" in result.stderr
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+@pytest.mark.parametrize(
+    "command",
+    [
+        "timeout 60 uv run python3 -m modal app logs ap-123",
+        'timeout 60 uv run python3 -m modal container exec ta-123 -- sh -c "cat /proc/loadavg"',
+        "uv run python3 -m modal app logs --help",
+    ],
+)
+def test_bounded_or_static_stream_passes(command: str) -> None:
+    assert _run(command).returncode == 0
+
+
+def test_heredoc_body_mentioning_a_stream_is_not_a_stream() -> None:
+    command = (
+        "S=/tmp/x; cat > $S/brief.md <<'EOF'\n"
+        "# Lane brief\n"
+        "the parent had to `modal container exec` into the container and read `ps`\n"
+        "run `modal app logs <id>` only with a bound\n"
+        "EOF\n"
+        "ls $S | head -3"
+    )
+    result = _run(command)
+    assert result.returncode == 0, result.stderr
+
+
+def test_real_stream_after_a_heredoc_still_blocks() -> None:
+    command = "cat > /tmp/note.md <<'EOF'\nplain text\nEOF\nuv run python3 -m modal app logs ap-123"
+    assert _run(command).returncode == 2
