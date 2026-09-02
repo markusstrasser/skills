@@ -405,3 +405,5 @@ end-knowledge-index -->
 - **[2026-08-24] fetch_paper 0/8 on 2026 open-access DOIs (Nature/BMC/MDPI/Cambridge: Sci-Hub has no 2026 content, Unpaywall missed; 3 of the 8 hung >120s). Working route for anything with a PMCID: EuropePMC `https://www.ebi.ac.uk/europepmc/webservices/rest/<PMCID>/fullTextXML` (6/6, no wall; S2 `search_papers` returns the PMCID). Publisher HTML via urllib → 3 KB cookie walls; bioRxiv 429; Sage/T&F 403; `crawling_exa` OK on nature.com/mdpi/BMC HTML but times out on Springer PDFs and OSF downloads (plain `curl -L` gets the OSF PDF). `search_preprints` returned [] on 3 well-formed queries the same day (2026-08-24, iq-sex-differences)**
 
 - **[2026-09-01] 2026-09-01: arXiv export API silently IGNORES parenthesized OR-groups in search_query — (abs:A OR abs:B) AND abs:C returns unfiltered noise; a noisy result set is a BROKEN QUERY, not a negative. Use simple two-term ANDs or intersect client-side.**
+
+- **[2026-09-02] references/source-grading is named by SKILL.md but absent from the installed research references directory (2026-09-02 Eileen Gu claim audit)**
