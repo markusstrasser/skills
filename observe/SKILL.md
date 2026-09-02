@@ -415,12 +415,23 @@ Cross-artifact harvester: read what the producers found, deduplicate, rank, surf
 through. **You consume artifacts. You do not produce analysis.**
 
 **Two jobs: gather NEW, and drain the actionable OPEN queue.** Draining is real but small — the
-bigger lever is keeping the streams separate *at entry* so the count stays honest. So the first move
+bigger lever is keeping the streams separate *at entry* so the count stays honest.
+
+**Backpressure (measured 2026-09-02, not a style choice).** Before minting a steward proposal or a
+decisions-pending question, run `just steward-reconcile` / `just questions`: if open proposals > 40
+or stale questions > 40 the queue is frozen — drain first (`just questions-drain --dispatch`, then
+`--apply-verdicts <memo>` for the MOOT/SUPERSEDED residue) instead of adding. A queue nobody drains
+is the flooding GOALS.md forbids (105 open proposals, 118 stale questions, zero dispositions Aug 11 → Sep 2). So the first move
 every run is to classify the backlog by stream (shared section), THEN drain the actionable residue.
 Two classes to weight when they appear: **agent self-process anti-patterns** (re-guessing before
 measuring, fix-spirals, `--no-verify` escape-hatching — they recur silently because no error fires;
 `[obs]` unless there is a concrete guard to build) and **dead infra / generation without
 consumption** (a generator with no consumer — genuinely `[ ]`: delete it or wire it).
+
+**Backpressure — check before you mint.** Before writing a steward proposal or a
+`decisions-pending/` question, run `just steward-reconcile` / `just questions`. Above 40 open
+proposals or 40 stale questions the queue is **frozen**: drain first (`just questions-drain
+--dispatch`, then mark MOOT/SUPERSEDED items stale) instead of adding to it.
 
 **Sources — live streams first**, then legacy artifact dirs behind an mtime guard (reordered
 2026-07-05: the original producers went quiet April-June 2026 and the signal plane moved to the
@@ -478,6 +489,11 @@ report**, stop (the `/loop` interval drives the next tick; don't self-schedule) 
 Boundary-crossing (taste / money / irreversible / shared across 3+ projects / discovery-tier) → write
 a sign-off-ready item to `agent-infra/decisions-pending/`, **never greenlight it yourself**. That is
 the Generate lane: unattended-safe because it only produces reversible drafts for a yes/no.
+
+**But the Generate lane has backpressure.** Run `just steward-reconcile` / `just questions` before
+minting. Above 40 open proposals or 40 stale questions the queue is **frozen** — drain it (`just
+questions-drain --dispatch`, then mark MOOT/SUPERSEDED items stale) and route the tick's finding
+into that drain instead of writing a new item.
 
 **Emit the Top-N every run — the loop's headline output.**
 `uv run python3 ~/Projects/agent-infra/scripts/top_priorities.py --top 10` writes `PRIORITIES.md`
@@ -809,10 +825,14 @@ classifier, not a reviewer (focused slices, 10-20 file heads per axis, <50KB) ·
 mechanical phase, which catches 60-70% of consistency findings for $0 with zero hallucination risk.
 
 **Harvest and the loop.** Re-analyzing sessions instead of reading existing artifact output ·
-re-proposing vetoed items without concrete new evidence · inflating recurrence (count distinct source
+re-proposing vetoed items without concrete new evidence · minting into a frozen queue (> 40 open
+proposals or stale questions — drain first, see harvest) · inflating recurrence (count distinct source
 *types*) · skipping dedup — if everything is already tracked, say so · proposing maintenance as
 "improvement" (this finds infrastructure/tooling/architecture change) · re-running on the same commit
-range — check `docs/audit/sweep-*/` and the run manifest first, run the delta only.
+range — check `docs/audit/sweep-*/` and the run manifest first, run the delta only · **minting into
+a frozen queue** — above 40 open steward proposals or 40 stale questions (`just steward-reconcile` /
+`just questions`) you drain before you add. A queue nobody drains is the flooding GOALS.md forbids;
+measured 2026-09-02, 105 open proposals and 118 stale questions with zero dispositions since Aug 11.
 
 **Design and scope.** Collapsing the general to one axis — the biggest gap is often *better*, *more*,
 or *unnecessary*, not *faster* · error-driven blindness — only learning from corrections leaves

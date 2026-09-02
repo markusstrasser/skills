@@ -140,7 +140,10 @@ If a concrete, reversible guard would prevent recurrence:
 # /observe maintain reads these on next tick
 ```
 
-One proposal max. Prefer attach-evidence over new infrastructure.
+One proposal max. Prefer attach-evidence over new infrastructure. **Skip the proposal when
+`just steward-reconcile` reports > 40 open** — the queue is frozen until drained (`just
+questions-drain --dispatch`); the cap is measured (2026-09-02 tabula rasa: 105 open, zero
+dispositions in 22 days), not a style choice.
 
 ## Vetoes
 
