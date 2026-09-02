@@ -149,10 +149,17 @@ def lint_code(name: str, src: str) -> list[str]:
     # error. Found live 2026-07-06: four UserPromptSubmit hooks (prior-context,
     # clash-capture, context-warn, continuation-guard) dead for ~3 weeks, starving
     # the prior-context front-load AND the clash-detect shadow. `user_message`
-    # has no other legitimate use, so this is filename-agnostic: flag any hook that
-    # reads user_message without also reading prompt (comment/docstring mentions are
-    # already stripped from `code`).
-    if re.search(r"user_message", code) and not re.search(
+    # has no other legitimate use as a FIELD READ, so this is filename-agnostic: flag
+    # any hook that reads user_message without also reading prompt (comment/docstring
+    # mentions are already stripped from `code`). Match read-access forms only —
+    # `.user_message` (jq / attribute), `["user_message"]`, `.get("user_message"` —
+    # never the bare token: a dict-literal OUTPUT key (`"user_message": msg`, the
+    # Cursor hook contract) and a variable named `last_user_message` are not reads
+    # of the stdin field. (False positives 2026-09-02: cursor_shell_guards.py,
+    # precompact-extract.py — the only smoke red once codex parity went green.)
+    if re.search(
+            r"""\.user_message\b|\[\s*['"]user_message['"]\s*\]|get\(\s*['"]user_message['"]""",
+            code) and not re.search(
             r"""\.prompt\b|get\(\s*['"]prompt['"]|['"]\.prompt['"]|jq[^\n]*\.prompt\b""", code):
         viol.append(
             "reads .user_message but not .prompt — CC 2.1.x renamed the "
