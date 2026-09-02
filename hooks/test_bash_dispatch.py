@@ -987,3 +987,16 @@ def test_worktree_paths_without_persistent_cd_pass(sandbox, command):
     envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
     disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
     assert disp["exit_code"] == 0
+
+
+def test_timeout_around_modal_container_exec_passes_the_crawl_guard(sandbox):
+    """`container exec` is a bounded stream the streaming guard requires a timeout on;
+    the crawl guard must not refuse that same timeout (2026-09-02 contradiction)."""
+    envelope = {
+        "tool_name": "Bash",
+        "tool_input": {
+            "command": 'timeout 60 uv run python3 -m modal container exec ta-01ABC -- sh -c "cat /proc/loadavg"'
+        },
+    }
+    disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
+    assert disp["exit_code"] == 0
