@@ -213,14 +213,14 @@ Don't create new entity files during a scout run. If a scan surfaces a new tool 
 
 ### Pipeline Output
 
-When invoked as `--weekly` (or dispatched from `/improve maintain`'s weekly frontier rotation), also:
+When invoked as `--weekly` (or dispatched from `/observe maintain`'s weekly frontier rotation), also:
 1. Update the research index in `.claude/rules/research-index.md` if new memo warrants a permanent entry
 2. Commit the memo and any entity file updates: `[research] Trending scout — N new findings, window YYYY-MM-DD to YYYY-MM-DD`
 3. **Route findings into the consumption loop — NOW, at source (immediacy).** A memo is
    generation; the loop drains `improvement-log.md`, NOT `research/`. Routing here, in the
    same session that found them, is strictly better than waiting for the weekly harvest to
    re-derive them — you have full context. **Follow the one canonical finding-routing protocol
-   defined in `/improve` harvest Phase 2f** (enforced by `just orphan-findings`); do NOT restate
+   defined in `/observe` harvest Phase 2f** (enforced by `just orphan-findings`); do NOT restate
    its rules here — single source, so the two never drift (constitution principle 9). In short:
    Adopt/Evaluate → `[ ]` with the finding title verbatim; no-live-items memo → one
    `RECONCILIATION:` entry; Watch/Ignore stay memo-only. Harvest 2f is the weekly backstop for
@@ -229,9 +229,9 @@ When invoked as `--weekly` (or dispatched from `/improve maintain`'s weekly fron
 ## Loop Integration
 
 This is a **worker** skill, not a loop conductor. It runs on a weekly cadence as one of the
-frontier-scan rotation rows in `/improve maintain` (alternating with `/observe architecture`),
+frontier-scan rotation rows in `/observe maintain` (alternating with `/observe architecture`),
 or by hand as `/trending-scout weekly`. (The standalone `orchestrator` pipeline that used to
-schedule it was retired 2026-06-12 — `/improve maintain` is the single conductor now.)
+schedule it was retired 2026-06-12 — `/observe maintain` is the single conductor now.)
 
 ## Edge Cases
 

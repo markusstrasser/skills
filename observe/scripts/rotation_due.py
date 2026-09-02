@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""rotation_due.py — derive /improve maintain P3 rotation due-ness from the action ledger.
+"""rotation_due.py — derive /observe maintain P3 rotation due-ness from the action ledger.
 
 The P3 table's "what ran when" used to live in the agent's head each tick
 (state-externalization gap, flagged 2026-07-05). This script is the single
@@ -42,13 +42,13 @@ ROTATION: dict[str, tuple[int, str]] = {
     "doctor-health": (1, "uv run python3 scripts/doctor.py"),
     "session-cost": (1, "flag cost/no-commit anomalies in recent sessions"),
     "steer-mine": (7, "just steer-mine"),
-    "finding-drain": (7, "/improve harvest"),
+    "finding-drain": (7, "/observe harvest"),
     "failures-observe": (7, "/observe failures"),
     "shell-env": (7, "doctor.py global:shell-env-* checks"),
     "architecture-observe": (7, "/observe architecture"),
-    "leverage-scan": (7, "/leverage"),
+    "leverage-scan": (7, "/observe lever"),
     "memo-staleness": (7, "ACTIVE research memos vs recent file changes"),
-    "code-quality": (7, "/project-upgrade --quick"),
+    "code-quality": (7, "/observe audit --quick"),
     "calibration-canary": (7, "calibration-canary.py --mode sampling --difficulty hard"),
     "infra-coverage": (30, "git log -> categorize fixes by detection source"),
 }

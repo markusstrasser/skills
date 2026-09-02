@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cursor_dispatch.sh — hardened repo-coupled Tier-2 dispatch lane for `/improve maintain`.
+# cursor_dispatch.sh — hardened repo-coupled Tier-2 dispatch lane for `/observe maintain`.
 #
 # Routes read-only critique/analysis to cursor-agent (Cursor quota, repo-aware) BEHIND a
 # safety wrapper so a missing binary / expired auth / quota stall / timeout NEVER silently

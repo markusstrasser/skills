@@ -158,7 +158,7 @@ REDISCOVERY = re.compile(
     r"why (not|didn'?t you) (check|read|look|find|figure)|"
     r"why did you not (find|figure|check|read|look)|"
     r"ask yourself|every ?time I mention|RSI\s*:"
-    r"|/execute\b|/improve\b|/research\b|/observe\b"
+    r"|/execute\b|/research\b|/observe\b"
     r")\b",
     re.I,
 )
