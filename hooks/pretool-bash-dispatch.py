@@ -1793,7 +1793,11 @@ def gate_timeout_modal_guard(raw_payload: str) -> GateResult:
     if not _TIMEOUT_WRAP_RE.search(scan):
         return GateResult(0, "", "")
     cmd2 = scan
-    if re.search(r"\bmodal\s+(?:app|container)\s+logs\b", cmd2):
+    # `app logs`, `container logs` and `container exec` are bounded streams, not crawls:
+    # the streaming guard REQUIRES a timeout on them, so blocking it here made the two
+    # gates unsatisfiable together (genomics 2026-09-02, a read-only `container exec`
+    # to inspect a silent materializer was refused both ways).
+    if re.search(r"\bmodal\s+(?:app|container)\s+(?:logs|exec)\b", cmd2):
         return GateResult(0, "", "")
     if not _TIMEOUT_CRAWL_RE.search(cmd2):
         return GateResult(0, "", "")
