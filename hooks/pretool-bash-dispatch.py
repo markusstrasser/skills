@@ -162,9 +162,7 @@ _IF_RE = re.compile(r"^Bash\((.*)\)$")
 
 
 _IF_SEGMENT_RE = re.compile(r"&&|\|\||;|\||\n")
-_IF_COMMAND_PREFIX_RE = re.compile(
-    r"^(?:(?:[A-Za-z_][A-Za-z0-9_]*=\S*)|!|time|command|exec)\s+"
-)
+_IF_COMMAND_PREFIX_RE = re.compile(r"^(?:(?:[A-Za-z_][A-Za-z0-9_]*=\S*)|!|time|command|exec)\s+")
 
 
 def _strip_if_command_prefixes(segment: str) -> str:
@@ -294,9 +292,7 @@ def make_native_gate(rel_path: str, mod_name: str, base: Path = HOOKS_DIR):
 # --- 1. pretool-git-noext-inject.sh (MUTATOR, no if) -----------------------
 
 
-def _after_heredoc_bodies(
-    command: str, start: int, delimiters: list[tuple[str, bool]]
-) -> int:
+def _after_heredoc_bodies(command: str, start: int, delimiters: list[tuple[str, bool]]) -> int:
     """Return the offset after sequential, exactly matched heredoc terminators."""
     cursor = start
     for delimiter, strip_tabs in delimiters:
@@ -318,9 +314,7 @@ def _is_shell_redirection_fd(raw: str) -> bool:
     return raw.isdigit() or bool(re.fullmatch(r"\{[A-Za-z_][A-Za-z0-9_]*\}", raw))
 
 
-def _shell_heredoc_declaration(
-    command: str, start: int
-) -> tuple[int, str, bool] | None:
+def _shell_heredoc_declaration(command: str, start: int) -> tuple[int, str, bool] | None:
     """Parse one heredoc operator as ``(end, delimiter, strip_tabs)``."""
     if command[start : start + 2] != "<<" or command[start : start + 3] == "<<<":
         return None
@@ -553,9 +547,7 @@ def _iter_shell_syntax(command: str):
                 break
             separator_end = line_end + 1
             if pending_heredocs:
-                separator_end = _after_heredoc_bodies(
-                    command, separator_end, pending_heredocs
-                )
+                separator_end = _after_heredoc_bodies(command, separator_end, pending_heredocs)
                 pending_heredocs.clear()
             yield "separator", command[line_end:separator_end], line_end, separator_end
             i = separator_end
@@ -564,11 +556,7 @@ def _iter_shell_syntax(command: str):
         if heredoc is not None:
             if word_start is not None:
                 raw = command[word_start:i]
-                kind = (
-                    "redirect"
-                    if redirect_target or _is_shell_redirection_fd(raw)
-                    else "word"
-                )
+                kind = "redirect" if redirect_target or _is_shell_redirection_fd(raw) else "word"
                 yield kind, raw, word_start, i
                 word_start = None
                 redirect_target = False
@@ -578,17 +566,11 @@ def _iter_shell_syntax(command: str):
             i = delimiter_end
             continue
 
-        redirection = next(
-            (op for op in redirection_operators if command.startswith(op, i)), None
-        )
+        redirection = next((op for op in redirection_operators if command.startswith(op, i)), None)
         if redirection is not None:
             if word_start is not None:
                 raw = command[word_start:i]
-                kind = (
-                    "redirect"
-                    if redirect_target or _is_shell_redirection_fd(raw)
-                    else "word"
-                )
+                kind = "redirect" if redirect_target or _is_shell_redirection_fd(raw) else "word"
                 yield kind, raw, word_start, i
                 word_start = None
                 redirect_target = False
@@ -625,9 +607,7 @@ def _iter_shell_syntax(command: str):
             redirect_target = False
             separator_end = i + separator_len
             if ch == "\n" and pending_heredocs:
-                separator_end = _after_heredoc_bodies(
-                    command, separator_end, pending_heredocs
-                )
+                separator_end = _after_heredoc_bodies(command, separator_end, pending_heredocs)
                 pending_heredocs.clear()
             yield "separator", command[i:separator_end], i, separator_end
             i = separator_end
@@ -698,9 +678,7 @@ def _git_noext_has_complex_shell(command: str) -> bool:
             continue
         if kind != "word" or not command_start:
             continue
-        if raw in {"!", "time", "command", "exec"} or re.match(
-            r"^[A-Za-z_][A-Za-z0-9_]*=", raw
-        ):
+        if raw in {"!", "time", "command", "exec"} or re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", raw):
             continue
         if raw in _SHELL_COMPLEX_COMMAND_WORDS:
             return True
@@ -739,9 +717,7 @@ def _git_noext_command_index(words: list[tuple[str, int, int]]) -> int | None:
             continue
         if value == "time":
             i += 1
-            next_value = (
-                _shlex_unquote_word(words[i][0]) if i < len(words) else None
-            )
+            next_value = _shlex_unquote_word(words[i][0]) if i < len(words) else None
             if next_value == "-p":
                 i += 1
             continue
@@ -770,9 +746,7 @@ def _git_noext_command_index(words: list[tuple[str, int, int]]) -> int | None:
 def _git_noext_rewrite_segment(segment: str) -> str | None:
     """Insert safety flags at raw word offsets, preserving every existing byte."""
     words = [
-        (raw, start, end)
-        for kind, raw, start, end in _iter_shell_syntax(segment)
-        if kind == "word"
+        (raw, start, end) for kind, raw, start, end in _iter_shell_syntax(segment) if kind == "word"
     ]
     git_index = _git_noext_command_index(words)
     if (
@@ -2167,6 +2141,52 @@ def gate_opus_concurrency_advisory(raw_payload: str) -> GateResult:
 # always run), run(raw_payload)->GateResult.
 # ─────────────────────────────────────────────────────────────────────────
 
+_WORKTREE_CD_RE = re.compile(
+    r"(?:^|[\s;&|])cd\s+[\"']?([^\s\"';&|()]*\.claude/worktrees/[^\s\"';&|()]*)"
+)
+
+
+def gate_worktree_cd_guard(raw_payload: str) -> GateResult:
+    """Block a persistent ``cd`` into a lane worktree (``.claude/worktrees/...``).
+
+    The Bash tool's cwd persists across calls, so ``cd <worktree> && ...`` leaves
+    every later command — ``git log`` ranges, ``uv run``, file swaps — running
+    against the worktree instead of main. Genomics catalog M122; recurred
+    2026-09-02 in one hour: a false-empty ``git log`` bisect, a 373 MB venv built
+    inside the worktree, and an edit that landed in the wrong tree. A subshell
+    ``(cd <wt> && ...)`` cannot persist and passes; ``git -C <wt>`` and absolute
+    paths are the intended spellings.
+    """
+    try:
+        data = json.loads(raw_payload)
+    except Exception:
+        return GateResult(0, "", "")
+    cmd = (data.get("tool_input") or {}).get("command", "") or ""
+    if "worktrees" not in cmd or "cd" not in cmd:
+        return GateResult(0, "", "")
+    # A cd inside ( ... ) or $( ... ) cannot change the persistent cwd: strip
+    # parenthesised groups innermost-first before matching.
+    stripped = cmd
+    for _ in range(8):
+        reduced = re.sub(r"\([^()]*\)", "", stripped)
+        if reduced == stripped:
+            break
+        stripped = reduced
+    match = _WORKTREE_CD_RE.search(stripped)
+    if match is None:
+        return GateResult(0, "", "")
+    target = match.group(1)
+    msg = (
+        f"BLOCK: `cd {target}` would leave this session's persistent cwd inside a lane "
+        "worktree; every later Bash call (git log ranges, uv run, edits) would then run "
+        "against the worktree, not main (genomics catalog M122, recurred 2026-09-02).\n"
+        f"Use `git -C {target} ...`, absolute `{target}/...` paths, or a subshell "
+        f"`(cd {target} && ...)`, which cannot persist.\n"
+    )
+    _log_trigger("worktree-cd-guard", "block", cmd[:80], cmd)
+    return GateResult(2, msg, "")
+
+
 MANIFEST: list[dict] = [
     {
         "name": "secret-output-guard",
@@ -2267,6 +2287,8 @@ MANIFEST: list[dict] = [
     {"name": "git-stash-guard", "if": None, "run": gate_git_stash_guard},
     {"name": "pkill-anchor-guard", "if": None, "run": gate_pkill_anchor_guard},
     {"name": "opus-concurrency-advisory", "if": None, "run": gate_opus_concurrency_advisory},
+    # --- 2026-09-02: persistent cd into a lane worktree (genomics M122 recurrence) ---
+    {"name": "worktree-cd-guard", "if": None, "run": gate_worktree_cd_guard},
 ]
 
 
@@ -2316,17 +2338,19 @@ def _classify(result: GateResult) -> tuple[str, str | dict]:
 
 def _log_gate(name: str, kind: str) -> None:
     """ONE instrumentation point for all 35 in-process gates (2026-09-01 audit:
-    163/207 wired hook scripts emit no event-log row, so fire counts are
-    unmeasurable). Maps dispatcher verdicts onto the existing hook-trigger-log
- action vocabulary under a SEPARATE dispatch: namespace, so it can never
- double-count the 13 gates that already self-log; fail-open throughout."""
+       163/207 wired hook scripts emit no event-log row, so fire counts are
+       unmeasurable). Maps dispatcher verdicts onto the existing hook-trigger-log
+    action vocabulary under a SEPARATE dispatch: namespace, so it can never
+    double-count the 13 gates that already self-log; fail-open throughout."""
     action = {"block": "block", "mutate": "warn", "advise": "warn"}.get(kind)
     if action is None:
         return
     try:
         subprocess.run(
             [str(HOOKS_DIR / "hook-trigger-log.sh"), f"dispatch:{name}", action, "in-process gate"],
-            capture_output=True, timeout=3, check=False,
+            capture_output=True,
+            timeout=3,
+            check=False,
         )
     except Exception:
         pass
