@@ -14,7 +14,7 @@ collapsed that premise in five findings:
 - **F4** — exactly ONE standalone autonomous loop exists (hutter, clean verifier). intel/genomics/
   science are **partial-verifier** systems with no standalone auto-loop; the verifier regime *determines*
   whether a standalone loop is even possible.
-- **F5** — the two surviving "consumers" (hutter, `/improve maintain`) **already implement the pattern
+- **F5** — the two surviving "consumers" (hutter, `/observe maintain`) **already implement the pattern
   in their own prose** and **nothing loads this directory** (grep-verified, zero callers). The extraction
   was the *union* of three loops' rules; the genuine *intersection* is a 2-liner both already have. By
   the project's own proven-common-≥2 bar, the shared skill was **not earned**, and F4 left it with no

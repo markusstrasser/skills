@@ -1,5 +1,5 @@
 #!/bin/bash
-# Live-state snapshot + noop hash for `/improve maintain` ticks.
+# Live-state snapshot + noop hash for `/observe maintain` ticks.
 # Extracted from improve/SKILL.md "Live State" inline heredoc (2026-07-06, Native-First).
 # Behavior-preserving: writes ~/.claude/maintain-state-hash.txt; on unchanged state prints
 # a noop line, appends a noop row to $(pwd)/maintenance-actions.jsonl, and exits 0.

@@ -141,3 +141,20 @@ entry) so `scripts/maintain_tick.py` can auto-pick tier-0 builds:
 
 Tier rules live in `config/build-autonomy-tiers.json`; the motor LOADS them — do not
 restate inline. Cross-repo items: `blast_radius: shared` (human-gated), still log `[ ]`.
+
+
+## Mode → artifacts
+
+| Mode | Artifacts |
+|------|-----------|
+| `all` | `manifest.json` v2 → `digest.md` → lane subdirs → merged `candidates.jsonl` + `preflight.json` |
+| `sessions`·`architecture`·`supervision` | `manifest.json` → `signals.jsonl` → `candidates.jsonl` → `digest.md` (architecture also `YYYY-MM-DD.md`) |
+| `drift` | `manifest.json` → `candidates.jsonl` → `drift-digest.md` |
+| `retro` | `artifacts/session-retro/{date}-{SID}-manual.json` |
+| `failures` | `failures.json`, `failures/shell-env-gate.json`, `shell-env-candidate.jsonl` |
+| `blindspot` | `.claude/blindspot-digest.md` |
+| `harvest` | `artifacts/harvest/{DATE}-{SID}-harvest.md` |
+| `maintain` | `maintenance-actions.jsonl` (append-only) + `PRIORITIES.md` + `MAINTAIN.md` |
+| `lever` | a memo + the shipped, measured change |
+| `audit`·`harness`·`discover` | `coverage.json` + `findings.json` + `report.md` (+ `synthesis.md`) |
+| `conventions` | `docs/audit/sweep-{date}/findings.md` |

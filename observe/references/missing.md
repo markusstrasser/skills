@@ -3,7 +3,7 @@
 > Divergent discovery of what's MISSING from an optimized system. Not "what should we
 > improve?" but "what entire categories have we not even considered?" Fire when a domain is
 > heavily optimized and you suspect blind spots: "what am I missing?", "blind spots", "negative
-> space". This is the absence-detection mode of `/leverage` — the core mode hunts 10-100x on a
+> space". This is the absence-detection mode of `/observe lever` — that mode hunts 10-100x on a
 > *known* surface; this mode hunts the surfaces you never put on an axis at all.
 
 **This is NOT:** the core leverage loop (which 10x's a known surface), `/brainstorm` (ideas

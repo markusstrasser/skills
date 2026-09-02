@@ -8,7 +8,7 @@
 #   3x-repeated instruction). Policy (agent-infra invariants #1, relaxed 2026-06-13): human-DIRECTED
 #   reversible governance edits are allowed — explicit OR confidently inferred from the user's
 #   messages; only an AUTONOMOUS self-edit with no human message to infer from is barred (the p-hack
-#   hole). So this WARNS and lets the edit proceed; the daily governance downstream-watch (/improve
+#   hole). So this WARNS and lets the edit proceed; the daily governance downstream-watch (/observe
 #   maintain) + git reversibility are the safety net. Lives in skills/hooks (git-tracked) so it can
 #   never be silently lost like its predecessor.
 # verifier: null

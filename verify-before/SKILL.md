@@ -241,7 +241,7 @@ if post-hoc-rationalization recurs after this mode ships.
 
 ## Relationship to other skills
 
-- `/upgrade` — broader refactor workflow; `verify-before` is the narrow
+- `/observe audit` — broader refactor workflow; `verify-before` is the narrow
   pre-launch / pre-diagnosis contract.
 - `/modal` (reference) — documents Modal SDK gotchas. `verify-before status`
   tells you when to consult it; a **fresh** `modal app list --json` / `modal app logs` subprocess tells you the actual state (modal-triage MCP retired 2026-07-02).

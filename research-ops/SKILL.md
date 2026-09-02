@@ -1,7 +1,7 @@
 ---
 name: research-ops
 disable-model-invocation: true
-description: "Use when: 'compile memos', training-data diff, parallel research dispatch, generate/execute lanes. NOT one-shot questions — use /research. Loop conductor: /improve maintain."
+description: "Use when: 'compile memos', training-data diff, parallel research dispatch, generate/execute lanes. NOT one-shot questions — use /research. Loop conductor: /observe maintain."
 user-invocable: true
 argument-hint: <mode> [topic]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent, WebSearch, WebFetch]
@@ -14,7 +14,7 @@ Operator-initiated research workflows. For one-shot research questions, use `/re
 
 | Mode | Trigger | What it does |
 |------|---------|--------------|
-| `cycle` | dispatched by `/improve maintain` (research rotation), or `/research-ops cycle` by hand | The research-domain generate/execute lanes (discover/gap/plan/review/verify). NOT a standalone loop conductor. |
+| `cycle` | dispatched by `/observe maintain` (research rotation), or `/research-ops cycle` by hand | The research-domain generate/execute lanes (discover/gap/plan/review/verify). NOT a standalone loop conductor. |
 | `compile` | `/research-ops compile <concept>` | Synthesize memos into unified article |
 | `diff` | `/research-ops diff <text or path>` | Extract what's NOT in training data |
 | `dispatch` | `/research-ops dispatch [depth]` | Parallel audit sweep |
@@ -28,7 +28,7 @@ Operator-initiated research workflows. For one-shot research questions, use `/re
 
 # Mode: cycle (research generate/execute lanes)
 
-> **Not a loop conductor.** The single RSI-loop conductor is `/improve maintain` (one
+> **Not a loop conductor.** The single RSI-loop conductor is `/observe maintain` (one
 > `/loop 30m` window). This mode is the **research-domain worker** it dispatches when the
 > conductor's weekly research rotation is due — or run it by hand for a focused research push.
 > The earlier "run this on `/loop 15m`" framing was retired 2026-06-12 when the three
@@ -77,7 +77,7 @@ The unattended generator. Runs as a **launchd job** (`claude -p "/research-ops c
 
 1. `git pull`. Read `queue/` depth, `decisions-pending/`, the Live State improvement signals, and recent git log.
 2. **Decide if there is work.** Queue healthy (≥8 unused proposals) AND no fresh improvement signals → write one `noop` line to `CYCLE.md` log, `git push` if changed, **stop**. Do not manufacture work.
-3. **Discover + gap-analyze — lead with the divergent engine, not a raw search.** Run `/leverage` for frontier-scanned step-changes (its `missing` mode when the surface is mature and you suspect unframed blind spots; `generators` when recent wins keep arriving off-trail), `/brainstorm` for within-frame candidates, and `search_preprints` + `/research dispatch` for the literature. **Science/research repos — standing SOTA sweep every fire:** pull the newest validated papers (`search_preprints` + `traverse_citations` since the last fire) AND newest tools/methods (`/trending-scout`, Exa) for the repo's domain, and propose upgrades that move it to the current frontier — genomics is the exemplar (always run the newest validated method, not the one that was SOTA when the pipeline was written). Compare every candidate against git log + research memos — skip anything already known. Read improvement signals from Live State; prioritize `STEER`. If discover returns empty, `/brainstorm` the project domain. SWE quality gaps belong to `/maintain` — don't duplicate.
+3. **Discover + gap-analyze — lead with the divergent engine, not a raw search.** Run `/observe lever` for frontier-scanned step-changes (its `missing` mode when the surface is mature and you suspect unframed blind spots; `generators` when recent wins keep arriving off-trail), `/brainstorm` for within-frame candidates, and `search_preprints` + `/research dispatch` for the literature. **Science/research repos — standing SOTA sweep every fire:** pull the newest validated papers (`search_preprints` + `traverse_citations` since the last fire) AND newest tools/methods (`/trending-scout`, Exa) for the repo's domain, and propose upgrades that move it to the current frontier — genomics is the exemplar (always run the newest validated method, not the one that was SOTA when the pipeline was written). Compare every candidate against git log + research memos — skip anything already known. Read improvement signals from Live State; prioritize `STEER`. If discover returns empty, `/brainstorm` the project domain. SWE quality gaps belong to `/maintain` — don't duplicate.
 4. **Write proposals to `queue/`.** Append ≤8 concrete, buildable, ONE-change proposals — each with: the change, files it touches, rationale tied to evidence, and how to verify it. These are *candidates*, not approvals.
 5. **Human-gated items → `decisions-pending/`.** Anything in the "never autonomous" set (classification thresholds with clinical implications, validated clinical logic, new verification tooling, GOALS.md direction) goes here as a written question — never into `queue/`. For these, run `/critique model` cross-lab (Gemini 3.5 Flash + Opus, a *different* lab than the generator) and write recommendation + dissent + the open question. Do NOT greenlight.
 6. `git commit + push` (`queue/`, `decisions-pending/`, `CYCLE.md` log). Keep output small. Never ask whether to continue.
@@ -99,7 +99,7 @@ reversible drafts for a human yes/no — you never ship.</role>
    and improvement signals (run scripts/gather-cycle-state.sh {ROOT}).
 2. If queue ≥8 unused AND no fresh STEER/quality signal AND decisions-pending/ empty:
    write one noop line to CYCLE.md, git push if changed, STOP. Don't manufacture work.
-3. Discover + gap-analyze: /leverage for frontier step-changes (missing mode if the
+3. Discover + gap-analyze: /observe lever for frontier step-changes (missing mode if the
    surface is mature, generators if wins keep arriving off-trail); /brainstorm within-frame;
    search_preprints/Exa for new papers + tools. SCIENCE REPOS — standing SOTA sweep every
    fire: newest validated papers (search_preprints + traverse_citations since last fire) +

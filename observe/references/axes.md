@@ -202,3 +202,15 @@ echo "f-string /data/ (ad-hoc): $(grep -l 'f\"/data/' scripts/modal_*.py | wc -l
 echo "stage_artifact() users: $(grep -l 'stage_artifact(' scripts/modal_*.py | wc -l)"
 echo "Manual results/ f-strings: $(grep 'results/' scripts/modal_*.py | grep -v 'stage_artifact\|#\|import\|doc' | grep 'f"' | wc -l)"
 ```
+
+## Axis summary
+
+| Axis | Checks | Mechanical | Flash |
+|------|--------|-----------|-------|
+| `config` | config JSON vs Pydantic models, dual-registry alignment, schema drift | yes | yes |
+| `conventions` | import patterns, decorator adoption, `write_json_atomic` vs `json.dump`, `run_cmd` vs `subprocess.run` | yes | no |
+| `duplication` | diverged copy-paste functions across files (hash comparison) | yes | optional |
+| `registration` | stage registry vs actual scripts, dataset registry completeness | yes | no |
+| `ir` | typed IR layers: payload/adapter/assembly/policy coverage, orphan types, phantom imports | no | yes |
+| `lifecycle` | `@stage` / `init_stage` / `finalize_stage` / `vol.commit` consistency | yes | no |
+| `paths` | `Paths()` adoption vs legacy `DATA_DIR` / f-string construction | yes | no |

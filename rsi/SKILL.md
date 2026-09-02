@@ -79,7 +79,7 @@ just -f ~/Projects/agent-infra/justfile rsi-hindsight-enqueue
 ```
 
 Convert the top matching row into a maintain draft or detector proposal (steward /
-`maintain-candidates.json`), then leave the row queued for `/improve maintain`.
+`maintain-candidates.json`), then leave the row queued for `/observe maintain`.
 Do **not** expand REDISCOVERY regexes while the over_caution ablation window is open.
 
 **arc-agi MEMORY discipline (AP10):** never paste session blocks into `MEMORY.md`. Write the
@@ -137,7 +137,7 @@ If a concrete, reversible guard would prevent recurrence:
 
 ```bash
 # Write to ~/.claude/steward-proposals/YYYY-MM-DD-<slug>.md
-# /improve maintain reads these on next tick
+# /observe maintain reads these on next tick
 ```
 
 One proposal max. Prefer attach-evidence over new infrastructure.

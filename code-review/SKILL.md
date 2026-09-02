@@ -134,7 +134,7 @@ mkdir -p ~/.claude/artifacts/$PROJECT
 ```
 
 Write `~/.claude/artifacts/$PROJECT/code-review-$(date +%Y-%m-%d).json` with confirmed/unfixed summary
-for downstream skills (`/upgrade`, `/critique close`).
+for downstream skills (`/observe audit`, `/critique close`).
 
 ## Module-depth lens (design-level findings)
 

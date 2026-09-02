@@ -10,11 +10,11 @@ verifier:
   regime: partial                   # synthesis/gap/discovery has NO ground truth — generate-only unattended
 
 schedule:
-  driver: "dispatched BY /improve maintain (the conductor) on its research rotation; or launchd claude -p '/research-ops cycle' for Lane A; or /loop /research-ops cycle by hand"
+  driver: "dispatched BY /observe maintain (the conductor) on its research rotation; or launchd claude -p '/research-ops cycle' for Lane A; or /loop /research-ops cycle by hand"
   noop_on: queue-healthy            # queue ≥8 unused proposals AND no fresh STEER/quality signal AND decisions-pending empty
   lock: null
   # NOTE: science is NOT a standalone conductor. Since the 2026-06-12 three-conductor merge, the single
-  # RSI-loop conductor is /improve maintain; this loop is the research-domain WORKER it dispatches. So
+  # RSI-loop conductor is /observe maintain; this loop is the research-domain WORKER it dispatches. So
   # science's DEPLOY (driving it via the outer-loop skill) is coupled to the conductor migration (plan
   # Phase 3), not independent. This contract is the partial-regime REFERENCE instance + the route.py
   # partial-fix proof; it is not yet science's live driver.
@@ -88,7 +88,7 @@ is the vetoed `session_quality` trap.
 
 **Two honest divergences from the naive plan, surfaced by ground truth:**
 1. **Science is conductor-coupled, not a standalone loop.** `/research-ops cycle` is a worker the
-   single conductor (`/improve maintain`) dispatches. So science's DEPLOY belongs with the conductor
+   single conductor (`/observe maintain`) dispatches. So science's DEPLOY belongs with the conductor
    migration (Phase 3); this contract is build-and-prove only (the reference instance + the fix proof).
 2. **Science's ledger is git-native, not SQL.** The attempt graph is git history; the log is CYCLE.md;
    failures are `failed-experiments/` fingerprints. The shared SQL ledger schema + conformance linter

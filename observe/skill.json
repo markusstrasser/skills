@@ -1,90 +1,173 @@
 {
   "name": "observe",
-  "kind": "worker",
+  "kind": "orchestrator",
   "intent_class": "observational",
-  "summary": "Transcript-derived diagnostics and backlog candidate generation.",
+  "summary": "The RSI loop: transcript-derived diagnostics, backlog drain, forward leverage hunt, and repo-scale improvement routing.",
   "entrypoint": {
     "type": "skill_doc",
     "path": "observe/SKILL.md"
   },
   "modes": {
+    "all": {
+      "intent_class": "observational",
+      "requires_packet": true,
+      "requires_gpt": false,
+      "artifacts": ["manifest.json", "digest.md", "candidates.jsonl", "preflight.json"]
+    },
     "sessions": {
       "intent_class": "observational",
       "requires_packet": true,
       "requires_gpt": false,
-      "artifacts": [
-        "manifest.json",
-        "signals.jsonl",
-        "candidates.jsonl",
-        "digest.md",
-        "dispatch.meta.json"
-      ]
+      "artifacts": ["manifest.json", "signals.jsonl", "candidates.jsonl", "digest.md", "dispatch.meta.json"]
     },
     "architecture": {
       "intent_class": "observational",
       "requires_packet": true,
       "requires_gpt": false,
-      "artifacts": [
-        "manifest.json",
-        "signals.jsonl",
-        "candidates.jsonl",
-        "digest.md",
-        "dispatch.meta.json"
-      ]
+      "artifacts": ["manifest.json", "signals.jsonl", "candidates.jsonl", "digest.md", "dispatch.meta.json"]
     },
     "supervision": {
       "intent_class": "observational",
       "requires_packet": false,
       "requires_gpt": false,
-      "artifacts": [
-        "manifest.json",
-        "signals.jsonl",
-        "candidates.jsonl",
-        "digest.md"
-      ]
+      "artifacts": ["manifest.json", "signals.jsonl", "candidates.jsonl", "digest.md"]
     },
     "drift": {
       "intent_class": "observational",
       "requires_packet": true,
       "requires_gpt": false,
-      "artifacts": [
-        "manifest.json",
-        "candidates.jsonl",
-        "drift-digest.md",
-        "drift-output.meta.json"
-      ]
+      "artifacts": ["manifest.json", "candidates.jsonl", "drift-digest.md", "drift-output.meta.json"]
     },
     "retro": {
       "intent_class": "observational",
       "requires_packet": false,
       "requires_gpt": false,
-      "artifacts": [
-        "manifest.json",
-        "signals.jsonl",
-        "candidates.jsonl",
-        "digest.md"
-      ]
+      "artifacts": ["manifest.json", "signals.jsonl", "candidates.jsonl", "digest.md"]
+    },
+    "failures": {
+      "intent_class": "observational",
+      "requires_packet": false,
+      "requires_gpt": false,
+      "artifacts": ["failures.json", "shell-env-gate.json", "shell-env-candidate.jsonl"]
+    },
+    "blindspot": {
+      "intent_class": "observational",
+      "requires_packet": false,
+      "requires_gpt": false,
+      "artifacts": ["blindspot-digest.md", "candidates.jsonl"]
+    },
+    "harvest": {
+      "intent_class": "convergent",
+      "requires_packet": false,
+      "requires_gpt": false,
+      "artifacts": ["harvest.md", "candidates.jsonl"]
+    },
+    "suggest": {
+      "intent_class": "divergent",
+      "requires_packet": true,
+      "requires_gpt": false,
+      "artifacts": ["candidates.md"]
+    },
+    "maintain": {
+      "intent_class": "operator",
+      "requires_packet": false,
+      "requires_gpt": false,
+      "artifacts": ["maintenance-actions.jsonl", "PRIORITIES.md", "MAINTAIN.md"]
+    },
+    "lever": {
+      "intent_class": "divergent",
+      "requires_packet": false,
+      "requires_gpt": false,
+      "artifacts": ["report.md"]
+    },
+    "missing": {
+      "intent_class": "divergent",
+      "requires_packet": false,
+      "requires_gpt": false,
+      "artifacts": ["report.md"]
+    },
+    "generators": {
+      "intent_class": "divergent",
+      "requires_packet": false,
+      "requires_gpt": false,
+      "artifacts": ["report.md"]
+    },
+    "audit": {
+      "intent_class": "operator",
+      "requires_packet": true,
+      "requires_gpt": true,
+      "artifacts": ["coverage.json", "findings.json", "report.md"]
+    },
+    "harness": {
+      "intent_class": "operator",
+      "requires_packet": true,
+      "requires_gpt": true,
+      "artifacts": ["coverage.json", "findings.json", "report.md"]
+    },
+    "discover": {
+      "intent_class": "operator",
+      "requires_packet": true,
+      "requires_gpt": true,
+      "artifacts": ["synthesis.md", "coverage.json", "report.md"]
+    },
+    "pliability": {
+      "intent_class": "operator",
+      "requires_packet": false,
+      "requires_gpt": false,
+      "artifacts": ["report.md"]
+    },
+    "forensics": {
+      "intent_class": "operator",
+      "requires_packet": true,
+      "requires_gpt": true,
+      "artifacts": ["report.md"]
+    },
+    "conventions": {
+      "intent_class": "operator",
+      "requires_packet": false,
+      "requires_gpt": false,
+      "artifacts": ["findings.md"]
     }
   },
   "uses": {
     "dispatch_profiles": [
       "observe_bulk",
-      "composer_review"
+      "composer_review",
+      "composer_screen",
+      "fast_extract",
+      "cheap_tick",
+      "deep_review",
+      "formal_review",
+      "gpt_general"
     ],
     "packet_builders": [
-      "observe_transcript_packet"
+      "observe_transcript_packet",
+      "shared_context_packet"
     ],
     "artifact_schemas": [
       "observe.signal.v1",
-      "observe.candidate.v1"
+      "observe.candidate.v1",
+      "review-coverage.v1",
+      "brainstorm.matrix.v1"
     ]
   },
   "follow_on": [
-    "improve",
-    "upgrade"
+    "rsi",
+    "critique",
+    "brainstorm",
+    "research",
+    "research-ops",
+    "trending-scout"
   ],
   "references": [
     "observe/SKILL.md",
-    "observe/references/artifact-contract.md"
+    "observe/references/artifact-contract.md",
+    "observe/references/maintain-rotation.md",
+    "observe/references/harvest-sources.md",
+    "observe/references/audit-pipeline.md",
+    "observe/references/discover-gates.md",
+    "observe/references/axes.md",
+    "observe/references/missing.md",
+    "observe/references/generators.md"
   ]
 }

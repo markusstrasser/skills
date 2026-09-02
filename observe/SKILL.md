@@ -1,777 +1,869 @@
 ---
 name: observe
-description: "Use when: /observe, session quality, 'what went wrong', drift, supervision misses, blindspots. Modes: sessions, architecture, supervision, drift, retro, failures, blindspot. NOT 10x discovery (/leverage)."
+description: "Use when: /observe, session quality, what to fix next, biggest lever, codebase audit. Modes: sessions supervision drift retro failures blindspot harvest maintain lever audit conventions."
 user-invocable: true
-argument-hint: <mode> [project] [options...]
-context: fork
+argument-hint: <mode> [target] [options...]
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit, Agent]
 effort: medium
 ---
 
-# Observe
+# Observe — the RSI loop
 
-Unified diagnostic workflow. Five lenses on the same transcript data, each answering a different question.
+One skill, four jobs: **look back** at what happened, **act** on what it found, **look forward** at
+what never fails, **apply** the change to a codebase. Merged 2026-09-02 from `observe` + `improve` +
+`leverage` + `upgrade` + `sweep` — five skills doing one job in five vocabularies. `/rsi close`
+(the session-end ritual) stays separate.
 
-> **Retrospective + error-oriented by design.** Observe learns from what *happened*
-> (anti-patterns, corrections, wasted supervision). It is structurally blind to
-> friction that never fails — ambient latency/cost, manual repetition, and tools you
-> have never tried (you can't retro your way to an unused capability). For that class
-> of order-of-magnitude win, use the prospective, frontier-scanning twin: **`/leverage`**.
+## When to use / NOT
 
-## Current Environment
-`!echo "Date: $(date +%Y-%m-%d) | CWD: $(basename $PWD) | Transcripts: $(ls ~/.claude/projects/ | wc -l | tr -d ' ') project dirs"`
+Use it when the question is about **the system**, not the task. NOT for: a diff or PR
+(`/code-review`) · a plan or findings doc (`/critique`) · root-causing one bug (`/analyze`) · pure
+ideation (`/brainstorm`) · one-shot literature work (`/research`) · a session-end digest (`/rsi close`).
 
-## Artifact Contract
+**The structural blind spot, and the modes that cover it.** The retrospective modes learn from what
+*failed*. They are blind to work that succeeds while far short of possible, to any axis nothing
+measures, and to any tool never tried — you cannot retro your way to an unused capability. That is
+what `lever`/`missing`/`generators` exist for: prospective, external, frontier-scanning. Reaching
+for a retro when the real gap is an unframed axis is the most common mis-route into this skill.
 
-See `references/artifact-contract.md` for the canonical observe artifact tree, deterministic
-signal/candidate flow, and promotion gates.
+## Modes
 
-## Dispatch routing (2026-06-21)
+| Mode | Question it answers | Entry point |
+|------|--------------------|-------------|
+| `all` | Full RSI pass, every deterministic lane + triangulation | `just observe-run all [project] [days]` |
+| `sessions` | What behavioral anti-patterns appeared? | shared extract → classify → stage |
+| `architecture` | What design wants to emerge? | shared extract → pattern extract → synthesis |
+| `supervision` | Where was human time wasted? | `scripts/supervision-kpi.py` |
+| `drift` | What slow pattern spans MANY sessions? | `just observe-drift` (wide, 1M ctx) |
+| `retro` | What went wrong *this* session? | local only, no dispatch |
+| `failures` | Which tools/CLIs are actually BROKEN in real use? | `scripts/scan_tool_failures.py` |
+| `blindspot` | What did the loop MISS that the human caught? | `just blindspot` (emb-contrastive) |
+| `harvest` | What did the producers find that nobody drained? | gather + dedup + rank |
+| `suggest` | Which repeated workflow should become a skill/tool? | tool n-grams → dispatch → scaffold |
+| `maintain` | What is the ONE thing to do this tick? | **the conductor** — `/loop 30m /observe maintain` |
+| `lever` | Where is the 10-100x on a KNOWN surface? | frame → axes → floor → scan → pilot → ratchet |
+| `missing` | What category never got put on an axis at all? | `references/missing.md` |
+| `generators` | Is the generator SET wrong? (wins arrive off-trail) | `references/generators.md` |
+| `audit` | Is this code correct? | dual-model bug-find → triage → verified fixes |
+| `harness` | What enforcement gap causes *future* bugs? | audit pipeline, harness prompts |
+| `discover` | What is missing from this codebase? | 6 gated phases, inventory → implement |
+| `pliability` | Can an agent find the right file from its name? | split monoliths, rename, index |
+| `forensics` | How does this codebase actually evolve? | concept lifecycle + rule decay + survival |
+| `conventions` | Is this code *consistent* with itself? (alias `sweep`) | mechanical → Flash → verify |
 
-**Default depends on harness — not one model for everything.**
+`audit`·`harness`·`discover`·`pliability`·`conventions` end in **applied changes**. Everything else
+ends in a staged candidate or a memo. Know which you invoked.
+
+## Shared: scope + argument parsing
+
+First positional is the mode; the rest are target + options. **Default mode:** `retro` if the
+session is wrapping up ("retro", "retrospective") — otherwise `sessions`.
+
+| Option | Applies to | Default |
+|--------|-----------|---------|
+| `--days N` | retrospective modes | 1 sessions/architecture · 3 harvest · 7 supervision/blindspot · 21 drift/failures |
+| `--project P` · `--path DIR` | retrospective · code modes | all projects · repo root |
+| `--quick` · `--thorough` · `--deferred` | architecture, audit, forensics | standard pipeline |
+| `--force` | sessions, retro (defeats the idempotency stop) | off |
+| `--headless` · `--wide-only` · `--multitask` | dispatch routing (table below) | harness-dependent |
+| `--corrections` | sessions: mine user corrections, not anti-patterns | off |
+| `--focus` | harvest: hooks·skills·scripts·architecture·rules·all | all |
+| `--depth N` | conventions: git history depth | 40 |
+
+**Scope for `maintain`:** default is **all active repos** (agent-infra intel genomics phenome hutter
+substrate arc-agi). A repo arg narrows only which repo's rotation/fixes the tick acts on — the SWEEP
+always covers every repo, because a red job anywhere is the priority.
+
+## Shared: transcript + artifact extraction
+
+Every retrospective mode except `retro` starts here. **Prefer the orchestrator** — it is size-safe:
+`just -f ~/Projects/agent-infra/justfile observe-run <mode> [project] [days]`.
+
+Manual single-mode prep uses `scripts/observe_prepare_context.py --project P --sessions N
+--artifact-dir "$ARTIFACT_DIR" --full` (drift: `scripts/observe_drift_context.py --sessions 60
+--projects …`), **never raw `extract_transcript.py` concatenation** — that produced 10MB blobs in
+multitask runs. Both live in `~/Projects/agent-infra/scripts/`.
+
+**Both transcript sources or the signal is halved.** Claude Code JSONL at
+`~/.claude/projects/-Users-alien-Projects-{project}/`; Codex CLI at `~/.codex/state_5.sqlite` +
+rollout JSONL (matched by `cwd`). Codex runs alongside Claude Code on the same projects — dropping
+it silently loses ~50% of the record. The preprocessor strips thinking blocks and base64. Record
+every input in `manifest.json` so downstream tooling can audit what was analyzed.
+
+Then: **coverage digest** (`bash scripts/coverage-digest.sh > "$ARTIFACT_DIR/coverage-digest.txt"`)
+so the classifier stops re-reporting known patterns · **shape pre-filter**
+(`scripts/session-shape.py --days N`) to focus deep analysis on flagged sessions · **full-corpus
+steer mining** weekly (`just steer-mine`, incremental via `~/.claude/steer-mining/`) because the
+recent-window modes miss steers buried in older sessions.
+
+## Shared: dispatch + effort scaling
+
+**The default depends on the harness — there is no one model for everything.**
 
 | Harness | Default analysis | API dispatch |
-|---------|------------------|--------------|
-| **Cursor** (Agent tool available) | Parent + parallel **Composer subagents** (`/multitask`) | **OFF** unless `--headless` |
-| **Claude Code / launchd / `/loop`** | Deterministic extract → **`observe_bulk`** | ON |
+|---------|-----------------|--------------|
+| **Cursor** (Agent tool available) | parent + parallel Composer subagents (`--multitask`) | **OFF** unless `--headless` |
+| **Claude Code / launchd / `/loop`** | deterministic extract → `observe_bulk` | ON |
 
-**Flags (add to `$ARGUMENTS`):**
-- `--headless` — force `observe_bulk` API dispatch even in Cursor (unattended / escape hatch)
-- `--wide-only` — `observe_bulk` **for drift only**; other modes use subagents or local analysis
-- `--multitask` — Cursor: fan out one subagent per mode in parallel
+**Profiles.** Headless bulk classify → `observe_bulk` (`gemini-3.1-flash-lite-preview`, 1M ctx,
+~$0.05/MTok in). There is no `gemini-3.1-flash` text SKU — Flash-Lite *is* the 3.1 tier.
+`deep_review` (3.5-flash) is the `/critique` cosigner **only**, too expensive at observe volume.
+Formal/quantitative verification → `gpt_general`. Codebase `audit` is dual-model (below).
 
-**Headless profile:** `observe_bulk` → **`gemini-3.1-flash-lite-preview`** (Gemini **3.1** Flash-Lite; 1M ctx;
-~10× cheaper than 3.5-flash). There is no `gemini-3.1-flash` text SKU — Flash-Lite is the 3.1 tier.
-`deep_review` (**3.5-flash**) stays on **`/critique` cosigner only** — never for observe.
+**Cursor subagent contract:** run the deterministic extract first, read the artifacts +
+`improvement-log` + `coverage-digest.txt`, stage to `candidates.jsonl`, write the mode digest,
+verify against transcript before promotion. **Anti-pattern:** parent → subagent → Flash →
+subagent-verifies; collapse it to subagents reading artifacts directly, or headless without the hop.
 
-**Cursor subagent contract:** each mode subagent runs deterministic extract first, reads artifacts
-+ `improvement-log` / `coverage-digest.txt`, stages to `candidates.jsonl`, writes mode digest.
-Verify claims against transcript before promotion (~20-30% invention rate on headless bulk classify).
+**The prompt file is sent VERBATIM via `--prompt-file` — it must contain ONLY the prompt.** No
+markdown wrapper, no `# Title`, no `<!-- comment -->`, no heredoc artifact. A wrapper preamble fed
+after a long transcript makes the model continue the transcript's task instead of analyzing it
+(misfired 3× on 2026-06-13 before this was stripped).
 
-**Anti-pattern:** parent → subagent → Flash → subagent verifies. Collapse to subagents reading
-artifacts directly, or headless `observe_bulk` without the nested hop.
-
-## Mode Routing
-
-| Mode | Question answered | Headless dispatch (`observe_bulk`) | Cursor default | Canonical artifacts |
-|------|------------------|-----------------------------------|----------------|-------------------|
-| `all` | Full RSI pass (all deterministic lanes + triangulation) | optional `--headless` on prep artifacts | **Orchestrator** + `--multitask` subagents | `observe_run.py` → `manifest.json` v2 → `digest.md` → lane subdirs |
-| `sessions` | What behavioral anti-patterns appeared? | `--headless` only | **Subagent** | `manifest.json` -> `signals.jsonl` -> `candidates.jsonl` -> `digest.md` |
-| `architecture` | What design wants to emerge? | `--headless` only | **Subagent** | `manifest.json` -> … -> `YYYY-MM-DD.md` |
-| `supervision` | Where was human time wasted? | `--headless` only | **Subagent** | `manifest.json` -> … -> `digest.md` |
-| `drift` | What slow-moving pattern spans MANY sessions? | **Yes** (`--wide-only` or `--headless`) | Subagent (or headless for wide) | `manifest.json` -> `candidates.jsonl` -> `drift-digest.md` |
-| `retro` | What went wrong this session? | No | **Local parent** | `artifacts/session-retro/` |
-| `failures` | Which tools/CLIs are actually BROKEN in real use? | Tiered: deterministic -> Haiku -> deep | **Deterministic** (+ optional subagent) | `scan_tool_failures.py` -> `failures.json` |
-| `blindspot` | What did the loop MISS that the human had to catch? | emb-contrastive | **Subagent** + emb miner | `blindspot_miner.py` -> `.claude/blindspot-digest.md` |
-
-Parse `$ARGUMENTS` for mode. First positional arg is the mode (`all` runs every lane). Remaining args are project, options.
-
-**Default mode logic:**
-- If the session is ending (user said "retro", "retrospective", or session is wrapping up) -> `retro`
-- Otherwise -> `sessions`
-
-**Options common to all modes:**
-- `--days N` -- time window (default: 1 for sessions/architecture, 7 for supervision/blindspot, 21 for drift/failures)
-- `--project PROJECT` -- filter to one project
-- `--corrections` -- sessions mode only: extract user correction patterns instead of anti-patterns
-- `--headless` -- force `observe_bulk` API dispatch (Claude Code / launchd default; opt-in in Cursor)
-- `--wide-only` -- `observe_bulk` for drift mode only; other modes use subagents/local
-- `--multitask` -- Cursor: parallel subagent per mode (sessions · architecture · supervision · drift · failures · blindspot; retro local)
-
-## Mode: `all` (recommended for full RSI pass)
-
-Deterministic Tier-0 for every lane in one timestamped run dir, with **cross-mode triangulation**
-(supervision vector + blindspot + failures reinforcing the same theme = higher confidence).
+Concatenate every source you extracted into one context file (`input.md`, then `codex.md` behind a
+`[ -s ]` guard, drift also `operational-context.txt`, then `coverage-digest.txt`), then dispatch:
 
 ```bash
-OBSERVE_PROJECT_ROOT="${OBSERVE_PROJECT_ROOT:-$HOME/Projects/agent-infra}"
-just -f "$OBSERVE_PROJECT_ROOT/justfile" observe-run all [project] [days]
-# or: uv run python3 "$OBSERVE_PROJECT_ROOT/scripts/observe_run.py" all --project agent-infra --days 7
+uv run python3 ~/Projects/skills/scripts/llm-dispatch.py --profile observe_bulk \
+  --context /tmp/observe-context.md --prompt-file "$CLAUDE_SKILL_DIR/references/<mode>-dispatch-prompt.md" \
+  --output "$ARTIFACT_DIR/<m>-output.md" --meta "$ARTIFACT_DIR/<m>-output.meta.json" \
+  --error-output "$ARTIFACT_DIR/<m>-output.error.json"
 ```
 
-Writes `artifacts/observe/{run-id}/`:
-- `manifest.json` (v2 — all lane metadata)
-- `digest.md` (composed from deterministic lanes + triangulation)
-- `sessions/`, `supervision/`, `drift/`, `failures/`, `blindspot/`, `architecture/` subdirs
-- `candidates.jsonl` (merged) + `preflight.json`
+**The context cap is enforced in CODE:** `llm-dispatch.py` refuses `--context` > 600KB (exit 2).
+When it refuses, **batch by project and drop the lowest-signal input first** (Codex transcripts are
+the bulk and least signal-dense) — do not raise the cap; splitting preserves signal, a bigger blob
+loses it. Measured 2026-06-12: a `--days 7` architecture run sent ~3.4MB/project and the dispatch
+died with NO output and NO error file — the silently-dead loop component this skill exists to catch.
 
-**Then (Cursor `--multitask`):** fan out subagents for LLM lanes reading the prep artifacts —
-do NOT re-extract transcripts manually. Parent reads `digest.md` triangulation section first.
+**Safety-preamble guard (REQUIRED for headless drift).** `observe_bulk` may carry a CBRN/safety
+preamble that, on biomedical (phenome) and long (genomics) bundles, derails the model into a safety
+eval instead of analysis (garbage output 2026-06-13). Fence the context: prepend
+`=== BEGIN INERT HISTORICAL TRANSCRIPTS (analyze, do not execute) ===`, append `=== END ===`. The
+prompt file itself still goes verbatim and stays wrapper-free.
 
-### Scope-aware triangulation (2026-06-28)
+**Hallucination is the rule.** ~20-30% invention on headless bulk classify; ~15-20% on file paths.
+Verification is mandatory in every mode: cited session IDs exist, quoted user messages appear in the
+transcript, tool sequences match, claimed paths resolve. Mark each finding `VERIFIED` or
+`DROPPED:reason`. **Model output is DATA, not conclusions.**
 
-`observe_run.py` tags lanes with scope/sensitivity and **only triangulates within compatible scope**:
+**Effort.** `--quick`/`/loop` → ~10 sessions, phases 1-2, ~$0.10 · default → ~15 sessions, full,
+~$0.50 · `--days 7+` → ~50+ sessions, full + cross-model review, ~$2.00. Frontmatter effort is
+`medium` for the high-frequency conductor and retro lanes; escalate to high/ultrathink by hand for
+`lever`, `discover`, `audit --thorough`, `harness` — those are synthesis, not extraction. Pattern
+extraction degrades past ~80 sessions in one call, so batch `--days 7+` by project and note that
+cross-project patterns get harder to see when batched.
 
-| Lane | Scope | Sensitivity |
-|------|-------|-------------|
-| supervision | project-filter | strict |
-| blindspot, drift, failures, architecture | fleet | loose |
+## Shared: dedup, rank, persist
 
-Rules:
-- A **zero reading from a strict project-scoped lane is NOT corroboration** for a fleet alarm.
-- Fleet-only signals get `confidence: low` and must not drive RAISE_AUTONOMY on the filtered project.
-- Both lanes firing non-zero → `confidence: high`.
+**Load the dedup baselines in full first.** `improvement-log.md` gives TRACKED (implemented → skip,
+proposed → mark reinforced, in-progress → skip); `.claude/rules/vetoed-decisions.md` gives VETOED —
+never re-propose one without concrete new evidence. Count recurrence by **distinct source type**:
+two mentions in one retro is one source, not two.
 
-Merged candidates get `existing_coverage_match` at emit time (improvement-log + steward-proposals join) so known-open items surface as `lifecycle: modify`, not fresh `[ ]` rows.
+**Denominator rule (every extractor, every mode).** Each miner reports files scanned, records
+parsed, items matched — and the output quotes them. A bare `0 found` is indistinguishable from a
+broken parser; the `#f` extractor returned a silent false-zero for months because nothing forced
+`matched 0 / parsed 0` into view (fixed skills@837f4d2). `matched 0` with a healthy denominator is
+signal. **`parsed 0` is a BROKEN SOURCE** — fix it before trusting the run.
 
-Promotion verdicts carry `lifecycle: add|modify|suppress` (L1 act-drain anti-accretion).
+**Two-stream status discipline (F1, `agent-infra/.claude/rules/gov-id.md`).** Pick the glyph by what
+the finding *is*, not by habit:
 
-**Headless / launchd:** run `observe_run.py all` then dispatch `observe_bulk` per lane on the
-pre-built `observe-context.md` files (size-safe, already capped).
+- **Behavioral observation** (TOKEN WASTE, SYCOPHANCY, MISSING PUSHBACK, REASONING-ACTION MISMATCH,
+  OVER-ENGINEERING, CAPABILITY ABANDONMENT…) → **`[obs]`**, never `[ ]`. Append-only calibration
+  ledger; its consumer is recurrence→rule promotion, not a build. It can never be `[x]`.
+- **Actionable infra/tooling/architecture** (a concrete hook/lint/script/rule) → **`[ ]` proposed**.
+- Behavioral AND spawning a build → write both, separately.
+- **Moot** (subject deleted/eradicated) → `[~] retired — subject no longer exists`. Free drain.
 
-## Shared: Transcript Extraction
+Not pedantry: tagging behavioral findings `[ ]` inflated the actionable-open count from a real ~23
+into a 131-item panic number (2026-06-08: 92 of 131 were behavioral, ~13 named eradicated infra).
 
-All modes except `retro` start with transcript extraction.
+**Two rankings, because the loop does two jobs.** *New items* = `recurrence × severity × novelty`
+(severity 3/2/1; recurrence = distinct source types 1-6; novelty 1.5 new / 1.0 reinforcing / 0.5
+tangential). *The drain* = `leverage × staleness`, where leverage is the size of the win (10-100×
+friction removed, a failure class closed, dead infra eradicated). **Not** recurrence×severity — the
+highest-leverage infra fixes are often single-source (one human finding at a session tail), so the
+new-item formula buries them.
 
-**Prefer the orchestrator** (size-safe, no footguns):
+**Promotion gate — mandatory before writing `improvement-log.md`:**
+`uv run python3 "${CLAUDE_SKILL_DIR}/scripts/observe_gates.py" preflight --artifact-root "$ARTIFACT_DIR"`.
+Write entries only for candidates with `verdict=promote` in `promotion-verdicts.jsonl` **and**
+`preflight.json → promotions_allowed=true` (`references/promotion-gates.md`). Criteria: recurs 2+
+sessions, not already covered, a checkable predicate or an architectural change. Novel high-severity
+may promote immediately. Not promotable → leave it in `candidates.jsonl` with an explicit state; do
+not force a log entry.
 
-```bash
-just -f ~/Projects/agent-infra/justfile observe-run <mode> [project] [days]
-```
+**Recurring classifier false positives** — do not stage these: "unprompted commit" flagged HIGH
+(global CLAUDE.md authorizes auto-commit) · `done_with_denials` (a governance approval gate, not a
+failure) · "agent paused before executing" (rubber-stamp approval is intentional oversight, not
+sycophancy).
 
-For manual single-mode prep, use `observe_prepare_context.py` (NOT raw `extract_transcript.py`
-concatenation — that produced 10MB blobs in multitask runs):
-
-```bash
-OBSERVE_PROJECT_ROOT="${OBSERVE_PROJECT_ROOT:-$HOME/Projects/agent-infra}"
-ARTIFACT_DIR="${OBSERVE_ARTIFACT_ROOT:-$OBSERVE_PROJECT_ROOT/artifacts/observe}"
-uv run python3 "$OBSERVE_PROJECT_ROOT/scripts/observe_prepare_context.py" \
-  --project <project> --sessions <N> --artifact-dir "$ARTIFACT_DIR" --full
-```
-
-Drift wide window:
-
-```bash
-uv run python3 "$OBSERVE_PROJECT_ROOT/scripts/observe_drift_context.py" \
-  --artifact-dir "$ARTIFACT_DIR/drift" --sessions 60 \
-  --projects agent-infra genomics substrate phenome intel hutter
-```
-
-Legacy raw extract (only if orchestrator unavailable):
-
-Record both inputs in `manifest.json` so downstream tooling can audit what was analyzed:
-
-```bash
-cat > "$ARTIFACT_DIR/manifest.json" <<EOF
-{"mode":"$MODE","project":"${PROJECT:-all}","artifact_dir":"$ARTIFACT_DIR","inputs":["input.md","codex.md"]}
-EOF
-```
-
-### Operational Context
-
-Build operational context (hook triggers, receipts, git commits) for the session window. See `references/transcript-extraction.md` Step 1.3 for the full script.
-
-### Coverage Digest
-
-Generate existing-coverage digest so Gemini doesn't re-report known patterns:
-
-```bash
-bash "$OBSERVE_PROJECT_ROOT/scripts/coverage-digest.sh" > "$ARTIFACT_DIR/coverage-digest.txt"
-```
-
-### Shape Pre-Filter (optional)
-
-```bash
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/session-shape.py --days {DAYS} {--project PROJECT}
-```
-
-Focus deep analysis on flagged sessions. Skip normal-profile sessions unless you have specific concerns.
-
-### Full-Corpus Steer Mining (optional, weekly)
-
-Recent-window modes above miss steers buried in older sessions. For **preference-vector**
-extraction across the full agentlogs universe (steers, confirmations, agent_miss), run the
-incremental miner — it skips already-scanned sessions via `~/.claude/steer-mining/scanned_ledger.jsonl`:
-
-```bash
-# From agent-infra (preferred — budget-capped defaults):
-just steer-mine
-
-# Or direct (custom budget / output path):
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/mine_steers.py --from-agentlogs --prompt-mode multi --budget 5 --workers 3 --out "$ARTIFACT_DIR/steer-signals.jsonl"
-```
-
-Consumer: `/improve maintain` weekly row clusters recurring `vector` fields → GOALS refresh or
-steward-proposal. Same promotion gates as `references/artifact-contract.md` — no direct hook writes.
-
----
-
-## Mode: sessions
-
-Analyze session transcripts for behavioral anti-patterns that no linter or static analysis can detect. Scoring rubric and 20-item taxonomy in `lenses/behavioral-antipatterns.md`. Grounding examples in `references/grounding-examples.md`.
-
-Parse the project argument from $ARGUMENTS. Default: last 5 sessions.
-
-### Step 0: Run Manifest
-
-Treat `manifest.json`, `signals.jsonl`, and `candidates.jsonl` as the primary outputs.
-`improvement-log.md` is a promotion sink, not the working artifact store.
-
-At run start, record:
-- mode
-- project filter
-- session ids / extraction inputs
-- artifact root
-- whether dispatch ran
-
-If the same session set already exists in the current manifest and `--force` was not passed, stop instead of appending another narrative-only run.
-
-### Step 1: Extract & Pre-Filter
-
-Run shared transcript extraction above. Build operational context per `references/transcript-extraction.md` Step 1.3.
-
-### Step 2: Classify findings
-
-**Cursor (default):** spawn a subagent with transcript artifacts + `coverage-digest.txt` +
-`lenses/behavioral-antipatterns.md`. Subagent reads `improvement-log.md` for prior art, stages
-findings to `candidates.jsonl`, writes `digest.md`. Skip API dispatch unless `--headless`.
-
-**Headless (`--headless` or Claude Code / `/loop`):** send transcript + coverage digest to
-`observe_bulk` (`gemini-3.1-flash-lite-preview`). Full prompt in `references/gemini-dispatch-prompt.md`.
-
-> **The prompt file is sent VERBATIM via `--prompt-file` — it must contain ONLY the prompt, no markdown wrapper, title, or heredoc artifacts.** A wrapper preamble fed after a long transcript makes the model continue the transcript's task instead of analyzing it (misfired 3× on 2026-06-13 before this was stripped). Do NOT add a `# Title` or `<!-- comment -->` header to the prompt files.
-
-Dispatch via the shared wrapper, not raw SDK calls. Concatenate BOTH transcript sources
-(Claude Code + Codex) plus the coverage digest. The `[ -s codex.md ]` guard keeps dispatch
-working when no Codex sessions exist in the window, but when they do, Codex must be included:
-
-```bash
-{
-  cat "$ARTIFACT_DIR/input.md"
-  if [ -s "$ARTIFACT_DIR/codex.md" ]; then
-    printf '\n\n---\n\n'
-    cat "$ARTIFACT_DIR/codex.md"
-  fi
-  printf '\n\n---\n\n'
-  cat "$ARTIFACT_DIR/coverage-digest.txt"
-} > /tmp/observe-context.md
-uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
-  --profile observe_bulk \
-  --context /tmp/observe-context.md \
-  --prompt-file "$CLAUDE_SKILL_DIR/references/gemini-dispatch-prompt.md" \
-  --output "$ARTIFACT_DIR/gemini-output.md" \
-  --meta "$ARTIFACT_DIR/gemini-output.meta.json" \
-  --error-output "$ARTIFACT_DIR/gemini-output.error.json"
-```
-
-### Step 2b: Composer precision pass
-
-**Cursor:** subagent analysis IS the precision pass — verify session IDs and quotes against
-transcript before staging. No second dispatch needed unless headless bulk output exists.
-
-**Headless:** after `observe_bulk`, run Composer screen on HIGH-severity candidates only
-(max 3 clusters):
-
-```bash
-# Build a tight packet: top 3 candidates + 20 lines transcript evidence each
-uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
-  --profile composer_review \
-  --context "$ARTIFACT_DIR/composer-candidates.md" \
-  --prompt "For each candidate: VERDICT promote|drop|needs_more_evidence. Cite transcript line or say MISSING. One block per candidate. Commit to a verdict — no hedge-only lists." \
-  --output "$ARTIFACT_DIR/composer-output.md" \
-  --meta "$ARTIFACT_DIR/composer-output.meta.json"
-```
-
-Skip Step 2b when headless returned zero candidates or mode is `retro`/`failures` (deterministic).
-For headless `sessions`/`architecture`/`drift`, run Step 2b only on HIGH-severity candidates.
-
-### Step 3: Stage Findings
-
-Validate classifier output (subagent or headless `observe_bulk`) against transcript, check session UUIDs, and stage the result as a candidate record before any promotion. Full procedure, JSON template, and candidate contract live in `references/findings-staging.md` and `references/artifact-contract.md`.
-
-**Judgment calls when staging:**
-- Gemini flags "unprompted commit" as HIGH -- false positive, global CLAUDE.md authorizes auto-commit
-- `done_with_denials` status is NOT a failure -- it's a governance approval gate
-- "Agent paused before executing" -- rubber-stamp approvals are intentional oversight, not sycophancy
-- Promotion criteria: recurs 2+ sessions, not already covered, checkable predicate or architectural change
-- Novel high-severity findings can be promoted immediately (don't wait for recurrence)
-- If the item is not promotable, leave it in `candidates.jsonl` with an explicit state instead of forcing a log entry.
-
-### Step 4: Summary
-
-Report to user:
-- Sessions analyzed: N
-- Shape anomalies detected: N
-- Signals staged: N
-- Candidates staged: N (by category)
-- Ready for promotion: N (2+ recurrences)
-- New failure modes discovered: N
-- Proposed fixes: list
-
-Write the operator summary to `digest.md` using `references/digest-template.md` (data validity banner + metric legend).
-
-**Mandatory before `improvement-log.md`:**
-
-```bash
-python3 "${CLAUDE_SKILL_DIR}/scripts/observe_gates.py" preflight \
-  --artifact-root "$ARTIFACT_DIR"
-```
-
-Only write `improvement-log.md` entries for candidates with `verdict=promote` in `promotion-verdicts.jsonl` **and** `preflight.json` → `promotions_allowed=true`. See `references/promotion-gates.md`.
-
-### Promotion Sink (`improvement-log.md`, only after promotion)
+**Promotion sink format** (`improvement-log.md`, only after the gate):
 
 ```markdown
 ### [YYYY-MM-DD] [CATEGORY]: [summary]
-- **Session:** [project] [session-id-prefix]
-- **Evidence:** [what happened, with message excerpts]
-- **Failure mode:** [link to agent-failure-modes.md category, or "NEW"]
+- **Session:** [project] [session-id-prefix]      - **Evidence:** [what happened, with excerpts]
+- **Failure mode:** [agent-failure-modes.md category, or "NEW"]
 - **Proposed fix:** [hook | skill | rule | CLAUDE.md change | architectural]
 - **Root cause:** [system-design | agent-capability | task-specification | skill-router | skill-weakness | skill-execution | skill-coverage]
 - **Status:** [ ] proposed   ← ONLY for an actionable infra/tooling/architecture build
 ```
 
-**Two-stream status discipline (F1, see `agent-infra/.claude/rules/gov-id.md`).** Pick the glyph
-by what the finding *is*, not by habit:
-- **Behavioral observation** (TOKEN WASTE, SYCOPHANCY, MISSING PUSHBACK, REASONING-ACTION MISMATCH,
-  OVER-ENGINEERING, CAPABILITY ABANDONMENT…) → **`[obs]`**, never `[ ]`. It's an append-only
-  calibration-ledger entry whose consumer is recurrence→rule promotion, not a per-item build. A
-  behavioral finding tagged `[ ]` inflates the actionable-open count into a panic number — the
-  exact bug this fixed (131 "open" → 33 real, 2026-06-08).
-- **Actionable infra/tooling/architecture** (a concrete hook/lint/script/rule to build) → `[ ]` proposed.
-- When a finding is behavioral AND spawns a concrete build, write the `[obs]` ledger entry for the
-  pattern and a separate `[ ]` entry for the build.
+## Mode: all
 
-### Corrections Mode (`--corrections`)
+Deterministic Tier-0 for every lane in one timestamped run dir, with **cross-mode triangulation**
+(supervision vector + blindspot + failures reinforcing one theme = higher confidence).
+`just observe-run all [project] [days]` writes `artifacts/observe/{run-id}/`. Then in Cursor
+`--multitask`, fan out subagents on the **prep artifacts** — do not re-extract by hand; read the
+triangulation section of `digest.md` first.
 
-Extract user correction patterns instead of behavioral anti-patterns. Full procedure in `references/corrections-mode.md`.
+**Scope-aware triangulation.** `observe_run.py` tags lanes with scope and sensitivity and only
+triangulates within compatible scope: supervision is `project-filter`/strict; blindspot, drift,
+failures, architecture are `fleet`/loose.
 
-Treat this as a narrower signal source over the same pipeline:
-deterministic extraction -> `signals.jsonl` -> optional classification -> `candidates.jsonl` -> promotion check.
+- A **zero reading from a strict project-scoped lane is NOT corroboration** for a fleet alarm.
+- Fleet-only signals get `confidence: low`; they must not drive RAISE_AUTONOMY on a filtered project.
+- Both lanes non-zero → `confidence: high`.
 
----
+Merged candidates get `existing_coverage_match` at emit time (improvement-log + steward-proposals
+join) so known-open items surface as `lifecycle: modify`, not a fresh `[ ]` row. Verdicts carry
+`lifecycle: add|modify|suppress` (L1 anti-accretion).
+
+## Mode: sessions
+
+Behavioral anti-patterns no linter can detect. Rubric + 20-item taxonomy in
+`lenses/behavioral-antipatterns.md` · grounding examples in `references/grounding-examples.md` ·
+prompt in `references/gemini-dispatch-prompt.md` · staging procedure and JSON template in
+`references/findings-staging.md` · digest format in `references/digest-template.md`.
+
+1. **Run manifest** — record mode, project filter, session ids, artifact root, whether dispatch ran.
+   If the same session set already exists in the manifest and `--force` was not passed, **stop**;
+   do not append another narrative-only run.
+2. **Extract + pre-filter** (shared). Operational context per `references/transcript-extraction.md`
+   Step 1.3.
+3. **Classify** (shared dispatch), then **precision-pass**: in Cursor the subagent analysis *is* the
+   precision pass; headless, run a `composer_review` screen on HIGH-severity candidates only (max 3
+   clusters, ~20 lines of evidence each) demanding `VERDICT promote|drop|needs_more_evidence` plus a
+   cited transcript line or `MISSING`. Skip entirely when headless returned zero candidates.
+4. **Stage + summarize** — sessions analyzed, shape anomalies, signals staged, candidates by
+   category, ready-for-promotion, new failure modes, proposed fixes.
+
+**`--corrections`** mines user correction patterns over the same pipeline
+(`references/corrections-mode.md`).
 
 ## Mode: architecture
 
-Creative architectural review -- find better abstractions, missing tools, repeated workflows that should be pipelines, cross-project patterns that should be shared infra. Pattern types in `lenses/architectural-patterns.md`.
+Better abstractions, missing tools, repeated workflows that should be pipelines, cross-project
+patterns that should be shared infra. Pattern types in `lenses/architectural-patterns.md` · output
+template in `references/output-template.md` · prompt in `references/gemini-prompt.md` · loop-mode
+JSONL format in `references/loop-mode.md`.
 
-**Mindset:** The best proposals are ones nobody asked for. A pattern in 3 sessions is coincidence. A pattern in 8 sessions across 3 projects is an abstraction waiting to be born.
+**Mindset: the best proposals are ones nobody asked for.** A pattern in 3 sessions is coincidence.
+A pattern in 8 sessions across 3 projects is an abstraction waiting to be born.
 
-Parse `$ARGUMENTS` for days (default 1), project filter, focus area. `--quick` = phases 1-2 only.
+Gather all active projects unless `--project`, merge to `all.md`, verify <500KB → extract patterns
+(shared dispatch; output is DATA, verify every claim) → **creative synthesis**: cross-reference
+existing infra first (`references/existing-infra-checks.md`), then for each verified pattern
+generate 3+ genuinely different approaches — **denial cascade** ("what if we COULDN'T use
+hooks/skills/pipelines?"), **cross-domain forcing** (the analogous problem in another field),
+**inversion** ("what if we made X unnecessary?") — and converge with the lens filters. Write
+`$ARTIFACT_DIR/YYYY-MM-DD.md`, proposals sorted by priority.
 
-### Phase 1: Gather & Compress
-
-Run shared transcript extraction. Extract from all active projects (meta, intel, selve, genomics, arc-agi) unless `--project` filters. Merge into `$ARTIFACT_DIR/all.md`. Verify <500KB.
-
-Run shape pre-filter. Note anomalous sessions for priority analysis.
-
-### Phase 2: Pattern Extraction
-
-**Cursor (default):** subagent reads merged transcripts + `references/existing-infra-checks.md`,
-extracts patterns per `references/gemini-prompt.md` format, verifies against source. No API dispatch.
-
-**Headless:** dispatch to `observe_bulk` for structured pattern extraction. Full prompt body in
-`references/gemini-prompt.md`. Use the shared dispatch helper, not raw CLI subprocess calls.
-
-**Gemini's output is DATA, not conclusions.** Headless extraction is DATA; creative synthesis
-is Phase 3 (parent or subagent).
-
-**Operational limits (the context cap is now enforced in CODE, not prose):**
-- **`llm-dispatch.py` refuses `--context` > 600KB (`--max-context-bytes`, exit 2).** You no
-  longer have to remember to check — the wrapper does. Measured failure 2026-06-12: a `--days 7`
-  architecture run sent ~3.4MB/project (raw Claude+Codex transcripts) to gemini-3.5-flash and
-  the dispatch died with NO output and NO error file (silently-dead loop component — the class
-  this skill exists to catch). When the wrapper refuses, **batch by project and drop the
-  lowest-signal inputs first** (Codex transcripts are the bulk and least signal-dense; or extract
-  with `--full` off). Don't blindly raise the cap — splitting preserves signal, a bigger blob loses it.
-- Pattern extraction degrades past ~80 sessions in one Gemini call. For `--days 7+`, batch by project.
-- Gemini hallucination rate on session details: ~20-30%. Verification below is mandatory.
-- Cross-project patterns are harder to detect when batched by project — note this gap.
-
-**Verify Gemini claims (mandatory):**
-1. Check cited session IDs actually exist
-2. Verify quoted user messages appear in the transcript
-3. Confirm tool sequences match reality
-Drop any finding where evidence doesn't verify. Mark: `VERIFIED` or `DROPPED:reason`.
-
-### Phase 3: Creative Synthesis
-
-Cross-reference existing infrastructure before generating proposals. Load `references/existing-infra-checks.md` for command set.
-
-**Divergent ideation** -- for each verified pattern, generate 3+ genuinely different approaches:
-- **Denial cascade:** "What if we COULDN'T use hooks/skills/pipelines?"
-- **Cross-domain forcing:** Name an analogous problem in a different domain.
-- **Inversion:** Instead of "how do we automate X?", ask "what if we made X unnecessary?"
-
-**Convergent selection** -- apply filters from `lenses/architectural-patterns.md`.
-
-### Phase 4: Structured Output
-
-Load `references/output-template.md` for proposal template. Sort proposals by priority descending.
-
-### Phase 5: Write Output
-
-Write to `$ARTIFACT_DIR/YYYY-MM-DD.md`. Include header from `references/output-template.md`.
-
-**Do NOT:** implement anything, write to improvement-log.md, modify GOALS.md, propose things in backlog without marking KNOWN.
-
-**DO:** include at least one wild card challenging a current assumption, name the system's trajectory, flag the single highest-leverage abstraction.
-
-### Effort Scaling
-
-| Trigger | Sessions | Phases | Budget |
-|---------|----------|--------|--------|
-| `--quick` or `/loop` | ~10 (1 day) | 1-2 only | ~$0.10 |
-| default | ~15 (1 day) | Full 1-5 | ~$0.50 |
-| `--days 7+` | ~50+ (7 days) | Full + cross-model review | ~$2.00 |
-
-**Loop mode:** Load `references/loop-mode.md` for JSONL format, synthesis triggers, implementation tracking.
-
----
+**Do NOT** implement, write to `improvement-log.md`, modify GOALS.md, or propose a backlog item
+without marking it KNOWN. **DO** include one wild card challenging a current assumption, name the
+system's trajectory, and flag the single highest-leverage abstraction.
 
 ## Mode: supervision
 
-Measure human correction load as a **direction vector** — not legacy "wasted %".
-Classification: `lenses/supervision-waste.md` · taxonomy: `agent-infra/scripts/supervision_taxonomy.py`.
+Human correction load as a **direction vector**, not a legacy "wasted %". Classification in
+`lenses/supervision-waste.md`; taxonomy in `agent-infra/scripts/supervision_taxonomy.py`.
 
-### Step 1: Structural extraction
-
-```bash
-OBSERVE_PROJECT_ROOT="${OBSERVE_PROJECT_ROOT:-$HOME/Projects/agent-infra}"
-ARTIFACT_DIR="${OBSERVE_ARTIFACT_ROOT:-$OBSERVE_PROJECT_ROOT/artifacts/observe}"
-mkdir -p "$ARTIFACT_DIR"
-DAYS=${DAYS:-1}
-PROJECT_FLAG=""
-[[ -n "${PROJECT:-}" ]] && PROJECT_FLAG="--project ${PROJECT}"
-
-uv run python3 "$OBSERVE_PROJECT_ROOT/scripts/supervision-kpi.py" \
-  --days "$DAYS" $PROJECT_FLAG \
-  --report "$ARTIFACT_DIR/supervision-report.json" \
-  --output "$ARTIFACT_DIR/supervision-sessions.jsonl"
-```
-
-Default: `--days 1`. Pass `--days 7` for weekly, `--project X` to filter.
-
-Read `supervision-report.json` and report headline numbers:
-- Sessions analyzed, user turns, **correction_rate_pct**
-- **Direction vector** (raise_autonomy, reduce_error, grow_coverage, amplify_taste)
-- **autonomy_reading** (genuine_gain | mixed | timidity_rising | …)
-- Top sessions by load; inspectable **examples** with evidence strings
-- AIR (corrections after hooks / hooks shown)
-
-### Step 2: Extract transcripts for context
-
-For the top 3-5 sessions by `load` in the report:
-
-```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/extract_transcript.py <project> --sessions 5 --output "$ARTIFACT_DIR/supervision-transcripts.md"
-```
-
-### Step 3: LLM synthesis
-
-**Cursor (default):** subagent reads `supervision-report.json` + top-load transcripts,
-synthesizes automatable patterns per `lenses/supervision-waste.md`, stages verified items.
-
-**Headless:** dispatch report + transcripts via `observe_bulk`. For each direction with
-recurrence ≥3, determine fix type and concrete implementation.
-
-Output format per finding:
+`scripts/supervision-kpi.py --days N [--project P] --report …/supervision-report.json --output
+…/supervision-sessions.jsonl`. Report the headline numbers: sessions, user turns,
+**correction_rate_pct**, the **direction vector** (raise_autonomy · reduce_error · grow_coverage ·
+amplify_taste), **autonomy_reading** (genuine_gain | mixed | timidity_rising | …), top sessions by
+load with inspectable evidence strings, and AIR (corrections after hooks / hooks shown). Then
+extract transcripts for the top 3-5 sessions by load and synthesize automatable patterns for each
+direction with recurrence ≥3:
 
 ```
 ### [TYPE_ID]: [one-line description]
 - **Direction:** RAISE_AUTONOMY | REDUCE_ERROR | GROW_COVERAGE | AMPLIFY_TASTE
-- **Occurrences:** N (across M sessions)
-- **Evidence:** [taxonomy evidence string from report examples]
+- **Occurrences:** N (across M sessions)      - **Evidence:** [taxonomy evidence string]
 - **Fix type:** HOOK | RULE | DEFAULT | SKILL | ARCHITECTURAL
-- **Proposed fix:** [specific implementation]
-- **Maintenance:** NONE | LOW | MEDIUM
+- **Proposed fix:** [specific implementation]  - **Maintenance:** NONE | LOW | MEDIUM
 ```
 
-### Step 4: Review and Stage
-
-1. Verify examples against transcript (session IDs, quoted text)
-2. Stage into `candidates.jsonl` tagged `"mode":"supervision"`
-3. Write `digest.md` — lead with direction vector + autonomy_reading, NOT a scalar waste %
-4. Promote only after `observe_gates.py preflight`
-
-### Step 5: Trend report (weekly)
-
-If `--days 7+`, compare `direction_trends` and `autonomy_reading` vs prior run:
-- RAISE_AUTONOMY trending down without REDUCE_ERROR/GROW_COVERAGE rising = genuine gain
-- Over-caution flat while stop-smart-judge enforce active = detector efficacy confound (check control classes)
-
-```markdown
-### [YYYY-MM-DD] Supervision audit
-- **Period:** [N days], [M sessions], [K user turns]
-- **Correction rate:** [X%]
-- **Vector:** autonomy=[n] error=[n] coverage=[n] taste=[n]
-- **Autonomy reading:** [genuine_gain|mixed|…]
-- **Top type:** [over_caution|rediscovery|…]
-- **Status:** [obs] calibration only unless `[ ]` build staged
-```
-
----
+Lead `digest.md` with the vector and autonomy_reading, **never a scalar waste %**. On `--days 7+`,
+compare against the prior run: RAISE_AUTONOMY trending down *without* REDUCE_ERROR/GROW_COVERAGE
+rising is genuine gain. Over-caution flat while an enforcing detector is active is a
+detector-efficacy confound — check the control classes.
 
 ## Mode: drift
 
-The SLOW, WIDE pass. Where `sessions` reads ~5 sessions over 1 day for per-session anti-patterns,
-`drift` reads a WIDE window (default `--days 21`, all projects) in one 1M-context shot to find
-patterns no single retro can see: recurrence counts, proposed-but-never-built, rising friction,
-convention drift. This is the deliberate cross-session reasoning lane — run it weekly via `/loop`,
-not daily.
+The SLOW, WIDE pass. Where `sessions` reads ~5 sessions over 1 day, `drift` reads 21 days across all
+projects in one 1M-context shot to find what no single retro can see: recurrence counts,
+proposed-but-never-built, rising friction, convention drift. Weekly via `/loop`, not daily. Prompt:
+`references/drift-dispatch-prompt.md`.
 
-Why it can be slow + cheap: `observe_bulk` (gemini-3.1-flash-lite-preview) is 1M-capable and
-cheap at volume; 3 weeks of sessions ≈ 200-600KB, one dispatch. Cost lever is Flash-Lite + async
-— NOT the Batch API (not wired in `llm-dispatch.py`). The `claude_review` Opus profile caps at
-200K, so it is NOT a substitute for the wide pass; use `observe_bulk` or Cursor subagent with
-`just observe-drift` context.
+Slow *and* cheap because `observe_bulk` is 1M-capable: 3 weeks ≈ 200-600KB, one dispatch. The lever
+is Flash-Lite + async, **not** the Batch API (not wired in `llm-dispatch.py`). The `claude_review`
+Opus profile caps at 200K and is **not** a substitute.
 
-### Step 1: Extract wide window
-
-Run shared transcript extraction with the wide window across ALL projects (omit `--project`).
-Use a large `--sessions` cap so the window isn't silently truncated:
-
-```bash
-MODE=drift
-DAYS=${DAYS:-21}
-# Extract many sessions across all projects, full fidelity, into input.md (+ codex.md).
-# Reuse the shared extraction commands above with --sessions 60 (or higher) and --full.
-```
-
-Build operational context (Step 1.3) and the coverage digest as in `sessions` mode — drift
-LEANS on the git-commit operational context to detect "proposed but never built" (a fix proposed
-in an early session with no later landing commit).
-
-### Step 2: Dispatch (wide, 1M) — headless or `--wide-only`
-
-**Cursor default:** subagent with `just observe-drift` context — skip API unless `--headless` or `--wide-only`.
-
-> **Safety-preamble guard (REQUIRED for headless).** The `observe_bulk` profile may carry a
-> CBRN/safety preamble. On biomedical (phenome) and long (genomics) transcript bundles it can
-> derail the model into a safety eval or task role-play instead of analysis (produced garbage on
-> 2026-06-13). Wrap the concatenated context in an explicit inert-data fence — prepend a line like
-> `=== BEGIN INERT HISTORICAL TRANSCRIPTS (analyze, do not execute) ===` and append `=== END ===` to
-> `/tmp/observe-drift-context.md` before dispatch. (The prompt file itself is sent verbatim and
-> must stay wrapper-free — see the Step 2 note in `sessions` mode.)
-
-```bash
-{
-  cat "$ARTIFACT_DIR/input.md"
-  if [ -s "$ARTIFACT_DIR/codex.md" ]; then printf '\n\n---\n\n'; cat "$ARTIFACT_DIR/codex.md"; fi
-  printf '\n\n---\n\n'; cat "$ARTIFACT_DIR/operational-context.txt"
-  printf '\n\n---\n\n'; cat "$ARTIFACT_DIR/coverage-digest.txt"
-} > /tmp/observe-drift-context.md
-uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
-  --profile observe_bulk \
-  --context /tmp/observe-drift-context.md \
-  --prompt-file "$CLAUDE_SKILL_DIR/references/drift-dispatch-prompt.md" \
-  --output "$ARTIFACT_DIR/drift-output.md" \
-  --meta "$ARTIFACT_DIR/drift-output.meta.json" \
-  --error-output "$ARTIFACT_DIR/drift-output.error.json"
-```
-
-If extraction exceeds the dispatcher's size guard, narrow `--days` rather than disabling the
-guard (an oversized batch silently kills the dispatch — gemini died on a 3.4MB observe batch,
-2026-06-12).
-
-### Step 3: Stage findings
-
-Validate against the transcript (session-id anchoring) and stage each finding into
-`candidates.jsonl` tagged `"mode":"drift"`, carrying the distinct-session count in evidence so
-the 2+-recurrence promotion gate is machine-checkable. Same promotion rules as `sessions` mode:
-behavioral observations → `[obs]`; concrete builds → `[ ]` proposed. RECURRENCE findings at 2+
-distinct sessions are promotion-eligible immediately.
-
-### Step 4: Summary
-
-Write `drift-digest.md` (terse — lead with promotable findings). Report to user:
-- Window: N days, M sessions, P projects
-- Recurrence findings ≥2 sessions: N (promotable)
-- Proposed-but-never-built: N
-- Rising-friction trends: N
-- Convention drift: N
-Only write `improvement-log.md` entries for promoted candidates.
-
----
+Drift **leans on the git-commit operational context** to detect proposed-but-never-built (a fix
+proposed early with no later landing commit) — build it, don't skip it. Use `--sessions 60`+ so the
+window is not silently truncated; if extraction exceeds the size guard, narrow `--days` rather than
+disabling the guard. Stage each finding with the **distinct-session count in evidence** so the
+2+-recurrence gate is machine-checkable; findings at 2+ distinct sessions are promotion-eligible
+immediately. Lead `drift-digest.md` with promotable findings.
 
 ## Mode: retro
 
-End-of-session retrospective. LOCAL analysis only -- no Gemini dispatch. Classification in `lenses/retro-reflection.md`.
+End-of-session retrospective. **Local only — no dispatch.** Classification and template in
+`lenses/retro-reflection.md`.
 
-**CAPTURE, don't fix.** The goal is to *append* findings to `improvement-log.md` — NOT to
-implement fixes in the moment. Fixing at session end is the fix-spiral trap (observed: ~15 turns
-lost optimizing one script at a session tail by guessing instead of measuring). Tag by stream
-(F1): **behavioral observations → `[obs]`** (calibration ledger), **actionable infra builds →
-`[ ]`** (the drain queue). Do NOT default everything to `[ ]` — most retro findings are behavioral
-`[obs]` and tagging them `[ ]` is what inflated the "open backlog" into a false panic number
-(131→33 once corrected, 2026-06-08; the real actionable queue was always small). Actionable `[ ]`
-items are batched and human-dispositioned by `/improve harvest` + `maintain`. Capture sharp, tag
-the right stream, stop, let the drain act.
+**CAPTURE, don't fix.** *Append* findings — do not implement fixes in the moment. Fixing at session
+end is the fix-spiral trap (~15 turns lost optimizing one script at a tail by guessing instead of
+measuring). Actionable `[ ]` items get batched and human-dispositioned by `harvest` + `maintain`.
 
-### Phase 0: Idempotency Check
+**Phase 0 — idempotency.** Check `artifacts/session-retro/` for `$(date +%F)-${SID}-*.json`; if any
+exist and `--force` was not passed, report "already retro'd" and **stop**. Five retros on one session
+were observed, each adding zero new findings after the second.
 
-Before analyzing, check for existing retro artifacts for this session:
+**Phase 1 — evidence.** Scan THIS session for concrete events: failures (commands that errored,
+tools that returned wrong results, approaches abandoned) · corrections (where the user redirected
+you, what they said, what you were doing wrong) · wasted work (code written then deleted, searches
+that found nothing, repeated attempts) · environment friction (missing deps, wrong paths, hook
+blocks, rate limits) · time sinks · and **agent self-process anti-patterns, the lens nothing else
+captures.** Be honest about your OWN failures, not just the environment's: guessing a cause before
+measuring it, fix-spirals, thrash loops on one target, `--no-verify` as an escape hatch, long edit
+churn on one file, collapsing a general ask to a narrow case. Much of this is deterministic from
+agentlogs — repeated identical failed `tool_calls`, `--no-verify` in commit args, N edits to one
+path — so **mine it, don't just introspect**.
 
-```bash
-SID=$(cat ~/.claude/current-session-id 2>/dev/null | head -c8 || date +%s | tail -c 8)
-EXISTING=$(find "$OBSERVE_PROJECT_ROOT/artifacts/session-retro" -maxdepth 1 -name "$(date +%Y-%m-%d)-${SID}-*.json" 2>/dev/null | wc -l | tr -d ' ')
-```
+**Phases 2-5.** Classify into exactly one category · check prior art (`candidates.jsonl` first, then
+`grep improvement-log.md` for already-promoted parallels → "RECURRING: matches YYYY-MM-DD"; check
+whether a hook/rule/skill already covers it) · write
+`artifacts/session-retro/{date}-{SID}-manual.json`:
 
-If EXISTING > 0 and `--force` was NOT passed: report "Already retro'd ({EXISTING} artifact(s) exist for session {SID} today). Use --force to re-analyze." and stop. This prevents diminishing-returns loops (5 retros on the same session observed, each adding zero new findings after the 2nd).
-
-### Phase 1: Evidence Collection
-
-Scan THIS session for concrete events:
-1. **Failures**: commands that errored, tools that returned wrong results, approaches abandoned
-2. **Corrections**: places the user redirected you -- what did they say and what were you doing wrong?
-3. **Wasted work**: code written then deleted, searches that found nothing, repeated attempts
-4. **Environment friction**: missing dependencies, wrong paths, permission errors, hook blocks, API rate limits
-5. **Time sinks**: disproportionate turns relative to value delivered
-6. **Agent self-process anti-patterns** (the lens nothing else captures — be honest about your OWN failures, not just the environment's): guessing/asserting a cause before measuring it (e.g. re-trying a fix 3× before profiling); fix-spirals (compounding edits chasing a moving target); thrash loops (repeated failed tool calls on the same target); `--no-verify` / guard-bypass as an escape hatch; long edit-churn on one file; collapsing a general ask to a narrow case (over-narrowing). Much of this is deterministic from agentlogs — repeated identical failed `tool_calls`, `--no-verify` in commit args, N edits to one path — so mine it, don't just introspect.
-
-### Phase 2: Classification
-
-Classify each finding into exactly one category from `lenses/retro-reflection.md`.
-
-### Phase 3: Prior Art Check
-
-Before proposing fixes:
-1. Review `"$ARTIFACT_DIR/candidates.jsonl"` for existing candidate matches and prior state transitions
-2. Search `"$OBSERVE_PROJECT_ROOT/improvement-log.md"` only for already-promoted parallels: `grep -i "KEYWORD" "$OBSERVE_PROJECT_ROOT/improvement-log.md" | head -5`
-3. Match existing entry -> mark "RECURRING: matches entry from YYYY-MM-DD"
-4. Check if hook/rule/skill already addresses this -> note it
-
-### Phase 4: Output
-
-Use template from `lenses/retro-reflection.md`.
-
-### Phase 5: Persist Findings
-
-Write findings as JSON to `"$OBSERVE_PROJECT_ROOT/artifacts/session-retro/"`:
-
-```bash
-mkdir -p "$OBSERVE_PROJECT_ROOT/artifacts/session-retro"
-SID=$(cat ~/.claude/current-session-id 2>/dev/null | head -c8 || date +%s | tail -c 8)
-```
-
-Write `{date}-{SID}-manual.json` with:
 ```json
-{"findings": [{"category": "...", "summary": "...", "severity": "high|medium|low", "evidence": "...", "project": "...", "proposed_fix": "..."}], "source": "manual-retro"}
+{"findings": [{"category": "…", "summary": "…", "severity": "high|medium|low",
+               "evidence": "…", "project": "…", "proposed_fix": "…"}], "source": "manual-retro"}
 ```
-
----
 
 ## Mode: failures
 
-**"Which tools/CLIs are actually BROKEN in real use?"** — the question the proxy
-health-checks (hooks-smoke, launchd exit, indexer) structurally cannot answer.
-The failure signal lives in `agentlogs` (errored `tool_calls` + their result-event
-stderr) and went unread while a dead `corpus` CLI failed for days (2026-06-14,
-user: *"don't you check the logs for what doesn't work?"*). **Hierarchical**: a
-cheap deterministic net first; escalate real $ only to the big clusters.
+**"Which tools/CLIs are actually BROKEN in real use?"** — the question the proxy health checks
+(hooks-smoke, launchd exit codes, indexer status) structurally cannot answer. The signal lives in
+`agentlogs` (errored `tool_calls` + their result-event stderr) and went unread while a dead `corpus`
+CLI failed for days (2026-06-14, operator: *"don't you check the logs for what doesn't work?"*).
+**Hierarchical: a cheap deterministic net first, real money only on the big clusters.**
 
-### Tier 1 — deterministic miner ($0, always run)
-```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/scan_tool_failures.py --days 21            # human view
-python3 ${CLAUDE_SKILL_DIR}/scripts/scan_tool_failures.py --days 21 --json > "$ARTIFACT_DIR/failures.json"
-```
-Joins errored tool_calls -> result-event text, keeps only real crash SIGNATURES
-(Traceback + a raised `ModuleNotFoundError/ImportError`, a real shell
-`command not found`, an entry-point shim crash, **or cross-harness zsh-env
-failures** — `zsh-env:nomatch`, `zsh-env:alias-collision`, `zsh-env:parse-error`).
-PreToolUse hook blocks are explicitly excluded (working guards, not broken tools).
-High recall; minor residual noise is expected and is Tier 2's job to drop.
+**Tier 1 — deterministic miner ($0, always run).**
+`uv run python3 "${CLAUDE_SKILL_DIR}/scripts/scan_tool_failures.py" --days 21 --json > "$ARTIFACT_DIR/failures.json"`
+joins errored tool_calls → result-event text and keeps only real crash **signatures**: Traceback + a
+raised `ModuleNotFoundError`/`ImportError`, a real shell `command not found`, an entry-point shim
+crash, or a cross-harness zsh-env failure (`zsh-env:nomatch`, `:alias-collision`, `:parse-error`).
+**PreToolUse hook blocks are excluded** — those are working guards, not broken tools. High recall;
+residual noise is Tier 2's job.
 
-**Shell-env gate (auto, $0):** after writing `failures.json`, `observe_run.py`
-runs `scripts/shell_env_loop_gate.py` → `failures/shell-env-gate.json`. When
-`zsh-env:*` volume ≥50/30d **and** `doctor.py` cross-harness shell checks fail,
-stages `shell-env-candidate.jsonl` for `/improve harvest` (no human transcript
-mining required).
+**Shell-env gate (auto, $0).** After `failures.json`, `observe_run.py` runs
+`scripts/shell_env_loop_gate.py`. At `zsh-env:*` volume ≥50/30d **and** failing `doctor.py`
+cross-harness shell checks it stages `shell-env-candidate.jsonl` for `harvest`, no transcript mining.
 
-### Tier 2 — cheap triage (Haiku / cheapest available model)
-Pass the Tier-1 clusters to the cheapest model and classify each:
-`REAL_INFRA_BREAK` vs `TRANSIENT` (one-off scratch script, wrong-dir invocation)
-vs `EXPECTED`. One bulk call — this is a which/yes-no call, not analysis, so it is
-cheap by construction. Output: ranked REAL breaks only. (Route via the shared
-dispatch helper at its cheapest profile.)
+**Tier 2 — cheap triage.** One bulk call at the cheapest profile classifying each cluster
+`REAL_INFRA_BREAK` / `TRANSIENT` (one-off scratch script, wrong-dir invocation) / `EXPECTED`. A
+which/yes-no call, not analysis, so it is cheap by construction. Output ranked REAL breaks only.
 
-### Tier 3 — escalate the big ones ($, only top clusters)
-For clusters that are REAL **and** high-volume/multi-day (e.g.
-`missing-module:duckdb` x46/10d), dispatch a deeper root-cause+fix pass
-(Gemini/Opus): dep missing from an env, or agents invoking bare `python3` instead
-of `uv run`? Produce a concrete fix surface. **Spend here** — a big recurring
-break is worth real compute; better to spend and fix a class than do a few cheap
-lookups and miss it.
-
-### Route findings
-Tier-2/3 confirmed breaks -> `improvement-log.md` `[ ]` (actionable infra), or
-`decisions-pending/` if shared-infra/irreversible. One-off scratch failures ->
-drop (don't inflate the queue). Cadence: weekly, or any tick after a "loop missed
-a broken tool" surprise.
-
----
+**Tier 3 — escalate the big ones ($).** For clusters that are REAL *and* high-volume/multi-day (e.g.
+`missing-module:duckdb` ×46/10d), dispatch a deeper root-cause+fix pass: a dep missing from an env,
+or agents invoking bare `python3` instead of `uv run`? **Spend here** — fixing a recurring class
+beats a handful of cheap lookups that miss it. Route confirmed breaks to `improvement-log.md` `[ ]`,
+or `decisions-pending/` if shared-infra or irreversible; drop one-off scratch failures.
 
 ## Mode: blindspot
 
-**"What did the loop MISS that the human had to catch?"** — the RSI signal. Every
-time the human reproaches/corrects the agent for missing something it should have
-caught (a prior decision, an existing tool, a git-log fact, the right approach),
-that's a labeled example of a loop coverage gap. The objective (Constitution:
-*declining supervision*) is to drive the RATE of these toward zero by converting
-each recurring cluster into a DETECTOR. (Markus, 2026-06-14: *"every time I mention
-something, ask why the loop didn't find it, and metaimprove a way for the next loop
-to find stuff like it."*)
+**"What did the loop MISS that the human had to catch?"** — the RSI signal. Every time the human
+reproaches or corrects the agent for missing something it should have caught (a prior decision, an
+existing tool, a git-log fact, the right approach), that is a labeled example of a loop coverage
+gap. The objective (Constitution: *declining supervision*) is to drive the RATE toward zero by
+converting each recurring cluster into a **detector**. (Markus, 2026-06-14: *"every time I mention
+something, ask why the loop didn't find it, and metaimprove a way for the next loop to find stuff
+like it."*)
 
-`failures` finds broken *tools*; `supervision` audits wasted *human time* broadly;
-`blindspot` is the sharp cut — the human catching a *loop miss* — and it feeds the
-CONVERT step (`/improve maintain`).
+`failures` finds broken *tools*; `supervision` audits wasted *human time* broadly; `blindspot` is
+the sharp cut — the human catching a loop miss — and it feeds the CONVERT step in `maintain`.
+Run `just -f ~/Projects/agent-infra/justfile blindspot`; the launchd tick runs it daily.
 
-### Detection — emb-contrastive (the only method that works here)
+**Why not regex or fuzzy matching:** the distinction is *pragmatic* (is the human reproaching a
+miss?), not topical. "Did you check the git log" and "can you check the tests" are topically
+identical and pragmatically opposite. Measured (improvement-log 2026-06-14): regex 43% recall; fuzzy
+hits a lexical ceiling; emb-contrastive (blind-centroid minus normal-centroid) is the only method
+catching semantic paraphrases at precision.
+
+**CONVERT (the loop closure).** Cluster the flagged messages with `emb pairs`. For the **top
+recurring cluster** ask: *what deterministic check or state-injection would have caught this
+autonomously?* Dedup against existing hooks first, then route the proposed detector to
+`improvement-log.md` `[ ]` (agent-infra-local) or `decisions-pending/` (shared/irreversible). The
+blindspot-flag rate is the pre-registered success metric — it should fall as detectors land.
+
+## Mode: harvest
+
+Cross-artifact harvester: read what the producers found, deduplicate, rank, surface what fell
+through. **You consume artifacts. You do not produce analysis.**
+
+**Two jobs: gather NEW, and drain the actionable OPEN queue.** Draining is real but small — the
+bigger lever is keeping the streams separate *at entry* so the count stays honest. So the first move
+every run is to classify the backlog by stream (shared section), THEN drain the actionable residue.
+Two classes to weight when they appear: **agent self-process anti-patterns** (re-guessing before
+measuring, fix-spirals, `--no-verify` escape-hatching — they recur silently because no error fires;
+`[obs]` unless there is a concrete guard to build) and **dead infra / generation without
+consumption** (a generator with no consumer — genuinely `[ ]`: delete it or wire it).
+
+**Sources — live streams first**, then legacy artifact dirs behind an mtime guard (reordered
+2026-07-05: the original producers went quiet April-June 2026 and the signal plane moved to the
+deterministic miners). Read a source's entry in `references/harvest-sources.md` before working it.
+
+| # | Source | Note |
+|---|--------|------|
+| 2a | `.claude/blindspot-digest.md` (§2i) | highest-signal live source; top cluster → candidate detector (dedup vs existing hooks) |
+| 2b | `~/.claude/reflect-quarantine/*.jsonl` (§2e) | pre-deduped FM-routed proposals; `just reflect-review`; promote for human disposition, **never auto-apply** |
+| 2c | `just orphan-findings` (§2f) | **the canonical finding-routing protocol** other generators cite — never restate it. Only live, discrete, undone items, title verbatim; one `RECONCILIATION:` entry clears a fully-dispositioned memo |
+| 2d | session-retro / design-review / session-analyst / suggest-skill dirs | mtime guard FIRST — skip any dir with nothing in-window |
+| 2g | `artifacts/observe/*/failures/shell-env-candidate.jsonl` | auto-staged; high-priority infra, never `[obs]` |
+| 2h | `just memory-harvest` | dedup against the suggested target FIRST; only generalizable ≥2-project lessons; cross-skill factoring is propose-only |
+| 3a | `scripts/extract_user_tags.py --days N --tag f` | user `#f` feedback — highest signal, ground-truth corrections |
+| 3b | git corrections | `log --since=CUTOFF --grep='Evidence:'`; `--oneline -- .claude/rules/ improvement-log.md`; skills `-- '*/SKILL.md' hooks/`. Three commits fixing hook edge cases signals weak hook testing |
+
+Then dedup + classify (`hook`·`skill`·`script`·`architecture`·`rule`·`config`), apply `--focus`,
+rank both streams, and write `artifacts/harvest/{DATE}-{SID}-harvest.md`: window, focus, **sources
+scanned with denominators**, items found → after dedup → after focus, a summary table, and per-item
+type · priority with its factors · status NEW|REINFORCED|VETOED-BUT-REVISIT · sources with paths and
+quoted findings · proposed action · dedup notes.
+
+## Mode: suggest
+
+Detect repeated multi-tool workflows and propose skill or MCP-tool candidates: repeated tool
+sequences (same 3+ step chain across 2+ sessions) · manual orchestration (the user repeating the
+same multi-step instructions) · MCP gaps (shelling out to bash for what one tool could do) ·
+recurring session shapes worth parameterizing.
+
+Extract transcripts (default: current project, last 10 sessions) → extract 3/4/5-grams of tool
+sequences locally, count, keep those appearing 2+ times → dispatch transcripts + the sequence
+analysis asking for pattern, frequency, current cost, trigger, parameters, skeleton, classified
+**SKILL** (multi-step, judgment needed) vs **MCP TOOL** (deterministic, reusable), max 7, ranked by
+frequency × complexity saved. Validate before presenting: `ls ~/Projects/skills/`, read the
+`.mcp.json` files, grep the `ideas.md` backlog, and spot-check every frequency claim against the
+transcripts. On approval, scaffold the skill dir or propose the MCP addition.
+
+**Guardrails:** no skills for coincidental one-offs that happened twice · no MCP tools for things
+better as a bash alias · frequency matters more than complexity · cross-check the 10-use threshold in
+GOALS.md · **no strong candidates? say so — do not fabricate.**
+
+## Mode: maintain — THE loop conductor
+
+Run as `/loop 30m /observe maintain` in one open window you watch. The **single RSI-loop conductor**
+— it absorbed the standalone `orchestrator` skill and `research-ops cycle` (both retired 2026-06-12;
+three conductors for one job was over-proliferation). It is a **thin conductor**: sweep for health,
+pick ONE thing, dispatch existing workers. It does not reimplement them. **Never ask for input.**
+
+Each tick, in order: **SWEEP** (always — this is the visibility; a red mechanical job is the tick's
+priority) → **noop check** (state hash unchanged AND sweep green → one-line noop, stop; idle ticks
+are ~free) → **pick ONE** by readiness × priority → **route by verifier boundary** → **visible tick
+report**, stop (the `/loop` interval drives the next tick; don't self-schedule) → **emit Top-N**.
+
+**Route by verifier boundary.** Reversible + single-project → do it, auto-commit agent-infra-local.
+Boundary-crossing (taste / money / irreversible / shared across 3+ projects / discovery-tier) → write
+a sign-off-ready item to `agent-infra/decisions-pending/`, **never greenlight it yourself**. That is
+the Generate lane: unattended-safe because it only produces reversible drafts for a yes/no.
+
+**Emit the Top-N every run — the loop's headline output.**
+`uv run python3 ~/Projects/agent-infra/scripts/top_priorities.py --top 10` writes `PRIORITIES.md`
+(gitignored) and prints the ranked cross-repo "what to plan next" digest. **A green tick still has a
+priorities list — surface it.** Reversible+local+cheap → just do it; real work → a plan candidate or
+`decisions-pending/`.
+
+**Live state.** `bash ~/.claude/skills/observe/scripts/maintain_live_state.sh` — snapshot + noop
+hash; writes `~/.claude/maintain-state-hash.txt`, appends noop rows to `maintenance-actions.jsonl`,
+exits 0 early on unchanged state.
+
+**The SWEEP.** The cheap health pass before the noop check. A silently-dead hook or stuck mechanical
+job surfaces here on the first tick after it breaks — this is why the loop is watched, not headless.
+
 ```bash
-# runs in emb's env so agent-infra stays torch-free; $0 local
-uv run --project ~/Projects/emb python3 ~/Projects/agent-infra/scripts/blindspot_miner.py --days 7
-# or: just -f ~/Projects/agent-infra/justfile blindspot   (the launchd job runs it daily 06:50)
-```
-Why not regex/fuzzy: the distinction is *pragmatic* (is the human reproaching a
-miss?), not topical — "did you check the git log" vs "can you check the tests" are
-topically identical, pragmatically opposite. Benchmark (improvement-log 2026-06-14):
-regex 43% recall; fuzzy hits a lexical ceiling; emb-contrastive (blind-centroid
-minus normal-centroid) is the only one catching semantic paraphrases at precision.
-The miner already runs daily (launchd) and writes `.claude/blindspot-digest.md`;
-this mode is the on-demand / wider-window re-run.
-
-### Cluster + CONVERT (the loop-closure — done in `/improve maintain`)
-1. `emb pairs --fuzzy` (or dense) over the flagged messages clusters recurring misses.
-2. For the **top recurring cluster**, ask: *what deterministic check / state-injection
-   would have caught this autonomously?* (e.g. the dominant cluster is prior-context
-   blindness → a "harness supplies what's already known at the propose/diagnose
-   boundary" detector, extending `inventory-dispatch` past subagent-dispatch.) If you
-   dispatch a model to cluster-analyze or draft the detector, route it via `/model-guide`.
-3. Route the proposed detector to `improvement-log.md` `[ ]` (agent-infra-local) or
-   `decisions-pending/` (shared/irreversible). The blindspot-flag rate is the
-   pre-registered success metric — it should fall as detectors land.
-
-Cadence: the digest surfaces every agent-infra SessionStart (`blindspot-surface.sh`);
-triage the top cluster in any `/improve maintain` tick.
-
----
-
-## Model Selection for Dispatch
-
-| Harness | Profile | When |
-|---------|---------|------|
-| **Cursor** (default) | **Composer subagents** (`composer-2.5` / `composer-2.5-fast`) | All modes except retro; `/multitask` parallel fan-out |
-| **Headless** | `observe_bulk` → `gemini-3.1-flash-lite-preview` | Claude Code, launchd, `/loop`, or `--headless` / drift `--wide-only` |
-| **Never for observe** | `deep_review` (3.5-flash) | Reserved for `/critique` cosigner — too expensive at observe volume |
-
-Formal/quantitative verification: `gpt_general` (GPT-5.5 medium). Route via shared dispatch helper.
-See `/model-guide` for critique cosigner routing (unchanged).
-
-```python
-from pathlib import Path
-from shared.llm_dispatch import dispatch
-# Headless observe bulk classify only
-r = dispatch(profile="observe_bulk", prompt="...", context_text="...", output_path=Path("/tmp/observe.md"))
-# Cursor: use Agent/subagent fan-out instead of dispatch for interactive observe
+just -f ~/Projects/agent-infra/justfile hooks-smoke --timeout 8 2>&1 | tail -3   # non-zero = dead/broken hook
+uv run python3 ~/Projects/agent-infra/scripts/pulse.py canary 2>&1 | grep -E "✗|ALARM" || true  # a dead metric is the priority
+launchctl list 2>/dev/null | grep agent-infra | awk '$2 != 0 {print "  launchd non-zero exit:", $3}'
+just -f ~/Projects/agent-infra/justfile freshness 2>&1 | grep -E "DUE|source"   # sweeps past cadence
 ```
 
-## Notes
+Optionally add a parallel per-repo Composer drift screen (`git diff HEAD~1 --stat` →
+`llm-dispatch.py --profile composer_screen` asking for `RISK high|medium` + one line + a suggested
+check, else `OK`). Surface `RISK` lines — **triage only**; deterministic `doctor`/`drift-sentinel`
+own ground truth. A **red sweep is the tick's priority**: if the fix is agent-infra-local and
+obvious, do it this tick instead of the rotation. Full `doctor.py` stays in the daily rotation.
 
-- Transcript sources (BOTH must be extracted and concatenated into dispatch context):
-  - Claude Code JSONL at `~/.claude/projects/-Users-alien-Projects-{project}/`
-  - Codex CLI at `~/.codex/state_5.sqlite` + rollout JSONL (reads project by `cwd` match)
-- Codex runs alongside Claude Code on the same project; dropping it silently loses ~50% of the signal
-- Preprocessor strips thinking blocks and base64 content
-- Headless `observe_bulk` ≈ $0.05/MTok in — cheap enough for `/loop`; Cursor subagents use subscription pool instead
+A **`just freshness` DUE row is a valid pick** — run the named worker: `trending-scout` →
+`/trending-scout` (writes `research/trending-scout-YYYY-MM-DD.md`); `agent-infra-sweep` → a memo
+named `research/*sweep*.md` with a `YYYY-MM-DD` stamp anywhere in the name, which is what
+`freshness` reads to mark the source fresh. Any broad sweep memo counts; check the newest
+`*sweep*.md` before starting a fresh deep sweep. The deterministic sources (vendor-docs,
+binary-extract) are **not** the agent's job — launchd's `vendor-sweep` owns them; they appear in
+`freshness` only so a red row exposes a dead job.
+
+**Rate limit.** `CLAUDE_PROCS=$(pgrep -x claude | wc -l)`; ≥5 → skip the claude subagent lane. Use
+`pgrep -x` (exact process name) — the old `-lf` substring-matched every `~/.claude/…` path (105 vs 5
+true), so the gate was stuck closed and the loop never dispatched. **The cursor lane is NOT gated by
+this count** (separate quota, separate process).
+
+**The priority ladder.** (P0/P1 were the orchestrator queue — eradicated 2026-06-07, deleted here.)
+
+- **P2 — implement promoted findings.** For `[ ]` items: read context, verify 2+ recurrence,
+  classify autonomous vs propose, execute or write the proposal.
+- **P2.5 — route design-review proposals** to `~/.claude/steward-proposals/`.
+- **P3 — routine rotation.** Due-ness is **derived, not remembered**:
+  `uv run python3 ~/.claude/skills/observe/scripts/rotation_due.py` reads
+  `maintenance-actions.jsonl` and prints DUE/never per task. **Logging contract:** a tick that picks
+  a rotation task appends `{"ts":…,"action":"rotation","target":"<task-key>","result":…}` — the
+  script only sees what is logged with its keys, and an unlogged run stays "due" forever. Cadence
+  values live in the SCRIPT (single source); the table below documents *how*.
+- **P4 — implement proposals.** Read `~/.claude/steward-proposals/`. Autonomous → implement, verify,
+  commit, append `**Status:** IMPLEMENTED`. Propose-only → skip.
+- **P5 — triage + escalation.** >20 `[ ] proposed` → batch-triage. A hook at >100 warns/day for 3+
+  days with <20% FP → write a promote proposal. Boundary-crossing → a sign-off-ready
+  `decisions-pending/` item (run `/critique model` first if consequential).
+- **P6 — all clear.** Nothing actionable? One line. **Don't invent work.**
+
+**Rotation table** — the 24 rotation tasks, their cadence and how each is run, live in
+`references/maintain-rotation.md`. The session-learning rows (session anti-patterns, steer
+mining, supervision, blindspot→detector, governance downstream-watch, the maintain motor, ACT
+drain) come first — they are why this runs on a loop.
+
+**Tier 2 dispatch — max 1 per tick.** Pick the lane by task shape:
+
+- **Repo-coupled critique/analysis → the cursor lane (default).**
+  `~/Projects/skills/scripts/cursor_dispatch.sh --prompt "<task>" --out <artifact> [--workspace <dir>]`
+  uses **Composer** (a non-Composer `--model` is off-policy AND hook-blocked). Read-only, repo-aware
+  (it flags "already handled at file:line" a cold API model cannot), not gated by `CLAUDE_PROCS`.
+  **Mandatory fallback:** any non-zero exit (10 no-binary · 11 no-auth · 12 timeout · 13 error · 14
+  empty) → re-dispatch the SAME task to the claude Agent lane. **Never skip a task because cursor failed.**
+- **Code-mutating / multi-file fixes → claude Agent + worktree isolation** (the cursor lane is
+  read-only by design). **Non-repo synthesis / search fan-out → claude `Explore`/`Agent` or `llmx`**
+  (gated by `CLAUDE_PROCS`).
+
+**Logging.** Append JSONL to `maintenance-actions.jsonl` for EVERY action:
+`{"ts":"…","action":"freshness","target":"ClinVar","result":"ok","detail":"12d old"}`.
+
+**MAINTAIN.md** — unified quality state; create from `references/MAINTAIN.md` if absent. Sections:
+Findings, Queue, Fixed, Deferred, Strategic Notes, Drift Alerts. Monotonic IDs M001… WIP caps
+enforce flow: max 5 findings (full → stop taking new), max 3 queued (full → halt discovery, focus
+dispatch), items >90 days → move to end with `[STALE]`.
+
+**Autonomy.** *Autonomous:* agent-infra-local files, advisory hooks, measurement scripts, retrying
+transient failures, finding triage, rule additions at 2+ recurrence. *Propose only:* changes to
+other repos, shared hooks/skills, new pipelines, structural changes, multiple viable approaches.
+*Never:* GOALS.md, capital, external contacts, shared-infra deployment.
+
+**Operating rules.** One task per tick, highest priority · log everything · report in 1-3 lines ·
+auto-fix deterministic, dispatch the rest · respect revisit dates · idempotent (check the action log
+and git log before acting) · classify before acting · a failed task is logged and skipped, never
+retried consecutively.
+
+## Mode: lever
+
+**Find the order-of-magnitude win the reactive loops cannot see.** Point it at any high-traffic
+surface — testing, ingestion, research, deploy, debugging, a daily ritual, a report you regenerate
+by hand — you suspect is an order of magnitude short of its best.
+
+**Cost is only one axis — discover the axis, don't assume it.** The defining mistake (made *twice*
+in this skill's founding session: "testing" collapsed to "speed," then "the category" collapsed to
+"cost") is fixating on one dimension.
+
+| Axis | "could be 10x ___" | how you'd measure it |
+|------|--------------------|----------------------|
+| **Faster** | cheaper / lower-latency / fewer turns | wall-clock, turns, tokens, $ |
+| **Better** | higher-quality / more-accurate output | an eval / judge / ground-truth score |
+| **More** | a capability you don't have *at all* | does it exist? coverage % |
+| **Simpler** | less complexity / maintenance / surface | components, LOC, moving parts |
+| **Unnecessary** | the task shouldn't exist; different actor/mechanism | does the need disappear? |
+
+1. **Frame + name the consumer** — *who consumes this output, agent or human?* Not cosmetic: in the
+   founding case "the consumer is an agent" deleted half the candidates (notebooks, TUI debuggers,
+   watch-mode are human-only).
+2. **Discover the axes, calibrated to the surface's maturity.** Novel/unmeasured → hand off to
+   `/brainstorm` (it owns the divergent technique; this mode owns only the target), then map onto
+   the five axes. Mature/already-measured → a lightweight checklist pass; the full perturbation
+   matrix is disproportionate tax. The axes overlap — they exist to **break the anchor**, not to
+   classify cleanly.
+3. **Measure the current state on the chosen axis.** No number (or clear binary) on today → no
+   measurable win. 4. **State the floor/ceiling from first principles** — what is 100x here?
+5. **Frontier scan** — subagent fan-out + `/research`. Search what *exists in the world*; history
+   cannot contain an unused capability. Verify currency (training data is stale on fast-moving
+   tooling). Gate on **maintenance, not effort**. Reframe each candidate for the step-1 consumer.
+6. **Adversarial review — `/critique model`** on the *proposal*. Catches tool-choice naivety ("X is
+   a drop-in" when it floods 1,600 warnings), over-engineering, benefits asserted-but-unproven.
+7. **Pilot + MEASURE — `/verify-before`.** Smallest real version against the floor. Measurement
+   routinely *corrects the plan*: the founding session overturned three claims (parallel linting was
+   1.4x not 8x; the named "fix" for the slow outlier did nothing; a "drop-in" checker flooded
+   warnings). **Size the win at the SESSION level, not the per-run level** — multiply by `frequency
+   × blocking-fraction × where-the-time-concentrates`. The testmon win shrank from "31-77x faster
+   testing" to "collapse the 2.5% slow-run tail" once measured (99.3% blocking, but 77% of runs
+   already <5s). Quoting a per-run number as a session number is the overclaim this step catches.
+   Worked example: `agent-infra/research/2026-06-08-honest-factor-testmon-case-study.md`.
+8. **Consumption-gate + ratchet.** Ship only what has a *named consumer* (skip the rest, with
+   reasons), then ratchet the win so the system cannot silently regress — a recipe, a default, a
+   gate, a baseline that can only improve.
+
+**Keep the orchestrator thin: reference by capability, not internals.** Step 2 hands off to
+`/brainstorm`, step 5 to `/research`, step 6 to `/critique model`, steps 3/7 to `/verify-before`.
+This mode adds only the five-axis taxonomy, the floor measurement, pilot-correction, and the
+ratchet. If a step is doing a primitive's job, delete it and hand off; copying brainstorm's
+perturbations or critique's axes in here is drift. The two soft-dependency failure modes:
+*step-skipping* (free-associating axes so the dep silently never fires) and *duplication drift*.
+
+**Output:** a memo recording the axes brainstormed and the one chosen, the measured state + floor,
+the frontier scan (adopt/trial/skip, maintenance-gated), the measured pilot, the ratchet. **The
+deliverable is the shipped and measured change, not the memo.**
+
+*Automated complement (note, not part of a manual run):* the blind spot "success that never fails"
+wants a per-axis automated feeder — read the signals already collected (`agentlogs tool_latency` for
+faster, eval scores for better, coverage gaps for more) and auto-nominate the worst offenders. That
+gives orphaned telemetry a consumer and answers "why did a human have to notice."
+
+## Mode: missing
+
+Hunt entire categories an optimized system never put on an axis at all. Use when the surface is so
+mature that `lever`'s step-2 axis brainstorm will not surface the unframed. Method — exclusion list
++ STORM perspectives + pertinent negatives: `references/missing.md`.
+
+## Mode: generators
+
+Hunt a better generator SET, for when wins keep arriving off-trail: collect the miss-pattern →
+cluster → retrodiction-test → install one level up (`references/generators.md`). It reads the misses
+`lever` and `missing` leave behind and grows the menu both draw from.
+
+## Mode: audit
+
+Feed the codebase to two model families in parallel, get structured findings, triage with a
+disposition table, execute with per-finding verification and rollback. **Each verified change gets
+its own git commit.**
+
+Seven phases, one reference file each — pre-flight, dump, parallel analysis, cross-validation,
+triage, execute-with-rollback, report — plus the effort tiers (`--quick` phases 0-2 ~2 min · default
+full ~15-30 min · `--thorough` adds cross-validation ~30-60 min · `--deferred` re-triages prior
+deferrals): `references/audit-pipeline.md`. Route through the shared dispatch surfaces and the packet
+contract in `shared/context_packet.py`; consume `coverage.json` + `findings.json`. **Do not rebuild
+provider flags, packet manifests, or raw model recipes here.**
+
+**Why dual-model:** cross-family review catches 31pp more errors than single-model (FINCH-ZK).
+Same-model review is a martingale. Gemini brings pattern detection + 1M context; GPT brings formal
+reasoning + type-system depth.
+
+**Triage evidence requirements** — a disposition without evidence is a guess. DEFER with "no
+incidents" → must `grep -i KEYWORD CLAUDE.md` and show zero matches. REJECT with "already exists" →
+must cite the specific `file:line` or test name. DEFER at all → grep for callers first; "needs canary
+validation" for zero-caller dead code is overcautious.
+
+**Finding categories, priority order:** BROKEN_REFERENCE > ERROR_SWALLOWED > IMPORT_ISSUE >
+DUPLICATION > PATTERN_INCONSISTENCY > MISSING_SHARED_UTIL > DEAD_CODE > NAMING_INCONSISTENCY >
+HARDCODED > COUPLING.
+
+**Scorecard:** finding correctness ≥60% verified (fail <40%) · apply success ≥80% retained (fail
+<60%) · zero unreviewed changes (any violation fails) · no test regression · static errors after ≤ before.
+
+## Mode: harness
+
+Architecture-focused deep analysis for agent-developed codebases. Finds **enforcement gaps, not
+current bugs** — it prevents future bug *categories*. Same pipeline as `audit` with the prompts in
+`references/model-prompts-harness.md`.
+
+**Use when:** the codebase is primarily agent-developed (enforcement > convention) · a standard audit
+already cleaned the obvious bugs · the goal is "fewer categories of future bugs" · the codebase has
+grown past ~50 files with shared modules.
+
+**What it finds that `audit` misses:** Pydantic roundtrips (models immediately `.model_dump()`'d back
+to dicts) · open vocabularies (strings that should be StrEnum) · missing Protocols (duck-typed
+interfaces with no structural contract) · duplicate definitions (constants/sets defined in N files
+instead of imported from one) · `dict[str, Any]` returns from high-traffic functions · missing
+import-time checks and runtime invariants.
+
+**Triage differs.** Standard triage asks "is this a real bug?" Harness triage asks: does the
+enforcement already exist (models hallucinate missing features at ~40%)? how many callers (grep the
+function/type, count importers)? is the "duplicate" intentional variation? what is the injection
+point — one function, or N file edits? **Apply threshold:** affects <3 files or prevents <1 known bug
+class → DEFER.
+
+## Mode: discover
+
+Discover what is missing from a codebase, validate feasibility, implement. Six phases, each with an
+explicit gate against a known failure mode. The eight gates (F1 inventory · F2 tool · F3 context ·
+F4 idempotency · F5 schema · F6 calibration · F7 semantic-dedup · F8 append-at-tail) and the phase
+budgets are in `references/discover-gates.md`; each phase has its own `references/phase-N-*.md`.
+
+Up to 3 Claude agents + 2 GPT dispatches in parallel, one idea per agent. Survivor calibration
+defaults to 0-2 and **a 0-survivor pass is healthy**. **Every object must have a caller — dead code
+with a plan does not pass.** Stopping after phase 4 is legitimate.
+
+## Mode: pliability
+
+Make a project's files discoverable for agents. **A file name is the cheapest index entry.** If the
+name is good enough the agent knows to read it without a rule: `context-rot-mitigation-strategies.md`
+self-triggers on a context task; `notes.md` triggers nothing.
+
+**Scan** knowledge files (docs, research, CLAUDE.md, skills, scripts) for line count, name
+descriptiveness, section count → **identify**: **monoliths** (>150 lines, 3+ `##` sections on
+different topics) · **cryptic names** (don't say what's inside or when to read it) · **missing index**
+(no "consult before" mapping in CLAUDE.md) · **iterative content** — dated iterations of the same
+analysis are **NEVER** archival or deletion candidates, they are *indexing* candidates → **propose**
+a table (split / rename / index) and **ask before proceeding** → **execute approved changes only**:
+splits preserve front matter and add a provenance note
+(`[pliability] Split {original} into {n} topic files`); renames `grep -r` for references first, then
+`git mv` and update them; indexing adds the "consult before" triggers → **verify** with `ls`, read
+the index, check for broken references.
+
+**Does NOT:** rewrite file contents (splits and moves only) · change code or tests · modify CLAUDE.md
+beyond the index section · touch files outside the project root · rename conventionally named files
+(README, CLAUDE.md, pyproject.toml).
+
+## Mode: forensics
+
+Longitudinal analysis of how the codebase actually evolves — concepts through lifecycle states, AI
+sessions joined to downstream outcomes, which rules decay and which fixes stick. `retro` sees one
+session; `architecture` sees workflow patterns; **forensics sees the trajectory.**
+
+1. **Evolution index** (the index IS the mode; analysis without evidence is speculation): git history
+   + session attribution → commit classification FIX / FIX-OF-FIX / REVERT / FEATURE / RULE /
+   RESEARCH / CHORE → session→commit→outcome join → concept lifecycle inference RESEARCH → PROTOTYPE
+   → INTEGRATED → PROMOTED/NARROWED/SUPERSEDED/RETIRED → cross-reference improvement-log, hook
+   triggers, failure modes, vetoed decisions. References: `git-extraction.md`,
+   `commit-classification.md`, `session-outcome-joins.md`, `concept-lifecycle.md`.
+2. **Patterns + decay metrics** — fix-of-fix chains, session-correlated fragility, build-then-retire,
+   concept stalls (PROTOTYPE >7 days) · rule compliance at day 1/7/14 · improvement-log cycle time
+   and zombie findings · **reinvention detection** (a retired concept being rebuilt is a *retrieval*
+   failure, not a building failure). `pattern-extraction.md`, `failure-taxonomy.md`.
+3. **Causal + survival** — mitigation failure modes COVERAGE_GAP / DECAY / NOVEL / ROUTING_GAP /
+   SEMANTIC (`causal-analysis.md`), artifact survival by type, root-cause clustering.
+4. **Predictions** — rank by `frequency × blast_radius × (1 - mitigation_coverage)`, veto-check
+   against `vetoed-decisions.md` and Claude Code native features (`predictions.md`).
+
+**Judgment calls:** <10 commits in the window → report "insufficient data", extend `--days` · rule
+half-life <14 days → promote to a hook, >30 days → the instruction is working · PROTOTYPE stalled >7
+days → retire or integrate · **don't conflate frequency with severity** (rare catastrophic beats
+frequent trivial).
+
+## Mode: conventions (alias: `sweep`)
+
+**"Is this code consistent with itself?"** — the opposite cost profile to `audit`. Mechanical and
+structural analysis covers 60-80% of consistency issues for $0; Flash classifies only the ambiguous
+residue. `audit` asks *is this correct*; `conventions` asks *does this match the rest*. ~$0 vs $2-5,
+5-10 min vs 15-30, different failure-mode coverage.
+
+1. **Scope (git-driven, ~30s).** `git log --oneline --stat --no-merges -${DEPTH:-40}` plus a churn
+   count (`--format="" --name-only | sort | uniq -c | sort -rn`). Identifies bulk-change commits
+   (10+ files, highest drift risk), fix-wave commits ("Fix N failures" — residuals likely), and churn
+   hotspots (repeatedly-changed files indicate instability).
+2. **Structural checks (mechanical, ~3 min).** Deterministic per-axis scripts in
+   `references/axes.md`. One block per check: `AXIS / CHECK / FOUND / SEVERITY / FILES`. Collect them
+   all before dispatching anything.
+3. **Classify the ambiguous residue (~1 min).** Default Flash (`fast_extract`) with the prompts in
+   `references/flash-prompts.md`; **repo-grounded ambiguous cases → Composer** (`composer_review`),
+   which reads the workspace and follows tight contracts better on structural "does this actually
+   match?" questions (slower ~25s, higher contract fidelity). **One combined context file per axis**
+   (`awk 'FNR==1{print "\n=== FILE: " FILENAME " ===\n"}1' …`), not multiple `-f` flags. Full files
+   for modules <500 lines, first 80 lines for large ones.
+4. **Verify (~2 min).** Flash hallucinates specifics. Before any finding enters the report: check
+   file/function existence, read the actual lines for copy-paste claims, grep for claimed-missing
+   functions, read both the model and the JSON for schema-mismatch claims. Measured: 5/6 specific
+   findings correct; the one miss was a scan-script bug misread as a data bug. **Drop anything that
+   fails verification.**
+5. **Synthesize (~2 min).** Write `docs/audit/sweep-{date}/findings.md` per
+   `references/findings-template.md`, grouped by tier — **CRITICAL** semantic data errors (wrong
+   business/biological facts) · **HIGH** structural inconsistency blocking orchestration · **MEDIUM**
+   pattern drift causing confusion or silent bug risk · **LOW** cosmetic tech debt. Each finding gets
+   ID, tier, one-line what, the grep/script output as evidence, affected files, and a **concrete**
+   fix (not "should be fixed"). End with a phased remediation plan; deferred items get explicit
+   justification.
+
+The seven axes (`config` · `conventions` · `duplication` · `registration` · `ir` · `lifecycle` ·
+`paths`), what each checks, and whether it needs a model are in `references/axes.md` alongside the
+mechanical check scripts. Default is all axes; pass axis names as positional args to filter.
+
+## Artifact contract
+
+Canonical tree, deterministic signal/candidate flow, promotion gates, and the per-mode artifact map:
+`references/artifact-contract.md`. `manifest.json`, `signals.jsonl` and `candidates.jsonl` are the
+**primary outputs**; `improvement-log.md` is a **promotion sink, not the working artifact store** —
+nothing reaches it without passing `observe_gates.py preflight`.
+
+## Anti-patterns
+
+**Analysis.** "Top N" triage — every APPLY finding gets implemented, don't self-select a subset ·
+batch apply without verification — each change is verified independently · trusting model file paths
+(~15% hallucinated) · trusting "this function is never called" — grep it, dynamic dispatch is
+invisible to static analysis · rubber-stamping model findings as triage — you hold context the models
+don't (vetoed decisions, deliberate exclusions, runtime environment, dead-code status), so cross-check
+every finding before presenting a disposition · sending the whole codebase to Flash — it is a
+classifier, not a reviewer (focused slices, 10-20 file heads per axis, <50KB) · skipping the
+mechanical phase, which catches 60-70% of consistency findings for $0 with zero hallucination risk.
+
+**Harvest and the loop.** Re-analyzing sessions instead of reading existing artifact output ·
+re-proposing vetoed items without concrete new evidence · inflating recurrence (count distinct source
+*types*) · skipping dedup — if everything is already tracked, say so · proposing maintenance as
+"improvement" (this finds infrastructure/tooling/architecture change) · re-running on the same commit
+range — check `docs/audit/sweep-*/` and the run manifest first, run the delta only.
+
+**Design and scope.** Collapsing the general to one axis — the biggest gap is often *better*, *more*,
+or *unnecessary*, not *faster* · error-driven blindness — only learning from corrections leaves
+success-far-short-of-possible invisible · history-bound blindness — you cannot retro your way to an
+unused tool, model, or idea · measurement without consumption — telemetry collected and never acted
+on · plan-without-pilot — quoting an improvement you never measured · over-scaffolding — no
+monitoring, CI/CD, auth, or enterprise patterns on personal projects · omitting project context from
+model prompts — without CLAUDE.md purpose + recent git history, models flag theoretical bugs that
+cannot happen here · maintaining a manual concept registry — infer from git history and
+improvement-log, manual upkeep rots · counting dev effort as cost — filter by *maintenance* burden ·
+fabricating instances — every failure class cites a commit hash or an improvement-log entry.
+
+**Default migration stance:** unless the user names a live external boundary, assume a proposed
+improvement is a breaking refactor with full migration. Prefer replacing the old path cleanly over
+wrappers, adapters, or dual paths; treat compatibility scaffolding as a smell to verify, not a
+default to preserve; spend `discover` idea budget on cleaner end states, not phased coexistence.
+
+## Known limitations
+
+**Dynamic dispatch** — `getattr()`, `importlib.import_module()`, CLI `entry_points` are invisible to
+static analysis. **No tests** — verification degrades to syntax and import checks only. **Monorepos**
+— >500K tokens need splitting, run per package. **Semantic failures are unhookable** — cross-model
+review is the only mitigation.
+
+## Recipes (the real interface)
+
+Every one verified present in `~/Projects/agent-infra` via `just --list`:
+
+```bash
+just observe-run <mode> [project] [days]    # THE orchestrator — all deterministic lanes
+just observe-all                            # full RSI pass
+just observe-context [project] [sessions]   # size-safe context build (<600KB)
+just observe-drift                          # wide-window drift context
+just observe-preflight | just observe-gates # promotion gate
+just blindspot                              # emb-contrastive loop-miss miner
+just steer-mine                             # incremental full-corpus steer mining
+just hooks-smoke                            # the SWEEP's first check
+just freshness                              # which surveillance sweeps are DUE
+just orphan-findings                        # canonical finding-routing ratchet
+just reflect-review | just reflect-classify # quarantine triage
+just memory-harvest                         # cross-project memory generalization
+just supervision-audit                      # supervision KPI
+just questions                              # human-gated pending decisions
+```
+
+Scripts under `${CLAUDE_SKILL_DIR}/scripts/`: `observe_gates.py` · `scan_tool_failures.py` ·
+`extract_transcript.py` · `extract_codex_transcript.py` · `session-shape.py` · `mine_steers.py` ·
+`rank_agent_miss.py` · `smart_judge_stats.py` · `validate_session_ids.py` · `observe_artifacts.py` ·
+`extract_user_tags.py` · `rotation_due.py` · `maintain_live_state.sh` · `dump_codebase.py`.
+
+**Skill upkeep:** if a run exposed a defect or friction in THIS skill, log it —
+`~/Projects/skills/hooks/append-skill-memento.sh observe '<one-line issue>'`.
 
 $ARGUMENTS
