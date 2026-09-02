@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # posttool-failure-log.sh — PostToolUseFailure hook.
 # Logs all tool failures (any tool, not just Bash) with error classification.
-# Writes to ~/.claude/tool-failures.jsonl + calls hook-trigger-log.sh.
+# Calls hook-trigger-log.sh.
 # Always exits 0 (PostToolUseFailure can't block — tool already failed).
 
-LOG_FILE="$HOME/.claude/tool-failures.jsonl"
 HOOK_DIR="$(dirname "$0")"
 
 INPUT=$(cat)
@@ -88,20 +87,6 @@ PROJECT=$(basename "$PROJECT")
 SESSION="${CLAUDE_SESSION_ID:-unknown}"
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-# Log to tool-failures.jsonl (use python for correct JSON escaping of error text)
-ERROR_MSG="$ERROR_MSG" INPUT_SUMMARY="$INPUT_SUMMARY" TOOL="$TOOL" \
-ERROR_CLASS="$ERROR_CLASS" PROJECT="$PROJECT" SESSION="$SESSION" TS="$TS" \
-IS_INTERRUPT="${IS_INTERRUPT:-false}" python3 -c '
-import os, json
-rec = {
-    "ts": os.environ["TS"], "tool": os.environ["TOOL"],
-    "error_class": os.environ["ERROR_CLASS"], "error_msg": os.environ["ERROR_MSG"],
-    "input_summary": os.environ["INPUT_SUMMARY"], "project": os.environ["PROJECT"],
-    "session": os.environ["SESSION"], "is_interrupt": os.environ["IS_INTERRUPT"] == "true",
-}
-with open(os.path.expanduser("~/.claude/tool-failures.jsonl"), "a") as f:
-    f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-' 2>/dev/null
 
 # Also log to unified hook telemetry
 "$HOOK_DIR/hook-trigger-log.sh" "tool-failure" "log" "$ERROR_CLASS: ${TOOL}" 2>/dev/null || true

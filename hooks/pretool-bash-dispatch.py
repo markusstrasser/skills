@@ -2314,6 +2314,24 @@ def _classify(result: GateResult) -> tuple[str, str | dict]:
     return "pass", ""
 
 
+def _log_gate(name: str, kind: str) -> None:
+    """ONE instrumentation point for all 35 in-process gates (2026-09-01 audit:
+    163/207 wired hook scripts emit no event-log row, so fire counts are
+    unmeasurable). Maps dispatcher verdicts onto the existing hook-trigger-log
+ action vocabulary under a SEPARATE dispatch: namespace, so it can never
+ double-count the 13 gates that already self-log; fail-open throughout."""
+    action = {"block": "block", "mutate": "warn", "advise": "warn"}.get(kind)
+    if action is None:
+        return
+    try:
+        subprocess.run(
+            [str(HOOKS_DIR / "hook-trigger-log.sh"), f"dispatch:{name}", action, "in-process gate"],
+            capture_output=True, timeout=3, check=False,
+        )
+    except Exception:
+        pass
+
+
 def main() -> None:
     raw_payload = sys.stdin.read()
     try:
@@ -2339,6 +2357,7 @@ def main() -> None:
         except Exception:
             continue  # fail-open: a dispatcher-level bug in one gate never blocks
         kind, val = _classify(result)
+        _log_gate(gate["name"], kind)
         if kind == "block":
             msg = val if isinstance(val, str) else json.dumps(val)
             sys.stderr.write(msg + ("\n" if not msg.endswith("\n") else ""))

@@ -234,23 +234,6 @@ def run_tab_and_dupread(tool_name, tool_input, ppid):
 
         print(json.dumps({"additionalContext": warn}))
 
-        shadow_log = os.path.join(HOME, ".claude", "dup-read-shadow.jsonl")
-        try:
-            with open(shadow_log, "a") as f:
-                f.write(
-                    json.dumps(
-                        {
-                            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                            "file": os.path.basename(fpath),
-                            "reads": total_reads,
-                            "ppid": str(ppid),
-                            "blocked": block,
-                        }
-                    )
-                    + "\n"
-                )
-        except OSError:
-            pass
 
     return warn, block
 
