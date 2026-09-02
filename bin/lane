@@ -419,10 +419,10 @@ launch_worker() {
     cd "$worktree" || exit 125
     case "$worker" in
       codex)
-        codex exec -m gpt-5.6-sol -s workspace-write --add-dir "$HOME/.cache/uv" --skip-git-repo-check "$prompt" < /dev/null
+        caffeinate -i codex exec -m gpt-5.6-sol -s workspace-write --add-dir "$HOME/.cache/uv" --skip-git-repo-check "$prompt" < /dev/null
         ;;
       claude)
-        env -u ANTHROPIC_API_KEY claude -p --model claude-opus-4-8 "$prompt" < /dev/null
+        caffeinate -i env -u ANTHROPIC_API_KEY claude -p --model claude-opus-4-8 "$prompt" < /dev/null
         ;;
       fake)
         if [ "$resume_mode" = true ]; then printf "%s\n" "$prompt"; fi

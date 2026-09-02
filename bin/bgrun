@@ -37,7 +37,7 @@ esac
 printf 'bgrun: cwd=%s\n' "$PWD" > "$log"
 
 nohup env PYTHONUNBUFFERED=1 bash -c '
-  "$@" > "$0.log.tmp" 2>&1
+  caffeinate -i "$@" > "$0.log.tmp" 2>&1  # caffeinate: idle-sleep killed an unattended 14-min audit overnight (genomics 2026-09-01)
   rc=$?
   cat "$0.log.tmp" >> "$0.log" 2>/dev/null || true
   rm -f "$0.log.tmp"
