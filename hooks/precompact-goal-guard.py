@@ -24,7 +24,13 @@ CUSTOM_INSTRUCTIONS = (
     "Preserve verbatim in the summary: the original goal statement (/goal text), "
     "the path .claude/checkpoint.md and instruction to re-read it, the current "
     "state of each work front (done / in-flight / blocked), any pending "
-    "verification commands, and any hard constraints the operator stated."
+    "verification commands, and any hard constraints the operator stated. "
+    # Fable 5.1 prompting guide (2026-09): the six things a compaction summary drops.
+    "Also keep, exactly: problems that came up and how they were resolved; options "
+    "tried or set aside and why; anything decided, ruled out, or established as a "
+    "constraint; where things stand now; what is still open or promised; and "
+    "names, numbers, dates, paths, and commit SHAs. Keep the operator's words close "
+    "to verbatim; condense the assistant's own reasoning to what it concluded."
 )
 
 
