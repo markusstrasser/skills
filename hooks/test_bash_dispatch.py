@@ -961,3 +961,29 @@ def test_settings_json_is_valid_after_edit():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
+
+
+def test_worktree_cd_persistent_blocks(sandbox):
+    envelope = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "cd /repo/.claude/worktrees/codex-x && git log --oneline -3"},
+    }
+    disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
+    assert disp["exit_code"] == 2
+    assert "persistent cwd" in disp["block_msg"]
+    assert "git -C /repo/.claude/worktrees/codex-x" in disp["block_msg"]
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git -C /repo/.claude/worktrees/codex-x status --short",
+        "(cd /repo/.claude/worktrees/codex-x && git status --short)",
+        "cd /repo && ls .claude/worktrees/",
+        "W=/repo/.claude/worktrees/codex-x; ls $W/scripts | head -3",
+    ],
+)
+def test_worktree_paths_without_persistent_cd_pass(sandbox, command):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
+    assert disp["exit_code"] == 0
