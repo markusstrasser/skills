@@ -1,5 +1,19 @@
 # Model Guide Changelog
 
+## 2026-09-02 - Claude Fable 5.1 entry (prompting-guide deltas)
+
+Anthropic released Claude Fable 5.1 (2026-09-01): same price as Fable 5, cache read
+$0.25, five effort levels with `high` default. Added a dated paragraph under the Fable 5
+section: effort sweeps do not transfer across models; `medium` ≈ Fable 5; `low` competitive
+with Opus/Sonnet per task; low effort searches less; long outputs at `high`; interactive
+default runs on the Max subscription (env key rejected), launcher `--effort max` flagged.
+
+### Changed
+- Fable 5 section: 5.1 addendum. No routing defaults changed (Opus 5 stays the headless
+  Claude default; Fable 5.1 interactive on the plan).
+- Source: platform.claude.com prompting guide for Fable 5.1; agent-infra
+  `research/2026-09-01-fable-5.1-tabula-rasa.md` §1.
+
 ## 2026-07-24 - Claude Opus 5 replaces Opus 4.8 as primary Claude default
 
 Anthropic released Claude Opus 5 (2026-07-24): near-Fable intelligence at Opus price

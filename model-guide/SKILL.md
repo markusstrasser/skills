@@ -248,6 +248,8 @@ $/task on long loops — measure on your own workload).
 
 ## Claude Fable 5 - "The Operator" (metered opt-in — reference only)
 
+**Claude Fable 5.1 (`claude-fable-5-1`, 2026-09-01) — the 5 notes below are superseded where they conflict.** Same $10/$50, cache read $0.25 (was $1.00), 1M context, effort levels `low|medium|high|xhigh|max` with `high` the default. The guide's operative claims: effort names do NOT map across models — re-run any effort sweep per model; `medium` ≈ Fable 5 quality at lower cost; `low` is often competitive with Opus/Sonnet on cost per task while scoring higher, so include it wherever a smaller model at higher effort would run; at `low` it searches less (keep the research-skill gate on low-effort lanes); at `xhigh`/`max` it may draft a long deliverable in thinking and again in the reply — run long outputs at `high`, and only raise effort where a measured gain justifies it. Interactive Claude Code on this machine runs it on the Max subscription (the environment API key is rejected in `customApiKeyResponses`, verified 2026-09-02); the launcher passes `--effort max`, which the guide argues against as a default. Headless lanes stay on Opus 5 (`$0` subscription) unless a Fable-specific edge is named. Full delta and card evidence: agent-infra `research/2026-09-01-fable-5.1-tabula-rasa.md` §1.
+
 Routability + economics: see the status note at the top of this skill (metered usage
 credits 2026-07-07; llmx/headless lanes confirmed live and paid, Agent tool currently can't
 reach it at all — see Verified Transport). Specs ($10/$50, 2× Opus), API shape (adaptive-only thinking,
@@ -437,3 +439,5 @@ Log it for the next reader: `~/Projects/skills/hooks/append-skill-memento.sh mod
 
 - **[2026-08-20] codex/gpt-5.6 subscription credits RESTORED (operator, arc-agi 07:49) — Luna licensed for BULK TRANSCRIPT MINING on the sub lane.** Supersedes the quota-conservation posture from the 07-25→07-29 dark window for bulk reads: operator explicitly put "Codex (luna) for transcript mining etc" back on the menu. The $0.20/$1.20 API fallback remains for multi-MTok fan-outs if the sub quota needs preserving mid-campaign. Working exec form unchanged: `codex exec -s workspace-write -C <dir> -m gpt-5.6-luna -c model_reasoning_effort="med"`.
 - **[2026-08-20b] codex exec effort enum tightened: `"med"` now 400s (`invalid_enum_value`) — use full `"medium"`.** The 08-11 note's `-c model_reasoning_effort="med"` form is STALE; supported enum: none/minimal/low/medium/high/xhigh/max (error caught at launch, arc-agi luna-yieldmine).
+
+- **[2026-08-27] Grok 4.6 (2026-08-12) scores AA Intelligence Index 61 — ties GPT-5.6 Sol, #3 behind Opus 5 (63) / Fable 5 (62) — at unchanged $2/$6; Grok 4.5=54 rows in this skill are STALE; Terminal-Bench still weak (26 vs 34.6), calibration not re-measured. Grok Bot (agent-employees) launched 08-11. Source: artificialanalysis.ai/articles/grok-4-6-benchmarks-and-analysis**
