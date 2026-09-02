@@ -9,9 +9,7 @@ effort: medium
 
 # Debug scout pipeline
 
-Formalizes the genomics bug-hunt pattern: **scouts write, orchestrator model judges, operator steers at ship boundaries.**
-
-Part of the wider file-bus pipeline — see `/orchestrate` and `~/Projects/agent-infra/.claude/rules/orchestrator-tool-names.md`.
+Formalizes the genomics bug-hunt pattern: **scouts write, orchestrator model judges, operator steers at ship boundaries.** (The file-bus pipeline that once wrapped this — `/orchestrate`, consolidation, commit-slice — was retired 2026-09-02; the parent session triages `docs/audit/` inline.)
 
 ## Roles
 
@@ -26,11 +24,9 @@ Part of the wider file-bus pipeline — see `/orchestrate` and `~/Projects/agent
 ```bash
 J="just -f ~/Projects/agent-infra/justfile"
 $J adversarial-debug-scout ~/Projects/genomics recent --prompt "cardinal rule + RESEARCH_ONLY"
-$J audit-findings-consolidation ~/Projects/genomics/docs/audit --repo ~/Projects/genomics
-# orchestrator model reads docs/audit/*-debug-handoff.md — validates SUSPECT, proposes fixes; operator approves apply:
-$J commit-slice-planning ~/Projects/genomics --include-untracked
-$J commit-slice-planning ~/Projects/genomics --apply 1 --dry-run
-$J commit-slice-planning ~/Projects/genomics --status-only
+$J debug-until-dry ~/Projects/genomics &     # or: wave loop until no new confirmed bugs
+# orchestrator model reads docs/audit/*-debug-handoff.md — validates SUSPECT, fixes confirmed
+# findings inline, notes rejections in the memo; operator approves tier-1/2 apply.
 ```
 
 **arc-agi multi-round audits:** before round 2+ scouts, run `just -C ~/Projects/arc-agi audit-ledger skip-fixed-md` and prepend the markdown block to each scout prompt. Ledger: `loop/audit/ledger.jsonl`. After fixes: `just -C ~/Projects/arc-agi audit-ledger seed-from-git`.
@@ -39,8 +35,7 @@ $J commit-slice-planning ~/Projects/genomics --status-only
 
 1. Scouts run **cursor ask-mode only** (`agent-infra/scripts/debug_scout.py`) — no edits, no commit.
 2. Output → `{repo}/docs/audit/YYYY-MM-DD-debug-{run}-{slug}.md`
-3. Consolidation → `{date}-findings-consolidation-handoff.md` (via `audit-findings-consolidation --kind debug`)
-4. **Orchestrator model** reads handoff — scouts do not implement fixes.
+3. **Orchestrator model** reads the handoffs and triages inline — scouts do not implement fixes.
 5. **Operator** approves tier-1/2 apply and taste calls.
 6. Check **scientific/conceptual** claims, not just code bugs (see `agent-infra/scripts/debug_scout_prompt.md`).
 7. Scouts **verify when cheap**: git log, targeted pytest; skip costly/live/mutating → SUSPECT + hand off.
@@ -49,7 +44,6 @@ $J commit-slice-planning ~/Projects/genomics --status-only
 
 | Skill | Role |
 |-------|------|
-| `/orchestrate` | Full pipeline: baseline → audit → fix → ship |
 | `/debug` (this) | Adversarial scout fan-out only |
 | `/code-review` | Structural line-format scout on source batches |
 | `/critique` | Cross-model design/plan review |
