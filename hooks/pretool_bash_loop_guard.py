@@ -1,30 +1,61 @@
 #!/usr/bin/env python3
-"""pretool_bash_loop_guard.py — detect multiline for/while/until/if blocks (zsh parse errors).
+"""Syntax preflight for multiline zsh control structures.
 
-Sidecar for pretool-bash-loop-guard.sh (extracted 2026-07-04 — the inline python-in-bash
-needed a quote scanner, and escaping a quote scanner inside a bash double-quoted string is
-its own bug class).
+The historical hook treated every ``do``/``then`` followed by a newline as a
+parse error. That sequence is the normal multiline spelling in zsh, so the
+guard blocked valid commands and never established that parsing would fail.
 
-Contract (matches the old inline code): read the COMMAND on stdin; exit 0 if a multiline
-control structure is present (shell wrapper then blocks), exit 1 if clean.
-
-Heredoc bodies and quoted-string spans are stripped first — both are opaque to the shell
-parser, so 'do\\n'/'then\\n' inside them cannot be a control structure. False positives
-fixed: heredoc payload (2026-06-10, session e24a68d3); commit-message prose ending a line
-on "then" inside -m "..." (2026-07-03, session f4fecc9a). The strippers are single-sourced
-in lib_bash_cmd_strip (divergent copies false-blocked/passed 4× in 3 days — see lib header).
+Keep the cheap lexical check only as an admission filter, then ask zsh itself
+with ``-n`` (parse without execution). Contract for the shell wrapper remains:
+stdin is the command; exit 0 only for a confirmed syntax error, exit 1 for a
+valid command or when zsh is unavailable (fail open).
 """
+
+from __future__ import annotations
+
 import re
+import shutil
+import subprocess
 import sys
 
-from lib_bash_cmd_strip import strip_heredocs, strip_quoted
+
+_MULTILINE_CONTROL = re.compile(r"\b(do|then)\s*\n")
 
 
-def has_multiline_block(cmd: str) -> bool:
-    cmd = strip_quoted(strip_heredocs(cmd))
-    # 'do\n' or 'then\n' in actual shell code = multiline loop/if (single-line forms pass)
-    return bool(re.search(r"\b(do|then)\s*\n", cmd))
+def syntax_error(command: str) -> str | None:
+    """Return zsh's parse error for a multiline control block, else ``None``.
+
+    ``zsh -n`` reads and parses the command but does not execute it. Restricting
+    the subprocess to the old hook's candidate shape avoids paying for a zsh
+    process on ordinary shell calls and avoids expanding this guard's scope.
+    """
+
+    if not _MULTILINE_CONTROL.search(command):
+        return None
+    zsh = shutil.which("zsh")
+    if zsh is None:
+        return None
+    result = subprocess.run(
+        [zsh, "-n", "-c", command],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+    if result.returncode == 0:
+        return None
+    return result.stderr.strip() or f"zsh syntax check exited {result.returncode}"
+
+
+def has_multiline_block(command: str) -> bool:
+    """Compatibility predicate: true only for a confirmed syntax error."""
+
+    return syntax_error(command) is not None
 
 
 if __name__ == "__main__":
-    sys.exit(0 if has_multiline_block(sys.stdin.read()) else 1)
+    error = syntax_error(sys.stdin.read())
+    if error is None:
+        raise SystemExit(1)
+    print(error)
+    raise SystemExit(0)

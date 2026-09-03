@@ -960,7 +960,7 @@ def gate_git_add_all_guard(raw_payload: str) -> GateResult:
     return GateResult(2, msg, "")
 
 
-# --- 4. pretool-bash-loop-guard.sh (BLOCKER, no if) — imports sidecar ------
+# --- 4. multiline zsh syntax preflight (BLOCKER, no if) — imports sidecar -
 
 
 def gate_bash_loop_guard(raw_payload: str) -> GateResult:
@@ -970,13 +970,12 @@ def gate_bash_loop_guard(raw_payload: str) -> GateResult:
         cmd = _jqlike_cmd(data)
         if not cmd:
             return GateResult(0, "", "")
-        if mod.has_multiline_block(cmd):
+        error = mod.syntax_error(cmd)
+        if error:
             msg = (
-                "BLOCKED: Multiline for/while/if blocks cause zsh parse errors. Use single-line syntax:\n"
-                '  for x in *.txt; do echo "$x"; done\n'
-                '  while read line; do echo "$line"; done\n'
-                "  if [ -f x ]; then echo yes; else echo no; fi\n"
-                "Or write a script file and run it.\n"
+                "BLOCKED: Command fails zsh syntax preflight:\n"
+                f"{error}\n"
+                "Complete the control structure (for example, add the missing done/fi).\n"
             )
             return GateResult(2, msg, "")
         return GateResult(0, "", "")
