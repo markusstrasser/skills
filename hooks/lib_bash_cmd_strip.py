@@ -3,23 +3,23 @@
 for PreToolUse hooks that pattern-match on `tool_input.command`.
 
 Why single-sourced (epistemic principle: a shared invariant has ONE definition):
-two hooks (pretool-no-background-commit, pretool-bash-loop-guard) each carried a
-private copy of "sanitize the command string before matching", and the copies
-diverged 4 times in 3 days — every divergence was a live false block or silent
-pass: c1323e8 (heredoc body false-blocked loop-guard), ff79b2d (heredoc body
+two hooks (pretool-no-background-commit and the now-retired regex-based
+pretool-bash-loop-guard) each carried a private copy of "sanitize the command
+string before matching", and the copies diverged 4 times in 3 days — every
+divergence was a live false block or silent pass: c1323e8 (heredoc body false-blocked loop-guard), ff79b2d (heredoc body
 false-blocked a codex-brief write in no-background-commit), 7af4faa (quoted
 prose 'then' at EOL false-blocked a commit), 681a068 (pipe-masked commit passed
 silently). A stripper that differs between guards means the same command is
 data to one hook and code to another. Consumers IMPORT these functions; never
 re-state them. test_lib_bash_cmd_strip.py pins the 4 historical edge cases and
-asserts both hook sidecars use these exact function objects.
+asserts the remaining pattern-matching hook uses these exact function objects.
 
 Semantics (shell-parser-faithful, fail-open):
 - Heredoc bodies and quoted spans are DATA — opaque to the shell parser — so
   keywords/commands inside them can never be real invocations.
 - Command-position anchoring is NOT here: it is matcher logic that differs by
   design per hook (no-background-commit anchors `git` to command position;
-  loop-guard has no notion of command position).
+  consumers define their own command-position semantics).
 """
 import re
 
