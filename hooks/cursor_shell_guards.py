@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -33,14 +32,14 @@ assert _arc_spec.loader is not None
 _arc_spec.loader.exec_module(_arc_mod)
 arc_verdict = _arc_mod.verdict
 
-# Single-source heredoc strip (lib_bash_cmd_strip) — do not re-privatize.
-_strip_spec = importlib.util.spec_from_file_location(
-    "lib_bash_cmd_strip", _HOOKS / "lib_bash_cmd_strip.py"
+# Single-source zsh syntax preflight — do not re-privatize.
+_syntax_spec = importlib.util.spec_from_file_location(
+    "pretool_bash_loop_guard", _HOOKS / "pretool_bash_loop_guard.py"
 )
-_strip_mod = importlib.util.module_from_spec(_strip_spec)
-assert _strip_spec.loader is not None
-_strip_spec.loader.exec_module(_strip_mod)
-strip_heredocs = _strip_mod.strip_heredocs
+_syntax_mod = importlib.util.module_from_spec(_syntax_spec)
+assert _syntax_spec.loader is not None
+_syntax_spec.loader.exec_module(_syntax_mod)
+shell_syntax_error = _syntax_mod.syntax_error
 
 
 def _project_has_uv(cwd: str) -> bool:
@@ -57,8 +56,9 @@ def _project_has_uv(cwd: str) -> bool:
 
 
 def _multiline_loop(cmd: str) -> bool:
-    cmd = strip_heredocs(cmd)
-    return bool(re.search(r"\b(do|then)\s*\n", cmd))
+    """Compatibility name: true only when zsh confirms a syntax error."""
+
+    return shell_syntax_error(cmd) is not None
 
 
 def _parse(payload: dict) -> tuple[str, str]:
@@ -101,11 +101,12 @@ def handle(mode: str, payload: dict) -> int:
         _allow()
         return 0
 
-    if _multiline_loop(cmd):
+    syntax_error = shell_syntax_error(cmd)
+    if syntax_error:
         _deny(
-            "BLOCKED: Multiline for/while/if blocks cause zsh parse errors. "
-            "Use single-line syntax or a temp .sh file:\n"
-            "  for x in *.txt; do echo \"$x\"; done"
+            "BLOCKED: Command fails zsh syntax preflight:\n"
+            f"{syntax_error}\n"
+            "Complete the control structure (for example, add the missing done/fi)."
         )
 
     can_rewrite = _project_has_uv(cwd)
@@ -140,7 +141,8 @@ def handle(mode: str, payload: dict) -> int:
 def _selftest() -> int:
     cases = [
         ({"tool_input": {"command": "python3 foo.py"}, "cwd": "/tmp"}, "pretool", "deny"),
-        ({"command": "for x in a; do\necho x\ndone"}, "before", "deny"),
+        ({"command": "for x in a; do\necho x\ndone"}, "before", "allow"),
+        ({"command": "for x in a; do\necho x"}, "before", "deny"),
         ({"tool_input": {"command": "ls"}, "cwd": "/tmp"}, "pretool", "allow"),
     ]
     bad = 0
