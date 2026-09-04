@@ -21,6 +21,7 @@ Semantics (shell-parser-faithful, fail-open):
   design per hook (no-background-commit anchors `git` to command position;
   consumers define their own command-position semantics).
 """
+
 import re
 
 
@@ -35,6 +36,24 @@ def strip_heredocs(s: str) -> str:
                 skip_until = None
             continue
         m = re.search(r"<<-?\s*(['\"]?)(\w+)\1", ln)
+        out.append(ln)
+        if m:
+            skip_until = m.group(2)
+    return "\n".join(out)
+
+
+def strip_quoted_heredocs(s: str) -> str:
+    """Drop bodies of heredocs whose delimiter is QUOTED (<<'EOF' / <<"EOF") — the shell
+    performs NO expansion there, so the body is pure data. An UNQUOTED <<EOF still expands
+    ($(...), backticks, $VAR) and is deliberately left in place to be scanned. Moved here from
+    pretool_bash_backtick_guard (2026-09-04) when the secret-path guard needed the same rule."""
+    out, skip_until = [], None
+    for ln in s.split("\n"):
+        if skip_until is not None:
+            if ln.strip() == skip_until:
+                skip_until = None
+            continue
+        m = re.search(r"<<-?\s*(['\"])(\w+)\1", ln)  # quoted delimiter ONLY
         out.append(ln)
         if m:
             skip_until = m.group(2)

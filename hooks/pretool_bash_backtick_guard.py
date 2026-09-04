@@ -36,15 +36,37 @@ substitution, which is a bug under every reading.
 Contract (matches the sidecar convention): `offending_flag(cmd)` returns the flag name
 that carries a backticked value, or None. The dispatch gate turns non-None into a block.
 """
+
 import re
 import sys
+
+# A quoted-delimiter heredoc body is data the shell never expands, so a backtick there is
+# literal — exactly the fix this guard recommends. ONE definition, shared with the
+# secret-path guard (lib_bash_cmd_strip.py); never re-state it here.
+from lib_bash_cmd_strip import strip_quoted_heredocs as _strip_quoted_heredocs
 
 # Flags whose value is prose/data written by an agent, across the CLIs this repo family
 # uses: git, gh, the loop tools (phenomena.py, idea_backlog.py), and generic scripts.
 DATA_FLAGS = (
-    "--note", "--notes", "-m", "--message", "--title", "--evidence", "--source",
-    "--reason", "--description", "--desc", "--summary", "--body", "--caption",
-    "--text", "--content", "--prompt", "--comment", "--label", "--annotation",
+    "--note",
+    "--notes",
+    "-m",
+    "--message",
+    "--title",
+    "--evidence",
+    "--source",
+    "--reason",
+    "--description",
+    "--desc",
+    "--summary",
+    "--body",
+    "--caption",
+    "--text",
+    "--content",
+    "--prompt",
+    "--comment",
+    "--label",
+    "--annotation",
 )
 
 # Bare key=value data fields (no leading dashes). `just backlog edit --append note="..."` is
@@ -57,27 +79,6 @@ _FLAG_RE = re.compile(
     r"(?<![\w-])(" + "|".join(re.escape(f) for f in DATA_FLAGS) + r")(=|\s+)"
     r"|(?<![\w.-])(" + "|".join(BARE_FIELDS) + r")=",
 )
-
-
-def _strip_quoted_heredocs(s: str) -> str:
-    """Drop bodies of heredocs whose delimiter is QUOTED (<<'EOF' / <<"EOF").
-
-    A quoted delimiter disables ALL expansion inside the body, so a backtick there is
-    literal — and it is exactly the fix this guard recommends, so failing to strip it
-    would make the guard block its own advice. An UNQUOTED <<EOF still expands, so those
-    bodies are deliberately left in place to be scanned.
-    """
-    out, skip_until = [], None
-    for ln in s.split("\n"):
-        if skip_until is not None:
-            if ln.strip() == skip_until:
-                skip_until = None
-            continue
-        m = re.search(r"<<-?\s*(['\"])(\w+)\1", ln)   # quoted delimiter ONLY
-        out.append(ln)
-        if m:
-            skip_until = m.group(2)
-    return "\n".join(out)
 
 
 def _double_quoted_value_at(cmd: str, start: int) -> str | None:
@@ -137,7 +138,7 @@ def reason(flag: str) -> str:
         "       tool add --note \"$(cat <<'EOF'\n"
         "     ...prose with `inline code`...\n"
         "     EOF\n"
-        "     )\"\n"
+        '     )"\n'
         "  3. SINGLE-quote the value (literal in every POSIX shell) if it contains no\n"
         "     single quotes: --note 'prose with `inline code`'\n"
         "  4. If you genuinely want substitution here, use $(...) so the intent is explicit.\n"
@@ -149,7 +150,7 @@ def main() -> int:
     flag = offending_flag(cmd)
     if flag:
         sys.stderr.write(reason(flag))
-        return 0   # sidecar convention: exit 0 == offense found, wrapper blocks
+        return 0  # sidecar convention: exit 0 == offense found, wrapper blocks
     return 1
 
 
