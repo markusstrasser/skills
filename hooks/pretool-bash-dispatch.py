@@ -2190,12 +2190,40 @@ def gate_worktree_cd_guard(raw_payload: str) -> GateResult:
     return GateResult(2, msg, "")
 
 
+# --- 0b. secret-path-guard (BLOCKER, no if) — imports sidecar -------------------
+# Replaces the two settings.json `Read()` deny rules (~/.config/sops/age/keys.txt,
+# ~/.config/secrets/**). Those made the auto-mode permission classifier stop for a HUMAN
+# whenever a Bash read path could not be resolved ("… after a cd would search a directory
+# that cannot be determined here, and a Read() deny rule is configured") — a lane blocked on
+# it while the operator was AFK, 2026-09-04. Deterministic here, never a prompt; the Read /
+# Grep / Glob twin is pretool-secret-path-read-guard.py. Scope + calibration live in the
+# sidecar docstring (0 fires over 1,151 real session commands; 2 over 4,570 across 12
+# sessions, both quoting the protected path literally).
+
+
+def gate_secret_path_guard(raw_payload: str) -> GateResult:
+    try:
+        data = json.loads(raw_payload)
+        cmd = _jqlike_cmd(data)
+        if not cmd or ".config" not in cmd:
+            return GateResult(0, "", "")
+        mod = _load_module(HOOKS_DIR / "pretool_secret_path_guard.py", "pretool_secret_path_guard")
+        token = mod.offending_secret_path(cmd)
+        if token:
+            _log_trigger("secret-path-guard", "block", token, cmd)
+            return GateResult(2, mod.reason(token, "Bash"), "")
+        return GateResult(0, "", "")
+    except Exception:
+        return GateResult(0, "", "")
+
+
 MANIFEST: list[dict] = [
     {
         "name": "secret-output-guard",
         "if": None,
         "run": make_native_gate("pretool-secret-output-guard.py", "pretool_secret_output_guard"),
     },
+    {"name": "secret-path-guard", "if": None, "run": gate_secret_path_guard},
     {"name": "git-noext-inject", "if": None, "run": gate_git_noext_inject},
     {"name": "pyunbuffered-inject", "if": None, "run": gate_pyunbuffered_inject},
     {"name": "bg-buffering-pipe", "if": None, "run": gate_bg_buffering_pipe},
