@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import tempfile
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -8,6 +10,34 @@ from shared.skill_manifest import validate_manifest
 
 
 class SkillManifestTest(unittest.TestCase):
+    def test_cli_accepts_relative_and_absolute_manifest_paths(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        relative = Path("observe/skill.json")
+        outputs = []
+        for manifest_path in (relative, root / relative):
+            result = subprocess.run(
+                [sys.executable, str(root / "scripts/lint_skill_manifests.py"),
+                 "--manifest", str(manifest_path)],
+                cwd=root, text=True, capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            outputs.append(result.stdout)
+        self.assertEqual(outputs, ["OK observe/skill.json\n"] * 2)
+
+    def test_cli_reports_invalid_external_manifest_without_traceback(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as td:
+            manifest_path = Path(td) / "skill.json"
+            manifest_path.write_text("{invalid json")
+            result = subprocess.run(
+                [sys.executable, str(root / "scripts/lint_skill_manifests.py"),
+                 "--manifest", "skill.json"],
+                cwd=td, text=True, capture_output=True,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(f"{manifest_path}: invalid JSON:", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+
     def test_validate_manifest_accepts_known_profile_and_schema(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
