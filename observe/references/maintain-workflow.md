@@ -10,37 +10,63 @@ Run as `/loop 30m /observe maintain` in one open window you watch. The **single 
 three conductors for one job was over-proliferation). It is a **thin conductor**: sweep for health,
 pick ONE thing, dispatch existing workers. It does not reimplement them. **Never ask for input.**
 
-Each tick, in order: **SWEEP** (always — this is the visibility; a red mechanical job is the tick's
-priority) → **noop check** (state hash unchanged AND sweep green → one-line noop, stop; idle ticks
-are ~free) → **pick ONE** by readiness × priority → **route by verifier boundary** → **visible tick
-report**, stop (the `/loop` interval drives the next tick; don't self-schedule) → **emit Top-N**.
+Each tick, in order: **SWEEP** → **noop check** → **pick ONE and route** when work is needed →
+**finish artifact updates and action logging** → **report** → **stop**. A red mechanical job takes
+priority. An unchanged green tick skips the work step, records a noop, and reports one concise line.
+The `/loop` interval drives the next tick; don't self-schedule. There is no earlier exit before the
+required logging and artifact updates are complete.
 
-**Route by verifier boundary.** Reversible + single-project → do it, auto-commit agent-infra-local.
-Boundary-crossing (taste / money / irreversible / shared across 3+ projects / discovery-tier) → write
-a sign-off-ready item to `agent-infra/decisions-pending/`, **never greenlight it yourself**. That is
-the Generate lane: unattended-safe because it only produces reversible drafts for a yes/no.
+**Route by verifier boundary.** For self-directed work, reversible changes confined to agent-infra
+with one clear approach may proceed and be auto-committed. Other-repo changes, shared infrastructure,
+structural changes or multiple viable approaches are propose-only. Continue broader work already
+authorized by the user within that scope; an unattended tick grants no additional permission.
+Work still requiring approval (taste / money / irreversible / shared deployment / discovery-tier)
+becomes a sign-off-ready item in `agent-infra/decisions-pending/`; **never greenlight it yourself**.
+The Generate lane produces reversible drafts for a yes/no.
 
 **Before minting proposals/questions, enforce [queue backpressure](candidate-lifecycle.md#queue-backpressure).** Route a frozen queue into the drain.
 
-**Emit the Top-N every run — the loop's headline output.**
-`uv run python3 ~/Projects/agent-infra/scripts/top_priorities.py --top 10` writes `PRIORITIES.md`
-(gitignored) and prints the ranked cross-repo "what to plan next" digest. **A green tick still has a
-priorities list — surface it.** Reversible+local+cheap → just do it; real work → a plan candidate or
-`decisions-pending/`.
+**Priorities output.** An unchanged green noop does not regenerate or repeat the Top-N. Run
+`uv run python3 ~/Projects/agent-infra/scripts/top_priorities.py --top 10` when priorities have
+changed, a new actionable result should be surfaced, or the user explicitly requests them. It
+prints the ranked digest and writes gitignored `PRIORITIES.md`; verify the artifact when updating
+it. Report the meaningful change or actionable items, not an unchanged list. Route resulting work
+through the same verifier and authorization boundary above.
 
-**Live state.** `bash ~/.claude/skills/observe/scripts/maintain_live_state.sh` — snapshot + noop
-hash; writes `~/.claude/maintain-state-hash.txt`, appends noop rows to `maintenance-actions.jsonl`,
-exits 0 early on unchanged state.
+**Live state.** After a green SWEEP, run
+`bash ~/.claude/skills/observe/scripts/maintain_live_state.sh` from the tick's project cwd. It writes
+`~/.claude/maintain-state-hash.txt` and, on unchanged state, appends the existing
+`action:noop`, `target:state-unchanged`, `result:ok` row to cwd-relative `maintenance-actions.jsonl`.
+Its exit 0 returns control to the tick; it is not proof that the SWEEP passed or that the tick is
+finished. Reuse its noop row rather than append a duplicate, finish any other required logging,
+then report. On a red SWEEP, skip this helper's success/noop branch and log the actual failure.
 
 **The SWEEP.** The cheap health pass before the noop check. A silently-dead hook or stuck mechanical
 job surfaces here on the first tick after it breaks — this is why the loop is watched, not headless.
 
+Run each command as a **separate tool call**, retaining its return status and full stdout/stderr.
+Do not pipe the producer through a display filter or replace its failure with `|| true`.
+
 ```bash
-just -f ~/Projects/agent-infra/justfile hooks-smoke --timeout 8 2>&1 | tail -3   # non-zero = dead/broken hook
-uv run python3 ~/Projects/agent-infra/scripts/pulse.py canary 2>&1 | grep -E "✗|ALARM" || true  # a dead metric is the priority
-launchctl list 2>/dev/null | grep agent-infra | awk '$2 != 0 {print "  launchd non-zero exit:", $3}'
-just -f ~/Projects/agent-infra/justfile freshness 2>&1 | grep -E "DUE|source"   # sweeps past cadence
+just -f ~/Projects/agent-infra/justfile hooks-smoke --timeout 8
 ```
+
+```bash
+uv run python3 ~/Projects/agent-infra/scripts/pulse.py canary
+```
+
+```bash
+launchctl list
+```
+
+```bash
+just -f ~/Projects/agent-infra/justfile freshness
+```
+
+Nonzero status from any command prevents a green/noop verdict. Also inspect the producer's findings:
+hook failures/leaks, canary alarms, nonzero last-exit statuses for agent-infra jobs in the launchctl
+table, and freshness `DUE` rows need triage even if the listing command itself succeeded. A successful
+listing is not a health verdict. Treat a `DUE` row as an actionable pick before considering a noop.
 
 Optionally add a parallel per-repo Composer drift screen (`git diff HEAD~1 --stat` →
 `llm-dispatch.py --profile composer_screen` asking for `RISK high|medium` + one line + a suggested
@@ -98,16 +124,22 @@ drain) come first — they are why this runs on a loop.
 
 **Logging.** Append JSONL to `maintenance-actions.jsonl` for EVERY action:
 `{"ts":"…","action":"freshness","target":"ClinVar","result":"ok","detail":"12d old"}`.
+Keep the existing `rotation`/`target:<task-key>` contract above; log failures and noops as well as
+completed work. Finish the required action rows and affected `MAINTAIN.md`/`PRIORITIES.md` updates
+before the tick's single final report and stop. A noop does not need a priorities rewrite.
 
 **MAINTAIN.md** — unified quality state; create from [MAINTAIN.md](MAINTAIN.md) if absent. Sections:
 Findings, Queue, Fixed, Deferred, Strategic Notes, Drift Alerts. Monotonic IDs M001… WIP caps
 enforce flow: max 5 findings (full → stop taking new), max 3 queued (full → halt discovery, focus
 dispatch), items >90 days → move to end with `[STALE]`.
 
-**Autonomy.** *Autonomous:* agent-infra-local files, advisory hooks, measurement scripts, retrying
-transient failures, finding triage, rule additions at 2+ recurrence. *Propose only:* changes to
-other repos, shared hooks/skills, new pipelines, structural changes, multiple viable approaches.
-*Never:* GOALS.md, capital, external contacts, shared-infra deployment.
+**Self-directed limits.** *Autonomous when reversible and one clear approach:* agent-infra-local
+files, advisory hooks, measurement scripts, retrying transient failures, finding triage, rule
+additions at 2+ recurrence. *Propose only:* changes to other repos, shared hooks/skills, new
+pipelines, structural changes, multiple viable approaches. *Never self-authorize:* GOALS.md or
+Constitution edits, capital, external contacts, or shared-infrastructure deployment. Existing user
+authorization and the canonical Constitution/GOALS approval rule still apply; these limits do not
+cancel approved broader work.
 
 **Operating rules.** One task per tick, highest priority · log everything · report in 1-3 lines ·
 auto-fix deterministic, dispatch the rest · respect revisit dates · idempotent (check the action log

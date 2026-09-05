@@ -95,8 +95,8 @@ Useful optional fields:
 **Do not promote from digest prose.** Run preflight before any `improvement-log.md` write:
 
 ```bash
-uv run python3 "${CLAUDE_SKILL_DIR}/scripts/observe_gates.py" preflight \
-  --artifact-root "$OBSERVE_ARTIFACT_ROOT"
+uv run python3 "${CLAUDE_SKILL_DIR}/scripts/observe_gates.py" \
+  --artifact-root "$OBSERVE_ARTIFACT_ROOT" preflight
 ```
 
 Writes `preflight.json` + `promotion-verdicts.jsonl`. Full gate table: `references/promotion-gates.md`.

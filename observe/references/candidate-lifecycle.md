@@ -36,12 +36,13 @@ highest-leverage infra fixes are often single-source (one human finding at a ses
 new-item formula buries them.
 
 **Promotion gate — mandatory before writing `improvement-log.md`:**
-`uv run python3 "${CLAUDE_SKILL_DIR}/scripts/observe_gates.py" preflight --artifact-root "$ARTIFACT_DIR"`.
+`uv run python3 "${CLAUDE_SKILL_DIR}/scripts/observe_gates.py" --artifact-root "$ARTIFACT_DIR" preflight`.
 Write entries only for candidates with `verdict=promote` in `promotion-verdicts.jsonl` **and**
 `preflight.json → promotions_allowed=true` ([promotion-gates.md](promotion-gates.md)). Criteria: recurs 2+
-sessions, not already covered, a checkable predicate or an architectural change. Novel high-severity
-may promote immediately. Not promotable → leave it in `candidates.jsonl` with an explicit state; do
-not force a log entry.
+sessions, not already covered, a checkable predicate or an architectural change. Severity does not
+bypass recurrence or any other gate: the [promotion CLI](../scripts/observe_gates.py) runs the
+[canonical gate implementation](../scripts/observe_gates_lib.py). Not promotable → leave it in
+`candidates.jsonl` with an explicit state; do not force a log entry.
 
 **Recurring classifier false positives** — do not stage these: "unprompted commit" flagged HIGH
 (global CLAUDE.md authorizes auto-commit) · `done_with_denials` (a governance approval gate, not a

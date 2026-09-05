@@ -7,7 +7,7 @@ LLM lanes **propose** candidates; `observe_gates.py` **decides** promotion.
 
 ```bash
 OBSERVE_ARTIFACT_ROOT="${OBSERVE_ARTIFACT_ROOT:-$HOME/Projects/agent-infra/artifacts/observe/<run>}"
-python3 "${CLAUDE_SKILL_DIR}/scripts/observe_gates.py" preflight --artifact-root "$OBSERVE_ARTIFACT_ROOT"
+python3 "${CLAUDE_SKILL_DIR}/scripts/observe_gates.py" --artifact-root "$OBSERVE_ARTIFACT_ROOT" preflight
 ```
 
 Read `preflight.json`:
