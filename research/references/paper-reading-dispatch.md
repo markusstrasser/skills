@@ -1,42 +1,46 @@
-<!-- Reference file for dispatch-research skill. Loaded on demand. -->
-# Paper-Reading Dispatch (Research Audits)
+<!-- Reference for research-ops. Loaded on demand. -->
+# Paper-Reading Dispatch
 
-When auditing tool implementations against source papers:
+Use for comparing a tool's implementation with its source papers.
 
-## DOI handling
+## Establish the source
 
-- Never hardcode DOIs in prompts — they're often wrong (3/4 were wrong in the 2026-03-18 genomics audit). Tell agents to SEARCH for the paper by title/author, then verify the DOI matches.
-- Tell agents: "Search for the paper first. Do not trust the DOI I provide — verify it resolves to the correct paper."
+Treat a supplied DOI as a locator: resolve it and verify the title, authors, and
+version against the paper being cited. Search by title/author when the identifier
+is absent or does not match. Never invent a DOI or accept an agent's correction
+without checking the paper's identity and content.
 
-## S2 fallbacks
+If a configured scholarly service fails, use an available source fallback such
+as OpenAlex, PMC, or the publisher. Check the configured tool schema before using
+backend options. Record the failed source and the fallback actually used; a
+transport failure is not evidence that the paper does not exist.
 
-- Semantic Scholar (S2) API goes down periodically (403 errors). Tell agents: "If search_papers with S2 fails, retry with `backend='openalex'`. If fetch_paper fails, use exa to find the paper on PMC or the publisher site."
-- All 4 agents in the 2026-03-18 session hit S2 403s but recovered via OpenAlex + PMC full text.
+## Bound the comparison
 
-## Paper-reading turn budget
+Size the lane from its actual resource budget, source availability, and comparison
+complexity. Do not infer a universal turn limit or tools-per-agent quota from an
+older session. Assign concrete implementations and checkable paper claims. Split
+independent comparisons when useful, and preserve findings incrementally during
+substantial work so a partial result can be inspected.
 
-- Fetching a paper + reading a script + comparing + writing a report = ~6-8 tool calls minimum per tool.
-- With Codex's ~15-20 turn limit, each agent can cover 2-3 tools (not 4+).
-- Have agents write findings incrementally after each tool, not in one synthesis at the end.
+For each finding, retain the paper/version, relevant passage or location, code
+file:line, observed mismatch, and any inference or uncertainty. Check substantive
+source claims and severity rather than relying on a model-specific reputation.
 
-## Output preservation
+## Preserve the output through the actual dispatch
 
-- Codex sandbox file writes can be cleaned up on agent exit. The `-o` flag output can also disappear.
-- **Read output files while agents are still running** (poll with `while` loop checking file existence).
-- Immediately `git add` or copy files once found. Don't wait for all agents to complete.
-- If files vanish after agent completion: the content is lost. Recreate from conversation context if you read it during execution.
+Use [Codex CLI dispatch](../../llmx-guide/references/codex-dispatch.md) for current
+model/tool routing, sandbox scope, completion handling, and recovery. A read-only
+lane can return its complete final report for `-o`; a lane writing an artifact
+needs an authorized writable path. Keep outputs distinct and owned.
 
-## What GPT-5.4 does well for paper audits
+Inspect completion status and the promised output before declaring it missing or
+recovering it. Use available raw logs and artifacts for recovery. If the selected
+runner actually tears down ephemeral storage, preserve its owned output before
+that teardown. Do not stage files merely because a worker has emitted them, and
+never sweep peer edits into a commit.
 
-- Code-grounded comparison (reading scripts, citing file:line) — consistently accurate
-- Identifying threshold mismatches between configs and paper recommendations
-- Finding real bugs (missing imports, config path errors, mode drift)
-- Correcting wrong DOIs and finding the right papers
-
-## What GPT-5.4 does poorly
-
-- Severity grading (tends to inflate)
-- Claiming things are "missing" when they exist in different files
-- External knowledge claims about API behavior, library features (verify these)
-
-Codex CLI only supports OpenAI models. For Claude/Gemini dispatch, use `llmx` or Claude Code subagents. Consult `/model-guide` for task-specific routing if uncertain.
+[Historical paper-audit notes](../../research/references/dispatch-reference-history.md#paper-reading-dispatch)
+retain the 2026-03-18 DOI/S2 incidents, GPT-5.4 observations, earlier turn estimates,
+and output-loss reports. Those reports do not establish current universal limits
+or file-persistence behavior.

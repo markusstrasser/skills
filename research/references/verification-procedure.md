@@ -1,42 +1,44 @@
-<!-- Reference file for dispatch-research skill. Loaded on demand. -->
+<!-- Reference for research-ops. Loaded on demand. -->
 # Verification Procedure
 
-This is the critical phase. Codex findings have a ~28% error rate. Every finding must be checked.
+Check every reported finding against the relevant authoritative evidence before
+calling it confirmed. An agent's confidence or model identity is not verification.
 
-## Verification checklist
+## Check the promised result
 
-For each audit output:
-1. **Exists and has substance** — file exists, >50 lines, not truncated
-2. **File paths are real** — grep/glob the cited paths, reject invented ones
-3. **Line numbers are accurate** — read the cited file:line, confirm the claim
-4. **Counts are correct** — re-run the counting logic yourself (e.g., `wc -l`, `jq length`, `grep -c`)
-5. **Classifications are defensible** — a "bug" claim should be a real bug, not a style preference
+1. **Complete output:** inspect the requested artifact or captured final report.
+   It must satisfy the dispatch contract and be readable and untruncated; no line
+   minimum applies. A short final pointer to a complete artifact is valid.
+2. **Real paths:** resolve cited paths, including symlinks. Search locates a path;
+   inspect the actual file before deciding it exists, is absent, or is obsolete.
+3. **Supported claims:** read the cited implementation and relevant callers or
+   primary source. Confirm line references and the behavior being claimed.
+4. **Accurate measurements:** independently reproduce counts or computations
+   material to the finding, using the actual data slice and stated definition.
+5. **Defensible classification:** distinguish a behavioral defect from a style
+   preference; justify severity using the observed effect.
 
-## Common Codex hallucination patterns
+| Signal | Verification |
+|---|---|
+| Invented or obsolete path | Locate and resolve the actual path; inspect its contents and history. |
+| Wrong count | Reproduce the count with the same scope and definition. |
+| Allegedly missing behavior | Trace the actual implementation and callers. |
+| Inflated severity | Check the consequence and downgrade or reject unsupported severity. |
+| "Already fixed" claim | Git search/log locates a candidate change; inspect the current implementation and use a relevant probe when needed. A commit message alone does not prove the fix. |
+| Wrong DOI | Resolve it and verify that paper identity and source content support the claim. |
 
-| Signal | Example | Fix |
-|--------|---------|-----|
-| Invented file paths | `src/auth/middleware.py` when no auth/ exists | Grep for the actual location |
-| Wrong counts | "17 orphan files" when actual is 10 | Re-count yourself |
-| Phantom features | "missing error handling in X" when X has try/except | Read the actual code |
-| Inflated severity | "critical security bug" for a missing docstring | Downgrade or drop |
-| Stale references | Citing code that was refactored away | Check git log for the file |
-| False fix claims | "This was already fixed" when git log shows no such commit | Verify with `git log --grep` |
-| Wrong DOIs | Agent "corrects" a DOI to a different paper | Verify DOI resolves to the claimed paper |
+For memo artifacts with paper citations, follow [paper evidence checks](../../research/references/paper-evidence.md#mechanical-citation-gate-for-memo-artifacts)
+for the current mechanical gate, blocking/advisory distinction, and parser limits.
+Identifier existence and venue do not establish that a paper supports the finding;
+source inspection still supplies that check.
 
-**Mechanical citation gate (finalize):** follow [paper evidence checks](paper-evidence.md#mechanical-citation-gate-for-memo-artifacts) for the current command, blocking/advisory distinction, and parser limitations. The gate tests identifier existence and venue; source inspection still verifies that the identifier matches the claimed paper and finding.
+## Return the verified findings
 
-**2026-03-18 session note:** In a 13-tool paper audit, GPT-5.4 had **zero hallucinations** in critical findings (bugs, threshold mismatches, config errors). All verified correct. The ~28% error rate is concentrated in counts, severity grading, and external knowledge claims — not in code-reading accuracy. Code-grounded findings (file:line citations) were consistently reliable.
+Report confirmed findings, corrections, and rejected claims with reasons where
+applicable. Use enough detail to make the result reviewable; do not pad an empty
+or small audit to satisfy a length quota. Recover incomplete output according to
+the [current dispatch contract](../../llmx-guide/references/codex-dispatch.md).
 
-## Verification output
-
-Produce a verified findings summary:
-- **Confirmed findings** (with corrected details where needed)
-- **Rejected findings** (with reason: hallucinated path, wrong count, etc.)
-- **Corrected findings** (finding was directionally right but details were wrong)
-
-Example from this project's audit session:
-```
-Audit claimed: "5% test coverage, 17 orphan files, 3 missing parsers"
-Verified:       14% test coverage, ~10 orphan files, 12 missing parsers
-```
+The [dated GPT-5.4 observations](../../research/references/dispatch-reference-history.md#verification-procedure)
+preserve the original error-rate claims and 2026-03-18 session note. They are
+historical samples, not a current model accuracy estimate.

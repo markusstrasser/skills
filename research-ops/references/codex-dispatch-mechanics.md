@@ -1,63 +1,18 @@
-<!-- Reference file for dispatch-research skill. Loaded on demand. -->
-# Codex Dispatch Mechanics
+# Codex research dispatch mechanics
 
-## Dispatch execution
+Use the [canonical Codex CLI guide](../../llmx-guide/references/codex-dispatch.md) for current flags and configuration. Use [research-worker guidance](../../model-guide/references/codex-subprocess-dispatch.md) for lane design and evidence verification.
+
+For a read-only audit with final-text capture:
 
 ```bash
-mkdir -p docs/audit  # or wherever findings should go
-
-# Parallel dispatch (max 4 when MCPs are needed)
-codex exec --model gpt-5.4 --full-auto \
-  -o docs/audit/codex-{slug}.md \
-  "You are auditing a codebase. Read files at their full paths. \
-   Cite file:line for findings. \
-   Do NOT create any files or write any templates. Just read code and analyze. \
-   BUDGET: Read at most 5 files. After that, STOP and synthesize. \
-   Spend 70% of effort reading, 30% writing your report. \
-   A partial report is infinitely better than no report. \
-   Your final text message will be captured automatically. \
-   End with a COMPLETE markdown report of all findings. \
-   TASK: [prompt]" &
-
-codex exec --model gpt-5.4 --full-auto \
-  -o docs/audit/codex-{slug}.md \
-  "..." &
-
-wait
-
-# IMMEDIATELY copy -o output after agents finish (sandbox cleanup can delete them)
-for f in docs/audit/codex-*.md; do
-  [ -f "$f" ] && cp "$f" "$f.bak"
-done
+codex exec -s read-only -C /path/to/repo -o docs/audit/codex-topic.md \
+  'Read the named files, check the stated properties, and cite exact evidence. Return the complete report as your final message. Keep the assigned scope.'
 ```
 
-## Key flags
+For a worker-written artifact, use workspace-write in the appropriate managed workspace and ask for the file path plus a concise verdict. Decide completeness from the artifact, not the length of the return message. Choose the model explicitly only when the lane requires an override; otherwise honor the configured model.
 
-- `exec` — non-interactive mode (not the interactive `codex` command)
-- `--full-auto` — sandboxed auto-approval (replaces old `--approval-mode full-auto`)
-- **Do NOT use `--ephemeral`** — sandbox cleanup deletes file writes made during execution, including `-o` output. Without `--ephemeral`, session is persisted but files survive. Cost: ~100KB per session in `~/.codex/sessions/`.
-- `-o FILE` — captures last agent *text* message to file. **Caveats:**
-  - If the agent spends all turns on tool calls and never produces a final text response, `-o` writes nothing. Always include in prompt: "End with a markdown summary of all findings."
-  - **Files written by agents inside the sandbox may be cleaned up on agent exit.** The `-o` output file itself can also be deleted by sandbox cleanup if `--ephemeral` is used. Always `git add` or `cp` output files immediately after agents complete.
-  - If `-o` files are empty or missing after agent completion, check `~/.codex/sessions/` for the session — but note that reasoning payloads are encrypted and findings are NOT recoverable from logs.
-- `--search` — **only works in interactive mode, NOT in `exec`**. Use MCP tools instead.
+Parallelize independent lanes within the runtime/provider limits. Distinct output files and ownership are required; wait through the owning process/harness and inspect exit status, stderr and artifacts before integrating. Preserve raw rollouts when recovery or evaluation requires them. The parent reviews findings at their sources and commits exact owned paths.
 
-## MCP tools
+A source/backend failure calls for a supported alternate source or transport with the same evidence contract. Report an unresolved access limitation; do not interpret it as absence of evidence. The old fixed file/turn quotas and unconditional recovery workflow are not defaults for every bounded lane.
 
-Codex shares the global MCP config (`~/.codex/config.toml`). 9 configured MCPs (context7, exa, research, meta-knowledge, brave-search, paper-search, perplexity, scite, codex_apps) are available to `exec` agents automatically. Each contributes to the ~37K token overhead.
-
-## MCP contention
-
-Max 4 parallel Codex agents when MCPs are needed. Each agent starts its own MCP server instances (9 servers x N agents). 5+ concurrent agents can overwhelm the system (132+ simultaneous MCP startups observed).
-
-## S2 API outages
-
-Semantic Scholar returns 403 periodically. Tell agents to fall back to `backend="openalex"` for `search_papers` if S2 fails. Or instruct agents to use `exa` web search as a paper-discovery fallback.
-
-## Output location
-
-Tell agents to write markdown findings to the **repo** (`docs/audit/`), NOT `/tmp`. macOS cleans up `/tmp` between sessions. If you dispatch through `meta/scripts/codex_dispatch.py`, raw stdout/stderr now default to `docs/archive/audit-logs/<run>/` whenever `--output-dir` is under `docs/audit/`. If you keep extra sweep logs yourself, put them there too, not active `docs/audit/`. After agents complete, immediately `git add` the markdown outputs before they can be cleaned up.
-
-## Fallback
-
-If Codex isn't installed, write prompts to `.claude/research-dispatch.md` as numbered prompts the user can copy-paste or route to another model.
+The [historical dispatch notes](codex-dispatch-history.md) preserve earlier flags, contention observations and output-loss reports. Their model names and rates need current verification before reuse.

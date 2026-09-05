@@ -1,83 +1,79 @@
-<!-- Reference file for dispatch-research skill. Loaded on demand. -->
+<!-- Reference for research-ops. Loaded on demand. -->
 # Plan and Execute
 
-## Phase 4: Plan structure
+## Plan the authorized work
+
+Use a plan sized to the findings. For a substantial change, record:
 
 ```markdown
 # Audit Findings — Fix & Refactor Plan
-
 **Session:** YYYY-MM-DD | **Project:** <name>
-
 ## Context
-<1-2 sentences on what audits found, what was verified>
-
-## Phase N: <Category> (<impact level>, <scope estimate>)
-
-### NA. <Specific fix>
-**Files:** `path/to/file.py:lines`
-- What to change
-- Why (cite the verified finding)
-- How (brief implementation note if non-obvious)
-
-## Execution Order
-<Phases ordered by: bugs first, then drift, then structural, then cleanup>
-
-## Verification
-<How to confirm fixes worked — specific commands>
+<What the audit found and what was verified>
+## Changes
+<For each finding: files, what changes, why, and relevant verification>
+## Execution order
+<Dependencies and any meaningful phases>
+## Dispositions
+<Every confirmed finding: implement, already resolved, or defer with a reason>
 ```
 
-## Plan principles
+Prioritize bugs, then drift, then hygiene. Cite the verified finding for each fix,
+state scope honestly, and include the commands or source checks that will verify
+it. Do not silently select only the top findings; give each a disposition.
 
-1. **Group by impact** — bugs before drift before hygiene
-2. **Cite the verified finding** for each fix — traceability from audit -> plan -> commit
-3. **Include verification commands** — how to confirm each fix worked
-4. **Estimate scope honestly** — "~10 min" not "trivial"
-5. **Flag deferred items** — things found but not worth fixing now (with reason per item, not a batch cutoff)
-6. **Phase boundaries** — commit after each phase, not one giant commit
-7. **Fix ALL verified findings** — don't self-select "top N" and implicitly drop the rest. Every confirmed finding gets a plan entry. If something must be deferred, give it an explicit disposition with a reason.
+## Carry authorization through execution
 
-## Plan approval
+An audit-and-fix request authorizes its reversible implementation; an approved
+plan carries through its phases without another approval pause. Continue after
+relevant validation. Phase count alone does not create a new checkpoint.
 
-Present the plan to the user. Wait for approval before executing. If the plan has 3+ phases, offer to execute phase-by-phase with checkpoints.
+Honor explicit audit-only, plan-only, read-only, and no-commit instructions. If
+an unresolved decision or an actual protected boundary requires user input,
+first complete the already-authorized work needed for a concrete, reviewable
+proposal. Do not require a special "full auto" phrase for authorized follow-through.
 
-## Phase 5: Execution principles
+## Execute and verify
 
-1. **Read before editing** — always read the target file before modifying
-2. **One logical change per commit** — granular semantic commits
-3. **Commit after each phase** — not one big commit at the end
-4. **Run tests after code changes** — `uv run pytest tests/` or equivalent
-5. **Verify each fix** against the plan's verification commands
-6. **Fix the neighborhood when it unblocks progress** — incidental cleanup (lint markers, related bugs, broken adjacent code) is part of the work. The only thresholds: split when >100 lines or when the cleanup touches a public API/contract.
-7. **Parallel where possible** — use Agent tool for independent file edits
-8. **Verify paths before fixing paths** — when fixing a wrong file path, run `find` for actual location + `head -5` to check structure before editing. Don't guess from directory names (3-iteration failure observed)
-9. **Run the script after each fix** — don't batch all fixes then test. Optional fields with explicit `None` values, wrong JSON structures, etc. only surface at runtime
+1. Read the target implementation and relevant callers before editing.
+2. Make coherent fixes with one logical change per commit when commits belong to
+   this lane. If the parent owns integration, hand off the changed files and leave
+   commits to the parent.
+3. Run checks that test the changed behavior and complete required project or
+   evaluation contracts. Use a focused test, source comparison, or affected-script
+   run as appropriate. Do not create implementation-mirroring tests for reversible,
+   low-impact edits. Run a full suite when integration scope, a required gate, or
+   an unresolved concern warrants it. Repeat or broaden only for new changes,
+   failures, or unanswered concerns.
+4. Verify each fix against the selected checks. Runtime shape failures need an
+   actual runtime check; a prose edit need not inherit a script or full-suite run.
+5. Include adjacent cleanup when it unblocks the work. Split a >100-line cleanup
+   or a public API/contract change into its own logical change and describe it.
+6. Delegate bounded independent work when it saves time or improves quality,
+   with explicit ownership and an output contract.
+7. When repairing a path, locate and inspect the real destination and structure;
+   do not infer it from directory names.
 
-## Multi-agent commit safety
+## Preserve peer work
 
-If SessionStart reported `PEER SESSION` (same checkout), other agents may `git add` your uncommitted edits under wrong commit messages. Mitigations:
-- **Commit after each fix**, not batched at the end of a phase
-- Or use `isolation: worktree` for the entire dispatch-research session
-- Never leave edited files uncommitted while background agents are running
+Inspect status before edits and handoff. Use managed worktrees for overlapping
+code work. Keep outputs distinct and obey the caller's ownership boundaries.
+Never stage or commit a peer's edits to make the checkout clean. When this lane
+owns a commit, select only its changes; same-file mixed authorship requires hunk
+selection. A parent-owned lane may finish with its edits uncommitted for integration.
 
-## Commit message format
+## Closeout and existing logs
 
-Reference the audit finding:
-```
-[scope] Verb thing — why (from audit)
-```
+Verify the owned result, then report findings addressed, validation, changed paths,
+commits if any, and explicit deferrals. Unrelated peer changes are not a closeout
+failure. Follow the project's commit format and cite the audit finding.
 
-## Post-execution
+If the project uses `MAINTAIN.md`, preserve its existing integration contract:
+- Append to `## Log`: `YYYY-MM-DD | dispatch-research | N findings, M applied, D deferred | [commit range]`.
+- Append deferred findings to `## Queue` with IDs continuing the M00N sequence.
+- Append applied fixes to `## Fixed`.
+- Use real commit references. When the parent owns commits, hand off the pending
+  log details for that integration; never insert an `uncommitted` placeholder.
 
-- Verify no uncommitted changes remain
-- Run full test suite
-- Summarize: N findings addressed, M commits, any deferred items
-
-## MAINTAIN.md Integration
-
-If `MAINTAIN.md` exists in the project root (project uses `/maintain`), **you must** also:
-- Append to `## Log`: `YYYY-MM-DD | dispatch-research | N findings, M applied, D deferred | [commit range]`
-- Append deferred findings to `## Queue` with IDs continuing the M00N sequence
-- Append applied fixes to `## Fixed`
-- Never write placeholder commit refs such as `uncommitted`. If code commits are likely in the same session, defer the `MAINTAIN.md` update until the real commit hash or range exists, then write the final entries in one pass.
-
-This feeds results into the SWE quality lane so `/maintain` can track them.
+[Historical procedure](../../research/references/dispatch-reference-history.md#plan-and-execute)
+preserves the original approval, test, path-recovery, and shared-checkout advice.

@@ -19,10 +19,10 @@ Operator-initiated research workflows. For one-shot research questions, use `/re
 | `diff` | `/research-ops diff <text or path>` | Extract what's NOT in training data |
 | `dispatch` | `/research-ops dispatch [depth]` | Parallel audit sweep |
 
-> **Cheap parallel lanes via codex subprocesses ($0).** A fleet of research lanes can run as
-> background `codex exec --full-auto` workers that invoke `$research` and each write their own memo
-> — same skills + MCP stack as Claude, network-backed, subscription-billed. Canary first, then fan
-> out. Full mechanics + gotchas: `model-guide/references/codex-subprocess-dispatch.md`.
+> **Independent research lanes.** Codex subprocesses can handle bounded lanes when
+> useful work remains for the parent. Match access and output permissions to the task;
+> verify uncertain transport before fan-out. See
+> [Codex subprocess dispatch](../model-guide/references/codex-subprocess-dispatch.md).
 
 ---
 
@@ -217,7 +217,7 @@ Search across all three projects for the concept:
 
 ```bash
 # Header-grep FIRST — finds files where concept is a primary topic
-rg -l "^#.*{concept}" ~/Projects/personal/health ~/Projects/personal/life ~/Projects/personal/synthoria ~/Projects/personal/apps/phenome/docs ~/Projects/genomics/docs ~/Projects/agent-infra/research -g '*.md'
+rg -l "^#.*{concept}" ~/Projects/personal/health ~/Projects/personal/life ~/Projects/personal/synthoria ~/Projects/genomics/docs ~/Projects/agent-infra/research -g '*.md'
 
 # MCP search for section-level matches
 search_meta("{concept}", scope="all", max_tokens=500)
@@ -432,88 +432,38 @@ If delta density is genuinely zero (the text contains nothing beyond your traini
 
 # Mode: dispatch
 
-Research -> Dispatch -> Verify -> Plan -> Execute. Opus orchestrates the full loop: dispatches parallel audits to GPT-5.4 via Codex CLI, verifies findings against actual code, synthesizes an execution plan, then implements it.
+Research → dispatch → verify → plan → execute. The parent owns scope and the final judgment; independent audit lanes return evidence for it to verify.
 
-## When to use
+## Scope and depth
 
-"dispatch research", "run audits", "codex sweep", "audit and fix", or when the user wants autonomous project improvement — from discovery through implementation.
+Use for “dispatch research”, “run audits”, “codex sweep”, or “audit and fix”. Match depth to the request and the number of independent questions. A quick sweep stops at findings; “just audit” stops after verification; “plan only” stops after the plan. Continue an authorized implementation through completion. Request additional approval only for a concrete action outside that authorization.
 
-**Depth modes:**
-- `"quick sweep"` -> 3-5 lightweight audits, stop at findings (no execute)
-- `"audit"` / default -> full 5-phase loop
-- `"deep audit"` -> 15+ thorough audits, comprehensive plan
+## Execution
 
-**Stop points:** "just audit" (stop after Phase 3), "plan only" (stop after Phase 4), "full auto" (all 5 phases).
+1. **Recon:** read project instructions, relevant files, recent commits and existing audit results. Define the questions and the evidence that would resolve them.
+2. **Dispatch:** split independent, substantial questions into bounded lanes when this improves coverage or latency. Give each lane an exact scope, budget, output contract and verification target. A lane may search and synthesize; do a small audit directly when delegation would add more coordination than useful work. Use [prompt construction](references/prompt-construction.md).
+3. **Verify:** check findings against declarations, call sites, tests or source evidence. Classify each as confirmed, rejected with reason, or corrected. Review all findings, including counts and claimed fix status; historical error rates do not establish the current model's reliability. See [verification procedure](references/verification-procedure.md).
+4. **Plan:** connect every confirmed finding to a fix or an explicit reason for deferral. Present a concrete plan when review or approval is needed; existing authorization carries through. See [planning and execution](references/plan-and-execute.md).
+5. **Execute:** implement the authorized fixes, run relevant checks and inspect the result. Read before editing; isolate concurrent writers and preserve peer changes. Commit one logical change at a time and continue until the requested scope is complete.
 
-## Pipeline
+## Codex dispatch contract
 
-```
-Phase 1: RECON     Read project state, identify gaps              (~15%)
-Phase 2: DISPATCH  Craft prompts, fire 3-5 parallel Codex audits  (~25%)
-Phase 3: VERIFY    Check findings against actual code              (~20%)
-Phase 4: PLAN      Synthesize verified findings into exec plan     (~15%)
-Phase 5: EXECUTE   Implement the plan (with user approval)         (~25%)
-```
+Use [dispatch mechanics](references/codex-dispatch-mechanics.md) for the current CLI examples and [model guidance](../model-guide/SKILL.md) for selection. Omit a model override to inherit the configured default; use an explicit model when requested or when the review design requires it. Probe actual tool access before assigning a task that depends on it. Current CLI capabilities, tool inventory and resource limits come from the installed environment, not an old model snapshot.
 
-## GPT-5.4 via Codex — what to know
+For a read-only audit, capture the final report with `-o`; for authorized file-producing work, provide the output path and writable workspace. Wait for completion, then inspect the promised artifact before deciding whether recovery is needed. A missing final reply is not proof that the artifact is missing. Keep durable findings at the project-designated path and report transport failures separately from the capability being tested.
 
-**CAN do:** Read files, shell commands, cross-reference, count/compare, structured output. Has 9 MCPs (scite, exa, brave, perplexity, research, meta-knowledge, paper-search, context7, codex_apps).
+Preserve enough budget to synthesize. Set file, turn and concurrency limits from the task and observed resource use; use a canary when access or transport is uncertain. The [historical dispatch record](references/codex-dispatch-history.md) preserves the incidents behind the earlier limits.
 
-**CANNOT do:** DB queries, `uv`/project CLIs (sandbox lacks env), conversation history. **28% factual error rate on external knowledge.** Hallucinates fix status ("already fixed" when it wasn't). `--search` only works in interactive mode.
-
-**Auth:** ChatGPT account auth. Only `gpt-5.4` (default) and `gpt-5.3-codex` work. `o3`/`gpt-4.1` rejected.
-
-**Token overhead:** ~37K baseline per `codex exec` call (9 MCP servers, no disable flag). Cost-effective for substantial tasks only.
-
-## Critical gotchas
-
-**Turn limits (~15-20 tool calls):** Max 5 files per agent. Split larger audits. Include synthesis deadline in EVERY prompt: "After reading at most 5 files, STOP and synthesize. 70% reading, 30% writing. Partial report > no report." (6th+ recurrence, 2026-03-28). Codex doesn't see CLAUDE.md — the instruction must be in the prompt.
-
-**Template-first anti-pattern:** Agents that create skeleton markdown first waste a write turn, then exhaust turns filling it in. Failed 3/4 sessions. Use `-o FILE` instead — captures final text message automatically.
-
-**Memory pressure gate:** Before dispatching, count active processes (`pgrep -lf claude | wc -l`, NOT `pgrep -c` on macOS). If >= 4, reduce to sequential or audit directly.
-
-**MCP contention:** Max 4 parallel Codex agents. Each starts 9 MCP servers. 5+ agents = 132+ simultaneous startups = system overwhelm.
-
-**Output preservation:** Tell agents to write to `docs/audit/`, NOT `/tmp`. Immediately `git add` or `cp` after completion — sandbox cleanup can delete files. Do NOT use `--ephemeral` (deletes `-o` output).
-
-**Verification is mandatory (Phase 3).** ~28% error rate concentrated in counts, severity, external knowledge. Code-grounded findings (file:line) are consistently reliable. See `references/verification-procedure.md` for checklist and hallucination patterns.
-
-**S2 API outages:** Tell agents to fall back to `backend="openalex"` or exa if Semantic Scholar returns 403.
-
-## Model selection
-
-| Target | When | Tradeoff |
-|--------|------|----------|
-| `codex exec --model gpt-5.4` | Cross-referencing, counting, structured output | Free, parallel, output extraction fragile |
-| Claude Code `Agent` subagents | Same + DuckDB/MCP access | Costs tokens, output inline (reliable) |
-| `uv run python3 ~/Projects/skills/scripts/llm-dispatch.py --profile deep_review ...` | 1M context, huge file ingestion | Best for monolithic analysis |
-
-**Use Codex for:** 5+ parallel audits, cross-file grep+read tracing, wiring/drift/completeness checks.
-**Use Claude subagents for:** <3 file audits, tasks needing project-specific tooling (uv, DuckDB, MCP).
-
-## Phase-by-phase execution
-
-**Phase 1 -- Recon:** Read CLAUDE.md, `.claude/overviews/`, plans, `git log --oneline -30`, `docs/audit/` (skip completed). Build mental model, identify audit targets.
-
-**Phase 2 -- Dispatch:** Craft self-contained prompts per `references/prompt-construction.md`. Execute per `references/codex-dispatch-mechanics.md`. Each prompt: "Read [files], check [properties], cross-reference [A vs B], cite file:line."
-
-**Phase 3 -- Verify:** Every finding checked against actual code. Follow `references/verification-procedure.md`. Output: confirmed / rejected (with reason) / corrected findings.
-
-**Phase 4 -- Plan:** Synthesize into phased execution plan per `references/plan-and-execute.md`. Fix ALL verified findings -- don't self-select "top N." Present to user; wait for approval.
-
-**Phase 5 -- Execute:** Implement per `references/plan-and-execute.md`. Read before editing. One commit per logical change. If other agents active, commit after each fix (not batched) or use `isolation: worktree`.
-
-## References (loaded on demand)
+## References
 
 | File | Contents |
 |------|----------|
-| `references/prompt-construction.md` | Target selection categories, prompt structure, good/bad patterns |
-| `references/codex-dispatch-mechanics.md` | Bash commands, flags, MCP config, `-o` caveats, fallback |
-| `references/verification-procedure.md` | Verification checklist, hallucination pattern table, output format |
-| `references/plan-and-execute.md` | Plan template, plan principles, execution principles, MAINTAIN.md integration |
-| `references/paper-reading-dispatch.md` | DOI handling, S2 fallbacks, turn budget, GPT-5.4 strengths/weaknesses for papers |
-| `references/agent-system-prompt.md` | Full system prompt for subagent dispatch |
+| [Prompt construction](references/prompt-construction.md) | Target selection, prompts and evidence contracts |
+| [Dispatch mechanics](references/codex-dispatch-mechanics.md) | Current CLI, workspace and output behavior |
+| [Verification procedure](references/verification-procedure.md) | Claim verification and historical failure patterns |
+| [Plan and execute](references/plan-and-execute.md) | Plan structure, execution and MAINTAIN.md integration |
+| [Paper reading](references/paper-reading-dispatch.md) | Source access, DOI handling and paper-analysis scope |
+| [Agent prompt](references/agent-system-prompt.md) | Research lane prompt template |
 
 ## Known Issues
 <!-- Append-only. Session-analyst may suggest additions. -->

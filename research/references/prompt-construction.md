@@ -1,45 +1,44 @@
-<!-- Reference file for dispatch-research skill. Loaded on demand. -->
+<!-- Reference for research-ops. Loaded on demand. -->
 # Prompt Construction
 
-## Target selection
+## Choose a bounded question
 
-Look for these categories of useful work:
+Useful audit targets include wiring, drift, completeness, downstream impact,
+hygiene, integration, and correctness against a specification or source paper.
+Name the concrete property to check. Delegate independent work when it saves
+time or improves quality; keep an already-resolved or trivial check local.
 
-| Category | Example | Good Codex target? |
-|----------|---------|-------------------|
-| **Wiring** | Does data flow correctly between components? | Yes — cross-file tracing |
-| **Drift** | Do configs/docs match code? Counts match reality? | Yes — counting/comparing |
-| **Completeness** | Are all expected outputs produced? | Yes — checklist verification |
-| **Impact** | What downstream effects do recent changes have? | Yes — grep + trace |
-| **Hygiene** | Dead code, orphan files, stale state? | Yes — existence checks |
-| **Integration** | Do cross-module consumers still work? | Yes — interface matching |
-| **Correctness** | Do algorithms match their cited sources? | Partial — logic only |
+## State the dispatch contract
 
-Don't generate prompts for things obvious from reading the code. Target things requiring **cross-referencing multiple files**, **counting/comparing**, or **tracing data flow**.
+Tailor the prompt to the task, using specific starting paths and relevant callers:
 
-## Prompt structure
-
-Every prompt must be self-contained and file-output-oriented:
-
-```
-Read [2-5 specific file paths]. For each [concrete thing], check:
-(a) [specific verifiable property]
-(b) [specific verifiable property]
-Cross-reference [A] against [B]. Categorize findings as: [defined categories].
-Cite file:line for every finding.
-Save to [specific output path].
+```text
+Task: [concrete question and authorized scope]
+Evidence: [starting files/sources and relationships to trace]
+Checks: [verifiable properties and useful finding categories]
+Resources: [actual time/turn/cost/tool limits, if set]
+Ownership: [read-only, or exact edit paths and commit responsibility]
+Output: [final report captured by the CLI, or an authorized artifact path]
+Cite file:line or primary sources for findings; separate evidence from inference.
+You share the workspace with peers. Preserve their work and stay within ownership.
 ```
 
-## Good patterns
+Choose the output mode before dispatch. A read-only lane can return its complete
+report as final text for CLI `-o` capture. A worker-written artifact requires the
+appropriate write scope and a specific path. See [Codex CLI dispatch](../../llmx-guide/references/codex-dispatch.md)
+for current invocation, sandbox, tool availability, and recovery details.
 
-- "Read X and Y, compare field Z" — grounded comparison
-- "For each item in X, verify it exists in Y" — completeness check
-- "Trace the data flow from A through B to C" — wiring audit
-- "Count/rank/compute" — plays to GPT-5.4 math strength
+## Make the work checkable
 
-## Bad patterns
+- "Read X and Y, compare field Z" — grounded comparison.
+- "For each item in X, verify it exists in Y" — completeness.
+- "Trace data from A through B to C" — wiring and caller behavior.
+- "Count/rank/compute using this definition" — a reproducible measurement.
 
-- "Investigate X" — too vague, produces slop
-- "Research best practices" — needs web, Codex can't
-- "Fix the code" — audits should REPORT, not MODIFY
-- "Check if everything works" — no specific properties
+"Investigate X", "research best practices", and "check everything" need a
+concrete question, evidence scope, and completion criterion. Web research is
+possible when the configured tools permit it. An audit-only lane reports findings;
+editing requires an authorized edit contract.
+
+[Historical prompt](../../research/references/dispatch-reference-history.md#prompt-construction)
+preserves the earlier model-specific advice and capability claims.
