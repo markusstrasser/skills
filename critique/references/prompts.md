@@ -4,7 +4,7 @@
 
 Prompt bodies for manual customization. The shared review script owns transport,
 output files, extraction, and verification. If you need to customize dispatch,
-edit `review/scripts/model-review.py` or the shared dispatch contract in
+edit `critique/scripts/model-review.py` or the shared dispatch contract in
 `shared/llm_dispatch.py`; do not teach raw CLI invocation here.
 
 ## Gemini -- Architectural/Pattern Review
@@ -105,7 +105,7 @@ agent-infra `research/2026-06-12-vendor-binary-skill-archaeology.md`) + Codex re
 
 ## Flash -- Optional Mechanical Audit Pass
 
-Mechanical-only passes should use the `mechanical` axis in `review/scripts/model-review.py`.
+Mechanical-only passes should use the `mechanical` axis in `critique/scripts/model-review.py`.
 Keep them flat and specific:
 
 - Duplicated content across files

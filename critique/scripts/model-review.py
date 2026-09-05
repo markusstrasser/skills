@@ -590,7 +590,7 @@ def write_structural_assumptions_artifact(review_dir: Path, assumptions: list[st
 
 
 # Presets map a single name to a list of axes.
-# `claude` (Opus 4.8, $0 subscription), `composer` (Cursor Composer 2.5,
+# `claude` (subscription profile), `composer` (Cursor Composer 2.5,
 # metered Cursor pool — "sub" but not free), `glm` (Z.ai GLM-5.2, metered
 # OpenRouter — a genuinely NEW fourth lab), and `grok` (Grok 4.5 via a
 # read-only cursor-agent repo workspace) are opt-in cosigners — intentionally
@@ -2869,7 +2869,7 @@ def verify_claims(
     # citing data/config files. Order reflects observed frequency: GPT
     # and Gemini both emit ``.js`` where ``.json`` was meant, and there's
     # a similar ``.yml`` ⇄ ``.yaml`` ambiguity. Known issue logged at
-    # /Users/alien/.claude/skills/critique/SKILL.md § Known Issues
+    # /Users/alien/.claude/skills/critique/references/known-issues.md
     # (2026-04-16 entry).
     _FUZZY_EXT_ALIASES = {
         ".js": (".json",),

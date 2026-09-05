@@ -25,7 +25,7 @@ If you customize the extraction prompt, keep it mechanical:
 - one item per line
 - do not evaluate or filter
 
-The source of truth for the extraction prompt is `review/scripts/model-review.py`.
+The source of truth for the extraction prompt is `critique/scripts/model-review.py`.
 
 ## Anonymize During Disposition
 

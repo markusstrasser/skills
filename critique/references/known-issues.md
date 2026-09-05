@@ -75,3 +75,12 @@
   cannot enforce JSON Schema. Subscription extraction now uses a strict JSON-only prompt and local
   parsing, while an all-profile invariant test rejects future subscription defaults that request
   `max_tokens` or search. The llmx fail-safe against silent metered fallback remains unchanged.
+- **[2026-09-05] Documentation routing consolidated; historical defaults are not live authority.**
+  The former root and adversarial lens disagreed on presets, model versions, Fable transport,
+  and diff ownership. Active dispatch now points to the script's `AXES`/`PRESETS` and shared
+  profiles; superseded guidance is preserved in [history.md](history.md). Diffs use code-review
+  only. Initial closeout design review uses `triage --mode model`; `--mode close` is the later
+  readiness gate because it requires `verified-disposition.md` already to exist. This documents
+  the existing gate contract rather than routing a blocked manifest into the model.
+
+- **[2026-09-05] Manifest validation crashed when --manifest used a relative path, including diagnostic output for external files. The CLI now resolves paths and renders external locations safely; subprocess regressions cover success and invalid JSON.**

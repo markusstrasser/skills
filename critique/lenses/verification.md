@@ -2,6 +2,10 @@
 
 # Verification — Fact-Checking Procedure
 
+Use for a report or list of file-specific LLM findings, including model review or an external audit. A single specific bug needs direct inspection; already human-verified findings need no repeat pass. Scientific and external factual claims belong to `/research`.
+
+`model-review.py --verify` checks paths, symbols, line anchors and local corroboration. That artifact is useful input, not proof of the described behavior. Semantic confirmation still requires the code, authoritative declaration, or an empirical run.
+
 ## Claim Extraction
 
 Parse the report (file or inline text). Prefer structured findings (`findings.json`)
@@ -26,9 +30,9 @@ For each extracted claim, verify against actual code:
 2. **Line numbers are accurate** — Read the cited file:line. If the line is stale but the file/symbol is right, mark `CORRECTED`.
 3. **Local anchors corroborate the claim** — Look for cited symbols, function names, or code anchors in the resolved file/context.
 4. **Logic matches description** — Read the surrounding context. Does the code actually do what the finding claims?
-4. **Counts are correct** — Re-run any counting logic yourself (`wc -l`, `grep -c`, etc.).
-5. **Severity is defensible** — Is a "critical bug" actually critical, or is it a style preference?
-6. **Not already fixed** — Check `git log --oneline -10 -- <file>` for recent changes.
+5. **Counts are correct** — Re-run any counting logic yourself (`wc -l`, `rg -c`, etc.).
+6. **Severity is defensible** — Is a "critical bug" actually critical, or is it a style preference?
+7. **Not already fixed** — Check `git log --oneline -10 -- <file>` for recent changes.
 
 ## Common LLM Hallucination Patterns
 
@@ -45,7 +49,7 @@ For each extracted claim, verify against actual code:
 
 ## Calibration by Source
 
-Error rates vary by source and claim type:
+Historical calibration below is retained from prior runs; it is not a measured error rate for a new model or this report. Re-verify the claims rather than grading by model identity:
 - **Codex/GPT file-reading claims** (file:line citations): ~5% error rate — generally reliable
 - **Codex/GPT counts and severity**: ~28% error rate — always re-verify
 - **Gemini structural observations**: variable — check paths exist
@@ -76,8 +80,8 @@ Error rates vary by source and claim type:
 
 ## Action Rules
 
-- **Fix ALL CONFIRMED and CORRECTED findings.** Never skip confirmed ones. Don't self-select "top N."
+- **Fix ALL CONFIRMED and CORRECTED findings within the authorized scope.** Never implement a HALLUCINATED finding. Don't self-select "top N."
 - If a specific finding must be deferred (blocked, needs human input, out of scope), state the reason per item.
 - Commit each fix separately with the finding number in the commit message.
 - If hallucination rate exceeds 40%, warn user the source is unreliable — suggest re-running with a different model.
-- Write synthesis table to `docs/audit/verification-YYYY-MM-DD.md` (or project's audit directory).
+- For more than 10 findings, write the synthesis table to `docs/audit/verification-YYYY-MM-DD.md` (or the project's audit directory) and return the path. Keep smaller reports concise.

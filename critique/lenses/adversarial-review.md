@@ -1,139 +1,68 @@
-<!-- Lens file for review skill: model mode dispatch methodology. Loaded on demand. -->
+<!-- Model-mode workflow. Load only after selecting model review. -->
 
-# Adversarial Review — Dispatch Methodology
+# Adversarial Review
 
-## Axis Descriptions
+Use this for convergent critique of a plan or design. Actual diffs belong to `/code-review`; adding a model axis is not an alternate diff-review route.
 
-| Axis | Model | What it checks | When to include |
-|------|-------|---------------|-----------------|
-| `arch` | Gemini 3.5-flash | Patterns, architecture, cross-reference, principles alignment | Always (default) |
-| `formal` | GPT-5.5 (high reasoning) | Math, logic, cost-benefit, testable predictions, quantified principles coverage | Always (default) |
-| `domain` | Gemini 3.5-flash | Domain fact correctness — citations, API endpoints, schemas, biological claims, numbers | Domain-dense plans; skip for pure code reviews |
-| `mechanical` | GPT-5.5 (low reasoning) | Stale refs, wrong paths, naming inconsistencies, duplicated content | Large codebases; include grep results |
-| `alternatives` | Gemini 3.5-flash | 3-5 genuinely different approaches with different mechanisms | Architecture decisions; SEPARATE from convergent review (never mix critique + brainstorm) |
+## Select scope and cost
 
-## Depth Presets
+Keep a bounded, self-contained review as one packet. Split a broad review into 2–4 independent subparts by phase, module cluster, concern, or risk tier; use a tight packet for each (<80KB is the existing soft target). The parent merges findings across subparts.
 
-| Preset | Axes | Blast radius | Cost |
-|--------|------|-------------|------|
-| `standard` | arch + formal | User-facing default; most features | ~$2-4 |
-| `deep` | arch + formal + domain + mechanical | User-facing; structural/domain-dense | ~$4-6 |
-| `full` | all 5 | User-facing; shared infra, clinical, high-stakes | ~$6-10 |
+Run deterministic triage before choosing a larger model panel. Triage recommends the preset from scope and evidence; do not overwrite that choice with an automatic four-axis pass. The CLI fallback and preset definitions, optional cosigners, and transport limits are in [Dispatch](../references/dispatch.md).
 
-Classify by blast radius, not file count. `standard` is the default.
-The user-facing presets are `standard`, `deep`, and `full`; each includes GPT-5.5.
-Gemini-only passes are internal-only and should not be documented to users as review presets.
+- Formal/math/Bayes/proof/invariant subparts may add `formal`; perceived importance alone is not an effort-escalation reason.
+- Domain-dense packets may add `domain`; larger structural reviews may use `deep`.
+- Extra `composer`, `claude`, `glm`, or `grok` cosigners are opt-in for a specific need. Composer is packet-only here and is excluded from closeout design; the diff layer already owns its review.
+- `full` includes the divergent `alternatives` axis. Select it only when alternatives are part of the requested work and keep that output separate from convergent findings.
+- Repo-scale audit inventories with remediation plans use [Audit-plan](repo-audit-plan-review.md), including its lane-evidence prerequisite and lean critics.
 
-## Per-Model Prompts
+## Assemble and dispatch
 
-### Gemini — Architectural/Pattern Review (arch axis)
+Read [Context assembly](../references/context-assembly.md) to build the actual packet. Include a `## Scope` block with target users, current and designed-for scale, and data rate of change. Include enough code/caller evidence to test the plan's premises. Curate governance only when current and relevant; blind adversarial review is the default.
 
-System: Concrete, no platitudes. Reference specific code/configs. Agent-built codebase (dev time = free). Budget ~2000 words, dense tables/lists.
+For repo-backed subparts, the packet builder can select exact files:
 
-Required sections:
-1. Assessment of Strengths and Weaknesses — reference actual code
-2. What Was Missed — cite files, line ranges, gaps
-3. Better Approaches — Agree (refine) / Disagree (alternative) / Upgrade
-4. What I'd Prioritize Differently — top 5, testable criteria
-5. Goals & Principles Alignment — violations and well-served principles (or internal consistency if no GOALS.md)
-6. Blind Spots In My Own Analysis — where to distrust Gemini
-
-### GPT-5.5 — Quantitative/Formal Analysis (formal axis)
-
-System: Quantitative and formal ONLY. Other reviewers handle qualitative. Precise, show reasoning. Agent-built codebase. Budget ~2000 words, tables, source-graded claims.
-
-Required sections:
-1. Logical Inconsistencies — contradictions, assumptions, invalid inferences, math verification
-2. Cost-Benefit Analysis — impact, maintenance burden, composability, risk. Filter on ongoing drag, NOT creation effort
-3. Testable Predictions — falsifiable predictions with success criteria
-4. Goals & Principles Alignment (Quantified) — per-principle coverage 0-100%, gaps, fixes
-5. My Top 5 Recommendations — measurable impact, quantitative justification, verification metrics
-6. Where I'm Likely Wrong — GPT-5.5 known biases: confident fabrication, overcautious scope-limiting, production-grade creep
-
-### Gemini 3.5-flash — Domain Correctness (domain axis)
-
-System: Domain-specific claim verification only. Per-claim verdict: CORRECT / WRONG / UNVERIFIABLE. Flag URLs, API endpoints, version numbers needing probes. Budget ~1500 words.
-
-### GPT-5.5 — Mechanical Audit (mechanical axis)
-
-System: Mechanical audit only, no analysis. Find: stale refs, inconsistent naming, missing cross-refs, duplicates, wrong paths. Flat numbered list. Runs at low reasoning effort (pattern-spotting, not reasoning).
-
-### Gemini 3.5-flash — Alternative Approaches (alternatives axis)
-
-System: Generate 3-5 genuinely different approaches (different mechanisms, not variations). Per approach: core mechanism, advantages, disadvantages, maintenance burden. Do NOT critique the existing plan.
-
-## Full prompt templates
-
-See `references/prompts.md` for copy-paste manual dispatch templates. The `model-review.py` script handles these automatically.
-
-## Dispatch Mechanics
-
-**Always use the script:**
 ```bash
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
+  --repo "$(pwd)" --file path/a.py --file path/b.py \
+  --output .model-review/subpart-1-context.md
+
+uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
+  --repo "$(pwd)" --packet .model-review/subpart-1-context.md --mode model
+
 uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
-  --context context.md \
-  --topic "$TOPIC" \
-  --project "$(pwd)" \
-  --extract \
-  --question "$QUESTION"
+  --dispatch-manifest .model-review/dispatch.json \
+  --context .model-review/subpart-1-context.md \
+  --topic "$TOPIC — subpart 1" --project "$(pwd)" \
+  --question "Review this subpart's design and premises. Do not speculate about files absent from context."
 ```
 
-Set the outer tool timeout above the longest selected profile: `660000` ms for standard axes,
-`1230000` ms with Grok, or `3630000` ms with Opus Max. The script fires all queries in parallel
-and derives its internal collection wait from those profiles.
+The builder's sidecar separates diff and design review targets. Review only the design target here. Inspect triage's manifest before dispatch; stop on blockers. Re-triage each changed packet and use its matching manifest. [Dispatch](../references/dispatch.md) defines scope/scout options, profile timeouts, extraction, sibling roots, and coverage artifacts.
 
-### Script Flags
+For plans with repo premises, keep repo-grounded premise verification before the packet-only axes. For an entirely self-contained packet, select `--context-scope packet` or the equivalent manifest policy instead of paying for an irrelevant scout.
 
-- `--extract` — Auto-extract claims via cross-family models, merge into `disposition.md`, and emit `coverage.json`. Add to all standard/deep/full reviews.
-- `--verify` — After extraction, verify cited files/symbols exist. Implies `--extract`.
-- `--questions FILE` — JSON mapping axis names to custom questions. Unmapped axes use `--question`.
-- `--context-file SPEC` — Repeat to assemble `file.py`, `file.py:100-150`, or `file.py:100` excerpts.
-- `--axes NAME` — Preset name or comma-separated axes.
+## Read outputs, verify, and synthesize
 
-### Model Selection Contract
+Read every axis output, then merge raw extracted findings across all subparts. Never synthesize an earlier synthesis. Account for all items using [Extraction](../references/extraction.md) when manual work is needed.
 
-```
-Gemini 3.5-flash:  arch / domain / alternatives passes
-GPT-5.5:           formal pass + mechanical pass (low effort)
-3.1-Pro:           fallback when 3.5-flash rate-limits
-```
+Verify each code claim against actual files and behavior; search for a claimed missing feature and trace its callers. A plausible name, file anchor, or model agreement only locates evidence. Use [Verification](verification.md) for a full findings report.
 
-The shared dispatch layer owns providers, transport, retries, and timeout
-policy. This lens should describe review responsibilities, not raw model flags.
+| Bucket | Meaning | Action |
+|---|---|---|
+| Convergent | Reviewers independently flag the same issue | Verify, then fix if confirmed |
+| Single-source | One reviewer flags an issue and another is silent | Verify; silence is a coverage gap, not disagreement |
+| Divergent | Reviewers address the same decision and recommend incompatible answers | Resolve factual disputes with evidence; preserve genuine judgment choices for the user |
 
-**NEVER downgrade models on failure.** Diagnose via shared dispatch metadata and
-coverage artifacts instead of teaching transport-specific debugging here.
+Cross-model agreement plus source verification is stronger than agreement alone. Contradiction by the actual code defeats a finding. Do not rank by raw model confidence. The script's confidence tiebreaker does not turn self-reported confidence into a calibrated probability; historical measurements are in [History](../references/history.md).
 
-### Gemini Rate Limit Fallback
+Before adopting a fix, identify where you disagree with reviewers and what context they lacked. Convergence on a flaw does not establish that their proposed fix is appropriately sized. See [Biases and anti-patterns](../references/biases-and-antipatterns.md) for recurrent failure patterns.
 
-Script auto-detects a Gemini 503/rate-limit on the primary axis (gemini-3.5-flash, exit 3 or stderr markers) and retries that axis once with the runner-up critique model (gemini-3.1-pro-preview) — NOT the cheap classification model, which measured ~42% hallucination as a critique axis. If the fallback also rate-limits, the axis fails cleanly (recorded in coverage.json). GPT axes are unaffected.
+## Act and hand off
 
-### Uncalibrated Threshold Flagging
+Apply verified convergent and single-source findings within the authorized task. Fix all confirmed/corrected items; defer only with a specific reason. The updated artifact is the deliverable when implementation is in scope. If every finding is rejected or deferred, deliver the disposition.
 
-Automatic with `--extract`: the script tags numeric thresholds (e.g., `>=20% AUPRC`) lacking cited sources with `[UNCALIBRATED]`. Common GPT failure mode: fabricating plausible thresholds. Treat as requiring your own derivation.
+State genuine divergent recommendations with both positions and their implications; do not silently blend them or implement one while the user's decision is pending. A factual contradiction is resolved by verification, not by a vote.
 
-## Known Issues
+Before closing, inspect `coverage.json` for packet drops, completed/failed axes, extraction totals, and verification totals. Preserve `shared-context.md`, its manifest, axis outputs, `findings.json`, `disposition.md`, and any `verified-disposition.md` in the script's review directory. Grounded anchor checks still require semantic review of the claim.
 
-- **Gemini (3.5-flash):** Production-pattern bias (enterprise for personal), self-recommendation (Google services), instruction dropping in long context
-- **GPT-5.5:** Confident fabrication (invents numbers/paths), overcautious scope, production-grade creep
-- **gemini-3-flash-preview / GPT-5.3:** Shallow analysis, ~42% hallucination as a critique axis. The cheap classification tier — never a cosigner. This is why `mechanical` moved to GPT-5.5 and the rate-limit fallback moved to 3.1-Pro. (Distinct from gemini-3.5-flash, the clean primary cosigner.)
-- **Correlated errors:** ~60% shared wrong answers when both err (Kim ICML 2025, pre-reasoning). Never same-family reviewer + synthesizer.
-- **Self-preference:** 74.9% demographic parity bias (Wataoka NeurIPS 2024). Different-family synthesis.
-- **Debate = martingale:** Sequential discussion has no correctness improvement (Choi 2025). Independent parallel reviews only.
-- **Shared dispatch output:** Never rely on shell redirects for review artifacts;
-  the shared script writes directly to files.
-
-## Anti-Patterns
-
-- **Synthesizing without extracting** — #1 information loss. Always extract + disposition before prose.
-- **Synthesizing a synthesis** — Each compression drops ideas. Merge raw extractions, not prior syntheses.
-- **Adopting without code verification** — Both models hallucinated "missing" features that already existed.
-- **Model agreement = proof** — Agreement is evidence, not proof. Verify against source code.
-- **Same prompt to both models** — Gemini = patterns, GPT = quantitative/formal. Different strengths need different prompts.
-- **Writing to /tmp** — Persist to `.model-review/YYYY-MM-DD-topic/`.
-- **Skipping governance check** — Unanchored reviews drift into generic advice.
-- **Mixing review and brainstorming** — Convergent only. Use `/brainstorm` for divergent.
-- **Priming tool names** — Turns critique into evaluation. Use `alternatives` axis separately.
-- **Scale-ambiguous context** — Both models converge on the same wrong answer from shared misleading context.
-- **"Top N" triage** — If INCLUDE, implement. DEFER needs explicit reason per item.
-- **Skipping self-doubt section** — Most valuable part of each review.
+Historical default panels, calibration results, the genomics LR/math review note, and retired Fable instructions are preserved in [History](../references/history.md). They are not current transport authority.

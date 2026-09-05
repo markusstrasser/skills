@@ -31,7 +31,7 @@ Gemini+GPT `model-review.py` returned 76 findings with high speculation density.
 
 Rule: **lanes supply facts; verify supplies truth; critics supply architecture.**
 
-**VOI boundary:** VOI scout (§1.5 in `SKILL.md`) runs on a **named fork** before expensive
+**VOI boundary:** the [premise scout](../references/dispatch.md#repo-scope-and-premise-scout) runs on a **named fork** before expensive
 adjudication. Lanes run **before critics** to inventory unknowns. VOI does not replace lanes
 on first whole-repo audit — it decides whether a specific fork is worth probing, not whether
 the repo was read.

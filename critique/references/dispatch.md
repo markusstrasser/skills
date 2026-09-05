@@ -1,163 +1,115 @@
-<!-- Reference file for model-review skill. Loaded on demand, not auto-loaded into context. -->
+<!-- Dispatch contract. Load for model dispatch, closeout design review, or transport debugging. -->
 
 # Dispatch Mechanics
 
-## Default economics: presets + subparts
+The maintained authorities are `critique/scripts/model-review.py` (`AXES`, `PRESETS`, prompts and CLI), `critique/scripts/review_gate.py` (triage policy), and `shared/llm_dispatch.py` (`PROFILES`, providers, transport, retries and timeouts). Use their `--help` or declarations before changing a dispatch. Historical model/pricing claims are in [History](history.md).
 
-**Presets** (see `model-review.py` PRESETS):
+## Choose the panel before dispatch
 
-| Preset | Geometry | When |
-|--------|----------|------|
-| `standard` | 2×2 / 4 lenses (CLI default until ROUTING_VERDICT) | Legacy / closeout |
-| `cross2` / `lens2` | diagonal S_G + M_P | Routine design (triage recommends; not CLI default yet) |
-| `cross4` / `lens4` | full 2×2 grid | Governance, multi-repo, INCONCLUSIVE≥3, **contradictory anchors** |
+| Preset | Axes | Selection |
+|---|---|---|
+| `cross2` / `lens2` | `arch,correctness` | Triage recommendation for routine design |
+| `cross4` / `lens4` | `arch,gaps,correctness,contracts` | Triage escalates for governance, multiple repos, ≥3 inconclusive findings, or contradictory anchors |
+| `standard` | Same four axes as cross4 | CLI fallback without a manifest; also declared by the plan-close packet builder |
+| `deep` | standard + `domain,mechanical` | Explicit structural/domain-dense review |
+| `full` | deep + `alternatives` | Explicit review plus divergent alternatives; keep the two outputs separate |
 
-1. **Split** the review into 2–4 subparts (phases, directories, risk tiers).
-2. **Run `review_gate.py triage`** → `dispatch.json` includes `preset`, `dispatch_policy`
-   (scout/scope/budget), and `preset_reasons`.
-3. **Per subpart**, dispatch from triage:
-   ```bash
-   model-review.py --dispatch-manifest .model-review/dispatch.json \
-     --context packet.md --topic "..." --question "Review"
-   ```
-   CLI flags override manifest fields when explicitly passed.
-   - Optional: `--cross-talk` on cross2/cross4 — structure lenses first, inject
-     `structural-assumptions.json` into mechanism passes (sequential; default parallel).
-4. **Merge** findings across subparts.
+The four standard axes have overlapping full-review mandates: their lenses differ, their territories do not. `arch` and `correctness` include folded gaps/contracts checks so cross2 remains a meaningful smaller panel. Read the manifest's `preset_reasons`; its explicit design axes override triage's recommendation.
 
-`arch` / `correctness` prompts include folded gaps/contracts checklists. Separate `gaps`/`contracts` axes remain for `standard`/`cross4` until ablation promotes `cross2`.
+Optional axes are outside the presets:
 
-Smaller packets → fewer tokens → lower cost. Split lenses → more findings than one mega-pass.
+| Axis | Use and contract |
+|---|---|
+| `formal` | Math, Bayes/stats, proofs or formal invariants; `formal_review` profile at high effort |
+| `composer` | Third lineage for a plan/design packet; neutral empty cwd, packet-only; never a duplicate diff review or closeout design axis |
+| `claude` | Third-family review for a load-bearing subpart; `claude_review` subscription profile |
+| `glm` | Explicit additional model family; metered profile |
+| `grok` | Repo-grounded premise falsification; exact Cursor registry and repo canary required |
 
-**Deterministic gate (run before dispatch):** `review_gate.py triage` reads the packet
-manifest + git diff, writes `.model-review/dispatch.json` (layers, blockers, token budget).
+User-facing review normally requires a GPT-backed axis. Pair a lone opt-in cosigner with a GPT axis; `--allow-non-gpt` is an explicit specialized exception, not a default. Do not increase effort merely because a topic feels important.
 
-**VOI premise scout (default on):** runs unless `--no-scout` or `--context-scope packet`
-(single-file / clear req-res / context-free). `--irreversible` gates on executed
-`conviction=low`; skip ≠ low. See `decisions/2026-06-15-voi-sequenced-review.md`.
+## Packet and manifest contract
 
-**Orchestrator wall-clock budget (opt-in):** `--budget-seconds SEC` — no limit by default.
-Applies to **parallel axis dispatch + extract only**; premise scout has a fixed timeout
-and does not consume this cap (scout timeout previously cascaded into all axes skipped
-as `budget_exhausted`). When set: skip axis/extract if `remaining < profile.timeout`
-(full job or nothing; never truncate). Skipped axes → `budget_exhausted` or
-`budget_insufficient_for_profile` (cap smaller than profile timeout at start);
-`execution-receipt.json` records `overall: partial|incomplete_all_skipped` (dispatch exits 2).
+Use one context file per independently reviewed subpart. The packet builder emits a markdown file plus a sidecar `<packet>.manifest.json`, including `payload_hash` and `review_targets`:
 
-`dispatch.json` includes `schema_version: dispatch.v1`. Triage exits **1** on blockers.
+- `diff_target`: code-review owns the git ref/range and files.
+- `design_target`: critique owns the packet and design review axes.
 
-```bash
-model-review.py --budget-seconds 480 --context plan.md --topic "gateway" --axes standard,formal --question "Review"
-```
+For committed work, specify `--since <first-session-commit>` (inclusive through HEAD), `--base <old-ref> --head <new-ref>`, or repeated `--file` selections. A clean worktree is not evidence that the review scope is empty. See [Plan close](../lenses/plan-close-review.md) for range examples and [Context assembly](context-assembly.md) for scope content.
 
-After review: `review_gate.py rank` → `orchestrator-top.json` + `anchor-contradictions.json`
-+ `escalation-recommendation.json` (when contradictory pairs ≥1); `outcome_link.py` uses
-`linked_anchor` (evidence) not file-touch alone; `integration_audit.py` before commit.
-
-**Escalation ontology:** `contradictory_anchors` = cross-family opposite stance on overlapping topic
-(same file + shared entity terms). **Non-overlap** (different issues, same file) does **not** escalate.
-
-Add `--axes standard,formal` only on subparts with math/Bayes/proofs/invariants (GPT **high**).
-Add `composer` or `claude` as third lineage on high-stakes diffs — not instead of the 4-axis core.
-
-## Shared Dispatch Contract
-
-The review script owns transport, context packing, output files, extraction, and
-verification. Prefer the script over ad hoc model calls:
-
-```bash
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
-  --context context.md \
-  --topic "$TOPIC" \
-  --project "$(pwd)" \
-  --extract \
-  --question "What's wrong with this [thing being reviewed]"
-```
-
-Use `--verify` when the review is a plan-close packet or when you want the script
-to check file/symbol references after extraction. After triage, manifest carries
-`extract`/`verify` — auto-loaded from `.model-review/dispatch.json` when present:
+Run triage for the exact packet:
 
 ```bash
 uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
-  --repo "$(pwd)" --packet .model-review/plan-close-context.md --mode close
+  --repo "$(pwd)" --packet .model-review/packet.md --mode model
 
 uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
-  --context .model-review/plan-close-context.md \
-  --topic "$TOPIC" \
-  --project "$(pwd)" \
-  --question "Review this plan closeout"
+  --dispatch-manifest .model-review/dispatch.json \
+  --context .model-review/packet.md \
+  --topic "$TOPIC" --project "$(pwd)" \
+  --question "Find design flaws and false premises in the proposed caller migration."
 ```
 
-No `--budget-seconds` unless the session is time-boxed (no wall-clock limit by default).
+`review_gate triage` accepts `--mode model|close|auto` and writes `schema_version: dispatch.v1`, layer ownership, blockers, preset/reasons and `dispatch_policy`. The policy includes `premise_scout`, `context_scope`, `budget_seconds`, `irreversible` and `cross_talk`; design-layer settings include `extract` and `verify`.
 
-Other useful forms:
+**Stop on blockers.** Triage exits 1 for blockers; an invalid budget below the resolved axis floor exits 2 without writing a new dispatch manifest. Dead references block closeout but are warnings for plan/design review. Close mode additionally requires an existing `verified-disposition.md`: use model mode for the initial design dispatch and close mode for the final readiness check. Do not send a blocked close manifest to the model and expect it to repair the blocker.
 
-```bash
-# Deep review with per-axis overrides
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
-  --context-file docs/plan.md \
-  --context-file scripts/finding_ir.py:86-110 \
-  --topic "$TOPIC" \
-  --axes arch,formal,domain,mechanical \
-  --questions questions.json \
-  --extract \
-  --question "Review this plan"
-```
+Pass `--dispatch-manifest` explicitly and keep it paired with the packet just triaged. Explicit CLI flags win over manifest settings. Auto-discovery only loads a manifest matching the packet hash or recorded path; an explicitly passed manifest is honored, so the caller remains responsible for its freshness. Re-triage after changing packet content.
 
-## Contract Boundaries
+The close gate rejects a `composer` design axis because the diff layer owns Composer via `/code-review`. Neither a broader preset nor another lineage licenses a second critique of the same diff.
 
-Transport/model choices live in `shared/llm_dispatch.PROFILES`. Update that shared
-contract rather than duplicating provider flags in skill docs.
+## Repo scope and premise scout
 
-Relevant profiles:
-- `deep_review` — Gemini `arch` + `gaps` axes
-- `gpt_general` — GPT-5.6 Luna **medium** on `correctness` + `contracts`
-- `formal_review` — GPT-5.6 Sol **high** on opt-in `formal` axis only
-- `mechanical_review` — GPT-5.6 Luna **low** on `mechanical` (deep/full)
-- `fast_extract` — mechanical extraction elsewhere
+`--context-scope` accepts only `repo` and `packet`.
 
-The script writes these artifacts:
-- `shared-context.md` / `shared-context.manifest.json`
-- `<axis>-output.md`
-- `findings.json`
-- `disposition.md`
-- `verified-disposition.md`
-- `coverage.json`
+| Option | Meaning |
+|---|---|
+| `--context-scope repo` | Scout may inspect the workspace; standalone script default |
+| `--context-scope packet` | Self-contained packet; no repo scout |
+| `--scout` / `--no-scout` | Enable/disable premise scout; standalone default on |
+| `--fork` | Named design fork for the scout; defaults to topic |
+| `--irreversible` | Block adjudication when an executed scout returns `conviction=low` |
+| `--force-scout` | Explicitly proceed despite that low-conviction gate |
 
-`coverage.json` is the stable machine-readable summary. Current top-level fields:
-- `schema_version`
-- `artifacts`
-- `context_packet`
-- `dispatch`
-- `extraction`
-- `verification`
+Triage can infer packet-only scope when the text has no repo premises, or take explicit `design_target.context_scope` and `premise_scout` fields. A skipped scout is not a low-conviction finding. A plan that depends on live callers, schemas, or join keys still needs repo-grounded evidence before packet-only criticism. The scout tests a named fork; it does not replace the inventory lanes of [Audit-plan](../lenses/repo-audit-plan-review.md).
 
-## Context Assembly
+## Transport, billing, and timeouts
 
-Repeat `--context-file` for specs of the form `path/file.py`,
-`path/file.py:100-150`, or `path/file.py:100`.
+Use the shared script for normal model/close design dispatch. The audit-plan lens documents its bounded two-critic exception. Do not replace a failed transport with an unrequested paid route.
 
-For plan-close review packets, prefer:
+- `claude_review` uses the current Opus profile through llmx `anthropic` with `auth=subscription` (claude-cli). Never switch to `anthropic-direct`/API by default. The profile locks overrides to `timeout`; API-only output knobs can force billing or fail.
+- General and mechanical GPT profiles use subscription transport. Subscription extraction uses a strict JSON prompt and local parsing because that transport cannot enforce JSON Schema. Do not add API-only `max_tokens` or search controls.
+- The Composer profile is usage-metered through Cursor. It has no reasoning-effort tiers and accepts only its supported timeout override; `max_tokens`, search and stream are not supported.
+- The Grok axis pins `cursor-grok-4.5-high` in a read-only repo workspace and fails closed on exact-registry or unrevealed HEAD-canary drift. Bare `grok-4.5` means xAI API; llmx Cursor is packet-only. Probe the intended repo with `model-review.py --preflight --axes grok --project "$(pwd)"`.
+- Plain `--preflight` performs import/routing checks plus a cached live subscription entitlement call; it makes no Grok call unless `--axes grok` is supplied.
+- Fable is not a script axis. Historical `fable-subagent` instructions are superseded. A Fable-specific request needs the current [model guide](../../model-guide/SKILL.md) and its verified transport/billing procedure; do not treat an Agent model pin as proof of the served model.
 
-```bash
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
-  --repo "$(pwd)" \
-  --output .model-review/plan-close-context.md
-```
+The executor derives its internal collection wait from the longest selected profile. Set the outer tool timeout above it: `660000` ms for standard, `1230000` ms with Grok, `3630000` ms with Opus Max. When the tool cannot wait that long, launch asynchronously and inspect the running task/output. A zero-byte artifact or timeout is transport failure, not reviewer evidence.
 
-## Context Formatting
+There is **no wall-clock budget by default**. Use `--budget-seconds SEC` only for a requested time box. It covers parallel axis dispatch plus extraction; the premise scout has a separate fixed timeout. The full selected profile must fit in the remaining budget: calls are skipped, never truncated. A cap below the largest resolved timeout is a triage configuration error. Dispatch records `budget_exhausted` / `budget_insufficient_for_profile` and partial or `incomplete_all_skipped` receipts (exit 2); do not report that as a completed review.
 
-Before assembling context, check `/model-guide` for per-model prompting rules.
-Key points:
+Never shell-redirect review artifacts or pipe model-review output through `tail`. The script writes artifacts directly. Debug using [Known issues](known-issues.md), shared dispatch metadata, and the recorded axis errors; do not silently change the model.
 
-- GPT-5.5 context should use XML `<doc id="..." title="...">` tags for document sections
-- Gemini does better when the question and constraints come last
-- Keep prompts direct; the shared review script handles the rest
+## Questions, context, and extraction
 
-## Extraction Defaults
+- `--context` is the main narrative file; repeated `--context-file` is additive and accepts `file.py`, `file.py:100-150`, or `file.py:100`.
+- `--questions FILE` takes JSON mapping axis names to specific questions; unmapped axes use `--question`.
+- Ask a concrete question about the target. Bare verbs such as `--question "close"`, `"review"`, or `"verify"` trigger a warning and generic replacement template.
+- The script owns default prompts. For manual customization, consult [Prompts](prompts.md) and only the relevant model-guide section. The historical formatting advice is XML document sections for GPT and query/critical constraints last for Gemini.
+- `--charter-anchor` injects the full goals/governance charter only for an explicitly selected compliance review. Otherwise curate current, relevant constraints as described in [Context assembly](context-assembly.md).
+- `--extract` defaults on. `--verify` implies extraction and checks cited paths, symbols, line anchors and local corroboration. Triage supplies extraction/verification settings for design review; explicit flags override them.
+- Cross-repo verification needs `--sibling-roots /path/to/repo-a /path/to/repo-b` so sibling anchors are actually resolved. A missing root is not evidence a claim is hallucinated.
+- Optional `--cross-talk` runs structure lenses first and injects `structural-assumptions.json` into mechanism passes for cross2/cross4; ordinary dispatch remains independent and parallel.
+- Extraction tags unsourced numeric thresholds `[UNCALIBRATED]`; derive or source them before use.
 
-Use `--extract` for normal user-facing reviews. Use `--extract --verify` for
-plan-close packets or any review that needs an auditable coverage trail with
-checked references. Default preset `standard` = 2× Gemini + 2× GPT-medium; add
-`formal` explicitly for math-dense subparts.
+## Artifacts and completion
+
+The script writes `shared-context.md`, `shared-context.manifest.json`, `<axis>-output.md`, `findings.json`, `disposition.md`, `coverage.json`, `execution-receipt.json`, and `verified-disposition.md` when verification runs.
+
+`coverage.json` is the machine-readable contract with `schema_version`, `artifacts`, `context_packet`, `dispatch`, `extraction`, and `verification`. Inspect actual packet provenance/drops, axis/model coverage and extraction/verification counts before completion. Read every axis output; no finding disappears because it falls below a summary cutoff.
+
+`verified-disposition.md` establishes anchors and local corroboration, not semantic truth. Source inspection or execution must establish whether the claimed behavior is real. Use [Verification](../lenses/verification.md).
+
+After extraction/verification, `review_gate.py rank` writes `orchestrator-top.json`, `anchor-contradictions.json`, and an escalation recommendation when applicable. The top eight are a reading order, not permission to omit confirmed findings. Contradictory anchors mean cross-family opposite stances on an overlapping topic; different issues in the same file do not qualify. Follow the recommendation on the same packet, then disposition every item.
+
+Closeout's [plan-close lens](../lenses/plan-close-review.md) owns the inconclusive pass, integration audit before the closeout commit, and outcome links after fix commits. `linked_anchor` is evidence-grade; file-touch-only `linked_file` is a weak candidate.
