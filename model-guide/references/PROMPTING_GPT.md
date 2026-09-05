@@ -1,154 +1,32 @@
-# GPT-5.6 Prompting Guide
+# GPT prompting and Astra migration
 
-**Last updated:** 2026-07-09
-**Scope:** GPT-5.6 Sol / Terra / Luna (+ Pro mode). GPT-5.5 removed.
+Verified 2026-09-05 against [official model guidance](https://developers.openai.com/api/docs/guides/latest-model). Preserve the requested model and workload: a migration does not collapse a cost-tier router, replace an evaluation baseline or authorize API spending.
 
-## Use Sol / Terra / Luna For
+## GPT-6 Astra behavior
 
-- **Sol** (`gpt-5.6-sol`): Codex and terminal-heavy implementation; formal/cross-lab; architecture GPT side.
-- **Terra** (`gpt-5.6-terra`): Mid-tier opt-in between Luna and Sol.
-- **Luna** (`gpt-5.6-luna`): Everyday GPT (≈ prior 5.5 perf at ~½ price) + mechanical/lint at low effort.
-- Structured outputs and strict tool schemas.
-- Document, spreadsheet, and slide generation inside OpenAI/Codex workflows.
-- Long-context retrieval where OpenAI-reported MRCR performance matters.
+The shared global instructions own the general defaults. Apply them when writing an Astra brief:
 
-## Use Pro Mode For
+- State the task, relevant inputs, success criteria and action boundaries. Tell the worker to finish authorized work and make routine assumptions; keep genuine missing decisions visible. A side question or new requirement steers the active task.
+- Carry existing authorization forward. Prepare the reviewable result before an outstanding approval. User instructions outrank skill guidelines; a skill-driven pause must identify the exact file, instruction and reason.
+- Request concise, plain prose and only the output structure needed by the consumer. Astra already tends toward detailed formatting; do not prepend `Formatting re-enabled` by habit.
+- Delegate bounded independent work when it improves time or quality. Preserve parent judgment, file ownership and artifact contracts. Do not require a panel for a single-source lookup or forbid useful delegation across all research.
+- Specify the checks needed for the change. Complete them, then stop repeating or broadening checks unless new evidence warrants it. Persistence and verification are useful behavioral instructions; avoid elaborate prescriptions for private reasoning.
 
-Pro is **not** a separate slug — set API `reasoning.mode=pro` on Sol/Terra/Luna (same $/MTok, more tokens). Use only when the task is worth the cost:
+These are vendor-recommended starting points, not local performance measurements. Validate a changed brief on representative tasks, including an authorized continuation, a genuinely gated action and a small edit that should stay small.
 
-- Hard quantitative derivation.
-- Calibration math or Bayesian chains.
-- Formal proof or precise data-analysis reasoning.
-- Final review of decisions that are expensive to undo.
-- Scientific/technical reasoning over provided data where extra test-time compute is likely to matter.
+## When migrating an actual Astra caller
 
-Do not use Pro for ordinary coding, broad web research, simple classification, or current-fact lookup.
+1. Preserve the effective reasoning effort. Map `none`/`minimal` to `low`; Astra supports `low`, `medium`, `high`, `xhigh` and `max` in the documented API. Check the specific CLI/runtime's supported settings separately.
+2. Use Responses for tool calling. Plain-text Chat Completions remains supported; a text-only caller does not need a new tool loop.
+3. Omit unsupported sampling/logprob parameters: `temperature`, `top_p`, `top_logprobs`; also Chat Completions `logprobs` and Responses `message.output_text.logprobs` in `include`.
+4. If a caller actually changes effort across responses, inspect `configuration_update` compatibility before adopting it. Preserve a stable prompt prefix; do not add state machinery to independent one-shot calls.
+5. If migrating an existing GPT-5.5-or-earlier cache-retention caller, use the documented `prompt_cache_options.ttl` replacement. No existing cache parameter means no migration is needed there.
+6. For a configured EU data-residency endpoint, use Standard processing; Astra fast/priority is unsupported there. User geography alone is not endpoint residency.
 
-## Model And API Facts
+Verify request construction and command parsing offline first. Keep pricing/admission and authorization controls; a mocked request is not a successful live API call. Optional async tools, WebSocket steering and pro mode need an actual caller and their specific documentation.
 
-| Variant | What differs | Price | Context | Max output |
-|---|---|---:|---:|---:|
-| `gpt-5.6-sol` | Flagship | $5/M input, $30/M output | 1.05M | 128K |
-| `gpt-5.6-terra` | Balanced | $2.50/M input, $15/M output | 1.05M | 128K |
-| `gpt-5.6-luna` | Cheap/fast | $1/M input, $6/M output | 1.05M | 128K |
-| Pro mode | Same model + parallel test-time compute | Same $/MTok (more tokens) | 1.05M | 128K |
+## Other GPT models and historical evidence
 
-Cutoff Feb 16 2026. Support Responses, Chat Completions, Batch, streaming, function calling, structured outputs, and image input. Effort includes `max`.
+Use the official guide for the exact model and current transport. Keep strict output schemas when a real consumer needs them, preserve source identity, and supply decisive code/data instead of vague task labels. For technical/numerical work, specify which calculations require independent checking.
 
-## Prompting Rules
-
-### Do Less Prompt Theater
-
-Do not use:
-
-```text
-Think step by step.
-Plan before acting.
-Check your work.
-Iterate until done.
-```
-
-GPT-5.5 already reasons internally. Over-scaffolding spends tokens on obeying your process text instead of solving the problem.
-
-Use:
-
-```text
-Task: ...
-Inputs: ...
-Constraints: ...
-Output format: ...
-Verification: ...
-```
-
-### Hydrate With Real Data
-
-GPT-5.5 and Pro are strongest when the prompt contains the actual code, logs, JSON, metrics, or evidence.
-
-Bad:
-
-```text
-Audit my variant scoring method.
-```
-
-Good:
-
-```text
-Here is the scoring function, current distribution, parameter ranges, and failing cases.
-Find mathematical or implementation errors. Show derivations for every numerical claim.
-```
-
-### Use Strict Schemas
-
-For function calling, set `strict: true` and make parameters precise. Do not rely on prose to enforce schema shape.
-
-### Use XML-Style Document Packets
-
-```xml
-<doc id="policy" title="Policy">
-...
-</doc>
-<doc id="log" title="Failure log">
-...
-</doc>
-```
-
-The format is easier for the model to segment than raw concatenated prose or deeply nested JSON.
-
-### Preserve Reasoning State
-
-Use the Responses API with stored state and `previous_response_id` for multi-turn tool loops. Chat Completions-style reconstruction loses reasoning items and can increase token usage.
-
-### Cache Deliberately
-
-Put static instructions and tool descriptions first, dynamic task material later. GPT-5.5 pricing rewards cached input, but only if your prefix is stable.
-
-### Re-enable Formatting
-
-When using thinking mode and Markdown matters, put this at the top of the developer message:
-
-```text
-Formatting re-enabled
-```
-
-## Pro Prompt Pattern
-
-```text
-Task: Derive/check ...
-
-Data:
-[exact values, code, logs, or tables]
-
-Constraints:
-- ...
-- ...
-
-Show all derivations. I will verify every intermediate step.
-Return final answer plus a table of assumptions, formulas, and computed values.
-```
-
-Pro needs exact material. It is not a substitute for retrieval.
-
-## System-Card Lessons
-
-- GPT-5.5 understands task intent earlier, asks for less guidance, uses tools more effectively, and keeps going longer than earlier models.
-- Destructive-action behavior improved, but the model still needs worktree safeguards. OpenAI reports destructive-action avoidance 0.90, perfect reversion 0.52, user-work preservation 0.57.
-- Factuality improved but remains insufficient for source-grade claims: in flagged factual-error cases, claims were 23% more likely correct, but response-level factual errors fell only 3%.
-- Coding-agent resampling found slightly more low-severity misalignment than GPT-5.4 Thinking, including taking credit for pre-existing work, ignoring constraints, and acting when the user only asked a question. Spell out action permissions.
-- CoT controllability is very low. OpenAI reports 0.2% control success for 50K-character CoTs. Do not try to micromanage hidden reasoning.
-- Apollo found no deferred-subversion sandbagging, but GPT-5.5 lied about completing an impossible coding task in 29% of samples. Impossible-task harnesses need deterministic checks.
-- GPT-5.5 is High capability for bio/chem and High but below Critical for cybersecurity. Cyber prompts need policy-aware routing and source/tool boundaries.
-
-## Verification Checklist
-
-- [ ] Current facts come from sources or tools, not model recall.
-- [ ] Tool use and code changes are checked against actual logs and git state.
-- [ ] Pre-existing work/user changes are preserved.
-- [ ] "Done" claims are backed by tests or parsed artifacts.
-- [ ] Pro outputs have every decisive calculation rechecked.
-
-## Sources
-
-- `https://openai.com/index/introducing-gpt-5-5/`
-- `https://deploymentsafety.openai.com/gpt-5-5/gpt-5-5.pdf`
-- `https://openai.com/api/pricing/`
-- `https://developers.openai.com/api/docs/models/compare`
+The [historical GPT guide](gpt-prompting-history.md) preserves prior model-specific observations and recipes. Its blanket bans on persistence/verification prompts and formatting prefix are superseded for Astra; do not transfer its reported error rates or model-selection verdicts without measurement.

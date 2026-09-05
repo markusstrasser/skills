@@ -15,11 +15,10 @@ reason this file exists). Two tiers:
 Run:  pytest test_cli_contracts.py                 # flag contracts only
       LIVE_CLI=1 pytest test_cli_contracts.py -v   # + live smokes
 
-Background (the contracts being defended — see `../references/bare-lean-dispatch.md`):
-codex `-c mcp_servers={}` strips the 56K MCP overhead; claude `--system-prompt` REPLACES
-the harness for a lean free-sub call; cursor `--mode ask` is the lean Composer path (vs
-the 38K Cloud-Agents agent); `-p codex-cli` stays on the ChatGPT sub (bare `--subscription`
-via llmx silently falls back to the PAID openai-api).
+Background: see `../references/bare-lean-dispatch.md` for dated measurements and
+`../references/codex-dispatch.md` for the current Codex contract. Test sandbox,
+workspace, config-isolation and output flags against the installed parser. Token
+overhead and billing cannot be inferred from flag acceptance or a successful reply.
 """
 
 from __future__ import annotations
@@ -39,6 +38,7 @@ def _help(cmd: list[str]) -> str:
     if shutil.which(cmd[0]) is None:
         pytest.skip(f"{cmd[0]} not installed")
     p = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    assert p.returncode == 0, f"CLI rejected {cmd!r}: {p.stderr[:300]}"
     return (p.stdout or "") + (p.stderr or "")
 
 
@@ -48,10 +48,21 @@ def _help(cmd: list[str]) -> str:
 
 
 def test_codex_has_config_override():
-    """codex `-c key=value` is how we strip MCP (`mcp_servers={}`) + set effort
-    (`model_reasoning_effort=low`). If `-c`/`--config` vanishes, the bare/effort path breaks."""
+    """The effort override remains available on the installed CLI."""
     h = _help(["codex", "exec", "--help"])
     assert "-c" in h and ("--config" in h), "codex lost -c/--config override"
+
+
+@pytest.mark.parametrize("sandbox", ["read-only", "workspace-write"])
+def test_codex_dispatch_arguments_parse(sandbox, tmp_path):
+    """Exercise the documented argv, including flags renamed in prior incidents."""
+    h = _help([
+        "codex", "exec", "-s", sandbox, "-C", str(tmp_path),
+        "--ignore-user-config", "--skip-git-repo-check",
+        "-c", 'model_reasoning_effort="low"',
+        "-o", str(tmp_path / "result.md"), "--help",
+    ])
+    assert "Run Codex non-interactively" in h
 
 
 def test_claude_has_lean_flags():
@@ -111,19 +122,19 @@ def test_live_claude_bare_runs_on_subscription():
 
 @live
 def test_live_codex_bare_and_effort_apply():
-    """codex `-c mcp_servers={}` (bare) + `-c model_reasoning_effort=low` must both still apply.
-    rc==0 confirms the overrides parse; the effort assertion would need the rollout log (left to
-    the operator — see the memory)."""
+    """Smoke an isolated config and explicit effort; rc==0 alone does not prove effort."""
     if shutil.which("codex") is None:
         pytest.skip("codex not installed")
     p = subprocess.run(
         [
             "codex",
             "exec",
-            "--full-auto",
+            "-s",
+            "read-only",
             "--skip-git-repo-check",
-            "-c",
-            "mcp_servers={}",
+            "--ignore-user-config",
+            "-m",
+            "gpt-6-astra",
             "-c",
             'model_reasoning_effort="low"',
             "Reply with exactly: OK",

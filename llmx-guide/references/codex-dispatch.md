@@ -1,89 +1,42 @@
-<!-- Reference file for llmx-guide skill. Loaded on demand. -->
+# Codex CLI dispatch
 
-# Direct Codex CLI Usage & Parallel Dispatch
+Checked against installed `codex exec --help` on 2026-09-05. Use [model-guide](../../model-guide/SKILL.md) for model/effort choice and current Astra prompting. The removed `--full-auto` and `--cwd` flags are not valid invocation options.
 
-## Direct Codex CLI Usage (without llmx)
-
-For subagent dispatch and non-interactive tasks, call `codex exec` directly:
+## Pick the actual work boundary
 
 ```bash
-# Simple task
-codex exec --full-auto "Review the error handling in scripts/*.py"
+# Analysis: read the workspace and return a report; the CLI captures final text.
+codex exec -s read-only -C /path/to/project -o findings.md 'Review the named files. Return the findings as your final message.'
 
-# With output capture
-codex exec --full-auto -o findings.md "Audit this codebase for dead code"
+# Authorized edits: confine shell writes to the selected worktree.
+codex exec -s workspace-write -C /path/to/worktree -c model_reasoning_effort=medium 'Implement the approved change and run its relevant checks.'
 
-# Specific working directory
-codex exec --full-auto -C /path/to/project "List all API endpoints"
-
-# Structured output
-codex exec --full-auto --output-schema schema.json "Extract function signatures"
+# Existing structured-output consumer.
+codex exec -s read-only --output-schema schema.json 'Extract the requested records.'
 ```
 
-**Key facts (v0.123.0+; GPT-5.6 suite GA 2026-07-09):**
-- **Auth:** ChatGPT account (browser login). Subscription-tier models work: `gpt-5.6-sol` (default), `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.4`, `gpt-5.3-codex`. `o3`, `gpt-4.1`, etc. are rejected.
-- **Token overhead:** ~37K tokens per call from MCP server tool descriptions (9 servers). No flag to disable. Structural cost — fine for substantial tasks, wasteful for trivial queries.
-- **MCP servers loaded:** context7, exa, research, meta-knowledge, brave-search, paper-search, perplexity, scite, codex_apps. Configured in `~/.codex/config.toml`.
-- **`--ephemeral`:** Avoid — sandbox cleanup deletes file writes including `-o` output.
-- **`--full-auto`:** Sandboxed auto-approval (workspace-write). Required for non-interactive use.
-- **`--search`:** Only works in interactive mode, NOT in `exec`. Use MCP tools instead.
-- **Default model:** Set in `~/.codex/config.toml` (`model = "gpt-5.6-sol"`). Don't pass `--model` unless overriding.
+`exec` is non-interactive. `-s` chooses shell sandbox scope; it does not itself authorize spending, MCP side effects or bypassing configured approvals. Use `-C`/`--cd` for the working root. Keep user/project execpolicy rules and approval controls unless the actual task explicitly authorizes an applicable change.
 
-**As Claude Code subagent:** Call via Bash tool. Set `timeout: 120000` or higher. Output is on stdout (last message repeated at end). Use `-o FILE` for file capture, but read/copy immediately — sandbox cleanup can delete.
+Omit `-m` to use the configured model; pass it only for an intended override. Astra accepts the full effort names supported by the actual runtime; do not use the old `med` abbreviation. Verify model/effort in the dispatch record when the model identity is part of an evaluation.
 
-## Codex Parallel Research Dispatch (from agent context)
+## Configuration and overhead
 
-Dispatch pattern for firing multiple Codex agents from Claude Code Bash tool:
+Direct dispatch loads the configured tools and discovered instructions. Tool availability and startup overhead depend on that configuration; old fixed server/token counts are historical. The CLI has `--ignore-user-config` for an explicitly isolated configuration, and `-c` overrides for selected settings. Inspect `--help` and the resulting dispatch plan instead of assuming a remembered bare profile works.
 
-```bash
-# Parallel dispatch — background each, wait for all
-codex exec --full-auto -o docs/audit/codex-topic-a.md \
-  "Use exa and perplexity MCP tools for web search. [TASK]. \
-   End with a COMPLETE markdown report as your final message. \
-   Do NOT create any files." &
+For llmx, `--mode agent --subscription` uses the caller workspace; isolated `--lite bare`/`--lite research` profiles are existing controlled routes. Run `llmx chat --dry-run ...` first and inspect transport, model, applied effort and tool profile. The research profile supplies the research MCP. `--ignore-rules` skips execpolicy `.rules` files; it does not remove project AGENTS.md. An isolated profile needs an appropriately isolated working directory.
 
-codex exec --full-auto -o docs/audit/codex-topic-b.md \
-  "Use exa and perplexity MCP tools for web search. [TASK]. \
-   End with a COMPLETE markdown report as your final message. \
-   Do NOT create any files." &
+Use the smallest tool set the task needs. Do not disable required research sources merely to reduce startup cost. Auth follows the selected Codex account/profile; an offline plan does not prove a successful authenticated model call.
 
-wait
-# Immediately git add — sandbox cleanup can delete files
-git add docs/audit/codex-*.md
-```
+## Outputs, concurrency and recovery
 
-**Critical `-o` gotcha:** `-o FILE` captures the agent's **last text message only**. If the agent spends all turns on MCP tool calls and never produces a final text response, `-o` writes 0 bytes. The prompt **must** include: `"End with a COMPLETE markdown report as your final message. Do NOT create any files."` Without this, ~50% of agents produce empty output files.
+Choose one output contract: final text captured with `-o`, or a worker-written artifact with a short final pointer. In the latter case grant the necessary workspace write scope. A brief final message is valid if the promised artifact is complete. Inspect files and exit status before deciding that recovery is needed.
 
-**Brave contention:** When dispatching 4+ parallel agents, they all share Brave's 1 req/sec rate limit (Free plan). This causes cascading 429s. Fix: tell agents to `"Use exa for web search (NOT brave-search)"` when running 4+ in parallel. 1-2 parallel agents can use Brave fine.
+`-o` captures the last assistant text message, so the brief must request the actual final report when that is the chosen contract. `--ephemeral` means no persisted session files; avoid it when raw rollout recovery or audit history is required. It is not documented as deleting arbitrary workspace output.
 
-**Perplexity quota:** Perplexity MCP can hit `401 insufficient_quota`. Tell agents: `"Use exa as primary search tool. Try perplexity as secondary — if it returns 401, continue with exa only."` Exa-only agents still produce good results (7-14KB reports observed).
+Delegate independent lanes within available quota, provider limits and file ownership. Keep outputs distinct, use managed worktrees for overlapping code, and leave commits to the parent. Use completion notifications or the owning process wait mechanism; preserve the actual return status and stderr. A failed transport is not a failed capability.
 
-**Practical limits (2026-03-26 tested):**
-- 4 parallel agents: all MCP servers start successfully (36 server instances)
-- 6 parallel agents: works but Perplexity quota depletes fast
-- Output success rate: ~70% with the "COMPLETE report as final message" prompt instruction, ~30% without it
-- Bash tool timeout: set `timeout: 600000` (10 min) — agents need 3-5 min each with MCP startup
+## Blind versus repository-aware work
 
-**Diagnostics — `codex doctor`** (Codex 0.131+): runtime/auth/network/config check. Run it before debugging llmx codex-cli failures manually.
+Codex can read its working tree. A prose information restriction alone does not make a run blind. For a blind lane, use a clean authorized directory with only its allowed material, or an appropriate text-only API route within the spending boundary. For repository-aware review, preserve access and say which evidence was available.
 
-**Codex 0.134+ (2026-05-26):** `--profile` is the primary profile selector; read-only MCP servers get parallel tool calls. `--subscription` (or legacy `--lite bare`/`--lite research`) use the `~/.codex-{bare,research}` profile dirs — after a Codex upgrade, verify nothing routes through unexpected user-config plugins. Don't hand-edit `~/.codex-*/config.toml`; codex rewrites it on launch.
-
-## Codex Inherits the Caller's CWD — Blind/Isolated Dispatch Footgun
-
-`llmx -p codex-cli` hands the caller's CWD to the codex subprocess (`cli_backends.py` "Actual cwd
-handed to the CLI subprocess"), and codex has READ access to that tree by default. A prompt-level
-information diet does NOT hold: the model explores the repo and absorbs context you withheld.
-
-Evidence (2026-06-12, hutter): a "map-blind" brainstorm arm dispatched from the project root
-reproduced same-day ledger specifics it was never given — exact probe values (500k→250k), a
-same-day measurement verdict ("LUT slow/null"), and internal key notation (`{1}`) — silently
-voiding the independent-convergence design.
-
-For genuinely blind / context-isolated codex dispatch:
-- `cd` to a clean directory first (e.g. `mkdir -p /tmp/blind-$$ && cd /tmp/blind-$$`), passing
-  context ONLY via `-f` files copied there; or
-- use the API transport (`-m gpt-5.6-sol` direct, no `-p codex-cli`) — no filesystem at all; or
-- `--subscription` (no tools) when training-knowledge-only is the point.
-
-Repo access is a FEATURE for map-aware/audit dispatches — make the choice explicit per arm, and
-state in the output memo which arms had filesystem access.
+[Historical observations](codex-dispatch-history.md) retain the original overhead, output-loss, contention and isolation incidents. Re-probe live limits before using those old rates or model lists in a current decision.

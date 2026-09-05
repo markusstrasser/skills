@@ -25,3 +25,5 @@ Append-only incident history. Consult for a matching failure; dated entries may 
 - **[2026-08-20b] codex exec effort enum tightened: `"med"` now 400s (`invalid_enum_value`) — use full `"medium"`.** The 08-11 note's `-c model_reasoning_effort="med"` form is STALE; supported enum: none/minimal/low/medium/high/xhigh/max (error caught at launch, arc-agi luna-yieldmine).
 
 - **[2026-08-27] Grok 4.6 (2026-08-12) scores AA Intelligence Index 61 — ties GPT-5.6 Sol, #3 behind Opus 5 (63) / Fable 5 (62) — at unchanged $2/$6; Grok 4.5=54 rows in this skill are STALE; Terminal-Bench still weak (26 vs 34.6), calibration not re-measured. Grok Bot (agent-employees) launched 08-11. Source: artificialanalysis.ai/articles/grok-4-6-benchmarks-and-analysis**
+
+- **[2026-09-05] 2026-09-05: August 11 removed-Codex-flag incident recurred in llmx, agent-infra wrappers and dispatch guides. Replaced --full-auto/--cwd with explicit -s scope/-C, consolidated current mechanics, and added parser-only argv tests for both scopes. Astra maps none/minimal to low and preserves max; native API admission remains closed without verified pricing.**
