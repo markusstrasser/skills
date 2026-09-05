@@ -87,7 +87,9 @@ def _scan_knowledge_store(cwd: str, kw: list[str]) -> list[tuple[str, list[str]]
     strong = [k for k in kw if len(k) >= 6] or kw
     refs: list[tuple[str, list[str]]] = []
 
-    idx = base / ".claude/rules/research-index.md"
+    idx = base / "docs/research-index.md"          # evals moved it out of the always-loaded rules dir (2026-09-05)
+    if not idx.is_file():
+        idx = base / ".claude/rules/research-index.md"
     try:
         if idx.is_file():
             for line in idx.read_text(errors="ignore").splitlines():
@@ -154,6 +156,10 @@ def main() -> None:
     if env.get("isolation") == "worktree" or ti.get("isolation") == "worktree":
         return
     text = f"{desc}\n{prompt[:1000]}"
+    # The dispatcher already did the inventory when the prompt cites memos by path or names an
+    # already-known baseline; re-listing them is noise (fired on 6/6 such dispatches, 2026-09-05).
+    if re.search(r"\b(research|docs|decisions)/[\w.\-/]+\.md\b|already[- ]known|already established", prompt, re.I):
+        return
     research_intent = bool(re.search(
         r"\b(research|investigat|explor|survey|audit|literature|find (all|every|out)|"
         r"search for|look (through|into)|what(?:'s| is) known|prior art|"

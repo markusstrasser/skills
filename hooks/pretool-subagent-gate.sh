@@ -251,7 +251,7 @@ if [ -n "$PROMPT" ]; then
     # it false-fired on every well-formed dispatch (10+ in one 2026-07-07 session). A digit is
     # required, so it still won't match "return the path". False-match only SUPPRESSES an
     # advisory (harmless direction).
-    HAS_TURN_BUDGET=$(echo "$PROMPT" | grep -ciE '(stop|halt|synthesize|write).*(70%|\bturn\b|budget|before running out)|max.*(\bturn\b|epoch)|epoch.*boundar|[0-9]+ ?turns?\b' || true)
+    HAS_TURN_BUDGET=$(echo "$PROMPT" | grep -ciE '(stop|halt|synthesize|write).*(70%|\bturn\b|budget|before running out)|max.*(\bturn\b|epoch)|epoch.*boundar|[0-9]+ ?(tool )?turns?\b' || true)
     HAS_FILE_OUTPUT=$(echo "$PROMPT" | grep -ciE '(write|save|output).*(file|path|memo|artifact)' || true)
 
     # Turn-budget is ADVISORY-ONLY as of 2026-06-03 (was a blocking trigger).
@@ -439,11 +439,11 @@ if [ -n "$PROMPT" ]; then
     fi
 fi
 
-# SELF-REPORT INJECT (2026-07-19, arc-agi session 6f4a8626): the Agent tool serves
-# claude-sonnet-5 regardless of any model pin (~15/15 measured), and model-guide has required
-# per-dispatch self-reports since 07-12 — but dispatchers forget (a full session dispatched ~10
-# agents without one). Make it structural: every dispatched prompt gets the clause unless it
-# already asks for a self-report.
+# SELF-REPORT INJECT (2026-07-19, arc-agi session 6f4a8626; re-measured 2026-09-05): model pins on
+# the Agent tool have been unreliable (07-19: sonnet-5 served ~15/15 regardless of pin; 09-05: six
+# dispatches self-reported claude-opus-5[1m]) — the self-report is the only ground truth, and
+# dispatchers forget to ask for it. Make it structural: every dispatched prompt gets the clause
+# unless it already asks for a self-report.
 if ! printf '%s' "$PROMPT" | grep -qi "self-report"; then
     SR_INJECT="MODEL SELF-REPORT (auto-added): the first line of your FIRST output (file or report message) MUST be your exact model ID copied verbatim from your own environment-info block. Model pins on this dispatch surface are known-unreliable; the parent reads this line back before trusting tier-sensitive work."
     if [ -z "$INJECT_SUFFIX" ]; then INJECT_SUFFIX="$SR_INJECT"; else INJECT_SUFFIX="$INJECT_SUFFIX
@@ -475,7 +475,7 @@ if inj:
 warn = (os.environ.get("WARN", "") or "").strip()
 if os.environ.get("MODEL_UNSET"):
     ti["model"] = "opus"
-    warn = (warn + " MODEL-GUARD: no model set -> injected model:opus AS A DEFENSIVE DEFAULT ONLY. WARNING (measured 2026-07-19, ~15/15): the Agent tool currently serves claude-sonnet-5 REGARDLESS of any model pin (opus/fable/injected all ignored). For a genuine frontier agent use headless `env -u ANTHROPIC_API_KEY claude -p --model claude-opus-4-8` (verified) or `codex exec` (gpt-5.6); any tier-sensitive Agent-tool dispatch owes a first-line model self-report, read back.").strip()
+    warn = (warn + " MODEL-GUARD: no model set -> injected model:opus. Pins are not ground truth (07-19: sonnet-5 served regardless of pin; 09-05: opus-5 served) — read back the first-line model self-report before trusting tier-sensitive work.").strip()
 out = {"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": ti}}
 if warn:
     out["hookSpecificOutput"]["additionalContext"] = warn

@@ -193,7 +193,9 @@ def _scan_index_and_files(base: Path, kw: list[str]) -> list[str]:
     """
     strong = [k for k in kw if len(k) >= 6] or kw
     refs: list[str] = []
-    idx = base / ".claude/rules/research-index.md"
+    idx = base / "docs/research-index.md"          # evals moved it out of the always-loaded rules dir (2026-09-05)
+    if not idx.is_file():
+        idx = base / ".claude/rules/research-index.md"
     try:
         if idx.is_file():
             for line in idx.read_text(errors="ignore").splitlines():
