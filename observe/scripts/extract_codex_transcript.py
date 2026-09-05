@@ -54,16 +54,6 @@ def find_sessions(project: str, limit: int = 5, days: int | None = None) -> list
             (f"%{project}%", *params_tail, limit),
         ).fetchall()
 
-    if not rows:
-        # Show available projects
-        cwds = con.execute(
-            "SELECT DISTINCT cwd FROM threads ORDER BY cwd"
-        ).fetchall()
-        print(f"Error: No sessions found for '{project}'", file=sys.stderr)
-        print(f"Available cwds: {[r['cwd'] for r in cwds]}", file=sys.stderr)
-        con.close()
-        sys.exit(1)
-
     result = [dict(r) for r in rows]
     con.close()
     return result
@@ -381,7 +371,7 @@ def main():
         )
         sessions.append(sess)
 
-    markdown = format_markdown(sessions, args.project)
+    markdown = format_markdown(sessions, args.project) if sessions else ""
 
     if args.output:
         Path(args.output).write_text(markdown)

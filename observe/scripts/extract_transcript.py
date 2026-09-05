@@ -393,7 +393,9 @@ def main():
     transcripts = find_transcripts(args.project, args.sessions, args.days)
     if not transcripts:
         print(f"No transcripts found for '{args.project}'", file=sys.stderr)
-        sys.exit(1)
+        if args.output:
+            Path(args.output).write_text("")
+        return
 
     mode_label = " (FULL)" if FULL_MODE else ""
     print(f"Processing {len(transcripts)} transcripts for '{args.project}'{mode_label}...", file=sys.stderr)
