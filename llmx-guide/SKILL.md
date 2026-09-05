@@ -100,7 +100,7 @@ Routing table: `critique/lenses/repo-audit-plan-review.md`. Preflight via `model
 | 3 | Shell `> file` / pipelines | `-o` + `set -o pipefail`; don't `2>/dev/null` diagnostics |
 | 4 | `shell=True` + parens in prompt | List args + `input=` |
 | 5 | Model name 404s | Hyphens not dots; see [models.md](references/models.md) |
-| 6 | Fable over llmx | Downshifts / API billing; use Agent subagent or `--subscription` Opus — see `/model-guide` |
+| 6 | Historical Fable downshifts / billing confusion | Current 5.1 route: `--subscription -m claude-fable-5-1`. Max includes a limited Fable allowance; do not fall back to paid API or usage credits without authorization. Agent-tool Fable pins need separate verification — see `/model-guide`. |
 | 7 | Grok 4.20 `--reasoning-effort` | Errors on reasoning variant; >200K input = 20× price tier |
 | 7b | Grok 4.5 retired Cursor aliases | Use exact `cursor-grok-4.5-{low,medium,high}` or matching `{effort}-fast` slugs from `cursor-agent models`. There is no xhigh slug. Bare `grok-4.5` is xAI API-only and subscription auth must fail before any xAI plan. |
 | 7c | Grok 4.5 xAI API 403 | `API key is currently blocked` — **key status**, not EU geo (Chicago Mullvad egress still 403'd 2026-07-09). Rotate/unblock key in console; Cursor pool is the live path meanwhile. |

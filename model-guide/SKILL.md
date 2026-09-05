@@ -1,6 +1,6 @@
 ---
 name: model-guide
-description: "Choose a model/effort and model-specific prompting for GPT-6 Astra, Fable 5.1, Claude, GPT-5.6 cost-tier or named opt-in lanes. Preserve workload cost and verifier needs; Fable remains a paid opt-in. Transport flags belong to /llmx-guide."
+description: "Choose a model/effort and model-specific prompting for GPT-6 Astra, Fable 5.1, Claude, GPT-5.6 cost-tier or named opt-in lanes. Preserve workload cost, plan limits and verifier needs. Transport flags belong to /llmx-guide."
 user-invocable: true
 argument-hint: '[task description or model name]'
 effort: low
@@ -18,45 +18,29 @@ The operator's Codex configuration selects Astra. Check the actual transport and
 
 **Operational specs:** `gpt-6-astra` (alias `gpt-6`). API $10/$50 per MTok (2×/1.5× above 272K input); Fast mode 2× Standard. 1.05M context, 128K max output. Effort `low|medium|high|xhigh|max`; `none`/`minimal` map to `low`. Subscription via `llmx chat --subscription -m gpt-6-astra` or `codex exec` (omit `-m`) is $0 against the ChatGPT plan. Source: developers.openai.com/api/docs/models/gpt-6-astra (2026-09-05).
 
-**Models covered:** GPT-6 Astra (default OpenAI / Codex flagship, 2026-09), Claude Opus 5 (primary Claude), Claude Fable 5.1 (current Fable slug; metered opt-in), Claude Sonnet 5 (cost-tier Claude), GPT-5.6 Sol / Terra / Luna (named cost-tier pins; GPT-5.5 removed), Kimi K3 (Moonshot open-weight, 2026-07-16), and Grok 4.5 through the Cursor subscription pool.
+**Models covered:** GPT-6 Astra (default OpenAI / Codex flagship, 2026-09), Claude Opus 5 (headless Claude default), Claude Fable 5.1 (interactive Claude default; Max plan allowance), Claude Sonnet 5 (cost-tier Claude), GPT-5.6 Sol / Terra / Luna (named cost-tier pins; GPT-5.5 removed), Kimi K3 (Moonshot open-weight, 2026-07-16), and Grok 4.5 through the Cursor subscription pool.
 **Last updated:** 2026-09-05 (GPT-6 Astra default Codex/OpenAI; Fable live slug `claude-fable-5-1`).
 **Active stance:** This skill no longer maintains a broad model zoo. Older GPT, Gemini, Grok-4.20-and-earlier, and Sonnet-4.6-and-earlier routes were removed from active guidance. Sonnet 5 is reinstated as a named, cost-tier Claude option (2026-06-30). Grok 4.5 is an opt-in read-only repo critique lane through exact Cursor slugs; the xAI API path remains separate and blocked/unverified locally. Use this guide for high-value frontier decisions; use repo-specific batch tooling or search tools for cheap bulk work.
 
 **OPEN QUESTION (2026-06-30, not yet resolved — operator call):** the "Architecture / design / high-reasoning critique → NEVER Sonnet" verdict below was reached against Sonnet 4.6 on 2026-06-20. Sonnet 5's system card shows large agentic/coding gains and prompt-injection robustness tying or beating Opus 4.8 in several places, but also the *worst* prefill/system-prompt-susceptibility numbers of the compared models and measurably more turns/tokens per task (system-card digest: `references/sonnet-5-system-card.md`). Whether this changes the "NEVER Sonnet" verdict for architecture/critique work is a live question, not re-litigated here — the verdict stands until the operator revisits it.
 
-**Claude Fable 5 — status (2026-07-12).** Off the claude.ai Pro/Max/Team subscription since 2026-07-07: continued access is priced at metered usage credits, $10/$50 per MTok (2× Opus 5) — press/pricing-page sourced (techtimes.com, bleepingcomputer.com, claude.com/pricing); reconciliation against observed usage is open, see Verified Transport below. Fable is reachable via `llmx chat -m claude-fable-5-1` (claude-cli transport; prior `claude-fable-5` remains an explicit pin) and headless `claude -p --model claude-fable-5-1` — **not reliably via the Agent tool**, where `fable-high`/`fable-low`-style dispatches currently serve `claude-sonnet-5` regardless of the pin (measured 2026-07-12, see Verified Transport — this is a mechanism bug, not a re-dormancy). Route gated/briefed/review dispatch to **opus-low** ($0 subscription); reach for Fable (via llmx, not the Agent tool) only with a named Fable-specific capability-edge justification over Opus `max`. Re-license trigger: Anthropic restores Fable to subscription plans.
+**Fable plan status — corrected 2026-09-05.** Fable 5 and 5.1 are included in Max and premium Team/seat-based Enterprise plans, within up to 50% of the shared weekly allowance. Pro and standard seats use credits. API calls and credits beyond the plan allowance remain metered; the operator's policy is Claude subscription only unless explicitly authorized otherwise. Fable 5.1 requires Claude Code ≥2.1.255; installed 2.1.261 supports it. [Anthropic plan rules](https://support.claude.com/en/articles/15424964-claude-fable-models-on-your-plan). Earlier blanket “off subscription” claims are superseded; [dated history](references/fable-routing-history.md) preserves them.
 
 **Opus 5** (`claude-opus-5`) is Anthropic's active top-tier model (released 2026-07-24): near-Fable intelligence at Opus price ($5/$25), 1M context, adaptive thinking on by default, SOTA on Frontier-Bench / GDPval-AA / ARC-AGI 3 / AutomationBench / OSWorld 2.0 cost-efficiency. Default for hardest Claude work, security/cyber/biology (Fable bio blocks now route here), and cross-lab review. **Architecture → `max` effort.** Keep `claude-opus-5` only as the documented cyber-classifier fallback target.
 
-## Verified Transport — what actually serves what (as-of 2026-07-14)
+## Verified Transport — configuration and execution evidence
 
-Routing *judgment* (which model you want) and routing *mechanism* (whether the lane you dispatch
-to actually delivers that model) are different questions — this table is the second one, and it
-currently has a serious hole. Re-verify any row before a tier-sensitive decision leans on it;
-mechanisms drift faster than judgment.
+| Lane | Verified state | Practical limit |
+|---|---|---|
+| Codex / `llmx chat --subscription -m gpt-6-astra` | Global model is Astra; llmx accepts the canonical ID and effort | Configuration and offline checks do not prove a new live request or workload result. |
+| `llmx chat --subscription -m claude-fable-5-1` | 2026-09-05 dry-run: `claude-cli`, subscription auth, exact 5.1 ID and requested effort | No live headless 5.1 canary in this check. Subscription never permits silent API fallback. |
+| Interactive Claude Code | Global setting `claude-fable-5-1[1m]`; installed CLI 2.1.261 | Existing September 2 local billing evidence is recorded in agent-infra’s Fable memo §10. Plan allowance and current remaining usage are separate. |
+| Claude Agent-tool model pins | Opus pins recovered in the July 29 observations; Fable pins have no later verification here | Treat old failures as dated evidence. For model-sensitive evaluations inspect the provider run record; self-report alone is not independent proof. |
+| Cursor Grok 4.5 | July 14 registry and repository canary recorded in the history | Refresh the registry/canary before a new model-sensitive dispatch. |
 
-| Lane | Actually serves | Status | Evidence / rederive |
-|---|---|---|---|
-| **Agent tool, any `subagent_type`, WITH an explicit `model:` param or agent-def `model:` frontmatter** (`fable-high`, `fable-low`, `opus-low`, custom agents) | **`claude-sonnet-5`** — the pin is silently ignored | **MEASURED, BROKEN — RECONFIRMED 2026-07-19 at scale** | arc-agi session 41f9b649, 2026-07-12: fable pin **5/5 self-reports**; opus pin **1/1**. **Re-measured 2026-07-19 (arc-agi team-lead 6f4a8626): explicit `model:"fable"` param → sonnet-5; explicit `model:"opus"` and hook-injected opus → sonnet-5 on every checked dispatch (raw-readers, builders) — ~15/15 cumulative. The Agent tool is currently a sonnet-only surface, full stop.** **[SUPERSEDED FOR OPUS PINS 2026-07-29: hook-injected `model:opus` → `claude-opus-5[1m]` self-reports 5/5 across five independent Agent-tool lanes in one night (arc-agi session e863d547: kaggle-envelope, negatives-audit, reasoning-study, routing-ab-rerun, harvest — each read back from a first-line self-report). Opus pins are HONORED on this evidence; the sonnet-only claim is STALE for opus. FABLE pins remain UNMEASURED since 07-19 — the verified-fable-dispatch two-stage llmx protocol stays in force for Fable until a fresh fable-pin probe. Grader-continuity consequence, live example: the 07-29 attack-routing rerun's grader served opus-5 where the 07-25 pass served sonnet-5, so its 0.875-1.000 replication band is cross-grader-MODEL agreement — confidence capped in that memo.]** Frontier-agent alternative VERIFIED same day: headless `env -u ANTHROPIC_API_KEY claude -p --model claude-opus-5` self-reports opus correctly (key-strip mandatory — with ANTHROPIC_API_KEY set it bills API and can fail "Credit balance too low"). Rederive: open the dispatch with "self-report your model ID from your own environment-info block, first line," read the answer back. |
-| Agent tool, no `model:` param (bare `general-purpose` etc.) | `claude-sonnet-5` (`CLAUDE_CODE_SUBAGENT_MODEL`) | MEASURED, **correct** — this is the documented default, not the bug above | 2026-06-29 finding, unchanged |
-| `llmx chat -m claude-fable-5-1` (claude-cli transport) | **Genuinely Fable 5.1** | Config-level 2026-09-05; 5 measured 2026-07-12 | Current Fable slug. Prior `claude-fable-5` remains an explicit pin. `llmx info --write-mirror` lists both. Dry-run: `llmx chat --dry-run --subscription -m claude-fable-5-1 -e high`. |
-| Headless `claude -p --model claude-fable-5-1` (key-stripped) | Genuinely Fable 5.1 | Config-level; 5 measured 2026-07-04 | Interactive Claude Code on this machine already runs 5.1. Re-probe headless before a batch. |
-| `llmx chat --subscription -m claude-opus-5` / `-m gpt-6-astra` / `-m gpt-5.6*` | Named model | Config-level, not self-report-verified | `~/.claude/cache/llmx-routing.json` `lite_allowed_models` confirms *routable*. |
-| `cursor-agent --model cursor-grok-4.5-high --mode ask --workspace <repo>`; llmx exact `cursor-grok-4.5-*` slugs | Grok 4.5 through Cursor subscription | **MEASURED, CURRENT** (2026-07-14) | Live registry exposes low/medium/high plus trailing `-fast`; named high smoke and an unrevealed exact repo-HEAD canary passed. Critique preflight enforces registry + canary before dispatch. Bare `grok-4.5` remains xAI API, never Cursor subscription. |
-| codex-cli / `llmx --subscription -m gpt-6-astra` | `gpt-6-astra` | Config-level 2026-09-05 | Operator Codex config `model = "gpt-6-astra"`. Omit `-m` to use it. Named `gpt-5.6-*` pins stay on the allowlist. `gpt-5.5` remains retired (exit 2). |
-
-**Until the Agent-tool bug is fixed:** any Agent-tool dispatch where the model tier is
-load-bearing (a cost claim, an eval arm, a "frontier vs cheap" comparison) needs a one-line
-self-report opening the brief, read back before trusting the result. One line catches a silent
-tier swap that otherwise bills or behaves as the wrong model.
-
-**Fable cost status is unreconciled, not merely unverified:** the "$10/$50 metered" claim is
-press/pricing-page sourced; the llmx usage log shows `claude-cli`-transport Fable calls
-completing normally (large completions, zero errors) through 2026-07-12, after the cited
-cutoff, and the log has no cost/auth-mode field to say which billing path fired. Whether Claude
-Code's own OAuth entitlement is a separate pool from the claude.ai Pro/Max/Team plans the press
-covered is **unverified (2026-07-12)** — check actual Console billing before a batch decision
-hinges on "still $0" or "now expensive."
+The [historical transport record](references/fable-routing-history.md) preserves
+old routing failures and their later corrections. Validate the actual lane a
+caller uses; an alias or successful dry-run establishes configuration only.
 
 ## Default Routing
 
@@ -66,7 +50,7 @@ Judgment below assumes the lane you dispatch to actually delivers the named mode
 |---|---|---|
 | **Most headless/dispatch tasks — the default cheap lane** (extraction, triage, ticks, bulk classification, mechanical audit) | **GPT-6 Astra via codex-cli subscription** (`llmx chat --subscription -m gpt-6-astra`), effort `low` | $0 on the ChatGPT plan. Astra-low beats Luna-max on AA Intelligence Index (57 vs 43). Pass `-m gpt-5.6-luna` only for metered API bulk. |
 | Everyday GPT / Codex implementation, tool loops, structured API work | **GPT-6 Astra** (`llmx chat --subscription -m gpt-6-astra`; or omit `-m` on `codex exec`) | Operator Codex config selects Astra. API list $10/$50; subscription is $0 against the ChatGPT plan. Named `gpt-5.6-*` pins remain for evals and cheaper API work. |
-| Hardest / longest / most-ambiguous Claude work: multi-day autonomous runs, codebase-scale migrations, first-shot on complex well-specified systems, dense-image vision, architecture | **Claude Opus 5** (`max` for architecture) | Active Claude frontier. Fable 5.1 (`claude-fable-5-1`) is the current Fable slug when a named edge justifies 2× price. Pair GPT-6 Astra for cross-lab on the hardest judgment calls. |
+| Hardest / longest / most-ambiguous Claude work: multi-day autonomous runs, codebase-scale migrations, first-shot on complex well-specified systems, dense-image vision, architecture | **Claude Opus 5** for existing headless lanes; **Fable 5.1** for the operator's interactive lane or an explicit Fable dispatch | Preserve each lane's role and plan allowance. API Fable costs twice Opus; Max subscription accounting is separate. Pair GPT-6 Astra for cross-lab on the hardest judgment calls. |
 | Routine/cost-sensitive coding, security review, cyber, lab/molecular biology | **Claude Opus 5** | Same model — use lower effort (`low`/`medium`) when the brief has mechanical gates. |
 | Quantitative proof, calibration math, hard science/data derivation where mistakes compound | **GPT-6 Astra** + API `reasoning.mode=pro` | Pro is a reasoning *mode* at the same $/MTok (more tokens). Use when the answer will be checked. |
 | Cross-model review | **Opus 5 + GPT-6 Astra** (Luna OK for mechanical) | Different labs, different failure profiles. Keep the review cross-lab; do not use same-instance self-review as the sole adversarial pressure. PLAN packets get repo-grounded premise falsification from the built-in Composer scout. |
@@ -85,7 +69,7 @@ Judgment below assumes the lane you dispatch to actually delivers the named mode
 | Architecture decision | **Opus 5 `max`** | Send the selected proposal to GPT-6 Astra for independent cross-lab critique; use the built-in premise scout for repo-grounded checks. |
 | Quantitative audit / CritPt-hard physics | GPT-6 Astra (`max` / pro mode) | Grok CritPt **15%** — weak; do not route hard derivation here. |
 | Long-context document/repo synthesis | Opus 5 or GPT-6 Astra | Both 1.05M-class. Grok API context is **500k** — prefer Opus/GPT for >500k. |
-| Browser/computer use | Opus 5 or GPT-6 Astra | Both strong; Fable 5.1 vision notes apply once it's reachable via a lane that isn't paid-metered or Agent-tool-broken. |
+| Browser/computer use | Opus 5, GPT-6 Astra or the operator's Fable 5.1 lane | Verify that the chosen transport exposes the required browser/computer tools. Model registration alone does not establish tool availability. |
 | PLAN critique needing repo falsification | **`/critique model` with its default premise scout; add opt-in `grok` for an independent repo cosigner** | Composer checks callers/joins by default; Grok high adds a separately preflighted read-only repo pass when the extra axis is worth the latency. |
 | Letter-exact output constraints (exact counts, rigid templates, banned words) | Schema/validator enforcement, any model | Never rely on prose compliance — Claude family is measurably weakest at mechanical constraint-following (IFBench 62–63 vs GPT-5.6-class 76, bottom-5 of 27). Construct caveat: IFBench is majority adversarial-synthetic and high scores trade against answer quality, so this is a weak GPT preference for unschematizable cases, not a routing rule. |
 | Claim verification | Neither alone | Use primary sources and deterministic checks; use models to summarize evidence, not to establish it. |
@@ -184,14 +168,14 @@ When dispatching subagents to execute work (Agent tool, headless `claude -p`, co
 | Partial/noisy verifier (research synthesis, memos, judgment-coupled work) | **Don't downgrade** — frontier model, normal effort | The Sonnet finding gets WORSE here: gate-gaming in regime-2 is exactly what you can't detect cheaply. Verifier-conditioned scope (constitution) applies. |
 | Judgment gaps in the spec | Yourself / Opus 5 | Cheap executors fill ambiguity with guesses; the savings are repaid as corrections. Codex-lane's reasoning-HIGH arm is the same lesson from the other side: on a spec-complete task, more reasoning bought one extra unnecessary spec deviation, not better conformance — spec + gates do the thinking, so buy reasoning only where the spec leaves thinking to do. |
 
-**Every row above assumes the lane delivers the named model** — false for Agent-tool pins as of
-2026-07-12 (Verified Transport). Self-report-check any row where the tier is what's being measured.
+**Model-sensitive comparisons require served-model evidence.** Keep requested model,
+resolved transport and provider-reported model distinct; see Verified Transport.
 
 ### Role → Lane (dispatch execution roles)
 
 | Role | Current-best lane | Cost class | Evidence |
 |---|---|---|---|
-| **Synthesis** (open design problem, no oracle) | Opus 5 `max` | $0 subscription | Fable's synthesis edge is real (2026-06-12 fable-effort-architecture eval, low missed the orthogonal factoring high shipped) but currently unreachable via Agent tool — llmx-only, paid, until the routing bug is fixed. |
+| **Synthesis** (open design problem, no oracle) | Opus 5 `max`; explicit Fable 5.1 via subscription | Plan usage | The 2026-06-12 Fable 5 effort result is historical evidence, not a Fable 5.1 comparison. Check served-model evidence before relying on an Agent-tool Fable pin. |
 | **Briefed execution** (full brief + mechanical gates) | `opus-low` or codex reasoning-low | $0 subscription | anim-workbench 2026-06-12 effort-tier/effort-integration/codex-lane (low ≈ medium/default, 0.57-0.59× tokens). |
 | **Review / cosign** | Opus 5 + GPT-6 Astra, cross-lab; opt-in GLM-5.2 or Grok-4.5 axis | $0 subscription (+~$0.30-1/call opt-in) | `evals/DECISIONS.md` `cross-lab-review-margin` (margin≈0, count-delta real); GLM decision 2026-06-19. |
 | **Research / literature** | Independent source/model lanes for broad coverage when useful; a bounded lookup or synthesis can stay in one lane | $0 subscription | arc-agi feedback 2026-07-07: codex arm found a paper (PRISM, 2605.26998) the Claude arm missed. |
@@ -208,7 +192,7 @@ When dispatching subagents to execute work (Agent tool, headless `claude -p`, co
 
 **Effort knob mechanics:** the Agent tool exposes only `model:`. Per-dispatch effort exists via (1) headless `claude -p --model opus --effort low` (verified working, CLI 2.1.175; background Bash + `--output-format json` for usage), or (2) `.claude/agents/*.md` frontmatter `effort:` (does NOT hot-register mid-session — usable only in later sessions). Codex/GPT cheap cosign via llmx `--subscription` is $0 — probe with `--dry-run --subscription` first; transport table in `~/.claude/cache/llmx-routing.json`.
 
-**Agent-tool DEFAULT model is NOT the session model (2026-06-29).** `general-purpose`/most subagents default to **`CLAUDE_CODE_SUBAGENT_MODEL`** (now `claude-sonnet-5` — Sonnet 4.6 RETIRED 2026-07-07, never route to it), NOT the parent's Opus. A bare `Agent(...)` with no `model:` runs Sonnet 5 — fine for bounded work, a **tier silently-wrong trap when the dispatch IS the measurement** (an eval baseline, a "frontier agent" arm). **The previously-recommended fix — pass `model:` explicitly, then `grep '"model"'` the transcript — is not proven sufficient as of 2026-07-12:** the newer bug (Verified Transport) shows a pin can be requested and still not be served, and whether transcript-grep reflects the request or the actual serve is untested (ASSUMPTION: probably the request, since that would explain why grep-verification didn't already catch this). Require a first-line self-report instead — the one channel confirmed to reflect the true served model. Second footgun, same 2026-06-29 session: an open-ended "be exhaustive" prompt to `general-purpose` triggered **sub-delegation + stall** (6 children spawned, "I'll pause here," 72K tokens burned, nothing delivered) — for bounded research dispatches, define the scope and resource budget of any sub-delegation; prohibit further spawning only when that lane needs a fixed information or resource boundary.
+**Agent-tool defaults can differ from the parent.** Inspect the role definition and applicable model overrides instead of inferring inheritance. Preserve bounded subtask scope and resource limits where the caller needs them. Earlier model-pin failures and the June sub-delegation stall are retained in the [routing history](references/fable-routing-history.md); they do not establish current Fable 5.1 execution or justify a universal delegation ban.
 
 **External validity:** all four evals are regime-1 (clear mechanical verifiers — tsc, deterministic scripts, numeric oracles) and screening-grade (n=1/arm). Only within-eval contrasts are clean — cross-eval comparisons are confounded by task, brief density (briefs improve as the author learns, flattering later arms), and harness (codex carries MCP servers + sandbox; opus arms ran bare). Every cheap-lane verdict is conditional on the dispatch-time classification "fully-briefed + mechanically gated" being honest — nothing here licenses cheap lanes for judgment-shaped or incomplete-spec work. The greenfield→integration replication trigger from the morning run is SATISFIED (effort-integration, port shape); the standing revocation trigger replaces it.
 
@@ -216,7 +200,7 @@ When dispatching subagents to execute work (Agent tool, headless `claude -p`, co
 
 ## Claude Opus 5 - "Near-Fable daily driver" (primary Claude)
 
-**Use for:** all active Claude frontier work — hardest autonomous runs, codebase-scale migrations, architecture, code review, security/cyber/biology, professional analysis, legal/financial reasoning, long autonomous loops, and cross-lab critique. Keeps Fable-tier routing by default: Fable is metered+paid and unreachable via the Agent tool (Verified Transport), so Opus is the practical default even where Fable might otherwise win on capability.
+**Use for:** existing headless Claude lanes — autonomous runs, codebase-scale migrations, architecture, code review, professional analysis and cross-lab critique. Preserve their Opus role; Fable 5.1 is available through the Max plan and is the operator's interactive default. Transport readiness and workload quality are separate checks.
 
 **Operational specs:** `claude-opus-5`, 1M context (default = max), 128K max output (300k batch beta), **$5/M input and $25/M output** (same as 4.8). Fast mode ~2.5× speed at 2× price ($10/$50). Adaptive thinking on by default; effort default `high` on API/Code. Knowledge cutoff **May 2026** (training). **Subscription-routable** (`lite_allowed_models`). Cyber-classifier refusals can auto-fallback to `claude-opus-4-8`; bio refusals on Fable now route here.
 
@@ -241,7 +225,7 @@ Full guide: `references/PROMPTING_CLAUDE.md`.
 
 ## Claude Sonnet 5 - "The Cost Tier" (added 2026-06-30)
 
-**Use for:** cost-sensitive coding and agentic work with a mechanical gate (tests, typecheck), mechanical no-gate dispatch (rename sweeps, boilerplate), and anything where untrusted tool output / prompt-injection exposure is the dominant risk — Sonnet 5 has the strongest measured prompt-injection robustness in its own system card, tying or beating Opus 4.8. **Not** a default for architecture/design/high-reasoning critique — see the OPEN QUESTION note above; that verdict has not been revisited for Sonnet 5. **Also the model the Agent tool silently substitutes when a `fable`/`opus` pin is dropped** (Verified Transport) — a result that "looks like Sonnet 5" (more turns/tokens, tying Opus on some benchmarks) may simply BE Sonnet 5 wearing another model's label; self-report before attributing quality to the pinned tier.
+**Use for:** cost-sensitive coding and agentic work with a mechanical gate (tests, typecheck), mechanical no-gate dispatch (rename sweeps, boilerplate), and work dominated by untrusted tool output or prompt injection. The Sonnet 5 system-card comparison and the unresolved architecture-routing question above remain model-specific evidence. Historical Agent-tool substitutions are recorded in Verified Transport; do not identify a served model from its writing style or self-report alone.
 
 **Operational specs:** `claude-sonnet-5`, 1M context, 128K max output, **$3/M input and $15/M output** ($2/$10 introductory through 2026-08-31, vs Opus 5's $5/$25). Adaptive thinking on by default (unlike Sonnet 4.6, which ran thinking-off by default — omitting `thinking` now runs adaptive). First Sonnet-tier model with `xhigh` effort. New tokenizer vs Sonnet 4.6 (~30% more tokens for the same text — partially offsets the lower $/token). **Not yet on the subscription allowlist** (`lite_allowed_models` in `~/.claude/cache/llmx-routing.json` has no Sonnet entry, 4.6 or 5) — `llmx chat --subscription -m claude-sonnet-5` will not route until that allowlist is updated (llmx's own config, not this skill).
 
@@ -254,16 +238,11 @@ $/task on long loops — measure on your own workload).
 
 **Prompting and API rules:** same XML-tag, no-prefill, no-non-default-sampling-param rules as Opus 5 (see `references/PROMPTING_CLAUDE.md` — written for Claude generally, applies here). Effort: default `high`; use `xhigh` for the hardest coding/agentic work in this tier (first Sonnet model to support it); `low`/`medium` for routine/mechanical dispatch per Dispatch Economics above.
 
-## Claude Fable 5 - "The Operator" (metered opt-in — reference only)
+## Claude Fable 5.1
 
-**Claude Fable 5.1 (`claude-fable-5-1`, 2026-09-01) — the 5 notes below are superseded where they conflict.** Same $10/$50, cache read $0.25 (was $1.00), 1M context, effort levels `low|medium|high|xhigh|max` with `high` the default. The guide's operative claims: effort names do NOT map across models — re-run any effort sweep per model; `medium` ≈ Fable 5 quality at lower cost; `low` is often competitive with Opus/Sonnet on cost per task while scoring higher, so include it wherever a smaller model at higher effort would run; at `low` it searches less (keep the research-skill gate on low-effort lanes); at `xhigh`/`max` it may draft a long deliverable in thinking and again in the reply — run long outputs at `high`, and only raise effort where a measured gain justifies it. Interactive Claude Code on this machine runs it on the Max subscription (the environment API key is rejected in `customApiKeyResponses`, verified 2026-09-02); the launcher passes `--effort max`, which the guide argues against as a default. Headless lanes stay on Opus 5 (`$0` subscription) unless a Fable-specific edge is named. Full delta and card evidence: agent-infra `research/2026-09-01-fable-5.1-tabula-rasa.md` §1.
+**`claude-fable-5-1`, released 2026-09-01.** API $10/$50 per MTok, cache read $0.25, 1M context and 128K output; adaptive thinking is always on, default effort `high`. [Official overview](https://platform.claude.com/docs/en/models/fable-5-1/overview). The global Claude setting selects `claude-fable-5-1[1m]`; explicit launcher effort takes precedence over saved settings. Preserve the operator's effort selection.
 
-Routability + economics: see the status note at the top of this skill (metered usage
-credits 2026-07-07; llmx/headless lanes confirmed live and paid, Agent tool currently can't
-reach it at all — see Verified Transport). Specs ($10/$50, 2× Opus), API shape (adaptive-only thinking,
-hidden CoT, `reasoning_extraction` classifier, refusal→Opus 5 (bio) / Opus 4.8 (cyber classifier default) fallback), system-card insights
-(two-source honesty regression vs Opus: AA-Omniscience 45% vs 64%), and prompting rules:
-[references/fable-5-dormant.md](references/fable-5-dormant.md).
+The September prompting guidance recommends testing effort per workload: names do not imply equivalent quality across models, low effort may search less, and high effort can duplicate long deliverables in reasoning and the reply. Use the requested effort; tune only against the task's verifier. The existing source digest and migration dispositions are in agent-infra `research/2026-09-01-fable-5.1-tabula-rasa.md` §1 and §10. Fable 5 findings remain [historical evidence](references/fable-5-dormant.md), with [prior routing claims](references/fable-routing-history.md) retained for calibration.
 
 ## GPT-5.6 suite — Sol / Terra / Luna (GA 2026-07-09)
 

@@ -1,5 +1,16 @@
 # Model Guide Changelog
 
+## 2026-09-05 - Reconcile Fable 5.1 plan and transport evidence
+
+Anthropic's current plan page includes Fable 5 and 5.1 in Max and premium seats,
+within up to 50% of shared weekly usage. The blanket July metered-only claim is
+superseded; API rates do not establish CLI billing. Installed Claude 2.1.261
+supports 5.1, and the subscription dry-run selects its exact model and effort.
+This proves local configuration, not a new served-model or billing canary.
+Preserved the operator's interactive Fable default and existing headless Opus
+lanes. Prior status and transport claims are retained in
+[fable-routing-history.md](fable-routing-history.md).
+
 ## 2026-09-05 - GPT-6 Astra + Fable 5.1 + Gemini 3.8 Flash defaults
 
 Operator Codex config already selects `gpt-6-astra`. Live dispatch now follows:
