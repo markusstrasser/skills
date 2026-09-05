@@ -47,6 +47,9 @@ Valid focuses: `refactoring`, `dead-code`, `optimization`, `patterns`, `security
 
 ## Step 2: Run Scout
 
+For a requested diff/PR review, first verify the refs and nonempty diff, then restrict the scout to
+the changed files. Select the depth preset below from the requested coverage and concrete risk.
+
 ```bash
 cd ~/Projects/agent-infra && uv run python3 "$SCOUT" ~/Projects/$PROJECT \
   --focus $FOCUS --provider cursor --workers 2
@@ -56,10 +59,11 @@ cd ~/Projects/agent-infra && uv run python3 "$SCOUT" ~/Projects/$PROJECT \
 1. **`cursor`** (default) — `composer-2.5` via `cursor-agent` / llmx cursor transport.
    Frontier-equal on injected-defect review; tight output contract required.
 2. **`google`** — Gemini via llmx (paid API path since 2026-05-31). Use on Cursor pool exhaustion.
-3. **`openai`** — GPT-5.5 via codex-cli. Fallback when Gemini rate-limits.
+3. **`openai`** — the configured model via codex-cli. Fallback when Gemini rate-limits.
 
 If the scout reports rate limiting on cursor, re-run with `--provider google` or `--provider openai`.
-For small modules (<30 files), add `--all-providers` for cross-model coverage.
+Use `--all-providers` for an explicitly selected high-recall review or a concrete unresolved risk
+that needs another model. Module size alone does not require a broader panel.
 
 **Timeout:** Set Bash timeout to 600000 (10 min) — large projects have 40+ batches.
 
