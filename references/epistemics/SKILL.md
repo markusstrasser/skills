@@ -1,144 +1,61 @@
 ---
 name: epistemics
-description: Bio/medical/scientific evidence hierarchy and anti-hallucination rules. Use when conducting claim-heavy medical research, genomics interpretation, supplement evaluation, pharmacogenomics, or clinical evidence synthesis. NOT for casual health questions, software engineering, or physics. Companion to researcher skill.
+description: Bio/medical/scientific evidence and anti-hallucination reference for claim-heavy medical research, genomics interpretation, supplement evaluation, pharmacogenomics, or clinical synthesis. Not a workflow for casual health questions or other technical domains.
 user-invocable: false
 effort: high
 ---
 
-# Bio/Medical Research Epistemics
+# Bio/medical research epistemics
 
-Domain-specific guardrails for scientific research. Use alongside `researcher` for the workflow; this skill provides the evidence hierarchy, anti-hallucination rules, and bio-specific failure modes.
+Use with [research](../../research/SKILL.md). Apply checks to the claims the task actually makes; an evidence review does not require a dosing, purchasing or implementation plan.
 
-## Anti-Hallucination Rules (non-negotiable)
+## Source and claim integrity
 
-1. **Citation requirement:** Every non-trivial factual claim needs a resolvable citation (DOI, PMID, ClinicalTrials.gov ID, or official URL). If you can't cite it, label "UNCITED."
+- Support consequential factual claims with a resolvable DOI, PMID, registry record or official URL. Verify source identity and the relevant contents. Mark unsupported claims as unresolved; never invent study details or references.
+- Separate cell culture, animal work, human observational/genetic associations, randomized trials, systematic reviews and clinical recommendations. Distinguish surrogate endpoints from patient-important outcomes. Mechanistic or animal evidence alone cannot establish human clinical efficacy.
+- For an effect estimate, report population, comparator, outcome, timeframe, magnitude and uncertainty when available. Mark missing quantities rather than fabricating them. Distinguish relative from absolute effects and check directionality.
+- For genetic claims, distinguish association, functional validation and clinical actionability. State relevant ancestry, allele/build and uncertainty; use OR/CI, allele frequency or penetrance where the claim requires and the source supplies them. A polygenic trait is not determined by one SNP.
+- Genotype-to-dose claims need CPIC/DPWG-level support; otherwise label the inference. When dosing is requested, cite the appropriate guideline or study, keeping prescription guidance and supplement evidence distinct.
 
-2. **No fake citations:** Never invent paper titles, authors, journals, or numbers. If you can't find the paper, say so.
+## Evidence type and certainty
 
-3. **Separate evidence layers:** Keep strictly distinct:
-   - (a) In vitro / cell culture
-   - (b) Animal model (species, dose, route)
-   - (c) Human observational / GWAS association
-   - (d) Human RCT — surrogate endpoint (biomarker)
-   - (e) Human RCT — clinical outcome (patient-important)
-   - (f) Systematic review / meta-analysis
-   - (g) Clinical guideline / consensus statement
+Report source design separately from claim-specific certainty. A guideline is a recommendation source; trace its underlying evidence and grading before using it to establish efficacy. A review's label or a trial's sample size alone does not determine support for this population and outcome.
 
-   NEVER let (a-c) substitute for (d-g). Say explicitly: "Mechanistic evidence only; no human clinical trial confirms this."
+For an intervention evidence synthesis, assess the body of evidence for each consequential outcome: bias, consistency, directness, precision and possible publication bias. Explain the reasons for confidence or uncertainty. If using formal GRADE labels, apply its method rather than treating document types as numbered quality grades. See [Cochrane Handbook, chapter 14](https://www.cochrane.org/authors/handbooks-and-manuals/handbook/current/chapter-14).
 
-4. **Quantify uncertainty:** Effect sizes need CIs or ranges. State population, comparator, timeframe. For genetic associations: OR + CI + population + MAF.
+Record the relevant design details once: sample size, population match, controls/blinding, registration, funding/COI, independent replication, effect size and endpoint. Compare strong contradictory and null results as well as positive findings. For clinical decisions with high stakes, obtain an independent assessment of the same sources; a second model's agreement does not replace source verification.
 
-5. **Genetic claims:** Distinguish GWAS association vs functional validation vs clinical actionability. State penetrance. "Associated with" ≠ "causes." Single-SNP interpretation of polygenic traits is usually misleading. PGx claims need CPIC/DPWG level.
+## Inference and output
 
-6. **Dosing guardrails:** Rx = guideline ranges only ("discuss with prescriber"). OTC/supplements = evidence-based ranges if cited. Genotype→dose only with CPIC/DPWG-level evidence, otherwise label INFERENCE.
+Label inference and state the assumptions that matter. For a quantitative inference, show the necessary derivation with units and examine plausible changes in the assumptions when they could change the conclusion. Qualitative reasoning does not need invented numerical sensitivity.
 
-## Evidence Hierarchy
+Keep evidence, inference and practical considerations distinguishable in the format the answer needs. Include access, cost, formulation or dosage only when requested or decision-relevant. Operational availability never establishes efficacy. A single concise evidence comparison can supply the study details for the synthesis; do not recite every source again or require a fixed three-section response.
 
-Grade every claim:
+## Relevant failure checks
 
-| Grade | Type | Notes |
-|-------|------|-------|
-| 1 | Clinical guideline / consensus | NICE, WHO, AAD, CPIC, DPWG |
-| 2 | Systematic review / meta-analysis | Cochrane, PRISMA-compliant |
-| 3 | Well-powered RCT | Pre-registered, independent, adequate N |
-| 4 | Small / pilot RCT | Underpowered, often industry-funded |
-| 5 | Large observational / cohort | Adjusted, replicated |
-| 6 | GWAS / genetic association | Report OR, CI, population, replication |
-| 7 | Animal model | Species, dose, route — note translatability |
-| 8 | In vitro / cell culture | Note concentration vs physiological |
-| 9 | Case report / expert opinion | Lowest weight |
+Use the checks that apply to the current claim:
 
-Always note: COI, replication status, sample size, population match, effect size (NNT, ARR, or Cohen's d when available).
+- **Genotype-to-phenotype leap:** do not turn a small association into a deterministic prediction.
+- **Concentration confusion:** compare an in-vitro concentration with achievable human exposure before claiming transfer.
+- **Funding/publication bias:** inspect study design and endpoint; funding is context, not an automatic verdict.
+- **Authority substitution:** trace a personality's protocol or a guideline's efficacy assertion to supporting studies.
+- **N=1 extrapolation:** a personal anecdote does not establish a population treatment effect.
+- **False binaries and direction errors:** retain the source's effect size, uncertainty, affected moiety and direction.
+- **Inference promotion:** a plausible mechanism stays an inference until the target outcome has direct support.
+- **Genotype-only search:** for a proposed intervention, also search the condition and relevant clinical outcome.
 
-## Inference Rules
+Verify decisive numbers and cited studies, applicable genetic/dosing support, relevant counterevidence and material uncertainty before delivering. Do not manufacture checklist sections for claims the answer does not contain.
 
-You may reason from first principles, but MUST label it INFERENCE.
+## Interpretation changes in a system
 
-Any INFERENCE must include:
-- Assumptions stated explicitly
-- A minimal derivation (with units)
-- Sensitivity: what if the key assumption is 2x off?
+Before making a new runtime concept, check its actual caller and whether it changes a decision, escalation, contradiction handling or follow-up. A caveat that only renames or limits an existing concept belongs in the existing representation or memo. This applies when the authorized task includes system changes; a literature question alone does not trigger a design exercise.
 
-Three buckets in every output:
-1. **EVIDENCE** — cited, graded
-2. **INFERENCE** — derived from evidence + assumptions, labeled
-3. **PRACTICAL** — availability, cost, formulation; never upgraded to efficacy claims
+## Other evidence and specialized authorities
 
-## Interpretation Compression Rules
+Regulatory labels, safety communications, registries, preprints, independent product tests and supply-chain records can support the claims they actually measure. Label source type and limits. Product composition or formulation evidence does not substitute for clinical outcomes.
 
-Before promoting any new concept into a system, ask:
+For PGx, use applicable CPIC/DPWG guidance and PharmGKB evidence levels. ClinVar, ClinGen and gnomAD answer different variant questions; cite the relevant record and version. No unsupported single-GWAS-hit or nutrigenomic dose leap.
 
-1. Is this a genuinely new primitive, or just a limiter on an existing one?
-2. Does it have a caller?
-3. Does it change belief, escalation, contradiction handling, or follow-up ordering?
+## History and correction
 
-If the answer is "no" or "mostly wording", do not promote it as a new runtime object. Keep it as memo-level guidance or merge it into an existing operator.
-
-This matters most in genomics and phenotype-policy work, where good epistemic caveats can easily metastasize into a Rube Goldberg system if every caveat becomes a first-class type.
-
-## Bio-Specific Failure Modes
-
-Check yourself against each before outputting:
-
-- **Genotype→phenotype leap:** Treating GWAS association (OR 1.1-1.5) as deterministic prediction. Fix: state OR, CI, population, penetrance.
-- **Concentration confusion:** Citing in vitro effect at 100μM as evidence for 500mg oral supplement without bioavailability discussion. Fix: check if effective concentration is physiologically achievable.
-- **Supplement industry bias:** Most supplement RCTs are small, industry-funded, surrogate endpoints, positive publication bias. Fix: flag funding, N, endpoint type.
-- **Protocol broadcasting:** Treating Huberman/Attia/Sinclair recommendation as evidence. Fix: trace to primary study and grade independently.
-- **N=1 extrapolation:** "Bryan Johnson does X" = anecdote, not evidence.
-- **False binary:** "This SNP means you can't convert X" when actual effect is 20-40% reduction. Fix: quantified ranges, not categorical language.
-- **Directionality error:** Citing real study but inverting the sign. Fix: explicitly state what changes, which moiety, direction for each step.
-- **Inference promotion:** Plausible mechanistic chain presented as decision-grade evidence. Fix: put in explicit INFERENCE section with assumptions + failure modes.
-- **Genotype-only search:** Only searched genotype→supplement, never condition→supplement. Fix: ALWAYS run condition-anchored search axis in parallel.
-
-## LLM-Specific Failure Modes (updated Feb 2026)
-
-| Model | Failure Mode | Severity | Notes |
-|-------|-------------|----------|-------|
-| Claude (Opus 4.6) | Sycophantic hedging; agrees then qualifies until useless | Medium | Improved from 4.5 but still present |
-| Claude | Citation-shaped bullshit; plausible references that don't exist | High | CoT unfaithfulness baseline: 7-13% on clean prompts (ICLR 2026) |
-| Claude | Genotype determinism; treats associations as deterministic | High | |
-| GPT (5.2–5.4) | Confident fabrication; invents complete fake studies with authors and N | Critical | Worse with extended thinking enabled. 5.4 improved (SimpleQA ~72%) but still rarely refuses — fabricates confidently |
-| GPT | Overcitation; cites 20+ papers, many tangential or unverifiable | Medium | |
-| Gemini (3.1 Pro) | Google-source bias; over-relies on Scholar snippets without reading papers | High | 1M context invites dumping entire papers without processing |
-| Gemini | Length inflation; massive outputs that bury the signal | Medium | |
-| All models | Implicit post-hoc rationalization; unfaithful CoT on clean prompts | Medium | 7-13% baseline rate (arXiv, ICLR 2026 submission). Not adversarial — happens on normal prompts |
-
-**Cross-model validation:** For high-stakes bio claims (Grade 1-3 evidence affecting clinical decisions), route the same evidence through a second model as independent assessor. Different models have different fabrication patterns — Claude invents plausible-but-wrong citations, GPT invents complete fake studies. Cross-checking catches both.
-
-## Recitation Before Synthesis
-
-Before grading evidence or writing conclusions, **recite the key evidence items verbatim** — restate the study name, N, effect size, and population for each Grade 1-5 source you're relying on. This combats lost-in-the-middle effects when working with many sources (Du et al., EMNLP 2025: +4% accuracy, training-free).
-
-Don't summarize — recite. The act of restating forces attention back to the actual data before the synthesis step where hallucination risk is highest.
-
-## Self-Audit Checklist
-
-After any bio research output:
-- [ ] Every number has a source (DOI/PMID/URL)
-- [ ] No study cited that you haven't verified exists
-- [ ] In vitro/animal evidence NOT used to justify clinical recommendations
-- [ ] Genetic associations include OR, CI, population, penetrance
-- [ ] "Cannot/always/never" replaced with quantified ranges
-- [ ] Industry-funded studies flagged
-- [ ] Supplement doses cite the study they come from
-- [ ] Genotype→dosing claims have CPIC/DPWG level or labeled INFERENCE
-- [ ] Confidence ratings are honest
-- [ ] Counterarguments section exists and is substantive
-- [ ] New interpretation ideas passed the caller test
-- [ ] New interpretation ideas are not just renamed duplicates of earlier operators
-- [ ] Cautions/limiters were not promoted into runtime objects without decision impact
-
-## PGx Quick Reference
-
-**Justified:** CPIC Level A/B, PharmGKB Level 1A/1B.
-**Not justified (but LLMs do it):** Single GWAS hit OR<2.0→dose recommendation; nutrigenomic SNP→supplement dose; variant without replication in user's ancestry.
-
-**Key databases:** CPIC (cpicpgx.org), PharmGKB, ClinVar, DPWG, gnomAD.
-
-## Non-Paper Evidence (acceptable, labeled)
-
-- Regulatory: FDA/EMA monographs, drug labels, safety communications
-- Grey literature: ClinicalTrials.gov entries, conference posters, preprints [PREPRINT]
-- Independent testing: ConsumerLab, Labdoor, third-party CoAs
-- PGx databases: PharmGKB, ClinVar, CPIC guidelines
-- Operational: formulation stability, supply chain, product CoAs
+The [historical guide](history.md) preserves all earlier incident/model notes, including the old 1–9 document hierarchy and mandatory recitation template. On 2026-09-05, the Astra guidance audit found that those rules conflated source type with certainty and expanded unrelated work. Current guidance grades support for the actual claim and uses only relevant verification. Dated GPT/Claude/Gemini error rates are historical observations, not measurements of today's models.
