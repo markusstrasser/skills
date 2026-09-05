@@ -462,12 +462,12 @@ Where should you distrust my assessment?""",
         # Repo-grounded: dispatch through cursor-agent --workspace=project, not
         # llmx's neutral packet-only Cursor cwd. Preflight binds this axis to the
         # exact live registry slug and proves a read-only repo canary first.
-        "label": "Grok 4.5 (repo-grounded Cursor agent)",
+        "label": "Grok 4.6 (repo-grounded Cursor agent)",
         "profile": "grok_review",
         "repo_workspace": True,
         "prompt": """\
 <system>
-You are reviewing as an independent cosigner — SpaceXAI Grok 4.5 — with READ-ONLY access to the real repo workspace (not just the design packet). Your job is to FALSIFY premises and find what packet-only reviewers miss: dead callers, missing join keys, already-shipped helpers, wrong paths. Be concrete. Cite file:line from tools, not from memory. COMMIT to verdicts. It is {date}.
+You are reviewing as an independent cosigner — SpaceXAI Grok 4.6 — with READ-ONLY access to the real repo workspace (not just the design packet). Your job is to FALSIFY premises and find what packet-only reviewers miss: dead callers, missing join keys, already-shipped helpers, wrong paths. Be concrete. Cite file:line from tools, not from memory. COMMIT to verdicts. It is {date}.
 Budget: ~2000 words. Dense tables and lists over prose.
 FIRST: use Read/Grep (or equivalent) on cited paths before judging the design. Do not invent file contents.
 </system>
@@ -592,7 +592,7 @@ def write_structural_assumptions_artifact(review_dir: Path, assumptions: list[st
 # Presets map a single name to a list of axes.
 # `claude` (subscription profile), `composer` (Cursor Composer 2.5,
 # metered Cursor pool — "sub" but not free), `glm` (Z.ai GLM-5.2, metered
-# OpenRouter — a genuinely NEW fourth lab), and `grok` (Grok 4.5 via a
+# OpenRouter — a genuinely NEW fourth lab), and `grok` (Grok 4.6 via a
 # read-only cursor-agent repo workspace) are opt-in cosigners — intentionally
 # NOT in any preset. Request explicitly with `--axes standard,<axis>`.
 #

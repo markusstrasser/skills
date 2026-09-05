@@ -8,8 +8,8 @@
 
 Cursor's CLI can proxy frontier models (opus, gpt, claude, …) at their own
 metered rates. Composer remains the default lane. On 2026-07-14 the live Cursor
-registry and named/repo smokes admitted exact `cursor-grok-4.5-{low,medium,high}`
-slugs (plus trailing `-fast`) for deliberate opt-in use. Bare `grok-4.5`, retired
+registry admitted exact `cursor-grok-4.6-{low,medium,high,xhigh}` (2026-09-05; the 4.5 slugs are gone)
+slugs (plus trailing `-fast`) for deliberate opt-in use. Bare `grok-4.6`, retired
 aliases, and generic opus/gpt/claude/gemini/sonnet pins remain off-policy.
 
 Enforcement, not instruction: a prior session called cursor with a foreign
@@ -38,14 +38,14 @@ _ARM_MODEL = re.compile(r"\bdispatch-cursor-arm\.sh\s+\S+\s+([A-Za-z0-9._/-]+)")
 # drift previously made stale aliases silently unsafe, so no wildcard family match.
 _COMPOSER = re.compile(r"^composer(?:[-.]|$)", re.IGNORECASE)
 _CURSOR_GROK = re.compile(
-    r"^cursor-grok-4\.5-(?:low|medium|high)(?:-fast)?$", re.IGNORECASE
+    r"^cursor-grok-4\.6-(?:low|medium|high|xhigh)(?:-fast)?$", re.IGNORECASE
 )
 
 _MSG = (
     "BLOCKED: cursor-agent model '{model}' is not admitted. Use native Composer "
     "(composer-2.5 / composer-2.5-fast) or an exact live Cursor Grok slug "
-    "cursor-grok-4.5-{{low,medium,high}} with optional trailing -fast. Bare grok-4.5 "
-    "is xAI API; retired xhigh/fast-prefix aliases are forbidden. For opus/gpt use "
+    "cursor-grok-4.6-{{low,medium,high,xhigh}} with optional trailing -fast. Bare grok-4.6 "
+    "is xAI API (use the grok CLI or llmx for it); 4.5 slugs and fast-prefix aliases are forbidden. For opus/gpt use "
     "`claude -p` / `codex exec` / `llmx`, not cursor."
 )
 
@@ -87,12 +87,14 @@ def _selftest() -> int:
     cases = [
         ("agent -p --mode ask --trust --model composer-2.5 'hi'", "pass"),
         ("agent -p --trust --model composer-2.5-fast 'x'", "pass"),
-        ("agent -p --mode ask --trust --model cursor-grok-4.5-low 'x'", "pass"),
-        ("agent -p --mode ask --trust --model cursor-grok-4.5-medium-fast 'x'", "pass"),
-        ("agent -p --mode ask --trust --model cursor-grok-4.5-high 'x'", "pass"),
-        ("agent -p --trust --model grok-4.5 'x'", "block"),
-        ("agent -p --trust --model cursor-grok-4.5-xhigh 'x'", "block"),
-        ("agent -p --trust --model cursor-grok-4.5-fast-high 'x'", "block"),
+        ("agent -p --mode ask --trust --model cursor-grok-4.6-low 'x'", "pass"),
+        ("agent -p --mode ask --trust --model cursor-grok-4.6-xhigh 'x'", "pass"),
+        ("agent -p --mode ask --trust --model cursor-grok-4.5-high 'x'", "block"),
+        ("agent -p --mode ask --trust --model cursor-grok-4.6-medium-fast 'x'", "pass"),
+        ("agent -p --mode ask --trust --model cursor-grok-4.6-high 'x'", "pass"),
+        ("agent -p --trust --model grok-4.6 'x'", "block"),
+        ("agent -p --trust --model cursor-grok-4.6-max 'x'", "block"),
+        ("agent -p --trust --model cursor-grok-4.6-fast-high 'x'", "block"),
         ("cursor-agent --model opus 'review this'", "block"),
         ("agent -p --trust --model gpt-5.5 'do it'", "block"),
         ("agent -p --trust -m claude-opus-4-8 'x'", "block"),

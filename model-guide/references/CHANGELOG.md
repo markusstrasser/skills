@@ -364,3 +364,9 @@ for CC-dispatched subagents.
   reads ≈ $0.20/MTok input) without drawing on the codex subscription quota — the subscription
   lane stays $0 but is capacity-limited (dark 07-25→07-29 on quota). llmx price table updated
   same day (llmx 2f7abfc; stale entries were overstating Luna est_cost 5×).
+
+## 2026-09-05 — Grok 4.6 replaces 4.5; Grok Build CLI recorded
+
+- `cursor-agent models` lists only `cursor-grok-4.6-{low,medium,high,xhigh}[-fast]`; every `cursor-grok-4.5-*` pin (critique `grok` axis, memory dispatch lines, routing allowlist) was dead. Updated the Grok section, Verified Transport, routing rows, llmx-guide models table/footgun 7b, `~/.claude/rules/llmx-routing.md`.
+- Grok Build (`~/.grok/bin/grok` 1.0.13, SuperGrok subscription) smoke-tested headless: JSON output with usage, served model `grok-4.6-build`, ~26K tokens of CLI context per call. Recorded as a separate lane; llmx transport pending.
+- Grok 4.6 API facts (500K context, $2/$6 <200K, $4/$12 ≥200K, `xhigh` effort, released 2026-08-12) from vendor/partner pages; no local AA measurement yet — the 4.5 AA table stays as the calibration snapshot.

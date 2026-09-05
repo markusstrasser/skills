@@ -443,7 +443,7 @@ class AxisResolutionTest(unittest.TestCase):
         self.assertFalse(model_review.axis_needs_repo_workspace("composer"))
         self.assertEqual(model_review.AXES["grok"]["profile"], "grok_review")
         profile = model_review.dispatch_core.PROFILES["grok_review"]
-        self.assertEqual(profile.model, "cursor-grok-4.5-high")
+        self.assertEqual(profile.model, "cursor-grok-4.6-high")
         self.assertEqual(profile.provider, "cursor")
         self.assertEqual(model_review._resolved_axis_timeout("grok"), 1200)
         self.assertGreater(
@@ -479,7 +479,7 @@ class AxisResolutionTest(unittest.TestCase):
                 patch.object(model_review, "_run_cursor_command", return_value=completed) as run,
             ):
                 result = model_review._call_cursor_repo_agent(
-                    model="cursor-grok-4.5-high",
+                    model="cursor-grok-4.6-high",
                     project_dir=root,
                     context_path=context_path,
                     prompt="Review this.",
@@ -491,7 +491,7 @@ class AxisResolutionTest(unittest.TestCase):
             command = run.call_args.args[0]
             self.assertIn("--mode", command)
             self.assertEqual(command[command.index("--mode") + 1], "ask")
-            self.assertEqual(command[command.index("--model") + 1], "cursor-grok-4.5-high")
+            self.assertEqual(command[command.index("--model") + 1], "cursor-grok-4.6-high")
             self.assertEqual(command[command.index("--workspace") + 1], str(root.resolve()))
             self.assertEqual(run.call_args.kwargs["cwd"], root)
             self.assertIn("OK", output_path.read_text())
@@ -1751,7 +1751,7 @@ class PreflightTest(unittest.TestCase):
                 patch.object(
                     model_review,
                     "run_grok_preflight",
-                    return_value=(0, {"ok": True, "model": "cursor-grok-4.5-high"}),
+                    return_value=(0, {"ok": True, "model": "cursor-grok-4.6-high"}),
                 ) as grok_preflight,
             ):
                 return_code = model_review.run_preflight(project_dir, include_grok=True)
@@ -1778,7 +1778,7 @@ class GrokPreflightTest(unittest.TestCase):
                 return self._completed(
                     args,
                     exit_code=0,
-                    stdout="cursor-grok-4.5-high - Cursor Grok 4.5\n",
+                    stdout="cursor-grok-4.6-high - Cursor Grok 4.6\n",
                 )
             prompt = str(kwargs.get("input_text") or "")
             if "current git commit" in prompt:
@@ -1812,7 +1812,7 @@ class GrokPreflightTest(unittest.TestCase):
         self.assertEqual(len(cursor_dispatches), 1)
         for command in cursor_dispatches:
             self.assertEqual(command[command.index("--mode") + 1], "ask")
-            self.assertEqual(command[command.index("--model") + 1], "cursor-grok-4.5-high")
+            self.assertEqual(command[command.index("--model") + 1], "cursor-grok-4.6-high")
             self.assertEqual(command[command.index("--workspace") + 1], str(project_dir.resolve()))
         cursor_calls = [call for call in cursor_run.call_args_list if "--model" in call.args[0]]
         self.assertEqual(len(cursor_calls), 1)
@@ -1845,7 +1845,7 @@ class GrokPreflightTest(unittest.TestCase):
                 return self._completed(
                     args,
                     exit_code=0,
-                    stdout="cursor-grok-4.5-high - Cursor Grok 4.5\n",
+                    stdout="cursor-grok-4.6-high - Cursor Grok 4.6\n",
                 )
             prompt = str(kwargs.get("input_text") or "")
             self.assertNotIn("abc123def456", prompt)
@@ -1878,7 +1878,7 @@ class GrokPreflightTest(unittest.TestCase):
                 return self._completed(
                     args,
                     exit_code=0,
-                    stdout="cursor-grok-4.5-high - Cursor Grok 4.5\n",
+                    stdout="cursor-grok-4.6-high - Cursor Grok 4.6\n",
                 )
             project_dir = Path(kwargs["cwd"])
             self.assertFalse((project_dir / ".model-review/grok-preflight-latest.json").exists())

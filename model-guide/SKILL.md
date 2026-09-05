@@ -18,9 +18,9 @@ The operator's Codex configuration selects Astra. Check the actual transport and
 
 **Operational specs:** `gpt-6-astra` (alias `gpt-6`). API $10/$50 per MTok (2×/1.5× above 272K input); Fast mode 2× Standard. 1.05M context, 128K max output. Effort `low|medium|high|xhigh|max`; `none`/`minimal` map to `low`. Subscription via `llmx chat --subscription -m gpt-6-astra` or `codex exec` (omit `-m`) is $0 against the ChatGPT plan. Source: developers.openai.com/api/docs/models/gpt-6-astra (2026-09-05).
 
-**Models covered:** GPT-6 Astra (default OpenAI / Codex flagship, 2026-09), Claude Opus 5 (headless Claude default), Claude Fable 5.1 (interactive Claude default; Max plan allowance), Claude Sonnet 5 (cost-tier Claude), GPT-5.6 Sol / Terra / Luna (named cost-tier pins; GPT-5.5 removed), Kimi K3 (Moonshot open-weight, 2026-07-16), and Grok 4.5 through the Cursor subscription pool.
-**Last updated:** 2026-09-05 (GPT-6 Astra default Codex/OpenAI; Fable live slug `claude-fable-5-1`).
-**Active stance:** This skill no longer maintains a broad model zoo. Older GPT, Gemini, Grok-4.20-and-earlier, and Sonnet-4.6-and-earlier routes were removed from active guidance. Sonnet 5 is reinstated as a named, cost-tier Claude option (2026-06-30). Grok 4.5 is an opt-in read-only repo critique lane through exact Cursor slugs; the xAI API path remains separate and blocked/unverified locally. Use this guide for high-value frontier decisions; use repo-specific batch tooling or search tools for cheap bulk work.
+**Models covered:** GPT-6 Astra (default OpenAI / Codex flagship, 2026-09), Claude Opus 5 (headless Claude default), Claude Fable 5.1 (interactive Claude default; Max plan allowance), Claude Sonnet 5 (cost-tier Claude), GPT-5.6 Sol / Terra / Luna (named cost-tier pins; GPT-5.5 removed), Kimi K3 (Moonshot open-weight, 2026-07-16), and Grok 4.6 through the Cursor subscription pool and the Grok Build CLI.
+**Last updated:** 2026-09-05 (GPT-6 Astra default Codex/OpenAI; Fable live slug `claude-fable-5-1`; Grok 4.6 replaces 4.5 on Cursor, Grok Build CLI recorded).
+**Active stance:** This skill no longer maintains a broad model zoo. Older GPT, Gemini, Grok-4.20-and-earlier, and Sonnet-4.6-and-earlier routes were removed from active guidance. Sonnet 5 is reinstated as a named, cost-tier Claude option (2026-06-30). Grok 4.6 is an opt-in read-only repo critique lane through exact Cursor slugs and a headless lane through the Grok Build CLI; the xAI API path remains separate and blocked/unverified locally. Use this guide for high-value frontier decisions; use repo-specific batch tooling or search tools for cheap bulk work.
 
 **OPEN QUESTION (2026-06-30, not yet resolved — operator call):** the "Architecture / design / high-reasoning critique → NEVER Sonnet" verdict below was reached against Sonnet 4.6 on 2026-06-20. Sonnet 5's system card shows large agentic/coding gains and prompt-injection robustness tying or beating Opus 4.8 in several places, but also the *worst* prefill/system-prompt-susceptibility numbers of the compared models and measurably more turns/tokens per task (system-card digest: `references/sonnet-5-system-card.md`). Whether this changes the "NEVER Sonnet" verdict for architecture/critique work is a live question, not re-litigated here — the verdict stands until the operator revisits it.
 
@@ -36,7 +36,8 @@ The operator's Codex configuration selects Astra. Check the actual transport and
 | `llmx chat --subscription -m claude-fable-5-1` | 2026-09-05 dry-run: `claude-cli`, subscription auth, exact 5.1 ID and requested effort | No live headless 5.1 canary in this check. Subscription never permits silent API fallback. |
 | Interactive Claude Code | Global setting `claude-fable-5-1[1m]`; installed CLI 2.1.261 | Existing September 2 local billing evidence is recorded in agent-infra’s Fable memo §10. Plan allowance and current remaining usage are separate. |
 | Claude Agent-tool model pins | Opus pins recovered in the July 29 observations; Fable pins have no later verification here | Treat old failures as dated evidence. For model-sensitive evaluations inspect the provider run record; self-report alone is not independent proof. |
-| Cursor Grok 4.5 | July 14 registry and repository canary recorded in the history | Refresh the registry/canary before a new model-sensitive dispatch. |
+| Cursor Grok 4.6 | 2026-09-05: `cursor-agent models` lists ONLY `cursor-grok-4.6-{low,medium,high,xhigh}[-fast]`; the 4.5 slugs are gone. `llmx chat --dry-run --subscription -m cursor-grok-4.6-high` resolves (effort is baked into the slug; `-e` is ignored). | Any pin on a `cursor-grok-4.5-*` slug is dead. Refresh the canary before a model-sensitive dispatch. |
+| Grok Build CLI (`~/.grok/bin/grok`, 1.0.13) | 2026-09-05 live smoke: headless `grok -p "…" --output-format json -m grok-4.6 --reasoning-effort <e>` returned the answer plus token usage; served model `grok-4.6-build`. | Every call carries ~26K tokens of the CLI's own context; cost shows as `total_cost_usd` against the SuperGrok plan. llmx `grok-cli` transport in progress. |
 
 The [historical transport record](references/fable-routing-history.md) preserves
 old routing failures and their later corrections. Validate the actual lane a
@@ -114,7 +115,7 @@ Mechanics and footguns: `/llmx-guide`.
 - **Cheap classification / mechanical audits:** `gpt-6-astra` at `low` via codex-cli subscription ($0). Luna does not beat Astra-low on quality (AA Astra-low 57 vs Luna-max 43); keep `-m gpt-5.6-luna` for metered API bulk. Gemini is critique-only since 2026-07-14.
 - **GPT-6 Astra default effort:** preserve the requested effort; `none`/`minimal` map to `low`. Suite supports `max`. Pass `-e high`/`xhigh`/`max` for depth; reasoning bills as output.
 - **GLM-5.2 (Z.ai, NEW LAB) = opt-in review cosigner, NOT an extractor (2026-06-19).** A 4th independent training lab (Zhipu) → real cross-lab diversity for critique; request explicitly `--axes …,glm` (`glm_review` profile, routed via OpenRouter). **Calibration edge:** 72% AA-Omniscience non-hallucination (2026-06-18 independent read) — best among commonly-routed large models, ahead of Opus 4.8 64%; strong on impossibility/paradox detection in anecdotal coding probes. Accepts ONLY `high`/`xhigh` reasoning (no low tier) → structurally expensive+slow → **rejected for high-volume extraction/ingestion** (cost-dominated, no quality gain; keep gpt-5.3/gemini-3-flash). Match reasoning floor to task: GLM for occasional thorough review and epistemic guardrails, not throughput. See `agent-infra/decisions/2026-06-19-glm-5.2-integration.md`, `evals` DECISIONS `glm-5.2-extraction`.
-- **Grok 4.5 is routable through Cursor subscription as of 2026-07-14.** Use exact `cursor-grok-4.5-{low,medium,high}` or matching trailing-`-fast` slugs. The opt-in critique `grok` axis pins `cursor-grok-4.5-high` in a read-only repo workspace and fails closed on registry or unrevealed repo-canary drift. The bare `grok-4.5` xAI API lane remains separate.
+- **Grok 4.6 is the Cursor Grok pool as of 2026-09-05 (4.5 slugs removed).** Use exact `cursor-grok-4.6-{low,medium,high,xhigh}` or matching trailing-`-fast` slugs. The opt-in critique `grok` axis pins `cursor-grok-4.6-high` in a read-only repo workspace and fails closed on registry or unrevealed repo-canary drift. The bare `grok-4.6` xAI API lane and the Grok Build CLI (`grok -p`) are separate lanes.
 - **Gemini 3.6 Flash / 3.5 Flash-Lite (launched 2026-07-21) are REGISTERED, NOT ROUTED (2026-07-22).**
   Live API ids `gemini-3.6-flash`, `gemini-3.5-flash-lite` (GA, no `-preview` suffix; verified
   against `models.list`, not guessed). Registered in llmx (`652d1ed`) purely so the spend guard
@@ -303,9 +304,11 @@ metered, locally unverified, and no subscription path exists.
 3. **UX gap** — the vendor concedes a noticeable user-experience gap vs Fable 5 / Sol
    despite competitive scores.
 
-## Grok 4.5 - repo-grounded Cursor opt-in
+## Grok 4.6 — Cursor pool, Grok Build CLI, xAI API
 
-SpaceXAI frontier model (2026-07-08), jointly trained with Cursor. Independent AA
+**Grok 4.6 (released 2026-08-12) replaced Grok 4.5 everywhere on 2026-09-05.** API: `grok-4.6`, 500K context, text+image in, $2/$6 per MTok below 200K input ($0.50 cached), $4/$12 at or above 200K; reasoning effort `low|medium|high|xhigh` (xhigh is new). Cursor pool: `cursor-grok-4.6-{low,medium,high,xhigh}[-fast]` — `cursor-agent models` no longer lists any 4.5 slug, so every `cursor-grok-4.5-*` pin is dead. Grok Build (`~/.grok/bin/grok`, v1.0.13, Apache-2.0, SuperGrok/X Premium+ subscription, left beta 2026-08-07) is xAI's own terminal coding agent powered by 4.6: interactive TUI, headless `grok -p "<prompt>" [--prompt-file P] --output-format text|json|streaming-json -m grok-4.6 --reasoning-effort <e> [--no-plan] [--permission-mode …]`, up to eight subagents in worktrees, ACP integration. It is the lane the operator means by "grok" as a subagent — not only Cursor. Sources: [xAI Grok Build docs](https://docs.x.ai/build/overview), [x.ai/build](https://x.ai/build), [release guide](https://codersera.com/blog/grok-4-6-launch-guide-2026/), [pricing/context](https://kingy.ai/blog/grok-4-6-price-benchmarks-api-cursor-context-window/). The 4.6-specific benchmark numbers below are NOT yet measured here; the AA table is the 4.5 snapshot kept for calibration until a 4.6 paste replaces it.
+
+**Grok 4.5 history.** SpaceXAI frontier model (2026-07-08), jointly trained with Cursor. Independent AA
 measurement put it in the **frontier pack on capability** with a **cost/speed edge** and
 **mid-pack calibration**. Cursor's exact Grok slugs are live again as of 2026-07-14; use this
 as an opt-in read-only repo-review axis, not a replacement for Opus/GPT judgment or primary evidence.
@@ -327,7 +330,7 @@ as an opt-in read-only repo-review axis, not a replacement for Opus/GPT judgment
 | Output speed | **~88 tok/s** | Flash 167 · Fable 70 · GPT 68 | Faster than Fable/GPT |
 
 **Admission gate (enforced on every critique dispatch):** the live registry must expose exact slug
-`cursor-grok-4.5-high`, and an unrevealed exact repo-HEAD canary must prove read-only workspace
+`cursor-grok-4.6-high`, and an unrevealed exact repo-HEAD canary must prove read-only workspace
 access. Any failure blocks the axis before reviewer dispatch.
 
 **Use less / never alone:**
@@ -337,18 +340,19 @@ access. Any failure blocks the axis before reviewer dispatch.
 4. **Contexts >500k** — API window is 500k; Opus/GPT are 1M-class.
 5. **CursorBench scores** — Cursor blog: training contamination; excluded from their table.
 
-**Operational specs (API):** `grok-4.5`, **500k context**, $2/$6 per MTok, reasoning `low`/`medium`/`high` (default high). Fast Cursor variant $4/$18.
+**Operational specs (API, 4.5 era — superseded by the 4.6 line above):** `grok-4.5`, **500k context**, $2/$6 per MTok, reasoning `low`/`medium`/`high` (default high). Fast Cursor variant $4/$18.
 
 **Surfaces:**
-| Surface | How | Status (2026-07-14) |
+| Surface | How | Status (2026-09-05) |
 |---|---|---|
-| Critique `grok` axis | `model-review.py --axes standard,grok` | **Live opt-in** — exact high slug, read-only repo workspace, registry + unrevealed-canary preflight |
-| Cursor session / `cursor-agent` | `--model cursor-grok-4.5-high --mode ask --workspace <repo>` | **Verified live** — registry + named smoke + exact repo-HEAD canary |
-| llmx Cursor pool | `llmx chat --subscription -m cursor-grok-4.5-high` | **Current source contract** — exact slug infers cursor-cli and passes subscription allowlist |
-| llmx xAI API | `llmx chat -p xai -m grok-4.5 -e high` | Wired + priced; **API key currently blocked** (403) — key status, not EU geo |
+| Critique `grok` axis | `model-review.py --axes standard,grok` | Opt-in — pin moved to `cursor-grok-4.6-high` on 2026-09-05 (was 4.5, which the registry no longer lists); re-run the preflight canary before trusting it |
+| Cursor session / `cursor-agent` | `--model cursor-grok-4.6-high --mode ask --workspace <repo>` | Registry lists the 4.6 slugs (2026-09-05); named smoke + canary not yet re-run on 4.6 |
+| Grok Build headless | `grok -p "<prompt>" --output-format json -m grok-4.6 --reasoning-effort high --no-plan` (cwd = the repo you want it to read) | **Verified live 2026-09-05**: `grok -p "Reply with exactly the word OK…" --no-plan --output-format json -m grok-4.6 --reasoning-effort low` returned `OK` in JSON with usage (26,055 input tokens for a one-line prompt — it loads its own ~26K system context — 23 output, 18 reasoning, `total_cost_usd` 0.0089 reported against the SuperGrok plan, served model `grok-4.6-build`). `grok agent` is the same headless runner without the TUI. |
+| llmx Cursor pool | `llmx chat --subscription -m cursor-grok-4.6-high` (or `-xhigh`) | **Verified 2026-09-05** — dry-run resolves cursor-cli; nine live red-team reviews dispatched the same evening |
+| llmx xAI API | `llmx chat -p xai -m grok-4.6 -e high` | Model id known to llmx; key status unverified since the 2026-07-09 403 |
 
-**Footgun (updated 2026-07-14):** exact Cursor slugs are prefixed
-`cursor-grok-4.5-` and place `-fast` last; there is no xhigh slug. Bare `grok-4.5` is the
+**Footgun (updated 2026-09-05):** exact Cursor slugs are prefixed
+`cursor-grok-4.6-` and place `-fast` last; 4.6 adds an `xhigh` slug. Bare `grok-4.6` is the
 xAI API model. Current llmx refuses any `auth=subscription` plan that resolves to `xai-api`.
 
 See `agent-infra/decisions/2026-07-09-grok-4.5-transport.md`.
@@ -362,7 +366,7 @@ Opus 5 (max for architecture): architectural/professional judgment and implement
 GPT-6 Astra: terminal/tool/process critique and structured failure search (hard).
 GPT-5.6 Luna: mechanical / bulk (low).
 GPT-6 Astra + reasoning.mode=pro: quantitative or high-irreversibility decisions.
-Grok 4.5 high (Cursor opt-in): repo-grounded premise falsification after live preflight.
+Grok 4.6 high (Cursor opt-in, or Grok Build headless in the repo): repo-grounded premise falsification after live preflight.
 Ground truth: tests, git, databases, source documents, primary web pages.
 ```
 
@@ -373,7 +377,7 @@ That verdict, calibrated: the cross-lab-vs-same-lab MARGIN is **≈0** — a sec
 ## Validation Checklists
 
 Post-output verification lists — All Outputs + per-model (Fable 5, Sonnet 5, Opus 5, GPT-5.6 Sol/Terra/Luna,
-GLM-5.2, Grok 4.5): [references/validation-checklists.md](references/validation-checklists.md).
+GLM-5.2, Grok 4.6): [references/validation-checklists.md](references/validation-checklists.md).
 Consult after receiving output from a routed model, not at routing time.
 
 ## Source Notes
