@@ -50,6 +50,7 @@ llmx chat --subscription -m claude-opus-5 -f ctx.md -o out.md "query"
 llmx chat --subscription -m claude-fable-5-1 -f ctx.md -o out.md "query"
 llmx chat -p codex-cli --subscription -m gpt-6-astra -f ctx.md -o out.md "query"
 llmx chat --subscription -m cursor-grok-4.6-high -f ctx.md -o out.md "query"   # 4.5 slugs are gone from Cursor (2026-09-05)
+llmx chat -p grok -m grok-4.6 -e high -f ctx.md -o out.md "query"           # Grok Build CLI lane (subscription-only, neutral cwd; agent mode keeps cwd)
 ```
 
 Repository-coupled agent review (caller cwd, project rules, native CLI tools):

@@ -79,7 +79,7 @@ Default provider model: **Astra**. Codex `~/.codex/config.toml` selects Astra; o
 | Gemini 3.x (Pro/Flash) | low, medium, high | high (server-side, via `thinking_config`) |
 | Grok 4.5 (API) | **low, medium, high** | high |
 | Grok 4.6 (Cursor) | effort baked into exact slug (`-low`/`-medium`/`-high`/`-xhigh`; optional trailing `-fast`) | pass an exact `cursor-grok-4.6-*` registry slug |
-| Grok 4.6 (Grok Build CLI, `grok -p`) | `--reasoning-effort low|medium|high|xhigh` | served model reports as `grok-4.6-build` |
+| Grok 4.6 (Grok Build CLI, `llmx chat -p grok -m grok-4.6` / `grok -p`) | `-e low|medium|high|xhigh` (`none`/`minimal`→low, `max`→xhigh) | served model reports as `grok-4.6-build`; llmx logs real tokens for this lane (landed 2026-09-05) |
 | Grok 4.20 Reasoning | **NONE — passing `reasoning_effort` errors** | auto (model reasons internally) |
 | Grok 4.20 Multi-Agent | low, medium, high, xhigh — **selects agent count, not depth** (low/med→4 agents, high/xhigh→16) | -- |
 | Grok 4.20 Non-Reasoning | n/a (no thinking) | -- |
