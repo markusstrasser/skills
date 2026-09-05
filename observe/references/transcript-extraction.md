@@ -1,37 +1,53 @@
-<!-- Reference file for observe skill (shared transcript extraction). Loaded on demand. -->
-# Transcript Extraction & Pre-Filtering
+# Transcript preparation and pre-filtering
 
-## Step 1: Extract Transcripts
-
-Parse the project argument from $ARGUMENTS. Default: last 5 sessions.
+Load for a retrospective mode that actually needs transcript extraction. `retro` uses the current
+session locally; `harvest` consumes existing producer artifacts. Prefer the size-safe native entry:
 
 ```bash
-OBSERVE_PROJECT_ROOT="${OBSERVE_PROJECT_ROOT:-$HOME/Projects/agent-infra}"
-OBSERVE_ARTIFACT_ROOT="${OBSERVE_ARTIFACT_ROOT:-$OBSERVE_PROJECT_ROOT/artifacts/observe}"
-mkdir -p "$OBSERVE_ARTIFACT_ROOT"
-
-# Claude Code sessions — use --full for session-analyst dispatch (3-5x more content, preserves corrections)
-python3 ${CLAUDE_SKILL_DIR}/scripts/extract_transcript.py <project> --sessions <N> --full --output "$OBSERVE_ARTIFACT_ROOT/input.md"
-
-# Codex CLI sessions (GPT-5.4 via OpenAI) — reads ~/.codex/state_5.sqlite + rollout JSONL.
-# Codex runs alongside Claude Code on the same project; presence MUST feed dispatch.
-# The `|| : > ...` ensures codex.md exists even when no sessions match the window.
-python3 ${CLAUDE_SKILL_DIR}/scripts/extract_codex_transcript.py <project> --sessions <N> --output "$OBSERVE_ARTIFACT_ROOT/codex.md" 2>/dev/null || : > "$OBSERVE_ARTIFACT_ROOT/codex.md"
+just -f ~/Projects/agent-infra/justfile observe-run <mode> [project] [days]
 ```
 
-Run BOTH extractors every time. Claude Code is primary; Codex is additive when sessions exist.
-Both feeds belong under the same canonical artifact root, must both be referenced from
-`manifest.json`, and must both be concatenated into the dispatch context in Step 2. Never silently
-drop Codex — it regularly runs genomics work in parallel with Claude Code, and omitting it loses
-roughly half the signal. Empty `codex.md` is a valid state (no Codex sessions in window) and
-downstream code must tolerate it.
+For a manual single-mode run, choose a fresh run artifact directory and use the existing prep script:
 
-With `--full`: ~80-400KB per 5 sessions (well within Gemini's 1M). Without: ~20-100KB.
-Paper evidence: raw traces beat summaries by +15pp for diagnostic quality (Lee et al. 2026).
+```bash
+uv run python3 ~/Projects/agent-infra/scripts/observe_prepare_context.py \
+  --project P --sessions N --days D --artifact-dir "$ARTIFACT_DIR" --full
+```
+
+Drift uses `observe_drift_context.py --sessions 60 --projects … --artifact-dir "$ARTIFACT_DIR"`.
+Read `--help` when selecting flags. Do not concatenate raw extractor output into an uncapped blob.
+Read the prepared file's byte count and any trim notes; the dispatch cap is 600KB, enforced in code.
+For truncation, batch by project or reduce the extraction window. Keep the lost scope explicit in
+`manifest.json` and the digest. See [analysis dispatch](analysis-dispatch.md) before sending a bundle.
+
+## Source and coverage contract
+
+Read raw rollout turns for session judgments. Include Claude Code JSONL under
+`~/.claude/projects/-Users-alien-Projects-{project}/` and Codex's `~/.codex/state_5.sqlite` + rollout
+JSONL matched by cwd. The preprocessor strips thinking and base64. Record every input and every
+omission in `manifest.json`; preserve the [artifact contract](artifact-contract.md).
+
+An empty Codex file is valid only when no matching sessions were found. A failed extractor is a
+broken source, not evidence of no sessions: inspect return status/stderr and scan/parse/match
+denominators before treating empty output as a clean run. Do not suppress failures into empty files.
+The prep helpers propagate extractor failures. Healthy empty windows succeed with empty output;
+drift retains either source when the other is empty. Neither clipping nor a healthy summary replaces
+a raw-source check.
+
+Historical evidence retained from the original workflow: omitting concurrent Codex work lost roughly
+half the record; uncapped multitask concatenation produced 10MB contexts. Full raw traces were kept
+because summaries miss corrections (the earlier guide cited Lee et al. 2026, +15pp diagnostic quality).
+
+Build operational context for the analyzed time window (hook triggers, receipts, git commits), then
+the coverage digest and shape pre-filter below. Weekly full-corpus steer mining uses `just steer-mine`
+with incremental state in `~/.claude/steer-mining/`; recent-window runs miss older buried corrections.
+The following manual operational-context recipe applies when the native run has not already built it.
+Set `OBSERVE_PROJECT_ROOT` to the repo root, `OBSERVE_ARTIFACT_ROOT` to this run directory, and `CWD`
+to the analyzed checkout; use manifest timestamps/session IDs if they are already available.
 
 ## Step 1.3: Build Operational Context
 
-Before dispatching to Gemini, build an operational context file with hook triggers, receipts,
+Before external analysis, build an operational context file with hook triggers, receipts,
 and git commits for the analyzed sessions' time window. This gives the analyst the full
 operational picture, not just the transcript.
 
@@ -57,17 +73,17 @@ END_TS=$(tail -5 "$OBSERVE_ARTIFACT_ROOT/input.md" | grep -oE '[0-9]{4}-[0-9]{2}
 
 ## Step 1.5: Build Coverage Context
 
-Before dispatching to Gemini, generate the existing-coverage digest so Gemini doesn't re-report known patterns:
+Before external analysis, generate the existing-coverage digest so Gemini doesn't re-report known patterns:
 
 ```bash
 bash "$OBSERVE_PROJECT_ROOT/scripts/coverage-digest.sh" > "$OBSERVE_ARTIFACT_ROOT/coverage-digest.txt"
 ```
 
-This produces ~2000 tokens of existing finding titles, active hook descriptions, and key rules. Prepend it to the Gemini prompt. Gemini should only report genuinely new patterns not already covered by the digest.
+This produces ~2000 tokens of existing finding titles, active hook descriptions, and key rules. Include it in the prepared context. The analyst should only report genuinely new patterns not already covered by the digest.
 
 ## Shape Pre-Filter (Optional, before Step 2)
 
-Before dispatching to Gemini, check which sessions are structurally anomalous:
+Before external analysis, check which sessions are structurally anomalous:
 
 ```bash
 uv run python3 ${CLAUDE_SKILL_DIR}/scripts/session-shape.py --days 1 --project <project>

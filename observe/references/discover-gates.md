@@ -3,6 +3,9 @@
 
 Mandatory. A phase that skips its gate is a known-failure repeat.
 
+Use [analysis safeguards](analysis-safeguards.md) when evaluating candidates. Follow the existing
+user-authorized scope; discovering a possible improvement does not authorize its deployment.
+
 | # | Failure | Prevention gate |
 |---|---------|-----------------|
 | F1 | researching already-built features | **inventory gate**: grep `scripts/*.py` for concept keywords before ANY research |
@@ -16,11 +19,11 @@ Mandatory. A phase that skips its gate is a known-failure repeat.
 
 Phases and budgets: 1 inventory ~10% (F1,F7) · 2 brainstorm ~15% (F1,F4) · 3 research ~25% (F1-F6) ·
 4 plan ~15% · 5 model review ~15% (F3) · 6 implement ~20% — one reference file each,
-`references/phase-N-*.md`. Up to 3 Claude agents + 2 GPT dispatches in parallel, one idea per agent.
+the phase links below. Up to 3 Claude agents + 2 GPT dispatches in parallel, one idea per agent.
 **Every object must have a caller — dead code with a plan does not pass.** Stopping after phase 4 is
 legitimate.
 
-Phase files, in order: `references/phase-1-inventory.md` · `references/phase-2-brainstorm.md` ·
-`references/phase-3-research.md` · `references/phase-4-plan.md` · `references/phase-5-review.md` ·
-`references/phase-6-implement.md`. Cross-cutting concerns that span several of them (budget
-discipline, dispatch hygiene, artifact handling) are in `references/operational-discipline.md`.
+Phase files, in order: [inventory](phase-1-inventory.md) · [brainstorm](phase-2-brainstorm.md) ·
+[research](phase-3-research.md) · [plan](phase-4-plan.md) · [review](phase-5-review.md) ·
+[implement](phase-6-implement.md). Cross-cutting concerns that span several of them (budget
+discipline, dispatch hygiene, artifact handling) are in [operational discipline](operational-discipline.md).

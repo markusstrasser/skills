@@ -95,7 +95,7 @@ Useful optional fields:
 **Do not promote from digest prose.** Run preflight before any `improvement-log.md` write:
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/scripts/observe_gates.py" preflight \
+uv run python3 "${CLAUDE_SKILL_DIR}/scripts/observe_gates.py" preflight \
   --artifact-root "$OBSERVE_ARTIFACT_ROOT"
 ```
 

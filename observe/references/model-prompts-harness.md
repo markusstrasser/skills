@@ -15,7 +15,7 @@ Use the shared packet builders and the shared review surface:
 
 - `shared/context_packet.py` for packet assembly
 - shared review/dispatch contract for multi-axis execution and extraction
-- `review/lenses/adversarial-review.md` for the axis responsibilities
+- [critique's adversarial-review lens](../../critique/lenses/adversarial-review.md) for the axis responsibilities
 
 ## Harness Angles
 
@@ -27,6 +27,6 @@ The harness prompts should focus on:
 4. Type narrowing and protocols
 5. Unification opportunities that reduce drift
 
-The canonical prompt wording lives with the review skill. This file only says
+The canonical prompt wording lives with the critique skill. This file only says
 what the harness mode should optimize for and which shared contracts it should
 use.
