@@ -19,7 +19,7 @@ When using `web_search_advanced_exa`, set `category` to narrow results:
 Omit `category` when the query spans domains or when you want diverse source types.
 
 ## Scientific / Biomedical
-- **Invoke `epistemics` skill** if available — it has the evidence hierarchy and grading rules.
+- Read [shared epistemics](../references/epistemics/SKILL.md) for evidence hierarchy and grading rules.
 - **For precise numbers** (gene coordinates, protein sizes, odds ratios, allele counts): use `perplexity_ask` first. Empirical benchmark (8 genomics questions, Mar 2026): Perplexity returned exact values with CIs and assembly versions; Exa `/answer` confirmed/denied but omitted precision (couldn't extract BRCA1 amino acid count, gave "~3.1B" instead of 3,298,912,062 for GRCh38). Use `verify_claim` only when you already have the number and need a yes/no check.
 - ClinVar single-submitter entries get reclassified often — don't treat as settled. ≥2 stars only.
 - gnomAD frequency alone is not clinical evidence. PRS percentiles are population-relative, not absolute risk.
@@ -28,7 +28,7 @@ Omit `category` when the query spans domains or when you want diverse source typ
 - PubMed for clinical literature. Exa for recent work (Semantic Scholar can't filter by date on free tier).
 
 ## Trading / Investment
-- **Invoke `source-grading` skill** if available — Admiralty grades, not provenance tags.
+- Read [shared source grading](../references/source-grading/SKILL.md) for Admiralty grades rather than duplicate provenance tags.
 - **Detrend before claiming correlation.** Spurious correlations are the norm — control for market, seasonality, and shared trends before reporting any r value.
 - Consensus = zero information. If every analyst says it, the price already reflects it.
 - For high-conviction leads, use `/analyze hypotheses` to prevent single-hypothesis confirmation bias.
@@ -44,7 +44,7 @@ Omit `category` when the query spans domains or when you want diverse source typ
 - Small-denominator metrics need Empirical Bayes shrinkage, not raw proportions.
 
 ## Investigative / OSINT
-- **Invoke `source-grading` skill** if available — Admiralty grades mandatory.
+- Read [shared source grading](../references/source-grading/SKILL.md); Admiralty grades are required for this domain.
 - Grade claims, not datasets. The same dataset can have different reliability for different fields.
 - **Predict the data footprint BEFORE querying.** If your hypothesis is true, what should you see in the data?
 - Correlated signals (e.g., shared phone + shared address + shared official) can't be summed as independent log-likelihood ratios. Use composite scoring.
