@@ -26,7 +26,7 @@ The operator's Codex configuration selects Astra. Check the actual transport and
 
 **Fable plan status — corrected 2026-09-05.** Fable 5 and 5.1 are included in Max and premium Team/seat-based Enterprise plans, within up to 50% of the shared weekly allowance. Pro and standard seats use credits. API calls and credits beyond the plan allowance remain metered; the operator's policy is Claude subscription only unless explicitly authorized otherwise. Fable 5.1 requires Claude Code ≥2.1.255; installed 2.1.261 supports it. [Anthropic plan rules](https://support.claude.com/en/articles/15424964-claude-fable-models-on-your-plan). Earlier blanket “off subscription” claims are superseded; [dated history](references/fable-routing-history.md) preserves them.
 
-**Opus 5** (`claude-opus-5`) is Anthropic's active top-tier model (released 2026-07-24): near-Fable intelligence at Opus price ($5/$25), 1M context, adaptive thinking on by default, SOTA on Frontier-Bench / GDPval-AA / ARC-AGI 3 / AutomationBench / OSWorld 2.0 cost-efficiency. Default for hardest Claude work, security/cyber/biology (Fable bio blocks now route here), and cross-lab review. **Architecture → `max` effort.** Keep `claude-opus-5` only as the documented cyber-classifier fallback target.
+**Opus 5** (`claude-opus-5`) remains the existing headless Claude default and cross-lab review lane. Fable 5.1 is the operator's interactive default. Preserve explicit task and fallback selections; a fallback example does not redefine the general routing role.
 
 ## Verified Transport — configuration and execution evidence
 
