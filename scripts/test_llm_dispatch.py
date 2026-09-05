@@ -26,19 +26,21 @@ class DispatchCoreTest(unittest.TestCase):
             context_path.write_text("context")
 
             def mock_chat(**kwargs):
-                # fast_extract → Luna low via codex-cli subscription (2026-07-14,
-                # Gemini critique-only policy).
                 self.assertEqual(kwargs["provider"], "openai")
-                self.assertEqual(kwargs["model"], "gpt-5.6-luna")
+                self.assertEqual(kwargs["model"], "gpt-6-astra")
                 response = MagicMock()
                 response.content = "hello"
                 response.latency = 0.25
                 response.usage = {"prompt_tokens": 12, "completion_tokens": 3, "total_tokens": 15}
                 return response
 
-            with patch.object(llm_dispatch, "_LLMX_CHAT", mock_chat), patch.object(
-                llm_dispatch, "_LLMX_VERSION", "test"
-            ), patch.dict("os.environ", {"LLM_DISPATCH_TELEMETRY_PATH": str(root / "telemetry.jsonl")}):
+            with (
+                patch.object(llm_dispatch, "_LLMX_CHAT", mock_chat),
+                patch.object(llm_dispatch, "_LLMX_VERSION", "test"),
+                patch.dict(
+                    "os.environ", {"LLM_DISPATCH_TELEMETRY_PATH": str(root / "telemetry.jsonl")}
+                ),
+            ):
                 result = llm_dispatch.dispatch(
                     profile="fast_extract",
                     prompt="Analyze this",
@@ -50,9 +52,11 @@ class DispatchCoreTest(unittest.TestCase):
             self.assertEqual(output_path.read_text(), "hello")
             meta = json.loads((root / "out.meta.json").read_text())
             self.assertEqual(meta["status"], "ok")
-            self.assertEqual(meta["resolved_model"], "gpt-5.6-luna")
+            self.assertEqual(meta["resolved_model"], "gpt-6-astra")
             self.assertEqual(meta["usage"]["prompt_tokens"], 12)
-            telemetry = [json.loads(line) for line in (root / "telemetry.jsonl").read_text().splitlines()]
+            telemetry = [
+                json.loads(line) for line in (root / "telemetry.jsonl").read_text().splitlines()
+            ]
             self.assertEqual(len(telemetry), 1)
             self.assertEqual(telemetry[0]["usage"]["total_tokens"], 15)
 
@@ -65,8 +69,9 @@ class DispatchCoreTest(unittest.TestCase):
             def exploding_chat(**kwargs):
                 raise RuntimeError("429 resource_exhausted")
 
-            with patch.object(llm_dispatch, "_LLMX_CHAT", exploding_chat), patch.object(
-                llm_dispatch, "_LLMX_VERSION", "test"
+            with (
+                patch.object(llm_dispatch, "_LLMX_CHAT", exploding_chat),
+                patch.object(llm_dispatch, "_LLMX_VERSION", "test"),
             ):
                 result = llm_dispatch.dispatch(
                     profile="deep_review",
@@ -97,8 +102,9 @@ class DispatchCoreTest(unittest.TestCase):
                 response.latency = 0.1
                 return response
 
-            with patch.object(llm_dispatch, "_LLMX_CHAT", mock_chat), patch.object(
-                llm_dispatch, "_LLMX_VERSION", "test"
+            with (
+                patch.object(llm_dispatch, "_LLMX_CHAT", mock_chat),
+                patch.object(llm_dispatch, "_LLMX_VERSION", "test"),
             ):
                 result = llm_dispatch.dispatch(
                     profile="gpt_general",
@@ -134,8 +140,9 @@ class DispatchCoreTest(unittest.TestCase):
                 response.latency = 0.1
                 return response
 
-            with patch.object(llm_dispatch, "_LLMX_CHAT", mock_chat), patch.object(
-                llm_dispatch, "_LLMX_VERSION", "test"
+            with (
+                patch.object(llm_dispatch, "_LLMX_CHAT", mock_chat),
+                patch.object(llm_dispatch, "_LLMX_VERSION", "test"),
             ):
                 result = llm_dispatch.dispatch(
                     profile="fast_extract",
@@ -166,8 +173,9 @@ class DispatchCoreTest(unittest.TestCase):
                 response.latency = 0.1
                 return response
 
-            with patch.object(llm_dispatch, "_LLMX_CHAT", mock_chat), patch.object(
-                llm_dispatch, "_LLMX_VERSION", "test"
+            with (
+                patch.object(llm_dispatch, "_LLMX_CHAT", mock_chat),
+                patch.object(llm_dispatch, "_LLMX_VERSION", "test"),
             ):
                 result = llm_dispatch.dispatch(
                     profile="fast_extract",

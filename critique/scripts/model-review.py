@@ -218,11 +218,11 @@ Callers exist? Join keys on both sides? Schema matches reality?
 Load-bearing premises the design depends on. One per line, each starting with "- ".""",
     },
     "correctness": {
-        "label": "GPT-5.6 Luna medium A (full review — bugs + structure)",
+        "label": "GPT-6 Astra medium A (full review — bugs + structure)",
         "profile": "gpt_general",
         "prompt": """\
 <system>
-Full adversarial review of THIS subpart. GPT-5.6 Luna medium effort.
+Full adversarial review of THIS subpart. GPT-6 Astra medium effort.
 Lens A: bugs, boundaries, silent failures — AND whether the architecture supports correctness.
 Budget: ~1200 words.
 </system>
@@ -249,13 +249,13 @@ Unchecked return codes, fail-open paths, missing guards.
 Interface breaks, dual paths, orphaned consumers, fail-open error semantics.""",
     },
     "contracts": {
-        "label": "GPT-5.6 Luna medium B (full review — migration + interfaces)",
+        "label": "GPT-6 Astra medium B (full review — migration + interfaces)",
         "profile": "gpt_general",
         "prompt": """\
 <system>
 Second GPT pass — SAME full mandate (bugs + architecture), different lens.
 Lens B: interfaces, contracts, migration completeness — but still flag real bugs you see.
-Do NOT defer bugs to the other GPT pass. GPT-5.6 Luna medium. Budget: ~1200 words.
+Do NOT defer bugs to the other GPT pass. GPT-6 Astra medium. Budget: ~1200 words.
 </system>
 
 {question}
@@ -277,12 +277,12 @@ Dual paths, orphaned consumers, unnamed removal conditions.
 ## 5. Where I'm Likely Wrong""",
     },
     "formal": {
-        "label": "GPT-5.6 Sol high (quantitative/formal — opt-in)",
+        "label": "GPT-6 Astra high (quantitative/formal — opt-in)",
         "profile": "formal_review",
         "prompt": """\
 <system>
 You are performing QUANTITATIVE and FORMAL analysis. Other reviewers handle qualitative pattern review. Focus on what they can't do well. Be precise. Show your reasoning. No hand-waving.
-Use ONLY when the subpart involves math, proofs, Bayes/stats, or formal invariants. GPT-5.6 Sol at HIGH effort.
+Use ONLY when the subpart involves math, proofs, Bayes/stats, or formal invariants. GPT-6 Astra at HIGH effort.
 Budget: ~1500 words. Tables over prose. Source-grade claims.
 </system>
 
@@ -928,7 +928,7 @@ def build_effective_policy(args: argparse.Namespace) -> dict:
 # Primary Gemini critique axis
 GEMINI_PRIMARY_MODEL = dispatch_core.PROFILES["deep_review"].model
 # Rate-limit fallback target for the Gemini (arch) axis. When gemini-3.5-flash
-# rate-limits, retry the axis on gpt-5.6-luna — the rule-sanctioned move ("after a
+# rate-limits, retry the axis on gpt-6-astra — the rule-sanctioned move ("after a
 # Gemini rate-limit, switch to GPT or Flash"; llmx transport-routing) and an
 # adversarial-grade model. Tradeoff: this collapses the arch+formal pair to GPT
 # for that one review (degraded cross-model diversity), accepted because it is
@@ -1665,7 +1665,7 @@ def rerun_axis_with_fallback(
     budget: DispatchBudget | None = None,
 ) -> dict:
     """Retry the rate-limited primary Gemini (arch) axis on the cross-provider
-    adversarial fallback (gpt-5.6-luna since 2026-07-09; 3.1-pro retired from
+    adversarial fallback (gpt-6-astra since 2026-09-05; 3.1-pro retired from
     automation). Collapses the pair to GPT for this review, but rare + reliable."""
     out_path = review_dir / f"{axis}-output.md"
     print(
@@ -2131,9 +2131,7 @@ def dispatch(
     }
     profile_wait_timeout = _parallel_dispatch_wait_default(axis_names)
     wait_timeout = (
-        budget.wait_timeout(profile_wait_timeout)
-        if budget is not None
-        else profile_wait_timeout
+        budget.wait_timeout(profile_wait_timeout) if budget is not None else profile_wait_timeout
     )
     with ThreadPoolExecutor(max_workers=len(axis_names)) as pool:
         futures = {pool.submit(_run_axis, axis): axis for axis in axis_names}
@@ -3607,8 +3605,7 @@ def main() -> int:
         grok_preflight_path.write_text(json.dumps(grok_checks, indent=2) + "\n")
         if grok_exit != 0:
             print(
-                "error: Grok axis preflight failed before dispatch; "
-                f"inspect {grok_preflight_path}",
+                f"error: Grok axis preflight failed before dispatch; inspect {grok_preflight_path}",
                 file=sys.stderr,
             )
             return 1

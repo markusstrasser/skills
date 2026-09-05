@@ -1,12 +1,13 @@
-## OpenAI — GPT-5.6 suite (GA 2026-07-09)
+## OpenAI — GPT-6 Astra (default) and GPT-5.6 cost-tier
 
 | ID | Role | $/MTok in/out | Effort |
 |---|---|---|---|
-| `gpt-5.6-sol` (alias `gpt-5.6`) | Flagship | $5 / $30 | none…max |
-| `gpt-5.6-terra` | Balanced (≈ prior 5.5) | $2.50 / $15 | none…max |
-| `gpt-5.6-luna` | Cheap/fast | $1 / $6 | none…max |
+| `gpt-6-astra` (alias `gpt-6`) | **Default OpenAI / Codex flagship** | $10 / $50 | low…max (`none`/`minimal` → `low`) |
+| `gpt-5.6-sol` (alias `gpt-5.6`) | Named 5.6 flagship pin | $5 / $30 | none…max |
+| `gpt-5.6-terra` | Balanced mid | $2 / $12 | none…max |
+| `gpt-5.6-luna` | Cheap/fast / mechanical | $0.20 / $1.20 | none…max |
 
-Default provider model: **Sol**. Pro = `reasoning.mode=pro` (same rates). Context 1.05M / 128K out.
+Default provider model: **Astra**. Codex `~/.codex/config.toml` selects Astra; omit `-m` to use it. Named 5.6 pins stay valid. Pro = `reasoning.mode=pro` (same rates). Context 1.05M / 128K out. Subscription (codex-cli) is $0 against the ChatGPT plan.
 
 <!-- Reference file for llmx-guide skill. Loaded on demand. -->
 
@@ -17,14 +18,16 @@ Default provider model: **Sol**. Pro = `reasoning.mode=pro` (same rates). Contex
 | Model | llmx name | Notes |
 |-------|-----------|-------|
 | ~~Gemini 3.1 Pro~~ | `gemini-3.1-pro-preview` | **RETIRED as a routing option 2026-06-13 (operator).** Do not route here — flash-3.5 dominates critique/synthesis and is cheaper/faster (re-confirmed on the ADR-0009 spine critique). Still callable via explicit `-m` for a one-off ARC-AGI-2/GPQA/video need, but it is not a default or recommended pick anywhere. Paid API; free Gemini CLI retired 2026-05-31. |
-| Gemini 3.5 Flash | `gemini-3.5-flash` | **Default Gemini for critique/synthesis** (promoted over 3.1 Pro 2026-05-24). Stable GA (May 2026). ~3× Flash pricing — Pro-lite tier. Paid API only (~$1.50/$9 per MTok; `--flex` = 50% off) — free Gemini CLI retired 2026-05-31. |
+| Gemini 3.8 Flash | `gemini-3.8-flash` | **Default Gemini** (GA 2026-09-02). Critique/search/vision/`--fast`. Intro $0.75/$3.75 through 2026-12-31, then $1.50/$7.50. Effort `low\|medium\|high` (default medium; no `minimal`). Critique-only policy unchanged (`LLMX_GEMINI_OK=1`). |
+| Gemini 3.5 Flash | `gemini-3.5-flash` | Named prior Flash pin. $1.50/$9. |
 | Gemini 3 Flash | `gemini-3-flash-preview` | Cheap workhorse. `-preview` required. Use for high-volume classification, not when 3.5's reasoning is needed |
 | GPT Image 2 | `gpt-image-2` | Current SoTA image model. Default for `llmx image`; supports generation and edit/reference workflows |
 | Gemini 3 Pro Image | `gemini-3-pro-image-preview` | Available via `llmx image --provider google -m pro` |
 | GPT-5.3 Instant | `gpt-5.3-chat-latest` | Reasoning max: **medium only**. Auto-defaults |
-| GPT-5.6 Sol | `gpt-5.6-sol` (alias `gpt-5.6`) | **Default OpenAI model.** Flagship. $5/$30. Effort `none`…`max`. Pro = API `reasoning.mode=pro`. Context 1.05M / 128K. |
-| GPT-5.6 Terra | `gpt-5.6-terra` | Mid opt-in. $2.50/$15. Effort `none`…`max`. |
-| GPT-5.6 Luna | `gpt-5.6-luna` | **Everyday GPT** (≈ prior 5.5 perf at ~½ price). $1/$6. Also mechanical at low effort. |
+| GPT-6 Astra | `gpt-6-astra` (alias `gpt-6`) | **Default OpenAI / Codex model.** $10/$50 API; $0 via `--subscription` codex-cli. Effort `low`…`max`; `none`/`minimal` map to `low`. |
+| GPT-5.6 Sol | `gpt-5.6-sol` (alias `gpt-5.6`) | Named 5.6 flagship pin. $5/$30. Effort `none`…`max`. Pro = API `reasoning.mode=pro`. |
+| GPT-5.6 Terra | `gpt-5.6-terra` | Mid opt-in. $2/$12. Effort `none`…`max`. |
+| GPT-5.6 Luna | `gpt-5.6-luna` | Cheap/mechanical GPT. $0.20/$1.20. Keep for bulk extract and lint. |
 | GPT-5.4 | `gpt-5.4` | Older GPT. Prefer Sol/Terra/Luna for new work. |
 | GPT-5.2 (legacy) | `gpt-5.2` | Legacy OpenAI default. |
 | GPT-5-Codex | `gpt-5-codex` | No `minimal` reasoning-effort |
@@ -49,6 +52,7 @@ Default provider model: **Sol**. Pro = `reasoning.mode=pro` (same rates). Contex
 
 | Model | Max Input | Max Output | Notes |
 |-------|----------|-----------|-------|
+| GPT-6 Astra | 1,050,000 | 128,000 | Effort `low`…`max`; `none`/`minimal` → `low` |
 | GPT-5.6 Sol / Terra / Luna | 1,050,000 | 128,000 | Effort includes `max`; Pro = `reasoning.mode=pro` |
 | GPT-5.4 | 1,050,000 | 128,000 | |
 | GPT-5.2 | 272,000 | 128,000 | |
@@ -65,6 +69,7 @@ Default provider model: **Sol**. Pro = `reasoning.mode=pro` (same rates). Contex
 | Model | Valid values | Default |
 |-------|------------|---------|
 | GPT-5.3 Instant | **medium only** | medium (auto) |
+| GPT-6 Astra | low, medium, high, xhigh, **max** (`none`/`minimal` → low) | (unset → model default) |
 | GPT-5.6 Sol / Terra / Luna | none, low, medium, high, xhigh, **max** | medium |
 | GPT-5.4 | none, minimal, low, medium, high, xhigh | high |
 | GPT-5.2 | minimal, low, medium, high | high |

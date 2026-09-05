@@ -88,7 +88,7 @@ For each phase in the slice, in order:
    > A fable dispatch now needs a named Fable-specific justification + a one-shot billing probe first
    > (bill-vs-fail unverified). Canonical status: model-guide OFF-SUBSCRIPTION note.
    - **judgment-loaded gated work** (declared design holes, oracle-gotcha mapping, adjudicated-fact
-     dependencies) → Fable effort-low (headless `claude -p --model claude-fable-5 --effort low`,
+     dependencies) → Fable effort-low (headless `claude -p --model claude-fable-5-1 --effort low`,
      key-stripped) — licensed at 0.90× opus-low tokens; found unique design gaps opus missed
      *(suspended per rider above → opus-low)*
    - **survivor-edge re-point / gate-redesign-with-oracle** (rewrite a legacy gate or module against a

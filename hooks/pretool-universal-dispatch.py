@@ -234,7 +234,6 @@ def run_tab_and_dupread(tool_name, tool_input, ppid):
 
         print(json.dumps({"additionalContext": warn}))
 
-
     return warn, block
 
 
@@ -254,8 +253,19 @@ SEARCH_TOOL_RE = re.compile(
 # (llmx-routing.md). Caught live once already: a scout's flagless gpt-5.6
 # dispatch billed API rate, 2026-07-15, ~$1.
 _LLMX_SUBSCRIPTION_MODELS = {
-    "claude-fable-5", "claude-opus-4-8", "composer-2.5", "gemini-3-flash-preview",
-    "gpt-5.6", "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "grok-4.5",
+    "claude-fable-5",
+    "claude-fable-5-1",
+    "claude-opus-5",
+    "claude-opus-4-8",
+    "composer-2.5",
+    "gemini-3-flash-preview",
+    "gpt-6-astra",
+    "gpt-6",
+    "gpt-5.6",
+    "gpt-5.6-luna",
+    "gpt-5.6-sol",
+    "gpt-5.6-terra",
+    "grok-4.5",
 }
 _LLMX_MODEL_FLAG_RE = re.compile(r"(?:^|\s)-m[=\s]+([A-Za-z0-9._-]+)")
 _LLMX_HAS_SUBSCRIPTION_ROUTING_RE = re.compile(
@@ -277,7 +287,9 @@ def _log_trigger_cmd(hook: str, action: str, detail: str, cmd: str) -> None:
     try:
         subprocess.run(
             [f"{SKILLS_HOOKS}/hook-trigger-log.sh", hook, action, detail, cmd],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
         )
     except Exception:
         pass

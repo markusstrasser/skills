@@ -1,5 +1,29 @@
 # Model Guide Changelog
 
+## 2026-09-05 - GPT-6 Astra + Fable 5.1 + Gemini 3.8 Flash defaults
+
+Operator Codex config already selects `gpt-6-astra`. Live dispatch now follows:
+llmx OpenAI default, all GPT `llm_dispatch` profiles (including cheap extract at
+effort `low`), critique GPT axes, `codex_dispatch` DEFAULT_MODEL. Fable live slug
+is `claude-fable-5-1`. Gemini critique/search/vision/google default is
+`gemini-3.8-flash` (intro $0.75/$3.75 through 2026-12-31). Named older pins stay
+valid; they are no longer defaults.
+
+**Luna vs Astra-low (research, not a local bakeoff):** Artificial Analysis
+Intelligence Index Astra-low **57** vs Luna-max **43**. Jane Street reported Astra
+ahead of GPT-5.6 Sol at low/medium/high. Luna still wins **metered API cost**
+(~50× cheaper: $0.20/$1.20 vs $10/$50) and **speed**. On the $0 Codex
+subscription, Astra-low is the better cheap lane; pass `-m gpt-5.6-luna` only
+for metered bulk where $/tok or latency is the axis.
+
+### Changed
+- Default Routing / Quick Selection: Codex, flagship GPT, and cheap GPT lanes → Astra.
+- Gemini cosigner / `--fast` / vision / batch → 3.8 Flash.
+- Verified Transport: Fable 5.1 and Astra rows.
+
+### Not changed
+- Headless Claude default stays Opus 5. Explicit `gpt-5.6-*` / older Gemini eval pins.
+
 ## 2026-09-02 - Claude Fable 5.1 entry (prompting-guide deltas)
 
 Anthropic released Claude Fable 5.1 (2026-09-01): same price as Fable 5, cache read

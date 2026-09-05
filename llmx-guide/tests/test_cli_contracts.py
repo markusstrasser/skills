@@ -56,12 +56,23 @@ def test_codex_has_config_override():
 @pytest.mark.parametrize("sandbox", ["read-only", "workspace-write"])
 def test_codex_dispatch_arguments_parse(sandbox, tmp_path):
     """Exercise the documented argv, including flags renamed in prior incidents."""
-    h = _help([
-        "codex", "exec", "-s", sandbox, "-C", str(tmp_path),
-        "--ignore-user-config", "--skip-git-repo-check",
-        "-c", 'model_reasoning_effort="low"',
-        "-o", str(tmp_path / "result.md"), "--help",
-    ])
+    h = _help(
+        [
+            "codex",
+            "exec",
+            "-s",
+            sandbox,
+            "-C",
+            str(tmp_path),
+            "--ignore-user-config",
+            "--skip-git-repo-check",
+            "-c",
+            'model_reasoning_effort="low"',
+            "-o",
+            str(tmp_path / "result.md"),
+            "--help",
+        ]
+    )
     assert "Run Codex non-interactively" in h
 
 
@@ -69,9 +80,7 @@ def test_claude_has_lean_flags():
     """claude `--system-prompt` REPLACES the harness (lean free-sub one-off); `--strict-mcp-config`
     drops project MCPs. Losing either kills the lean-claude path."""
     h = _help(["claude", "--help"])
-    assert "--system-prompt" in h, (
-        "claude lost --system-prompt (harness no longer replaceable)"
-    )
+    assert "--system-prompt" in h, "claude lost --system-prompt (harness no longer replaceable)"
     assert "--strict-mcp-config" in h, "claude lost --strict-mcp-config"
 
 
@@ -95,11 +104,7 @@ def test_live_claude_bare_runs_on_subscription():
     rc==0 with the key stripped == sub; an API-billing error would mean the sub path broke."""
     if shutil.which("claude") is None:
         pytest.skip("claude not installed")
-    env = {
-        k: v
-        for k, v in os.environ.items()
-        if k not in ("ANTHROPIC_API_KEY", "CLAUDE_API_KEY")
-    }
+    env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "CLAUDE_API_KEY")}
     p = subprocess.run(
         [
             "claude",
@@ -173,15 +178,13 @@ def test_live_cursor_ask_mode_is_lean():
     dt = time.time() - t0
     assert p.returncode == 0, f"cursor ask failed: {p.stderr[:200]}"
     assert "OK" in p.stdout, "cursor ask produced no output"
-    assert dt < 90, (
-        f"cursor ask mode took {dt:.0f}s — may have regressed to the agent harness"
-    )
+    assert dt < 90, f"cursor ask mode took {dt:.0f}s — may have regressed to the agent harness"
 
 
 @live
 def test_live_codex_subscription_route_not_api_fallback():
     """Tripwire for the llmx `--subscription` -> PAID openai-api fallback. `-p codex-cli` MUST keep
-    gpt-5.6-sol on the ChatGPT sub. We assert the transport line says codex-cli, not openai-api billing."""
+    gpt-6-astra on the ChatGPT sub. We assert the transport line says codex-cli, not openai-api billing."""
     if shutil.which("llmx") is None:
         pytest.skip("llmx not installed")
     p = subprocess.run(
@@ -189,7 +192,7 @@ def test_live_codex_subscription_route_not_api_fallback():
             "llmx",
             "chat",
             "-m",
-            "gpt-5.6-sol",
+            "gpt-6-astra",
             "-p",
             "codex-cli",
             "-e",
@@ -203,5 +206,5 @@ def test_live_codex_subscription_route_not_api_fallback():
     # transport line is on stderr; must route codex-cli (sub), never bill the API
     assert "transport" in p.stderr.lower(), f"no transport diagnostic: {p.stderr[:200]}"
     assert "codex-cli" in p.stderr, (
-        f"gpt-5.6-sol -p codex-cli did NOT route codex-cli sub: {p.stderr[:300]}"
+        f"gpt-6-astra -p codex-cli did NOT route codex-cli sub: {p.stderr[:300]}"
     )

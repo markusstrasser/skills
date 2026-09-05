@@ -79,10 +79,10 @@ PROFILES: dict[str, DispatchProfile] = {
         name="fast_extract",
         intent="Low-cost extraction, triage, and short synthesis",
         provider="openai",
-        # 2026-07-14: Gemini is critique-only (operator policy, agent-infra
-        # decisions/2026-07-14-gemini-critique-only-policy.md); default cheap
-        # lane is Luna low via codex-cli subscription ($0).
-        model="gpt-5.6-luna",
+        # 2026-09-05: Astra-low on subscription. Luna does not beat Astra-low
+        # on quality (AA Intelligence Index: Astra-low 57 vs Luna-max 43).
+        # Keep `-m gpt-5.6-luna` for metered API bulk where $/tok and speed win.
+        model="gpt-6-astra",
         timeout=300,
         reasoning_effort="low",
         auth="subscription",
@@ -92,12 +92,9 @@ PROFILES: dict[str, DispatchProfile] = {
         name="deep_review",
         intent="Long-context structural critique and review",
         provider="google",
-        # 2026-05-24: gemini-3.5-flash empirically outperforms
-        # gemini-3.1-pro-preview on critique/synthesis in this workflow.
-        # Pro stays available via the legacy_pro_review profile.
-        # Cosigner only (2G+2GPT standard) — never sole reviewer; probe
-        # invention risk on clean packets → orchestrator must disposition.
-        model="gemini-3.5-flash",
+        # 2026-09-05: Gemini 3.8 Flash is the current Flash GA (intro $0.75/$3.75
+        # through 2026-12-31). Critique-only policy unchanged.
+        model="gemini-3.8-flash",
         timeout=300,
         reasoning_effort="high",
         input_token_limit=900000,
@@ -106,9 +103,9 @@ PROFILES: dict[str, DispatchProfile] = {
         name="formal_review",
         intent="Formal or quantitative GPT-backed review",
         provider="openai",
-        # 2026-07-09: GPT-5.6 Sol (flagship). Escalate further via API
-        # reasoning.mode=pro (same model id) when wired — not a separate slug.
-        model="gpt-5.6-sol",
+        # 2026-09-05: GPT-6 Astra is the flagship GPT / Codex default.
+        # Named gpt-5.6-* pins stay valid for evals and cheaper API work.
+        model="gpt-6-astra",
         timeout=600,
         # 2026-06-10: formal is the GPT reasoning axis for reviews — operator
         # policy is "medium most cases, high for deep/formal". `gpt_general`
@@ -121,26 +118,22 @@ PROFILES: dict[str, DispatchProfile] = {
         name="gpt_general",
         intent="General-purpose GPT-backed dispatch",
         provider="openai",
-        # 2026-07-09: Luna ≈ prior GPT-5.5 perf at ~½ that price ($1/$6 vs old $5/$30).
-        model="gpt-5.6-luna",
+        # 2026-09-05: everyday GPT follows the operator Codex default (Astra).
+        model="gpt-6-astra",
         timeout=600,
         reasoning_effort="medium",
-        # 2026-07-14: operator default — Luna low/medium via codex-cli
-        # subscription ($0) for most tasks; API metering is opt-in.
+        # Subscription via codex-cli ($0 on the ChatGPT plan); API metering is opt-in.
         auth="subscription",
         input_token_limit=120000,
     ),
     "mechanical_review": DispatchProfile(
-        # Mechanical/lint axis (deep/full presets). Luna at LOW effort:
+        # Mechanical/lint axis (deep/full presets). Astra at LOW effort:
         # the job is fast pattern-spotting (stale refs, naming, dup), not
-        # reasoning. Repointed off gemini-3-flash-preview on 2026-06-01 — that
-        # model measured ~42-67% hallucination as a critique axis, poisoning
-        # exactly the high-stakes deep/full reviews where mechanical runs.
-        # 2026-07-09: same Luna id as gpt_general; effort (low vs medium) is the dial.
+        # reasoning.
         name="mechanical_review",
         intent="Low-effort GPT mechanical/lint audit",
         provider="openai",
-        model="gpt-5.6-luna",
+        model="gpt-6-astra",
         timeout=300,
         reasoning_effort="low",
         # 2026-07-14: subscription lane (codex-cli, $0) — see gpt_general.
@@ -151,9 +144,7 @@ PROFILES: dict[str, DispatchProfile] = {
         name="search_grounded",
         intent="Search-backed answer synthesis",
         provider="google",
-        # 2026-05-24: 3.5 Flash supports --search grounding and is the
-        # default cosigner; swapped for consistency with deep_review.
-        model="gemini-3.5-flash",
+        model="gemini-3.8-flash",
         timeout=300,
         search=True,
         input_token_limit=900000,
@@ -162,9 +153,7 @@ PROFILES: dict[str, DispatchProfile] = {
         name="cheap_tick",
         intent="Low-cost maintenance or cycle tick synthesis",
         provider="openai",
-        # 2026-07-14: repointed off gemini-3-flash (critique-only policy) to
-        # Luna low via codex-cli subscription ($0).
-        model="gpt-5.6-luna",
+        model="gpt-6-astra",
         timeout=300,
         reasoning_effort="low",
         auth="subscription",
@@ -174,11 +163,9 @@ PROFILES: dict[str, DispatchProfile] = {
         name="observe_bulk",
         intent="Headless /observe bulk classification — cheap context; verify before promotion",
         provider="openai",
-        # 2026-06-21: observe repointed off deep_review (3.5-flash — too expensive at volume).
-        # 2026-07-14: repointed off gemini flash-lite (critique-only policy) to Luna low
-        # via codex-cli subscription ($0). NOTE the context drop 900K→120K: callers
-        # already size-cap via `just observe-context`; chunk rather than stuff.
-        model="gpt-5.6-luna",
+        # NOTE the context drop 900K→120K: callers already size-cap via
+        # `just observe-context`; chunk rather than stuff.
+        model="gpt-6-astra",
         timeout=300,
         reasoning_effort="low",
         auth="subscription",
@@ -302,12 +289,15 @@ PROFILES: dict[str, DispatchProfile] = {
 MODEL_TO_PROFILE = {
     "gemini-3-flash-preview": "fast_extract",
     "gemini-3.1-flash-lite-preview": "observe_bulk",
+    "gemini-3.8-flash": "deep_review",
     "gemini-3.5-flash": "deep_review",
     "gemini-3.1-pro-preview": "legacy_pro_review",  # demoted 2026-05-24
+    "gpt-6-astra": "formal_review",
+    "gpt-6": "formal_review",
     "gpt-5.6-sol": "formal_review",
     "gpt-5.6": "formal_review",
-    "gpt-5.6-terra": "gpt_general",  # mid-tier opt-in; default gpt_general is Luna
-    "gpt-5.6-luna": "gpt_general",
+    "gpt-5.6-terra": "gpt_general",  # mid-tier opt-in
+    "gpt-5.6-luna": "gpt_general",  # explicit Luna pin; effort is the cheap/mechanical dial
     "claude-opus-5": "claude_review",
     "claude-opus-4-8": "claude_review",  # legacy pin → same profile
     "composer-2.5": "composer_review",
@@ -972,7 +962,9 @@ def dispatch(
                 "finished_at": _utc_now(),
                 "context_sha256": context_sha256,
                 "context_payload_hash": context_payload_hash,
-                "context_manifest_path": str(context_manifest_path) if context_manifest_path else None,
+                "context_manifest_path": str(context_manifest_path)
+                if context_manifest_path
+                else None,
                 "context_token_estimate": (context_manifest or {}).get("token_estimate"),
                 "context_budget_metric": (context_manifest or {}).get("budget_metric"),
                 "context_estimate_method": (context_manifest or {}).get("estimate_method"),
@@ -1187,7 +1179,7 @@ def dispatch(
                 "context_estimate_method": (context_manifest or {}).get("estimate_method"),
                 "usage": None,
                 "auth": call_kwargs["auth"],
-            "mode": call_kwargs["mode"],
+                "mode": call_kwargs["mode"],
                 "error_type": status,
             }
         )

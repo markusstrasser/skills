@@ -9,7 +9,7 @@ from pathlib import Path
 # for both the live path (per-project config) and the cross-project batch path.
 # 2026-07-14: Luna low via codex-cli subscription ($0) — Gemini is critique-only
 # (agent-infra decisions/2026-07-14-gemini-critique-only-policy.md).
-DEFAULT_OVERVIEW_MODEL = "gpt-5.6-luna"
+DEFAULT_OVERVIEW_MODEL = "gpt-6-astra"
 
 
 @dataclass(frozen=True)
@@ -41,7 +41,9 @@ def read_overview_config(project_root: Path) -> OverviewConfig:
         "OVERVIEW_TYPES": "source",
         "OVERVIEW_MODEL": DEFAULT_OVERVIEW_MODEL,
         "OVERVIEW_OUTPUT_DIR": ".claude/overviews",
-        "OVERVIEW_PROMPT_DIR": str((Path.home() / "Projects" / "skills" / "hooks" / "overview-prompts")),
+        "OVERVIEW_PROMPT_DIR": str(
+            (Path.home() / "Projects" / "skills" / "hooks" / "overview-prompts")
+        ),
         "OVERVIEW_EXCLUDE": "",
         "OVERVIEW_NO_GITIGNORE": "",
         "OVERVIEW_LOC_THRESHOLD": "200",
@@ -71,7 +73,9 @@ def read_overview_config(project_root: Path) -> OverviewConfig:
     dirs_by_type: dict[str, list[str]] = {}
     for overview_type in overview_types:
         config_key = f"OVERVIEW_{overview_type.upper()}_DIRS"
-        dirs_by_type[overview_type] = [item.strip() for item in config.get(config_key, "").split(",") if item.strip()]
+        dirs_by_type[overview_type] = [
+            item.strip() for item in config.get(config_key, "").split(",") if item.strip()
+        ]
 
     return OverviewConfig(
         project_root=project_root,

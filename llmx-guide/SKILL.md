@@ -47,7 +47,8 @@ uv run python3 ~/Projects/skills/critique/scripts/model-review.py --preflight
 
 ```bash
 llmx chat --subscription -m claude-opus-5 -f ctx.md -o out.md "query"
-llmx chat -p codex-cli --subscription -m gpt-5.6-sol -f ctx.md -o out.md "query"
+llmx chat --subscription -m claude-fable-5-1 -f ctx.md -o out.md "query"
+llmx chat -p codex-cli --subscription -m gpt-6-astra -f ctx.md -o out.md "query"
 llmx chat --subscription -m cursor-grok-4.5-high -f ctx.md -o out.md "query"
 ```
 

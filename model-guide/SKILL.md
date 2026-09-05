@@ -1,6 +1,6 @@
 ---
 name: model-guide
-description: "Choose a model/effort and model-specific prompting for Astra, Claude, GPT-5.6 tiers or named opt-in lanes. Preserve workload cost and verifier needs; Fable remains a paid opt-in. Transport flags belong to /llmx-guide."
+description: "Choose a model/effort and model-specific prompting for GPT-6 Astra, Fable 5.1, Claude, GPT-5.6 cost-tier or named opt-in lanes. Preserve workload cost and verifier needs; Fable remains a paid opt-in. Transport flags belong to /llmx-guide."
 user-invocable: true
 argument-hint: '[task description or model name]'
 effort: low
@@ -14,15 +14,17 @@ Select between the current frontier models and prompt them correctly.
 
 For Astra prompting or migration, read [current GPT guidance](references/PROMPTING_GPT.md), verified against the official guide on 2026-09-05. Apply persistent authorized execution, explicit skill precedence, concise prose, useful bounded delegation and proportionate verification. Preserve effective effort, including `max`; `none`/`minimal` migrate to `low`.
 
-The operator's Codex configuration selects Astra. Check the actual transport and its applied model/effort before a model-sensitive dispatch. Existing lower-cost task profiles and evaluation pins keep their roles; an Astra integration fix does not replace them. Dated judgments below apply to their named models and harnesses, not automatically to Astra.
+The operator's Codex configuration selects Astra. Check the actual transport and its applied model/effort before a model-sensitive dispatch. Existing lower-cost task profiles and evaluation pins keep their roles; Luna stays the cheap extract/mechanical lane. Dated judgments below apply to their named models and harnesses, not automatically to Astra.
 
-**Models covered:** Claude Opus 5 (primary Claude), Claude Sonnet 5 (cost-tier Claude), GPT-5.6 Sol / Terra / Luna (GA 2026-07-09; GPT-5.5 removed), Kimi K3 (Moonshot open-weight, 2026-07-16), and Grok 4.5 through the Cursor subscription pool. Claude Fable 5 remains a **metered opt-in** (off subscription 2026-07-07; see below).
-**Last updated:** 2026-07-24 (Claude Opus 5 replaces Opus 5 as primary Claude default).
+**Operational specs:** `gpt-6-astra` (alias `gpt-6`). API $10/$50 per MTok (2×/1.5× above 272K input); Fast mode 2× Standard. 1.05M context, 128K max output. Effort `low|medium|high|xhigh|max`; `none`/`minimal` map to `low`. Subscription via `llmx chat --subscription -m gpt-6-astra` or `codex exec` (omit `-m`) is $0 against the ChatGPT plan. Source: developers.openai.com/api/docs/models/gpt-6-astra (2026-09-05).
+
+**Models covered:** GPT-6 Astra (default OpenAI / Codex flagship, 2026-09), Claude Opus 5 (primary Claude), Claude Fable 5.1 (current Fable slug; metered opt-in), Claude Sonnet 5 (cost-tier Claude), GPT-5.6 Sol / Terra / Luna (named cost-tier pins; GPT-5.5 removed), Kimi K3 (Moonshot open-weight, 2026-07-16), and Grok 4.5 through the Cursor subscription pool.
+**Last updated:** 2026-09-05 (GPT-6 Astra default Codex/OpenAI; Fable live slug `claude-fable-5-1`).
 **Active stance:** This skill no longer maintains a broad model zoo. Older GPT, Gemini, Grok-4.20-and-earlier, and Sonnet-4.6-and-earlier routes were removed from active guidance. Sonnet 5 is reinstated as a named, cost-tier Claude option (2026-06-30). Grok 4.5 is an opt-in read-only repo critique lane through exact Cursor slugs; the xAI API path remains separate and blocked/unverified locally. Use this guide for high-value frontier decisions; use repo-specific batch tooling or search tools for cheap bulk work.
 
 **OPEN QUESTION (2026-06-30, not yet resolved — operator call):** the "Architecture / design / high-reasoning critique → NEVER Sonnet" verdict below was reached against Sonnet 4.6 on 2026-06-20. Sonnet 5's system card shows large agentic/coding gains and prompt-injection robustness tying or beating Opus 4.8 in several places, but also the *worst* prefill/system-prompt-susceptibility numbers of the compared models and measurably more turns/tokens per task (system-card digest: `references/sonnet-5-system-card.md`). Whether this changes the "NEVER Sonnet" verdict for architecture/critique work is a live question, not re-litigated here — the verdict stands until the operator revisits it.
 
-**Claude Fable 5 — status (2026-07-12).** Off the claude.ai Pro/Max/Team subscription since 2026-07-07: continued access is priced at metered usage credits, $10/$50 per MTok (2× Opus 5) — press/pricing-page sourced (techtimes.com, bleepingcomputer.com, claude.com/pricing); reconciliation against observed usage is open, see Verified Transport below. Fable is reachable via `llmx chat -m claude-fable-5` (claude-cli transport, confirmed working) and headless `claude -p --model claude-fable-5` (confirmed 2026-07-04) — **not reliably via the Agent tool**, where `fable-high`/`fable-low`-style dispatches currently serve `claude-sonnet-5` regardless of the pin (measured 2026-07-12, see Verified Transport — this is a mechanism bug, not a re-dormancy). Route gated/briefed/review dispatch to **opus-low** ($0 subscription); reach for Fable (via llmx, not the Agent tool) only with a named Fable-specific capability-edge justification over Opus `max`. Re-license trigger: Anthropic restores Fable to subscription plans.
+**Claude Fable 5 — status (2026-07-12).** Off the claude.ai Pro/Max/Team subscription since 2026-07-07: continued access is priced at metered usage credits, $10/$50 per MTok (2× Opus 5) — press/pricing-page sourced (techtimes.com, bleepingcomputer.com, claude.com/pricing); reconciliation against observed usage is open, see Verified Transport below. Fable is reachable via `llmx chat -m claude-fable-5-1` (claude-cli transport; prior `claude-fable-5` remains an explicit pin) and headless `claude -p --model claude-fable-5-1` — **not reliably via the Agent tool**, where `fable-high`/`fable-low`-style dispatches currently serve `claude-sonnet-5` regardless of the pin (measured 2026-07-12, see Verified Transport — this is a mechanism bug, not a re-dormancy). Route gated/briefed/review dispatch to **opus-low** ($0 subscription); reach for Fable (via llmx, not the Agent tool) only with a named Fable-specific capability-edge justification over Opus `max`. Re-license trigger: Anthropic restores Fable to subscription plans.
 
 **Opus 5** (`claude-opus-5`) is Anthropic's active top-tier model (released 2026-07-24): near-Fable intelligence at Opus price ($5/$25), 1M context, adaptive thinking on by default, SOTA on Frontier-Bench / GDPval-AA / ARC-AGI 3 / AutomationBench / OSWorld 2.0 cost-efficiency. Default for hardest Claude work, security/cyber/biology (Fable bio blocks now route here), and cross-lab review. **Architecture → `max` effort.** Keep `claude-opus-5` only as the documented cyber-classifier fallback target.
 
@@ -37,11 +39,11 @@ mechanisms drift faster than judgment.
 |---|---|---|---|
 | **Agent tool, any `subagent_type`, WITH an explicit `model:` param or agent-def `model:` frontmatter** (`fable-high`, `fable-low`, `opus-low`, custom agents) | **`claude-sonnet-5`** — the pin is silently ignored | **MEASURED, BROKEN — RECONFIRMED 2026-07-19 at scale** | arc-agi session 41f9b649, 2026-07-12: fable pin **5/5 self-reports**; opus pin **1/1**. **Re-measured 2026-07-19 (arc-agi team-lead 6f4a8626): explicit `model:"fable"` param → sonnet-5; explicit `model:"opus"` and hook-injected opus → sonnet-5 on every checked dispatch (raw-readers, builders) — ~15/15 cumulative. The Agent tool is currently a sonnet-only surface, full stop.** **[SUPERSEDED FOR OPUS PINS 2026-07-29: hook-injected `model:opus` → `claude-opus-5[1m]` self-reports 5/5 across five independent Agent-tool lanes in one night (arc-agi session e863d547: kaggle-envelope, negatives-audit, reasoning-study, routing-ab-rerun, harvest — each read back from a first-line self-report). Opus pins are HONORED on this evidence; the sonnet-only claim is STALE for opus. FABLE pins remain UNMEASURED since 07-19 — the verified-fable-dispatch two-stage llmx protocol stays in force for Fable until a fresh fable-pin probe. Grader-continuity consequence, live example: the 07-29 attack-routing rerun's grader served opus-5 where the 07-25 pass served sonnet-5, so its 0.875-1.000 replication band is cross-grader-MODEL agreement — confidence capped in that memo.]** Frontier-agent alternative VERIFIED same day: headless `env -u ANTHROPIC_API_KEY claude -p --model claude-opus-5` self-reports opus correctly (key-strip mandatory — with ANTHROPIC_API_KEY set it bills API and can fail "Credit balance too low"). Rederive: open the dispatch with "self-report your model ID from your own environment-info block, first line," read the answer back. |
 | Agent tool, no `model:` param (bare `general-purpose` etc.) | `claude-sonnet-5` (`CLAUDE_CODE_SUBAGENT_MODEL`) | MEASURED, **correct** — this is the documented default, not the bug above | 2026-06-29 finding, unchanged |
-| `llmx chat -m claude-fable-5` (claude-cli transport) | **Genuinely Fable** | MEASURED | `~/.claude/llmx-usage.jsonl` — 18 real completions through 2026-07-12 (e.g. 34,385 completion tokens at `reasoning_effort: max`). `grep claude-fable-5 ~/.claude/llmx-usage.jsonl \| tail`. **Currently the only proven way to guarantee Fable.** |
-| Headless `claude -p --model claude-fable-5` (key-stripped) | Genuinely Fable | MEASURED (2026-07-04, arc-agi ebbeff04) | Dispatches and completes; not re-verified since — re-probe before relying on it for a batch. |
-| `llmx chat --subscription -m claude-opus-5` / `-m gpt-5.6*` | Named model | Config-level, not self-report-verified | `~/.claude/cache/llmx-routing.json` `lite_allowed_models` confirms *routable*; llmx has no built-in "ask the model who it is" check yet. |
+| `llmx chat -m claude-fable-5-1` (claude-cli transport) | **Genuinely Fable 5.1** | Config-level 2026-09-05; 5 measured 2026-07-12 | Current Fable slug. Prior `claude-fable-5` remains an explicit pin. `llmx info --write-mirror` lists both. Dry-run: `llmx chat --dry-run --subscription -m claude-fable-5-1 -e high`. |
+| Headless `claude -p --model claude-fable-5-1` (key-stripped) | Genuinely Fable 5.1 | Config-level; 5 measured 2026-07-04 | Interactive Claude Code on this machine already runs 5.1. Re-probe headless before a batch. |
+| `llmx chat --subscription -m claude-opus-5` / `-m gpt-6-astra` / `-m gpt-5.6*` | Named model | Config-level, not self-report-verified | `~/.claude/cache/llmx-routing.json` `lite_allowed_models` confirms *routable*. |
 | `cursor-agent --model cursor-grok-4.5-high --mode ask --workspace <repo>`; llmx exact `cursor-grok-4.5-*` slugs | Grok 4.5 through Cursor subscription | **MEASURED, CURRENT** (2026-07-14) | Live registry exposes low/medium/high plus trailing `-fast`; named high smoke and an unrevealed exact repo-HEAD canary passed. Critique preflight enforces registry + canary before dispatch. Bare `grok-4.5` remains xAI API, never Cursor subscription. |
-| codex-cli / `llmx --subscription -m gpt-5.6*` | `gpt-5.6` family | MEASURED | `gpt-5.5` retired from the subscription allowlist 2026-07-10 (exit 2 on attempt) — don't route or price it anywhere. |
+| codex-cli / `llmx --subscription -m gpt-6-astra` | `gpt-6-astra` | Config-level 2026-09-05 | Operator Codex config `model = "gpt-6-astra"`. Omit `-m` to use it. Named `gpt-5.6-*` pins stay on the allowlist. `gpt-5.5` remains retired (exit 2). |
 
 **Until the Agent-tool bug is fixed:** any Agent-tool dispatch where the model tier is
 load-bearing (a cost claim, an eval arm, a "frontier vs cheap" comparison) needs a one-line
@@ -62,28 +64,28 @@ Judgment below assumes the lane you dispatch to actually delivers the named mode
 
 | Situation | Use | Why |
 |---|---|---|
-| **Most headless/dispatch tasks — the default cheap lane** (extraction, triage, ticks, bulk classification, mechanical audit) | **GPT-5.6 Luna via codex-cli subscription** (`llmx chat --subscription -m gpt-5.6-luna`), effort `low` (mechanical/bulk) or `medium` (general) | Operator directive 2026-07-14: $0 on the ChatGPT plan; replaces the Gemini cheap tier (Gemini is critique-only — agent-infra `decisions/2026-07-14-gemini-critique-only-policy.md`). `shared/llm_dispatch.py` profiles `fast_extract`/`cheap_tick`/`observe_bulk`/`gpt_general`/`mechanical_review` all route here. |
-| Hardest / longest / most-ambiguous Claude work: multi-day autonomous runs, codebase-scale migrations, first-shot on complex well-specified systems, dense-image vision, architecture | **Claude Opus 5** (`max` for architecture) | Active Claude frontier. Fable metered at 2× Opus (off-subscription 2026-07-07) — Opus keeps all default Claude routing. Pair GPT-5.6 Sol for cross-lab on the hardest judgment calls. |
+| **Most headless/dispatch tasks — the default cheap lane** (extraction, triage, ticks, bulk classification, mechanical audit) | **GPT-6 Astra via codex-cli subscription** (`llmx chat --subscription -m gpt-6-astra`), effort `low` | $0 on the ChatGPT plan. Astra-low beats Luna-max on AA Intelligence Index (57 vs 43). Pass `-m gpt-5.6-luna` only for metered API bulk. |
+| Everyday GPT / Codex implementation, tool loops, structured API work | **GPT-6 Astra** (`llmx chat --subscription -m gpt-6-astra`; or omit `-m` on `codex exec`) | Operator Codex config selects Astra. API list $10/$50; subscription is $0 against the ChatGPT plan. Named `gpt-5.6-*` pins remain for evals and cheaper API work. |
+| Hardest / longest / most-ambiguous Claude work: multi-day autonomous runs, codebase-scale migrations, first-shot on complex well-specified systems, dense-image vision, architecture | **Claude Opus 5** (`max` for architecture) | Active Claude frontier. Fable 5.1 (`claude-fable-5-1`) is the current Fable slug when a named edge justifies 2× price. Pair GPT-6 Astra for cross-lab on the hardest judgment calls. |
 | Routine/cost-sensitive coding, security review, cyber, lab/molecular biology | **Claude Opus 5** | Same model — use lower effort (`low`/`medium`) when the brief has mechanical gates. |
-| Codex/terminal-heavy implementation, tool loops, structured API work | **GPT-5.6 Sol** (or **Luna** for everyday/cost) | GPT-5.6 suite GA 2026-07-09. Sol = flagship; **Luna ≈ prior GPT-5.5 perf at ~1/10 that price** ($0.20/$1.20 since the 2026-07-30 cut; Terra $2/$12); Terra = mid opt-in. Effort includes `max`. |
-| Quantitative proof, calibration math, hard science/data derivation where mistakes compound | **GPT-5.6 Sol** + API `reasoning.mode=pro` (or ChatGPT Sol Pro) | No separate `gpt-5.6-*-pro` slug — Pro is a reasoning *mode* on Sol/Terra/Luna at the same $/MTok (more tokens). Use when the answer will be checked. |
-| Cross-model review | **Opus 5 + GPT-5.6 Sol** (Luna OK for routine critique) | Different labs, different failure profiles. Keep the review cross-lab; do not use same-instance self-review as the sole adversarial pressure. PLAN packets get repo-grounded premise falsification from the built-in Composer scout. |
-| Architecture / design / high-reasoning critique | **Opus 5 `max` + GPT-5.6 Sol — NEVER Sonnet** | Operator 2026-06-20: architecture → Opus **`max`**. Sonnet is for search + bug-fixes only. A sonnet-thinking arch critique built a confident "HALT, reverse the spine" conclusion on a *search-error false premise*; Opus + GPT-5.6 got it right. For codebase-coupled decisions, rely on the review gate's repo-grounded Composer premise scout before packet-only critics. |
-| Agentic SaaS / multi-tool workflows (AutomationBench-shaped) | **Opus 5 or GPT-5.6 Sol** | Grok led the historical model screen, but the verified local Cursor admission currently covers read-only repo review, not autonomous write/tool workflows. |
+| Quantitative proof, calibration math, hard science/data derivation where mistakes compound | **GPT-6 Astra** + API `reasoning.mode=pro` | Pro is a reasoning *mode* at the same $/MTok (more tokens). Use when the answer will be checked. |
+| Cross-model review | **Opus 5 + GPT-6 Astra** (Luna OK for mechanical) | Different labs, different failure profiles. Keep the review cross-lab; do not use same-instance self-review as the sole adversarial pressure. PLAN packets get repo-grounded premise falsification from the built-in Composer scout. |
+| Architecture / design / high-reasoning critique | **Opus 5 `max` + GPT-6 Astra — NEVER Sonnet** | Operator 2026-06-20: architecture → Opus **`max`**. Sonnet is for search + bug-fixes only. For codebase-coupled decisions, rely on the review gate's repo-grounded Composer premise scout before packet-only critics. |
+| Agentic SaaS / multi-tool workflows (AutomationBench-shaped) | **Opus 5 or GPT-6 Astra** | Grok led the historical model screen, but the verified local Cursor admission currently covers read-only repo review, not autonomous write/tool workflows. |
 | Current facts, quotes, prices, law, news | **Tools first, then model synthesis** | Every model card still shows factuality limits. Retrieval/database truth beats frontier recall. **Not Grok alone** — AA-Omniscience non-hallucination ~46% (mid-pack; worse than Opus 4.8 64% / GLM 72%). |
 
 ## Quick Selection Matrix
 
 | Task | First choice | Escalate / pair when |
 |---|---|---|
-| Agentic coding | Opus 5 (high effort) | Drop to `low` effort when brief has mechanical gates; use GPT-5.6 Sol/Terra when terminal/Codex-heavy. |
+| Agentic coding | Opus 5 (high effort) | Drop to `low` effort when brief has mechanical gates; use GPT-6 Astra when terminal/Codex-heavy. |
 | Codebase-scale migration / multi-day autonomous run | Opus 5 (`xhigh`/`max`) | Keep human checkpoints at irreversible boundaries. |
 | Security review, exploit/vuln work, cyber, molecular biology | Opus 5 | Active Claude default for classifier-sensitive work (formerly Fable-refusal domain). |
-| Debugging messy repo state | GPT-5.6 Luna or Sol | Pair with Opus if the fix requires architectural judgment. |
-| Architecture decision | **Opus 5 `max`** | Send the selected proposal to GPT-5.6 Sol for independent cross-lab critique; use the built-in premise scout for repo-grounded checks. |
-| Quantitative audit / CritPt-hard physics | GPT-5.6 Sol (`max` / pro mode) | Grok CritPt **15%** — weak; do not route hard derivation here. |
-| Long-context document/repo synthesis | Opus 5 or GPT-5.6 Sol/Terra | Both 1.05M-class. Grok API context is **500k** — prefer Opus/GPT for >500k. |
-| Browser/computer use | Opus 5 or GPT-5.6 Sol | Both strong; Fable vision-SOTA notes apply once it's reachable via a lane that isn't paid-metered or Agent-tool-broken. |
+| Debugging messy repo state | GPT-6 Astra (or Luna for mechanical) | Pair with Opus if the fix requires architectural judgment. |
+| Architecture decision | **Opus 5 `max`** | Send the selected proposal to GPT-6 Astra for independent cross-lab critique; use the built-in premise scout for repo-grounded checks. |
+| Quantitative audit / CritPt-hard physics | GPT-6 Astra (`max` / pro mode) | Grok CritPt **15%** — weak; do not route hard derivation here. |
+| Long-context document/repo synthesis | Opus 5 or GPT-6 Astra | Both 1.05M-class. Grok API context is **500k** — prefer Opus/GPT for >500k. |
+| Browser/computer use | Opus 5 or GPT-6 Astra | Both strong; Fable 5.1 vision notes apply once it's reachable via a lane that isn't paid-metered or Agent-tool-broken. |
 | PLAN critique needing repo falsification | **`/critique model` with its default premise scout; add opt-in `grok` for an independent repo cosigner** | Composer checks callers/joins by default; Grok high adds a separately preflighted read-only repo pass when the extra axis is worth the latency. |
 | Letter-exact output constraints (exact counts, rigid templates, banned words) | Schema/validator enforcement, any model | Never rely on prose compliance — Claude family is measurably weakest at mechanical constraint-following (IFBench 62–63 vs GPT-5.6-class 76, bottom-5 of 27). Construct caveat: IFBench is majority adversarial-synthetic and high scores trade against answer quality, so this is a weak GPT preference for unschematizable cases, not a routing rule. |
 | Claim verification | Neither alone | Use primary sources and deterministic checks; use models to summarize evidence, not to establish it. |
@@ -124,9 +126,9 @@ Mechanics and footguns: `/llmx-guide`.
 
 ## llmx Cosigner / Dispatch Defaults (judgment — transport in mirror)
 
-- **Cosigner / critique / synthesis:** `gemini-3.5-flash` (inverted from 3.1 Pro 2026-05-24, operator-empirical; re-confirmed 2026-06-13 — flash-3.5 ≈ GPT-high ≫ 3.1-pro on the ADR-0009 spine critique). **Always in the 2G+2GPT mix — never the only reviewer.** Probe flags invention on clean packets; orchestrator dispositions via `--extract --verify` (see agentlogs evidence).
-- **Cheap classification / mechanical audits:** `gpt-5.6-luna` at `low` via codex-cli subscription ($0). ~~gemini-3-flash / flash-lite~~ — Gemini is critique-only since 2026-07-14 (metered gemini-* refuses outside the /critique engine; agent-infra `decisions/2026-07-14-gemini-critique-only-policy.md`).
-- **GPT-5.6 default effort is `medium`** (suite supports `max` beyond `xhigh`) — pass `-e high`/`xhigh` for depth; reasoning bills as output.
+- **Cosigner / critique / synthesis:** `gemini-3.8-flash` (GA 2026-09-02; intro $0.75/$3.75 through 2026-12-31). **Always in the 2G+2GPT mix — never the only reviewer.** Probe flags invention on clean packets; orchestrator dispositions via `--extract --verify`.
+- **Cheap classification / mechanical audits:** `gpt-6-astra` at `low` via codex-cli subscription ($0). Luna does not beat Astra-low on quality (AA Astra-low 57 vs Luna-max 43); keep `-m gpt-5.6-luna` for metered API bulk. Gemini is critique-only since 2026-07-14.
+- **GPT-6 Astra default effort:** preserve the requested effort; `none`/`minimal` map to `low`. Suite supports `max`. Pass `-e high`/`xhigh`/`max` for depth; reasoning bills as output.
 - **GLM-5.2 (Z.ai, NEW LAB) = opt-in review cosigner, NOT an extractor (2026-06-19).** A 4th independent training lab (Zhipu) → real cross-lab diversity for critique; request explicitly `--axes …,glm` (`glm_review` profile, routed via OpenRouter). **Calibration edge:** 72% AA-Omniscience non-hallucination (2026-06-18 independent read) — best among commonly-routed large models, ahead of Opus 4.8 64%; strong on impossibility/paradox detection in anecdotal coding probes. Accepts ONLY `high`/`xhigh` reasoning (no low tier) → structurally expensive+slow → **rejected for high-volume extraction/ingestion** (cost-dominated, no quality gain; keep gpt-5.3/gemini-3-flash). Match reasoning floor to task: GLM for occasional thorough review and epistemic guardrails, not throughput. See `agent-infra/decisions/2026-06-19-glm-5.2-integration.md`, `evals` DECISIONS `glm-5.2-extraction`.
 - **Grok 4.5 is routable through Cursor subscription as of 2026-07-14.** Use exact `cursor-grok-4.5-{low,medium,high}` or matching trailing-`-fast` slugs. The opt-in critique `grok` axis pins `cursor-grok-4.5-high` in a read-only repo workspace and fails closed on registry or unrevealed repo-canary drift. The bare `grok-4.5` xAI API lane remains separate.
 - **Gemini 3.6 Flash / 3.5 Flash-Lite (launched 2026-07-21) are REGISTERED, NOT ROUTED (2026-07-22).**
@@ -151,7 +153,7 @@ Mechanics and footguns: `/llmx-guide`.
   vendor claim is not evidence that it reviews as well. Swap is one line in the critique axes.
 - **`llmx vision` is multi-provider as of 2026-07-22 (llmx `2b12289`) — it used to be Gemini-only
   and off-ledger.** It now routes through the normal dispatch path, so `-m` takes any
-  vision-capable model id (`gemini-3.6-flash`, `gpt-5.6-sol`, `gpt-5.6-luna`, `claude-opus-5`),
+  vision-capable model id (`gemini-3.6-flash`, `gpt-6-astra`, `gpt-5.6-luna`, `claude-opus-5`),
   provider is inferred, and `-e` effort works. Three consequences worth knowing:
   (1) it is **spend-guarded and policy-gated** like everything else — a Gemini vision call now
   needs `LLMX_GEMINI_OK=1`, where it previously dispatched freely;
@@ -164,7 +166,7 @@ Mechanics and footguns: `/llmx-guide`.
   PROMPT, not `--provider` (use `--provider` to override the inferred one).
   **This unblocks a cross-family vision judge**, which the figure-vision eval previously could not
   have — its qualitative judge was Gemini-flash grading a Gemini-flash candidate, a same-family
-  COI it documented as forced by the tool. Pass `--judge gpt-5.6-sol` there now.
+  COI it documented as forced by the tool. Pass `--judge gpt-6-astra` there now.
 - **`gemini-3.1-pro-preview` is RETIRED as a routing option (2026-06-13, operator).** Do not route here for critique/synthesis/review — flash-3.5 dominates and is cheaper/faster. (Benchmark records in `references/BENCHMARKS.md` are kept as evidence; this is a routing retirement, not a data scrub. Callable via explicit `-m` if a one-off ever needs ARC-AGI-2/GPQA/video, but it is not a default anywhere.)
 - **Cosigner calibration caveat (AA-Omniscience, 2026-06-11):** both cosigner defaults are bottom-quartile abstainers — non-hallucination 39% (`gemini-3.5-flash`), prior GPT class 14% (re-measure Luna/Sol TBD), despite an abstention prompt. Critique output = adversarial pressure on reasoning, never a fact source; **for fact-heavy review where calibration matters, verify novel specifics at primary and lean on a frontier model (Opus/GPT), not a cheap cosigner.** Instruments: agent-infra `research/2026-06-11-aa-benchmark-instrument-validity.md`.
 
@@ -191,7 +193,7 @@ When dispatching subagents to execute work (Agent tool, headless `claude -p`, co
 |---|---|---|---|
 | **Synthesis** (open design problem, no oracle) | Opus 5 `max` | $0 subscription | Fable's synthesis edge is real (2026-06-12 fable-effort-architecture eval, low missed the orthogonal factoring high shipped) but currently unreachable via Agent tool — llmx-only, paid, until the routing bug is fixed. |
 | **Briefed execution** (full brief + mechanical gates) | `opus-low` or codex reasoning-low | $0 subscription | anim-workbench 2026-06-12 effort-tier/effort-integration/codex-lane (low ≈ medium/default, 0.57-0.59× tokens). |
-| **Review / cosign** | Opus 5 + GPT-5.6 Sol, cross-lab; opt-in GLM-5.2 or Grok-4.5 axis | $0 subscription (+~$0.30-1/call opt-in) | `evals/DECISIONS.md` `cross-lab-review-margin` (margin≈0, count-delta real); GLM decision 2026-06-19. |
+| **Review / cosign** | Opus 5 + GPT-6 Astra, cross-lab; opt-in GLM-5.2 or Grok-4.5 axis | $0 subscription (+~$0.30-1/call opt-in) | `evals/DECISIONS.md` `cross-lab-review-margin` (margin≈0, count-delta real); GLM decision 2026-06-19. |
 | **Research / literature** | Independent source/model lanes for broad coverage when useful; a bounded lookup or synthesis can stay in one lane | $0 subscription | arc-agi feedback 2026-07-07: codex arm found a paper (PRISM, 2605.26998) the Claude arm missed. |
 | **Scout fan-out** (parallel audits/debug scouts) | Cross-model default, concurrency-capped ≤2 concurrent opus subagents / ≤2 concurrent model workers each, else sequential | $0 subscription | arc-agi feedback 2026-07-08: 4 concurrent opus agents × openrouter fan-out (28-way) killed 3/4 mid-run — opus session-limit + provider contention, both real ceilings. |
 | **OS-student serving** (open-weight model as trainee/actor under test) | Project-specific — measure, don't assume | GPU $/hr | Example only, not a universal verdict: arc-agi killed mistral-small-3.2-24B as an OS-tier base (dominated on every axis, 2026-07-11), rehabbed qwen3.6-27b via a no-think serving config, kept gemma-4-31B alive. Check your own project's standing-kills doc before reusing a verdict cross-project. Serving mechanics: `/modal` skill. |
@@ -281,12 +283,11 @@ hidden CoT, `reasoning_extraction` classifier, refusal→Opus 5 (bio) / Opus 4.8
 
 **Cache (5.6+):** writes 1.25× uncached input; reads 90% discount; 30-min minimum cache life + explicit breakpoints.
 
-**Routing defaults (this fleet):**
-- Cross-lab / architecture / hardest Codex → **Sol** (`high`/`xhigh`/`max`)
-- Critique `gpt_general` / everyday GPT → **Luna** (`medium`)
-- Mechanical lint axis → **Luna** (`low`)
-- Mid-cost bump → **Terra** (explicit `-m`)
-- Subscription path: `llmx chat --subscription -m gpt-5.6-sol` (codex-cli)
+**Routing defaults (this fleet is now the named cost-tier, not the GPT flagship):**
+- GPT flagship / everyday Codex / formal review → **GPT-6 Astra**
+- Mechanical lint / bulk extract → **Luna** (`low`)
+- Mid-cost API bump → **Terra** (explicit `-m`)
+- Named 5.6 Sol pin: `llmx chat --subscription -m gpt-5.6-sol`
 
 **Calibration:** re-measure AA-Omniscience on 5.6 before trusting abstention. Until then, treat GPT critique as adversarial pressure on *reasoning*, not a fact source.
 
@@ -379,9 +380,9 @@ Use independent parallel reviews, then synthesize yourself:
 
 ```text
 Opus 5 (max for architecture): architectural/professional judgment and implementation critique.
-GPT-5.6 Sol: terminal/tool/process critique and structured failure search (hard).
-GPT-5.6 Luna: everyday critique / mechanical (medium/low).
-GPT-5.6 Sol + reasoning.mode=pro: quantitative or high-irreversibility decisions.
+GPT-6 Astra: terminal/tool/process critique and structured failure search (hard).
+GPT-5.6 Luna: mechanical / bulk (low).
+GPT-6 Astra + reasoning.mode=pro: quantitative or high-irreversibility decisions.
 Grok 4.5 high (Cursor opt-in): repo-grounded premise falsification after live preflight.
 Ground truth: tests, git, databases, source documents, primary web pages.
 ```
