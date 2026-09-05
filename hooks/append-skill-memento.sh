@@ -1,44 +1,34 @@
 #!/usr/bin/env bash
-# Safely append a Known Issues entry to a skill's SKILL.md.
+# Append a skill incident to its dedicated reference without rewriting the router.
 # Usage: append-skill-memento.sh <skill-name> "<issue description>"
-#
-# Appends below the "## Known Issues" header without touching frontmatter
-# or other sections. Creates the section if missing.
+# The skill must already expose references/known-issues.md; missing targets fail.
 
 set -euo pipefail
 
 SKILL_NAME="${1:?Usage: append-skill-memento.sh <skill-name> \"<description>\"}"
 DESCRIPTION="${2:?Usage: append-skill-memento.sh <skill-name> \"<description>\"}"
-DATE=$(date +%Y-%m-%d)
+MEMENTO_DATE=$(date +%Y-%m-%d)
+
+case "$SKILL_NAME" in
+    ""|*[!a-z0-9-]*|-*)
+        echo "ERROR: skill name must contain lowercase letters, digits or hyphens" >&2
+        exit 1
+        ;;
+esac
 
 SKILLS_DIR="${SKILLS_DIR:-$HOME/Projects/skills}"
 SKILL_MD="$SKILLS_DIR/$SKILL_NAME/SKILL.md"
+MEMENTO_FILE="$SKILLS_DIR/$SKILL_NAME/references/known-issues.md"
 
 if [ ! -f "$SKILL_MD" ]; then
     echo "ERROR: $SKILL_MD not found" >&2
     exit 1
 fi
 
-ENTRY="- **[$DATE] $DESCRIPTION**"
-
-# Check if ## Known Issues section exists
-if grep -q '^## Known Issues' "$SKILL_MD"; then
-    # Find the line number of ## Known Issues
-    LINE=$(grep -n '^## Known Issues' "$SKILL_MD" | head -1 | cut -d: -f1)
-    # Find the absolute line number of the next section header (or EOF).
-    # awk exits successfully when there is no later header, unlike a no-match
-    # grep pipeline under set -euo pipefail.
-    NEXT=$(awk -v line="$LINE" 'NR > line && /^## / { print NR; exit }' "$SKILL_MD")
-    if [ -n "$NEXT" ]; then
-        # Use ed for atomic insert (avoids sed -i portability issues)
-        printf '%s\n' "${NEXT}i" "$ENTRY" "" "." "w" | ed -s "$SKILL_MD" >/dev/null
-    else
-        # No next section — append at end of file
-        printf '\n%s\n' "$ENTRY" >> "$SKILL_MD"
-    fi
-else
-    # Section doesn't exist — append at end of file
-    printf '\n## Known Issues\n<!-- Append-only. Session-analyst may suggest additions. -->\n%s\n' "$ENTRY" >> "$SKILL_MD"
+if [ ! -f "$MEMENTO_FILE" ]; then
+    echo "ERROR: $MEMENTO_FILE not found; create it and link it from $SKILL_MD first" >&2
+    exit 1
 fi
 
-echo "Appended to $SKILL_MD: $ENTRY"
+printf '\n- **[%s] %s**\n' "$MEMENTO_DATE" "$DESCRIPTION" >> "$MEMENTO_FILE"
+echo "Appended to $MEMENTO_FILE"

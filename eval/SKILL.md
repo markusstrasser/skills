@@ -511,3 +511,7 @@ DECISIONS/RESULTS.
 ---
 **Hit a defect or friction in THIS skill during the eval arc?** Log it so the next run inherits the fix:
 `~/Projects/skills/hooks/append-skill-memento.sh eval '<one-line issue>'`.
+
+## Known Issues
+
+For matching failures, read [incident history](references/known-issues.md). The memento helper appends there.
