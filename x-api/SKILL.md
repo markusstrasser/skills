@@ -37,7 +37,18 @@ Promoted after being hand-rolled 4× across two research sessions. Wraps
 uv run --project ~/Projects/skills python3 ~/Projects/skills/x-api/scripts/search.py query '"greater male variability" lang:en' --out hits.jsonl --label mytopic
 uv run --project ~/Projects/skills python3 ~/Projects/skills/x-api/scripts/search.py verify StuartJRitchie lakens cremieuxrecueil
 uv run --project ~/Projects/skills python3 ~/Projects/skills/x-api/scripts/search.py thread 1234567890 --author whyvert
+uv run --project ~/Projects/skills python3 ~/Projects/skills/x-api/scripts/search.py query 'immigration lang:en' --start-time 2026-06-05T00:00:00Z --end-time 2026-08-01T00:00:00Z --pages 1 --max 50 --out summer.jsonl --label summer
 ```
+
+Date windows (2026-09-05): `query --start-time/--end-time` pass the official
+full-archive parameters on every page. Use UTC `YYYY-MM-DDTHH:MM:SSZ`; start
+is inclusive and end exclusive. Malformed dates, future dates and start >= end
+fail before an API request. Both flags are optional. Keep `--pages` and `--max`
+explicit for a bounded sample; without dates, returned pages do not establish
+coverage of a requested historical interval. [Official endpoint reference](https://docs.x.com/x-api/posts/search-all-posts).
+
+Evidence: the 2026-09-05 immigration review requested June–September material;
+the prior CLI exposed no time parameters and its returned sample began August 10.
 
 Rules it encodes (learned the expensive way):
 - **verify handles BEFORE `from:` queries** — a wrong training-data handle reads as a

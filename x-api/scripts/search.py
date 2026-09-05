@@ -17,6 +17,7 @@ cost-ledger discipline and the hard-won operational lessons baked in:
 
 Usage:
   search.py query 'QUERY' [--pages 1] [--max 100] [--out FILE.jsonl] [--label L]
+                         [--start-time UTC_ISO] [--end-time UTC_ISO]
   search.py verify HANDLE [HANDLE ...]
   search.py thread CONVERSATION_ID [--author HANDLE] [--out FILE.jsonl]
 
@@ -28,6 +29,7 @@ import argparse
 import json
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -71,12 +73,40 @@ def _enrich(body: dict) -> list[dict]:
     return tweets
 
 
-def search_all(query: str, pages: int, max_results: int, tally: CostTally) -> list[dict]:
+def validate_window(start_time: str | None, end_time: str | None) -> None:
+    """Reject malformed, future, or reversed UTC windows before any API read."""
+    parsed = {}
+    now = datetime.now(timezone.utc)
+    for name, value in (("start_time", start_time), ("end_time", end_time)):
+        if value is None:
+            continue
+        try:
+            timestamp = datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(
+                tzinfo=timezone.utc
+            )
+            if timestamp.strftime("%Y-%m-%dT%H:%M:%SZ") != value:
+                raise ValueError("noncanonical UTC timestamp")
+        except ValueError as exc:
+            raise ValueError(f"{name} must be a valid UTC time: YYYY-MM-DDTHH:MM:SSZ") from exc
+        if timestamp > now:
+            raise ValueError(f"{name} must not be in the future")
+        parsed[name] = timestamp
+    if len(parsed) == 2 and parsed["start_time"] >= parsed["end_time"]:
+        raise ValueError("start_time must be earlier than end_time")
+
+
+def search_all(query: str, pages: int, max_results: int, tally: CostTally,
+               *, start_time: str | None = None, end_time: str | None = None) -> list[dict]:
+    validate_window(start_time, end_time)
     rows: list[dict] = []
     next_token = None
     for _ in range(pages):
         params = {"query": query, "max_results": max_results, "tweet.fields": FIELDS,
                   "expansions": "author_id", "user.fields": "username,public_metrics"}
+        if start_time is not None:
+            params["start_time"] = start_time
+        if end_time is not None:
+            params["end_time"] = end_time
         if next_token:
             params["next_token"] = next_token
         body = _get(f"{API}/tweets/search/all", params)
@@ -128,6 +158,8 @@ def main() -> None:
     q.add_argument("--max", type=int, default=100, dest="max_results")
     q.add_argument("--out", type=Path, default=None)
     q.add_argument("--label", default="x_search")
+    q.add_argument("--start-time", help="inclusive UTC start: YYYY-MM-DDTHH:MM:SSZ")
+    q.add_argument("--end-time", help="exclusive UTC end: YYYY-MM-DDTHH:MM:SSZ")
     q.add_argument("--with-retweets", action="store_true",
                    help="do not auto-append -is:retweet")
 
@@ -149,11 +181,16 @@ def main() -> None:
         return
 
     if args.cmd == "query":
+        try:
+            validate_window(args.start_time, args.end_time)
+        except ValueError as exc:
+            ap.error(str(exc))
         query = args.query
         if "-is:retweet" not in query and "is:retweet" not in query \
                 and not args.with_retweets:
             query += " -is:retweet"
-        rows = search_all(query, args.pages, args.max_results, tally)
+        rows = search_all(query, args.pages, args.max_results, tally,
+                          start_time=args.start_time, end_time=args.end_time)
         label = args.label
     else:  # thread
         rows = pull_thread(args.conversation_id, args.author, tally)
