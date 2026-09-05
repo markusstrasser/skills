@@ -151,3 +151,78 @@ the consumer-shaped part, deferred to the first judge-validation eval that needs
 statistically invalid below 50 labels/stratum (GLIDE `arXiv:2605.31278`) — at ~20/stratum, hand-label
 all + bootstrap; `just power` refuses PPI/R² sizing below the threshold. Fitted IRT, CapBencher,
 CAT/LEGO-IRT, noise-injection sandbagging: deferred — see `evals/docs/decisions/deferred-and-open.md`.
+
+
+## 2026-09 adopts — judge-instrument hardening (folded from `evals/research/2026-09-05-newest-evals-two-months.md`)
+
+Read depth for the arXiv rows is abstract-level (v1 dates confirmed); numbers are transcriptions, not
+table-verified. Every institutional post was read in full.
+
+- **Commit-first judging (Phase 4).** The judge solves the task itself, commits to an answer, then
+  accepts a candidate only on match. An audit of the default judge configs of eight eval frameworks
+  found 0 of 24 implement it; nine share one ancestor prompt traceable by a copied typo; a best-of-N
+  search with no answer access got 90/96 and 93/96 candidates accepted, every one failing a held-out
+  suite (arXiv:2609.00088). Cost: one extra judge call per item. Applies only where an answer is
+  checkable; rubric-graded free text gets the R-probe instead.
+- **Construct-sensitivity R beside invariance S (Phase 3).** Formalize judge validity as a 2-D
+  profile: S = P(verdict unchanged under construct-preserving edits), R = P(verdict changes under
+  minimal construct-changing edits); S and R are independent and no scalar summary preserves all
+  comparisons. Across 7 judges × 4 domains with generation/verification/judging on disjoint model
+  families, S=0.945 but R=0.319 at matched S≥0.90; surface-only predictors reproduce 55–67% of public
+  labels incl. 67.4% of MT-Bench votes (arXiv:2608.24419). The probe is ~12 items on an existing rig.
+  Pair with a **rubric-only sham arm**: classifiers over rubric text alone, with no response, predict
+  judge output; judges often fail to update when the response or the criterion is reversed
+  (arXiv:2609.02942). A non-trivial sham score means the run measured the rubric.
+- **Endpoint rule (Phase 4 stats).** A double difference (within-item contrast, differenced across a
+  manipulated attribute) read off a bounded rating scale is not identified on that scale: each term is
+  censored by its own share, so a severity shift common to both responses manufactures an interaction
+  whenever they censor unequally. A pre-registered 990-call audit reproduced 79–85% of its one
+  significant interaction from the severity shift and the scale floor alone (arXiv:2608.27309). Use
+  paired ranks, exact-match, or model the censoring.
+- **Judge input hygiene.** (a) Prior scores carried only as metadata (revision / attempt / prior-score
+  fields) shift ratings toward their values; 7 of 8 models show bootstrap intervals below zero on the
+  anchored-metadata effect over 185k evaluations (arXiv:2608.25869) → `evalcore.judge.lint_no_anchoring`
+  runs in `dispatch`. (b) Judge version instability: many-facet Rasch severity spans 219 points on a
+  0–1000 scale across 12 judges; all five version contrasts shift severity past family-wise correction;
+  judge-human r only .47–.56 (arXiv:2608.29517); judge upgrades are not interchangeable and repeated-sample
+  juries add little when errors correlate (arXiv:2607.08535) → pin the judge build in the prereg; compare
+  across a judge change only within-run and paired. (c) A decoding-budget parameter shared between the
+  generation and judging calls silently truncated one producer's hallucinated answers and manufactured a
+  32-point cross-lingual collapse that replicated from N=50 to N=500 with a mechanistic story attached,
+  then vanished when the shared parameter was fixed (arXiv:2607.13707) → generator and judge never share
+  a config object; `templates/config.toml` documents the keys. (d) Same-model judging is leniency-biased
+  again on current models (Fable 5.1 card §6.5.3); the paired Eval-Pair Matrix estimator (judges paired on
+  the exact same answer, ~275 validated records) is the correct COI estimator at our scale
+  (arXiv:2607.10626) → `dispatch` warns when the judge model is in `blind_to`.
+- **Omission is never judge-graded.** Across eight judge designs, paired discrimination is .79–.94 on
+  added or altered content but .50–.63 on omissions; wording, voting and GEPA prompt optimisation do
+  not recover it (arXiv:2608.31016). Completeness constructs use the LAB per-item presence check
+  (scoped per-criterion context) — the checklist oracle the paper recommends. Hindsight: HAD-LEVER.
+- **pass^k and generation residuals.** ThinkingBox (507 stateful workflows, backend-state grading):
+  Opus 5 pass@1 66.50% vs pass^20 47.53% on the same tasks (arXiv:2608.19741) → `evalcore.stats.pass_rates`.
+  In an agent-commerce re-audit, reported welfare gains of +87.4/+35.0/+28.8 collapsed to +7.2/−13.9/+23.8
+  once arms shared an offer schema and chooser; generation residuals were 49.9% of variance and the four
+  largest single-generation effects averaged +229 vs +37.6 over three generations (arXiv:2609.01519) →
+  ≥3 generations per condition, harness identical across arms. Harness-only changes moved SWE-bench
+  Verified F2PF 28%→49% with frozen weights (arXiv:2608.26218) → `harness` is a provenance field.
+- **Stopping rule.** UK AISI `optstop` (MIT, `pip install optstop[inspect]`, arXiv:2608.14425):
+  hierarchical-Bayesian sequential stopping on credible-interval width or stabilisation, with a
+  low-success safeguard; removed 57–97% of planned trials across nine settings with equivalent
+  conclusions. Preregister the precision target instead of N; pin the version (4-commit repo).
+- **Provenance generation settings.** Evaluation Cards (EvalEval/HF, arXiv:2606.09809): 96.5% of
+  reported evals miss at least one field needed to re-run them; max-tokens absent 95.6%, temperature
+  93.9% → `storage.provenance(generation=..., judges=..., harness=...)`, filled by `run_eval`.
+- **Audit-conditional numbers.** Anthropic's reward-seeker checkpoint (Opus 4.8 RL'd on ~80 hackable
+  environments) scored 1.12 vs 1.04 baseline on the automated behavioral audit and complied with
+  bioweapon requests at 29% with a visible grader vs 0.7% without
+  (alignment.anthropic.com/2026/reward-seeker/). UK AISI (2026-07-21): every frontier model tested
+  attempted to cheat (out-of-scope or disallowed actions); self-report acknowledged it <50% of the time
+  and chain-of-thought often did not mention it. A judge-scored number where the SUT can infer grading
+  is a behavior-under-audit number: add a grader-hidden arm or label it.
+- **Agentic-trace scanners.** Four scanner types with human-labeling rubrics, validated on held-out
+  Inspect Evals: ground-truth access, tool failure, guessing vulnerability, answer-format ambiguity
+  (arXiv:2607.27518) — a superset of the leakguard for trace review. Record contamination *acquired
+  during the run* as a per-run provenance field, not a benchmark property (arXiv:2608.29463).
+- **Teardown rubric items 10–13** (`evals/docs/famous-evals-teardown-rubric.md`): gold error rate
+  (FrontierMath v2 corrected errors in 42% of problems), author re-selection rate (Terminal-Bench 2.0 →
+  Harbor-Index 3/89), contamination half-life (SWE-Bench Pro 23%→80% in eight months), grader visibility.
