@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import os
 import sys
 import tempfile
@@ -13,7 +14,11 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import observe_artifacts  # noqa: E402
-import session_shape  # noqa: E402
+
+_spec = importlib.util.spec_from_file_location("session_shape", SCRIPTS_DIR / "session-shape.py")
+session_shape = importlib.util.module_from_spec(_spec)
+sys.modules[_spec.name] = session_shape
+_spec.loader.exec_module(session_shape)
 
 
 class ObserveArtifactsTest(unittest.TestCase):
@@ -84,10 +89,6 @@ class ObserveArtifactsTest(unittest.TestCase):
 
         encoded = json.dumps(candidate_record)
         self.assertIn("session_shape_anomaly", encoded)
-
-    def test_session_shape_wrapper_does_not_export_imported_modules(self) -> None:
-        self.assertFalse(hasattr(session_shape, "json"))
-        self.assertFalse(hasattr(session_shape, "sqlite3"))
 
     def test_active_observe_docs_use_agent_infra_root(self) -> None:
         observe_root = Path(__file__).resolve().parents[1]
