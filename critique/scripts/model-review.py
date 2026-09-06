@@ -1577,38 +1577,34 @@ def _strip_additional_properties(schema: dict) -> dict:
 
 
 def _call_llmx(
-    provider: str,
-    model: str,
+    *,
+    profile: dispatch_core.DispatchProfile,
     context_path: Path,
     prompt: str,
     output_path: Path,
     context_manifest_path: Path | None = None,
     schema: dict | None = None,
-    **kwargs,
+    timeout: int | None = None,
 ) -> dict:
     """Call the shared dispatch helper and adapt its result shape for review logic."""
     try:
-        profile = dispatch_core.map_model_to_profile(model)
-        override_payload = {}
-        for key in ("timeout", "reasoning_effort", "max_tokens", "search"):
-            if key in kwargs and kwargs[key] is not None:
-                override_payload[key] = kwargs[key]
-        overrides = (
-            dispatch_core.DispatchOverrides(**override_payload) if override_payload else None
-        )
+        overrides = dispatch_core.DispatchOverrides(timeout=timeout) if timeout is not None else None
+        registered, _ = dispatch_core.resolve_profile(profile.name, overrides)
+        if registered != profile:
+            raise ValueError(
+                f"review profile mismatch for {profile.name}: "
+                f"selected {profile.fingerprint()}, registered {registered.fingerprint()}"
+            )
         result = dispatch_core.dispatch(
-            profile=profile,
+            profile=profile.name,
             prompt=prompt,
             context_path=context_path,
             context_manifest_path=context_manifest_path,
             output_path=output_path,
             schema=schema,
             overrides=overrides,
-            # Transport is owned by the profile (auth on DispatchProfile).
-            # Do NOT pass api_only here — a hardcode re-states/overrides the
-            # profile and silently breaks CLI-transport profiles (composer_review
-            # → cursor → was routed to the OpenAI API → 404). The dispatch default
-            # (None) resolves to each profile's declared transport.
+            # Keep the selected profile: model names are shared by profiles with
+            # different auth/effort. Remapping Astra selected API/high for subscription/medium.
         )
         output_size = output_path.stat().st_size if output_path.exists() else 0
         exit_code = 0 if result.status in {"ok", "parse_error"} else 1
@@ -1620,7 +1616,7 @@ def _call_llmx(
         }
     except Exception as e:
         error_msg = str(e)[:500]
-        print(f"warning: llmx call failed ({model}): {error_msg}", file=sys.stderr)
+        print(f"warning: llmx call failed ({profile.name}): {error_msg}", file=sys.stderr)
         return {
             "exit_code": 1,
             "size": 0,
@@ -1658,7 +1654,6 @@ def collect_dispatch_failures(
 
 def rerun_axis_with_fallback(
     axis: str,
-    axis_def: dict[str, object],
     review_dir: Path,
     ctx_file: Path | ContextArtifact,
     prompt: str,
@@ -1673,8 +1668,8 @@ def rerun_axis_with_fallback(
         f"cross-provider fallback ({GEMINI_FALLBACK_MODEL})",
         file=sys.stderr,
     )
-    api_kwargs = dict(axis_def.get("api_kwargs") or {})  # type: ignore[arg-type]
-    profile_timeout = _axis_profile_timeout(axis)
+    profile = dispatch_core.PROFILES["gpt_general"]
+    profile_timeout = _profile_resolved_timeout(profile.name)
     if budget is not None and not budget.can_start(profile_timeout):
         return {
             "exit_code": 1,
@@ -1683,13 +1678,12 @@ def rerun_axis_with_fallback(
             "error": "budget exhausted before fallback retry",
         }
     return _call_llmx(
-        provider="google",
-        model=GEMINI_FALLBACK_MODEL,
+        profile=profile,
         context_path=context_content_path(ctx_file),
         context_manifest_path=context_manifest_path(ctx_file),
         prompt=prompt,
         output_path=out_path,
-        **api_kwargs,
+        timeout=profile_timeout,
     )
 
 
@@ -2038,8 +2032,7 @@ def dispatch(
             )
         else:
             result = _call_llmx(
-                provider=profile_def.provider,
-                model=profile_def.model,
+                profile=profile_def,
                 context_path=context_content_path(context_artifact),
                 context_manifest_path=context_manifest_path(context_artifact),
                 prompt=prompts[axis],
@@ -2060,8 +2053,7 @@ def dispatch(
             entry["stderr"] = result["error"]
         if axis_needs_repo_workspace(axis):
             entry["transport"] = "cursor-agent-workspace"
-        # Primary Gemini axis rate-limited -> retry once with the runner-up
-        # critique model (3.1-Pro), not the cheap classification model.
+        # Primary Gemini axis rate-limited -> retry once with the declared fallback profile.
         if (
             not axis_needs_repo_workspace(axis)
             and profile_def.model == GEMINI_PRIMARY_MODEL
@@ -2074,7 +2066,6 @@ def dispatch(
             entry["initial_exit_code"] = result["exit_code"]
             fallback_result = rerun_axis_with_fallback(
                 axis,
-                axis_def,
                 review_dir,
                 ctx_files[axis],
                 prompts[axis],
@@ -2530,8 +2521,7 @@ def extract_claims(
             else EXTRACTION_PROMPT
         )
         result = _call_llmx(
-            provider=profile_def.provider,
-            model=profile_def.model,
+            profile=profile_def,
             context_path=output_path,
             context_manifest_path=None,
             prompt=extraction_prompt,

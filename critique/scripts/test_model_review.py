@@ -68,6 +68,37 @@ class ModelReviewDispatchTest(unittest.TestCase):
         self.assertIn("gemini-3.8-flash", models_called)
         self.assertTrue(any("gpt-6-astra" in m for m in models_called), models_called)
 
+    def test_dispatch_preserves_same_model_profiles(self) -> None:
+        """Astra correctness must not inherit formal's API billing and high effort."""
+        from types import SimpleNamespace
+
+        self.ctx_files["correctness"] = self.ctx_files["formal"]
+        calls = []
+
+        def mock_chat(**kwargs):
+            calls.append(kwargs)
+            return SimpleNamespace(content="mock review", latency=0.01, usage={})
+
+        with patched_llmx_chat(mock_chat):
+            result = model_review.dispatch(
+                self.review_dir, self.ctx_files, ["correctness", "formal"],
+                "Review the profile contract", has_governance=False,
+            )
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual({c["model"] for c in calls}, {"gpt-6-astra"})
+        self.assertEqual(
+            {(c["auth"], c["reasoning_effort"]) for c in calls},
+            {("subscription", "medium"), ("api", "high")},
+        )
+        for axis, profile_name in (("correctness", "gpt_general"), ("formal", "formal_review")):
+            self.assertEqual(result[axis]["exit_code"], 0)
+            meta = json.loads((self.review_dir / f"{axis}-output.meta.json").read_text())
+            profile = model_review.dispatch_core.PROFILES[profile_name]
+            self.assertEqual(meta["requested_profile"], profile_name)
+            self.assertEqual(meta["auth"], profile.auth)
+            self.assertEqual(meta["resolved_kwargs"]["reasoning_effort"], profile.reasoning_effort)
+
     def test_dispatch_falls_back_after_gemini_rate_limit(self) -> None:
         call_count = {"arch": 0}
 
@@ -95,12 +126,16 @@ class ModelReviewDispatchTest(unittest.TestCase):
                 has_governance=False,
             )
 
-        # arch should have fallen back to the runner-up critique model (3.1-Pro)
+        # arch should have fallen back to the declared cross-provider profile.
         self.assertEqual(result["arch"]["model"], model_review.GEMINI_FALLBACK_MODEL)
         self.assertEqual(result["arch"]["fallback_reason"], "gemini_rate_limit")
         self.assertGreater(result["arch"]["size"], 0)
         # formal should succeed normally
         self.assertEqual(result["formal"]["exit_code"], 0)
+        fallback_meta = json.loads((self.review_dir / "arch-output.meta.json").read_text())
+        self.assertEqual(fallback_meta["requested_profile"], "gpt_general")
+        self.assertEqual(fallback_meta["auth"], "subscription")
+        self.assertEqual(fallback_meta["resolved_kwargs"]["reasoning_effort"], "medium")
 
     def test_collect_dispatch_failures_flags_zero_byte_outputs(self) -> None:
         dispatch_result = {
@@ -222,6 +257,27 @@ class SchemaTransformTest(unittest.TestCase):
 
 
 class CallLlmxTest(unittest.TestCase):
+    def test_call_llmx_rejects_profile_drift_before_transport(self) -> None:
+        from dataclasses import replace
+
+        selected = model_review.dispatch_core.PROFILES["gpt_general"]
+        for change in ({"auth": "api"}, {"reasoning_effort": "high"}):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as td:
+                ctx = Path(td) / "ctx.md"
+                ctx.write_text("context")
+                out = Path(td) / "out.md"
+                with (
+                    patch.dict(model_review.dispatch_core.PROFILES, {selected.name: replace(selected, **change)}),
+                    patch.object(model_review.dispatch_core, "dispatch") as transport,
+                ):
+                    result = model_review._call_llmx(
+                        profile=selected, context_path=ctx, prompt="test", output_path=out,
+                    )
+                transport.assert_not_called()
+                self.assertEqual(result["exit_code"], 1)
+                self.assertIn("review profile mismatch", result["error"])
+                self.assertFalse(out.exists())
+
     def test_call_llmx_returns_error_dict_on_exception(self) -> None:
         def exploding_chat(**kwargs):
             raise ConnectionError("network down")
@@ -232,8 +288,7 @@ class CallLlmxTest(unittest.TestCase):
             out = Path(td) / "out.md"
             with patched_llmx_chat(exploding_chat):
                 result = model_review._call_llmx(
-                    provider="google",
-                    model="gemini-3.5-flash",
+                    profile=model_review.dispatch_core.PROFILES["deep_review"],
                     context_path=ctx,
                     prompt="test",
                     output_path=out,
@@ -259,8 +314,7 @@ class CallLlmxTest(unittest.TestCase):
             out = Path(td) / "out.md"
             with patched_llmx_chat(capture_chat):
                 model_review._call_llmx(
-                    provider="openai",
-                    model="gpt-5.6-sol",
+                    profile=model_review.dispatch_core.PROFILES["formal_review"],
                     context_path=ctx,
                     prompt="test",
                     output_path=out,
@@ -287,8 +341,7 @@ class CallLlmxTest(unittest.TestCase):
             out = Path(td) / "out.md"
             with patched_llmx_chat(capture_chat):
                 model_review._call_llmx(
-                    provider="google",
-                    model="gemini-3.5-flash",
+                    profile=model_review.dispatch_core.PROFILES["deep_review"],
                     context_path=ctx,
                     prompt="test",
                     output_path=out,
@@ -315,8 +368,7 @@ class CallLlmxTest(unittest.TestCase):
             out = Path(td) / "out.md"
             with patched_llmx_chat(capture_chat):
                 model_review._call_llmx(
-                    provider="cursor",
-                    model="composer-2.5",
+                    profile=model_review.dispatch_core.PROFILES["composer_review"],
                     context_path=ctx,
                     prompt="test",
                     output_path=out,
@@ -345,8 +397,7 @@ class CallLlmxTest(unittest.TestCase):
             out = Path(td) / "out.md"
             with patched_llmx_chat(capture_chat):
                 model_review._call_llmx(
-                    provider="openai",
-                    model="gpt-5.6-sol",
+                    profile=model_review.dispatch_core.PROFILES["formal_review"],
                     context_path=ctx,
                     prompt="test",
                     output_path=out,
@@ -372,8 +423,7 @@ class CallLlmxTest(unittest.TestCase):
             out = Path(td) / "out.md"
             with patched_llmx_chat(capture_chat):
                 model_review._call_llmx(
-                    provider="anthropic",
-                    model="claude-opus-4-8",
+                    profile=model_review.dispatch_core.PROFILES["claude_review"],
                     context_path=ctx,
                     prompt="test",
                     output_path=out,
@@ -640,6 +690,7 @@ class ExtractionCoverageTest(unittest.TestCase):
                 self.assertIsNone(model_review.extract_claims(review_dir, dispatch_result))
 
             self.assertEqual(len(captured), 1)
+            self.assertEqual(captured[0]["profile"], model_review.dispatch_core.PROFILES["gpt_general"])
             self.assertIsNone(captured[0]["schema"])
             self.assertIn("Return ONLY a JSON object", captured[0]["prompt"])
 
