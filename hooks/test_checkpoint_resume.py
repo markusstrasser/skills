@@ -9,9 +9,16 @@ checkpoint-autogen.md and the reader hardcoded checkpoint.md. These pin the sele
 Run: cd ~/Projects/skills/hooks && python3 -m pytest test_checkpoint_resume.py -q
 """
 
+import json
 import os
+import subprocess
+import sys
+import time
+from pathlib import Path
 
 import checkpoint_resume as cr
+
+HOOK_DIR = Path(__file__).resolve().parent
 
 
 def _write(path, session, body="body"):
@@ -161,7 +168,9 @@ def test_remnant_false_for_fresh_peer(tmp_path):
 
 
 def test_remnant_false_for_missing(tmp_path):
-    assert cr.is_stale_remnant(str(tmp_path / "nope.md"), "sess", now=1_000_000.0) is False
+    assert (
+        cr.is_stale_remnant(str(tmp_path / "nope.md"), "sess", now=1_000_000.0) is False
+    )
 
 
 def test_remnant_respects_custom_floor(tmp_path):
@@ -171,3 +180,139 @@ def test_remnant_respects_custom_floor(tmp_path):
     _touch_mtime(str(p), now - 5 * 3600)
     assert cr.is_stale_remnant(str(p), "me", now=now, max_age_h=12.0) is False
     assert cr.is_stale_remnant(str(p), "me", now=now, max_age_h=4.0) is True
+
+
+# ─── is_curated + the curated-clobber guard ──────────────────────────
+
+
+def _write_signed(path, session, stamp, body="body"):
+    with open(path, "w") as fh:
+        fh.write(
+            "# Resume Checkpoint\n<!-- session: %s -->\n\nWritten by PreCompact hook at %s.\n\n%s\n"
+            % (session, stamp, body)
+        )
+
+
+def _stamp_for(epoch):
+    return time.strftime("%Y-%m-%d %H:%M", time.localtime(epoch))
+
+
+def test_curated_when_no_hook_signature(tmp_path):
+    path = tmp_path / "checkpoint.md"
+    _write(str(path), "sess-ME", "## Pending Tasks\n- finish")
+    assert cr.is_curated(str(path)) is True
+
+
+def test_not_curated_for_the_hooks_own_fresh_write(tmp_path):
+    path = tmp_path / "checkpoint.md"
+    written = 1_000_000_000
+    _write_signed(str(path), "sess-ME", _stamp_for(written))
+    _touch_mtime(str(path), written + 59)  # minute-resolution stamp: the same write
+    assert cr.is_curated(str(path)) is False
+
+
+def test_curated_when_edited_after_the_hook_wrote_it(tmp_path):
+    path = tmp_path / "checkpoint.md"
+    written = 1_000_000_000
+    _write_signed(str(path), "sess-ME", _stamp_for(written))
+    _touch_mtime(str(path), written + 600)
+    assert cr.is_curated(str(path)) is True
+
+
+def test_curated_false_for_missing(tmp_path):
+    assert cr.is_curated(str(tmp_path / "nope.md")) is False
+
+
+def test_select_prefers_curated_own_file_over_fresher_extract(tmp_path):
+    """The writer diverted its extract beside a curated file; the reader must send the
+    resuming agent to the curated file and name the extract."""
+    now = 1_000_000.0
+    curated = tmp_path / "checkpoint.md"
+    extract = tmp_path / "checkpoint-autogen.md"
+    _write(str(curated), "sess-ME", "## Pending Tasks\n- finish")
+    _write_signed(str(extract), "sess-ME", _stamp_for(now - 60))
+    _touch_mtime(str(curated), now - 3600)
+    _touch_mtime(str(extract), now - 60)
+    sel = cr.select_for_read(str(tmp_path), "sess-ME", now=now)
+    assert sel["basename"] == "checkpoint.md"
+    assert sel["curated"] is True
+    assert sel["extract_sibling"] == "checkpoint-autogen.md"
+    msg = cr.resume_message(str(tmp_path), "sess-ME", now=now)
+    assert "`.claude/checkpoint.md` first" in msg
+    assert "checkpoint-autogen.md" in msg
+
+
+def test_select_newest_own_file_when_none_is_curated(tmp_path):
+    now = 1_000_000.0
+    older = tmp_path / "checkpoint.md"
+    newer = tmp_path / "checkpoint-autogen.md"
+    _write_signed(str(older), "sess-ME", _stamp_for(now - 7200))
+    _write_signed(str(newer), "sess-ME", _stamp_for(now - 60))
+    _touch_mtime(str(older), now - 7200)
+    _touch_mtime(str(newer), now - 60)
+    sel = cr.select_for_read(str(tmp_path), "sess-ME", now=now)
+    assert sel["basename"] == "checkpoint-autogen.md"
+    assert sel["curated"] is False
+    assert sel["extract_sibling"] is None
+
+
+def _run_writer(tmp_path, session):
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_text("")
+    home = tmp_path / "home"
+    (home / ".claude").mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(
+        {
+            "session_id": session,
+            "cwd": str(tmp_path / "proj"),
+            "transcript_path": str(transcript),
+            "trigger": "auto",
+        }
+    )
+    proc = subprocess.run(
+        [sys.executable, str(HOOK_DIR / "precompact-extract.py")],
+        input=payload,
+        text=True,
+        capture_output=True,
+        env={**os.environ, "HOME": str(home)},
+        timeout=60,
+    )
+    assert proc.returncode == 0, proc.stderr
+    return proc
+
+
+def test_writer_diverts_beside_a_curated_own_checkpoint(tmp_path):
+    """End to end: the PreCompact writer must not clobber the session's hand-written file."""
+    claude_dir = tmp_path / "proj" / ".claude"
+    claude_dir.mkdir(parents=True)
+    curated = claude_dir / "checkpoint.md"
+    _write(str(curated), "sess-ME", "## Pending Tasks\n- finish the thing")
+    before = curated.read_text()
+
+    _run_writer(tmp_path, "sess-ME")
+
+    assert curated.read_text() == before
+    extract = claude_dir / "checkpoint-autogen.md"
+    assert extract.is_file()
+    assert "Written by PreCompact hook at" in extract.read_text()
+    assert cr.is_curated(str(extract)) is False
+    sel = cr.select_for_read(str(claude_dir), "sess-ME")
+    assert sel["basename"] == "checkpoint.md"
+    assert sel["extract_sibling"] == "checkpoint-autogen.md"
+
+
+def test_writer_still_overwrites_its_own_signed_checkpoint(tmp_path):
+    """Negative control: the hook's own fresh, unedited file keeps the overwrite path."""
+    claude_dir = tmp_path / "proj" / ".claude"
+    claude_dir.mkdir(parents=True)
+    own = claude_dir / "checkpoint.md"
+    written = time.time() - 30
+    _write_signed(str(own), "sess-ME", _stamp_for(written), body="old extract")
+    _touch_mtime(str(own), written)
+
+    _run_writer(tmp_path, "sess-ME")
+
+    assert not (claude_dir / "checkpoint-autogen.md").exists()
+    text = own.read_text()
+    assert "Written by PreCompact hook at" in text
+    assert "old extract" not in text

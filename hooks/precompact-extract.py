@@ -277,10 +277,10 @@ def main():
 
         try:
             branch = git("rev-parse", "--abbrev-ref", "HEAD")
-            modified = [l for l in git("diff", "--name-only").split("\n") if l][:20]
-            staged = [l for l in git("diff", "--cached", "--name-only").split("\n") if l][:20]
+            modified = [line for line in git("diff", "--name-only").split("\n") if line][:20]
+            staged = [line for line in git("diff", "--cached", "--name-only").split("\n") if line][:20]
             untracked = [
-                l for l in git("ls-files", "--others", "--exclude-standard").split("\n") if l
+                line for line in git("ls-files", "--others", "--exclude-standard").split("\n") if line
             ][:10]
             recent_commits = git("log", "--oneline", "-5")
             diff_stat = git("diff", "--stat")
@@ -353,9 +353,10 @@ def main():
         # a live peer re-writes on every compaction, far inside the age floor.
         try:
             sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-            from checkpoint_resume import is_stale_remnant
+            from checkpoint_resume import is_curated, is_stale_remnant
         except Exception:
             is_stale_remnant = None
+            is_curated = None
         try:
             with open(checkpoint_path) as _f:
                 _m = re.search(r"<!-- session: (\S+) -->", _f.read(400))
@@ -363,6 +364,14 @@ def main():
                 remnant = is_stale_remnant(checkpoint_path, session) if is_stale_remnant else False
                 if not remnant:
                     checkpoint_path = os.path.join(checkpoint_dir, "checkpoint-autogen.md")
+            elif _m and session and is_curated is not None and is_curated(checkpoint_path):
+                # CURATED-CLOBBER GUARD (genomics 2026-09-07 02:31): the session's OWN
+                # checkpoint.md was hand-written (no hook signature, or edited after the
+                # stamped write) and carried a Pending Tasks list the transcript extract
+                # cannot reconstruct; the extract went over it and the resume lost the
+                # list. Divert beside it, exactly as for a curated tracked file; the
+                # reader (select_for_read) prefers the curated file and names the extract.
+                checkpoint_path = os.path.join(checkpoint_dir, "checkpoint-autogen.md")
         except (OSError, FileNotFoundError):
             pass
 

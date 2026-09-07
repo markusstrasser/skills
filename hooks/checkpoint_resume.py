@@ -40,6 +40,13 @@ import time
 # human-authored and must never be auto-selected or reclaimed.
 PAIR = ("checkpoint.md", "checkpoint-autogen.md")
 _SESSION_RE = re.compile(rb"<!-- session: (\S+) -->")
+# The writer signs every file it writes; the signature is the ownership marker.
+_HOOK_SIGNATURE_RE = re.compile(
+    rb"Written by PreCompact hook at (\d{4}-\d{2}-\d{2} \d{2}:\d{2})\."
+)
+# The stamp has minute resolution, so the hook's own write lands < 60 s after it; an
+# mtime further past the stamp than this is a hand edit after the hook wrote the file.
+CURATED_EDIT_GRACE_S = 180.0
 
 # A live concurrent peer re-writes its checkpoint on every compaction; only a
 # dead session leaves one older than this. Reclaim past the floor, protect within.
@@ -55,6 +62,34 @@ def read_session_stamp(path):
         return None
     match = _SESSION_RE.search(head)
     return match.group(1).decode("utf-8", "replace") if match else None
+
+
+def is_curated(path):
+    """True iff `path` is a hand-curated resume checkpoint the writer must not clobber.
+
+    A checkpoint without the writer's signature line was written by hand; one whose
+    mtime sits more than CURATED_EDIT_GRACE_S past the stamped write time was edited by
+    hand after the hook wrote it (an agent updating Pending Tasks in place). Either way
+    the transcript extract cannot reconstruct it: genomics 2026-09-07 02:31 lost a
+    hand-written Pending Tasks list to the extract, whose "Working Summary" was an
+    older block. Missing or unreadable files are not curated.
+    """
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(400)
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return False
+    match = _HOOK_SIGNATURE_RE.search(head)
+    if not match:
+        return True
+    try:
+        stamped = time.mktime(
+            time.strptime(match.group(1).decode("ascii"), "%Y-%m-%d %H:%M")
+        )
+    except (ValueError, OverflowError):
+        return True
+    return (mtime - stamped) > CURATED_EDIT_GRACE_S
 
 
 def _candidates(claude_dir):
@@ -73,6 +108,7 @@ def _candidates(claude_dir):
                 "basename": name,
                 "session": read_session_stamp(path),
                 "mtime": mtime,
+                "curated": is_curated(path),
             }
         )
     return found
@@ -83,6 +119,8 @@ def select_for_read(claude_dir, current_session, now=None):
 
     Preference order:
       1. a file stamped with `current_session` (this session's own fresh write),
+         a hand-curated one first — the writer diverts its transcript extract
+         beside a curated file precisely so the curated Pending Tasks survive,
       2. the newest file by mtime.
     Returned dict carries provenance so the reader can warn when the chosen file
     is NOT the resuming session's (a handoff/possibly-stale doc).
@@ -93,7 +131,13 @@ def select_for_read(claude_dir, current_session, now=None):
         return None
     own = [c for c in cands if current_session and c["session"] == current_session]
     pool = own if own else cands
-    chosen = max(pool, key=lambda c: c["mtime"])
+    curated = [c for c in pool if c["curated"]] if own else []
+    chosen = max(curated or pool, key=lambda c: c["mtime"])
+    extract_siblings = (
+        [c for c in own if c is not chosen and not c["curated"]]
+        if chosen["curated"]
+        else []
+    )
     age_hours = max(0.0, (now - chosen["mtime"]) / 3600.0)
     is_current = bool(current_session and chosen["session"] == current_session)
     return {
@@ -103,6 +147,10 @@ def select_for_read(claude_dir, current_session, now=None):
         "mtime": chosen["mtime"],
         "age_hours": round(age_hours, 1),
         "is_current": is_current,
+        "curated": bool(chosen["curated"]),
+        "extract_sibling": extract_siblings[0]["basename"]
+        if extract_siblings
+        else None,
         "sibling_count": len(cands) - 1,
     }
 
@@ -119,7 +167,14 @@ def resume_message(claude_dir, current_session, now=None):
     base = sel["basename"]
     age = sel["age_hours"]
     if sel["is_current"]:
-        msg = " Read `.claude/%s` first (this session's fresh resume checkpoint)." % base
+        msg = (
+            " Read `.claude/%s` first (this session's fresh resume checkpoint)." % base
+        )
+        if sel["curated"] and sel["extract_sibling"]:
+            msg += (
+                " It is hand-curated; the hook's transcript extract sits beside it in"
+                " `.claude/%s`." % sel["extract_sibling"]
+            )
         if age > 18:
             msg += (
                 " It is %.1fh old — verify its 'done' claims against `git log --oneline -15`"
