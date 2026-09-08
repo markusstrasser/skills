@@ -11,7 +11,22 @@ Start from the question, choose the truth surface, then reason about failure mod
 Shared status contract:
 `references/status-reconciliation.md`
 
-## Baseline: Modal 1.5.2, parity required
+## Current genomics baseline: Modal 1.5.5, parity required
+
+**2026-09-08 correction:** genomics requires `modal[api-proxy-support]>=1.5.5,<1.6`
+and locks 1.5.5. Align the shell-global CLI with
+`uv tool install 'modal[api-proxy-support]==1.5.5' --force`, then run the parity
+checks below. Preserve the proxy extra. This supersedes the 1.5.2 genomics pin
+and installation example in the historical baseline below.
+
+The supported update repairs `ModalChannel._connected`: a closing Connection is
+unusable even before its handler receives connection-lost notification. Real
+library controls fail on 1.5.2 and pass on 1.5.5. Prefer that fix to custom client
+renewal; `_Client._close` can still clear another cached client. This host SDK
+change leaves the declared genomics toolchain identities unchanged. It does not
+establish a fix for Volume block-HTTP 404s or replace live rehearsal evidence.
+
+## Historical 1.5.2 baseline (genomics pin superseded above)
 
 **Shell-global CLI** is a `uv tool` install (`~/.local/bin/modal` →
 `uv tool install 'modal==1.5.2'`). That is what **arc-agi** uses: it does
