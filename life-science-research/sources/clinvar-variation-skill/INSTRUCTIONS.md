@@ -15,7 +15,8 @@ description: Submit compact ClinVar Clinical Tables and NCBI Variation requests 
 - Return concise markdown summaries from the script JSON by default.
 - Return the JSON verbatim only if the user explicitly asks for machine-readable output.
 - Use `action=search` for the Clinical Tables endpoint.
-- Use `action=vcv|rcv|scv|refsnp` for NCBI Variation beta objects.
+- Use `action=vcv|rcv|scv` for NCBI Variation beta ClinVar objects.
+- Use `action=refsnp` for the current NCBI RefSNP route, `/variation/v0/refsnp/{id}`.
 
 ## Input
 - Read one JSON object from stdin.

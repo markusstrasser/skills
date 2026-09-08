@@ -18,6 +18,7 @@ else:
 
 CLINICAL_TABLES_URL = "https://clinicaltables.nlm.nih.gov/api/variants/v4/search"
 VARIATION_BASE = "https://api.ncbi.nlm.nih.gov/variation/v0/beta"
+REFSNP_BASE = "https://api.ncbi.nlm.nih.gov/variation/v0/refsnp"
 
 
 def error(code: str, message: str, warnings: list[str] | None = None) -> dict[str, Any]:
@@ -154,7 +155,7 @@ def execute(payload: Any) -> dict[str, Any]:
             path = f"{VARIATION_BASE}/clinvar/scv/{str(identifier).strip()}"
         else:
             digits = str(identifier).strip().lstrip("rs").lstrip("RS")
-            path = f"{VARIATION_BASE}/refsnp/{digits}"
+            path = f"{REFSNP_BASE}/{digits}"
 
         response = requests.get(path, timeout=config["timeout_sec"])
         response.raise_for_status()
