@@ -73,6 +73,15 @@ and taste. Retain the existing swap recipe until those comparisons justify remov
 Use returned token usage for cost; old per-image prices below are historical.
 Probe the Images endpoint itself: model-list/retrieve can lag working edit access.
 
+**Trial outcome, 2026-09-09:** Markus rejected all four direct Sunburst candidates:
+"they suck and the face doesn't look much like me". The assistant's initial
+direct-first recommendation was withdrawn. Better texture/continuity did not
+establish likeness; do not promote zero-shot or remove identity enforcement from
+this evidence. The rejection is stored in the imagegen canonical verdicts and
+`generated/runs/20260909-comparison/README.md`. Revisit only with a distinct
+identity mechanism and a direct visual comparison, not aesthetic refinement of
+the same generated faces. This is a failed trial, not proof of a universal ceiling.
+
 ## THE core architecture — GPT Image 2 historical recipe
 
 **Identity is IMPOSED, never GENERATED.** gpt-image-2 (and every diffusion model)
