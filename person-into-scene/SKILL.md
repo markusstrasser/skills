@@ -58,7 +58,22 @@ the memo's prediction didn't survive measurement). Override per profile/shot YAM
 Nano Banana Pro as generator, DreamID / BFS diffusion head-swap (probed via
 `scripts/modal/bfs_head_swap_probe.py`).
 
-## THE core architecture — read first (it's why this works)
+## GPT Image 2.5 update (2026-09-09; supersedes the model ceiling below)
+
+The engine defaults to `gpt-image-2.5-sunburst`; select `gpt-image-2.5-flare` for
+an explicit faster-model comparison. Both accept low/medium/high/xhigh/max/auto.
+See [official capabilities](https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst).
+The prior mandatory-swap guidance below describes measured GPT Image 2 behavior,
+not evidence about 2.5. When evaluating a new model, first use the real references
+and a short direct prompt, without swap, restoration, feathering, or finishing.
+Scene CLI `--prompt` and MCP `image_generate(prompt=...)` expose this path.
+Keep every raw output, inspect it, and compare with prior exact files; do not
+infer success from a model announcement or scores alone. Markus decides likeness
+and taste. Retain the existing swap recipe until those comparisons justify removal.
+Use returned token usage for cost; old per-image prices below are historical.
+Probe the Images endpoint itself: model-list/retrieve can lag working edit access.
+
+## THE core architecture — GPT Image 2 historical recipe
 
 **Identity is IMPOSED, never GENERATED.** gpt-image-2 (and every diffusion model)
 *cannot* reproduce a specific real face from references — it averages refs into a
