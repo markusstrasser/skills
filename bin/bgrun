@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bgrun — reaper-proof background dispatch with a done-marker contract.
+# bgrun — process-group-isolated background dispatch with a done-marker contract.
 #
 #   bgrun <name> -- <command ...>
 #
@@ -7,25 +7,112 @@
 # output to <dir>/<name>.log (never pipe background output through tail/grep —
 # buffering swallows it on kill). Writes <dir>/<name>.pid at launch and
 # <dir>/<name>.done containing the exit code at completion. Prints the paths
-# and a ready-to-paste watch loop.
+# and a liveness-aware `bgrun --wait <name>` command.
 #
 # Dir: $BGRUN_DIR if set, else ${TMPDIR:-/tmp}/bgrun. Existing markers for the
-# same name are cleared at launch.
+# same name are cleared at launch only after a prior live job is ruled out.
+# Evidence: 2026-09-13 Codex exec cleanup reaped an audit and its supervisor in
+# the tool's process group. `set -m` (already used by bin/lane) survived the same
+# native marker probe; nohup/disown alone only protect against shell hangup.
 set -euo pipefail
 
-if [ "$#" -lt 3 ] || [ "$2" != "--" ]; then
-  echo "usage: bgrun <name> -- <command ...>" >&2
+wait_mode=false
+if [ "$#" = 2 ] && [ "$1" = "--wait" ]; then
+  wait_mode=true
+  name="$2"
+elif [ "$#" -ge 3 ] && [ "$2" = "--" ]; then
+  name="$1"; shift 2
+else
+  echo "usage: bgrun <name> -- <command ...> | bgrun --wait <name>" >&2
   exit 2
 fi
-name="$1"; shift 2
-case "$name" in (*/*|*" "*) echo "bgrun: name must be a plain token" >&2; exit 2;; esac
+case "$name" in (""|*/*|*[[:space:]]*) echo "bgrun: name must be a plain token" >&2; exit 2;; esac
 
 dir="${BGRUN_DIR:-${TMPDIR:-/tmp}/bgrun}"
 mkdir -p "$dir"
 log="$dir/$name.log"; done_marker="$dir/$name.done"; pid_file="$dir/$name.pid"
+started_file="$dir/$name.started"
+launch_lock="$dir/$name.launch-lock"
+
+take_lock() {
+  # Native lockf locks this inherited descriptor, not the pathname's existence.
+  # Retain the file: unlink/recreate would let callers lock different inodes.
+  exec 9>"$launch_lock"
+  if ! /usr/bin/lockf -s -t "$1" 9; then
+    exec 9>&-
+    echo "bgrun: another operation owns $launch_lock" >&2
+    return 125
+  fi
+}
+release_lock() { exec 9>&-; }
+
+started_identity() { TZ=UTC LC_ALL=C ps -p "$1" -o lstart= 2>/dev/null; }
+job_group_alive() {
+  case "$1" in (""|*[!0-9]*) return 1;; esac
+  [ "$1" -gt 1 ] && kill -0 -- "-$1" 2>/dev/null
+}
+supervisor_alive() {
+  local pid="$1" expected="$2" state
+  case "$pid" in (""|*[!0-9]*) return 1;; esac
+  [ "$pid" -gt 1 ] && kill -0 "$pid" 2>/dev/null || return 1
+  state=$(ps -p "$pid" -o stat= 2>/dev/null) || return 1
+  case "$state" in (*Z*|"") return 1;; esac
+  [ -z "$expected" ] || [ "$(started_identity "$pid")" = "$expected" ]
+}
+
+if [ "$wait_mode" = true ]; then
+  take_lock 1 || exit 125
+  [ -f "$pid_file" ] || { echo "bgrun: missing supervisor identity for $name" >&2; exit 125; }
+  expected_pid=$(<"$pid_file")
+  expected_started=""
+  [ ! -f "$started_file" ] || expected_started=$(<"$started_file")
+  release_lock
+  if [ -z "$expected_started" ] && [ ! -f "$done_marker" ]; then
+    echo "bgrun: [DEGRADED] $name has no start identity; checking its recorded PID only" >&2
+  fi
+  while :; do
+    # Launch and receipt consumption share a kernel lock, so a replacement job
+    # cannot change identity/receipt between the check and the read.
+    take_lock 1 || exit 125
+    # A same-name relaunch is a different job, even if a new marker arrives.
+    current_pid=""; current_started=""
+    [ ! -f "$pid_file" ] || current_pid=$(<"$pid_file")
+    [ ! -f "$started_file" ] || current_started=$(<"$started_file")
+    if [ "$current_pid" != "$expected_pid" ] || [ "$current_started" != "$expected_started" ]; then
+      echo "bgrun: $name supervisor identity changed while waiting" >&2; exit 125
+    fi
+    if [ -f "$done_marker" ]; then
+      rc=$(<"$done_marker")
+      case "$rc" in (""|*[!0-9]*) echo "bgrun: invalid completion marker for $name" >&2; exit 125;; esac
+      [ "$rc" -le 255 ] || { echo "bgrun: invalid completion status for $name" >&2; exit 125; }
+      echo "bgrun: $name rc=$rc log=$log"
+      exit "$rc"
+    fi
+    if ! supervisor_alive "$expected_pid" "$expected_started"; then
+      # Publication precedes supervisor exit; recheck the atomic marker once.
+      if [ -f "$done_marker" ]; then release_lock; continue; fi
+      echo "bgrun: $name supervisor $expected_pid died without completion; inspect $log and $log.tmp" >&2
+      exit 125
+    fi
+    release_lock
+    sleep 1
+  done
+fi
+
+# Serialize same-name launches through PID/start publication. A live predecessor
+# keeps every marker/log byte; do not use broad process-name matching or kills.
+take_lock 0 || exit 125
+if [ -f "$pid_file" ]; then
+  previous_pid=$(<"$pid_file")
+  previous_started=""
+  [ ! -f "$started_file" ] || previous_started=$(<"$started_file")
+  if supervisor_alive "$previous_pid" "$previous_started" || job_group_alive "$previous_pid"; then
+    echo "bgrun: $name is already running as supervisor/group $previous_pid" >&2; exit 125
+  fi
+fi
 # Truncate the log too: appending across same-name runs made a STALE error read
 # as the current run's outcome (genomics kernel live-proof loop, 2026-08-11).
-rm -f "$done_marker" "$pid_file" "$log"
+rm -f "$done_marker" "$pid_file" "$started_file" "$log" "$log.tmp"
 # Relative paths and `just` recipes resolve against the caller's cwd. A session whose shell
 # had drifted into a lane worktree launched `just prune-source-epochs` there: it rebuilt that
 # worktree's venv and pruned nothing (genomics, 2026-09-01). Record the cwd in the log header
@@ -36,18 +123,31 @@ case "$PWD" in
 esac
 printf 'bgrun: cwd=%s\n' "$PWD" > "$log"
 
+# Match bin/lane: noninteractive in-script job control creates a separate group.
+# `bash -m` at startup cannot enable it in Codex's non-TTY exec environment.
+set -m
 nohup env PYTHONUNBUFFERED=1 bash -c '
   caffeinate -i "$@" > "$0.log.tmp" 2>&1  # caffeinate: idle-sleep killed an unattended 14-min audit overnight (genomics 2026-09-01)
   rc=$?
   cat "$0.log.tmp" >> "$0.log" 2>/dev/null || true
   rm -f "$0.log.tmp"
-  echo "$rc" > "$0.done"
-' "$dir/$name" "$@" >/dev/null 2>&1 &
+  printf "%s\n" "$rc" > "$0.done.tmp.$$"
+  mv "$0.done.tmp.$$" "$0.done"
+' "$dir/$name" "$@" 9>&- </dev/null >/dev/null 2>&1 &
 launch_pid=$!
+set +m
 disown "$launch_pid" 2>/dev/null || true
 echo "$launch_pid" > "$pid_file"
+launch_started=$(started_identity "$launch_pid" || true)
+if [ -n "$launch_started" ]; then printf '%s\n' "$launch_started" > "$started_file"; fi
+if [ ! -f "$done_marker" ]; then
+  if ! job_group_alive "$launch_pid" || ! supervisor_alive "$launch_pid" "$launch_started"; then
+    [ -f "$done_marker" ] || { echo "bgrun: supervisor $launch_pid failed process-group isolation or exited before completion" >&2; exit 125; }
+  fi
+fi
+release_lock
 
 echo "bgrun: $name pid=$launch_pid cwd=$PWD"
 echo "  log:  $log"
 echo "  done: $done_marker (contains exit code)"
-echo "  watch: until [ -f $done_marker ]; do sleep 15; done; echo \"$name rc=\$(cat $done_marker) tail=\$(tail -1 $log)\""
+printf '  watch: BGRUN_DIR=%q %q --wait %q\n' "$dir" "${BASH_SOURCE[0]}" "$name"
