@@ -1,6 +1,6 @@
 ---
 name: analyze
-description: "Use when: why/root-cause, confounder, regression, ACH, DAG adjustment, weakest-link. Lenses: null, causal, dag, hypotheses, audit, stop. NOT ideation (/brainstorm)."
+description: "Use when: why/root-cause, confounder, regression, ACH, DAG adjustment, weakest-link, official/administrative statistic. Lenses: null, causal, dag, hypotheses, audit, pipeline, stop. NOT ideation (/brainstorm)."
 user-invocable: true
 argument-hint: "[lens] [question or target]"
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit]
@@ -30,6 +30,7 @@ Project workflows decide:
 | weakest-link-audit | A causal story sounds plausible but may have one unsupported link | `lenses/weakest-link-audit.md` |
 | spirit-audit | A work-product is judged against a contract (eval verdict, backtest, gate, benchmark, claim) and may be letter-true but spirit-false (gaming, invalid gold, errors-scored-as-results, confounds, leakage) | `lenses/spirit-audit.md` |
 | proxy-validity | Estimating a latent quantity (ability, credibility, capability) from observable proxies, or applying a proposed bias-discount to such an estimate | `lenses/proxy-validity.md` |
+| measurement-pipeline | The object is a published statistic built from administrative or survey records (crime, deaths, cases, unemployment, incidents, migration, inequality) and may not be the quantity it names; run before any cross-group, cross-place or cross-year comparison | `lenses/measurement-pipeline.md` |
 | decision-impact-stop | Analysis may not change any action | `lenses/decision-impact-stop.md` |
 
 Detailed reference files remain under `references/` for DAG algorithms,
@@ -39,7 +40,8 @@ Adjunct: when the object under analysis is a published quantitative claim (a hea
 
 ## Mode Recommendation
 
-1. Define the observation precisely.
+1. Define the observation precisely. If it is a published administrative or survey
+   statistic, run measurement-pipeline first: the number may not be the quantity it names.
 2. Run null/base-rate before causal story generation.
 3. If residual remains:
    - shape-matched "why" question -> causal attribution
