@@ -14,7 +14,7 @@ Branch on these, don't parse stderr:
 | 3 | Rate limit / service-unavailable (429/503/overload, transient) | **llmx now AUTO-RETRIES these** (backoff+jitter, `LLMX_MAX_RETRIES` default 4; llmx@0e24d5c) — exit 3 means retries were already EXHAUSTED. Don't add your own retry loop; raise `LLMX_MAX_RETRIES` or wait. |
 | 4 | Timeout | Set `--timeout` explicitly (1800-3600 for xhigh; default 300s, auto-scaled to 600/1200 for high/xhigh as a net; ceiling 3600s), or add `--stream` |
 | 5 | Model error (context too large, bad params) | Fix request |
-| 6 | **Quota/billing exhausted** (permanent) | Top up billing. NOT transient — retries won't help |
+| 6 | **Quota exhausted**: billing, or a subscription plan limit such as codex-cli's "You've hit your usage limit ... try again at 4:21 PM" (llmx@9a3deae) | Not retryable. Billing needs a top-up; a plan limit resets at the time in the message, so switch lanes or wait, never loop |
 
 ## Structured Diagnostics (stderr, JSON)
 
@@ -36,7 +36,7 @@ Exists but **not recommended**. Silent model switching masks failures. If you as
 ## Session-Level Fallback Rules
 
 - **Gemini 503/rate-limit:** llmx now auto-retries (backoff+jitter) BEFORE surfacing exit 3, so a surfaced 503 already exhausted `LLMX_MAX_RETRIES` attempts — a *manual* retry of the same model is still pointless. If exit 3 persists across calls (sustained outage, not a blip), switch to GPT/Flash for the rest of the session or raise `LLMX_MAX_RETRIES`. (Pre-auto-retry, this rule was "switch after the FIRST 503" — 4 incidents of 4-6 wasted manual retries; auto-retry absorbs the blips now.)
-- Exit 6 (billing) is permanent — never retry; exit 3 is transient (and auto-retried).
+- Exit 6 (billing or plan usage limit) is not retryable: read the message for a reset time and never loop; exit 3 is transient (and auto-retried).
 
 ## Cost / Usage Diagnostics
 

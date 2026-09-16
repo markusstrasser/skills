@@ -82,7 +82,7 @@ llmx chat --subscription -m claude-opus-5 -e low \
    at least 1800s and max effort to 3600s, but an explicit 1800–3600s bound remains clearer in scripts
 6. **Context files** — repeatable `-f a.md -f b.md` concatenates with `=== File: path ===` boundaries (fixed; do not pre-merge unless you want a custom layout). Library: `llmx.api.dispatch(..., context_paths=[...])`.
 7. **Gemini = paid API** since 2026-05-31; add `--flex` for 50% off non-interactive dispatch
-8. **Exit 6 = billing exhausted (permanent)**; exit 3 = rate limit (retry/backoff)
+8. **Exit 6 = billing or plan usage limit exhausted** (not retryable; a plan limit's message carries its reset time); exit 3 = rate limit (retry/backoff)
 
 ## When llmx Fails
 

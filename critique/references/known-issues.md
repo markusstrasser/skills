@@ -84,3 +84,5 @@
   the existing gate contract rather than routing a blocked manifest into the model.
 
 - **[2026-09-05] Manifest validation crashed when --manifest used a relative path, including diagnostic output for external files. The CLI now resolves paths and renders external locations safely; subprocess regressions cover success and invalid JSON.**
+
+- **[2026-09-16] GPT axes reported empty_output with codex exit 1 and a banner-only error: that was a ChatGPT subscription usage limit hidden by llmx keeping the head of codex stderr. Fixed in llmx@9a3deae (ERROR lines surface; plan limits exit 6 as quota). If a GPT axis fails in seconds, run one tiny llmx call and read the exit code before re-dispatching.**
