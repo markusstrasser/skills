@@ -41,7 +41,7 @@ Read only the references needed for the current question:
 - **Find a source:** use a known primary source directly; for discovery, prefer Exa then Brave when available. Academic metadata uses `search_papers`; database facts use the database. [Tool routing](references/tool-routing.md) covers tool choices and retrieval recovery. Inspect the current tool schema before relying on a remembered name or argument.
 - **Clinical or biological evidence synthesis:** [shared epistemics](../references/epistemics/SKILL.md). **Investigation / OSINT:** [shared source grading](../references/source-grading/SKILL.md); Admiralty grades replace duplicate provenance tags.
 - **Domain-specific pitfalls:** read the applicable section of [DOMAINS.md](DOMAINS.md).
-- **Writing a reusable memo:** [output formats and provenance](references/memo-output.md). For numbers doing argumentative work, use the [quantitative construction checklist](references/quant-bias-checklist.md).
+- **Writing a reusable memo:** [output formats and provenance](references/memo-output.md). For numbers doing argumentative work, use the [quantitative bias checklist](references/quant-bias-checklist.md): construction items 1–33, plus section I when an institution produced the number.
 - **"What is missing?" / novelty / missed discovery:** [gap audits](references/gap-audits.md).
 - **A dead route, broken pointer, or other skill defect:** [known issues](references/known-issues.md), the append-only history. Log a new issue with `~/Projects/skills/hooks/append-skill-memento.sh research '<one-line issue>'`; the helper writes to that reference.
 

@@ -36,7 +36,7 @@ Project workflows decide:
 Detailed reference files remain under `references/` for DAG algorithms,
 templates, worked examples, and ACH formats.
 
-Adjunct: when the object under analysis is a published quantitative claim (a headline number, %, ranking, or model output), also run the construction checks — ledger, unit, base, window, gross/net, measurement-vs-model — from the research skill's `references/quant-bias-checklist.md` (32 items, historical anchors).
+Adjunct: when the object under analysis is a published quantitative claim (a headline number, %, ranking, or model output), also run the construction checks — ledger, unit, base, window, gross/net, measurement-vs-model — from the research skill's `references/quant-bias-checklist.md` (items 1–33). When an institution produced the number (agency, court filing, journal, commissioned report) or the claim is about consensus or trust, also run its section I (items 34–52).
 
 ## Mode Recommendation
 
