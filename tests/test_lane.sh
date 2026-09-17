@@ -158,6 +158,8 @@ expected_codex=$(printf '%s\n' \
   gpt-5.6-sol \
   -s \
   workspace-write \
+  --add-dir \
+  "$HOME/.cache/uv" \
   --skip-git-repo-check \
   "Do the task in $BRIEF_REAL.")
 assert_eq "$expected_codex" "$(<"$LANE_CAPTURE/codex.args")" "codex arguments"
@@ -177,7 +179,7 @@ export ANTHROPIC_API_KEY="must-be-removed"
 "$LANE" run claudeargs --repo "$REPO" --brief "$BRIEF" --worker claude --no-worktree >/dev/null
 wait_for_file "$LANE_HOME/claudeargs.done"
 unset ANTHROPIC_API_KEY
-expected_claude=$(printf '%s\n' -p --model claude-opus-4-8 "Do the fake task.")
+expected_claude=$(printf '%s\n' -p --model claude-opus-4-8 --output-format stream-json --verbose "Do the fake task.")
 assert_eq "$expected_claude" "$(<"$LANE_CAPTURE/claude.args")" "claude arguments"
 assert_eq "$REPO_REAL" "$(<"$LANE_CAPTURE/claude.cwd")" "claude cwd"
 

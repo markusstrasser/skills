@@ -304,6 +304,23 @@ dirty_count() {
   echo "${count:-0}"
 }
 
+# Per-worktree bootstrap: run the repo's `.agents/prepare` (Delta/agent-skills
+# convention; `.claude/prepare` as a local override) inside a freshly created
+# worktree. Must be fast, idempotent and non-interactive — a lane never blocks on it.
+run_worktree_prepare() {
+  local repo="$1"
+  local worktree="$2"
+  local prep
+  for prep in "$repo/.claude/prepare" "$repo/.agents/prepare"; do
+    if [ -x "$prep" ]; then
+      echo "lane: prepare → $prep (in $worktree)" >&2
+      (cd "$worktree" && LANE_REPO="$repo" "$prep") >&2 || echo "lane: prepare exited $? — continuing" >&2
+      return 0
+    fi
+  done
+  return 0
+}
+
 ensure_worktree() {
   local name="$1"
   local repo="$2"
@@ -331,6 +348,7 @@ ensure_worktree() {
     else
       git -C "$repo" worktree add -b "$branch" "$worktree" "$base" >&2
     fi
+    run_worktree_prepare "$repo" "$worktree"
   fi
   printf '%s\t%s\n' "$worktree" "$branch"
 }
