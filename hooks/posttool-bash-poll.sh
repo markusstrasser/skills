@@ -22,7 +22,12 @@ PATH_TARGET=""
 while IFS= read -r _seg; do
   _seg=$(echo "$_seg" | sed 's/^ *//')
   echo "$_seg" | grep -qE '^(command +)?(wc|ls|head|tail|stat|cat|du)\b' || continue
-  _p=$(echo "$_seg" | grep -oE '(/[^ |;>&]+)' | head -1)
+  # The path token must START at a word boundary. The old `(/[^ |;>&]+)` took the
+  # first slash anywhere, so a RELATIVE path (`ls infra/immigration-fiscal/x`)
+  # yielded the suffix `/immigration-fiscal/x` and every distinct command under
+  # one tree collapsed onto one token ("Polled /immigration-fiscal 91x",
+  # immigration-research 2026-09-17/18: four blocks on distinct ls/cat/sed calls).
+  _p=$(echo "$_seg" | grep -oE "(^|[[:space:]\"'=(])/[^ |;>&\"']+" | head -1 | sed -E "s/^[[:space:]\"'=(]//")
   # A path that is the segment's REDIRECT TARGET is being written, not polled:
   # `cat >> /x/checkpoint.md <<'EOF'` is an append. 15 checkpoint appends in one
   # session (genomics 2026-08-27) tripped the counter as "Polled /checkpoint.md 15x".

@@ -26,6 +26,13 @@ if not cwd:
 if not os.path.isdir(os.path.join(cwd, ".git")):
     sys.exit(0)
 
+# Per-repo opt-out (2026-09-18). A repo whose convention is explicit path-scoped
+# commits marks .claude/no-auto-checkpoint; the hook then never commits, it only
+# surfaces (throttled, once per file per session). Evidence: immigration-research
+# 2026-09-17/18, nine [wip] checkpoints of half-edited memos and in-flight lane
+# files in one session, each superseded by the real commit minutes later.
+auto_commit_enabled = not os.path.exists(os.path.join(cwd, ".claude", "no-auto-checkpoint"))
+
 # Check for uncommitted changes (exclude gitignored files)
 try:
     staged = subprocess.run(
@@ -256,6 +263,12 @@ def _in_flight(path):
         return False
 in_flight = sorted(f for f in new_changes if _in_flight(f))
 new_changes = [f for f in new_changes if f not in in_flight]
+# Active subagents or peers on this checkout (the 900s window): no auto-commit
+# at all, surface only. The mtime heuristic cannot tell a settled file from a
+# lane between write bursts, and every frozen-stub incident on record happened
+# in exactly this state (2026-06-13, 2026-07-12, 2026-07-17, 2026-09-17).
+if _IN_FLIGHT_S == 900:
+    auto_commit_enabled = False
 
 # Automation-write ledger — the third writer class beyond own/peer sessions.
 # launchd jobs + generators (fm.py, digest/sensor writers) write tracked files
@@ -299,21 +312,62 @@ if automation_owned:
     new_changes = [f for f in new_changes if f not in automation_owned]
     contested = [f for f in contested if f not in automation_owned]
 
-# Contested-file advisory (computed once; reused by the empty-branch surface and the
-# success-branch note). Empty string when no file is in both ledgers.
+# Scratch and cache paths are never worth a surface line: lane caches, bytecode,
+# bgrun logs and markers. They should be gitignored; until they are, stay quiet.
+_NOISE_DIRS = ("_cache/", "__pycache__/")
+_NOISE_SUFFIXES = (".tmp", ".log.tmp", ".done", ".pyc")
+unattributable = [f for f in unattributable
+                  if not any(s in f for s in _NOISE_DIRS) and not f.endswith(_NOISE_SUFFIXES)]
+# While subagents or peers are active, unattributable files are by construction
+# in-flight lane output; they surface once the lanes are quiet (the seen-file is
+# not written for them here, so they are not lost).
+if _IN_FLIGHT_S == 900:
+    unattributable = []
+
+def _seen_path(sid, kind):
+    safe = re.sub(r"[^A-Za-z0-9_-]", "", sid or "nosession")[:64] or "nosession"
+    return os.path.join(os.path.expanduser("~"), ".claude", f"stop-{kind}-seen-{safe}.txt")
+
+def _fresh(sid, paths, kind):
+    # Once per file per session: the same list re-printed at every Stop is noise
+    # (immigration-research 2026-09-17/18: the same six contested files on eleven
+    # consecutive turn ends). Paths already surfaced under this kind are skipped.
+    if not paths:
+        return []
+    if not sid:
+        return paths
+    seen = set()
+    p = _seen_path(sid, kind)
+    try:
+        if os.path.isfile(p):
+            with open(p) as fh:
+                seen = {ln.strip() for ln in fh if ln.strip()}
+    except OSError:
+        pass
+    fresh = [x for x in paths if x not in seen]
+    if fresh:
+        try:
+            with open(p, "a") as fh:
+                for x in fresh:
+                    fh.write(x + "\n")
+        except OSError:
+            pass
+    return fresh
+
+# Contested-file advisory, throttled to files not yet surfaced this session.
 contested_note = ""
-if contested:
-    c = len(contested)
+contested_fresh = _fresh(session_id, contested, "contested")
+if contested_fresh:
+    c = len(contested_fresh)
     cplural = "s" if c != 1 else ""
-    cnames = ", ".join(contested[:6])
-    cmore = f" (+{len(contested) - 6} more)" if len(contested) > 6 else ""
+    cnames = ", ".join(contested_fresh[:6])
+    cmore = f" (+{len(contested_fresh) - 6} more)" if len(contested_fresh) > 6 else ""
     contested_note = (f" {c} contested file{cplural} (in BOTH this session and a peer ledger) were NOT "
                       f"auto-committed -- whole-file staging would sweep the peer hunks; commit your own "
                       f"hunks explicitly: {cnames}{cmore}.")
 
 def _unattrib_seen_path(sid):
-    safe = re.sub(r"[^A-Za-z0-9_-]", "", sid or "nosession")[:64] or "nosession"
-    return os.path.join(os.path.expanduser("~"), ".claude", f"stop-unattrib-seen-{safe}.txt")
+    return _seen_path(sid, "unattrib")
 
 def _fresh_unattributable(sid, paths):
     if not paths:
@@ -357,16 +411,25 @@ unattributable_fresh = _fresh_unattributable(session_id, unattributable)
 # keeps the "(N pre-existing/other-session excluded)" count from double-counting them.
 pre_existing = len(all_changes) - len(new_changes) - len(in_flight) - len(unattributable)
 
-if not new_changes:
+if not new_changes or not auto_commit_enabled:
     # Nothing this session SOLELY owns (contested files were excluded from auto-commit
-    # above). Two categories may still need a non-blocking surface:
-    #   (1) CONTESTED (in my ledger AND a peer ledger) -- partly mine, always surface.
+    # above), or auto-commit is off for this repo / while subagents run. Categories
+    # that may still need a non-blocking surface:
+    #   (0) OWN uncommitted work when auto-commit is off -- once per file per session.
+    #   (1) CONTESTED (in my ledger AND a peer ledger) -- partly mine, surface once.
     #   (2) UNATTRIBUTABLE subprocess output (in NO ledger) -- may be a peer script
     #       output; surface ONLY when no peer shares the checkout, else it is pure noise
     #       (4 firings on peer debug files, 85bd3604 2026-06-19; suppressed per d1907d3).
     # Files stay in the working tree + git status either way -- no data loss.
     parts = []
-    if contested:
+    if new_changes and not auto_commit_enabled:
+        own_fresh = _fresh(session_id, new_changes, "own")
+        if own_fresh:
+            o = len(own_fresh)
+            oplural = "s" if o != 1 else ""
+            why = "auto-checkpoint is off for this repo" if os.path.exists(os.path.join(cwd, ".claude", "no-auto-checkpoint")) else "subagents or peers are active on this checkout"
+            parts.append(f"{o} session file{oplural} uncommitted ({why}); commit explicitly when the work is done: " + ", ".join(own_fresh[:8]))
+    if contested_note:
         parts.append(contested_note.strip())
     if unattributable_fresh and _peer_count(cwd) < 1:
         u = len(unattributable_fresh)
