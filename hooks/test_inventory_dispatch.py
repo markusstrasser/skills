@@ -11,6 +11,7 @@ Run: python3 test_inventory_dispatch.py
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -20,9 +21,12 @@ HOOK = Path(__file__).resolve().parent / "pretool-inventory-dispatch.py"
 
 
 def run(envelope: dict) -> str:
+    # The hook logs every fire for ROI measurement; these fixtures ("attestation, outbox,
+    # verdict", "orchestrator, symphony") had been landing in the real log as skills-repo fires.
+    env = dict(os.environ, HOOK_TRIGGER_LOG=os.devnull)
     p = subprocess.run(
         [sys.executable, str(HOOK)],
-        input=json.dumps(envelope), capture_output=True, text=True, timeout=10,
+        input=json.dumps(envelope), capture_output=True, text=True, timeout=10, env=env,
     )
     assert p.returncode == 0, f"hook must always exit 0, got {p.returncode}: {p.stderr}"
     return p.stdout.strip()
@@ -129,6 +133,63 @@ def main() -> int:
             "tool_input": {"subagent_type": "researcher",
                            "description": "Survey worktree orchestrators prior art",
                            "prompt": "research worktree orchestrator tools"},
+        })))
+
+        # --- 2026-09-21 retune: 87 of 152 fires were keyed on directory names from paths.
+        # A repo whose memos all share its name as a prefix, like immigration-research.
+        topic_repo = make_repo(tmp, ["[analysis] Match fiscal benefits — preserve private tax offsets"],
+                               "immigration-research")
+        (topic_repo / "research").mkdir()
+        for stem in ("fiscal-impact", "crime-rates", "nlsy97-parent-linkage", "cultural-output",
+                     "detention-costs", "school-peers", "housing-rents", "wage-effects",
+                     "remittances", "naturalization", "enforcement-history", "visa-overstays"):
+            (topic_repo / "research" / f"immigration-{stem}.md").write_text("x")
+        brief = f"{topic_repo}/infra/immigration-fiscal/lane/BRIEF.md"
+
+        check("negative: directory names inside a path are not topic keywords", not fires(run({
+            "tool_name": "Agent", "cwd": str(topic_repo),
+            "tool_input": {"subagent_type": "researcher",
+                           "description": "Read the Misery of Diversity paper",
+                           "prompt": f"First read {brief} and follow it exactly. "
+                                     "Notes go to /private/tmp/claude-501/scratch/notes.md"},
+        })))
+        check("negative: a path containing 'research' is not research intent", not fires(run({
+            "tool_name": "Agent", "cwd": str(topic_repo),
+            "tool_input": {"subagent_type": "general-purpose",
+                           "description": "Guard test",
+                           "prompt": f"Make one Write call to {topic_repo}/scratch/private/x.json"},
+        })))
+        check("negative: reporting scaffolding words are not topic keywords", not fires(run({
+            "tool_name": "Agent", "cwd": str(topic_repo),
+            "tool_input": {"subagent_type": "Explore",
+                           "description": "Probe hook envelope",
+                           "prompt": "Make exactly one call. The parent reads a log, not your output."},
+        })))
+        check("negative: the repo's shared memo prefix selects nothing", not fires(run({
+            "tool_name": "Agent", "cwd": str(topic_repo),
+            "tool_input": {"subagent_type": "researcher",
+                           "description": "Investigate immigration court backlogs",
+                           "prompt": "research immigration judges and asylum grant rates"},
+        })))
+        check("positive: a distinctive memo keyword still fires in that repo", fires(run({
+            "tool_name": "Agent", "cwd": str(topic_repo),
+            "tool_input": {"subagent_type": "researcher",
+                           "description": "Investigate remittances to Mexico",
+                           "prompt": "research remittances outflows by origin"},
+        })))
+        # A brief under "<name>-research/infra/" is not a cited memo: the repo's name must not
+        # satisfy the "prompt already cites research/*.md" exemption.
+        check("positive: a repo named *-research does not silence the check", fires(run({
+            "tool_name": "Agent", "cwd": str(topic_repo),
+            "tool_input": {"subagent_type": "researcher",
+                           "description": "Investigate remittances to Mexico",
+                           "prompt": f"First read {brief}. Then research remittances outflows."},
+        })))
+        check("negative: a memo cited by path still means the inventory was done", not fires(run({
+            "tool_name": "Agent", "cwd": str(topic_repo),
+            "tool_input": {"subagent_type": "researcher",
+                           "description": "Investigate remittances to Mexico",
+                           "prompt": "Extend research/immigration-remittances.md with 2025 outflows."},
         })))
 
         # Fail-open: garbage stdin still exits 0 with no output.

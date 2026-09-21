@@ -72,7 +72,21 @@ STOP = {
     "validate", "validation", "structure", "structures", "generic", "general",
     "design", "designs", "pattern", "patterns", "feature", "features",
     "improve", "improvement", "improvements", "change", "changes",
+    # Dispatch scaffolding: how the subagent should report, not what it should study.
+    # "output" + "parent" alone listed two unrelated memos on 2026-09-21.
+    "output", "outputs", "parent", "parents", "reply", "replies", "return", "returns",
+    "exactly", "maximum", "minimum", "verbatim", "instruction", "instructions", "follow",
+    "first", "second", "third", "single", "other", "every", "calls", "turns", "prompt",
+    # Seen as the deciding keyword in a replay of 101 immigration-research dispatches.
+    "evidence", "directory", "download", "downloads", "constitution", "verification",
+    "verify", "specification", "protocol", "source", "sources", "primary", "quote", "quotes",
 }
+
+# A path names where to work, not what the topic is. Tokenized, this repo family's own
+# directory names were the top three keywords of 152 fires (2026-08-20 → 09-21:
+# iq-sex-differences 39, immigration-research 26, immigration-fiscal 22) and, by substring,
+# matched every memo in a repo whose memos all share the prefix.
+PATHLIKE = re.compile(r"\S*[/~]\S*")
 
 
 def _scan_knowledge_store(cwd: str, kw: list[str]) -> list[tuple[str, list[str]]]:
@@ -103,17 +117,23 @@ def _scan_knowledge_store(cwd: str, kw: list[str]) -> list[tuple[str, list[str]]
     except Exception:
         pass
 
+    names: list[str] = []
     for sub in ("research", "decisions"):
         d = base / sub
         try:
             if d.is_dir():
-                for f in d.glob("*.md"):
-                    nl = f.name.lower()
-                    hits = [k for k in strong if k in nl]
-                    if hits:
-                        refs.append((f"{sub}/{f.name}", hits))
+                names.extend(f"{sub}/{f.name}" for f in d.glob("*.md"))
         except Exception:
             pass
+    # A keyword carried by a quarter of all memo filenames is the repo's naming prefix
+    # ("immigration-…"), not a topic: it selects memos at random.
+    if len(names) >= 12:
+        strong = [k for k in strong
+                  if sum(k in n.lower() for n in names) <= len(names) // 4]
+    for name in names:
+        hits = [k for k in strong if k in name.lower()]
+        if hits:
+            refs.append((name, hits))
 
     seen: set[str] = set()
     out: list[tuple[str, list[str]]] = []
@@ -155,11 +175,15 @@ def main() -> None:
     # 245K-token fan-out through on 2026-06-13).
     if env.get("isolation") == "worktree" or ti.get("isolation") == "worktree":
         return
-    text = f"{desc}\n{prompt[:1000]}"
     # The dispatcher already did the inventory when the prompt cites memos by path or names an
     # already-known baseline; re-listing them is noise (fired on 6/6 such dispatches, 2026-09-05).
-    if re.search(r"\b(research|docs|decisions)/[\w.\-/]+\.md\b|already[- ]known|already established", prompt, re.I):
+    # The directory must be a path component of its own: with a bare \b, any .md file under a
+    # repo NAMED "*-research/" counted as a cited memo and silenced the check for that repo.
+    if re.search(r"(?<![\w-])(research|docs|decisions)/[\w.\-/]+\.md\b|already[- ]known|already established", prompt, re.I):
         return
+    # Intent and keywords come from the prose only. "/Users/x/immigration-research/…" in a
+    # prompt read as research intent and supplied the keyword "private" (from /private/tmp).
+    text = PATHLIKE.sub(" ", f"{desc}\n{prompt[:1000]}")
     research_intent = bool(re.search(
         r"\b(research|investigat|explor|survey|audit|literature|find (all|every|out)|"
         r"search for|look (through|into)|what(?:'s| is) known|prior art|"
@@ -175,7 +199,11 @@ def main() -> None:
         return
 
     # --- Distinctive topic keywords from the dispatch text.
+    # The repo's own name and its parts ("immigration", "differences") describe every memo and
+    # commit in it, so they discriminate nothing.
     seen: set[str] = set()
+    for part in Path(cwd).resolve().parts:
+        seen.update([part.lower(), *re.split(r"[-_]", part.lower())])
     kw: list[str] = []
     for t in re.findall(r"[a-z][a-z0-9_-]{4,}", text.lower()):
         if t in STOP or t in seen:
