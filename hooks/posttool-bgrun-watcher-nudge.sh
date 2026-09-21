@@ -16,7 +16,9 @@
 
 INPUT=$(cat)
 
-[ -n "$CLAUDE_AGENT_ID" ] && exit 0
+. "$(dirname "$0")/lib_hook_identity.sh" 2>/dev/null || exit 0
+hook_identity "$INPUT"
+[ -n "$HOOK_AGENT_ID" ] && exit 0
 
 CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
 case "$CMD" in

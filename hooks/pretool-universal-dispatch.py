@@ -28,6 +28,14 @@ import time
 HOME = os.path.expanduser("~")
 SKILLS_HOOKS = "/Users/alien/Projects/skills/hooks"
 
+_HOOK_DIR = os.path.dirname(os.path.abspath(__file__))
+if _HOOK_DIR not in sys.path:
+    sys.path.insert(0, _HOOK_DIR)
+try:
+    import lib_hook_identity as hook_identity
+except Exception:  # fail open: a broken checkout must not block every tool call
+    sys.exit(0)
+
 # State-dir override for hermetic testing only. Unset in production (default
 # "/tmp"), matching both originals' hardcoded /tmp/claude-*-$PPID paths
 # exactly — this env var does not exist in either original and changes
@@ -84,7 +92,7 @@ def field(tool_input, envelope, *keys):
 
 
 def agent_scope(envelope):
-    """Filename-safe id of the calling agent; "" for the main loop.
+    """Filename-safe id of the calling agent; "" for the main loop (lib_hook_identity).
 
     In-process subagents run inside the CLI process, so they share os.getppid() with the parent
     and with each other. Keyed on PPID alone, seven sibling readers of one shared BRIEF.md were
@@ -92,8 +100,7 @@ def agent_scope(envelope):
     in the preceding 14 days were BRIEF files). Every agent has its own context window, so every
     agent gets its own read history.
     """
-    agent = envelope.get("agent_id") or ""
-    return re.sub(r"[^A-Za-z0-9]", "", str(agent))[:32]
+    return hook_identity.agent_id(envelope)
 
 
 def probe_envelope(envelope, tool_name):
@@ -112,6 +119,7 @@ def probe_envelope(envelope, tool_name):
         "agent_type": envelope.get("agent_type"),
         "session_id": envelope.get("session_id"),
         "transcript": os.path.basename(str(envelope.get("transcript_path") or "")),
+        "env_names": sorted(k for k in os.environ if k.startswith("CLAUDE")),
     }
     with open(f"{flag}.log", "a") as f:
         f.write(json.dumps(record) + "\n")
@@ -333,7 +341,9 @@ def _log_trigger_cmd(hook: str, action: str, detail: str, cmd: str) -> None:
 
 
 def run_companion_remind(envelope, tool_name, tool_input):
-    session_id = os.environ.get("CLAUDE_SESSION_ID", "default")
+    # The hook environment never has CLAUDE_SESSION_ID, so this was "default" for every
+    # session on the machine and a "once per session" reminder fired once per reboot.
+    session_id = hook_identity.session_id(envelope) or "default"
     reminder_dir = f"{STATE_DIR}/companion-remind-{session_id}"
     counter_dir = os.path.join(reminder_dir, "counters")
     os.makedirs(reminder_dir, exist_ok=True)

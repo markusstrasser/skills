@@ -76,10 +76,12 @@ esac
 # extractor degrading to a coarser token than the polled leaf.
 [ -d "$PATH_TARGET" ] && exit 0
 
-# Scope tracker per session + fork context to avoid cross-subagent false positives
-# CLAUDE_AGENT_ID is set for subagents; fall back to PPID for main session
-_SCOPE="${CLAUDE_AGENT_ID:-${CLAUDE_SESSION_ID:-$PPID}}"
-TRACKER="/tmp/claude-bash-poll-tracker-${_SCOPE}"
+# Scope the tracker per calling agent to avoid cross-subagent false positives. The agent id
+# comes from the envelope; the CLAUDE_AGENT_ID / CLAUDE_SESSION_ID variables this line used to
+# read are never set for hook processes, so the scope was always the shared $PPID.
+. "$(dirname "$0")/lib_hook_identity.sh" 2>/dev/null || exit 0
+hook_identity "$INPUT"
+TRACKER="/tmp/claude-bash-poll-tracker-${HOOK_OWNER}"
 echo "$PATH_TARGET" >> "$TRACKER"
 
 COUNT=$(grep -cF "$PATH_TARGET" "$TRACKER" 2>/dev/null || echo 0)

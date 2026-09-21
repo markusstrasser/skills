@@ -10,11 +10,16 @@
 #
 # Testing: SEARCH_BURST_COUNTER=/tmp/test-burst bash pretool-search-burst.sh
 
-COUNTER_FILE="${SEARCH_BURST_COUNTER:-/tmp/claude-search-burst-${PPID:-0}}"
 WARN_THRESHOLD=10
 BLOCK_THRESHOLD=30
 
 INPUT=$(cat)
+
+# One counter per calling agent: parallel researcher subagents share the CLI's PID, so a
+# $PPID-only counter summed every sibling's searches and let any sibling's Read reset it.
+. "$(dirname "$0")/lib_hook_identity.sh" 2>/dev/null || exit 0
+hook_identity "$INPUT"
+COUNTER_FILE="${SEARCH_BURST_COUNTER:-/tmp/claude-search-burst-${HOOK_OWNER}}"
 
 # Extract tool name from PreToolUse input
 TOOL_NAME=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null || echo "")

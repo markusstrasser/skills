@@ -14,12 +14,15 @@
 INPUT=$(cat)
 
 # Subagents dispatch background work as part of THEIR task — never nag them.
-[ -n "$CLAUDE_AGENT_ID" ] && exit 0
+. "$(dirname "$0")/lib_hook_identity.sh" 2>/dev/null || exit 0
+hook_identity "$INPUT"
+[ -n "$HOOK_AGENT_ID" ] && exit 0
 
 BG=$(printf '%s' "$INPUT" | jq -r '.tool_input.run_in_background // false' 2>/dev/null)
 [ "$BG" != "true" ] && exit 0
 
-_SCOPE="${CLAUDE_SESSION_ID:-$PPID}"
+# PID-suffixed so reap_stale_trackers.py can prove the owner is gone.
+_SCOPE="$PPID"
 MARKER="/tmp/claude-bg-portfolio-nudge-${_SCOPE}"
 NOW=$(date +%s)
 if [ -f "$MARKER" ]; then

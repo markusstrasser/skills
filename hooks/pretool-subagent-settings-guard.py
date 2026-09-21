@@ -32,15 +32,21 @@ _SETTINGS_RE = re.compile(r"(^|/)\.claude/settings(\.local)?\.json$")
 
 
 def main() -> int:
-    if not os.environ.get("CLAUDE_AGENT_ID"):
-        return 0  # main session: not our concern
-
     try:
         envelope = json.load(sys.stdin)
     except Exception:
         return 0
     if not isinstance(envelope, dict):
         return 0
+
+    # A subagent is identified by the envelope's agent_id. This guard tested the
+    # CLAUDE_AGENT_ID environment variable until 2026-09-21; Claude Code never sets it for
+    # hook processes, so the guard could not fire outside its own tests.
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from lib_hook_identity import agent_id
+
+    if not (agent_id(envelope) or os.environ.get("CLAUDE_AGENT_ID")):
+        return 0  # main session: not our concern
 
     tool_input = envelope.get("tool_input")
     if not isinstance(tool_input, dict):

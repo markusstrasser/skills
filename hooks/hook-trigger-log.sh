@@ -32,9 +32,12 @@ if [ $# -ge 2 ]; then
     CMD="${4:-}"
     PROJECT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
     PROJECT=$(basename "$PROJECT")
-    # Read session ID from file (env var is never set by Claude Code)
-    SESSION="unknown"
+    # Hook processes inherit CLAUDE_CODE_SESSION_ID (probed 2026-09-21; CLAUDE_SESSION_ID is
+    # the one that is never set). The file is the fallback only: peer sessions in one checkout
+    # overwrite it, which credited their triggers to whichever session wrote last.
+    SESSION="${CLAUDE_CODE_SESSION_ID:-unknown}"
     for _sid_path in ".claude/current-session-id" "$HOME/.claude/current-session-id"; do
+        [ "$SESSION" != "unknown" ] && break
         if [ -f "$_sid_path" ]; then
             SESSION=$(cat "$_sid_path" 2>/dev/null | tr -d '[:space:]')
             [ -n "$SESSION" ] && break
@@ -79,9 +82,10 @@ if [ -n "$INPUT" ]; then
     TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     PROJECT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
     PROJECT=$(basename "$PROJECT")
-    # Read session ID from file
-    _SID="unknown"
+    # Session ID: the inherited variable first, the shared file as fallback (see above)
+    _SID="${CLAUDE_CODE_SESSION_ID:-unknown}"
     for _sp in ".claude/current-session-id" "$HOME/.claude/current-session-id"; do
+        [ "$_SID" != "unknown" ] && break
         if [ -f "$_sp" ]; then
             _SID=$(cat "$_sp" 2>/dev/null | tr -d '[:space:]')
             [ -n "$_SID" ] && break

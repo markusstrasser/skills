@@ -8,10 +8,15 @@ from pathlib import Path
 GUARD = str(Path(__file__).parent / "pretool-subagent-settings-guard.py")
 
 
-def run(envelope, agent_id: str | None = "a1b2c3", raw=None):
+def run(envelope, agent_id: str | None = "a12bfef463b73db2f", raw=None, env_agent_id=None):
+    """A subagent's call is marked the way Claude Code marks it: agent_id/agent_type in the
+    envelope (probed 2026-09-21). The hook environment never carries CLAUDE_AGENT_ID; these
+    tests set only that variable until then, so they passed while the live guard was dead."""
     env = {"PATH": "/usr/bin:/bin"}
-    if agent_id is not None:
-        env["CLAUDE_AGENT_ID"] = agent_id
+    if env_agent_id is not None:
+        env["CLAUDE_AGENT_ID"] = env_agent_id
+    if agent_id is not None and isinstance(envelope, dict):
+        envelope = dict(envelope, agent_id=agent_id, agent_type="general-purpose")
     data = raw if raw is not None else json.dumps(envelope)
     return subprocess.run(
         [sys.executable, GUARD], input=data, capture_output=True, text=True, env=env
@@ -36,6 +41,11 @@ def test_subagent_blocked_on_repo_settings_and_local():
 def test_main_session_never_blocked():
     p = run(_env("/Users/alien/.claude/settings.json"), agent_id=None)
     assert p.returncode == 0
+
+
+def test_environment_marker_alone_still_blocks():
+    p = run(_env("/Users/alien/.claude/settings.json"), agent_id=None, env_agent_id="a1b2c3")
+    assert p.returncode == 2
 
 
 def test_subagent_free_on_non_settings_paths():

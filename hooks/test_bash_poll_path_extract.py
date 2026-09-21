@@ -24,14 +24,14 @@ def check(label, ok):
 
 
 def run(cmd, scope):
-    env = dict(os.environ, CLAUDE_AGENT_ID=scope)
-    return subprocess.run([str(HOOK)], input=json.dumps({"tool_input": {"command": cmd}}),
-                          capture_output=True, text=True, env=env)
+    # The tracker is scoped by the envelope's agent_id (lib_hook_identity.sh), then this PID.
+    envelope = {"tool_input": {"command": cmd}, "agent_id": scope}
+    return subprocess.run([str(HOOK)], input=json.dumps(envelope), capture_output=True, text=True)
 
 
 def main():
-    scope = f"test-poll-{os.getpid()}"
-    tracker = Path(f"/tmp/claude-bash-poll-tracker-{scope}")
+    scope = "testpoll"
+    tracker = Path(f"/tmp/claude-bash-poll-tracker-{scope}-{os.getpid()}")
     tracker.unlink(missing_ok=True)
     try:
         # Sixteen distinct relative-path commands: no shared token, never blocked.

@@ -8,12 +8,16 @@
 
 trap 'exit 0' ERR
 
-# Use PPID (Claude Code process) for session-stable counter. Falls back to fixed name.
-COUNTER_FILE="/tmp/claude-bash-failure-count-${PPID:-0}"
-ERROR_FILE="/tmp/claude-bash-last-error-${PPID:-0}"
 THRESHOLD=5
 
 INPUT=$(cat)
+
+# One counter per calling agent (in-process subagents share the CLI's PID, so a $PPID-only
+# counter chained one sibling's failures onto another's and let any sibling's success reset it).
+. "$(dirname "$0")/lib_hook_identity.sh" 2>/dev/null || exit 0
+hook_identity "$INPUT"
+COUNTER_FILE="/tmp/claude-bash-failure-count-${HOOK_OWNER}"
+ERROR_FILE="/tmp/claude-bash-last-error-${HOOK_OWNER}"
 
 # Extract failure status and error details from tool output JSON
 RESULT=$(echo "$INPUT" | python3 -c "

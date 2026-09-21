@@ -20,6 +20,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 STATE_DIR="${CLAUDE_HOOK_STATE_DIR:-/tmp}"
 rm -f "$STATE_DIR/claude-reads-$PPID" "$STATE_DIR/claude-toolcount-$PPID" \
       "$STATE_DIR"/claude-reads-*-"$PPID" "$STATE_DIR"/claude-toolcount-*-"$PPID"
+# posttool-dup-read.sh keeps its own region tracker, which this reset used to miss.
+rm -f "/tmp/claude-read-tracker-$PPID" /tmp/claude-read-tracker-*-"$PPID"
 
 cat | python3 "$SCRIPT_DIR/precompact-extract.py"
 

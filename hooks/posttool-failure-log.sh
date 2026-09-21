@@ -84,7 +84,6 @@ else
 fi
 PROJECT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 PROJECT=$(basename "$PROJECT")
-SESSION="${CLAUDE_SESSION_ID:-unknown}"
 TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 

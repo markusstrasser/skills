@@ -17,15 +17,20 @@ if [ "${CORPUS_REMIND:-1}" = "0" ]; then
   exit 0
 fi
 
-# Session-scoped state — one reminder per identifier-prefix
-SESSION_ID="${CLAUDE_SESSION_ID:-default}"
+INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
+
+# Session-scoped state — one reminder per identifier-prefix. The session id comes from the
+# envelope: CLAUDE_SESSION_ID is never set for hook processes, so this was "default" for every
+# session on the machine and "once per session" meant once per reboot.
+. "$(dirname "$0")/lib_hook_identity.sh" 2>/dev/null || exit 0
+hook_identity "$INPUT"
+SESSION_ID="${HOOK_SESSION_ID:-default}"
 STATE_DIR="/tmp/corpus-remind-${SESSION_ID}"
 mkdir -p "$STATE_DIR" 2>/dev/null
 
 already_reminded() { [ -f "$STATE_DIR/$1" ]; }
 mark_reminded() { touch "$STATE_DIR/$1" 2>/dev/null; }
 
-INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
 TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // ""' 2>/dev/null || echo "")
 
 # Extract a likely paper identifier from the tool input. We accept:
