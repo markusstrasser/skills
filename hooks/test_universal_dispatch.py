@@ -254,6 +254,67 @@ def test_write_clears_prior_read_dedup_entries(tmp_path):
     assert codes == [0, 0, 0], codes
 
 
+def _agent_read(fpath, agent_id=None):
+    envelope = {"tool_name": "Read", "tool_input": {"file_path": fpath}}
+    if agent_id:
+        envelope.update({"agent_id": agent_id, "agent_type": "researcher"})
+    return envelope
+
+
+def test_sibling_agents_sharing_a_ppid_keep_separate_read_histories(tmp_path):
+    """2026-09-21: seven reader agents dispatched with one shared BRIEF.md. In-process subagents
+    share the CLI's PID, so the PPID-keyed tracker counted them as one reader: the second sibling
+    got DUPLICATE READ and the fifth was BLOCKED on its first read. Every dispatch below has the
+    same PPID (this test process), as in the incident."""
+    home, state = _isolated(tmp_path)
+    brief = "/tmp/shared_brief_for_siblings.md"
+    procs = [
+        run_dispatch(_agent_read(brief, f"a{n}2bfef463b73db2f"), home_dir=home, state_dir=state)
+        for n in range(7)
+    ]
+    procs.append(run_dispatch(_agent_read(brief), home_dir=home, state_dir=state))  # main loop
+    assert [p.returncode for p in procs] == [0] * 8
+    assert [p.stdout.strip() for p in procs] == [""] * 8
+    assert len(list(state.glob("claude-reads-*"))) == 8
+
+
+def test_one_agent_still_blocks_on_its_own_repeated_full_reads(tmp_path):
+    home, state = _isolated(tmp_path)
+    envelope = _agent_read("/tmp/agent_own_dup_target.py", "a12bfef463b73db2f")
+    procs = [run_dispatch(envelope, home_dir=home, state_dir=state) for _ in range(5)]
+    assert [p.returncode for p in procs] == [0, 0, 0, 0, 2]
+    assert "BLOCKED" in json.loads(procs[4].stdout)["additionalContext"]
+
+
+def test_agent_tracker_names_stay_reapable_and_inside_the_state_dir(tmp_path):
+    """reap_stale_trackers reads the owning PID from the filename suffix, and agent_id arrives
+    from the envelope, so it must not be able to steer the path."""
+    sys.path.insert(0, str(HOOKS_DIR))
+    from reap_stale_trackers import PID_SUFFIX
+
+    home, state = _isolated(tmp_path)
+    run_dispatch(_agent_read("/tmp/x.py", "../../evil/a-1"), home_dir=home, state_dir=state)
+    names = sorted(p.name for p in state.glob("claude-reads-*"))
+    assert names == [f"claude-reads-evila1-{os.getpid()}"], names
+    assert int(PID_SUFFIX.search(names[0]).group(1)) == os.getpid()
+    assert not (tmp_path / "evil").exists()
+
+
+def test_precompact_clears_every_tracker_of_its_own_process_only(tmp_path):
+    home, state = _isolated(tmp_path)
+    pid = os.getpid()  # the script's $PPID
+    own = [f"claude-reads-{pid}", f"claude-toolcount-{pid}",
+           f"claude-reads-a12bfef-{pid}", f"claude-toolcount-a12bfef-{pid}"]
+    foreign = [f"claude-reads-{pid}7", f"claude-reads-a12bfef-7{pid}", f"claude-tab-tool-{pid}"]
+    for name in own + foreign:
+        (state / name).write_text("x")
+    env = dict(os.environ, HOME=str(home), CLAUDE_HOOK_STATE_DIR=str(state))
+    proc = subprocess.run(["bash", str(HOOKS_DIR / "precompact-log.sh")], input="{}",
+                          capture_output=True, text=True, env=env, cwd=str(tmp_path))
+    assert proc.returncode == 0, proc.stderr
+    assert sorted(p.name for p in state.iterdir()) == sorted(foreign)
+
+
 def test_mcp_search_tool_triggers_research_reminder_at_third_call(tmp_path):
     home, state = _isolated(tmp_path)
     session = "test-session-search-burst"

@@ -13,9 +13,13 @@ trap 'exit 0' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Reset dup-read counter — post-compaction re-reads are legitimate
-rm -f "/tmp/claude-reads-$PPID"
-rm -f "/tmp/claude-toolcount-$PPID"
+# Reset dup-read counter — post-compaction re-reads are legitimate.
+# Subagent trackers are named claude-reads-<agent_id>-$PPID (pretool-universal-dispatch.py
+# agent_scope); the compacting agent is not identified here, so clear every tracker this CLI
+# process owns. Over-clearing only loosens an advisory guard.
+STATE_DIR="${CLAUDE_HOOK_STATE_DIR:-/tmp}"
+rm -f "$STATE_DIR/claude-reads-$PPID" "$STATE_DIR/claude-toolcount-$PPID" \
+      "$STATE_DIR"/claude-reads-*-"$PPID" "$STATE_DIR"/claude-toolcount-*-"$PPID"
 
 cat | python3 "$SCRIPT_DIR/precompact-extract.py"
 

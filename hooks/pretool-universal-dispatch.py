@@ -83,13 +83,47 @@ def field(tool_input, envelope, *keys):
     return ""
 
 
+def agent_scope(envelope):
+    """Filename-safe id of the calling agent; "" for the main loop.
+
+    In-process subagents run inside the CLI process, so they share os.getppid() with the parent
+    and with each other. Keyed on PPID alone, seven sibling readers of one shared BRIEF.md were
+    counted as one reader and blocked on their first read (2026-09-21; 12 of 25 dup-read blocks
+    in the preceding 14 days were BRIEF files). Every agent has its own context window, so every
+    agent gets its own read history.
+    """
+    agent = envelope.get("agent_id") or ""
+    return re.sub(r"[^A-Za-z0-9]", "", str(agent))[:32]
+
+
+def probe_envelope(envelope, tool_name):
+    """Opt-in input-contract probe: `touch $STATE_DIR/claude-hook-envelope-probe` records which
+    top-level fields Claude Code sends (names and ids only, never tool content) to
+    `claude-hook-envelope-probe.log`. Remove the flag file to stop."""
+    flag = f"{STATE_DIR}/claude-hook-envelope-probe"
+    if not os.path.exists(flag):
+        return
+    record = {
+        "ts": int(time.time()),
+        "tool": tool_name,
+        "ppid": os.getppid(),
+        "keys": sorted(envelope),
+        "agent_id": envelope.get("agent_id"),
+        "agent_type": envelope.get("agent_type"),
+        "session_id": envelope.get("session_id"),
+        "transcript": os.path.basename(str(envelope.get("transcript_path") or "")),
+    }
+    with open(f"{flag}.log", "a") as f:
+        f.write(json.dumps(record) + "\n")
+
+
 # ---------------------------------------------------------------------------
 # Part 1 — tab-title + duplicate-read tracking (tool-tracker.sh port)
 # ---------------------------------------------------------------------------
 
 
-def run_tab_and_dupread(tool_name, tool_input, ppid):
-    """Returns (warn_text_or_None, block_bool)."""
+def run_tab_and_dupread(tool_name, tool_input, ppid, scope=""):
+    """Returns (warn_text_or_None, block_bool). `scope` separates agents that share a PPID."""
     # --- action string (Ghostty tab title) ---
     if tool_name in ("Read", "Write", "Edit"):
         fp = tool_input.get("file_path") or ""
@@ -127,8 +161,10 @@ def run_tab_and_dupread(tool_name, tool_input, ppid):
             pass
 
     # --- duplicate-read detection ---
-    reads_file = f"{STATE_DIR}/claude-reads-{ppid}"
-    counter_file = f"{STATE_DIR}/claude-toolcount-{ppid}"
+    # The PID stays last: reap_stale_trackers.py reads the owning PID from the filename suffix.
+    owner = f"{scope}-{ppid}" if scope else str(ppid)
+    reads_file = f"{STATE_DIR}/claude-reads-{owner}"
+    counter_file = f"{STATE_DIR}/claude-toolcount-{owner}"
     recency_window = 20
 
     try:
@@ -639,8 +675,13 @@ def main():
         # Companion reminders first (advisory, stderr-only, never blocks).
         run_companion_remind(envelope, tool_name, tool_input)
 
+        try:
+            probe_envelope(envelope, tool_name)
+        except Exception:
+            pass
+
         # Tab-title + dup-read tracking (may set block=True; prints stdout JSON itself).
-        block = run_tab_and_dupread(tool_name, tool_input, ppid)[1]
+        block = run_tab_and_dupread(tool_name, tool_input, ppid, agent_scope(envelope))[1]
     except Exception:
         # Fail-open: never let an internal error block a tool call.
         sys.exit(0)
