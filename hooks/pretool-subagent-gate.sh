@@ -16,7 +16,13 @@
 # 5.  File-edit intent via subagent (should use Edit/Write directly)
 # 6.  Delegation cascade (3+ consecutive Agent calls)
 # 7'. Turn-budget note absent (advisory since 2026-06-03 — deprecated CORAL
-#     self-instruction; harness now returns final message at maxTurns)
+#     self-instruction; harness now returns final message at maxTurns; research-shaped
+#     dispatches only since 2026-09-21)
+#
+# Checks 7, 10, 12 and the self-report inject scan the prompt PLUS any brief it delegates to
+# (a cited .md whose basename contains brief/protocol/instructions/playbook/runbook), and an
+# explicit "do not write any file" opts a dispatch out of the file-output checks.
+# Tests: test_subagent_gate.py.
 # 8.  Output-path collision across concurrent dispatches
 # 9.  genomics: write_json_atomic guidance
 #
@@ -180,6 +186,24 @@ fi
 # Check 5: File-edit intent via subagent
 PROMPT=$(printf '%s' "$INPUT" | jq -r '.tool_input.prompt // ""' 2>/dev/null || true)
 
+# Text the discipline checks (7, 10, 12, self-report) scan: the prompt plus any brief it
+# delegates to. A dispatch that says "first read <lane>/BRIEF.md and follow it exactly" keeps
+# its turn budget, output path and stub-first rule in that file. Scanning the prompt alone
+# false-fired on 7 of 7 such dispatches (immigration-research 2026-09-21) and, for non-exempt
+# agent types, injects a second output path that contradicts the brief's.
+# Convention: the basename contains brief, protocol, instructions, playbook or runbook.
+CHECK_TEXT="$PROMPT"
+if [ -n "$PROMPT" ]; then
+    BRIEFS=$(printf '%s' "$PROMPT" | grep -oE '[~/A-Za-z0-9_.-]*/[A-Za-z0-9_./-]+\.md' \
+        | grep -iE '(^|/)[^/]*(brief|protocol|instructions|playbook|runbook)[^/]*\.md$' | sort -u | head -3 || true)
+    for _brief in $BRIEFS; do
+        _brief="${_brief/#\~/$HOME}"
+        [ -f "$_brief" ] || _brief="$PWD/$_brief"
+        [ -f "$_brief" ] && CHECK_TEXT="$CHECK_TEXT
+$(head -c 20000 "$_brief" 2>/dev/null || true)"
+    done
+fi
+
 if echo "$DESC $PROMPT" | grep -qiE 'edit (the |a |this )?file|write (to |the )?file|modify (the |a )?file|update (the |a )?file|fix (the |a |this )?(code|file|bug|issue)|implement (the |a |this )?|create (a |the )?file|add (to|code|a function|the)'; then
     # Exception: worktree isolation is fine for code changes
     if ! echo "$INPUT" | grep -q '"worktree"'; then
@@ -251,8 +275,14 @@ if [ -n "$PROMPT" ]; then
     # it false-fired on every well-formed dispatch (10+ in one 2026-07-07 session). A digit is
     # required, so it still won't match "return the path". False-match only SUPPRESSES an
     # advisory (harmless direction).
-    HAS_TURN_BUDGET=$(echo "$PROMPT" | grep -ciE '(stop|halt|synthesize|write).*(70%|\bturn\b|budget|before running out)|max.*(\bturn\b|epoch)|epoch.*boundar|[0-9]+ ?(tool )?turns?\b' || true)
-    HAS_FILE_OUTPUT=$(echo "$PROMPT" | grep -ciE '(write|save|output).*(file|path|memo|artifact)' || true)
+    HAS_TURN_BUDGET=$(echo "$CHECK_TEXT" | grep -ciE '(stop|halt|synthesize|write).*(70%|\bturn\b|budget|before running out)|max.*(\bturn\b|epoch)|epoch.*boundar|[0-9]+ ?(tool )?turns?\b|[0-9]+ (searches|tool calls)\b' || true)
+    # "Do not write any file" is not a file-output instruction. Read negated clauses out before
+    # looking for one; if nothing positive is left and the prompt opted out in so many words,
+    # that is the parent's call for a probe-sized dispatch (2026-09-21: the unnegated regex
+    # then demanded a stub for a file nobody had asked for).
+    POSITIVE_TEXT=$(printf '%s' "$CHECK_TEXT" | perl -pe 's/\b(do not|don.?t|never|no need to|need not|without)\b[^.;\n]{0,80}//ig; s/\bno (result|output|notes?) (file|memo)s?\b[^.;\n]*//ig' 2>/dev/null || printf '%s' "$CHECK_TEXT")
+    HAS_FILE_OUTPUT=$(echo "$POSITIVE_TEXT" | grep -ciE '(write|save|output).*(file|path|memo|artifact)' || true)
+    NO_FILE_OPT_OUT=$(echo "$PROMPT" | grep -ciE "\b(do not|don.?t|never|no need to|need not|without)\b[^.;]{0,40}\b(writ|sav|creat)[a-z]*\b[^.;]{0,30}\b(files?|memo|artifact)\b|\bno (result|output|notes?) (file|memo)s?\b" || true)
 
     # Turn-budget is ADVISORY-ONLY as of 2026-06-03 (was a blocking trigger).
     # The "stop at 70% and synthesize" self-instruction is deprecated: the
@@ -266,7 +296,15 @@ if [ -n "$PROMPT" ]; then
     # write-stub gate (Check 10) guards mid-run process death, which is NOT
     # confirmed fixed and which subagents won't self-mitigate (they don't write
     # files unless told).
-    if [ "$HAS_TURN_BUDGET" -eq 0 ]; then
+    # Narrowed 2026-09-21 to research-shaped dispatches, the only ones the ≤12-turn epoch rule
+    # is about. Unscoped it fired on 71 of 101 replayed immigration-research dispatches, mostly
+    # script-running lanes with nothing to budget; a note attached to most dispatches is read
+    # by none of them.
+    IS_RESEARCH_SHAPED=0
+    if [ "$STYPE" = "researcher" ] || echo "$DESC $PROMPT" | grep -qiE '\b(literature|web search|systematic review|prior art)\b'; then
+        IS_RESEARCH_SHAPED=1
+    fi
+    if [ "$HAS_TURN_BUDGET" -eq 0 ] && [ "$IS_RESEARCH_SHAPED" -eq 1 ]; then
         CHECK_IDS="${CHECK_IDS}7,"
         WARNINGS="${WARNINGS}SUBAGENT TURN-BUDGET (advisory): no turn-budget note in prompt. Prefer parent-controlled epochs — review the subagent's returned output and re-dispatch with refined scope if gaps remain — over a 'stop at 70%' self-instruction. "
     fi
@@ -278,7 +316,7 @@ if [ -n "$PROMPT" ]; then
         WARNINGS="${WARNINGS}SUBAGENT WAIT DISCIPLINE (advisory): prompt implies the subagent may wait on its own background/long-running work. Instruct it to wait SYNCHRONOUSLY (bounded blocking waits, re-issued as needed) rather than stopping/yielding while watchers run — every yield fires a stale task-notification at the parent (yield-churn, 2026-07-04). "
     fi
 
-    if [ "$HAS_FILE_OUTPUT" -eq 0 ]; then
+    if [ "$HAS_FILE_OUTPUT" -eq 0 ] && [ "$NO_FILE_OPT_OUT" -eq 0 ]; then
         MISSING="file-output instruction (write results to a file)"
 
         # Block research-heavy agents; advise read-only ones
@@ -357,7 +395,7 @@ fi
 # non-worktree dispatches, mirroring Check 7's case logic. Advisory retained for
 # self-managing subtypes and short prompts.
 if [ -n "$PROMPT" ] && [ "${HAS_FILE_OUTPUT:-0}" -gt 0 ]; then
-    HAS_EARLY_WRITE=$(echo "$PROMPT" | grep -ciE 'probe in progress|write.*(stub|scaffold|skeleton|draft|placeholder|empty).*(first|before|initially)|(first|before)[, ]+writ|(first|before).*(tool|call|action|step).*write|write.*(before|prior to).*(search|probe|fetch|research)|initial.*(write|draft).*file|(scaffold|stub|placeholder).*(first|before)|(begin|start) (by|with).*(writ|creat|scaffold)' || true)
+    HAS_EARLY_WRITE=$(echo "$CHECK_TEXT" | grep -ciE 'probe in progress|write.*(stub|scaffold|skeleton|draft|placeholder|empty).*(first|before|initially)|(first|before)[, ]+writ|(first|before).*(tool|call|action|step).*write|write.*(before|prior to).*(search|probe|fetch|research)|initial.*(write|draft).*file|(scaffold|stub|placeholder).*(first|before)|(begin|start) (by|with).*(writ|creat|scaffold)' || true)
     if [ "$HAS_EARLY_WRITE" -eq 0 ]; then
         PROMPT_LEN=${#PROMPT}
         HAS_WORKTREE=$(echo "$INPUT" | grep -c '"worktree"' || true)
@@ -412,7 +450,7 @@ fi
 # warn (Check 7/10 ergonomic pattern): the subagent gets the requirement verbatim.
 if [ -n "$PROMPT" ] && echo "$PROMPT" | grep -qE '(^|[ `"'"'"'(=])research/[A-Za-z0-9_./-]*\.md'; then
     TAG_RE=$(cat "$HOME/Projects/skills/hooks/provenance_tags.re" 2>/dev/null || printf '%s' '\[DATA\]|\[INFERENCE\]|\[SOURCE:')
-    if ! echo "$PROMPT" | grep -qE "$TAG_RE"; then
+    if ! echo "$CHECK_TEXT" | grep -qE "$TAG_RE"; then
         ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "inject" "check=12 research-tags" 2>/dev/null || true
         RTAG_INJECT="PROVENANCE TAGS (auto-added): every file you write under research/ must carry bracketed provenance tags from its FIRST write, the stub included — e.g. a header line combining [DATA] (empirical evidence: logs, traces, measurements), [INFERENCE] (your analysis/verdicts), [SOURCE: url], [FRONTIER]/[PREPRINT] (papers), [UNVERIFIED]. A prose 'Provenance:' line without bracketed tags does NOT satisfy the repo's research gate and will block the session."
         if [ -z "$INJECT_SUFFIX" ]; then INJECT_SUFFIX="$RTAG_INJECT"; else INJECT_SUFFIX="$INJECT_SUFFIX
@@ -444,7 +482,7 @@ fi
 # dispatches self-reported claude-opus-5[1m]) — the self-report is the only ground truth, and
 # dispatchers forget to ask for it. Make it structural: every dispatched prompt gets the clause
 # unless it already asks for a self-report.
-if ! printf '%s' "$PROMPT" | grep -qi "self-report"; then
+if ! printf '%s' "$CHECK_TEXT" | grep -qiE "self-report|exact model id"; then
     SR_INJECT="MODEL SELF-REPORT (auto-added): the first line of your FIRST output (file or report message) MUST be your exact model ID copied verbatim from your own environment-info block. Model pins on this dispatch surface are known-unreliable; the parent reads this line back before trusting tier-sensitive work."
     if [ -z "$INJECT_SUFFIX" ]; then INJECT_SUFFIX="$SR_INJECT"; else INJECT_SUFFIX="$INJECT_SUFFIX
 
