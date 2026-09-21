@@ -167,6 +167,15 @@ REDISCOVERY = re.compile(
 # Bare "https://… / is this relevant?" must fire WITHOUT INTENT; prior-context's
 # own-work scans miss this class entirely.
 URL_RE = re.compile(r"https?://[^\s<>\"')\]]+", re.I)
+# A URL inside pasted terminal output is part of an error report, not a pointer the operator
+# wants triaged. 2026-09-21: a pasted `git push` rejection (GitHub push protection) produced
+# three [pending] rows — a docs link, the repo's own unblock link and its own remote — and
+# asked for a ledger entry for each. 3 of 3 dispositions were noise.
+LOG_LINE_RE = re.compile(
+    r"^\s*(remote:|error:|fatal:|hint:|warning:|To\s+https?://|npm (ERR|WARN)|Traceback|"
+    r"File \"|! \[|\$ |>>> |at \S+ \(|\[?\d{4}-\d\d-\d\d[T ]\d\d:\d\d)",
+    re.I,
+)
 POINTER_LEDGER = (
     Path.home() / "Projects" / "agent-infra"
     / "artifacts" / "pointer-dispositions" / "ledger.jsonl"
@@ -539,7 +548,12 @@ def _normalize_pointer_url(url: str) -> str:
 
 def _pointer_disposition_lines(prompt: str) -> list[str]:
     """Front-load external URL dispositions from the pointer ledger."""
-    urls = [_normalize_pointer_url(u) for u in URL_RE.findall(prompt or "")]
+    urls = []
+    for line in (prompt or "").splitlines():
+        if LOG_LINE_RE.match(line):
+            continue
+        urls.extend(_normalize_pointer_url(u) for u in URL_RE.findall(line)
+                    if not u.rstrip(").,;\"'").endswith(".git"))
     if not urls:
         return []
     by_url: dict[str, dict] = {}

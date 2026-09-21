@@ -246,6 +246,26 @@ def main() -> None:
     check("bare URL paste emits POINTER-DISPOSITION", "POINTER-DISPOSITION" in c_url)
     check("Agno dpo_jury is doesnt_apply from ledger", "doesnt_apply" in c_url)
 
+    # 13. 2026-09-21: URLs inside pasted terminal output are an error report, not pointers.
+    push_rejection = (
+        "remote: error: GH013: Repository rule violations found for refs/heads/main.\n"
+        "remote:   - GITHUB PUSH PROTECTION\n"
+        "remote:     https://docs.github.com/code-security/secret-scanning/working-with-push-protection\n"
+        "remote:     (?) To push, remove secret from commit(s) or follow this URL to allow the secret.\n"
+        "remote:     https://github.com/someone/some-repo/security/secret-scanning/unblock-secret/3JdHV\n"
+        "To https://github.com/someone/some-repo.git\n"
+        " ! [remote rejected] main -> main (push declined due to repository rule violations)\n"
+        "error: failed to push some refs to 'https://github.com/someone/some-repo.git'\n"
+    )
+    c_log = ctx(run({"prompt": push_rejection, "cwd": str(Path.home()), "session_id": "s_pointer_log"}))
+    check("pasted push rejection emits no POINTER-DISPOSITION", "POINTER-DISPOSITION" not in c_log)
+    c_mixed = ctx(run({
+        "prompt": push_rejection + "\nAlso, is https://example.org/some-new-eval-harness relevant?",
+        "cwd": str(Path.home()), "session_id": "s_pointer_mixed",
+    }))
+    check("a real pointer beside pasted output still fires", "example.org/some-new-eval-harness" in c_mixed)
+    check("and only that pointer is listed", "unblock-secret" not in c_mixed and "docs.github.com" not in c_mixed)
+
     td.cleanup()
     print(f"\n{passed} passed, {failed} failed")
     sys.exit(1 if failed else 0)
