@@ -152,6 +152,33 @@ class StopUncommittedAttributionTest(unittest.TestCase):
         self.assertNotIn("fresh.py", self._head_files())
         self.assertIn("fresh.py", self._git("status", "--short", "fresh.py"))
 
+    def test_baseline_untracked_dir_covers_its_files(self) -> None:
+        """The baseline is `git status --short` output, which collapses an untracked
+        directory to "dir/", while the hook lists untracked files one by one. Files under
+        a directory ALREADY untracked at session start must not be surfaced as this
+        session's subprocess output (immigration-research 2026-09-21: a Cursor-built lane
+        written 3.5h before the session began was reported as "most likely YOURS").
+
+        Positive control in the same firing: a genuinely new unattributable file IS
+        surfaced, so silence about the lane cannot come from the hook being mute."""
+        (self.repo / "peerlane").mkdir()
+        self._write_settled("peerlane/result.csv", "x\n")
+        status = subprocess.run(
+            ["git", "-C", str(self.repo), "status", "--short"],
+            capture_output=True, text=True, timeout=10, env=_clean_env(),
+        ).stdout
+        self.assertIn("?? peerlane/\n", status)  # fixture really has the collapsed form
+        baseline = Path("/tmp") / f"session-baseline-{self.mine}.txt"
+        baseline.write_text(status)
+        self.tmp_ledgers.append(baseline)
+        self._tmp_ledger(self.mine, "elsewhere.py")  # non-empty ledger -> attribution branch
+        self._write_settled("fresh_unowned.csv", "y\n")  # appears after the baseline
+        stdin = '{"cwd":"%s","session_id":"%s"}' % (self.repo, self.mine)
+        r = subprocess.run(["bash", str(SCRIPT)], input=stdin,
+                           capture_output=True, text=True, timeout=20, env=_clean_env())
+        self.assertIn("fresh_unowned.csv", r.stdout)
+        self.assertNotIn("peerlane/result.csv", r.stdout)
+
     def test_contested_file_not_swept(self) -> None:
         """A file in BOTH this session's AND a peer's ledger (contested) must NOT be
         auto-committed: whole-file `git add` would sweep the peer's hunks. This is the

@@ -136,6 +136,18 @@ if session_id:
         else:
             other_touched |= owned
 
+# Baseline DIRECTORY entries. The baseline is `git status --short` output, which
+# collapses an untracked directory to "dir/", while all_changes lists untracked files
+# one by one (ls-files --others). Files under a directory ALREADY untracked at session
+# start therefore never matched the baseline and were surfaced as "most likely YOURS"
+# subprocess output (immigration-research 2026-09-21: 19 files of a Cursor-built lane,
+# written 3.5h before the session began). Same ancestor rule stop-research-gate.sh
+# applies. Paths in this session OWN ledger stay in, so a file this session adds
+# inside such a directory is still attributed and handled.
+baseline_dirs = tuple(n for n in baseline_files if n.endswith("/"))
+if baseline_dirs:
+    new_changes = [f for f in new_changes if f in my_touched or not f.startswith(baseline_dirs)]
+
 # Attribution policy. When this session has a populated Edit/Write ledger, that
 # ledger is the source of truth: auto-commit ONLY files in it. A file in NO
 # ledger is an unattributable subprocess output (sync-generated-docs,
