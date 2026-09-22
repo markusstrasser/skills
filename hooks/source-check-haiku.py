@@ -56,7 +56,8 @@ def main():
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             result = json.loads(resp.read())
-            text = result["content"][0]["text"].strip()
+            # By block type: a thinking-capable model puts a thinking block first.
+            text = "".join(b.get("text", "") for b in result.get("content", []) if b.get("type") == "text").strip()
     except Exception:
         return
 
