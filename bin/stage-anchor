@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+"""stage-anchor — stage YOUR edits to a file a peer session is also editing, index only, by content anchor.
+
+usage: stage-anchor <file> <op> [<op> ...]      (run from the repo root)
+  op = 'insert_before:<anchor-line-prefix> => <new-line-prefix>'
+       'insert_after:<anchor-line-prefix> => <new-line-prefix>'
+       'replace:<line-prefix>'          (new line = the working-tree line with that prefix)
+
+Why: `git diff -U0` + `git apply --cached --unidiff-zero` seats pure insertions at the working
+tree's line numbers, so with a peer's uncommitted insertions above yours the hunk lands in the
+wrong place (immigration-research 03332eb, 2026-09-22: an INDEX row and a FAQ paragraph went
+into the wrong table/entry and were pushed). This tool starts from the committed text
+(`git show HEAD:<file>`), locates anchors by their text, takes the new line(s) from the working
+tree by prefix (a prefix ending in '...' takes the whole block up to the next blank line), and
+writes the result to the index with hash-object + update-index. The working tree is never
+touched. Then inspect `git diff --cached` and bare-commit. Afterwards `git diff -- <file>` must
+show only the peer's hunks. Refuses when an anchor or prefix is not unique in its file.
+"""
+import subprocess
+import sys
+
+
+def git(*a, **k):
+    return subprocess.run(["git", *a], check=True, capture_output=True, text=True, **k).stdout
+
+
+def unique(lines, prefix, what):
+    hits = [i for i, l in enumerate(lines) if l.startswith(prefix)]
+    if len(hits) != 1:
+        sys.exit(f"[BLOCKED] {what}: {len(hits)} lines start with {prefix!r}")
+    return hits[0]
+
+
+def take(wt, prefix):
+    block = prefix.endswith("...")
+    prefix = prefix[:-3] if block else prefix
+    i = unique(wt, prefix, "working-tree text")
+    if not block:
+        return [wt[i]]
+    j = i
+    while j + 1 < len(wt) and wt[j + 1] != "":
+        j += 1
+    return wt[i:j + 1]
+
+
+def main() -> None:
+    if len(sys.argv) < 3:
+        sys.exit(__doc__)
+    path, ops = sys.argv[1], sys.argv[2:]
+    base = git("show", f"HEAD:{path}").split("\n")
+    wt = open(path, encoding="utf-8").read().split("\n")
+    for op in ops:
+        kind, _, rest = op.partition(":")
+        if kind == "replace":
+            i = unique(base, rest, "anchor")
+            base = base[:i] + take(wt, rest) + base[i + 1:]
+            continue
+        anchor, sep, prefix = rest.partition(" => ")
+        if not sep:
+            sys.exit(f"[BLOCKED] op needs ' => ' between anchor and new-line prefix: {op[:80]!r}")
+        i = unique(base, anchor, "anchor")
+        new = take(wt, prefix)
+        if any(l in base for l in new if l.strip()):
+            sys.exit(f"[BLOCKED] new text already in HEAD: {new[0][:80]!r}")
+        if kind == "insert_before":
+            base = base[:i] + new + ([""] if base[i - 1] == "" else []) + base[i:]
+        elif kind == "insert_after":
+            base = base[:i + 1] + ([""] if base[i + 1] == "" else []) + new + base[i + 1:]
+        else:
+            sys.exit(f"[BLOCKED] unknown op {kind!r}")
+    sha = subprocess.run(["git", "hash-object", "-w", "--stdin"], input="\n".join(base), check=True,
+                         capture_output=True, text=True).stdout.strip()
+    subprocess.run(["git", "update-index", "--cacheinfo", f"100644,{sha},{path}"], check=True)
+    print(f"  ✓ staged {path}")
+    print(git("diff", "--cached", "--stat", "--", path))
+    print(subprocess.run(["git", "diff", "--cached", "-U0", "--no-ext-diff", "--", path],
+                         capture_output=True, text=True).stdout[:3000])
+
+
+if __name__ == "__main__":
+    main()
