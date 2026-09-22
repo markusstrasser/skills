@@ -118,8 +118,12 @@ Political even-handedness (§4.4.1, API / claude.ai): even-handed on 99.4% / 99.
 | Exact-ID lanes (`claude-opus-5`) | Unchanged; they stay on Opus 5 until re-pinned. |
 | Interactive Claude Code | The working `~/.claude/settings.json` no longer pins a model; HEAD still has `claude-fable-5-1[1m]`, and the removal is uncommitted. This session ran `claude-opus-5-5[1m]`. |
 
+## Local measurement (2026-09-22)
+
+`~/Projects/evals/opus55_fable51_analysis_traps/` ran headless Claude Code with the key stripped: four real immigration-research analysis traps, two trials per arm, graded deterministically. Every arm caught 8/8: Opus 5.5 medium, Opus 5.5 xhigh and Fable 5.1 high. Median output tokens were 4.1k, 9.6k and 6.2k. At this ceiling the task discriminates only on cost. Opus 5.5 medium reached Fable high's quality on bounded analysis with cues in the files, using 0.66× the tokens; xhigh bought nothing. The long-context research gap in the vendor card (medium DRACO 83.9 vs Fable high 86.5) is still untested locally.
+
 ## Open measurements (do not invent)
 
 - No independent AA-Omniscience or Intelligence Index measurement for Opus 5.5 yet. GDPval-AA and AA-Briefcase were run by Artificial Analysis.
-- No local comparison with Fable 5.1 on this fleet's workloads: quality, reasoning tokens and output tokens per arm are all unmeasured.
+- No discriminating local comparison with Fable 5.1 on long-context research; the bounded-analysis screen below hit its ceiling.
 - The Agent-tool `model: opus` served model is unverified.
