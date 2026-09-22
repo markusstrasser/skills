@@ -2190,6 +2190,107 @@ def gate_worktree_cd_guard(raw_payload: str) -> GateResult:
     return GateResult(2, msg, "")
 
 
+# --- remote-delete-guard (BLOCKER, no if) --------------------------------------
+_REMOTE_DELETE_PREFIX_WORDS = {"!", "sudo", "time", "command", "exec", "nohup", "env"}
+_REMOTE_DELETE_SHELLS = {"bash", "sh", "zsh"}
+
+
+def _remote_delete_hit(words: list[str], depth: int = 0) -> str | None:
+    """Name the destructive call in one parsed command, or None.
+
+    Recurses one level into ``bash -c '<cmd>'`` and ``xargs <cmd>`` so the
+    wrapped spelling of the same call is caught too.
+    """
+    i = 0
+    while i < len(words) and (
+        words[i] in _REMOTE_DELETE_PREFIX_WORDS or re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", words[i])
+    ):
+        i += 1
+    if i >= len(words):
+        return None
+    prog = words[i].rsplit("/", 1)[-1]
+    rest = words[i + 1 :]
+    if depth == 0 and prog in _REMOTE_DELETE_SHELLS and "-c" in rest:
+        inner = rest[rest.index("-c") + 1 : rest.index("-c") + 2]
+        for seg, _s, _e in _iter_shell_segments(inner[0] if inner else ""):
+            try:
+                hit = _remote_delete_hit(shlex.split(seg), depth + 1)
+            except ValueError:
+                continue
+            if hit:
+                return hit
+        return None
+    if depth == 0 and prog == "xargs":
+        cmd_start = next((k for k, w in enumerate(rest) if not w.startswith("-")), None)
+        return None if cmd_start is None else _remote_delete_hit(rest[cmd_start:], depth + 1)
+    short = [w for w in rest if w.startswith("-") and not w.startswith("--")]
+    if prog == "history" and any("c" in w[1:] for w in short):
+        return "`history -c` (clears the shell's command history)"
+    if prog == "gsutil":
+        if "rb" in rest:
+            return "`gsutil rb` (removes a bucket)"
+        if "rm" in rest:
+            after = rest[rest.index("rm") + 1 :]
+            if any(re.match(r"^-[a-zA-Z]*[rR]", w) for w in after) or any("**" in w for w in after):
+                return "`gsutil rm -r` (recursive object deletion)"
+    if prog == "gcloud" and rest[:2] == ["storage", "rm"]:
+        if "--recursive" in rest or any(re.match(r"^-[a-zA-Z]*[rR]", w) for w in rest):
+            return "`gcloud storage rm --recursive` (recursive object deletion)"
+    if prog == "gcloud" and rest[:3] == ["storage", "buckets", "delete"]:
+        return "`gcloud storage buckets delete` (removes a bucket)"
+    if prog == "aws" and rest[:2] == ["s3", "rm"] and "--recursive" in rest:
+        return "`aws s3 rm --recursive` (recursive object deletion)"
+    if prog == "aws" and rest[:2] == ["s3", "rb"]:
+        return "`aws s3 rb` (removes a bucket)"
+    return None
+
+
+def gate_remote_delete_guard(raw_payload: str) -> GateResult:
+    """Block recursive cloud-storage deletes and shell-history clearing.
+
+    Claude Opus 5.5 System Card §6.3.1 (2026-09-22): internal snapshots issued
+    hallucinated destructive calls with no task reason — ``history -c …``
+    described as a "no-op check of shell", and a fabricated agent message asking
+    for ``gsutil -m rm -r [path]`` "to clear the stale cache". The card credits
+    auto mode with stopping these; sessions here run with bypassed permissions,
+    so this gate is the remaining check. agentlogs, 30 days to 2026-09-22
+    (45,255 shell calls, all vendors): zero real gsutil / gcloud storage / aws s3
+    recursive deletes and zero ``history -c``, so the block costs nothing today.
+    ``modal volume rm`` is deliberately not covered: 17 receipted genomics
+    cleanups in the same window.
+    """
+    try:
+        data = json.loads(raw_payload)
+    except Exception:
+        return GateResult(0, "", "")
+    cmd = (data.get("tool_input") or {}).get("command", "") or ""
+    if not any(tok in cmd for tok in ("gsutil", "gcloud", "aws", "history")):
+        return GateResult(0, "", "")
+    try:
+        segments = list(_iter_shell_segments(cmd))
+    except ValueError:
+        return GateResult(0, "", "")
+    for seg, _start, _end in segments:
+        try:
+            words = shlex.split(seg)
+        except ValueError:
+            continue
+        hit = _remote_delete_hit(words)
+        if hit is None:
+            continue
+        msg = (
+            f"BLOCK: {hit}. The Claude Opus 5.5 system card (§6.3.1) records rare "
+            "hallucinated destructive calls of exactly this shape — `history -c` framed as "
+            "a no-op, a fabricated request to `gsutil -m rm -r` a cache — and this machine "
+            "runs without auto mode's classifier. agentlogs shows no legitimate use in 30 "
+            "days.\nIf the deletion is really intended, stop and ask the operator to run it "
+            "with `! <command>`; do not respell the command to get past this guard.\n"
+        )
+        _log_trigger("remote-delete-guard", "block", hit, cmd)
+        return GateResult(2, msg, "")
+    return GateResult(0, "", "")
+
+
 # --- 0b. secret-path-guard (BLOCKER, no if) — imports sidecar -------------------
 # Replaces the two settings.json `Read()` deny rules (~/.config/sops/age/keys.txt,
 # ~/.config/secrets/**). Those made the auto-mode permission classifier stop for a HUMAN
@@ -2320,6 +2421,7 @@ MANIFEST: list[dict] = [
     {"name": "opus-concurrency-advisory", "if": None, "run": gate_opus_concurrency_advisory},
     # --- 2026-09-02: persistent cd into a lane worktree (genomics M122 recurrence) ---
     {"name": "worktree-cd-guard", "if": None, "run": gate_worktree_cd_guard},
+    {"name": "remote-delete-guard", "if": None, "run": gate_remote_delete_guard},
 ]
 
 

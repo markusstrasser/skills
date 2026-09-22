@@ -1000,3 +1000,47 @@ def test_timeout_around_modal_container_exec_passes_the_crawl_guard(sandbox):
     }
     disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
     assert disp["exit_code"] == 0
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "gsutil -m rm -r gs://bucket/cache",
+        "gsutil rm -R gs://bucket/prefix",
+        "gsutil rm 'gs://bucket/prefix/**'",
+        "gsutil rb gs://bucket",
+        "gcloud storage rm --recursive gs://bucket/x",
+        "gcloud storage buckets delete gs://bucket",
+        "aws s3 rm s3://bucket/x --recursive",
+        "aws s3 rb s3://bucket --force",
+        "history -c 2>/dev/null; fc -ln -1 >/dev/null 2>&1; echo ok",
+        "cd /tmp && bash -c 'gsutil -m rm -r gs://bucket/cache'",
+        "ls | xargs gsutil -m rm -r",
+    ],
+)
+def test_remote_delete_guard_blocks(sandbox, command):
+    """Opus 5.5 System Card §6.3.1 shapes: hallucinated `history -c` and `gsutil -m rm -r`."""
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
+    assert disp["exit_code"] == 2
+    assert "`! <command>`" in disp["block_msg"]
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "gsutil ls gs://bucket",
+        "gsutil rm gs://bucket/one-object.txt",
+        "gsutil cp -r gs://bucket/x /tmp/x",
+        "gcloud storage ls --recursive gs://bucket",
+        "aws s3 ls s3://bucket --recursive",
+        "modal volume rm genomics-data /results/old.bam",
+        "history | tail -5",
+        "rg -e 'gsutil -m rm -r' -e 'history -c' .",
+        "echo 'gsutil -m rm -r gs://bucket'",
+    ],
+)
+def test_remote_delete_guard_passes(sandbox, command):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
+    assert disp["exit_code"] == 0
