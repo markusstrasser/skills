@@ -14,6 +14,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+# precommit-trigger: userprompt-prior-context.py test_userprompt_prior_context.py
+# ^ validate-changed-hooks.sh runs this test when the hook (or this test) is staged. The
+#   noise cases below (generic single keywords, harness tag names) are the 2026-09-22
+#   retune's contract; a regression there costs ~395 tokens on every matching prompt.
+
 HOOK = Path(__file__).parent / "userprompt-prior-context.py"
 
 # Hermetic HOME so the hook's per-session dedup files (Path.home()/.claude/...)
@@ -22,11 +27,26 @@ _HOME = tempfile.TemporaryDirectory()
 (Path(_HOME.name) / ".claude").mkdir(parents=True, exist_ok=True)
 
 
+def _clean_env(**extra: str) -> dict:
+    """Env with GIT_* stripped — hermetic temp-repo git, same reason as
+    test_stop_uncommitted_attribution._clean_env.
+
+    validate-changed-hooks.sh runs this test from `git commit`'s pre-commit hook,
+    which exports GIT_INDEX_FILE (and GIT_DIR) pointing at the OUTER repo. Inherited,
+    every temp-repo `git add/commit` here operates on that locked index and fails,
+    and the hook's own `git -C <fixture> log` would read the OUTER repo's history
+    instead of the fixture's — false hits, false failures. Observed 2026-09-22 when
+    this test was first wired into the precommit-trigger gate."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env.update(extra)
+    return env
+
+
 def run(envelope: dict) -> str:
     p = subprocess.run(
         [sys.executable, str(HOOK)],
         input=json.dumps(envelope), capture_output=True, text=True, timeout=10,
-        env={**os.environ, "HOME": _HOME.name},
+        env=_clean_env(HOME=_HOME.name),
     )
     assert p.returncode == 0, f"hook must always exit 0, got {p.returncode}: {p.stderr}"
     return p.stdout.strip()
@@ -50,6 +70,11 @@ def fixture_dir() -> tempfile.TemporaryDirectory:
         "- A standing duckdb dependency guard for missing-dep failures\n"
         "- something short\n"
         "- Investigate whether the blindspot miner should embed fewer candidates\n"
+        # Bait for the harness-markup cases: if tag names ever survive into the
+        # keyword set again, they have something here to match and the hook fires.
+        "- Track system-reminder and pasted_content tag noise in the prompt hook\n"
+        # Bait for the generic-word cases (same purpose, ordinary English).
+        "- Keep the clean complete example decisive smart fable wording consistent\n"
     )
     (base / "research").mkdir()
     (base / "research/2026-06-11-duckdb-invocation-discipline.md").write_text("x")
@@ -157,14 +182,14 @@ def main() -> None:
     (ex_base / "justfile").write_text("blindspot:\n    echo blindspot\n\nmaintain-tick:\n    echo tick\n")
     (ex_base / "scripts/hooks").mkdir(parents=True)
     (ex_base / "scripts/hooks/sample_guard.py").write_text("# hook\n")
-    subprocess.run(["git", "-C", str(ex_base), "init", "-q"], check=True)
+    subprocess.run(["git", "-C", str(ex_base), "init", "-q"], check=True, env=_clean_env())
     subprocess.run(["git", "-C", str(ex_base), "add", "."], check=True,
-                   env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-                        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"})
+                   env=_clean_env(GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t",
+                                  GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t"))
     subprocess.run(["git", "-C", str(ex_base), "commit", "-m", "add blindspot hook scaffold", "-q"],
                    check=True,
-                   env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-                        "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"})
+                   env=_clean_env(GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t",
+                                  GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t"))
     out = run({
         "user_message": "should we add a new hook for blindspot detection or use an existing view?",
         "cwd": str(ex_base),
@@ -181,19 +206,19 @@ def main() -> None:
     # 12. Git-path slice: committed tracked file surfaces via recent git-touched paths.
     gp_td = tempfile.TemporaryDirectory()
     gp_base = Path(gp_td.name)
-    subprocess.run(["git", "-C", str(gp_base), "init", "-q"], check=True)
+    subprocess.run(["git", "-C", str(gp_base), "init", "-q"], check=True, env=_clean_env())
     (gp_base / "migrations").mkdir()
     seed = gp_base / "migrations/2026-06-29-seed-claimcore-view.sql"
     seed.write_text("-- claimcore view seed for prior-context test\n")
     subprocess.run(
         ["git", "-C", str(gp_base), "add", str(seed)],
         check=True,
-        env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"},
+        env=_clean_env(GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t"),
     )
     subprocess.run(
         ["git", "-C", str(gp_base), "commit", "-m", "add claimcore view migration", "-q"],
         check=True,
-        env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"},
+        env=_clean_env(GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t"),
     )
     out = run({
         "user_message": "should we design a new schema view for claimcore ingestion?",
@@ -209,10 +234,10 @@ def main() -> None:
     red_td = tempfile.TemporaryDirectory()
     red_base = Path(red_td.name)
     (red_base / ".git").mkdir()
-    subprocess.run(["git", "-C", str(red_base), "init", "-q"], check=True)
+    subprocess.run(["git", "-C", str(red_base), "init", "-q"], check=True, env=_clean_env())
     subprocess.run(
         ["git", "-C", str(red_base), "commit", "--allow-empty", "-m", "prior observe work", "-q"],
-        check=True, env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"},
+        check=True, env=_clean_env(GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t"),
     )
     out = run({
         "user_message": "why don't you check the git log for what we already built?",
@@ -265,6 +290,37 @@ def main() -> None:
     }))
     check("a real pointer beside pasted output still fires", "example.org/some-new-eval-harness" in c_mixed)
     check("and only that pointer is listed", "unblock-secret" not in c_mixed and "docs.github.com" not in c_mixed)
+
+    # 14. 2026-09-22 retune — the hook fired on 49 of 860 prompts (~395 tokens each)
+    #     on single generic keywords that happen to appear in a filename/idea/commit.
+    #     (a) generic words never carry a topic; (b) harness tag names are markup, not
+    #     words the operator typed; (c) one keyword hit is a coincidence, two is prior
+    #     work. The ideas.md fixture above deliberately contains every one of these
+    #     words, so a silent result here cannot come from "nothing to match".
+    check("generic-word prompt is silent (clean/fable/smart)",
+          run({"prompt": "Yes ... let's get it clean... fable is smart ...",
+               "cwd": base, "session_id": "s_generic_1"}) == "")
+    check("bare 'example' is silent",
+          run({"prompt": "example", "cwd": base, "session_id": "s_generic_2"}) == "")
+    check("longer all-generic prompt is silent",
+          run({"prompt": "should we add another example here, to make it cleaner?",
+               "cwd": base, "session_id": "s_generic_3"}) == "")
+    check("'decisive'/'complete' alone are silent",
+          run({"prompt": "can we make this complete and decisive?",
+               "cwd": base, "session_id": "s_generic_4"}) == "")
+    check("harness tag names are markup, not keywords",
+          run({"prompt": "<pasted_content id=zz9><system-reminder>build it</system-reminder>"
+                         "</pasted_content>\nshould we look at this?",
+               "cwd": base, "session_id": "s_tags"}) == "")
+    check("one keyword hit alone is silent (two-hit floor)",
+          run({"prompt": "should we build a duckdb parser?",
+               "cwd": base, "session_id": "s_one_hit"}) == "")
+    c14 = ctx(run({"prompt": "should we revisit duckdb invocation now?",
+                   "cwd": base, "session_id": "s_two_hits"}))
+    check("two topical hits still fire", bool(c14) and "PRIOR-CONTEXT" in c14)
+    check("two-hit fire keeps the output format",
+          "duckdb" in c14 and "duckdb-invocation-discipline" in c14
+          and "TRIAGE-VERDICT" in c14 and "TRIAGE-DISPATCH" in c14)
 
     td.cleanup()
     print(f"\n{passed} passed, {failed} failed")

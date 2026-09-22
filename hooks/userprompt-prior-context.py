@@ -101,6 +101,37 @@ STOP = {
     "whatever", "somebody", "anyone", "discuss", "discussed", "discussion",
 }
 
+# Harness tag names + generic English (2026-09-22 retune). Measured: the hook fired
+# on 49 of 860 prompts across 50 sessions (~395 tokens each, and it instructs the
+# model to go read memos). The fires audited were single generic tokens that happen
+# to appear inside a memo filename or commit subject:
+#   2026-09-22 "Yes ... let us get it clean... fable is smart ..." -> [clean, fable, smart]
+#   2026-09-21 checkpoint: "example", "decisive", "complete", and the harness tag
+#                          name `pasted_content` itself (markup, never a topic).
+# Tag names are belt-and-braces on top of TAG_RE below (which deletes the markup
+# spans outright); the generic words are the real fix, paired with the two-hit floor
+# in main(). Domain nouns stay OUT of here -- they ARE the topic that must match.
+STOP |= {
+    # harness / markup tokens
+    "pasted_content", "command-name", "command-message", "command-args",
+    "system-reminder", "local-command-caveat", "local-command-stdout",
+    "local-command-stderr", "teammate-message", "user-prompt-submit-hook",
+    # generic English that carries no topic signal
+    "clean", "cleaner", "cleanup", "smart", "smarter", "example", "examples",
+    "decisive", "complete", "completed", "completely", "incomplete", "fable",
+    "quick", "quickly", "quicker", "simple", "simply", "simpler", "small",
+    "smaller", "large", "larger", "short", "shorter", "longer", "still",
+    "again", "thanks", "right", "wrong", "sorry", "great", "proper", "properly",
+    "clearly", "obviously", "basically", "totally", "fully", "ready", "likely",
+    "enough", "exactly", "other", "others", "another", "whole", "entire",
+    "entirely", "sense", "nicely", "final", "finally", "first", "point",
+}
+
+# Harness tags and markup: `<pasted_content id=…>`, `<system-reminder>`,
+# `<command-name>…`. The tag SPANS are deleted before keyword extraction; the text
+# between an open and close tag survives (a pasted document still has a topic).
+TAG_RE = re.compile(r"<[^<>\n]{0,400}>")
+
 # Intent gate: the prompt looks like a propose / build / diagnose / status-of-X
 # request — the surfaces where un-grounded proposals happen. Deliberately broad;
 # the keyword-MATCH gate (must overlap real prior work) is what gives precision,
@@ -184,6 +215,7 @@ POINTER_LEDGER = (
 
 def _kw(text: str) -> list[str]:
     """Distinctive topic keywords (>=5 chars, not generic), longest first."""
+    text = TAG_RE.sub(" ", text)
     seen: set[str] = set()
     out: list[str] = []
     for t in re.findall(r"[a-z][a-z0-9_-]{4,}", text.lower()):
@@ -762,7 +794,10 @@ def main() -> None:
 
     kw = _kw(prompt)
     infra_only = bool(INFRA_DESIGN.search(prompt) or OBSERVE_RSI.search(prompt) or live_book_hit)
-    if not kw and not infra_only and not rediscovery and not pointer_lines:
+    # Two-hit floor, cheap half: one topical token cannot clear the floor in main()
+    # below, so exit BEFORE the file/git scans. The regex-gated slices (infra,
+    # observe, live-book, pointer, rediscovery) keep their own gates and are unaffected.
+    if len(kw) < 2 and not infra_only and not rediscovery and not pointer_lines:
         return
 
     base = Path(cwd)
@@ -770,6 +805,22 @@ def main() -> None:
     ideas = _scan_ideas(base, kw)
     commits = _scan_git(cwd, kw)
     siblings = _scan_sibling_repos(base, kw) if not (memos or ideas or commits) else []
+
+    # Two-hit floor, precision half (2026-09-22). ONE keyword overlapping a filename
+    # or commit subject is a coincidence, not prior work on the topic -- that is how
+    # a lone "complete"/"example"/"decisive" pulled a 395-token block plus a
+    # go-read-these-memos instruction into 49 of 860 prompts. Require >=2 DISTINCT
+    # non-generic keywords to hit the same reference set. Mirrors how the scans match:
+    # word-boundary for index rows / ideas / commits, substring for filenames.
+    kw_hits = {
+        k for k in kw
+        if any(re.search(rf"\b{re.escape(k)}\b", s.lower())
+               for s in memos + ideas + commits + siblings)
+        or any(k in s.lower() for s in memos + siblings)
+    }
+    if len(kw_hits) < 2:
+        memos, ideas, commits, siblings = [], [], [], []
+
     observe_lines = _observe_self_check_lines() if OBSERVE_RSI.search(prompt) else []
     infra_lines = _infra_design_lines(base, prompt, kw)
     book_lines = _live_book_lines(base, prompt)
@@ -804,11 +855,7 @@ def main() -> None:
     if _already_surfaced(session_id, sig):
         return
 
-    matched_kw = sorted({
-        k for k in kw
-        if any(re.search(rf"\b{re.escape(k)}\b", s.lower()) for s in memos + ideas + commits)
-        or any(k in s.lower() for s in memos)
-    }) or kw[:4]
+    matched_kw = sorted(kw_hits) or kw[:4]
 
     parts = [
         "PRIOR-CONTEXT (harness-supplied, advisory): your request touches "
