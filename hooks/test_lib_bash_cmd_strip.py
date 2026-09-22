@@ -83,6 +83,20 @@ def main():
     check("cursor multiline_loop ignores heredoc do/then",
           not _cm._multiline_loop(edn))
 
+    # live_mask (2026-09-22): the cat-guard read "$(cat ...)" written as data three times
+    # in one session. Offsets are preserved; only text the shell expands survives.
+    cm = "git commit -m \"$(cat <<'EOF'\nIt read $(cat nope.txt).\nEOF\n)\" && echo '$(x)' # $(y)"
+    mk = lib.live_mask(cm)
+    check("live_mask preserves offsets", len(mk) == len(cm))
+    check("live_mask blanks a quoted heredoc inside \"$( )\", single quotes, comments",
+          "nope" not in mk and "$(x)" not in mk and "$(y)" not in mk
+          and mk.startswith("git commit -m \"$(cat <<'EOF'"))
+    check("live_mask blanks escaped \\$(",
+          "$(" not in lib.live_mask('git commit -m "the \\$(cat ...) guard"'))
+    check("live_mask keeps double-quoted and unquoted-heredoc substitutions",
+          "$(cat a)" in lib.live_mask('echo "$(cat a)"')
+          and "$(cat b)" in lib.live_mask("cat <<EOF\nit's $(cat b)\nEOF\necho ok"))
+
     fails = sum(1 for _, ok in CHECKS if not ok)
     print(f"{len(CHECKS) - fails}/{len(CHECKS)} passed")
     sys.exit(1 if fails else 0)

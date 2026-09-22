@@ -1011,29 +1011,12 @@ def gate_bash_backtick_guard(raw_payload: str) -> GateResult:
 
 def gate_bash_cat_guard(raw_payload: str) -> GateResult:
     try:
-        mod = _load_module(HOOKS_DIR / "pretool_bash_cat_guard.py", "pretool_bash_cat_guard")
         data = json.loads(raw_payload)
         cmd = _jqlike_cmd(data)
-        if not cmd or "$(cat " not in cmd:
+        if not cmd or not re.search(r"\$\(\s*cat\s", cmd):
             return GateResult(0, "", "")
-        cwd = data.get("cwd") or os.getcwd()
-        redirected = {t.rstrip(";&|").strip("\"'") for t in re.findall(r">>?\s*(\S+)", cmd)}
-        missing = []
-        for span in mod.find_cat_spans(cmd):
-            for tok in span.split():
-                if tok.startswith("-") or tok in ("<<", "<<<"):
-                    continue
-                if ">" in tok or "<" in tok:
-                    continue
-                if any(c in tok for c in "$`*?[]{}~"):
-                    continue
-                tok = tok.strip("\"'")
-                if not tok or tok in redirected:
-                    continue
-                path = tok if os.path.isabs(tok) else os.path.join(cwd, tok)
-                if not os.path.exists(path):
-                    missing.append(tok)
-        missing = list(dict.fromkeys(missing))
+        mod = _load_module(HOOKS_DIR / "pretool_bash_cat_guard.py", "pretool_bash_cat_guard")
+        missing = mod.missing_paths(cmd, data.get("cwd") or os.getcwd())
         if not missing:
             return GateResult(0, "", "")
         lines = [
@@ -1041,7 +1024,7 @@ def gate_bash_cat_guard(raw_payload: str) -> GateResult:
         ]
         lines += [f"  missing: {m}" for m in missing]
         lines.append(
-            "Create the file first (verify with wc -c), or fix the path. If the file is created earlier in this same command via a redirect, this guard skips it — heredocs inside $( ) are not detected, restructure instead."
+            "Create the file first (verify with wc -c), or fix the path. A redirect target in the same command is skipped, and so is text the shell never expands (quoted heredoc bodies, single quotes, \\$( escapes, comments)."
         )
         return GateResult(2, "\n".join(lines) + "\n", "")
     except Exception:
