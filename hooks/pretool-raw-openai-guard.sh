@@ -50,7 +50,7 @@ esac
 
 cat >&2 <<'MSG'
 BLOCKED: raw OpenAI SDK in a .py file. This stack routes GPT through llmx, not the paid API:
-  • $0 (ChatGPT subscription):  llmx chat -p codex-cli -m gpt-5.5 --subscription ...
+  • $0 (ChatGPT subscription):  llmx chat -p codex-cli -m gpt-6-astra --subscription ...
   • governed/logged dispatch:   ~/Projects/skills/scripts/llm-dispatch.py --profile gpt_general
 The raw `openai` SDK bills the paid API for no benefit (see memory route-model-calls-through-llmx).
 Legit exceptions are NOT OpenAI: gemini embeddings/File Search use google.genai directly — those aren't matched.

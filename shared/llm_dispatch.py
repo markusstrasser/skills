@@ -185,15 +185,15 @@ PROFILES: dict[str, DispatchProfile] = {
         input_token_limit=900000,
     ),
     "claude_review": DispatchProfile(
-        # Opt-in third cosigner: Claude Opus 5 via Claude Code subscription
+        # Opt-in third cosigner: Claude Opus 5.5 via Claude Code subscription
         # (llmx provider `anthropic` → claude-cli transport). NOT in the default
         # Gemini+GPT pairing — request explicitly with `--axes claude` (or add to
         # an axis list). A genuinely third training family for adversarial diversity.
         # auth=subscription → claude-cli OAuth. NEVER auth=api unless caller opts in.
         name="claude_review",
-        intent="Claude Opus 5 adversarial review via subscription (opt-in cosigner)",
+        intent="Claude Opus 5.5 adversarial review via subscription (opt-in cosigner)",
         provider="anthropic",
-        model="claude-opus-5",
+        model="claude-opus-5-5",
         # Opus max architecture reviews can legitimately run beyond ten minutes.
         # A live 2026-07-10 review was killed at the old 600s boundary with zero
         # output despite a healthy subscription probe. Keep the bound finite, but

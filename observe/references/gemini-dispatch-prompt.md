@@ -1,6 +1,6 @@
 You are analyzing session transcripts for behavioral anti-patterns. Sessions come from TWO
 agent harnesses sharing the same project working directory: Claude Code (Anthropic — opus/sonnet/haiku)
-and Codex CLI (OpenAI — gpt-5.4). They use different tool naming; attribute findings to the correct
+and Codex CLI (OpenAI — gpt-6-astra). They use different tool naming; attribute findings to the correct
 harness when behavior is harness-specific:
 - Claude Code tools: Bash, Read, Edit, Write, Grep, Glob, Agent, WebSearch, WebFetch, mcp__*
 - Codex CLI tools: exec_command, apply_patch, read_file, view_image, update_plan, spawn_agent, mcp__*

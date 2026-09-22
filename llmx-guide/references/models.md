@@ -20,17 +20,17 @@ Default provider model: **Astra**. Codex `~/.codex/config.toml` selects Astra; o
 | ~~Gemini 3.1 Pro~~ | `gemini-3.1-pro-preview` | **RETIRED as a routing option 2026-06-13 (operator).** Do not route here — flash-3.5 dominates critique/synthesis and is cheaper/faster (re-confirmed on the ADR-0009 spine critique). Still callable via explicit `-m` for a one-off ARC-AGI-2/GPQA/video need, but it is not a default or recommended pick anywhere. Paid API; free Gemini CLI retired 2026-05-31. |
 | Gemini 3.8 Flash | `gemini-3.8-flash` | **Default Gemini** (GA 2026-09-02). Critique/search/vision/`--fast`. Intro $0.75/$3.75 through 2026-12-31, then $1.50/$7.50. Effort `low\|medium\|high` (default medium; no `minimal`). Critique-only policy unchanged (`LLMX_GEMINI_OK=1`). |
 | Gemini 3.5 Flash | `gemini-3.5-flash` | Named prior Flash pin. $1.50/$9. |
-| Gemini 3 Flash | `gemini-3-flash-preview` | Cheap workhorse. `-preview` required. Use for high-volume classification, not when 3.5's reasoning is needed |
+| Gemini 3 Flash | `gemini-3-flash-preview` | Cheap workhorse, `-preview` required. Superseded by Gemini 3.8 Flash (default, above) — prefer the newer ID for new work; kept for recognition (still a live registry/batch key). |
 | GPT Image 2 | `gpt-image-2` | Current SoTA image model. Default for `llmx image`; supports generation and edit/reference workflows |
 | Gemini 3 Pro Image | `gemini-3-pro-image-preview` | Available via `llmx image --provider google -m pro` |
-| GPT-5.3 Instant | `gpt-5.3-chat-latest` | Reasoning max: **medium only**. Auto-defaults |
+| GPT-5.3 Instant | `gpt-5.3-chat-latest` | Reasoning max: **medium only**. Auto-defaults. Superseded by GPT-5.6 Luna (cheap/fast, above) — prefer the newer pin for new work. |
 | GPT-6 Astra | `gpt-6-astra` (alias `gpt-6`) | **Default OpenAI / Codex model.** $10/$50 API; $0 via `--subscription` codex-cli. Effort `low`…`max`; `none`/`minimal` map to `low`. |
 | GPT-5.6 Sol | `gpt-5.6-sol` (alias `gpt-5.6`) | Named 5.6 flagship pin. $5/$30. Effort `none`…`max`. Pro = API `reasoning.mode=pro`. |
 | GPT-5.6 Terra | `gpt-5.6-terra` | Mid opt-in. $2/$12. Effort `none`…`max`. |
 | GPT-5.6 Luna | `gpt-5.6-luna` | Cheap/mechanical GPT. $0.20/$1.20. Keep for bulk extract and lint. |
 | GPT-5.4 | `gpt-5.4` | Older GPT. Prefer Sol/Terra/Luna for new work. |
 | GPT-5.2 (legacy) | `gpt-5.2` | Legacy OpenAI default. |
-| GPT-5-Codex | `gpt-5-codex` | No `minimal` reasoning-effort |
+| GPT-5-Codex | `gpt-5-codex` | No `minimal` reasoning-effort. Superseded by GPT-6 Astra (default Codex flagship, above) — prefer the newer pin for new work. |
 | Claude Sonnet 5 | `claude-sonnet-5` | Released 2026-06-30. 1M context, 128K output, $3/$15 per MTok ($2/$10 intro through 2026-08-31). Adaptive thinking on by default; first Sonnet-tier model with `xhigh` effort. Not yet in `lite_allowed_models` (subscription allowlist) — `--subscription -m claude-sonnet-5` will not route until that's added. See `/model-guide` for routing guidance and the full system-card digest. |
 | Claude Sonnet 4.6 | `claude-sonnet-4-6` | Hyphens, not dots. Superseded by Sonnet 5 (2026-06-30) — prefer the newer ID for new work. |
 | GLM-5.2 | `glm-5.2` | Z.ai via OpenRouter (`zai` provider). **Reasoning: high/xhigh only** (no low tier). Opt-in critique cosigner — see `/model-guide` trilemma + `agent-infra/decisions/2026-06-19-glm-5.2-integration.md`. |

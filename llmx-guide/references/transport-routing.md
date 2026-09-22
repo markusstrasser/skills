@@ -19,7 +19,7 @@ Interaction mode is independent from billing and from the legacy lite profile:
 ```bash
 llmx -p google "question"       # paid Gemini API (free CLI retired 2026-05-31); add --flex for 50% off
 llmx -p openai "question"       # uses OpenAI API
-llmx chat --subscription -m claude-opus-4-8 "question"  # Claude CLI subscription route (canonical)
+llmx chat --subscription -m claude-opus-5-5 "question"  # Claude CLI subscription route (canonical)
 llmx -p codex-cli --subscription -m gpt-5.6-sol "question"  # Codex CLI subscription
 llmx -p claude-cli "question"   # force Claude CLI transport (prefer --subscription on logical anthropic)
 llmx -p xai "question"          # xAI API (OpenAI-compatible at https://api.x.ai/v1)
@@ -30,7 +30,7 @@ Provider names are install-dependent. On the local 2026-05-10 install,
 subscription auth, prefer the logical route:
 
 ```bash
-llmx chat --subscription -m claude-opus-4-8 \
+llmx chat --subscription -m claude-opus-5-5 \
   --timeout 120 -o /tmp/claude-smoke.txt \
   "Reply with exactly OK."
 ```
@@ -87,10 +87,10 @@ Both approaches work:
 
 ```bash
 # Using -s flag with the API transport
-llmx -p openai -m gpt-5.4 --timeout 600 -s "You are reviewing code. Be concrete." "Review this design"
+llmx -p openai -m gpt-6-astra --timeout 600 -s "You are reviewing code. Be concrete." "Review this design"
 
 # Inline system tags (equivalent prompt text)
-cat <<'EOF' | llmx chat -p openai -m gpt-5.4 --timeout 600
+cat <<'EOF' | llmx chat -p openai -m gpt-6-astra --timeout 600
 <system>
 You are reviewing code. Be concrete. Reference specific files and tradeoffs.
 </system>
@@ -162,7 +162,7 @@ When dispatching from an agent context:
 llmx -p google -f .claude/overviews/source-overview.md "What files handle authentication?"
 
 # Code review with inline system prompt (API by default)
-cat <<'EOF' | llmx -p openai -m gpt-5.4 -o review.md
+cat <<'EOF' | llmx -p openai -m gpt-6-astra -o review.md
 <system>You are reviewing code. Be concrete. Reference specific files.</system>
 
 $(cat src/main.py)
@@ -185,7 +185,7 @@ done
 Set the Codex CLI default in `~/.codex/config.toml`:
 
 ```toml
-model = "gpt-5.4"
+model = "gpt-6-astra"
 model_reasoning_effort = "xhigh"
 ```
 
