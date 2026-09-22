@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 HOOK = Path(__file__).with_name("pretool-multiagent-commit-guard.sh")
 
@@ -278,6 +279,55 @@ class TrailingPathspecCommitTests(unittest.TestCase):
             r = _run_guard('git commit -m "merge"', process_cwd=repo, tool_workdir=repo,
                             fake_bin=fake_bin, peer_count=1)
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+
+class PartialStagingPathspecTests(unittest.TestCase):
+    """`git commit -- <paths>` takes working-tree content; a partial staging must not be lost."""
+
+    def setUp(self) -> None:
+        self._log_dir = tempfile.TemporaryDirectory()
+        env = mock.patch.dict(os.environ, {"HOOK_TRIGGER_LOG": str(Path(self._log_dir.name) / "t.jsonl")})
+        env.start()
+        self.addCleanup(env.stop)
+        self.addCleanup(self._log_dir.cleanup)
+
+    def _repo(self, tmp_path: Path) -> tuple[Path, Path]:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _git("init", cwd=repo)
+        _git("config", "user.email", "test@example.com", cwd=repo)
+        _git("config", "user.name", "Test", cwd=repo)
+        (repo / "mixed.py").write_text("a = 1\nb = 2\n", encoding="utf-8")
+        _git("add", "mixed.py", cwd=repo)
+        _git("commit", "-m", "baseline", cwd=repo)
+        fake_bin = tmp_path / "bin"
+        fake_bin.mkdir()
+        return repo, fake_bin
+
+    def test_blocks_pathspec_commit_of_partially_staged_file_even_without_peers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, fake_bin = self._repo(Path(tmp))
+            (repo / "mixed.py").write_text("a = 10\nb = 2\n", encoding="utf-8")
+            _git("add", "mixed.py", cwd=repo)  # my hunk, staged
+            (repo / "mixed.py").write_text("a = 10\nb = 20\n", encoding="utf-8")  # peer hunk, unstaged
+            r = _run_guard('git commit -m "mine" -- mixed.py', process_cwd=repo, tool_workdir=repo,
+                           fake_bin=fake_bin, peer_count=0)
+            self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+            reason = json.loads(r.stdout)["reason"]
+            self.assertIn("PARTIAL STAGING WOULD BE DISCARDED", reason)
+            self.assertIn("mixed.py", reason)
+
+    def test_allows_pathspec_commit_when_index_matches_worktree_or_nothing_staged(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, fake_bin = self._repo(Path(tmp))
+            (repo / "mixed.py").write_text("a = 10\nb = 2\n", encoding="utf-8")
+            unstaged_only = _run_guard('git commit -m "x" -- mixed.py', process_cwd=repo, tool_workdir=repo,
+                                       fake_bin=fake_bin, peer_count=1)
+            self.assertEqual(unstaged_only.returncode, 0, unstaged_only.stdout + unstaged_only.stderr)
+            _git("add", "mixed.py", cwd=repo)
+            fully_staged = _run_guard('git commit -m "x" -- mixed.py', process_cwd=repo, tool_workdir=repo,
+                                      fake_bin=fake_bin, peer_count=1)
+            self.assertEqual(fully_staged.returncode, 0, fully_staged.stdout + fully_staged.stderr)
 
 
 if __name__ == "__main__":

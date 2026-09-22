@@ -89,6 +89,31 @@ sys.exit(0)
 ' 2>/dev/null
 }
 
+# Listed paths that have BOTH staged and unstaged changes. `git commit -- <paths>`
+# (== --only) commits each listed path's WORKING-TREE content and ignores the
+# index, so a hunk-only staging (stage-anchor, add -p) is silently replaced by
+# the whole file, a peer's uncommitted hunks included. 2026-09-22: a sweep
+# worker committed a peer's WIP this way twice in one run (llmx, research-mcp).
+_pathspec_partial_paths() {
+    printf '%s' "$1" | python3 -c '
+import shlex, sys
+try:
+    tokens = shlex.split(sys.stdin.read())
+except ValueError:
+    sys.exit(0)
+if "--" in tokens:
+    idx = len(tokens) - 1 - tokens[::-1].index("--")
+    for tok in tokens[idx + 1:]:
+        print(tok)
+' 2>/dev/null | while IFS= read -r _p; do
+        [ -n "$_p" ] || continue
+        if ! git -C "$2" diff --cached --quiet -- "$_p" 2>/dev/null \
+           && ! git -C "$2" diff --quiet -- "$_p" 2>/dev/null; then
+            printf '%s\n' "$_p"
+        fi
+    done
+}
+
 # Block dangerous git patterns that sweep in or destroy other agents' changes:
 # - git add -A / --all / . — sweeps all changes
 # - git add -p — interactive staging shows hunks from all agents' modifications
@@ -110,6 +135,18 @@ elif echo "$CMD_FIRST" | grep -qE '^[[:space:]]*git[[:space:]]+(-C[[:space:]]+[^
     # Bare `git commit` (no path scope at all) is dangerous in multi-agent mode.
     if echo "$CMD_FIRST" | grep -qE '[[:space:]](--only|--include|-o|--amend|-i|--interactive|-p|--patch)([[:space:]]|$)' \
        || _pathspec_commit_is_safe "$CMD"; then
+        _PARTIAL=$(_pathspec_partial_paths "$CMD" "$TARGET_DIR")
+        if [ -n "$_PARTIAL" ]; then
+            "$HOOK_DIR/hook-trigger-log.sh" "multiagent-commit" "block-partial-pathspec" \
+                "paths=$(printf '%s' "$_PARTIAL" | tr '\n' ' ' | head -c 80)" "$CMD" 2>/dev/null || true
+            PARTIAL_REASON="PARTIAL STAGING WOULD BE DISCARDED: these listed paths have staged AND unstaged changes:
+$_PARTIAL
+\`git commit -- <paths>\` commits each listed path's working-tree content and ignores what you staged, so the unstaged hunks (usually a peer's work) would land in your commit.
+- To commit exactly what you staged: inspect \`git diff --cached\`, then run a bare \`git commit -m \"...\"\` (no pathspec).
+- To commit the whole file on purpose: \`git add <file>\` first, then commit."
+            jq -n --arg reason "$PARTIAL_REASON" '{decision: "block", reason: $reason}'
+            exit 2
+        fi
         # T3 exposure probe: this guard's precondition (a git-commit call in
         # a shared/main checkout with a peer present) matched, but the
         # command was ALREADY safe — log the eligible-and-clean row the
@@ -187,7 +224,7 @@ For git add: use specific files (not -A/-p/.).
 
 For git commit: the canonical safe form is \`git commit --only -m "..." -- <paths>\` (bare \`git commit -m "..." -- <paths>\` is git-semantically identical — a pathspec given to git commit with no --only/-i already defaults to --only's behavior). This reads ONLY the current working-tree content of the named paths and disregards anything staged for other paths, so a peer's own pre-staged files can never sweep into this commit (2026-05-27 substrate-session sweep on 486973e; 2026-07-18 auto-checkpoint sweep on 754b702c).
 
-If a peer has ALSO edited one of your target files (mixed authorship, same file): --only still reads that file's CURRENT working-tree content, which includes the peer's unstaged edits too — a pathspec does not protect against same-file hunks. Isolate your own hunks first with \`git add -p <file>\`, verify the index holds nothing else (\`git status\`), then a bare \`git commit\` (no pathspec) commits exactly what is staged.
+If a peer has ALSO edited one of your target files (mixed authorship, same file): --only still reads that file's CURRENT working-tree content, which includes the peer's unstaged edits too — a pathspec does not protect against same-file hunks. Isolate your own hunks with \`~/Projects/skills/bin/stage-anchor <file> ...\` (index-only; \`git add -p\` is blocked here), check \`git diff --cached\`, then a bare \`git commit\` commits exactly what is staged, or work in a linked worktree.
 
 For git checkout/restore (destructive): prefer Read + Edit to repair in place; if you must discard, run "git stash push -- <files>" first so it's reversible.
 
