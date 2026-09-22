@@ -160,7 +160,11 @@ class StopUncommittedAttributionTest(unittest.TestCase):
         written 3.5h before the session began was reported as "most likely YOURS").
 
         Positive control in the same firing: a genuinely new unattributable file IS
-        surfaced, so silence about the lane cannot come from the hook being mute."""
+        counted, so silence about the lane cannot come from the hook being mute.
+
+        Attribution floor (2026-09-22): unattributable files are reported as a COUNT
+        only -- no paths, no commit instruction -- so the count itself carries the
+        regression signal (2 would mean the baseline-dir filter broke)."""
         (self.repo / "peerlane").mkdir()
         self._write_settled("peerlane/result.csv", "x\n")
         status = subprocess.run(
@@ -176,8 +180,34 @@ class StopUncommittedAttributionTest(unittest.TestCase):
         stdin = '{"cwd":"%s","session_id":"%s"}' % (self.repo, self.mine)
         r = subprocess.run(["bash", str(SCRIPT)], input=stdin,
                            capture_output=True, text=True, timeout=20, env=_clean_env())
-        self.assertIn("fresh_unowned.csv", r.stdout)
+        self.assertIn("1 uncommitted file not touched by this session", r.stdout)
         self.assertNotIn("peerlane/result.csv", r.stdout)
+        self.assertNotIn("fresh_unowned.csv", r.stdout)
+
+    def test_unattributable_is_counted_never_named_or_commanded(self) -> None:
+        """Attribution floor (immigration-research 7cf1f4bb, 2026-09-22): files this
+        session never touched -- a peer session's running scripts rewriting derived
+        CSVs -- were named and the model was told they were "most likely YOURS:
+        review and commit explicitly", twice in one session. A Stop hook firing forces
+        an extra model turn (80 firings / 50 sessions), so an unattributable file now
+        costs one count line: no paths, no ownership claim, no commit instruction.
+
+        Fire with a non-empty own ledger (attribution branch) and two files written by
+        something else entirely."""
+        self._tmp_ledger(self.mine, "mine.py")
+        self._write_settled("mine.py", "m\n")
+        self._write_settled("peer_a.csv", "a\n")
+        self._write_settled("peer_b.csv", "b\n")
+        stdin = '{"cwd":"%s","session_id":"%s"}' % (self.repo, self.mine)
+        r = subprocess.run(["bash", str(SCRIPT)], input=stdin,
+                           capture_output=True, text=True, timeout=20, env=_clean_env())
+        self.assertIn("2 uncommitted files not touched by this session", r.stdout)
+        for banned in ("peer_a.csv", "peer_b.csv", "most likely YOURS",
+                       "commit them explicitly", "review and commit"):
+            self.assertNotIn(banned, r.stdout)
+        # The session's OWN file keeps the existing behavior: auto-committed.
+        self.assertIn("mine.py", self._head_files())
+        self.assertIn("peer_a.csv", self._git("status", "--short", "peer_a.csv"))
 
     def test_contested_file_not_swept(self) -> None:
         """A file in BOTH this session's AND a peer's ledger (contested) must NOT be

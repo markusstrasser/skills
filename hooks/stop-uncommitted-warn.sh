@@ -429,8 +429,9 @@ if not new_changes or not auto_commit_enabled:
     # that may still need a non-blocking surface:
     #   (0) OWN uncommitted work when auto-commit is off -- once per file per session.
     #   (1) CONTESTED (in my ledger AND a peer ledger) -- partly mine, surface once.
-    #   (2) UNATTRIBUTABLE subprocess output (in NO ledger) -- may be a peer script
-    #       output; surface ONLY when no peer shares the checkout, else it is pure noise
+    #   (2) UNATTRIBUTABLE subprocess output (in NO ledger) -- COUNT ONLY, never paths
+    #       and never a commit instruction (see the attribution floor below); surfaced
+    #       ONLY when no peer shares the checkout, else it is pure noise
     #       (4 firings on peer debug files, 85bd3604 2026-06-19; suppressed per d1907d3).
     # Files stay in the working tree + git status either way -- no data loss.
     parts = []
@@ -444,35 +445,20 @@ if not new_changes or not auto_commit_enabled:
     if contested_note:
         parts.append(contested_note.strip())
     if unattributable_fresh and _peer_count(cwd) < 1:
+        # ATTRIBUTION FLOOR (2026-09-22). These files are in NO Edit/Write ledger, and
+        # neither bgrun nor lane records a launching session id (checked: bin/bgrun keys
+        # jobs by name only, bin/lane by lane name) -- so nothing can tie them to this
+        # session. Naming them and demanding a commit was wrong twice in ONE session
+        # (immigration-research 7cf1f4bb 2026-09-22: five arrival_cohorts_2026_09_18
+        # derived CSVs a PEER session was actively rewriting via fetch_pums_mex.py and
+        # download_missing_acs_years.sh), and every firing costs an extra model turn
+        # (80 firings across 50 sessions, ~197 tokens each, 2026-09-15..22). Count only:
+        # no paths, no ownership claim, no commit instruction. The codex-liveness probe
+        # that used to soften the ownership claim is gone with the claim itself.
+        # Files stay in the working tree and in git status -- nothing is lost.
         u = len(unattributable_fresh)
         uplural = "s" if u != 1 else ""
-        ulist = "\n".join(unattributable_fresh[:10])
-        # Peer detection above only sees peer CLAUDE sessions. A live INTERACTIVE codex
-        # session editing the same checkout is invisible to it, so "most likely YOURS"
-        # misattributed in-flight codex kernel edits 3x in one evening
-        # (genomics 2026-08-23: exomiser/lirical, rs17822931 audit, receipt_realization).
-        # Cheap liveness proxy: any codex rollout written in the last 15 min. Message-only
-        # branch -- never changes commit behavior. NOTE: this whole program lives inside a
-        # single-quoted python3 -c string -- NO apostrophes anywhere in it.
-        codex_live = False
-        try:
-            _codex_root = os.path.join(os.path.expanduser("~"), ".codex", "sessions")
-            codex_live = bool(subprocess.run(
-                ["find", _codex_root, "-name", "*.jsonl", "-mmin", "-15", "-print", "-quit"],
-                capture_output=True, text=True, timeout=5,
-            ).stdout.strip())
-        except Exception:
-            pass
-        if codex_live:
-            parts.append(f"{u} changed file{uplural} were written outside the Edit/Write tools of "
-                   f"this session, so this session did not auto-commit them. A codex session was "
-                   f"ACTIVE in the last 15 min and may own these as in-flight edits -- verify "
-                   f"ownership before committing; do NOT sweep the work of a live peer:\n{ulist}")
-        else:
-            parts.append(f"{u} changed file{uplural} were written by a background subprocess (a codex/llmx "
-                   f"worker YOU launched, or local automation), NOT via the Edit/Write tool, so this "
-                   f"session did not auto-commit them. No peer claude shares this checkout, so they are "
-                   f"most likely YOURS: review and commit explicitly:\n{ulist}")
+        parts.append(f"{u} uncommitted file{uplural} not touched by this session; left alone.")
     if parts:
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "Stop", "additionalContext": "\n\n".join(parts)}}))
     sys.exit(0)
@@ -531,9 +517,11 @@ try:
         pre_msg = f" ({pre_existing} pre-existing/other-session excluded)" if pre_existing else ""
         u_msg = ""
         if unattributable_fresh:
+            # Same attribution floor as the surface-only branch: count, no paths, no
+            # commit instruction -- this session did not touch these files.
             u = len(unattributable_fresh)
             uplural = "s" if u != 1 else ""
-            u_msg = f" {u} subprocess-written file{uplural} (in no ledger) were left uncommitted — commit them explicitly if yours."
+            u_msg = f" {u} uncommitted file{uplural} not touched by this session; left alone."
         inflight_msg = ""
         if in_flight:
             k = len(in_flight)
