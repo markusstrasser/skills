@@ -107,8 +107,11 @@ if "--" in tokens:
         print(tok)
 ' 2>/dev/null | while IFS= read -r _p; do
         [ -n "$_p" ] || continue
-        if ! git -C "$2" diff --cached --quiet -- "$_p" 2>/dev/null \
-           && ! git -C "$2" diff --quiet -- "$_p" 2>/dev/null; then
+        # Exit 1 means "has differences". 128 (not a repo, git error) is no evidence
+        # of partial staging: counting it blocked commits run outside a repo.
+        _staged=0; git -C "$2" diff --cached --quiet -- "$_p" 2>/dev/null || _staged=$?
+        _unstaged=0; git -C "$2" diff --quiet -- "$_p" 2>/dev/null || _unstaged=$?
+        if [ "$_staged" -eq 1 ] && [ "$_unstaged" -eq 1 ]; then
             printf '%s\n' "$_p"
         fi
     done

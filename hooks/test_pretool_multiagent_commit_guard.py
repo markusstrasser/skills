@@ -329,6 +329,17 @@ class PartialStagingPathspecTests(unittest.TestCase):
                                       fake_bin=fake_bin, peer_count=1)
             self.assertEqual(fully_staged.returncode, 0, fully_staged.stdout + fully_staged.stderr)
 
+    def test_git_error_outside_a_repo_is_not_partial_staging(self) -> None:
+        """2026-09-22: `git diff --quiet` exits 128 outside a repo; that was read as 'has changes'."""
+        with tempfile.TemporaryDirectory() as tmp:
+            plain, fake_bin = Path(tmp) / "plain", Path(tmp) / "bin"
+            plain.mkdir()
+            fake_bin.mkdir()
+            r = _run_guard('git commit -m "x" -- a b', process_cwd=plain, tool_workdir=plain,
+                           fake_bin=fake_bin, peer_count=0)
+            self.assertNotIn("PARTIAL STAGING", r.stdout + r.stderr)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
