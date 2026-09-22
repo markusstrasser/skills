@@ -686,6 +686,18 @@ def main():
         # Companion reminders first (advisory, stderr-only, never blocks).
         run_companion_remind(envelope, tool_name, tool_input)
 
+        # Quote provenance for subagent briefs and peer messages (advisory stdout).
+        if tool_name in ("Agent", "SendMessage"):
+            try:
+                from quote_provenance import check_dispatch
+
+                note = check_dispatch(tool_input, envelope.get("transcript_path") or "")
+                if note:
+                    _log_trigger_cmd("quote-provenance", "warn", tool_name, "")
+                    print(json.dumps({"additionalContext": note}))
+            except Exception:
+                pass
+
         try:
             probe_envelope(envelope, tool_name)
         except Exception:
