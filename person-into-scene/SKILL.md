@@ -189,7 +189,7 @@ just image-run markus camel-desert        # bare names under ~/Documents/image-g
 Never present an image as "fixed/clean/final" without verifying it. The verification
 stack, in order of authority:
 1. **Flash localizer (primary):** `uv run python3 scripts/tools/flash_inspect.py img.png`
-   (in ~/Projects/imagegen) — schema-constrained gemini-3-flash artifact findings with
+   (in ~/Projects/imagegen) — schema-constrained gemini-3.8-flash artifact findings with
    severity score + box_2d. Run it on every candidate BEFORE presenting; when a defect
    appears, BISECT stages with it (gen → swap → finish variants — it isolated the A3
    color-match root cause in one pass after agent eyes missed it six times).
