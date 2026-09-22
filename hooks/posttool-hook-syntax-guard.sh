@@ -24,15 +24,18 @@ case "$INPUT" in
     *) exit 0 ;;
 esac
 
-HOOKGUARD_INPUT="$INPUT" python3 <<'PYEOF'
-import os, sys, json, re, shutil, subprocess
+# Hand python ONLY the edited path. The whole envelope used to ride in an env var, and a
+# PostToolUse envelope carries the full pre-edit file (tool_response.originalFile), so an
+# Edit of a large file that merely mentions "hooks/" blew past ARG_MAX and python3 died
+# with "Argument list too long" (23 of 23 logged runs, 2026-09-15..22, on ordinary
+# 0.4–6 KB Edits). The guard is fail-open, so those runs checked nothing.
+FP=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // ""' 2>/dev/null) || FP=""
+[ -n "$FP" ] || exit 0
 
-try:
-    data = json.loads(os.environ.get("HOOKGUARD_INPUT") or "{}")
-except Exception:
-    sys.exit(0)
+HOOKGUARD_FP="$FP" python3 <<'PYEOF'
+import os, sys, re, shutil, subprocess
 
-fp = (data.get("tool_input") or {}).get("file_path") or ""
+fp = os.environ.get("HOOKGUARD_FP") or ""
 if not fp or not os.path.isfile(fp):
     sys.exit(0)
 
