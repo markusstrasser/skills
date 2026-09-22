@@ -1,11 +1,33 @@
 # Frontier Model Benchmarks
 
-**Last updated:** 2026-07-24
-**Active scope:** Claude Fable 5, Claude Opus 5 (primary), Claude Opus 4.8 (cyber fallback / historical AA), GPT-5.6 Sol/Terra/Luna, Grok 4.5 (AA niche).
+**Last updated:** 2026-09-22
+**Active scope:** Claude Opus 5.5 (primary since 2026-09-22), Claude Fable 5, Claude Opus 5 (exact-ID lanes), Claude Opus 4.8 (cyber fallback / historical AA), GPT-5.6 Sol/Terra/Luna, Grok 4.5 (AA niche).
 **Note:** GPT-5.5 columns below are historical AA/vendor snapshots (pre-5.6); do not route to GPT-5.5.
 
 Older GPT/Gemini/Grok-4.20-and-earlier/Sonnet routing rows were removed from the active benchmark surface. Historical comparisons remain only where a vendor used them as a baseline. Fable 5 numbers are the GA-configuration scores (production safety classifiers on, fallback to Opus 4.8 where they fire); the unsafeguarded Mythos 5 scores a touch higher on classifier-adjacent rows. Grok 4.5 rows below are from Artificial Analysis independent evals (2026-07-08), not vendor self-report.
 
+
+## Claude Opus 5.5 launch (2026-09-22) — system card Table 8.1.A
+
+Vendor-run except where noted; max effort, mean of five trials. Full tables, effort curves and section numbers: [opus-5-5-system-card.md](opus-5-5-system-card.md).
+
+| Evaluation | Opus 5.5 | Fable 5.1 | Opus 5 | GPT-6 Astra | Routing read |
+|---|---:|---:|---:|---:|---|
+| SWE-bench Pro | **89.9** | 81.2 | 79.2 | – | Coding → 5.5 |
+| Terminal-Bench 4.0 | **66.4** (`xhigh`) | 55.8 | 52.3 | 57.9 | Terminal work → 5.5 or Astra |
+| FrontierCode v1.1 Main | **54.4** | 50.3 | 48.0 | 53.3 | 5.5 peaks at `medium` (54.6) |
+| HLE no tools / tools | **64.4** / **67.7** | 60.9 / 65.6 | 56.6 / 63.6 | – / 57.2 | |
+| ArXivMath Aug 2026, no tools / tools | **91.2** / **96.9** | 82.9 / 92.1 | 78.1 / 90.4 | – | Derivation → 5.5 |
+| GDPval-AA v2.1 (AA-run Elo) | **1846** | 1735 | 1708 | 1542 | Knowledge work → 5.5 |
+| AA-Briefcase v1.1 (AA-run Elo) | **1822** | 1678 | 1673 | 1569 | |
+| AutomationBench (Zapier-run) | 40.0 | 31.4 | 26.9 | **41.4** | Tie with Astra |
+| DRACO deep research | 87.4 | 87.7 | **88.3** | – | Tie; 5.5 at `low` 72.5 |
+| WANDR wide research (soft F1) | **72.3** | 68.7 | 67.1 | – | 5.5 at `low` 31.2 |
+| OfficeQA / Pro | 78.9 / 67.7 | **80.2** / **69.0** | 78.1 / 66.9 | – | Fable slightly ahead |
+| Chartography no tools / tools | **64.4** / **89.0** | 44.8 / 88.4 | 29.8 / 83.4 | – | |
+| AA-Omniscience public split, incorrect / abstain | **17%** / 7% | 21% / 2% (Mythos 5.1) | 22% / 6% | – | Anthropic's run; not comparable with AA's published rates |
+
+Price $4/$20 (Fable 5.1 $10/$50; Opus 5 $5/$25). Independent remeasure still pending: AA Intelligence Index and AA-Omniscience.
 
 ## Claude Opus 5 launch (2026-07-24) — vendor Pareto claims
 

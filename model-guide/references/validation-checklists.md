@@ -27,6 +27,16 @@
 - [ ] On long agentic loops, check actual turn/token count against Opus 4.8 before assuming the lower $/token wins on $/task — Sonnet 5 runs more turns on long-horizon work in its own benchmarks.
 - [ ] Keep prompt-injection boundaries around tool outputs (though Sonnet 5 measures strongest-in-class here).
 
+### After Claude Opus 5.5
+- [ ] Confirm the served model when it matters: the `opus` alias moved to `claude-opus-5-5` on 2026-09-22; exact-ID lanes still serve Opus 5.
+- [ ] Check that computed numbers came from executed code or the required tool; answering tool-required tasks from memory is its one reward-hack subclass above Mythos 5.1 (card §6.2.1).
+- [ ] For research or synthesis output, check the effort it ran at: `low` collapses on research (DRACO 72.5, WANDR 31.2).
+- [ ] If it relayed a user approval to a subagent or acted on one, find the user message that grants it (card §6.3.1: rare overclaiming of user intent; more acceptance of unverifiable authorization claims).
+- [ ] If the input contained pasted third-party text, confirm it did not act on instructions inside it (card §6.5.1).
+- [ ] On contested political or social questions, check that the strongest opposing case is stated in full rather than offered for later (API opposing-perspectives rate 26.9%).
+- [ ] After a stance change under pushback, check that new evidence was named (MASK honesty 87.4% vs Opus 5 94.8%).
+- [ ] Cyber or dual-use biology refusals: re-run on `claude-opus-5` by exact ID; `reasoning_extraction` refusals do not fall back.
+
 ### After Claude Opus 4.8
 - [ ] Check math and quantitative derivations, especially if not tool-backed.
 - [ ] Best-calibrated frontier model measured (AA-Omniscience non-hallucination 64%) — appropriate as monitor, but it still fabricates on a third of its misses; sources still required.

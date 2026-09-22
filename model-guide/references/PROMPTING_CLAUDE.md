@@ -1,14 +1,27 @@
-# Claude Opus 5, Fable 5 & Opus 4.8 Prompting Guide
+# Claude Opus 5.5, Opus 5, Fable 5 & Opus 4.8 Prompting Guide
 
-**Last updated:** 2026-07-24
-**Scope:** Claude Opus 5 (primary default), Fable 5 (metered opt-in), Opus 4.8 (cyber fallback).
+**Last updated:** 2026-09-22
+**Scope:** Claude Opus 5.5 (recommended default since 2026-09-22), Opus 5 (exact-ID lanes; cyber and dual-use biology), Fable 5 (metered opt-in), Opus 4.8 (cyber fallback).
 
 
-## Opus 5 vs Fable 5 vs Opus 4.8 — when to reach for which
+## Opus 5.5 vs Opus 5 vs Fable 5 vs Opus 4.8 — when to reach for which
 
-- **Opus 5** (`claude-opus-5`): **default Claude.** Near-Fable capability at $5/$25. Long-horizon agentic coding, architecture, review, professional work, bio (Fable bio blocks route here). Prefer over Fable for daily work; re-sweep effort — `low`/`medium` often enough.
+- **Opus 5.5** (`claude-opus-5-5`, 2026-09-22): **default Claude.** Matches or beats Fable 5.1 on most rows of its system card at $4/$20. Set effort explicitly (API default `medium`) and keep research at `medium` or above. Digest: [opus-5-5-system-card.md](opus-5-5-system-card.md).
+- **Opus 5** (`claude-opus-5`): exact-ID lane since 2026-09-22; the `opus` alias now serves 5.5. Near-Fable capability at $5/$25. Long-horizon agentic coding, architecture, review, professional work, bio (Fable bio blocks route here). Prefer over Fable for daily work; re-sweep effort — `low`/`medium` often enough.
 - **Fable 5** (`claude-fable-5`): metered $10/$50 — only when a named edge justifies 2× price (or Mythos-class cyber/bio capability is required and accessible).
 - **Opus 4.8** (`claude-opus-4-8`): cyber-classifier fallback target (vendor default on flagged cyber); keep for that path only — not a general default.
+
+## Opus 5.5 prompting deltas (vs Opus 5)
+
+- **Set effort explicitly.** The API default is `medium` (Opus 5: `high`), and effort names do not map one-to-one: the vendor reports 5.5 at `medium` beating Opus 5 at `high` on coding and knowledge work. Keep research and synthesis at `medium` or above; at `low` it scores 72.5 on DRACO and 31.2 on WANDR.
+- **Lower effort before asking for brevity.** At the same level it thinks more per turn than Opus 5, and effort cuts thinking more reliably than instructions.
+- **Re-test the Opus 5 scaffolding below** (concision, anti-over-verification, scope caps) rather than carrying it over.
+- **Give it writing rules.** It follows supplied rules and puts the important information first.
+- **Mark pasted third-party text as data** when the harness does not; the card shows it acting on instructions planted in user-pasted text more often than Opus 5.
+- **Name the tool or command a computed number must come from, and ask for the receipt.** When a tool is required it sometimes answers from memory.
+- **Ask for the strongest opposing case on contested topics.** It tends to mention the other side briefly and offer to argue it later.
+- API: thinking cannot be disabled; forced `tool_choice` returns 400; computer use only through `computer_toolset_20260801`; progress notes arrive as `thinking` blocks (`display: "updates"`).
+- Sources: https://www.anthropic.com/claude-opus-5-5, https://anthropic.com/claude-opus-5-5-system-card, and the claude-api skill's `shared/model-migration.md` § Migrating to Claude Opus 5.5.
 
 ## Opus 5 prompting deltas (vs 4.8)
 

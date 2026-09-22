@@ -1,5 +1,18 @@
 # Model Guide Changelog
 
+## 2026-09-22 - Claude Opus 5.5 released; recommended Claude default
+
+Read the announcement and the 230-page system card on release day. Opus 5.5 scores
+above Opus 5 on every row of its capability summary and at or above Fable 5.1 on most,
+at $4/$20 per MTok (Fable 5.1 $10/$50). It ties Fable 5.1 on DRACO deep research and
+trails slightly on OfficeQA. New digest: [opus-5-5-system-card.md](opus-5-5-system-card.md).
+
+- Transport: `claude -p --model opus` (CLI 2.1.280) served `claude-opus-5-5` (JSON `modelUsage`), so every alias-based lane moved on release day, including `opus-low`. llmx `-m claude-opus-5-5` dry-run resolves to claude-cli with subscription auth; no live llmx canary.
+- Routing: Opus rows now name Opus 5.5. Cyber and dual-use biology stay on `claude-opus-5` by exact ID (5.5 re-routes most cyber to Opus 4.8 and runs a bio classifier). The interactive setting stays the operator's call.
+- Research lanes on 5.5 need `medium` or above: DRACO 72.5 and WANDR 31.2 at `low`.
+- Watch-items added to validation-checklists.md: tool-required tasks answered from memory, pasted-text instructions, authorization claims, opposing-perspective coverage, MASK honesty below Opus 5.
+- Not measured locally: quality per token against Fable 5.1 on this fleet's workloads; the Agent-tool `model: opus` served model.
+
 ## 2026-09-05 - Reconcile Fable 5.1 plan and transport evidence
 
 Anthropic's current plan page includes Fable 5 and 5.1 in Max and premium seats,
