@@ -33,7 +33,10 @@ while IFS= read -r _seg; do
   # session (genomics 2026-08-27) tripped the counter as "Polled /checkpoint.md 15x".
   # The extractor yields the path SUFFIX for a relative target (`.claude/checkpoint.md`
   # → `/checkpoint.md`), so allow any non-space prefix between the redirect and it.
-  [ -n "$_p" ] && echo "$_seg" | grep -qE ">>?[[:space:]]*\"?[^[:space:]]*${_p}" && continue
+  # `_p` lands inside an ERE: a path carrying `(`, `+` or `[` made grep abort
+  # ("grep: parentheses not balanced", 2026-09-15..22), so escape the metacharacters.
+  _p_re=$(printf '%s' "$_p" | sed -E 's/[][\\.^$*+?(){}|]/\\&/g')
+  [ -n "$_p" ] && echo "$_seg" | grep -qE ">>?[[:space:]]*\"?[^[:space:]]*${_p_re}" && continue
   [ -n "$_p" ] && { PATH_TARGET="$_p"; break; }
 done <<EOF_SEGS
 $(echo "$CMD_CLEAN" | sed 's/&&/\n/g; s/||/\n/g' | tr '|;' '\n')
@@ -100,7 +103,10 @@ if [ "$COUNT" -ge 15 ]; then
   echo "${LOAD_HINT}" >&2
   exit 2
 elif [ "$COUNT" -ge 10 ]; then
-  printf '{"additionalContext": "Polled %s %sx via Bash. If waiting for a background task, prefer TaskOutput over polling. %s Next poll will be blocked."}' \
-    "$PATH_TARGET" "$COUNT" "$LOAD_HINT"
+  # Emit through jq: the hint carries double quotes, so the printf-built object was
+  # invalid JSON on every firing (19 of 20 logged runs, 2026-09-15..22) and the advisory
+  # never reached the model. hookSpecificOutput is the PostToolUse context field.
+  jq -cn --arg msg "Polled ${PATH_TARGET} ${COUNT}x via Bash. If waiting for a background task, prefer TaskOutput over polling. ${LOAD_HINT} Next poll will be blocked." \
+    '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $msg}}'
 fi
 exit 0

@@ -41,8 +41,23 @@ def main():
         check("relative paths leave the tracker empty", not tracker.exists() or tracker.read_text().strip() == "")
         # Genuine poll of one absolute file still blocks on the 15th call.
         target = "/tmp/some-long-background-output-file.log"
-        codes = [run(f"tail -5 {target}", scope).returncode for _ in range(15)]
+        results = [run(f"tail -5 {target}", scope) for _ in range(15)]
+        codes = [r.returncode for r in results]
         check("absolute-path poll blocks at 15", codes[-1] == 2 and all(c == 0 for c in codes[:9]))
+        # 2026-09-22: the 10th-14th calls carry an advisory; it must be valid JSON in the
+        # PostToolUse context field (the printf-built object was invalid on every firing).
+        try:
+            advisory = json.loads(results[9].stdout)
+            ctx = advisory["hookSpecificOutput"]["additionalContext"]
+            ok = advisory["hookSpecificOutput"]["hookEventName"] == "PostToolUse" and ctx.startswith(f"Polled {target} 10x")
+        except (ValueError, KeyError, TypeError):
+            ok = False
+        check("advisory at 10 is valid JSON with hookSpecificOutput.additionalContext", ok)
+        check("no hook stderr before the block", all(not r.stderr.strip() for r in results[:14]))
+        # 2026-09-22: a path with an ERE metacharacter must not abort grep
+        # ("grep: parentheses not balanced").
+        r = run("tail -5 /tmp/lane-output-(partial-run.log", scope)
+        check("regex metacharacter in the path leaves grep silent", r.returncode == 0 and not r.stderr.strip())
         # A quoted absolute path is extracted without the quote.
         run(f'cat "{target}"', scope)
         lines = tracker.read_text().split()
