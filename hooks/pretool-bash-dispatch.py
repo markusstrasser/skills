@@ -2088,16 +2088,14 @@ def gate_pkill_anchor_guard(raw_payload: str) -> GateResult:
 
 
 # --- 31. opus-concurrency-advisory (ADVISORY, no if) -------------------------
-# Reuses arc-agi's `just opus-load` recipe's EXACT pgrep pattern and threshold
-# verbatim (arc-agi justfile:823 `opus-load`) rather than reinventing a count —
-# see that recipe's own comment for the measured basis (6+ concurrent streams
-# -> 72% dead rounds, arc-agi 2026-07-18 Stage-0 burn) and its stated throttle
-# ("keep <=2-3; stagger launches above that"). Cited, not duplicated logic:
-# the pattern string below IS the recipe's pattern string, kept identical on
-# purpose so the two never silently drift apart.
-_OPUS_LOAD_PGREP_PATTERN = "claude-opus-4-8|claude-fable-5|claude -p"
+# Pattern and threshold come from arc-agi's former `just opus-load` recipe
+# (measured: 6+ concurrent streams -> 72% dead rounds, arc-agi 2026-07-18
+# Stage-0 burn; throttle "keep <=2-3; stagger launches above that"). arc-agi
+# was removed, so this is now the only definition. 2026-09-22: widened from
+# opus-4-8 to every Opus 4/5 id; the old pattern missed Opus 5 and 5.5.
+_OPUS_LOAD_PGREP_PATTERN = "claude-opus-[45]|claude-fable-5|claude -p"
 _OPUS_TRIGGER_LLMX_RE = re.compile(r"\bllmx\b", re.I)
-_OPUS_TRIGGER_MODEL_RE = re.compile(r"claude-opus-4-8|claude-fable-5", re.I)
+_OPUS_TRIGGER_MODEL_RE = re.compile(r"claude-opus-[45]|claude-fable-5", re.I)
 _OPUS_TRIGGER_CLAUDE_P_RE = re.compile(r"(?:^|[;&|(]\s*)claude\s+-p\b")
 
 
@@ -2129,7 +2127,7 @@ def gate_opus_concurrency_advisory(raw_payload: str) -> GateResult:
     _log_trigger("opus-concurrency-advisory", "warn", f"count={count} cmd={cmd[:80]}", cmd)
     msg = (
         f"ADVISORY: {count} concurrent opus-family streams already live (pgrep -f "
-        f"'{_OPUS_LOAD_PGREP_PATTERN}', same pattern as `just opus-load` in arc-agi) — "
+        f"'{_OPUS_LOAD_PGREP_PATTERN}') — "
         "measured: 6+ concurrent -> 72% dead rounds (arc-agi 2026-07-18 Stage-0 burn: heavy "
         "induction calls slow past --llm-timeout and die as EMPTY/nonzero 'transport errors' "
         "under contention). Stagger or throttle this launch (throttle: keep <=2-3 concurrent; "

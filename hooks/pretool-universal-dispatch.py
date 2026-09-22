@@ -300,6 +300,7 @@ _LLMX_SUBSCRIPTION_MODELS = {
     "claude-fable-5",
     "claude-fable-5-1",
     "claude-opus-5",
+    "claude-opus-5-5",
     "claude-opus-4-8",
     "composer-2.5",
     "gemini-3-flash-preview",
