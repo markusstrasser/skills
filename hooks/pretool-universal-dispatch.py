@@ -312,6 +312,7 @@ _LLMX_SUBSCRIPTION_MODELS = {
     "gpt-5.6-terra",
     "grok-4.5",
     "grok-4.6",
+    "grok-4.7",
 }
 _LLMX_MODEL_FLAG_RE = re.compile(r"(?:^|\s)-m[=\s]+([A-Za-z0-9._-]+)")
 _LLMX_HAS_SUBSCRIPTION_ROUTING_RE = re.compile(

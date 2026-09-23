@@ -1,7 +1,7 @@
 # Frontier Model Benchmarks
 
 **Last updated:** 2026-09-22
-**Active scope:** Claude Opus 5.5 (primary since 2026-09-22), Claude Fable 5, Claude Opus 5 (exact-ID lanes), Claude Opus 4.8 (cyber fallback / historical AA), GPT-5.6 Sol/Terra/Luna, Grok 4.5 (AA niche).
+**Active scope:** Claude Opus 5.5 (primary since 2026-09-22), Claude Fable 5, Claude Opus 5 (exact-ID lanes), Claude Opus 4.8 (cyber fallback / historical AA), GPT-5.6 Sol/Terra/Luna, Grok 4.7 (vendor launch table in model-guide; AA rows below are still Grok 4.5).
 **Note:** GPT-5.5 columns below are historical AA/vendor snapshots (pre-5.6); do not route to GPT-5.5.
 
 Older GPT/Gemini/Grok-4.20-and-earlier/Sonnet routing rows were removed from the active benchmark surface. Historical comparisons remain only where a vendor used them as a baseline. Fable 5 numbers are the GA-configuration scores (production safety classifiers on, fallback to Opus 4.8 where they fire); the unsafeguarded Mythos 5 scores a touch higher on classifier-adjacent rows. Grok 4.5 rows below are from Artificial Analysis independent evals (2026-07-08), not vendor self-report.
