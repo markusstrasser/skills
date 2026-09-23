@@ -32,9 +32,12 @@ uv run --project ~/Projects/agent-infra python3 \
 ```
 
 Selects this session's last `reflect.close-digest.v1` row — never a `close-ack.v1`
-(acks share the file and dominate the tail; blind `tail -1` returns an ack). An empty
-session arg falls back to the latest **un-acked** digest — the SessionStart-nudge case,
-where the digest belongs to a prior session.
+(acks share the file and dominate the tail; blind `tail -1` returns an ack). A full id or
+a unique ≥8-char prefix works. An empty session arg falls back to the newest **pending**
+digest in the current project — the SessionStart-nudge case, where the digest belongs to a
+prior session; `--any-project` crosses projects. A digest past the 14-day transcript
+horizon (or whose transcript is gone) is expired, not pending; asking for it by id still
+prints it, with a `[STALE-DIGEST: …]` line on stderr.
 
 If exit 1 (no digest): drain the queue, then retry:
 
@@ -124,7 +127,9 @@ uv run --project ~/Projects/agent-infra python3 \
 ```
 
 Grades: `DERIVABLE` | `NON-DERIVABLE` (taste/telos — logged, no fault). No auto-append on ack
-without `--hindsight` — avoids empty stub cruft.
+without `--hindsight` — avoids empty stub cruft. `--ack` takes the full id or a unique ≥8-char
+prefix and writes the full id; an id with no digest exits 1 and writes nothing; another
+project's digest needs `--any-project`.
 
 ```bash
 uv run --project ~/Projects/agent-infra python3 \
