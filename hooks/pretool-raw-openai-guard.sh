@@ -54,6 +54,6 @@ BLOCKED: raw OpenAI SDK in a .py file. This stack routes GPT through llmx, not t
   • governed/logged dispatch:   ~/Projects/skills/scripts/llm-dispatch.py --profile gpt_general
 The raw `openai` SDK bills the paid API for no benefit (see memory route-model-calls-through-llmx).
 Legit exceptions are NOT OpenAI: gemini embeddings/File Search use google.genai directly — those aren't matched.
-If you genuinely need the raw SDK, say so explicitly and note why in the file.
+There is no in-file exemption: route the call through llmx, or ask the operator if the raw SDK is truly needed.
 MSG
 exit 2
