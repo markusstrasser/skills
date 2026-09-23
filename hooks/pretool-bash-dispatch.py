@@ -2377,9 +2377,10 @@ def _simple_commands(command: str) -> list[tuple[str, dict[str, str], list[str |
 # --- git-history-guard (BLOCKER, no if) — imports sidecar ----------------------
 # A history rewrite in a checkout shared with a live peer can un-commit or republish
 # the peer's commit (arc-agi 2026-07-16: `git reset --soft HEAD~1` after a peer had
-# committed), and `reset --hard` discards the peer's uncommitted work. Rule, verbs,
-# identity and incidents: pretool_git_history_guard.py (the sidecar holds the git
-# semantics and the Gov-ID). The cheap substring check keeps non-matching calls free.
+# committed), `--amend` commits the whole shared index (arc-agi 2026-07-10), and
+# `reset --hard` discards the peer's uncommitted work. Rule, verbs, identity and
+# incidents: pretool_git_history_guard.py (the sidecar holds the git semantics and the
+# Gov-ID). The cheap substring check keeps non-matching calls free.
 _GIT_HISTORY_HINTS = ("reset", "rebase", "--am")
 
 

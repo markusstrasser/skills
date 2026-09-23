@@ -1110,11 +1110,31 @@ def _run_history(sandbox, tmp_path, command, *, peers=1, session=MINE, cwd=None,
     return run_dispatcher(envelope, env, where)
 
 
-_FOREIGN_HEAD_BLOCKS = [
+_AMEND_FORMS = [
     "git commit --amend --no-edit",
     "git commit -a --amend",
     "git commit -am 'reword' --amend",
     "GIT_EDITOR=true git commit --amend",
+]
+
+
+@pytest.mark.parametrize("owners", [[PEER, MINE], [MINE, PEER], [MINE, None]], ids=["own", "foreign", "untagged"])
+@pytest.mark.parametrize("command", _AMEND_FORMS)
+def test_git_history_guard_blocks_every_amend_with_peers(sandbox, tmp_path, owners, command):
+    """--amend commits the whole shared index, so HEAD ownership does not make it safe
+    (arc-agi 2026-07-10: a self-amend swept two peer-staged rows)."""
+    head = _make_history(sandbox, owners)[-1]
+    disp = _run_history(sandbox, tmp_path, command)
+    assert disp["exit_code"] == 2, disp
+    msg = disp["block_msg"]
+    assert "1 peer session(s) share this checkout" in msg
+    assert "--amend commits the whole shared index and rewrites HEAD" in msg
+    owner = f"session {owners[-1][:8]}" if owners[-1] else "no Session-ID"
+    assert f"HEAD {head[:7]} ({owner})" in msg
+    assert "make a follow-up commit instead" in msg
+
+
+_FOREIGN_HEAD_BLOCKS = [
     "git reset --soft HEAD~1",
     "git reset --mixed HEAD~1",
     "git reset --keep HEAD~1",
@@ -1167,7 +1187,7 @@ def test_git_history_guard_solo_never_fires(sandbox, tmp_path, command):
 
 @pytest.mark.parametrize(
     "command",
-    ["git commit --amend --no-edit", "git reset --soft HEAD~1", "git reset HEAD~1", "git reset", "git rebase -i HEAD~1"],
+    ["git reset --soft HEAD~1", "git reset HEAD~1", "git reset", "git rebase -i HEAD~1"],
 )
 def test_git_history_guard_allows_own_head_with_peers(sandbox, tmp_path, command):
     _make_history(sandbox, [PEER, MINE])
@@ -1177,7 +1197,7 @@ def test_git_history_guard_allows_own_head_with_peers(sandbox, tmp_path, command
 
 def test_git_history_guard_blocks_head_without_trailer(sandbox, tmp_path):
     _, head = _make_history(sandbox, [MINE, None])
-    disp = _run_history(sandbox, tmp_path, "git commit --amend --no-edit")
+    disp = _run_history(sandbox, tmp_path, "git reset --soft HEAD~1")
     assert disp["exit_code"] == 2
     assert f"HEAD {head[:7]}" in disp["block_msg"]
     assert "no Session-ID" in disp["block_msg"]
@@ -1250,7 +1270,7 @@ def test_git_history_guard_reads_identity_from_recorded_envelope(sandbox, tmp_pa
     envelope = {key: f"<{key}>" for key in _RECORDED_BASH_ENVELOPE_KEYS}
     envelope.update(
         tool_name="Bash",
-        tool_input={"command": "git commit --amend --no-edit"},
+        tool_input={"command": "git reset --soft HEAD~1"},
         cwd=sandbox["cwd"],
         session_id=MINE,
         hook_event_name="PreToolUse",

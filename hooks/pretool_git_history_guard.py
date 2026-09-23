@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Gov-ID: hook:git-history-guard
-# goal: in a checkout shared with live peer sessions, block history rewrites of commits this session cannot show it wrote, and any reset --hard
+# goal: in a checkout shared with live peer sessions, block every --amend and reset --hard, and reset/rebase rewrites of commits this session cannot show it wrote
 # verifier: skills/hooks/test_bash_dispatch.py (test_git_history_guard_*)
 # blast_radius: shared
 """pretool_git_history_guard.py — git semantics for the Bash dispatcher's `git-history-guard`.
@@ -10,20 +10,23 @@ Incidents:
     session's own commit, ran after a concurrent peer had committed. It un-committed the
     PEER's commit, and the re-commit published the peer's work under the wrong message
     (recovered from the reflog; fix-forward annotation bd91a04f).
-  * arc-agi 2026-07-10 (session ab8eb4c5): `git commit --amend` raced six peers and swept two
-    peer rows under the wrong message.
+  * arc-agi 2026-07-10 (session ab8eb4c5): `git commit --amend` of the session's OWN
+    auto-checkpoint, with six peers present, committed the whole shared index and swept two
+    peer-staged rows under the wrong message. Owning HEAD does not protect the shared index.
   * genomics 2026-06-27: `git reset --hard` in a shared checkout wiped a teammate's finished,
     uncommitted pass.
 
 Rule, active only when peer-session-count.sh (the single peer detector, also used by the
 stash, multiagent-commit and SessionStart hooks) reports >= 1 peer in the target checkout:
+  * `git commit --amend` blocks whoever owns HEAD: it commits the whole shared index, peer-
+    staged files included, and rewrites HEAD. A follow-up commit is always available.
   * `git reset --hard` blocks whoever owns HEAD, because it discards every peer's uncommitted
     edits.
-  * `git commit --amend`, a non-pathspec `git reset`, and `git rebase` (except its
-    continue/abort/skip/quit/edit-todo/show-current-patch controls) block unless HEAD, and
-    every commit the command would drop or rewrite (`<target>..HEAD`, `<upstream>..HEAD`,
-    capped at RANGE_LIMIT), carries a `Session-ID:` trailer naming this session. A missing
-    trailer counts as foreign: nothing then shows this session wrote the commit.
+  * A non-pathspec `git reset` and `git rebase` (except its continue/abort/skip/quit/
+    edit-todo/show-current-patch controls) block unless HEAD, and every commit the command
+    would drop or rewrite (`<target>..HEAD`, `<upstream>..HEAD`, capped at RANGE_LIMIT),
+    carries a `Session-ID:` trailer naming this session. A missing trailer counts as
+    foreign: nothing then shows this session wrote the commit.
   * Path-scoped resets (`git reset [<tree>] -- <paths>`, `git reset <paths>`, `-p`,
     `--pathspec-from-file`) only unstage paths and always pass.
 
@@ -442,7 +445,7 @@ def _range_spec(op: HistoryOp) -> list[str] | None:
     """The revs whose commits the command drops or rewrites, beyond HEAD itself."""
     if op.verb == "rebase" and op.rebase_root:
         return [f"--max-count={RANGE_LIMIT}", op.range_head]
-    if op.verb == "amend" or op.rev is None or op.rev is UNKNOWN or op.rev in ("HEAD", "@"):
+    if op.rev is None or op.rev is UNKNOWN or op.rev in ("HEAD", "@"):
         return None
     return [f"--max-count={RANGE_LIMIT}", f"{op.rev}..{op.range_head}"]
 
@@ -490,6 +493,17 @@ def check(op: HistoryOp, my_ids: set[str], environ) -> Decision | None:
             f"(genomics 2026-06-27). HEAD is {head_sha[:7]} ({_owner(head_ids)}). Discard only "
             "your own paths (`git stash push -- <paths>` keeps them recoverable) or reset inside "
             "your own worktree, and fix forward with a new commit.\n",
+        )
+
+    if op.verb == "amend":
+        return Decision(
+            "block",
+            detail,
+            f"BLOCK: `{op.display}`: {peers} peer session(s) share this checkout — --amend "
+            f"commits the whole shared index and rewrites HEAD {head_sha[:7]} "
+            f"({_owner(head_ids)}); make a follow-up commit instead (`git commit -m ... -- "
+            "<paths>` commits only your paths). An amend of a session's own checkpoint swept "
+            "two peer-staged rows under the wrong message here (arc-agi 2026-07-10).\n",
         )
 
     checked = list(head)
