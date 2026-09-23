@@ -1333,6 +1333,7 @@ def _ops(command, base="/base", environ=None):
         "git -c core.editor=true commit --amend",
         "command git commit -q --amend",
         "if git commit --amend --no-edit; then echo ok; fi",
+        "git commit --amend -m -h",  # `-h` is the message here, not a help request
     ],
 )
 def test_git_history_parse_finds_amend(command):
@@ -1351,6 +1352,11 @@ def test_git_history_parse_finds_amend(command):
         "git reset HEAD -- a.py",
         "git reset a.py b.py",
         "git rebase --continue",
+        # usage requests (seen in the 2026-09-23 agentlogs replay): git rewrites nothing
+        "git rebase -h",
+        "git reset -h",
+        "git reset --help",
+        "git commit --amend -h",
     ],
 )
 def test_git_history_parse_ignores_non_rewrites(command):

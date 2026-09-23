@@ -81,6 +81,9 @@ _REBASE_VALUE_LONG = {
     "--onto", "--exec", "--strategy", "--strategy-option", "--whitespace", "--empty", "--trailer",
 }
 
+# In an option position these print usage (or fail as an unknown switch): nothing is rewritten.
+_HELP_WORDS = {"-h", "--help"}
+
 UNKNOWN = object()  # a rev word that is present but cannot be expanded here
 
 
@@ -281,6 +284,8 @@ def _amend_op(rest) -> HistoryOp | None:
             continue
         if word == "--":
             break
+        if word in _HELP_WORDS:
+            return None
         if word.startswith("--"):
             name = word.split("=", 1)[0]
             if name in _AMEND_SPELLINGS:
@@ -316,6 +321,8 @@ def _reset_op(rest, shell_vars, environ, cwd) -> HistoryOp | None:
         if word is None:
             positional.append(None)
             continue
+        if word in _HELP_WORDS:
+            return None
         if word == "--":
             after_dashdash = []
         elif word in _RESET_MODES:
@@ -363,6 +370,8 @@ def _rebase_op(rest, shell_vars, environ, cwd) -> HistoryOp | None:
         if word is None:
             positional.append(None)
             continue
+        if word in _HELP_WORDS:
+            return None
         if word == "--root":
             root = True
         elif word.startswith("--"):
