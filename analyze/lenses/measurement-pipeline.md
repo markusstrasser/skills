@@ -21,6 +21,11 @@ across groups, places or years, and before the null/base-rate lens: the number i
    finding. Do not drop it.
 6. **Grade each mechanism** A–D by source and state one of: measured · real-in-law-but-unmeasured ·
    not found (absence verified by search, queries listed).
+7. **Check inference rules against the policy regime.** When a derived variable is read from program
+   receipt (legal status from Medicaid, citizenship from benefits, residence from enrollment), check
+   that program's eligibility rules for the file's state and year. A rule that holds nationally inverts
+   where a state changed eligibility. Ask also what the program costs the people the rule hides. When
+   one analysis finds a rule broken, fix every consumer of the shared variable in the same session.
 
 Output:
 
