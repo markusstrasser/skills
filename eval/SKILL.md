@@ -81,21 +81,20 @@ in `substrate/packages/<pkg>` consumed via `path = "../substrate/packages/<pkg>"
 editable = true` (how corpus-core / corpus-testing reach phenome+genomics). Symlinks
 are only for data dirs and the AGENTS.md/GEMINI.md→CLAUDE.md doc mirrors.
 
-- **evals-repo bakeoffs** get `evalcore` + scaffold + prereg guard for free (`evalcore` is an editable
-  dep of evals/ — `import evalcore.stats` / `.judge` / `.leakguard` just works).
-- **`evalcore` lives in `substrate/packages/evalcore`** (promoted 2026-06-13, ADR 0001 — phenome became
-  the proven 2nd consumer). Pure-stdlib, zero-dep. To use it from ANY repo's in-repo eval, add to that
-  repo's `pyproject.toml`: `"evalcore"` in `dependencies` + under `[tool.uv.sources]`
-  `evalcore = { path = "../substrate/packages/evalcore", editable = true }`, then `uv sync`. Then import:
+- **`evalcore` lives in `~/Projects/evals/evalcore` and is evals-local.** evals/ is `package = false`;
+  its bakeoffs import `evalcore` from the repo root and get the scaffold + prereg guard for free.
+  Pure-stdlib, zero-dep. It was promoted to `substrate/packages/evalcore` on 2026-06-13 and returned on
+  2026-07-14 (evals@4ab4bde) when its only second consumer, phenome, retired; the substrate copy was
+  deleted 2026-09-23. Key imports:
+    - `from evalcore.run import run_eval` — the guarded loop: leak-checked trials, a transport pre-flight
+      that aborts a dead arm before the sweep, one atomic `{run_id}.trials.jsonl`
     - `from evalcore.judge import dispatch, assert_blind, lint_not_leading, lint_stakes_neutral, cyclic_assignment`
     - `from evalcore.leakguard import assert_no_gold_leak`  — call before EVERY system-under-test dispatch
     - `from evalcore.stats import wilson_ci, mcnemar_exact, cohen_kappa, holm_correction, point_biserial, benjamini_hochberg`
-  Worked example: `phenome/tests/evals/epistemics/judge_refusal.py` runs `lint_not_leading` on its own
-  judge prompt as a standing tripwire (the regression guard for its 2026-06-13 led-judge incident).
-- **Add it WHEN an eval genuinely needs a primitive, not speculatively** — the proven-common bar still
-  holds (vetoed-decisions): a repo whose evals consume none of it should NOT carry the dep. evals/ +
-  phenome consume it today; genomics/intel add the line if/when an in-repo eval needs blind-judge /
-  leak-guard / Wilson-κ / power. Still: NO symlinks, NO copying evalcore's code into a repo.
+- **An in-repo eval elsewhere that needs these primitives is the second consumer** — re-promote evalcore
+  into `substrate/packages/` under the proven-common test (agent-infra
+  `decisions/2026-06-09-shared-extraction-proven-common-test.md`) and point both repos at it. Until
+  then no other repo carries the dep. Still: NO symlinks, NO copying evalcore's code into a repo.
 
 ## Phase 0 — Dedup (before designing anything)
 
@@ -284,7 +283,8 @@ in fact *unpersisted*, traces; the trace audit found a led judge + no specificit
   warned, temperature pinned. Checkable answer ⇒ commit-first (judge solves, commits, then compares). One strong judge + one
   diverse-family κ instrument; majority-of-panel is NOT truth (~2 effective votes).
   `cyclic_assignment` when judges × scenarios ≥ 2×2. Schema includes `confidence`.
-- Rows via `evalcore.results.row/append_rows`; provenance via `provenance()` (prompt hashes).
+- Trials are the source of truth (`run_eval` writes `{run_id}.trials.jsonl`); flat rows via
+  `evalcore.run.derive_rows`; provenance via `evalcore.storage.provenance()` (prompt hashes).
 - Report per-stratum, never only global. Paired comparisons: `paired_bootstrap_diff`,
   `mcnemar_exact` + `holm_correction`; `prob_superiority_beta` is the small-N primary readout.
 - SCREENING declaration → lead with ranks + effect sizes + CIs; p-values secondary.
