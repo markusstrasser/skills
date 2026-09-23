@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# peer-session-count.sh — print the number of INDEPENDENT `claude` sessions whose
-# cwd is the given checkout, EXCLUDING this session's own claude tree (subagents,
-# `claude -p`, hung children are DESCENDANTS — never peers; counting them drove a
-# multi-hour multi-agent-collision fiction, 2026-06-18).
+# peer-session-count.sh — print the number of INDEPENDENT agent sessions (`claude` or
+# `codex`) whose cwd is the given checkout, EXCLUDING this session's own process tree
+# (subagents, `claude -p`, `codex exec` dispatches, hung children are DESCENDANTS — never
+# peers; counting them drove a multi-hour multi-agent-collision fiction, 2026-06-18).
+# Codex counts because the 2026-07-16 arc-agi history rewrite raced a Codex peer.
 #
 # THE single source for "do peers share this checkout?" (epistemic-principle #9 —
 # one definition, consumers LOAD it). Consumers:
@@ -25,19 +26,21 @@ fi
 [ -z "$cwd" ] && { echo 0; exit 0; }
 cwd="$(cd "$cwd" 2>/dev/null && pwd -P || printf '%s' "$cwd")"  # canonicalize (/tmp vs /private/tmp)
 
-pids="$(pgrep -x claude 2>/dev/null | paste -sd, - || true)"
+# Codex's native binary is named `codex` (the npm `codex` launcher is a node process).
+pids="$( { pgrep -x claude; pgrep -x codex; } 2>/dev/null | paste -sd, - || true)"
 [ -z "$pids" ] && { echo 0; exit 0; }
 
-# my session's claude (walk up from THIS helper's PID — the helper is a descendant
-# of the calling hook, which is a descendant of my session's claude). Descendants
-# of my_claude are mine, never peers.
+# my session's agent process (walk up from THIS helper's PID — the helper is a
+# descendant of the calling hook, which is a descendant of my session's claude or
+# codex). Descendants of my_claude are mine, never peers. `ps -o comm=` is the argv0
+# path (/Users/…/.local/bin/claude, …/vendor/…/bin/codex); hook scripts show as `bash`.
 my_claude=""; p=$$
 while [ "${p:-0}" -gt 1 ]; do
-  case "$(ps -o comm= -p "$p" 2>/dev/null | tr -d ' ')" in *claude*) my_claude="$p"; break;; esac
+  case "$(ps -o comm= -p "$p" 2>/dev/null | tr -d ' ')" in *claude*|codex|*/codex) my_claude="$p"; break;; esac
   p="$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')"
 done
 
-# claude PIDs whose cwd == this checkout.
+# claude/codex PIDs whose cwd == this checkout.
 cand="$(lsof -a -d cwd -Fpn -p "$pids" 2>/dev/null \
         | awk -v c="$cwd" '/^p/{pid=substr($0,2)} /^n/{if(substr($0,2)==c)print pid}')"
 
