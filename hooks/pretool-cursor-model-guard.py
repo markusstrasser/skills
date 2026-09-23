@@ -7,10 +7,14 @@
 """BLOCK `cursor-agent` model pins outside the admitted Cursor-native set.
 
 Cursor's CLI can proxy frontier models (opus, gpt, claude, …) at their own
-metered rates. Composer remains the default lane. On 2026-07-14 the live Cursor
-registry admitted exact `cursor-grok-4.6-{low,medium,high,xhigh}` (2026-09-05; the 4.5 slugs are gone)
-slugs (plus trailing `-fast`) for deliberate opt-in use. Bare `grok-4.6`, retired
-aliases, and generic opus/gpt/claude/gemini/sonnet pins remain off-policy.
+metered rates. Composer remains the default lane. Verified live 2026-09-23
+with `cursor-agent` signed in: the registry admits exact `grok-4.7-{low,medium,
+high,xhigh}` slugs — NO `cursor-` prefix, unlike 4.6 — plus the still-listed
+`cursor-grok-4.6-{low,medium,high,xhigh}` (both with trailing `-fast` optional)
+for deliberate opt-in use. A 2026-09-22 guess admitted invented
+`cursor-grok-4.7-*` ids instead; that guess was wrong and is corrected here.
+Bare `grok-4.7` / `grok-4.6` (no effort suffix), retired 4.5 aliases, and
+generic opus/gpt/claude/gemini/sonnet pins remain off-policy.
 
 Enforcement, not instruction: a prior session called cursor with a foreign
 model anyway. No explicit `--model` is fine — the account default is Composer.
@@ -36,22 +40,32 @@ _ARM_MODEL = re.compile(r"\bdispatch-cursor-arm\.sh\s+\S+\s+([A-Za-z0-9._/-]+)")
 
 # Composer stays open to native future tiers. Grok is deliberately exact: registry
 # drift previously made stale aliases silently unsafe, so no wildcard family match.
+# 4.7 and 4.6 use DIFFERENT slug shapes on the live Cursor registry (verified
+# 2026-09-23) — 4.7 carries no `cursor-` prefix, 4.6 still does — so a single
+# prefix-anchored regex cannot express both without also admitting invented
+# ids (e.g. `cursor-grok-4.7-max`). Admission is exact membership in one
+# explicit set built from the two real shapes, never a wildcard.
 _COMPOSER = re.compile(r"^composer(?:[-.]|$)", re.IGNORECASE)
-_CURSOR_GROK = re.compile(
-    r"^cursor-grok-4\.6-(?:low|medium|high|xhigh)(?:-fast)?$", re.IGNORECASE
+_GROK_EFFORTS = ("low", "medium", "high", "xhigh")
+_CURSOR_GROK_MODELS = frozenset(
+    {f"grok-4.7-{effort}" for effort in _GROK_EFFORTS}
+    | {f"grok-4.7-{effort}-fast" for effort in _GROK_EFFORTS}
+    | {f"cursor-grok-4.6-{effort}" for effort in _GROK_EFFORTS}
+    | {f"cursor-grok-4.6-{effort}-fast" for effort in _GROK_EFFORTS}
 )
 
 _MSG = (
     "BLOCKED: cursor-agent model '{model}' is not admitted. Use native Composer "
     "(composer-2.5 / composer-2.5-fast) or an exact live Cursor Grok slug "
-    "cursor-grok-4.6-{{low,medium,high,xhigh}} with optional trailing -fast. Bare grok-4.6 "
-    "is xAI API (use the grok CLI or llmx for it); 4.5 slugs and fast-prefix aliases are forbidden. For opus/gpt use "
+    "grok-4.7-{{low,medium,high,xhigh}} (no cursor- prefix; 4.6 stays "
+    "cursor-grok-4.6-{{low,medium,high,xhigh}}) with optional trailing -fast. "
+    "Bare grok-4.7 is xAI API (use the grok CLI or llmx for it); 4.5 slugs and fast-prefix aliases are forbidden. For opus/gpt use "
     "`claude -p` / `codex exec` / `llmx`, not cursor."
 )
 
 
 def _model_allowed(model: str) -> bool:
-    return bool(_COMPOSER.match(model) or _CURSOR_GROK.fullmatch(model))
+    return bool(_COMPOSER.match(model) or model.lower() in _CURSOR_GROK_MODELS)
 
 
 def _is_cursor(cmd: str) -> bool:
@@ -87,8 +101,14 @@ def _selftest() -> int:
     cases = [
         ("agent -p --mode ask --trust --model composer-2.5 'hi'", "pass"),
         ("agent -p --trust --model composer-2.5-fast 'x'", "pass"),
+        ("agent -p --mode ask --trust --model grok-4.7-low 'x'", "pass"),
+        ("agent -p --mode ask --trust --model grok-4.7-high 'x'", "pass"),
+        ("agent -p --mode ask --trust --model grok-4.7-high-fast 'x'", "pass"),
         ("agent -p --mode ask --trust --model cursor-grok-4.6-low 'x'", "pass"),
         ("agent -p --mode ask --trust --model cursor-grok-4.6-xhigh 'x'", "pass"),
+        ("agent -p --trust --model grok-4.7 'x'", "block"),
+        ("agent -p --trust --model cursor-grok-4.7-high 'x'", "block"),  # invented; real slug has no prefix
+        ("agent -p --trust --model grok-4.7-max 'x'", "block"),
         ("agent -p --mode ask --trust --model cursor-grok-4.5-high 'x'", "block"),
         ("agent -p --mode ask --trust --model cursor-grok-4.6-medium-fast 'x'", "pass"),
         ("agent -p --mode ask --trust --model cursor-grok-4.6-high 'x'", "pass"),

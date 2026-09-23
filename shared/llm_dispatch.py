@@ -275,9 +275,9 @@ PROFILES: dict[str, DispatchProfile] = {
         # is intentionally packet-only. The exact slug is registry-bound and
         # preflighted before every Grok-axis dispatch.
         name="grok_review",
-        intent="Grok 4.6 repo-grounded adversarial review (opt-in cosigner)",
+        intent="Grok 4.7 repo-grounded adversarial review (opt-in cosigner)",
         provider="cursor",
-        model="cursor-grok-4.6-high",
+        model="grok-4.7-high",
         timeout=1200,
         auth="subscription",
         mode="chat",
@@ -303,6 +303,7 @@ MODEL_TO_PROFILE = {
     "composer-2.5": "composer_review",
     "composer-2.5-fast": "composer_screen",
     "glm-5.2": "glm_review",
+    "grok-4.7-high": "grok_review",
     "cursor-grok-4.6-high": "grok_review",
 }
 
