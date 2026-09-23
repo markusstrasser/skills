@@ -3,7 +3,7 @@
 
 ## Domain Forcing Pools
 
-Pick distant domains, not adjacent ones — the discomfort is the mechanism.
+Pick far domains from the rows below, plus one mid-distance domain that shares the problem's function or relational structure (e.g. for a cache: library reserve desks, blood banks). Far sources raise novelty and quality variance; nearer ones correlated with better-rated ideas in OpenIDEO field data, and too-far sources hurt (Chan, Dow & Schunn 2015; Fu et al. 2013).
 
 | Row | Domains |
 |-----|---------|

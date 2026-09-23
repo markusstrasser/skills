@@ -13,6 +13,8 @@ Date injection: `$(date +%Y-%m-%d)` in every system prompt.
 **Diversity comes from one self-aware generator, not from a crowd of parallel ones.** Recent controlled studies are consistent: under matched prompts a **single agent emitting many outputs in one pass beats parallel multi-agent fan-out on semantic diversity** — parallel agents can't see each other and converge on overlapping ideas, while a serial generator conditions on its own history to avoid redundancy (Single-Agent > MAS, openreview ZQVnJXLMkR, 2026). Closed-loop multi-LLM setups go further and **semantically collapse**, and 12 intervention strategies failed to stop it (arxiv 2605.17193). So:
 
 - **Default to Multi-Output single-agent** for the generation pass: one model, `$N_IDEAS` responses in a single inference, each conditioned on the ones before. External dispatch is for **volume and availability only** — it is mildly diversity-*negative*, not a diversity mechanism. Don't add dispatch rounds expecting more diversity.
+- **Multi-Output buys diversity, not quality-gated yield.** A single-pass list of 10 on a frontier ideator was second-most diverse but yielded zero ideas passing a strict quality gate; weak early ideas propagate (IDEAgent, arxiv 2607.22375). When the next step needs gated survivors, generate in short sequential batches against one-line signatures of the ideas already kept.
+- **No idea text crosses between parallel workers before Step 4, and no example ideas go into payloads.** Exchanging ideas narrows the domains explored (Kohn & Smith 2010); examples cause pigeonholing even when correct (arxiv 2606.24267). Forbidden-paradigm lists carry labels plus a one-line gloss, never idea bodies.
 - **Keep any dispatch group small, and do NOT use expert/authority personas in generation.** "Senior scientist"/expert framing *suppresses* semantic diversity; independent/junior framing explores broader, and larger/denser groups accelerate premature convergence (paradox of expertise, openreview YL4alzSQIl, 2026). Preserve independence and disagreement.
 - **Dispatch at LOW reasoning effort (`-e low`).** Brainstorm is distribution-SAMPLING — the divergence comes from verbalized-sampling + the perturbation prompting, NOT reasoning depth. Measured 2026-06-22: gpt-5.6-sol `-e low` spent **6 reasoning tokens** vs **6,657** at `-e high` for the *same* divergent output quality (28s vs 197s); GLM (no low tier) is a poor fit for a brainstorm pass for the same reason. High effort is wasted here — reserve it for the convergent `/critique` stage.
 
@@ -21,7 +23,7 @@ Date injection: `$(date +%Y-%m-%d)` in every system prompt.
 ```bash
 cat > "$BRAINSTORM_DIR/external-generation.prompt.md" <<'EOF'
 <system>
-First, name 4–6 broad, mutually distant semantic DIRECTIONS the solution could take (directions, not ideas). Then generate $N_IDEAS genuinely different approaches that fill those directions — and give a probability/confidence for each approach. Report the distribution; do not pre-rank or filter. No feasibility filtering yet. Do NOT adopt an expert/authority persona. It is $(date +%Y-%m-%d).
+Optimize for originality, not the most effective or expected answer. First, name 4–6 broad, mutually distant semantic DIRECTIONS the solution could take (directions, not ideas). Then generate $N_IDEAS genuinely different approaches that fill those directions — and give a probability/confidence for each approach. Report the distribution; do not pre-rank or filter. No feasibility filtering yet. Do NOT adopt an expert/authority persona. It is $(date +%Y-%m-%d).
 </system>
 
 [Design space + constraints + user-provided seeds if any]
@@ -61,7 +63,7 @@ Send the prompt below through the shared dispatch helper. The payload is the con
 
 ```md
 <system>
-DENIAL ROUND. The approaches below are FORBIDDEN - you cannot use them or their variants. Propose 5 fundamentally different approaches that share no paradigm with the forbidden list. It is $(date +%Y-%m-%d).
+DENIAL ROUND. The approaches below are FORBIDDEN - you cannot use them or their variants. Also forbidden in every round: bridging/connecting existing approaches and unifying/integrating them. Propose 5 fundamentally different approaches that share no paradigm with the forbidden list. Optimize for originality, not the most effective or expected answer. It is $(date +%Y-%m-%d).
 </system>
 
 ## Forbidden Paradigms
@@ -81,7 +83,7 @@ If `--domains` specified, use those. Otherwise pick 3 domains **unrelated** to t
 
 ```md
 <system>
-Map a design challenge to three unrelated domains. For each domain: what's the analogous problem, how does that domain solve it, what transfers back. It is $(date +%Y-%m-%d).
+Map a design challenge to three domains: one mid-distance (shares the challenge's function or relational structure, not its vocabulary) and two far. For each domain: what's the analogous problem, how does that domain solve it, what transfers back. It is $(date +%Y-%m-%d).
 </system>
 
 ## Design Challenge

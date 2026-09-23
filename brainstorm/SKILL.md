@@ -85,6 +85,8 @@ See `references/synthesis-templates.md` for pre-flight scripts.
 
 State clearly: the question, current approach (if any), hard constraints vs soft preferences, evaluation criteria.
 
+**Reformulate before generating.** Write 3 distinct constructions of the problem: a different goal, a different obstacle to attack, or a different constraint set ("where do we get a jack?" vs "how do we raise the car?"). Generate against at least two. Problem construction predicts solution originality and matters most when the problem is ill-defined or its cues conflict (Reiter-Palmon et al. 1997; 2018). `--quick` on a well-specified task may skip this.
+
 ### Step 2: Initial Generation
 
 **In-conversation first, dispatch second.** Generate `$N_IDEAS` approaches as plain text in the conversation BEFORE launching any external dispatch. The Mode Discipline gate above requires this — at least 5 candidate ideas must exist as conversation text before any non-packet tool call. No evaluation yet. Optimize for volume and diversity over individual brilliance. More seeds = more raw material for perturbation. If user included seed ideas, diversify from there.
@@ -92,7 +94,7 @@ State clearly: the question, current approach (if any), hard constraints vs soft
 **Don't cast wide blindly — stratify, then verbalize.** Two structural moves replace undirected breadth (both are training-free and measured to beat naive generation):
 1. **Semantic-direction stratification.** First, in one planning pass, name 4–6 *broad, mutually distant semantic directions* the solution could take (not ideas yet — directions). Then generate ideas to fill each direction. Pre-partitioning the space beats casting wide and deduping after, on the diversity–quality–compute frontier (Anchorless Diversification, arxiv 2605.30150, May 2026). Record the directions; they seed the `domain_row`/paradigm columns later.
    - *Reusable preset — interface/API/module design:* four mutually-distant directions are **minimize the interface** (1–3 high-leverage entry points), **maximize flexibility** (many use cases / extension), **optimize the common caller** (trivial default case), **ports & adapters** (logic behind a seam). (Ousterhout "Design It Twice"; see `agent-infra/research/2026-06-19-mattpocock-skills-best-ideas.md`.) Stratify *by constraint*, then generate — do NOT spawn one agent per direction expecting diversity (fan-out converges — see anti-patterns). The stratification is the mechanism; the agent count is not.
-2. **Verbalized sampling.** Frame the generation request as a *distribution*: "give me N genuinely different approaches **and your probability/confidence for each**." Asking for the distribution — not the single best answer — relieves typicality pressure and surfaces the low-probability tail (+1.6–2.1× diversity, ICML 2026). Keep the probabilities in the raw artifact; they are NOT a ranking signal (this is divergent mode — see the coverage≠quality caveat in synthesis-templates).
+2. **Verbalized sampling, with an originality goal.** Say "optimize for originality, not the most effective or expected answer": that one instruction moved creativity dz = +1.40 across 18 frontier models with no quality loss, four times the effect of enabling reasoning (AGC-Bench, arxiv 2607.01152). Frame the generation request as a *distribution*: "give me N genuinely different approaches **and your probability/confidence for each**." Asking for the distribution — not the single best answer — relieves typicality pressure and surfaces the low-probability tail (+1.6–2.1× diversity, ICML 2026). Keep the probabilities in the raw artifact; they are NOT a ranking signal (this is divergent mode — see the coverage≠quality caveat in synthesis-templates).
 
 With external dispatch: AFTER your own in-conversation set exists, dispatch a parallel external pass **for volume/availability only — not for diversity**. Parallel fan-out is mildly diversity-*negative* (agents converge on overlapping ideas); a single self-conditioning generator producing many outputs is the diversity mechanism. See `references/llmx-dispatch.md` for the Multi-Output default, persona constraints, and prompt payloads. **Do not poll** the dispatch output file — wait for the explicit completion signal (process exit, marker file), then read once.
 
@@ -102,15 +104,15 @@ Run axes specified by `--axes` (default: `denial,domain,constraint`; `contradict
 
 First: identify the 3-5 dominant paradigms from Step 2. These are what we're escaping.
 
-**3a: Denial Cascade** — Ban dominant paradigms, force genuinely different approaches. Novelty rises continuously with denial depth (NEOGAUGE, NAACL 2025). This is the primary divergence mechanism. See `references/llmx-dispatch.md` for prompt payloads.
+**3a: Denial Cascade** — Ban dominant paradigms, force genuinely different approaches. Novelty rises continuously with denial depth (NEOGAUGE, NAACL 2025). This is the primary divergence mechanism. Round 1 always also bans "bridge/connect X and Y" and "unify/integrate existing approaches": these frame 47–64% of LLM research ideas against 12% of human ones, across 9 models (arxiv 2607.01233). Pass paradigm *labels*, never example idea text: examples narrow the categories explored even when correct. See `references/llmx-dispatch.md` for prompt payloads.
 
-**3b: Domain Forcing** — Map the problem to distant, unrelated domains. Pick from domain pools in `references/domain-pools.md`. Distant domains, not adjacent ones — the discomfort is the mechanism.
+**3b: Domain Forcing** — Map the problem to unrelated domains from `references/domain-pools.md`. Far domains buy novelty and quality *variance*; field data link conceptually closer sources to better-rated ideas, and sources can be too far (Chan, Dow & Schunn 2015; Fu et al. 2013). So make one domain mid-distance (shares the problem's function or relational structure, not its vocabulary) and the rest far.
 
 **3c: Constraint Inversion** — Flip key assumptions (e.g., "compute free but storage costs $1/byte"). Design optimal solutions under altered constraints, then identify what transfers back to reality. Skipped in `--quick` mode.
 
 **3d: Contradiction (TRIZ)** — Opt-in (`--axes contradiction`; on under `--deep`). Restate the problem as technical contradictions: "improve X without worsening Y." For each pair, pull 3-5 candidate inventive principles from `references/triz-principles.md` and generate one idea per principle, applied to the actual system. The value is the external non-LLM prior: the principle is a structural constraint the idea must instantiate, not a vibe to sample near. A resolution *dissolves* the contradiction (both X and Y improve, or the tradeoff frame disappears); an idea that just picks a point on the X/Y tradeoff curve fails the round. Name the contradiction pairs explicitly before generating — infra decisions usually are one (depth vs maintenance surface, autonomy vs blast radius, context richness vs token cost).
 
-**3e: Conceptual Blending** — Opt-in (`--axes blend`; on under `--deep`). Distinct from domain forcing: 3b runs a one-way analogy ("how does immunology solve this?"); blending force-merges TWO input frames (the problem frame + one distant frame, or two distant frames) into a single blended space and mines the *emergent* structure — properties present in neither input alone (Fauconnier–Turner). Procedure: state each frame's roles/relations/dynamics, map counterpart elements across them, describe the blend as one coherent system, then keep ONLY the emergent structure. Straight A→B transfers get discarded (they belong to 3b); if a blend yields no emergent structure, record the dry cell in `coverage.json` and move on.
+**3e: Conceptual Blending** — Opt-in (`--axes blend`; on under `--deep`). Distinct from domain forcing: 3b runs a one-way analogy ("how does immunology solve this?"); blending force-merges TWO input frames (the problem frame + one distant frame, or two distant frames) into a single blended space and mines the *emergent* structure — properties present in neither input alone (Fauconnier–Turner). Procedure: state each frame's roles/relations/dynamics, map counterpart elements across them, describe the blend as one coherent system, then keep ONLY the emergent structure. Straight A→B transfers get discarded (they belong to 3b); so does a blend whose output is "unify A and B" (the default LLM attractor, see 3a). If a blend yields no emergent structure, record the dry cell in `coverage.json` and move on.
 
 **Knowledge injection:** Before perturbation, query 2-3 tangential domain examples via Exa to prime the search space with real-world mechanisms.
 
@@ -134,7 +136,7 @@ Mechanically extract every discrete idea from all artifacts into a numbered list
 
 ### Step 5: Synthesize
 
-Produce ranked synthesis with: Ideas to Explore (novelty x feasibility), Parked, Rejected, Paradigm Gaps, Suggested Next Step. Save to `$BRAINSTORM_DIR/synthesis.md`. See `references/synthesis-templates.md` for output template.
+Produce synthesis with: Ideas to Explore, Parked, Rejected, Paradigm Gaps, Suggested Next Step. **Select by gate, then spread; never by novelty × feasibility.** Gate each idea on feasibility and soundness, then choose the largest set of survivors that differ on a core mechanism, ordered by feasibility. Judge novelty only against a reference (the Step 2 dominant paradigms and prior `.brainstorm/` runs), and ask directly whether each idea is narrow or source-bound. LLM judges, including you, rate generated ideas as novel where experts disagree, and pairwise comparison makes it worse (arxiv 2606.12071); a pipeline built around this gated-set objective beat the best baseline 2–3.9× on it (IDEAgent, arxiv 2607.22375). Save to `$BRAINSTORM_DIR/synthesis.md`. See `references/synthesis-templates.md` for output template.
 
 ### Step 5.5: Pain-Point Gate (MANDATORY before implementation)
 
@@ -161,7 +163,7 @@ Don't auto-implement — divergent ideas need convergent validation first.
 
 - **Evaluating during generation.** Steps 2-3 generate. Steps 4-5 evaluate. Don't mix.
 - **Skipping denial rounds.** Initial generation IS the attractor basin. Denial is how you escape it.
-- **"Related" domains for domain forcing.** Adjacent fields converge to the same basin. Pick distant domains.
+- **All-adjacent domains for domain forcing.** Adjacent fields converge to the same basin. One mid-distance domain is deliberate; the rest are far.
 - **Implementing brainstorm output directly.** Prototype cheaply or stress-test with `/critique` first.
 - **Skipping coverage artifacts.** If you cannot name the matrix cells you covered, you do not yet know what was actually explored.
 - **Using brainstorm as a decision memo.** It produces candidate space plus coverage, not the final call.

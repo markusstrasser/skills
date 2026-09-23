@@ -102,7 +102,7 @@ Save to `$BRAINSTORM_DIR/synthesis.md`:
 **Extraction:** N items total → E explore, P parked, R rejected, M merged
 **Coverage:** axes [list], paradigms escaped N, uncovered cells [count]
 
-### Ideas to Explore (ranked by novelty x feasibility)
+### Ideas to Explore (gated on feasibility, then the most mutually distinct set; ordered by feasibility)
 | Rank | ID(s) | Idea | Why Non-Obvious | Maintenance | Composability |
 |------|-------|------|----------------|--------|------|
 
