@@ -61,8 +61,8 @@
 - [ ] Expensive by structure (`high`/`xhigh` only); don't promote to default cosigner or extractor without `evals/critique_replay` measurement.
 - [ ] Weight its reasoning on impossibility/contradiction flags; don't treat its factual recall as ground truth without sources.
 
-### After Grok 4.5 (repo-grounded critique / Cursor pool / agentic niche)
-- [ ] Confirm preflight passed exact registry slug `cursor-grok-4.5-high` and the unrevealed repo-HEAD canary.
+### After Grok 4.7 (repo-grounded critique / Cursor pool / agentic niche)
+- [ ] Confirm preflight passed exact registry slug `grok-4.7-high` (no `cursor-` prefix) and the unrevealed repo-HEAD canary. 4.5 AA calibration below is not a 4.7 measurement.
 - [ ] Confirm transport was `cursor-agent --mode ask --workspace` for critique (receipt `transport: cursor-agent-workspace`) — not llmx packet-only cursor.
 - [ ] Re-run 1–2 of its load-bearing greps yourself; weight reasoning, not asserted facts (~46% AA-Omniscience non-hallucination).
 - [ ] Do not treat CursorBench / vendor coding scores as decisive (Cursor blog: training contamination).

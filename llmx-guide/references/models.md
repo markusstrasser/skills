@@ -34,8 +34,9 @@ Default provider model: **Astra**. Codex `~/.codex/config.toml` selects Astra; o
 | Claude Sonnet 5 | `claude-sonnet-5` | Released 2026-06-30. 1M context, 128K output, $3/$15 per MTok ($2/$10 intro through 2026-08-31). Adaptive thinking on by default; first Sonnet-tier model with `xhigh` effort. Not yet in `lite_allowed_models` (subscription allowlist) — `--subscription -m claude-sonnet-5` will not route until that's added. See `/model-guide` for routing guidance and the full system-card digest. |
 | Claude Sonnet 4.6 | `claude-sonnet-4-6` | Hyphens, not dots. Superseded by Sonnet 5 (2026-06-30) — prefer the newer ID for new work. |
 | GLM-5.2 | `glm-5.2` | Z.ai via OpenRouter (`zai` provider). **Reasoning: high/xhigh only** (no low tier). Opt-in critique cosigner — see `/model-guide` trilemma + `agent-infra/decisions/2026-06-19-glm-5.2-integration.md`. |
-| **Grok 4.6** (SpaceXAI, 2026-08-12) | `grok-4.6` | **Current xAI model** (`-p xai`); 4.5 kept only as history. API: $2/$6 per MTok, 500k context, reasoning `low`/`medium`/`high` (default high). Live smoke may 403 with `API key is currently blocked` — key status, not geo (US egress still blocked 2026-07-09). Prefer Cursor pool / critique `grok` axis. |
-| Grok 4.6 (Cursor pool) | `cursor-grok-4.6-{low,medium,high,xhigh}` / `cursor-grok-4.6-{low,medium,high}-fast` | Exact live Cursor registry slugs (2026-09-05, `cursor-agent models`); effort precedes the optional `-fast` suffix; 4.6 adds `xhigh`. Route via `--subscription -m cursor-grok-4.6-high`. Bare `grok-4.6` is the xAI API model; the 4.5 slugs no longer exist on Cursor. |
+| **Grok 4.7** (SpaceXAI, 2026-09-21) | `grok-4.7` | **Current xAI / Grok Build model.** Launch page: from $2/$6; fast tier 2×. 500k context is carried from 4.6 (not restated on the news post). Prefer Cursor pool / critique `grok` axis. xAI key may still 403 (key status, 2026-07-09). Verified live 2026-09-23: `grok` CLI updated 1.0.13 → 1.0.41 and now lists `grok-4.7` as its default. |
+| Grok 4.7 (Cursor pool) | `grok-4.7-{low,medium,high,xhigh}[-fast]` — **no `cursor-` prefix** | Different grammar than 4.6. Route via `--subscription -m grok-4.7-high`. Verified live 2026-09-23 with `cursor-agent models`; a 2026-09-22 guess assumed `cursor-grok-4.7-*`, which does not exist. |
+| Grok 4.6 (previous) | `grok-4.6` / `cursor-grok-4.6-{low,medium,high,xhigh}[-fast]` | Still admitted, still carries the `cursor-` prefix. Cursor pool verified 2026-09-05. Grok Build CLI now defaults to 4.7; pass `-m grok-4.6` explicitly for this lane. |
 | Grok 4.20 Reasoning | `grok-4.20-0309-reasoning` | Legacy. Use `-p xai`. **Not in `_RECOMMENDED_MODELS`** — pass full name explicitly. |
 | Grok 4.20 Non-Reasoning | `grok-4.20-0309-non-reasoning` | Latency tier, same backbone/price |
 | Grok 4.20 Multi-Agent | `grok-4.20-multi-agent-0309` | `reasoning.effort` controls **agent count** (low/med→4, high/xhigh→16), not depth |
@@ -61,7 +62,7 @@ Default provider model: **Astra**. Codex `~/.codex/config.toml` selects Astra; o
 | Gemini 3.1 Pro | 1,048,576 | 65,536 | Server default is 8K — always pass `--max-tokens 65536` |
 | Gemini 3.5 Flash | 1,048,576 | 65,536 | Same window as Pro; pass `--max-tokens 65536` for long outputs |
 | Gemini 3 Flash | 1,048,576 | 65,535 | |
-| Grok 4.5 | 500,000 | (API default) | docs.x.ai Chat API table 2026-07-09 |
+| Grok 4.7 / 4.6 / 4.5 | 500,000 | (API default) | 4.5 from docs.x.ai 2026-07-09; 4.6/4.7 carry that window |
 | Grok 4.20 Reasoning | 2,000,000 | 128,000 | **>200K input → 20× price tier** ($40/$120 per M). Chunk before crossing. |
 
 ## Reasoning Effort Values
@@ -78,8 +79,8 @@ Default provider model: **Astra**. Codex `~/.codex/config.toml` selects Astra; o
 | Gemini 3.5 Flash | low, medium, high | high (server-side, via `thinking_config`) |
 | Gemini 3.x (Pro/Flash) | low, medium, high | high (server-side, via `thinking_config`) |
 | Grok 4.5 (API) | **low, medium, high** | high |
-| Grok 4.6 (Cursor) | effort baked into exact slug (`-low`/`-medium`/`-high`/`-xhigh`; optional trailing `-fast`) | pass an exact `cursor-grok-4.6-*` registry slug |
-| Grok 4.6 (Grok Build CLI, `llmx chat -p grok -m grok-4.6` / `grok -p`) | `-e low|medium|high|xhigh` (`none`/`minimal`→low, `max`→xhigh) | served model reports as `grok-4.6-build`; llmx logs real tokens for this lane (landed 2026-09-05) |
+| Grok 4.7 / 4.6 (Cursor) | effort baked into exact slug (`-low`/`-medium`/`-high`/`-xhigh`; optional trailing `-fast`) | pass an exact registry slug: `grok-4.7-*` (no prefix) or `cursor-grok-4.6-*` (prefix still admitted) |
+| Grok 4.7 (Grok Build CLI, `llmx chat -p grok -m grok-4.7` / `grok -p`) | `-e low|medium|high|xhigh` (`none`/`minimal`→low, `max`→xhigh) | default when `-m` is omitted; verified live 2026-09-23 on CLI 1.0.41 |
 | Grok 4.20 Reasoning | **NONE — passing `reasoning_effort` errors** | auto (model reasons internally) |
 | Grok 4.20 Multi-Agent | low, medium, high, xhigh — **selects agent count, not depth** (low/med→4 agents, high/xhigh→16) | -- |
 | Grok 4.20 Non-Reasoning | n/a (no thinking) | -- |

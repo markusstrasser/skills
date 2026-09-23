@@ -378,6 +378,19 @@ for CC-dispatched subagents.
   lane stays $0 but is capacity-limited (dark 07-25→07-29 on quota). llmx price table updated
   same day (llmx 2f7abfc; stale entries were overstating Luna est_cost 5×).
 
+## 2026-09-23 — Grok 4.7 Cursor slugs carry no `cursor-` prefix (correction)
+
+- The 2026-09-22 entry below guessed `cursor-grok-4.7-*` while `cursor-agent` auth was unavailable. Live `cursor-agent models` (signed in, 2026-09-23) lists 4.7 as `grok-4.7-{low,medium,high,xhigh}[-fast]` — no prefix. The guessed `cursor-grok-4.7-*` ids do not exist; the IDE subagent slug `grok-4.7-high-fast` already seen 2026-09-22 was the real form all along. 4.6 keeps its `cursor-grok-4.6-*` prefix, unchanged.
+- Corrected: the critique `grok_review` profile and its `MODEL_TO_PROFILE` entry, the cursor-agent skill, llmx-guide, this guide, `~/.claude/rules/llmx-routing.md`, and agent-infra's scout docs + context-limit table now pin `grok-4.7-high`. llmx's `lite_model_allowed` now gates every `grok-*`/`cursor-grok-*` id — not just the `cursor-grok-` prefix — by exact membership in the live-verified slug set (`CURSOR_GROK_MODELS`), so an invented id like `grok-4.7-max` still fails closed. The `pretool-cursor-model-guard` hook's admission check moved from a single prefix-anchored regex to the same exact-membership shape for the same reason.
+- `grok` CLI (Grok Build) updated 1.0.13 → 1.0.41 in the same session; `grok models` now lists `grok-4.7` (default) and `grok-4.7-build-fast` alongside `grok-4.6`/`grok-4.5`. Live: `llmx chat --subscription -m grok-4.7` → resolved to Cursor `grok-4.7-high`, replied; `grok -p -m grok-4.7` replied; `grok-4.7-max` refused. llmx `ca8e3f2`.
+
+## 2026-09-22 — Grok 4.7 is the current Grok (slug guessed here; corrected 2026-09-23 above)
+
+- Launch page https://x.ai/news/grok-4-7 (2026-09-21): from $2/$6, fast tier 2× price and speed, in Cursor, Grok Build, and the API. Context length not restated; 500k carried from 4.6.
+- Critique pin, llmx allowlist, cursor-agent skill, and the Claude llmx-routing rule now name `cursor-grok-4.7-high` / `grok-4.7`. 4.6 slugs stay admitted.
+- Not re-listed: `grok` 1.0.13 `models` still shows 4.6 default + 4.5. `cursor-agent` 2026.09.02 `models` was not run (auth). This session's IDE catalog lists `grok-4.7-high-fast` and `cursor-grok-4.6-xhigh`. Preflight fails closed until the CLI prints `cursor-grok-4.7-high`.
+- `llmx/providers.py` grok and grok-cli defaults are `grok-4.7`. Explicit `-m grok-4.6` still resolves.
+
 ## 2026-09-05 — Grok 4.6 replaces 4.5; Grok Build CLI recorded
 
 - `cursor-agent models` lists only `cursor-grok-4.6-{low,medium,high,xhigh}[-fast]`; every `cursor-grok-4.5-*` pin (critique `grok` axis, memory dispatch lines, routing allowlist) was dead. Updated the Grok section, Verified Transport, routing rows, llmx-guide models table/footgun 7b, `~/.claude/rules/llmx-routing.md`.

@@ -22,9 +22,10 @@ Source: critique/SKILL.md before the 2026-09-05 refactor, lines 48-73.
 
 **Opt-in cheap cosigner — Cursor Composer 2.5 (`composer` axis).** `/critique model --axes standard,composer` per subpart when reviewing a **plan/design packet** (not the diff — use `/code-review` for diffs). Dispatches `composer-2.5` via llmx's `cursor` transport (**packet-only** — neutral empty cwd). Validated frontier-equal on injected-defect review (11/11). Usage-metered Cursor pool. Pair with a GPT axis if using `composer` alone (axis-resolution rule).
 
-**Opt-in repo-grounded cosigner — Grok 4.5 (`grok` axis).** `/critique model --axes standard,grok`
-pins `cursor-grok-4.5-high` in a read-only repo workspace and fails closed on exact-registry or
-unrevealed HEAD-canary drift. Bare `grok-4.5` is xAI API; llmx Cursor is packet-only.
+**Opt-in repo-grounded cosigner — Grok 4.7 (`grok` axis).** `/critique model --axes standard,grok`
+pins `grok-4.7-high` (no `cursor-` prefix, verified live 2026-09-23) in a read-only repo workspace and
+fails closed on exact-registry or unrevealed HEAD-canary drift. Bare `grok-4.7` is xAI / Grok Build;
+llmx Cursor is packet-only.
 Probe without a review: `model-review.py --preflight --axes grok --project "$(pwd)"`; plain
 `--preflight` spends no Grok call.
 
@@ -68,7 +69,7 @@ unless the subpart is formal-class.
 | `--axes deep` | standard + domain + mechanical | Structural + domain-dense |
 | `--axes full` | deep + alternatives | Shared infra, clinical, high-stakes |
 | `--axes standard,composer` | + composer (Cursor, packet-only) | Plan/design third lineage — **not** closeout diff (use `/code-review`) |
-| `--axes standard,grok` | + Grok 4.5 (Cursor, read-only repo workspace) | PLAN premise falsification against live files/callers |
+| `--axes standard,grok` | + Grok 4.7 (Cursor, read-only repo workspace) | PLAN premise falsification against live files/callers |
 
 `formal`, `composer`, `claude`, and `grok` are opt-in add-ons. Run `standard` on each subpart; merge in session.
 

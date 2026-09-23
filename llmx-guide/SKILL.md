@@ -49,8 +49,8 @@ uv run python3 ~/Projects/skills/critique/scripts/model-review.py --preflight
 llmx chat --subscription -m claude-opus-5-5 -f ctx.md -o out.md "query"
 llmx chat --subscription -m claude-fable-5-1 -f ctx.md -o out.md "query"
 llmx chat -p codex-cli --subscription -m gpt-6-astra -f ctx.md -o out.md "query"
-llmx chat --subscription -m cursor-grok-4.6-high -f ctx.md -o out.md "query"   # 4.5 slugs are gone from Cursor (2026-09-05)
-llmx chat -p grok -m grok-4.6 -e high -f ctx.md -o out.md "query"           # Grok Build CLI lane (subscription-only, neutral cwd; agent mode keeps cwd)
+llmx chat --subscription -m grok-4.7-high -f ctx.md -o out.md "query"       # no cursor- prefix; 4.6 slugs still admitted; re-list with cursor-agent models
+llmx chat -p grok -m grok-4.7 -e high -f ctx.md -o out.md "query"           # Grok Build CLI lane (subscription-only; grok CLI 1.0.41 lists 4.7 as default)
 ```
 
 Repository-coupled agent review (caller cwd, project rules, native CLI tools):
@@ -103,7 +103,7 @@ Routing table: `critique/lenses/repo-audit-plan-review.md`. Preflight via `model
 | 5 | Model name 404s | Hyphens not dots; see [models.md](references/models.md) |
 | 6 | Historical Fable downshifts / billing confusion | Current 5.1 route: `--subscription -m claude-fable-5-1`. Max includes a limited Fable allowance; do not fall back to paid API or usage credits without authorization. Agent-tool Fable pins need separate verification — see `/model-guide`. |
 | 7 | Grok 4.20 `--reasoning-effort` | Errors on reasoning variant; >200K input = 20× price tier |
-| 7b | Grok Cursor slugs rotate with the model | 2026-09-05: `cursor-agent models` lists ONLY `cursor-grok-4.6-{low,medium,high,xhigh}[-fast]`; every 4.5 pin died silently. Rederive from `cursor-agent models`, never from memory. `-e` is ignored on cursor-cli (effort is in the slug). Bare `grok-4.6` is xAI API-only. The Grok Build CLI (`grok -p`) is a separate headless lane, not yet an llmx transport. |
+| 7b | Grok Cursor slugs rotate with the model | Verified live 2026-09-23: current pin is `grok-4.7-{low,medium,high,xhigh}[-fast]` — **no `cursor-` prefix** (a 2026-09-22 guess assumed `cursor-grok-4.7-*`, which does not exist); 4.6 slugs keep `cursor-grok-4.6-*` and stay admitted. Rederive from `cursor-agent models`, never from memory. `-e` is ignored on cursor-cli. Bare `grok-4.7` is xAI / Grok Build (`llmx chat -p grok`). `grok` CLI updated to 1.0.41, lists 4.7 as default. |
 | 7c | Grok 4.5 xAI API 403 | `API key is currently blocked` — **key status**, not EU geo (Chicago Mullvad egress still 403'd 2026-07-09). Rotate/unblock key in console; Cursor pool is the live path meanwhile. |
 | 7d | Critique `grok` vs llmx cursor | `grok` axis uses `cursor-agent --workspace` (repo). `llmx -p cursor` uses neutral empty cwd (packet-only). Don't substitute. |
 | 8 | Shelling llmx from Python: `subprocess.run(capture_output=True, timeout=)` hangs forever at 0% CPU | run()'s TimeoutExpired kills the child then blocks draining a pipe the llmx→claude-CLI grandchild holds. Use `Popen(start_new_session=True)` + `communicate(timeout)` + `os.killpg` on expiry (exemplar: arc-agi `agent/foundry_ewm.py llm()`; 27-min wedge 2026-07-04) |
