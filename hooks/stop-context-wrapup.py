@@ -8,7 +8,7 @@ global CLAUDE.md "save progress before compaction" contract had no enforcing
 hook (verified 2026-07-06: genomics be0657a9, 14 compactions, 0 wrap-ups).
 
 Fires ONCE per fill cycle: blocks the Stop with a short commit/loose-ends/
-checkpoint prompt when context crosses (window - MARGIN). Cycle detection is
+checkpoint prompt when context crosses thresholds(window). Cycle detection is
 self-contained — the state file records ctx at firing; a later ctx well below
 it means a compaction landed, which re-arms. No PostCompact companion needed,
 and manual /compact re-arms too.
@@ -32,9 +32,17 @@ Getting this wrong is symmetric pain: assuming 200K on a 1M session nudged
 at ~17% fill (6 sessions, 2026-07-06); assuming the full 1M would place the
 threshold at 955K and the nudge would NEVER beat the ~475K native compact
 (the 14-compactions-0-wrap-ups failure this hook exists to close).
-The binary's EFFECTIVE trigger fires ~26K below the configured window
-(observed pre=473,991 on window=500,000, arc-agi 182fba14) — MARGIN=45K
-prompts the wrap-up a comfortable turn before that.
+The binary's EFFECTIVE trigger fires TRIGGER_OFFSET below the resolved
+window: preTokens median 468,463 (range 465,639-490,071) over 130 auto-
+compactions, CC 2.1.270-2.1.280, 2026-09-02..23 (CC 2.1.201 was ~474K).
+A Stop hook fires only at a turn end, and autonomous turns grow tens of K
+each, so a thin margin gets jumped. The old window-45K threshold (455K)
+fired in 32 of 131 replayed fill cycles, never with 25K of room left
+(median 8.7K); after 8 of 23 real fires a checkpoint got written.
+trigger-LEAD (~403K) fires in ~57% of cycles with a median lead of ~50K.
+Cycles whose final turn runs unbroken past any threshold (~1/3, even at
+350K) are unreachable from Stop. Re-measure on CC bumps:
+~/Projects/agent-infra/scripts/ctx_wrapup_replay.py.
 
 Skips: goal-run-owned sessions (the goal ritual is richer), repos with a
 .claude/ctx-wrapup-off file (opt-out). State: ~/.claude/ctx-wrapup/<session>.
@@ -49,7 +57,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lib_context_tokens import context_tokens  # noqa: E402
 
-MARGIN = 45_000
+TRIGGER_OFFSET = 32_000  # native auto-compact fires this far below the window
+LEAD = 65_000  # nudge this far before the trigger...
+MIN_FILL = 0.75  # ...but never below 75% of it (keeps 200K windows sane)
 DEFAULT_WINDOW = 200_000
 REARM_RATIO = 0.6  # ctx fell below 60% of fired-ctx => compaction landed
 STATE_TTL_S = 7 * 86_400
@@ -105,6 +115,12 @@ def resolve_window(sid: str, cwd: Path) -> int:
     return DEFAULT_WINDOW
 
 
+def thresholds(window: int) -> tuple[int, int]:
+    """(estimated native trigger, nudge threshold) for a resolved window."""
+    trigger = window - TRIGGER_OFFSET
+    return trigger, max(trigger - LEAD, int(trigger * MIN_FILL))
+
+
 def main() -> int:
     try:
         payload = json.load(sys.stdin)
@@ -132,8 +148,7 @@ def main() -> int:
     ctx = context_tokens(payload.get("transcript_path", ""))
     if ctx <= 0:
         return 0
-    window = resolve_window(sid, cwd)
-    threshold = max(80_000 - MARGIN, window - MARGIN)
+    trigger, threshold = thresholds(resolve_window(sid, cwd))
 
     state_dir = Path.home() / ".claude" / "ctx-wrapup"
     state = state_dir / sid
@@ -168,7 +183,7 @@ def main() -> int:
         json.dumps(
             {
                 "decision": "block",
-                "reason": PROMPT.format(ctx=ctx, trigger=max(0, window - 26_000)),
+                "reason": PROMPT.format(ctx=ctx, trigger=trigger),
             }
         )
     )

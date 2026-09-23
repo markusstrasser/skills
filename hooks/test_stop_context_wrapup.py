@@ -68,6 +68,7 @@ class Base(unittest.TestCase):
         proc = subprocess.run([HOOK], input=json.dumps(payload),
                               capture_output=True, text=True, timeout=20, env=env)
         self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.stdout = proc.stdout
         return decision(proc.stdout)
 
     def state_file(self):
@@ -76,7 +77,7 @@ class Base(unittest.TestCase):
 
 class TestContextWrapup(Base):
     def test_fires_at_threshold_default_window(self):
-        # default window 200K, MARGIN 45K -> threshold 155K
+        # default window 200K -> trigger 168K -> threshold max(103K, 75%) = 126K
         self.assertEqual(self.fire(160_000), "block")
         self.assertTrue(os.path.exists(self.state_file()))
 
@@ -95,7 +96,7 @@ class TestContextWrapup(Base):
         self.assertEqual(self.fire(158_000), "block")  # next fill cycle fires
 
     def test_env_window_raises_threshold(self):
-        # window 500K -> threshold 455K; 160K stays silent
+        # window 500K -> trigger 468K -> threshold 403K; 160K stays silent
         self.assertIsNone(self.fire(160_000, window=500_000))
         self.assertEqual(self.fire(460_000, window=500_000), "block")
 
@@ -106,10 +107,17 @@ class TestContextWrapup(Base):
         self.assertIsNone(self.fire(170_000))
 
     def test_statusline_window_1m_fires_before_native_compact(self):
-        # Unconfigured binary on 1M compacts at ~475K (effective 500K window,
-        # measured genomics be0657a9) — the nudge must beat it: 500K-45K=455K.
-        self.write_ctxpct(46, 460_000, 1_000_000)
-        self.assertEqual(self.fire(460_000), "block")
+        # Unconfigured binary on 1M compacts at ~468K (130 compactions, CC
+        # 2.1.270-280). At the old 455K threshold the median lead was 8.7K
+        # and no replayed cycle left 25K; the nudge must leave >=60K.
+        self.write_ctxpct(41, 408_000, 1_000_000)
+        self.assertEqual(self.fire(468_000 - 60_000), "block")
+        self.assertIn("trigger fires ≈468,000", json.loads(self.stdout)["reason"])
+
+    def test_statusline_window_1m_not_before_threshold(self):
+        # ...but not absurdly early: 400K on a ~468K trigger stays silent.
+        self.write_ctxpct(40, 400_000, 1_000_000)
+        self.assertIsNone(self.fire(400_000))
 
     def test_env_window_beats_statusline(self):
         self.write_ctxpct(17, 170_000, 1_000_000)
@@ -125,8 +133,8 @@ class TestContextWrapup(Base):
         with open(os.path.join(self.claude, "settings.json"), "w") as f:
             json.dump({"autoCompactWindow": 300_000}, f)
         self.write_ctxpct(30, 290_000, 1_000_000)
-        self.assertIsNone(self.fire(200_000))          # 300K-45K=255K
-        self.assertEqual(self.fire(260_000), "block")
+        self.assertIsNone(self.fire(190_000))          # trigger 268K -> 203K
+        self.assertEqual(self.fire(210_000), "block")
 
     def test_garbage_ctxpct_falls_back_to_default(self):
         with open(f"/tmp/claude-ctxpct-{SID}", "w") as f:
