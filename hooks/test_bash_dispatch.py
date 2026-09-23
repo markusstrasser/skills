@@ -1383,3 +1383,64 @@ def test_git_history_parse_reset_and_rebase_targets():
     assert op.rev == "topic~2"
     (op,) = _ops("git rebase")
     assert op.rev == "@{upstream}"
+
+
+# ---------------------------------------------------------------------------
+# rg-replace-flag-guard (2026-09-23): glued `rg -rn` is `--replace n`, not recursive.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command,cluster",
+    [
+        ("rg -rn foo .", "-rn"),
+        ("rg -rln foo src/", "-rln"),
+        ("rg -rl foo", "-rl"),
+        ("rg -rc foo", "-rc"),
+        ("rg -rin foo", "-rin"),
+        ("rg -ril foo", "-ril"),
+        ("cd /tmp && rg -rn foo", "-rn"),
+        ("rg --glob '*.py' -rn foo", "-rn"),
+        ("rg -rn foo src/ | head -5", "-rn"),
+        ("timeout 20 rg -rln foo", "-rln"),
+    ],
+)
+def test_rg_glued_replace_flag_advises(sandbox, command, cluster):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    ctx = disp.get("additionalContext") or ""
+    assert "rg is recursive by default; `-r` is `--replace`" in ctx
+    assert f"`{cluster}` rewrites every match to `{cluster[2:]}`. Drop the `r`." in ctx
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "rg -r 'x' foo",
+        "rg -r x foo",
+        "rg --replace x foo",
+        "rg --replace=x foo",
+        "rg -e -rn file.txt",
+        "rg -g -rn foo",
+        "rg -nr foo",
+        "rg -r2 foo",
+        "rg -- -rn file.txt",
+        "grep -rn foo .",
+        "echo 'rg -rn foo'",
+        "rg -n foo src/",
+    ],
+)
+def test_rg_legit_forms_stay_silent(sandbox, command):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert "--replace" not in (disp.get("additionalContext") or "")
+
+
+def test_rg_glued_replace_logs_a_warn_row(sandbox):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "rg -rln needle ."}}
+    run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
+    rows = [r for r in _read_trigger_log(sandbox) if r.get("hook") == "rg-replace-flag-guard"]
+    assert [(r["action"], r["detail"]) for r in rows] == [("warn", "-rln")]
+    assert rows[0].get("cmd_tok") == "rg" and "cmd" not in rows[0]

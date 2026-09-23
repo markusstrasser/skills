@@ -2406,6 +2406,70 @@ def gate_git_history_guard(raw_payload: str) -> GateResult:
         return GateResult(0, "", "")
 
 
+# --- rg-replace-flag-guard (ADVISORY, no if) ------------------------------------
+# `rg -rn` reads as "recursive, line numbers", but rg is recursive by default and `-r`
+# is `--replace`: the rest of the cluster becomes the replacement, so every match
+# prints as `n`. agentlogs, 30 days to 2026-09-23: 88 glued `-r<letters>` calls
+# (`-rn` 74, `-rln` 13, `-ril` 1; steward proposal 2026-06-21). Value-taking flags
+# (rg 15.2 --help) skip their value, so `rg -e -rn` and `rg -g -rn` stay silent.
+_RG_VALUE_SHORT = set("ABCEMTdefgjmrt")
+_RG_VALUE_LONG = {
+    "--after-context", "--before-context", "--color", "--colors", "--context",
+    "--context-separator", "--dfa-size-limit", "--encoding", "--engine",
+    "--field-context-separator", "--field-match-separator", "--file", "--generate", "--glob",
+    "--hostname-bin", "--hyperlink-format", "--iglob", "--ignore-file", "--max-columns",
+    "--max-count", "--max-depth", "--max-filesize", "--path-separator", "--pre", "--pre-glob",
+    "--regex-size-limit", "--regexp", "--replace", "--sort", "--sortr", "--threads", "--type",
+    "--type-add", "--type-clear", "--type-not",
+}
+_RG_GLUED_REPLACE_RE = re.compile(r"^-r[A-Za-z]+$")
+
+
+def _rg_glued_replace(argv: list[str | None]) -> str | None:
+    """The first `-r<letters>` cluster in one rg argv, skipping option values."""
+    i = 1
+    while i < len(argv):
+        word = argv[i]
+        i += 1
+        if word is None or not word.startswith("-") or word == "-":
+            continue
+        if word == "--":
+            return None
+        if word.startswith("--"):
+            i += 1 if word in _RG_VALUE_LONG else 0
+            continue
+        if _RG_GLUED_REPLACE_RE.match(word):
+            return word
+        for pos, letter in enumerate(word[1:]):
+            if letter in _RG_VALUE_SHORT:
+                i += 1 if pos == len(word) - 2 else 0
+                break
+    return None
+
+
+def gate_rg_replace_flag_guard(raw_payload: str) -> GateResult:
+    try:
+        data = json.loads(raw_payload)
+        cmd = (data.get("tool_input") or {}).get("command", "") or ""
+        if "rg" not in cmd or "-r" not in cmd:
+            return GateResult(0, "", "")
+        for kind, _assigns, argv in _simple_commands(cmd):
+            if kind != "cmd" or not argv or argv[0] is None or argv[0].rsplit("/", 1)[-1] != "rg":
+                continue
+            cluster = _rg_glued_replace(argv)
+            if cluster is None:
+                continue
+            _log_trigger("rg-replace-flag-guard", "warn", cluster, cmd)
+            msg = (
+                f"rg is recursive by default; `-r` is `--replace` — `{cluster}` rewrites every "
+                f"match to `{cluster[2:]}`. Drop the `r`."
+            )
+            return GateResult(0, "", json.dumps({"additionalContext": msg}))
+        return GateResult(0, "", "")
+    except Exception:
+        return GateResult(0, "", "")
+
+
 MANIFEST: list[dict] = [
     {
         "name": "secret-output-guard",
@@ -2513,6 +2577,8 @@ MANIFEST: list[dict] = [
     # --- 2026-09-02: persistent cd into a lane worktree (genomics M122 recurrence) ---
     {"name": "worktree-cd-guard", "if": None, "run": gate_worktree_cd_guard},
     {"name": "remote-delete-guard", "if": None, "run": gate_remote_delete_guard},
+    # --- 2026-09-23: glued `rg -rn` silently rewrites matches (advisory) ---
+    {"name": "rg-replace-flag-guard", "if": None, "run": gate_rg_replace_flag_guard},
 ]
 
 
