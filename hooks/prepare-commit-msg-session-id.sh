@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # prepare-commit-msg hook: auto-append Session-ID trailer to every commit.
-# Reads from .claude/current-session-id (project-level) or ~/.claude/current-session-id (global).
+# Prefers the committing process's own session id; the shared .claude/current-session-id
+# (project, then global) is the last resort.
 # Skips if trailer already present, merge commits, or no session ID found.
 
 COMMIT_MSG_FILE="$1"
@@ -12,15 +13,19 @@ COMMIT_SOURCE="$2"  # message, template, merge, squash, commit (amend)
 # Skip if Session-ID already in message
 grep -q "^Session-ID:" "$COMMIT_MSG_FILE" && exit 0
 
-# Find session ID. PREFER a per-process agent identity: Claude exposes
-# $CLAUDE_SESSION_ID and Codex exposes $CODEX_THREAD_ID. Both are race-immune.
-# .claude/current-session-id is a SINGLE file shared by every
+# Find session ID. PREFER a per-process agent identity, in this order:
+#   $CLAUDE_SESSION_ID       Claude's Bash tool shell (it also has the next one, same value)
+#   $CLAUDE_CODE_SESSION_ID  Claude hook processes, which lack the first (probed 2026-09-21),
+#                            e.g. a Stop-hook auto-checkpoint commit
+#   $CODEX_THREAD_ID         Codex
+# All are race-immune. .claude/current-session-id is a SINGLE file shared by every
 # concurrent agent in the project, so a peer overwriting it between this agent's
 # work and its commit would stamp the commit with the PEER's id (mis-attributed
-# provenance). The env var belongs to this committing process and no peer can
-# change it. Fall back to project-level then global file when the var is unset.
+# provenance), and git-history-guard would then treat the commit as foreign. The env
+# vars belong to this committing process and no peer can change them. Fall back to
+# the project-level then global file only when all three are unset.
 SID=""
-PROCESS_SID="${CLAUDE_SESSION_ID:-${CODEX_THREAD_ID:-}}"
+PROCESS_SID="${CLAUDE_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-${CODEX_THREAD_ID:-}}}"
 if [ -n "$PROCESS_SID" ]; then
     SID=$(printf '%s' "$PROCESS_SID" | tr -d '[:space:]')
 fi
