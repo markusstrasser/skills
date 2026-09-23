@@ -37,7 +37,7 @@ except Exception:
 
 # Block empty output (<200 chars)
 if [ "${MSG_LEN:-0}" -lt 200 ]; then
-    echo "No research output. Write what you found, even if incomplete. Tag uncertainties with [UNVERIFIED]."
+    echo "No research output. Write what you found, even if incomplete. Tag uncertainties with [UNVERIFIED]." >&2
     exit 2
 fi
 
@@ -87,11 +87,11 @@ with open(logfile, "a") as f:
 # Execute blocking
 case "$BLOCK_REASON" in
     stub_with_claims)
-        echo "Output appears incomplete for research with claims. Write a synthesis with source tags before stopping."
+        echo "Output appears incomplete for research with claims. Write a synthesis with source tags before stopping." >&2
         exit 2
         ;;
     unsourced_substantial)
-        echo "Output contains factual claims without source tags. Add [SOURCE:], [DATABASE:], [DATA], [INFERENCE], or [UNVERIFIED] to each major claim before stopping."
+        echo "Output contains factual claims without source tags. Add [SOURCE:], [DATABASE:], [DATA], [INFERENCE], or [UNVERIFIED] to each major claim before stopping." >&2
         exit 2
         ;;
 esac
