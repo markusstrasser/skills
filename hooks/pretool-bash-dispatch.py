@@ -2299,6 +2299,113 @@ def gate_secret_path_guard(raw_payload: str) -> GateResult:
         return GateResult(0, "", "")
 
 
+# --- simple-command view for semantic gates ------------------------------------
+# Wrappers that run the next word as the command. `command -v/-V` only queries.
+_CMD_WRAPPER_VALUE_OPTS = {
+    "exec": {"-a"},
+    "env": {"-u", "--unset", "-C", "--chdir", "-S", "--split-string"},
+    "timeout": {"-k", "--kill-after", "-s", "--signal"},
+    "sudo": {"-u", "-g", "-h", "-p", "-C", "-D", "-R", "-T", "-U"},
+}
+_CMD_TRANSPARENT_WORDS = {"!", "{", "if", "then", "else", "elif", "do", "while", "until", "nohup", "builtin"}
+_ASSIGNMENT_WORD_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$", re.S)
+
+
+def _split_command_prefix(words: list[str | None]) -> tuple[dict[str, str], list[str | None]]:
+    """Split leading assignments and wrapper words off one simple command."""
+    assigns: dict[str, str] = {}
+    i, n = 0, len(words)
+    while i < n and words[i] is not None:
+        word = words[i]
+        match = _ASSIGNMENT_WORD_RE.match(word)
+        if match:
+            assigns[match.group(1)] = match.group(2)
+            i += 1
+        elif word in _CMD_TRANSPARENT_WORDS:
+            i += 1
+        elif word == "time":
+            i += 2 if i + 1 < n and words[i + 1] == "-p" else 1
+        elif word == "command":
+            i += 1
+            while i < n and words[i] == "-p":
+                i += 1
+            if i < n and words[i] in ("-v", "-V"):
+                return assigns, []
+        elif word in _CMD_WRAPPER_VALUE_OPTS:
+            value_opts = _CMD_WRAPPER_VALUE_OPTS[word]
+            i += 1
+            while i < n and words[i] is not None and words[i].startswith("-") and words[i] != "-":
+                i += 2 if words[i] in value_opts else 1
+            if word == "timeout":
+                i += 1  # DURATION
+        else:
+            break
+    return assigns, list(words[i:])
+
+
+def _simple_commands(command: str) -> list[tuple[str, dict[str, str], list[str | None]]]:
+    """Split a command line into ``(kind, assignments, argv)`` for semantic gates.
+
+    ``kind`` is ``"cmd"``, or ``"push"``/``"pop"`` at a ``(``/``)`` boundary so a
+    caller tracking ``cd`` can undo a subshell's. ``argv`` starts at the program
+    word (assignments, reserved words and time/command/exec/env/nohup/timeout/sudo
+    wrappers skipped); an empty ``argv`` with assignments is a plain assignment.
+    Words are shell-unquoted; one the unquoter cannot classify is ``None``.
+
+    Built on ``_iter_shell_syntax``, so heredoc bodies, comments and quoted text
+    never become command words. Raises ``ValueError`` on unbalanced input; callers
+    fail open.
+    """
+    out: list[tuple[str, dict[str, str], list[str | None]]] = []
+    words: list[str | None] = []
+    for kind, raw, _start, _end in _iter_shell_syntax(command):
+        if kind == "word":
+            words.append(_shlex_unquote_word(raw))
+            continue
+        if kind not in ("separator", "structure"):
+            continue  # redirection operators and their targets are not argv
+        if words:
+            out.append(("cmd", *_split_command_prefix(words)))
+            words = []
+        if kind == "structure":
+            out.append(("push" if raw == "(" else "pop", {}, []))
+    if words:
+        out.append(("cmd", *_split_command_prefix(words)))
+    return out
+
+
+# --- git-history-guard (BLOCKER, no if) — imports sidecar ----------------------
+# A history rewrite in a checkout shared with a live peer can un-commit or republish
+# the peer's commit (arc-agi 2026-07-16: `git reset --soft HEAD~1` after a peer had
+# committed), and `reset --hard` discards the peer's uncommitted work. Rule, verbs,
+# identity and incidents: pretool_git_history_guard.py (the sidecar holds the git
+# semantics and the Gov-ID). The cheap substring check keeps non-matching calls free.
+_GIT_HISTORY_HINTS = ("reset", "rebase", "--am")
+
+
+def gate_git_history_guard(raw_payload: str) -> GateResult:
+    try:
+        data = json.loads(raw_payload)
+        ti = data.get("tool_input") or {}
+        cmd = ti.get("command", "") or ""
+        if "git" not in cmd or not any(hint in cmd for hint in _GIT_HISTORY_HINTS):
+            return GateResult(0, "", "")
+        commands = _simple_commands(cmd)
+        mod = _load_module(HOOKS_DIR / "pretool_git_history_guard.py", "pretool_git_history_guard")
+        base = ti.get("workdir") or ti.get("cwd") or data.get("cwd") or os.getcwd()
+        my_ids = mod.session_ids(data, os.environ)
+        for op in mod.find_ops(commands, base, os.environ):
+            decision = mod.check(op, my_ids, os.environ)
+            if decision is None:
+                continue
+            _log_trigger("git-history-guard", decision.action, decision.detail, cmd)
+            if decision.action == "block":
+                return GateResult(2, decision.message, "")
+        return GateResult(0, "", "")
+    except Exception:
+        return GateResult(0, "", "")
+
+
 MANIFEST: list[dict] = [
     {
         "name": "secret-output-guard",
@@ -2378,6 +2485,9 @@ MANIFEST: list[dict] = [
         "if": "Bash(git*)",
         "run": make_subprocess_gate(str(HOOKS_DIR / "pretool-multiagent-commit-guard.sh")),
     },
+    # 2026-09-23 addition, placed before destructive-git-ref so that gate's backup-ref
+    # snapshot is not taken for a reset this guard is about to refuse.
+    {"name": "git-history-guard", "if": None, "run": gate_git_history_guard},
     {"name": "modal-run-guard", "if": None, "run": gate_modal_run_guard},
     {"name": "timeout-modal-guard", "if": None, "run": gate_timeout_modal_guard},
     {

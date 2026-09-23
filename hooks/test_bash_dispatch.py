@@ -1045,3 +1045,341 @@ def test_remote_delete_guard_passes(sandbox, command):
     envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
     disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
     assert disp["exit_code"] == 0
+
+
+# ---------------------------------------------------------------------------
+# git-history-guard (2026-09-23): history rewrites in a checkout shared with peers.
+# Peer detection is forced through PEER_SESSION_COUNT_BIN, as for the stash guard.
+# ---------------------------------------------------------------------------
+
+sys.path.insert(0, HOOKS_DIR)
+import pretool_git_history_guard as _ghg  # noqa: E402
+
+_SIMPLE_COMMANDS = _DISPATCHER_NAMESPACE["_simple_commands"]
+
+# session_id of a real Bash PreToolUse envelope recorded by pretool-universal-dispatch.py's
+# opt-in probe (/tmp/claude-hook-envelope-probe.log, 2026-09-21), with that envelope's key
+# set. The probe records names and ids only, so the non-identity values are placeholders.
+# The same records list the hook process's CLAUDE* variables: CLAUDE_CODE_SESSION_ID is
+# present and CLAUDE_SESSION_ID is not.
+MINE = "adae2b38-fa63-4fd0-b727-08c73975b287"
+PEER = "7d3f29c0-9e1b-4c2a-8f00-5a5a5a5a5a5a"
+_RECORDED_BASH_ENVELOPE_KEYS = [
+    "cwd", "effort", "hook_event_name", "permission_mode", "prompt_id", "scratchpad_dir",
+    "session_id", "tool_input", "tool_name", "tool_use_id", "transcript_path",
+]
+
+
+def _history_env(sandbox, tmp_path, peers):
+    env = dict(sandbox["env"])
+    for name in ("CLAUDE_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID"):
+        env.pop(name, None)
+    env["PEER_SESSION_COUNT_BIN"] = _fake_peer_bin(tmp_path, peers)
+    return env
+
+
+def _make_history(sandbox, owners):
+    """One commit per owner (None = no Session-ID trailer); returns the shas, oldest first."""
+    repo, env = sandbox["cwd"], sandbox["env"]
+    for args in (["init", "-q"], ["config", "user.email", "t@t.co"], ["config", "user.name", "t"]):
+        subprocess.run(["git", *args], cwd=repo, env=env, check=True)
+    shas = []
+    for n, owner in enumerate(owners):
+        with open(os.path.join(repo, "f.txt"), "a") as f:
+            f.write(f"line {n}\n")
+        with open(os.path.join(repo, "g.txt"), "a") as f:
+            f.write(f"line {n}\n")
+        subprocess.run(["git", "add", "f.txt", "g.txt"], cwd=repo, env=env, check=True)
+        message = ["-m", f"commit {n}"] + (["-m", f"Session-ID: {owner}"] if owner else [])
+        subprocess.run(["git", "commit", "-q", *message], cwd=repo, env=env, check=True)
+        shas.append(
+            subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=repo, env=env, capture_output=True, text=True, check=True
+            ).stdout.strip()
+        )
+    return shas
+
+
+def _run_history(sandbox, tmp_path, command, *, peers=1, session=MINE, cwd=None, env_extra=None):
+    env = _history_env(sandbox, tmp_path, peers)
+    env.update(env_extra or {})
+    where = cwd or sandbox["cwd"]
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": where}
+    if session:
+        envelope["session_id"] = session
+    return run_dispatcher(envelope, env, where)
+
+
+_FOREIGN_HEAD_BLOCKS = [
+    "git commit --amend --no-edit",
+    "git commit -a --amend",
+    "git commit -am 'reword' --amend",
+    "GIT_EDITOR=true git commit --amend",
+    "git reset --soft HEAD~1",
+    "git reset --mixed HEAD~1",
+    "git reset --keep HEAD~1",
+    "git reset --merge HEAD~1",
+    "git reset HEAD~1",
+    "git reset -q {base}",
+    "git reset",
+    "git rebase -i HEAD~1",
+    "git rebase --onto {base} HEAD~1",
+    "timeout 30 git rebase -i HEAD~1",
+    "git -C {repo} reset --soft HEAD~1",
+    "cd {repo} && git reset --soft HEAD~1",
+    'R={repo}; git -C "$R" reset --soft HEAD~1',
+    "(cd {repo} && git reset --soft HEAD~1)",
+]
+
+
+@pytest.mark.parametrize("template", _FOREIGN_HEAD_BLOCKS)
+def test_git_history_guard_blocks_rewrite_of_foreign_head(sandbox, tmp_path, template):
+    base, head = _make_history(sandbox, [MINE, PEER])
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    command = template.format(repo=sandbox["cwd"], base=base)
+    cwd = str(elsewhere) if "{repo}" in template else None
+    disp = _run_history(sandbox, tmp_path, command, cwd=cwd)
+    assert disp["exit_code"] == 2, disp
+    msg = disp["block_msg"]
+    assert f"HEAD {head[:7]}" in msg
+    assert f"session {PEER[:8]}" in msg
+    assert "1 live peer session(s)" in msg
+    assert "fix forward with a new commit" in msg.lower()
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git commit --amend --no-edit",
+        "git reset --soft HEAD~1",
+        "git reset HEAD~1",
+        "git reset",
+        "git rebase -i HEAD~1",
+        "git reset --hard",
+    ],
+)
+def test_git_history_guard_solo_never_fires(sandbox, tmp_path, command):
+    _make_history(sandbox, [MINE, PEER])
+    disp = _run_history(sandbox, tmp_path, command, peers=0)
+    assert disp["exit_code"] == 0, disp
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["git commit --amend --no-edit", "git reset --soft HEAD~1", "git reset HEAD~1", "git reset", "git rebase -i HEAD~1"],
+)
+def test_git_history_guard_allows_own_head_with_peers(sandbox, tmp_path, command):
+    _make_history(sandbox, [PEER, MINE])
+    disp = _run_history(sandbox, tmp_path, command)
+    assert disp["exit_code"] == 0, disp
+
+
+def test_git_history_guard_blocks_head_without_trailer(sandbox, tmp_path):
+    _, head = _make_history(sandbox, [MINE, None])
+    disp = _run_history(sandbox, tmp_path, "git commit --amend --no-edit")
+    assert disp["exit_code"] == 2
+    assert f"HEAD {head[:7]}" in disp["block_msg"]
+    assert "no Session-ID" in disp["block_msg"]
+
+
+def test_git_history_guard_checks_every_commit_the_reset_drops(sandbox, tmp_path):
+    """HEAD is this session's, but HEAD~1 (also dropped by HEAD~2) is the peer's."""
+    _, peer_commit, head = _make_history(sandbox, [MINE, PEER, MINE])
+    disp = _run_history(sandbox, tmp_path, "git reset --soft HEAD~2")
+    assert disp["exit_code"] == 2
+    assert f"HEAD {head[:7]} is yours" in disp["block_msg"]
+    assert f"{peer_commit[:7]} in the rewritten range" in disp["block_msg"]
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git reset -- f.txt",
+        "git reset HEAD -- f.txt",
+        "git reset f.txt g.txt",
+        "git reset f.txt",
+        "git reset -q -- f.txt g.txt",
+        "git reset -p",
+        "git reset --pathspec-from-file=paths.txt",
+    ],
+)
+def test_git_history_guard_allows_path_scoped_reset(sandbox, tmp_path, command):
+    _make_history(sandbox, [MINE, PEER])
+    disp = _run_history(sandbox, tmp_path, command)
+    assert disp["exit_code"] == 0, disp
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git rebase --continue",
+        "git rebase --abort",
+        "git rebase --skip",
+        "git rebase --quit",
+        "git rebase --edit-todo",
+        "git rebase --show-current-patch",
+    ],
+)
+def test_git_history_guard_allows_rebase_controls(sandbox, tmp_path, command):
+    _make_history(sandbox, [MINE, PEER])
+    disp = _run_history(sandbox, tmp_path, command)
+    assert disp["exit_code"] == 0, disp
+
+
+@pytest.mark.parametrize(
+    "template",
+    ["git reset --hard", "git reset --hard HEAD", "git reset -q --hard HEAD~1", "W={repo}; git -C $W reset --hard HEAD"],
+)
+def test_git_history_guard_blocks_reset_hard_even_on_own_head(sandbox, tmp_path, template):
+    _, head = _make_history(sandbox, [PEER, MINE])
+    disp = _run_history(sandbox, tmp_path, template.format(repo=sandbox["cwd"]))
+    assert disp["exit_code"] == 2, disp
+    msg = disp["block_msg"]
+    assert "discards every uncommitted change" in msg
+    assert f"HEAD is {head[:7]} (session {MINE[:8]})" in msg
+    assert "1 live peer session(s)" in msg
+    assert "fix forward with a new commit" in msg
+
+
+def test_git_history_guard_reads_identity_from_recorded_envelope(sandbox, tmp_path):
+    """Envelope with the recorded key set; hook env as recorded: CLAUDE_CODE_SESSION_ID only."""
+    _make_history(sandbox, [PEER, MINE])
+    env = _history_env(sandbox, tmp_path, 1)
+    env["CLAUDE_CODE_SESSION_ID"] = MINE
+    envelope = {key: f"<{key}>" for key in _RECORDED_BASH_ENVELOPE_KEYS}
+    envelope.update(
+        tool_name="Bash",
+        tool_input={"command": "git commit --amend --no-edit"},
+        cwd=sandbox["cwd"],
+        session_id=MINE,
+        hook_event_name="PreToolUse",
+    )
+    assert sorted(envelope) == _RECORDED_BASH_ENVELOPE_KEYS
+    assert "CLAUDE_SESSION_ID" not in env
+    assert run_dispatcher(envelope, env, sandbox["cwd"])["exit_code"] == 0
+    subprocess.run(
+        ["git", "commit", "-q", "--allow-empty", "-m", "peer", "-m", f"Session-ID: {PEER}"],
+        cwd=sandbox["cwd"], env=sandbox["env"], check=True,
+    )
+    assert run_dispatcher(envelope, env, sandbox["cwd"])["exit_code"] == 2
+
+
+def test_git_history_guard_accepts_codex_thread_id(sandbox, tmp_path):
+    _make_history(sandbox, [PEER, MINE])
+    disp = _run_history(
+        sandbox, tmp_path, "git reset --soft HEAD~1", session=None, env_extra={"CODEX_THREAD_ID": MINE}
+    )
+    assert disp["exit_code"] == 0, disp
+
+
+def test_git_history_guard_without_any_identity_cannot_claim_head(sandbox, tmp_path):
+    _make_history(sandbox, [PEER, MINE])
+    disp = _run_history(sandbox, tmp_path, "git reset --soft HEAD~1", session=None)
+    assert disp["exit_code"] == 2
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'git -C "$NOT_SET_ANYWHERE" reset --soft HEAD~1',
+        "echo 'git reset --soft HEAD~1' > notes.txt",
+        "cat > notes.md <<'EOF'\ngit reset --hard HEAD\nEOF",
+        "git log --grep 'git reset --soft' -1 --format=%h",
+    ],
+)
+def test_git_history_guard_fails_open_or_ignores_data(sandbox, tmp_path, command):
+    _make_history(sandbox, [MINE, PEER])
+    disp = _run_history(sandbox, tmp_path, command)
+    assert disp["exit_code"] == 0, disp
+
+
+def test_git_history_guard_fails_open_when_peer_detector_breaks(sandbox, tmp_path):
+    _make_history(sandbox, [MINE, PEER])
+    env = _history_env(sandbox, tmp_path, 1)
+    env["PEER_SESSION_COUNT_BIN"] = str(tmp_path / "missing-peer-bin")
+    envelope = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "git reset --soft HEAD~1"},
+        "cwd": sandbox["cwd"],
+        "session_id": MINE,
+    }
+    assert run_dispatcher(envelope, env, sandbox["cwd"])["exit_code"] == 0
+
+
+def test_git_history_guard_fails_open_outside_a_repo(sandbox, tmp_path):
+    disp = _run_history(sandbox, tmp_path, "git reset --soft HEAD~1")
+    assert disp["exit_code"] == 0
+
+
+def test_git_history_guard_logs_block_and_exposure_rows(sandbox, tmp_path):
+    _make_history(sandbox, [PEER, MINE])
+    assert _run_history(sandbox, tmp_path, "git reset --soft HEAD~1")["exit_code"] == 0
+    assert _run_history(sandbox, tmp_path, "git reset --hard")["exit_code"] == 2
+    rows = [r for r in _read_trigger_log(sandbox) if r.get("hook") == "git-history-guard"]
+    assert [r["action"] for r in rows] == ["exposure-clean", "block"]
+    assert all(r.get("cmd_tok") == "git" and "cmd" not in r for r in rows)
+    assert "peers=1" in rows[0]["detail"] and "mode=hard" in rows[1]["detail"]
+
+
+def _ops(command, base="/base", environ=None):
+    return _ghg.find_ops(_SIMPLE_COMMANDS(command), base, environ or {"HOME": "/home/u"})
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git commit --amen --no-edit",
+        "git -c core.editor=true commit --amend",
+        "command git commit -q --amend",
+        "if git commit --amend --no-edit; then echo ok; fi",
+    ],
+)
+def test_git_history_parse_finds_amend(command):
+    assert [op.verb for op in _ops(command)] == ["amend"]
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "git commit -m --amend",
+        "git commit --fixup=amend:HEAD",
+        "git commit --amend --no-amend",
+        "git commit -m x -- --amend",
+        "echo 'git commit --amend'",
+        "command -v git && echo 'git reset --hard'",
+        "git reset HEAD -- a.py",
+        "git reset a.py b.py",
+        "git rebase --continue",
+    ],
+)
+def test_git_history_parse_ignores_non_rewrites(command):
+    assert _ops(command) == []
+
+
+def test_git_history_parse_resolves_directories():
+    (op,) = _ops("W=/x/wt; git -C $W reset --hard main")
+    assert (op.target_dir, op.reset_mode, op.rev) == ("/x/wt", "hard", "main")
+    (op,) = _ops("cd /a && git -C b reset --soft HEAD~1")
+    assert op.target_dir == "/a/b"
+    (op,) = _ops("(cd /a && git status); git reset --soft HEAD~1")
+    assert op.target_dir == "/base"
+    (op,) = _ops("cd ~/proj && git rebase -i HEAD~2")
+    assert op.target_dir == "/home/u/proj"
+    (op,) = _ops('git -C "$UNSET" reset --soft HEAD~1')
+    assert op.target_dir is None
+
+
+def test_git_history_parse_reset_and_rebase_targets():
+    (op,) = _ops("git reset HEAD~1 --")
+    assert op.rev == "HEAD~1" and not op.needs_disambiguation
+    (op,) = _ops("git reset abc123")
+    assert op.rev == "abc123" and op.needs_disambiguation
+    (op,) = _ops('git reset --hard "$(git rev-parse main)"')
+    assert op.rev is _ghg.UNKNOWN and op.reset_mode == "hard"
+    (op,) = _ops("git rebase -x 'make test' HEAD~3")
+    assert op.rev == "HEAD~3"
+    (op,) = _ops("git rebase --onto main topic~2")
+    assert op.rev == "topic~2"
+    (op,) = _ops("git rebase")
+    assert op.rev == "@{upstream}"
