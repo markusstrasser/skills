@@ -40,7 +40,8 @@ Adjunct: when the object under analysis is a published quantitative claim (a hea
 
 ## Mode Recommendation
 
-1. Define the observation precisely. If it is a published administrative or survey
+1. Define the observation precisely, as bare facts separate from any explanation
+   that arrived with it. If it is a published administrative or survey
    statistic, run measurement-pipeline first: the number may not be the quantity it names.
 2. Run null/base-rate before causal story generation.
 3. If residual remains:

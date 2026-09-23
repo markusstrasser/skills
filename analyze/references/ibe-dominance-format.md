@@ -19,6 +19,7 @@ For each surviving hypothesis (posterior > 0.10), evaluate on 5 dimensions:
 - Compare hypotheses pairwise on each criterion: H1 > H2, H1 = H2, or H1 < H2
 - **Dominance:** H1 dominates H2 if H1 >= H2 on all criteria and H1 > H2 on at least one
 - **Non-dominance:** if neither dominates, state the tradeoff explicitly ("H1 is more parsimonious but H2 has broader scope")
+- **Loveliness is not likeliness.** Parsimony and scope stand in for probability only when base rates are missing; people judge simpler and broader explanations more likely regardless (Lombrozo 2007). With base rates available, the base rates dominate.
 - **Fertility is the tiebreaker.** When tradeoffs are close, the hypothesis generating more NEW checkable predictions wins -- it's more falsifiable
 
 ## Why Not Numeric Totals

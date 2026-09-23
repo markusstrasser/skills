@@ -48,6 +48,8 @@ Resolves the conflict between narrative-free statistical screening and hypothesi
 3. Query the data
 4. Compare prediction to reality
 5. Mismatches are more informative than confirmations
+6. Dismissing a mismatch as noise or artifact names the discounting move (ignore, reject, exclude, hold in abeyance, reinterpret, peripheral change) and the test that would show it is justified. Six of the seven documented responses to anomalous data discount it (Chinn & Brewer 1993).
+7. Two or more unexplained observations with a shared pattern call for a new frame, not more local patches (Klein data-frame; Kulkarni & Simon's surprise heuristic).
 
 **Do NOT mix phases.** Running Phase 1 with a narrative biases the screen. Running Phase 2 without a prediction wastes diagnostic power.
 
