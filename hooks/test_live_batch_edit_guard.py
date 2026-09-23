@@ -97,3 +97,53 @@ def test_override_and_foreign_repo_pass(
     assert run_hook(repo, edit(target), GENOMICS_LIVE_BATCH_EDIT_OK="1").returncode == 0
     elsewhere = tmp_path_factory.mktemp("other") / "scripts/stage.py"
     assert run_hook(repo, edit(elsewhere)).returncode == 0
+
+
+@pytest.fixture()
+def drive_from(request: pytest.FixtureRequest):
+    """Start a stand-in `just drive` process (DRIVE_MARK in its argv) with a chosen cwd."""
+    processes: list[subprocess.Popen] = []
+
+    def start(cwd: Path) -> None:
+        processes.append(
+            subprocess.Popen(
+                [
+                    sys.executable,
+                    "-c",
+                    "import time; time.sleep(60)",
+                    "drive_marker.py",
+                    "syn7sr",
+                    "family_cascade",
+                    "--budget-approved",
+                ],
+                cwd=cwd,
+            )
+        )
+
+    yield start
+    for process in processes:
+        process.kill()
+        process.wait()
+
+
+def test_blocks_main_source_edit_while_a_single_drive_runs_from_main(
+    repo: Path, drive_from
+) -> None:
+    # 2026-09-23: two parallel `just drive` runs died on a main edit the batch check missed.
+    drive_from(repo)
+    result = run_hook(
+        repo, edit(repo / "scripts/stage.py"), LIVE_BATCH_GUARD_DRIVE_MARK="drive_marker.py"
+    )
+    assert result.returncode == 2
+    assert "drive syn7sr:family_cascade" in result.stderr
+    assert "DirtyGitSourceError" in result.stderr
+
+
+def test_a_drive_running_from_a_worktree_does_not_block_main_edits(
+    repo: Path, drive_from
+) -> None:
+    drive_from(repo / ".claude/worktrees/lane")
+    result = run_hook(
+        repo, edit(repo / "scripts/stage.py"), LIVE_BATCH_GUARD_DRIVE_MARK="drive_marker.py"
+    )
+    assert result.returncode == 0
