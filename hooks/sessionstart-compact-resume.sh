@@ -37,8 +37,18 @@ if [ -n "$SID" ]; then
   date +%s > "/tmp/claude-postcompact-${SID}" 2>/dev/null || true
 fi
 
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Hook cwd is the shell's CURRENT directory, which drifts into subdirectories; the
+# PreCompact writer files the checkpoint at the git toplevel, so resolve the same root
+# (iq-sex-differences 2026-09-23: a subdir resume missed the root checkpoint).
+ROOT="$CWD"
+if [ -n "$CWD" ]; then
+  ROOT=$(python3 "$HOOK_DIR/checkpoint_resume.py" project-root "$CWD" 2>/dev/null || echo "$CWD")
+  [ -n "$ROOT" ] || ROOT="$CWD"
+fi
+
 CKPT=""
-if [ -n "$CWD" ] && [ -d "$CWD/.claude" ]; then
+if [ -n "$ROOT" ] && [ -d "$ROOT/.claude" ]; then
   # Point the resume at the CURRENT session's checkpoint — NOT a stale sibling.
   # The PreCompact writer may divert a fresh checkpoint to checkpoint-autogen.md
   # (anti-clobber for a tracked/curated or LIVE-peer checkpoint.md). This hook used
@@ -46,16 +56,15 @@ if [ -n "$CWD" ] && [ -d "$CWD/.claude" ]; then
   # after a divert and re-oriented a resume off a dead 2-day-old different-session
   # checkpoint (genomics 2026-07-06). checkpoint_resume single-sources the selection
   # (session-stamp match, else newest) and returns an honest, provenance-aware message.
-  HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  CKPT=$(python3 "$HOOK_DIR/checkpoint_resume.py" resume-message "$CWD/.claude" "$SID" 2>/dev/null || echo "")
+  CKPT=$(python3 "$HOOK_DIR/checkpoint_resume.py" resume-message "$ROOT/.claude" "$SID" 2>/dev/null || echo "")
 fi
 
 # Compaction loses operator CORRECTIONS while keeping ADR principles — so the same
 # wrong instantiation gets re-derived. Re-inject the project's settled-framing headers
 # (each is "topic — verdict") so a settled question is looked up, not re-derived.
 REFRAMINGS=""
-if [ -n "$CWD" ] && [ -f "$CWD/docs/decisions/REFRAMINGS.md" ]; then
-  TOPICS=$(awk '/^## /{sub(/^## /,"");printf "%s%s",sep,$0;sep=" · "}' "$CWD/docs/decisions/REFRAMINGS.md" 2>/dev/null || echo "")
+if [ -n "$ROOT" ] && [ -f "$ROOT/docs/decisions/REFRAMINGS.md" ]; then
+  TOPICS=$(awk '/^## /{sub(/^## /,"");printf "%s%s",sep,$0;sep=" · "}' "$ROOT/docs/decisions/REFRAMINGS.md" 2>/dev/null || echo "")
   [ -n "$TOPICS" ] && REFRAMINGS=" SETTLED FRAMINGS — do NOT re-derive these from principles; the pinned answer is in docs/decisions/REFRAMINGS.md (consult it + \`agentlogs search\` before asserting any identity/firewall/home/scope framing): ${TOPICS}."
 fi
 

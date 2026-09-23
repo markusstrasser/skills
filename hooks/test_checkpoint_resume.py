@@ -11,10 +11,13 @@ Run: cd ~/Projects/skills/hooks && python3 -m pytest test_checkpoint_resume.py -
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+import pytest
 
 import checkpoint_resume as cr
 
@@ -238,8 +241,8 @@ def test_select_prefers_curated_own_file_over_fresher_extract(tmp_path):
     assert sel["curated"] is True
     assert sel["extract_sibling"] == "checkpoint-autogen.md"
     msg = cr.resume_message(str(tmp_path), "sess-ME", now=now)
-    assert "`.claude/checkpoint.md` first" in msg
-    assert "checkpoint-autogen.md" in msg
+    assert "`%s` first" % curated in msg
+    assert "`%s`" % extract in msg
 
 
 def test_select_newest_own_file_when_none_is_curated(tmp_path):
@@ -256,7 +259,7 @@ def test_select_newest_own_file_when_none_is_curated(tmp_path):
     assert sel["extract_sibling"] is None
 
 
-def _run_writer(tmp_path, session):
+def _run_writer(tmp_path, session, cwd=None):
     transcript = tmp_path / "transcript.jsonl"
     transcript.write_text("")
     home = tmp_path / "home"
@@ -264,7 +267,7 @@ def _run_writer(tmp_path, session):
     payload = json.dumps(
         {
             "session_id": session,
-            "cwd": str(tmp_path / "proj"),
+            "cwd": str(cwd or tmp_path / "proj"),
             "transcript_path": str(transcript),
             "trigger": "auto",
         }
@@ -316,3 +319,118 @@ def test_writer_still_overwrites_its_own_signed_checkpoint(tmp_path):
     text = own.read_text()
     assert "Written by PreCompact hook at" in text
     assert "old extract" not in text
+
+
+# ─── project root: hook cwd drifts into subdirectories ───────────────
+# iq-sex-differences 2026-09-23: a PreCompact from analysis/ wrote
+# analysis/.claude/checkpoint.md with an empty Branch, the tracked root checkpoint
+# stayed stale, and the resume read a 3-week-old file.
+
+
+def _git(repo, *args):
+    subprocess.run(
+        ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t",
+         "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
+def _repo_with_subdir(tmp_path, tracked_checkpoint=None):
+    proj = tmp_path / "proj"
+    sub = proj / "analysis"
+    sub.mkdir(parents=True)
+    _git(proj, "init", "-q", "-b", "main")
+    if tracked_checkpoint is not None:
+        (proj / ".claude").mkdir()
+        (proj / ".claude" / "checkpoint.md").write_text(tracked_checkpoint)
+        _git(proj, "add", "-f", ".claude/checkpoint.md")
+    _git(proj, "commit", "-q", "--allow-empty", "-m", "init")
+    return proj.resolve(), sub.resolve()
+
+
+def test_project_root_from_a_subdir_is_the_toplevel(tmp_path):
+    proj, sub = _repo_with_subdir(tmp_path)
+    assert cr.git_toplevel(str(sub)) == str(proj)
+    assert cr.project_root(str(sub)) == str(proj)
+
+
+def test_project_root_outside_git_is_cwd(tmp_path, monkeypatch):
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
+    assert cr.git_toplevel(str(plain)) is None
+    assert cr.project_root(str(plain)) == str(plain)
+
+
+def test_writer_reads_git_state_in_a_linked_worktree(tmp_path):
+    """A linked worktree's `.git` is a FILE; the old isdir probe left Branch empty."""
+    proj, _ = _repo_with_subdir(tmp_path)
+    wt = tmp_path / "wt"
+    _git(proj, "worktree", "add", "-q", "-b", "wtb", str(wt))
+    assert (wt / ".git").is_file()
+
+    _run_writer(tmp_path, "sess-ME", cwd=wt)
+
+    assert "- **Branch:** `wtb`" in (wt / ".claude" / "checkpoint.md").read_text()
+
+
+def test_writer_files_a_subdir_checkpoint_at_the_toplevel(tmp_path):
+    proj, sub = _repo_with_subdir(tmp_path)
+
+    _run_writer(tmp_path, "sess-ME", cwd=sub)
+
+    assert not (sub / ".claude").exists()
+    text = (proj / ".claude" / "checkpoint.md").read_text()
+    assert "<!-- session: sess-ME -->" in text
+    assert "- **Branch:** `main`" in text
+
+
+def test_writer_diverts_beside_a_tracked_toplevel_checkpoint_from_a_subdir(tmp_path):
+    """The incident shape: tracked root checkpoint.md, compaction fired in analysis/."""
+    curated = "# Handoff\n<!-- session: old-sess -->\nhand-written\n"
+    proj, sub = _repo_with_subdir(tmp_path, tracked_checkpoint=curated)
+
+    _run_writer(tmp_path, "sess-ME", cwd=sub)
+
+    assert not (sub / ".claude").exists()
+    assert (proj / ".claude" / "checkpoint.md").read_text() == curated
+    extract = proj / ".claude" / "checkpoint-autogen.md"
+    assert "Written by PreCompact hook at" in extract.read_text()
+    sel = cr.select_for_read(str(proj / ".claude"), "sess-ME")
+    assert sel["basename"] == "checkpoint-autogen.md"
+    assert sel["is_current"] is True
+
+
+@pytest.mark.skipif(shutil.which("jq") is None, reason="the hook parses its envelope with jq")
+def test_sessionstart_reader_resolves_the_toplevel_from_a_subdir(tmp_path):
+    proj, sub = _repo_with_subdir(tmp_path)
+    sid = "ckpt-root-test-%d" % os.getpid()
+    claude_dir = proj / ".claude"
+    claude_dir.mkdir()
+    _write(str(claude_dir / "checkpoint.md"), sid)
+    (proj / "docs" / "decisions").mkdir(parents=True)
+    (proj / "docs" / "decisions" / "REFRAMINGS.md").write_text("## scope — settled\n")
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("CLAUDE_TOOL_INPUT", "CLAUDE_HOOK_SMOKE", "CODEX_HOOK_COMPAT_SMOKE")
+    }
+    try:
+        proc = subprocess.run(
+            ["bash", str(HOOK_DIR / "sessionstart-compact-resume.sh")],
+            input=json.dumps({"source": "compact", "cwd": str(sub), "session_id": sid}),
+            text=True,
+            capture_output=True,
+            env=env,
+            timeout=60,
+        )
+    finally:
+        Path("/tmp/claude-postcompact-%s" % sid).unlink(missing_ok=True)
+
+    assert proc.returncode == 0, proc.stderr
+    context = json.loads(proc.stdout)["hookSpecificOutput"]["additionalContext"]
+    assert "Read `%s` first (this session's fresh" % (claude_dir / "checkpoint.md") in context
+    assert "scope — settled" in context

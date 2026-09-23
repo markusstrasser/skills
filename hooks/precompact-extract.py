@@ -3,7 +3,8 @@
 Reads hook JSON from stdin (session_id, transcript_path, cwd, trigger).
 Outputs:
   1. ~/.claude/compact-log.jsonl — append-only compaction metrics
-  2. <cwd>/.claude/checkpoint.md — resume checkpoint with epistemic content
+  2. <project root>/.claude/checkpoint.md — resume checkpoint with epistemic content
+     (root = git toplevel of cwd, else cwd; checkpoint_resume.project_root)
 
 Single pass through transcript extracts both metrics (backward-compatible)
 and actual content (new). Content categories:
@@ -22,6 +23,9 @@ import subprocess
 import sys
 from collections import deque
 from datetime import datetime
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from checkpoint_resume import git_toplevel, is_curated, is_stale_remnant  # noqa: E402
 
 # ─── Sentence splitter ───────────────────────────────────────────────
 
@@ -267,11 +271,17 @@ def main():
     untracked = []
     diff_stat = ""
 
-    if cwd and os.path.isdir(os.path.join(cwd, ".git")):
+    # Hook `cwd` is the shell's CURRENT directory, which drifts into subdirectories
+    # (iq-sex-differences 2026-09-23: analysis/ got its own .claude/checkpoint.md with
+    # an empty Branch). Git state and the checkpoint belong to the work-tree root.
+    toplevel = git_toplevel(cwd)
+    root = toplevel or cwd
+
+    if toplevel:
 
         def git(*args, timeout=5):
             r = subprocess.run(
-                ["git"] + list(args), cwd=cwd, capture_output=True, text=True, timeout=timeout
+                ["git"] + list(args), cwd=root, capture_output=True, text=True, timeout=timeout
             )
             return r.stdout.strip() if r.returncode == 0 else ""
 
@@ -316,7 +326,7 @@ def main():
     if not cwd:
         sys.exit(0)
 
-    checkpoint_dir = os.path.join(cwd, ".claude")
+    checkpoint_dir = os.path.join(root, ".claude")
     os.makedirs(checkpoint_dir, exist_ok=True)
     checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.md")
     # CLOBBER GUARD (hutter 2026-06-11: autogen overwrote a CURATED checkpoint twice in one
@@ -326,7 +336,7 @@ def main():
     try:
         tracked = (
             subprocess.run(
-                ["git", "-C", cwd, "ls-files", "--error-unmatch", ".claude/checkpoint.md"],
+                ["git", "-C", root, "ls-files", "--error-unmatch", ".claude/checkpoint.md"],
                 capture_output=True,
                 timeout=5,
             ).returncode
@@ -352,19 +362,12 @@ def main():
         # (genomics 2026-07-06). Age discriminator single-sourced in checkpoint_resume:
         # a live peer re-writes on every compaction, far inside the age floor.
         try:
-            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-            from checkpoint_resume import is_curated, is_stale_remnant
-        except Exception:
-            is_stale_remnant = None
-            is_curated = None
-        try:
             with open(checkpoint_path) as _f:
                 _m = re.search(r"<!-- session: (\S+) -->", _f.read(400))
             if _m and session and _m.group(1) != session:
-                remnant = is_stale_remnant(checkpoint_path, session) if is_stale_remnant else False
-                if not remnant:
+                if not is_stale_remnant(checkpoint_path, session):
                     checkpoint_path = os.path.join(checkpoint_dir, "checkpoint-autogen.md")
-            elif _m and session and is_curated is not None and is_curated(checkpoint_path):
+            elif _m and session and is_curated(checkpoint_path):
                 # CURATED-CLOBBER GUARD (genomics 2026-09-07 02:31): the session's OWN
                 # checkpoint.md was hand-written (no hook signature, or edited after the
                 # stamped write) and carried a Pending Tasks list the transcript extract

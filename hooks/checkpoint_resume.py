@@ -6,7 +6,12 @@ Two hooks must AGREE on which file is "the current session's resume checkpoint":
   - the SessionStart(compact) READER (sessionstart-compact-resume.sh) — decides
     which file to tell the resuming agent to READ.
 
-The autogen resume pair is exactly two files in <cwd>/.claude/:
+Both resolve the directory through project_root(): hook JSON `cwd` is the shell's
+CURRENT directory, which drifts into subdirectories. A PreCompact from analysis/
+(iq-sex-differences 2026-09-23) wrote analysis/.claude/checkpoint.md with an empty
+Branch and left the root checkpoint stale, so the resume read a 3-week-old file.
+
+The autogen resume pair is exactly two files in <project root>/.claude/:
   - checkpoint.md          — default write target AND historical read target
   - checkpoint-autogen.md  — divert target when checkpoint.md must not be
                              clobbered (git-tracked/curated, or a LIVE peer
@@ -32,6 +37,7 @@ so the divert only protects a live peer, not a corpse — keeping non-hook reade
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 
@@ -51,6 +57,32 @@ CURATED_EDIT_GRACE_S = 180.0
 # A live concurrent peer re-writes its checkpoint on every compaction; only a
 # dead session leaves one older than this. Reclaim past the floor, protect within.
 DEFAULT_REMNANT_AGE_H = 12.0
+
+
+def git_toplevel(cwd, timeout=5):
+    """The git work-tree root containing `cwd`, or None outside a work tree.
+
+    rev-parse, not an isdir(".git") probe: a linked worktree or submodule has a
+    `.git` FILE, and a subdirectory has no `.git` at all.
+    """
+    if not cwd:
+        return None
+    try:
+        proc = subprocess.run(
+            ["git", "-C", cwd, "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    top = proc.stdout.strip()
+    return top if proc.returncode == 0 and top else None
+
+
+def project_root(cwd):
+    """The directory whose .claude/ holds the resume pair: git toplevel, else `cwd`."""
+    return git_toplevel(cwd) or cwd
 
 
 def read_session_stamp(path):
@@ -159,21 +191,21 @@ def resume_message(claude_dir, current_session, now=None):
     """The human-facing 'read X first' fragment for the SessionStart hook.
 
     Empty string when no checkpoint exists. Honest about provenance: never
-    claims a cross-session or stale file is "fresh".
+    claims a cross-session or stale file is "fresh". Names absolute paths: a
+    relative `.claude/X` resolves against whatever subdirectory the agent's
+    shell sits in, not the project root the file lives at.
     """
     sel = select_for_read(claude_dir, current_session, now=now)
     if not sel:
         return ""
-    base = sel["basename"]
+    path = os.path.abspath(sel["path"])
     age = sel["age_hours"]
     if sel["is_current"]:
-        msg = (
-            " Read `.claude/%s` first (this session's fresh resume checkpoint)." % base
-        )
+        msg = " Read `%s` first (this session's fresh resume checkpoint)." % path
         if sel["curated"] and sel["extract_sibling"]:
             msg += (
                 " It is hand-curated; the hook's transcript extract sits beside it in"
-                " `.claude/%s`." % sel["extract_sibling"]
+                " `%s`." % os.path.join(os.path.dirname(path), sel["extract_sibling"])
             )
         if age > 18:
             msg += (
@@ -183,10 +215,10 @@ def resume_message(claude_dir, current_session, now=None):
     else:
         sess = (sel["session"] or "unknown")[:8]
         msg = (
-            " Read `.claude/%s` first, but treat it with care: it is stamped session %s"
+            " Read `%s` first, but treat it with care: it is stamped session %s"
             " (%.1fh old), NOT this resuming session — a handoff from another/earlier session"
             " that may be stale. Verify every 'done' claim against `git log --oneline -15`"
-            " before acting on it." % (base, sess, age)
+            " before acting on it." % (path, sess, age)
         )
     return msg
 
@@ -212,6 +244,9 @@ def is_stale_remnant(path, current_session, now=None, max_age_h=DEFAULT_REMNANT_
 
 
 def _main(argv):
+    if len(argv) >= 3 and argv[1] == "project-root":
+        sys.stdout.write(project_root(argv[2]))
+        return 0
     if len(argv) >= 3 and argv[1] == "resume-message":
         claude_dir = argv[2]
         sid = argv[3] if len(argv) > 3 else ""
@@ -225,6 +260,7 @@ def _main(argv):
         return 0
     sys.stderr.write(
         "usage: checkpoint_resume.py {resume-message|select-read} <claude_dir> <session_id>\n"
+        "       checkpoint_resume.py project-root <cwd>\n"
     )
     return 2
 

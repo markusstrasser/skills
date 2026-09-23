@@ -18,8 +18,13 @@ CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // ""' 2>/dev/null || true)
 
 # Check for continuation boilerplate patterns
 if echo "$USER_MSG" | grep -qi "continued from a previous conversation\|session is being continued\|context ran out\|ran out of context\|previous conversation that ran out"; then
-    # Check if checkpoint.md exists
-    if [ -n "$CWD" ] && [ -f "$CWD/.claude/checkpoint.md" ]; then
+    # Check if checkpoint.md exists at the project root the PreCompact writer uses
+    # (git toplevel of the drifting hook cwd).
+    ROOT="$CWD"
+    if [ -n "$CWD" ]; then
+        ROOT=$(python3 "$(cd "$(dirname "$0")" && pwd)/checkpoint_resume.py" project-root "$CWD" 2>/dev/null || echo "$CWD")
+    fi
+    if [ -n "$ROOT" ] && [ -f "$ROOT/.claude/checkpoint.md" ]; then
         echo "checkpoint.md exists in .claude/ — the agent will auto-read it. No need to paste continuation context." >&2
     fi
 fi
