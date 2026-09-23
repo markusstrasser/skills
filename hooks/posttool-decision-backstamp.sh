@@ -8,6 +8,10 @@
 # target even when its own status reads accepted.
 #
 # FLIP verbs only (the verb ruling): supersedes | retires | reverses[-_ ]premise.
+# EXACT relation types in YAML frontmatter only (narrowed 2026-09-23 per the
+# misfire watch's pre-registered rule): 4 of 5 stamps in 3 months came from
+# partial supersessions (`supersedes_scope`, `supersedes_rationale_of`, a prose
+# `**Supersedes (for phenome):**`) and wrongly declared the whole ADR dead.
 # NOT unifies/merged_from/subsumes/concretizes/extends (consolidation/refinement ≠ kill).
 # Append-only (never rewrites the target's status line — a new appended entry, per the
 # "mark stale, never delete" principle). Idempotent (keyed on the marker text). Targets
@@ -38,19 +42,15 @@ SELF_ID=$(awk '
 ' "$FILE" 2>/dev/null || true)
 [ -z "$SELF_ID" ] && SELF_ID="$SELF_STEM"
 
-# Collect FLIP-verb supersession targets from BOTH forms:
-#  (1) YAML relations:  - type: supersedes|retires|reverses_premise / target: X
-#  (2) prose headers:   **Supersedes:** [[X]] / **Retires:** [[X]] / **Reverses-premise:** [[X]]
-# (1) YAML relations: a flip `type:` line followed by its `target:`.
+# Collect FLIP-verb supersession targets from YAML relations only:
+#   - type: supersedes|retires|reverses_premise   (exact; no suffixed variants)
+#     target: X
 yaml_targets=$(awk '
-  /^[[:space:]]*-[[:space:]]*type:[[:space:]]*(supersedes|retires|reverses[_-]premise)/ { armed=1; next }
+  /^[[:space:]]*-[[:space:]]*type:[[:space:]]*["\x27]?(supersedes|retires|reverses[_-]premise)["\x27]?[[:space:]]*(#.*)?$/ { armed=1; next }
   armed && /target:/ { sub(/.*target:[[:space:]]*/,""); gsub(/["\x27]/,""); print; armed=0; next }
   armed && !/^[[:space:]]/ { armed=0 }
 ' "$FILE" 2>/dev/null || true)
-# (2) Prose flip headers → every [[target]] on the matching line.
-prose_lines=$(grep -ioE '\*\*(supersedes|retires|reverses[ _-]premise)[^*]*\*\*[^*]*' "$FILE" 2>/dev/null || true)
-prose_targets=$(printf '%s\n' "$prose_lines" | grep -oE '\[\[[^]]+\]\]' 2>/dev/null | tr -d '[]' || true)
-targets=$(printf '%s\n%s\n' "$yaml_targets" "$prose_targets" | sed 's/[[:space:]]*$//' | grep -v '^[[:space:]]*$' | sort -u || true)
+targets=$(printf '%s\n' "$yaml_targets" | sed 's/[[:space:]]*$//' | grep -v '^[[:space:]]*$' | sort -u || true)
 [ -z "$targets" ] && exit 0
 
 DATE=$(date +%F)
