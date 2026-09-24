@@ -2,7 +2,6 @@
 name: source-grading
 description: NATO Admiralty System for grading source reliability and information credibility. Apply automatically during OSINT, forensic investigations, legal research, entity audits, or fraud analysis — NOT for general software or casual research. Every claim gets a 2-axis grade (A-F for source reliability, 1-6 for information credibility).
 user-invocable: false
-model: haiku
 effort: high
 ---
 
@@ -65,7 +64,7 @@ Write grades as `[Grade: X#]` inline with claims:
 
 ## When to Grade
 
-- **Always** during `investigate` or `researcher` workflows
+- **Always** during investigation or OSINT research (the `research` skill routes it here)
 - **Always** in analysis documents for handoff (attorneys, journalists, government)
 - **Optional** in informal conversation or brainstorming
-- **Required** before any lead enters the diagnosticity matrix in `competing-hypotheses`
+- **Required** before any lead enters the evidence matrix of the `/analyze` hypotheses lens
