@@ -1840,17 +1840,87 @@ def gate_plan_protect(raw_payload: str) -> GateResult:
 # ─────────────────────────────────────────────────────────────────────────
 
 
-def make_subprocess_gate(path: str):
+def _envelope_dir(raw_payload: str) -> str | None:
+    """The directory the Bash call runs in, as the envelope records it.
+
+    Same precedence as pretool-multiagent-commit-guard.sh and the git-history gate:
+    tool_input.workdir, then tool_input.cwd, then the top-level cwd. None when the
+    envelope names none; the caller then inherits the dispatcher's own cwd."""
+    try:
+        data = json.loads(raw_payload)
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    ti = data.get("tool_input")
+    ti = ti if isinstance(ti, dict) else {}
+    for value in (ti.get("workdir"), ti.get("cwd"), data.get("cwd")):
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def make_subprocess_gate(path: str, *, cwd_from_envelope: bool = False, timeout: float = 30):
+    """Run a kept gate as a subprocess fed the current envelope on stdin.
+
+    By default the child inherits the dispatcher's cwd; the three original kept
+    gates read the envelope themselves or use that cwd, and keep doing so.
+    ``cwd_from_envelope`` starts the child in ``_envelope_dir`` instead, for a gate
+    that resolves its repo from its own cwd. A directory that does not exist makes
+    subprocess.run raise, which fails open like any other error here."""
+
     def run(raw_payload: str) -> GateResult:
+        cwd = _envelope_dir(raw_payload) if cwd_from_envelope else None
         try:
             proc = subprocess.run(
-                [path], input=raw_payload, capture_output=True, text=True, timeout=30
+                [path],
+                input=raw_payload,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=cwd,
             )
         except Exception:
             return GateResult(0, "", "")
         return GateResult(proc.returncode, proc.stderr or "", proc.stdout or "")
 
     return run
+
+
+# --- git-stale-lock (SIDE EFFECT ONLY, never a verdict; trigger `\bgit\b`) -----
+# pretool-git-stale-lock.sh deletes git lock files that no process holds open (lsof)
+# and that are at least 30 s old, but never while a git process runs in that repo (a
+# git in a hook phase keeps its index.lock closed), and logs each removal to
+# ~/.cache/git-stale-lock/removed.jsonl. Until 2026-09-24 only genomics wired it (its
+# project settings.json). That day a 0-byte heli .git/index.lock, left at 20:05:05
+# with no holder and no git process, blocked every git write until it was removed by
+# hand about 10 minutes later. Running it here covers every repo.
+#
+# Kept as a subprocess: the guard's lsof possession test and file removal are the
+# safety logic, and a port could drift from them. The `\bgit\b` search runs anywhere
+# in the command because `cd <repo> && git ...` is the common shape; every other Bash
+# call pays only that search. The child starts in the envelope's directory because the
+# guard finds the repo with `git rev-parse --git-common-dir` in its own cwd. The result
+# is dropped and the gate always passes. _classify would turn the guard's exit-0 stderr
+# note into model-visible advisory text, which the directly wired hook never produced:
+# Claude Code feeds a hook's stderr to the model only on exit 2.
+#
+# Placed second, right after secret-output-guard (test_pretool_secret_output_guard.py
+# pins that gate first). The cleanup then happens even when a later gate blocks, and
+# the gates that run git (destructive-git-ref writes a backup ref) find the lock gone.
+_GIT_WORD_RE = re.compile(r"\bgit\b")
+_run_git_stale_lock = make_subprocess_gate(
+    str(HOOKS_DIR / "pretool-git-stale-lock.sh"), cwd_from_envelope=True, timeout=10
+)
+
+
+def gate_git_stale_lock(raw_payload: str) -> GateResult:
+    try:
+        if _GIT_WORD_RE.search(_jqlike_cmd(json.loads(raw_payload))):
+            _run_git_stale_lock(raw_payload)
+    except Exception:
+        pass  # fail-open: cleanup is best effort and never decides anything
+    return GateResult(0, "", "")
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -2477,6 +2547,9 @@ MANIFEST: list[dict] = [
         "if": None,
         "run": make_native_gate("pretool-secret-output-guard.py", "pretool_secret_output_guard"),
     },
+    # 2026-09-24: side-effect-only stale-lock cleanup, early so later gates and the
+    # command itself find the lock gone. Trigger lives in the gate (`\bgit\b`).
+    {"name": "git-stale-lock", "if": None, "run": gate_git_stale_lock},
     {"name": "secret-path-guard", "if": None, "run": gate_secret_path_guard},
     {"name": "git-noext-inject", "if": None, "run": gate_git_noext_inject},
     {"name": "pyunbuffered-inject", "if": None, "run": gate_pyunbuffered_inject},
