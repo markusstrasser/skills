@@ -14,6 +14,7 @@ for measuring adoption rates over time.
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from datetime import datetime
@@ -82,6 +83,84 @@ def get_known_scopes():
     return set()
 
 
+ASSIGNMENT = re.compile(r"""(?:^|[\s;&(])([A-Za-z_]\w*)=("[^"]*"|'[^']*'|[^\s;&|]+)""")
+
+
+def _expand(text, env):
+    return re.sub(r"\$\{(\w+)\}|\$(\w+)", lambda m: env.get(m.group(1) or m.group(2), m.group(0)), text)
+
+
+def _pathspec_commit(cmd, default_cwd):
+    """(workdir, pathspecs) of a `git [-C dir] commit ... -- <paths>` in cmd, or None.
+
+    Only the `--` form is read. `cd dir` segments before the commit and `-C dir` set the workdir;
+    simple VAR=value assignments in the command are expanded, and a pathspec that still holds a `$`
+    is dropped rather than guessed. A segment shlex cannot split is skipped.
+    """
+    head = re.split(r"<<-?\s*['\"]?[A-Za-z_]+['\"]?", cmd, maxsplit=1)[0]
+    env = {}
+    for m in ASSIGNMENT.finditer(head):
+        value = m.group(2)
+        env[m.group(1)] = value[1:-1] if value[:1] in "\"'" else value
+    workdir = default_cwd
+    for segment in re.split(r"&&|\|\||;|\n|\|", head):
+        try:
+            toks = shlex.split(segment)
+        except ValueError:
+            continue
+        if len(toks) > 1 and toks[0] == "cd":
+            workdir = os.path.join(workdir, os.path.expanduser(_expand(toks[1], env)))
+            continue
+        if "git" not in toks or "commit" not in toks[toks.index("git"):]:
+            continue
+        g = toks.index("git")
+        c = toks.index("commit", g)
+        wd = workdir
+        opts = toks[g + 1:c]
+        for i, tok in enumerate(opts[:-1]):
+            if tok == "-C":
+                wd = os.path.join(wd, os.path.expanduser(_expand(opts[i + 1], env)))
+        rest = toks[c + 1:]
+        if "--" not in rest:
+            return None
+        specs = [_expand(t, env) for t in rest[rest.index("--") + 1:]]
+        specs = [s for s in specs if s and "$" not in s]
+        return (wd, specs) if specs else None
+    return None
+
+
+def untracked_under_pathspecs(cmd, default_cwd):
+    """Untracked, non-ignored files under a pathspec commit's paths.
+
+    `git commit -- <dir>` takes only files git already tracks, so new files in a directory that
+    holds tracked ones are left out without any message. 2026-09-25: immigration-research 7ec7144
+    named a lane directory whose results, inventory and two tests were all new; none landed, and
+    the commit body described them (fixed in ed1b623).
+    """
+    spec = _pathspec_commit(cmd, default_cwd)
+    if not spec:
+        return []
+    workdir, specs = spec
+    try:
+        r = subprocess.run(
+            ["git", "-C", workdir, "ls-files", "--others", "--exclude-standard", "-z", "--", *specs],
+            capture_output=True, text=True, timeout=5,
+        )
+    except Exception:
+        return []
+    if r.returncode != 0:
+        return []
+    return [f for f in r.stdout.split("\0") if f]
+
+
+def untracked_message(files):
+    shown = ", ".join(files[:5]) + (f" and {len(files) - 5} more" if len(files) > 5 else "")
+    return (
+        f"{len(files)} untracked file(s) under this commit's pathspecs stay out of it: a pathspec"
+        f" commit takes tracked files only, so git add them first if they belong ({shown})."
+    )
+
+
 def log_check(subject, warnings, suggestions):
     """Log commit check results for correction rate measurement."""
     log_path = os.path.expanduser("~/.claude/commit-check-log.jsonl")
@@ -106,8 +185,14 @@ def main():
         print("SKIP")
         return
 
+    untracked = []
+    if "git" in cmd and "commit" in cmd:
+        untracked = untracked_under_pathspecs(cmd, d.get("cwd") or os.getcwd())
+
+    # Message checks read "git commit" only; `git -C dir commit` gets the untracked check alone,
+    # since the wrapper's staged-file checks run in the hook's cwd, not in dir.
     if "git commit" not in cmd:
-        print("SKIP")
+        print("WARN:" + untracked_message(untracked) if untracked else "SKIP")
         return
 
     # Blocking: Co-Authored-By: Claude
@@ -128,10 +213,10 @@ def main():
             msg = m_match.group(1)
 
     if not msg.strip():
-        print("SKIP")
+        print("WARN:" + untracked_message(untracked) if untracked else "SKIP")
         return
 
-    warnings = []
+    warnings = [untracked_message(untracked)] if untracked else []
     suggestions = []
     lines = msg.strip().split("\n")
     subject = lines[0].strip()
