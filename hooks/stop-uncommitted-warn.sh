@@ -33,19 +33,40 @@ if not os.path.isdir(os.path.join(cwd, ".git")):
 # files in one session, each superseded by the real commit minutes later.
 auto_commit_enabled = not os.path.exists(os.path.join(cwd, ".claude", "no-auto-checkpoint"))
 
+# Every git call in this hook goes through _git_run: SIGTERM first, SIGKILL only after
+# a 2 s grace. subprocess.run(timeout=) SIGKILLs the child, which git cannot catch, so a
+# git holding .git/index.lock at that moment leaves the lock behind and every later git
+# write in the repo fails with "Another git process seems to be running". On SIGTERM
+# git deletes its own lock files before it exits. Not only add/commit/reset take the
+# lock: measured 2026-09-24 (git 2.54), `git diff --name-only` rewrites the index
+# through index.lock whenever a tracked file is stat-dirty, --no-optional-locks or not.
+# Context: heli 2026-09-24, a 0-byte index.lock with no holder (left 20:05:05) blocked
+# every git write for ~10 min while a Blender render saturated the CPU, the load under
+# which these timeouts fire; which process left it is not known. Otherwise the contract
+# is subprocess.run: TimeoutExpired propagates, check=True raises CalledProcessError.
+def _git_run(args, timeout, text=True, check=False):
+    with subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, text=text) as proc:
+        try:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            proc.terminate()
+            try:
+                proc.communicate(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+            raise
+    if check and proc.returncode:
+        raise subprocess.CalledProcessError(proc.returncode, args, out, err)
+    return subprocess.CompletedProcess(args, proc.returncode, out, err)
+
 # Check for uncommitted changes (exclude gitignored files)
 try:
-    staged = subprocess.run(
-        ["git", "diff", "--cached", "--name-only"],
-        cwd=cwd, capture_output=True, text=True, timeout=5
-    ).stdout.strip()
-    unstaged = subprocess.run(
-        ["git", "diff", "--name-only"],
-        cwd=cwd, capture_output=True, text=True, timeout=5
-    ).stdout.strip()
-    untracked = subprocess.run(
-        ["git", "ls-files", "--others", "--exclude-standard"],
-        cwd=cwd, capture_output=True, text=True, timeout=5
+    staged = _git_run(["git", "diff", "--cached", "--name-only"], timeout=5).stdout.strip()
+    unstaged = _git_run(["git", "diff", "--name-only"], timeout=5).stdout.strip()
+    untracked = _git_run(
+        ["git", "ls-files", "--others", "--exclude-standard"], timeout=5
     ).stdout.strip()
 except Exception:
     sys.exit(0)
@@ -486,10 +507,7 @@ if not new_changes or not auto_commit_enabled:
 untracked_in_new = [f for f in new_changes if f in untracked_set]
 try:
     if untracked_in_new:
-        subprocess.run(
-            ["git", "add", "-N", "--"] + untracked_in_new,
-            cwd=cwd, capture_output=True, text=True, timeout=10, check=True
-        )
+        _git_run(["git", "add", "-N", "--"] + untracked_in_new, timeout=10, check=True)
     # Build commit message from file extensions/dirs
     dirs = sorted(set(f.split("/")[0] if "/" in f else "." for f in new_changes))
     scope = dirs[0] if len(dirs) == 1 else "multi"
@@ -506,9 +524,8 @@ try:
     body = "\n".join(body_lines)
     full_msg = f"{msg}\n\n{body}\n\nUngated checkpoint: no compile/test ran. Squash into a real commit before building on it."
 
-    result = subprocess.run(
-        ["git", "commit", "--only", "-m", full_msg, "--"] + new_changes,
-        cwd=cwd, capture_output=True, text=True, timeout=15
+    result = _git_run(
+        ["git", "commit", "--only", "-m", full_msg, "--"] + new_changes, timeout=15
     )
     if result.returncode == 0:
         # Auto-commit succeeded. decision:"allow" + top-level additionalContext
@@ -548,7 +565,7 @@ except Exception:
 # reset for those -- only the -N placeholders are our own index side effect.
 try:
     if untracked_in_new:
-        subprocess.run(["git", "reset", "HEAD", "--"] + untracked_in_new, cwd=cwd, capture_output=True, timeout=5)
+        _git_run(["git", "reset", "HEAD", "--"] + untracked_in_new, timeout=5, text=False)
 except Exception:
     pass
 
