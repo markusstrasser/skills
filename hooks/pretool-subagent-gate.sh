@@ -179,7 +179,7 @@ fi
 if [ "$STYPE" = "general-purpose" ]; then
     if echo "$DESC" | grep -qiE 'verify|evidence|literature|systematic review|meta.analysis|primary source|PMID|PubMed|cite|citation|research.*claim|check.*paper'; then
         CHECK_IDS="${CHECK_IDS}4,"
-        WARNINGS="${WARNINGS}SUBAGENT TYPE: Research/verification task using general-purpose agent. Use researcher subagent_type instead — it has maxTurns:25, epistemic guardrails, and source-check stop hook. general-purpose agents have no epistemic guardrails. "
+        WARNINGS="${WARNINGS}SUBAGENT TYPE: Research/verification task using general-purpose agent. Use researcher subagent_type instead — it has maxTurns:40, the research skill preloaded at effort high, and the source-check stop hook. general-purpose agents have no epistemic guardrails. "
     fi
 fi
 
@@ -296,8 +296,8 @@ if [ -n "$PROMPT" ]; then
     # write-stub gate (Check 10) guards mid-run process death, which is NOT
     # confirmed fixed and which subagents won't self-mitigate (they don't write
     # files unless told).
-    # Narrowed 2026-09-21 to research-shaped dispatches, the only ones the ≤12-turn epoch rule
-    # is about. Unscoped it fired on 71 of 101 replayed immigration-research dispatches, mostly
+    # Narrowed 2026-09-21 to research-shaped dispatches, the only ones the epoch rule is about
+    # (≤12 turns then; the researcher cap is 40 since 2026-09-25). Unscoped it fired on 71 of 101 replayed immigration-research dispatches, mostly
     # script-running lanes with nothing to budget; a note attached to most dispatches is read
     # by none of them.
     IS_RESEARCH_SHAPED=0
@@ -326,11 +326,13 @@ if [ -n "$PROMPT" ]; then
 
         case "$STYPE" in
             Explore|observe|claude-code-guide|statusline-setup|researcher)
-                # Advisory only — these subtypes self-manage via their SKILL.md.
-                # researcher's SKILL.md already embeds the CORAL 70%-stop epoch
-                # convention; re-requiring it in every dispatch is redundant
-                # friction. If a researcher subagent still exhausts turns, the
-                # fix is in its SKILL.md, not in dispatch prompts.
+                # Advisory only — these subtypes self-manage via their definitions.
+                # The researcher's agent definition (~/.claude/agents/researcher.md)
+                # carries the write-first epoch protocol; re-requiring it in every
+                # dispatch is redundant friction. If a researcher subagent still
+                # exhausts turns, the fix is in that definition, not in dispatch
+                # prompts. (Until 2026-09-25 this cited a researcher SKILL.md that
+                # had not existed since 2026-04-08.)
                 CHECK_IDS="${CHECK_IDS}7,"
                 WARNINGS="${WARNINGS}SUBAGENT OUTPUT: Dispatch prompt missing ${MISSING}. "
                 ;;
