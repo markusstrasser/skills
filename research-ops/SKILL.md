@@ -330,10 +330,13 @@ If no input provided, ask: "Paste the text, or give me a file path / URL."
 
 Before extracting, establish what you actually know vs. don't:
 
-**Training cutoffs (as of 2026-03):**
-- Claude Opus/Sonnet 4.6: ~May 2025
-- GPT-5.4: ~April 2025
-- Gemini 3.1 Pro: ~March 2025
+**Training cutoffs (checked 2026-09-25 against `model-guide`; the roster there is the live source):**
+- Claude Opus 5.5: June 2026
+- Claude Opus 5: May 2026
+- GPT-5.6 Sol, Terra and Luna: 16 February 2026
+- GPT-6 Astra and Fable 5.1: not recorded in model-guide; check the model card before relying on a date.
+
+(The March 2026 list named Claude 4.6 at ~May 2025, GPT-5.4 at ~April 2025 and Gemini 3.1 Pro at ~March 2025, all since superseded.)
 
 **Reliability by source date:**
 - **Pre-2024:** Almost certainly in training. Self-test is unreliable here — you'll both miss things you "know" and flag things you don't. Low value unless the source is niche/private.
