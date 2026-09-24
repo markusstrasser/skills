@@ -10,6 +10,8 @@ Fetch and read the relevant full text before citing a paper as ordinary support.
 
 For synthesis across papers, the corpus path is `search_papers` → `save_paper` → `fetch_paper` → `get_paper` → `prepare_evidence` → `ask_papers(use_rcs=True)`. Use it when corpus retrieval helps the task. Saving or delegating synthesis does not replace reading the evidence behind the conclusion.
 
+`prepare_evidence`, `ask_papers` and `extract_table` call Gemini. Under the 2026-07-14 critique-only policy (agent-infra `decisions/2026-07-14-gemini-critique-only-policy.md`) the server has no Gemini key unless one is exported for its process, and these calls fail with "No API key was provided"; read the full text with `get_paper` or `read_paper` instead. When a key is present, an empty `use_rcs=True` result is not evidence of absence: on 2026-08-24 and 2026-09-16 it returned "No relevant evidence found" on papers that answered the question without RCS. The likely cause, from Google's documentation rather than a live probe, is that the scoring model's thinking used up its 256-token output cap. research-mcp 39c53fb gives scoring low thinking and 2,048 tokens and reports failed chunks (`chunks_failed`, `rcs_chunks_failed`) instead of scoring them 0.
+
 If retrieval hangs or fails repeatedly, switch to a working primary-source route. See [tool recovery](tool-routing.md#retrieval-recovery) and [known issues](known-issues.md); transport failure is not a scientific negative. Do not purchase access or use credentials beyond the user's authorization.
 
 ## Grade support at the claim
