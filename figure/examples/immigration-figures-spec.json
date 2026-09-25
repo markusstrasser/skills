@@ -1,0 +1,254 @@
+{
+ "reader": "sonnet",
+ "source": "/Users/alien/Projects/immigration-research/infra/immigration-fiscal/figures_2026_09_22/src/generated",
+ "items": [
+  {
+   "id": "staircase",
+   "arms": {
+    "full": {
+     "image": "staircase.png"
+    },
+    "prose": {
+     "text_file": "staircase.prose.txt"
+    },
+    "chart": {
+     "image": "staircase.chart.png"
+    }
+   },
+   "questions": [
+    {
+     "id": "q1",
+     "q": "Going down the rows, which row is the first to make the running total a cost (positive) rather than a gain?",
+     "kind": "choice",
+     "options": [
+      "Taxes paid minus benefits received",
+      "Gain from their work",
+      "Unpaid hospital care",
+      "Schools",
+      "Colleges and other education",
+      "Police, courts and prisons"
+     ],
+     "answer": "Schools",
+     "role": "claim"
+    },
+    {
+     "id": "q2",
+     "q": "What is the running total ($bn a year) after the police, courts and prisons row?",
+     "kind": "range",
+     "answer": [
+      120.1,
+      156.1
+     ],
+     "tol": 1.5,
+     "role": "lookup"
+    },
+    {
+     "id": "q3",
+     "q": "How much ($bn a year) does the police, courts and prisons row add?",
+     "kind": "number",
+     "answer": 68.4,
+     "tol": 1,
+     "role": "lookup"
+    },
+    {
+     "id": "q4",
+     "q": "What is the running total ($bn a year) on the row marked as the main case, after the data corrections?",
+     "kind": "range",
+     "answer": [
+      200.9,
+      246.3
+     ],
+     "tol": 1.5,
+     "role": "claim"
+    }
+   ]
+  },
+  {
+   "id": "matrix",
+   "arms": {
+    "full": {
+     "image": "matrix.png"
+    },
+    "prose": {
+     "text_file": "matrix.prose.txt"
+    },
+    "chart": {
+     "image": "matrix.chart.png"
+    }
+   },
+   "questions": [
+    {
+     "id": "q1",
+     "q": "With schools at 63-66%, colleges full, police/health/welfare full and roads fixed, what is the large-figure cost ($bn) when general administration responds at 0.59?",
+     "kind": "range",
+     "answer": [
+      200.9,
+      234.6
+     ],
+     "tol": 1.5,
+     "role": "lookup"
+    },
+    {
+     "id": "q2",
+     "q": "Within each row, which general-administration column gives the highest cost?",
+     "kind": "choice",
+     "options": [
+      "0",
+      "0.59",
+      "0.84",
+      "1"
+     ],
+     "answer": "1",
+     "role": "shape"
+    },
+    {
+     "id": "q3",
+     "q": "Among rows where at least one budget grows with the population, what is the lowest large-figure (not small-figure) value, in $bn?",
+     "kind": "number",
+     "answer": 129.4,
+     "tol": 1.5,
+     "role": "lookup"
+    },
+    {
+     "id": "q4",
+     "q": "In the row where every budget is fixed, what is the large-figure range ($bn) when general administration responds at 0?",
+     "kind": "range",
+     "answer": [
+      -76.3,
+      -59.3
+     ],
+     "tol": 1.5,
+     "role": "lookup"
+    },
+    {
+     "id": "q5",
+     "role": "claim",
+     "kind": "choice",
+     "options": [
+      "yes",
+      "no"
+     ],
+     "q": "Does any combination in which at least one budget grows with the population leave other residents better off?",
+     "answer": "no"
+    }
+   ]
+  },
+  {
+   "id": "percentiles",
+   "arms": {
+    "full": {
+     "image": "percentiles.png"
+    },
+    "prose": {
+     "text_file": "percentiles.prose.txt"
+    },
+    "chart": {
+     "image": "percentiles.chart.png"
+    }
+   },
+   "questions": [
+    {
+     "id": "q1",
+     "q": "Paid through taxes, how many dollars a year is the average person in the richest 1% worse off? Give a negative number.",
+     "kind": "number",
+     "answer": -12658,
+     "tol": 60,
+     "role": "claim"
+    },
+    {
+     "id": "q2",
+     "q": "Paid through service cuts, from which of the 100 groups upward (counting 1 = poorest) does everyone come out ahead?",
+     "kind": "number",
+     "answer": 95,
+     "tol": 1,
+     "role": "claim"
+    },
+    {
+     "id": "q3",
+     "q": "At the middle (50th) group, which way of paying leaves the average person worse off?",
+     "kind": "choice",
+     "options": [
+      "paid through taxes",
+      "paid through service cuts",
+      "about equal"
+     ],
+     "answer": "paid through service cuts",
+     "role": "claim"
+    },
+    {
+     "id": "q4",
+     "q": "At about which of the 100 groups does the service-cuts line rise above the taxes line for good?",
+     "kind": "number",
+     "answer": 77,
+     "tol": 6,
+     "role": "shape"
+    }
+   ]
+  },
+  {
+   "id": "flip",
+   "arms": {
+    "full": {
+     "image": "flip.png"
+    },
+    "prose": {
+     "text_file": "flip.prose.txt"
+    },
+    "chart": {
+     "image": "flip.chart.png"
+    }
+   },
+   "questions": [
+    {
+     "id": "q1",
+     "q": "Set to 0%, which single public service leaves the lowest remaining cost?",
+     "kind": "choice",
+     "options": [
+      "Schools",
+      "Colleges and other education",
+      "Police, courts and prisons",
+      "Public health services",
+      "Welfare offices, housing, community",
+      "General administration",
+      "Roads, transport, parks, culture"
+     ],
+     "answer": "Schools",
+     "role": "shape"
+    },
+    {
+     "id": "q2",
+     "q": "Taxes they pay would have to be what multiple of what records show for everyone else to come out better off (give the range)?",
+     "kind": "range",
+     "answer": [
+      1.51,
+      1.66
+     ],
+     "tol": 0.03,
+     "role": "claim"
+    },
+    {
+     "id": "q3",
+     "q": "Does any single public service, moved alone across its whole range, turn the result into a gain?",
+     "kind": "choice",
+     "options": [
+      "yes",
+      "no"
+     ],
+     "answer": "no",
+     "role": "claim"
+    },
+    {
+     "id": "q4",
+     "q": "With the welfare offices, housing, community budget set to 0%, what cost remains ($bn a year)?",
+     "kind": "range",
+     "answer": [
+      169.6,
+      216.6
+     ],
+     "tol": 1.5,
+     "role": "lookup"
+    }
+   ]
+  }
+ ]
+}
