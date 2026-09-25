@@ -437,7 +437,7 @@ launch_worker() {
     cd "$worktree" || exit 125
     case "$worker" in
       codex)
-        caffeinate -i codex exec -m gpt-5.6-sol -s workspace-write --add-dir "$HOME/.cache/uv" --skip-git-repo-check "$prompt" < /dev/null
+        caffeinate -i codex exec -m gpt-6-sol -s workspace-write --add-dir "$HOME/.cache/uv" --skip-git-repo-check "$prompt" < /dev/null
         ;;
       claude)
         caffeinate -i env -u ANTHROPIC_API_KEY claude -p --model opus --output-format stream-json --verbose "$prompt" < /dev/null
@@ -690,7 +690,7 @@ cmd_review() {
   [ "$#" -ge 1 ] || die "review requires a name"
   local name="$1"
   shift
-  local model="gpt-5.6"
+  local model="gpt-6-sol"
   local effort="high"
   local focus=""
   local out="$LANE_HOME/$name.review.md"

@@ -145,8 +145,8 @@ class ModelReviewDispatchTest(unittest.TestCase):
             "elapsed_seconds": 1.0,
             "formal": {
                 "label": "Formal",
-                "model": "gpt-5.6-luna",
-                "requested_model": "gpt-5.6-luna",
+                "model": "gpt-6-luna",
+                "requested_model": "gpt-6-luna",
                 "exit_code": 0,
                 "size": 0,
                 "output": str(self.review_dir / "formal-output.md"),
@@ -476,7 +476,7 @@ class AxisResolutionTest(unittest.TestCase):
 
     def test_non_gpt_axis_sets_are_rejected(self) -> None:
         # arch/domain/alternatives are the Gemini-backed axes (mechanical is now
-        # GPT-backed, gpt-5.6-luna @ low effort).
+        # GPT-backed, gpt-6-luna @ low effort).
         with self.assertRaisesRegex(ValueError, "--allow-non-gpt"):
             model_review.resolve_axes("arch,domain,alternatives")
 
@@ -740,8 +740,8 @@ class ExtractionCoverageTest(unittest.TestCase):
                 },
                 "formal": {
                     "label": "GPT-5.5 (quantitative/formal)",
-                    "model": "gpt-5.6-luna",
-                    "requested_model": "gpt-5.6-luna",
+                    "model": "gpt-6-luna",
+                    "requested_model": "gpt-6-luna",
                     "exit_code": 0,
                     "size": 12,
                     "output": str(formal_output),
@@ -798,7 +798,7 @@ class ExtractionCoverageTest(unittest.TestCase):
             self.assertEqual(coverage["schema"], "review-coverage.v1")
             self.assertEqual(coverage["schema_version"], "review-coverage.v1")
             self.assertEqual(coverage["dispatch"]["requested_axis_count"], 2)
-            self.assertIn("gpt-5.6", coverage["dispatch"]["axes"][1]["model"])
+            self.assertIn("gpt-6", coverage["dispatch"]["axes"][1]["model"])
             self.assertEqual(coverage["context_packet"]["payload_hash"], "payload-hash")
             self.assertEqual(
                 coverage["context_packet"]["dropped_blocks"][0]["block_title"], "context.md"
@@ -1049,8 +1049,8 @@ class ModelReviewMainTest(unittest.TestCase):
                 "elapsed_seconds": 1.0,
                 "formal": {
                     "label": "Formal",
-                    "model": "gpt-5.6-luna",
-                    "requested_model": "gpt-5.6-luna",
+                    "model": "gpt-6-luna",
+                    "requested_model": "gpt-6-luna",
                     "exit_code": 0,
                     "size": 10,
                     "output": str(review_dir / "formal-output.md"),
@@ -1119,8 +1119,8 @@ class ModelReviewMainTest(unittest.TestCase):
                 "elapsed_seconds": 1.0,
                 "formal": {
                     "label": "Formal",
-                    "model": "gpt-5.6-luna",
-                    "requested_model": "gpt-5.6-luna",
+                    "model": "gpt-6-luna",
+                    "requested_model": "gpt-6-luna",
                     "exit_code": 0,
                     "size": 10,
                     "output": str(review_dir / "formal-output.md"),
@@ -1186,8 +1186,8 @@ class ModelReviewMainTest(unittest.TestCase):
                 "elapsed_seconds": 1.0,
                 "formal": {
                     "label": "Formal",
-                    "model": "gpt-5.6-luna",
-                    "requested_model": "gpt-5.6-luna",
+                    "model": "gpt-6-luna",
+                    "requested_model": "gpt-6-luna",
                     "exit_code": 0,
                     "size": 0,
                     "output": str(project_dir / "formal-output.md"),

@@ -155,7 +155,7 @@ wait_for_file "$LANE_HOME/codexargs.done"
 expected_codex=$(printf '%s\n' \
   exec \
   -m \
-  gpt-5.6-sol \
+  gpt-6-sol \
   -s \
   workspace-write \
   --add-dir \
@@ -288,7 +288,7 @@ wait_for_absent "$LANE_HOME/first.review.lock"
 assert_eq "EXIT=0" "$(<"$LANE_HOME/first.review.done")" "background review marker"
 assert_eq "DONE:0" "$(review_for first)" "completed review state"
 background_args="$LANE_CAPTURE/background.args"
-assert_eq "gpt-5.6" "$(arg_after -m "$background_args")" "default review model"
+assert_eq "gpt-6-sol" "$(arg_after -m "$background_args")" "default review model"
 assert_eq "high" "$(arg_after -e "$background_args")" "default review effort"
 assert_eq "$LANE_HOME/first.review.md" "$(arg_after -o "$background_args")" "default review output"
 

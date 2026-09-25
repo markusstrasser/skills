@@ -80,7 +80,7 @@ fi
 if [ -n "$CMD" ] && echo "$CMD" | grep -q 'llmx'; then
   MODEL_ARG=$(echo "$CMD" | grep -oE '(^|[[:space:]])-m[=[:space:]]+[A-Za-z0-9._-]+' | grep -oE '[A-Za-z0-9._-]+$' | tail -1)
   case "$MODEL_ARG" in
-    claude-fable-5|claude-opus-4-8|composer-2.5|gemini-3-flash-preview|gpt-5.6|gpt-5.6-luna|gpt-5.6-sol|gpt-5.6-terra|grok-4.5)
+    claude-fable-5-1|claude-opus-5|claude-opus-5-5|composer-2.5|gpt-6|gpt-6-astra|gpt-6-sol|gpt-6-luna|grok-4.5|grok-4.7)
       if ! echo "$CMD" | grep -qE -- '--subscription|--lite|--provider|(^|[[:space:]])-p([[:space:]]|=|$)'; then
         remind "llmx-subscription-flag" "llmx -m $MODEL_ARG has NO --subscription/--lite/-p/--provider flag — this call routes API-direct and BILLS per-token. \`--subscription\` IS the \$0 (llmx-routing.md); add it if this is meant to be the free lane."
       fi

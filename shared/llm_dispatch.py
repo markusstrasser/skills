@@ -81,7 +81,7 @@ PROFILES: dict[str, DispatchProfile] = {
         provider="openai",
         # 2026-09-05: Astra-low on subscription. Luna does not beat Astra-low
         # on quality (AA Intelligence Index: Astra-low 57 vs Luna-max 43).
-        # Keep `-m gpt-5.6-luna` for metered API bulk where $/tok and speed win.
+        # Keep `-m gpt-6-luna` for metered API bulk where $/tok and speed win.
         model="gpt-6-astra",
         timeout=300,
         reasoning_effort="low",
@@ -104,7 +104,7 @@ PROFILES: dict[str, DispatchProfile] = {
         intent="Formal or quantitative GPT-backed review",
         provider="openai",
         # 2026-09-05: GPT-6 Astra is the flagship GPT / Codex default.
-        # Named gpt-5.6-* pins stay valid for evals and cheaper API work.
+        # gpt-6-sol / gpt-6-luna are the cheaper named cost tiers.
         model="gpt-6-astra",
         timeout=600,
         # 2026-06-10: formal is the GPT reasoning axis for reviews — operator
@@ -287,24 +287,19 @@ PROFILES: dict[str, DispatchProfile] = {
 }
 
 MODEL_TO_PROFILE = {
-    "gemini-3-flash-preview": "fast_extract",
     "gemini-3.1-flash-lite-preview": "observe_bulk",
     "gemini-3.8-flash": "deep_review",
     "gemini-3.5-flash": "deep_review",
     "gemini-3.1-pro-preview": "legacy_pro_review",  # demoted 2026-05-24
     "gpt-6-astra": "formal_review",
     "gpt-6": "formal_review",
-    "gpt-5.6-sol": "formal_review",
-    "gpt-5.6": "formal_review",
-    "gpt-5.6-terra": "gpt_general",  # mid-tier opt-in
-    "gpt-5.6-luna": "gpt_general",  # explicit Luna pin; effort is the cheap/mechanical dial
+    "gpt-6-sol": "formal_review",
+    "gpt-6-luna": "gpt_general",  # explicit Luna pin; effort is the cheap/mechanical dial
     "claude-opus-5": "claude_review",
-    "claude-opus-4-8": "claude_review",  # legacy pin → same profile
     "composer-2.5": "composer_review",
     "composer-2.5-fast": "composer_screen",
     "glm-5.2": "glm_review",
     "grok-4.7-high": "grok_review",
-    "cursor-grok-4.6-high": "grok_review",
 }
 
 

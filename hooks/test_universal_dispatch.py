@@ -107,7 +107,7 @@ def test_repeated_read_sequence_matches_oracle(tmp_path):
 def test_llmx_bash_command_reminds_once_then_dedups(tmp_path):
     home, state = _isolated(tmp_path)
     session = "test-session-llmx"
-    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m gpt-5.6 'hi'"}}
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m gpt-6-sol 'hi'"}}
     p1 = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": session}, home_dir=home, state_dir=state)
     p2 = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": session}, home_dir=home, state_dir=state)
     assert p1.returncode == 0 and p2.returncode == 0
@@ -118,17 +118,17 @@ def test_llmx_bash_command_reminds_once_then_dedups(tmp_path):
 def test_llmx_gpt56_without_subscription_warns_once_then_dedups(tmp_path):
     home, state = _isolated(tmp_path)
     session = "test-session-gpt56-subflag"
-    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m gpt-5.6 -e xhigh 'hi'"}}
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m gpt-6-sol -e xhigh 'hi'"}}
     p1 = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": session}, home_dir=home, state_dir=state)
     p2 = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": session}, home_dir=home, state_dir=state)
     assert p1.returncode == 0 and p2.returncode == 0
-    assert "BILLS per-token" in p1.stderr and "gpt-5.6" in p1.stderr
+    assert "BILLS per-token" in p1.stderr and "gpt-6-sol" in p1.stderr
     assert "BILLS per-token" not in p2.stderr  # deduped second call
 
 
 def test_llmx_gpt56_with_subscription_flag_silent(tmp_path):
     home, state = _isolated(tmp_path)
-    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat --subscription -m gpt-5.6 -e xhigh 'hi'"}}
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat --subscription -m gpt-6-sol -e xhigh 'hi'"}}
     proc = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": "test-subflag-safe"}, home_dir=home, state_dir=state)
     assert proc.returncode == 0
     assert "BILLS per-token" not in proc.stderr
@@ -144,7 +144,7 @@ def test_llmx_model_not_in_subscription_allowlist_silent(tmp_path):
 
 def test_llmx_explicit_provider_flag_silences_subscription_warning(tmp_path):
     home, state = _isolated(tmp_path)
-    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat --provider openrouter -m gpt-5.6 'hi'"}}
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat --provider openrouter -m gpt-6-sol 'hi'"}}
     proc = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": "test-subflag-provider"}, home_dir=home, state_dir=state)
     assert proc.returncode == 0
     assert "BILLS per-token" not in proc.stderr
@@ -169,7 +169,7 @@ def test_llmx_gpt56_without_subscription_logs_warn_fire_with_fingerprint(tmp_pat
     ~/.claude/hook-triggers.jsonl at all — this is the first test proving it
     does now, WITH a command fingerprint and WITHOUT the raw command."""
     home, state = _isolated(tmp_path)
-    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m gpt-5.6 -e xhigh 'hi'"}}
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m gpt-6-sol -e xhigh 'hi'"}}
     proc = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": "test-fp-warn"}, home_dir=home, state_dir=state)
     assert proc.returncode == 0
     rows = _read_trigger_log(home)
@@ -178,7 +178,7 @@ def test_llmx_gpt56_without_subscription_logs_warn_fire_with_fingerprint(tmp_pat
     assert warns[0].get("cmd_tok") == "llmx"
     assert len(warns[0].get("cmd_fp", "")) == 8
     assert "cmd" not in warns[0]
-    assert "gpt-5.6" in warns[0].get("detail", "")
+    assert "gpt-6-sol" in warns[0].get("detail", "")
 
 
 def test_llmx_gpt56_with_subscription_flag_logs_exposure_clean(tmp_path):
@@ -186,7 +186,7 @@ def test_llmx_gpt56_with_subscription_flag_logs_exposure_clean(tmp_path):
     precondition (llmx + a subscription-eligible model) matched, but the
     routing flag was already present, so nothing fired."""
     home, state = _isolated(tmp_path)
-    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat --subscription -m gpt-5.6 -e xhigh 'hi'"}}
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat --subscription -m gpt-6-sol -e xhigh 'hi'"}}
     proc = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": "test-fp-exposure"}, home_dir=home, state_dir=state)
     assert proc.returncode == 0
     rows = _read_trigger_log(home)
@@ -209,13 +209,13 @@ def test_llmx_model_not_in_allowlist_logs_nothing_for_subscription_flag(tmp_path
 
 
 def test_llmx_claude_opus_no_flag_fires_both_claude_and_subscription_reminders(tmp_path):
-    """claude-opus-4-8/claude-fable-5 are in BOTH the coarse Claude-cli check
+    """claude-opus-5-5/claude-fable-5-1 are in BOTH the coarse Claude-cli check
     (fires regardless of --subscription presence) and the precise
     subscription-flag check (fires only when the flag is actually missing) —
     both firing here is intended, not a duplicate bug (see the gate's own
     comment in pretool-universal-dispatch.py)."""
     home, state = _isolated(tmp_path)
-    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m claude-opus-4-8 'hi'"}}
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m claude-opus-5-5 'hi'"}}
     proc = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": "test-subflag-claude"}, home_dir=home, state_dir=state)
     assert proc.returncode == 0
     assert "use --subscription (NEVER anthropic-direct" in proc.stderr

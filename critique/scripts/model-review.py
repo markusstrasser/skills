@@ -306,7 +306,7 @@ Convert vague claims into falsifiable predictions with success criteria. If a cl
 Ranked by measurable impact. Each must have: (a) what, (b) why with quantitative justification, (c) how to verify with specific metrics.
 
 ## 6. Where I'm Likely Wrong
-What am I (GPT-5.6) probably getting wrong? Known biases to flag: overconfidence in fabricated specifics, overcautious scope-limiting, production-grade recommendations for personal projects.""",
+What am I (GPT-6) probably getting wrong? Known biases to flag: overconfidence in fabricated specifics, overcautious scope-limiting, production-grade recommendations for personal projects.""",
     },
     "domain": {
         "label": "Gemini (domain correctness)",
@@ -330,7 +330,7 @@ For each domain-specific claim in the reviewed material:
 Flag any URLs, API endpoints, or version numbers that should be probed before implementation.""",
     },
     "mechanical": {
-        "label": "GPT-5.6 Luna (mechanical audit)",
+        "label": "GPT-6 Astra (mechanical audit)",
         "profile": "mechanical_review",
         "prompt": """\
 <system>
@@ -934,7 +934,7 @@ GEMINI_PRIMARY_MODEL = dispatch_core.PROFILES["deep_review"].model
 # for that one review (degraded cross-model diversity), accepted because it is
 # rare and beats the alternatives — gemini-3.1-pro-preview was RETIRED from
 # automation 2026-06-07 (same-provider, so it shares 3.5-flash's outage, and is
-# the ~25%-hallucination runner-up); gemini-3-flash-preview is the cheap
+# the ~25%-hallucination runner-up); gemini-3-flash-preview (retired 2026-09-25) was the cheap
 # classification slot (~42% hallucination on critique work, per-model
 # disposition audit 2026-06-01). A Claude model is deliberately NOT used: the
 # author under review is Claude, so a Claude fallback would reintroduce the

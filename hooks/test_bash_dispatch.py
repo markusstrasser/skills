@@ -935,7 +935,7 @@ def test_opus_concurrency_advises_at_three_or_more(sandbox, tmp_path, model):
 
 
 def test_opus_concurrency_silent_below_three(sandbox, tmp_path):
-    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m claude-opus-4-8 -e max hi"}}
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m claude-opus-5-5 -e max hi"}}
     env = dict(sandbox["env"])
     env["OPUS_LOAD_PGREP_BIN"] = _fake_pgrep_bin(tmp_path, 1)
     disp = run_dispatcher(envelope, env, sandbox["cwd"])
@@ -944,7 +944,7 @@ def test_opus_concurrency_silent_below_three(sandbox, tmp_path):
 
 
 def test_opus_concurrency_ignores_non_opus_models(sandbox, tmp_path):
-    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m gpt-5.6 -e max hi"}}
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m gpt-6-sol -e max hi"}}
     env = dict(sandbox["env"])
     env["OPUS_LOAD_PGREP_BIN"] = _fake_pgrep_bin(tmp_path, 5)
     disp = run_dispatcher(envelope, env, sandbox["cwd"])

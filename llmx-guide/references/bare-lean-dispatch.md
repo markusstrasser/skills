@@ -50,7 +50,7 @@ Reach for an agent only when the task genuinely needs tools/multi-step.
 
 ## Subscription routing gotchas (llmx)
 - Verify the billing route with `llmx chat --dry-run --subscription -m <requested-model> "<task>"`; expect the intended subscription CLI transport before a live call. The earlier silent-fallback report is retained in [dispatch history](codex-dispatch-history.md), not treated as the current contract.
-- `composer-2.5` is **blocked in llmx sub-mode** ("restricted to frontier models: opus / gemini-flash / gpt-5.6-*; use --auth api"). Reach Composer via `cursor-agent` directly, not llmx sub.
+- `composer-2.5` is **blocked in llmx sub-mode** (historical 2026-06 message; the current allowlist includes `composer-2.5` — rederive with `llmx info`). Reach Composer via `cursor-agent` directly, not llmx sub.
 - **gemini has NO sub route** (free CLI retired 2026-05-31) — always paid API (cheap with `-e low`/`--flex`).
 - **Subsidy map:** ChatGPT (codex) + Claude (OAuth) subs are *subsidized* (~$0 marginal). **Cursor's pool is METERED** ($0.50/$2.50 Composer Standard) — "sub" but not free.
 

@@ -20,7 +20,7 @@ Interaction mode is independent from billing and from the legacy lite profile:
 llmx -p google "question"       # paid Gemini API (free CLI retired 2026-05-31); add --flex for 50% off
 llmx -p openai "question"       # uses OpenAI API
 llmx chat --subscription -m claude-opus-5-5 "question"  # Claude CLI subscription route (canonical)
-llmx -p codex-cli --subscription -m gpt-5.6-sol "question"  # Codex CLI subscription
+llmx -p codex-cli --subscription -m gpt-6-sol "question"  # Codex CLI subscription
 llmx -p claude-cli "question"   # force Claude CLI transport (prefer --subscription on logical anthropic)
 llmx -p xai "question"          # xAI API (OpenAI-compatible at https://api.x.ai/v1)
 ```
