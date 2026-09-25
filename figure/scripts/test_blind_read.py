@@ -53,6 +53,15 @@ def test_verdict_sentence_will_do():
     assert "a sentence will do" in br.verdict(it, rows)
 
 
+def test_verdict_flags_trap_the_figure_fails():
+    it = {"id": "m", "arms": {"full": {}, "prose": {}},
+          "questions": [{"id": "q1", "role": "claim"}, {"id": "q2", "role": "trap"}]}
+    rows = _rows("m", {"full": {"q1": "ok", "q2": "wrong"}, "prose": {"q1": "ok", "q2": "ok"}})
+    assert "[MISLEADS]" in br.verdict(it, rows)
+    rows = _rows("m", {"full": {"q1": "ok", "q2": "ok"}, "prose": {"q1": "ok", "q2": "ok"}})
+    assert "[MISLEADS]" not in br.verdict(it, rows)
+
+
 def test_verdict_chart_carries_claim():
     it = {"id": "m", "arms": {"full": {}, "prose": {}}, "questions": [{"id": "q1", "role": "claim"}]}
     rows = _rows("m", {"full": {"q1": "ok"}, "prose": {"q1": "null"}})

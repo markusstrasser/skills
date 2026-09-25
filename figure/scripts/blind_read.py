@@ -23,7 +23,8 @@ Spec (JSON):
 }
 Paths are relative to the spec file. Arm names are free; `prose` and `full` feed
 the verdict. Tag each question with a `role`: `claim` (the takeaway the figure asserts),
-`lookup` (a specific value) or `shape` (a pattern, crossing or trend). A chart earns its
+`lookup` (a specific value), `shape` (a pattern, crossing or trend) or `trap` (the
+correct answer runs against the figure's visual impression; flags a misleading figure). A chart earns its
 place when `full` beats `prose` on claims, or on lookups/shape the reader actually needs.
 
 Usage: blind_read.py SPEC.json [--repeats N] [--workers N] [--out DIR]
@@ -225,6 +226,12 @@ def verdict(it: dict, rows: list[dict]) -> str:
         v = "prose answers everything asked; a sentence will do"
     chart = role_acc(it, rows, "chart", "claim")
     tail = f" (chart alone on claims: {chart:.0%})" if chart is not None else ""
+    # `trap`: the correct answer runs against the figure's visual impression (Healy's halo effect).
+    tf, tp = role_acc(it, rows, "full", "trap"), role_acc(it, rows, "prose", "trap")
+    if tf is not None and tp is not None:
+        parts.append(f"trap: full {tf:.0%} / prose {tp:.0%}")
+        if tf < tp - 0.15 or tf < 0.5:
+            tail += " **[MISLEADS] readers of the figure fall for the visual impression; fix before shipping**"
     return f"- **{it['id']}**: {'; '.join(parts)} -> {v}{tail}"
 
 
