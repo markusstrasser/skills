@@ -927,7 +927,7 @@ def build_effective_policy(args: argparse.Namespace) -> dict:
 
 # Primary Gemini critique axis
 GEMINI_PRIMARY_MODEL = dispatch_core.PROFILES["deep_review"].model
-# Rate-limit fallback target for the Gemini (arch) axis. When gemini-3.5-flash
+# Rate-limit fallback target for the Gemini (arch) axis. When gemini-3.8-flash
 # rate-limits, retry the axis on gpt-6-astra — the rule-sanctioned move ("after a
 # Gemini rate-limit, switch to GPT or Flash"; llmx transport-routing) and an
 # adversarial-grade model. Tradeoff: this collapses the arch+formal pair to GPT

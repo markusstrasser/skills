@@ -175,7 +175,7 @@ PROFILES: dict[str, DispatchProfile] = {
         # Pre-2026-05-24 default for deep_review. Kept available for
         # tasks where Pro's specific strengths (ARC-AGI-2, GPQA Diamond,
         # video understanding) actually dominate. For general adversarial
-        # critique/synthesis, prefer deep_review (gemini-3.5-flash).
+        # critique/synthesis, prefer deep_review (gemini-3.8-flash).
         name="legacy_pro_review",
         intent="Pre-2026-05-24 Gemini Pro fallback for cases needing Pro-specific strengths",
         provider="google",
@@ -289,7 +289,6 @@ PROFILES: dict[str, DispatchProfile] = {
 MODEL_TO_PROFILE = {
     "gemini-3.1-flash-lite-preview": "observe_bulk",
     "gemini-3.8-flash": "deep_review",
-    "gemini-3.5-flash": "deep_review",
     "gemini-3.1-pro-preview": "legacy_pro_review",  # demoted 2026-05-24
     "gpt-6-astra": "formal_review",
     "gpt-6": "formal_review",

@@ -306,7 +306,6 @@ _LLMX_SUBSCRIPTION_MODELS = {
     "gpt-6",
     "gpt-6-sol",
     "gpt-6-luna",
-    "grok-4.5",
     "grok-4.7",
 }
 _LLMX_MODEL_FLAG_RE = re.compile(r"(?:^|\s)-m[=\s]+([A-Za-z0-9._-]+)")
