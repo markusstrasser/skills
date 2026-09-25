@@ -5,7 +5,7 @@ Source: https://www.anthropic.com/claude-sonnet-5-system-card
 145 pages, downloaded to scratchpad and extracted page-by-page).
 This is a STRUCTURED DIGEST, not a verbatim text dump — organized by section with all
 specific numbers/scores preserved, quotes marked. For routing guidance built on this,
-see SKILL.md "Claude Sonnet 5" section. For the cross-repo adoption-site survey, see
+see [models/claude-sonnet-5.md](models/claude-sonnet-5.md) (moved from SKILL.md "Claude Sonnet 5" section, 2026-09-25). For the cross-repo adoption-site survey, see
 agent-infra `.claude/reviews/sonnet-5-dispatch-substitution-probe.md` and
 `research/2026-06-30-claude-sonnet-5-release.md`.
 -->

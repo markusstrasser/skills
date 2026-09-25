@@ -1,5 +1,33 @@
 # Model Guide Changelog
 
+## 2026-09-25 - Principle-first rewrite; per-model detail moved to references
+
+Operator direction (2026-09-25): "less little rules, more principles and constitutions";
+routing lists hold "the Pareto frontier only". SKILL.md went from 452 to about 80 lines:
+10 principles, one frontier roster table, settled operator decisions, and pointers.
+Every section of the old file moved verbatim by line range into `references/models/<slug>.md`
+(Opus 5.5, Opus 5, Fable 5.1, Sonnet 5, GPT-6 Astra, GPT-6 Sol/Luna, Kimi K3, Grok 4.7,
+GLM-5.2, Gemini) or into topical files (transport, routing-tables, selection-trilemma,
+cosigner-defaults, dispatch-economics, cross-model-review, source-notes). Each moved file
+names its source line range. Retired-model material is tagged `[historical: …]` in place;
+nothing was deleted. The old "When to Update" steps are folded into the new section, which
+adds prune-dominated-ids and a complete caller inventory (count first, then page).
+
+Pre-rewrite "When to Update" section, verbatim (SKILL.md L437-448):
+
+> ## When to Update This Skill
+>
+> Update after a current-frontier release or material system-card revision:
+> 1. Update `references/BENCHMARKS.md`.
+> 2. Update `references/PROMPTING_CLAUDE.md` or `references/PROMPTING_GPT.md`.
+> 3. Update this routing surface if the default choice changes.
+> 4. Update Verified Transport if a dispatch-mechanism fact changes (a lane starts/stops
+>    delivering the model it claims) — this table rots faster than judgment; re-probe, don't assume.
+> 5. Add a dated entry to `references/CHANGELOG.md`.
+>
+> Hit a defect or friction consulting this guide (a stale routing line, a wrong price, a missing model)?
+> Log it for the next reader: `~/Projects/skills/hooks/append-skill-memento.sh model-guide '<one-line issue>'`.
+
 ## 2026-09-22 - Claude Opus 5.5 released; recommended Claude default
 
 Read the announcement and the 230-page system card on release day. Opus 5.5 scores
