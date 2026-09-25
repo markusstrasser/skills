@@ -31,6 +31,22 @@ def test_grade_choice_case_insensitive():
     assert br.grade(q, "yes") == "wrong"
 
 
+def test_open_questions_asked_first_alone_and_ungraded(monkeypatch):
+    calls = []
+
+    def fake_run(arm, qs, base, model):
+        calls.append([q["id"] for q in qs])
+        ans = {q["id"]: ("a sentence" if q["kind"] == "open" else 3) for q in qs}
+        return {"raw": __import__("json").dumps(ans), "in_tok": 10, "out_tok": 2}
+
+    monkeypatch.setattr(br, "run_reader", fake_run)
+    qs = [{"id": "q1", "kind": "number", "answer": 3}, {"id": "q0", "kind": "open", "q": "main point?"}]
+    res = br.read_arm({}, qs, Path("."), "sonnet")
+    assert calls == [["q0"], ["q1"]]
+    assert res["answers"] == {"q0": "a sentence", "q1": 3} and res["in_tok"] == 20
+    assert br.grade(qs[1], "anything") == "open"
+
+
 def test_parse_answers_tolerates_wrapping_text():
     assert br.parse_answers('Here:\n```json\n{"q1": 3}\n```') == {"q1": 3}
     assert br.parse_answers("no json") is None

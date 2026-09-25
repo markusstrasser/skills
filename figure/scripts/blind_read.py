@@ -15,6 +15,7 @@ Spec (JSON):
              "prose": {"text_file": "matrix.prose.txt"},
              "chart": {"image": "matrix.chart.png"}},
     "questions": [
+      {"id": "q0", "q": "What is the main point?", "kind": "open"},
       {"id": "q1", "q": "...", "kind": "number", "answer": 102, "tol": 2, "role": "claim"},
       {"id": "q2", "q": "...", "kind": "range",  "answer": [303, 325], "tol": 2},
       {"id": "q3", "q": "...", "kind": "choice", "options": ["a", "b"], "answer": "a"}
@@ -48,7 +49,8 @@ material alone; do not use outside knowledge. If the material does not let you a
 give null for it -- a null is better than a guess.
 
 Answer formats: "number" -> a single number; "range" -> [low, high]; "choice" -> one of the listed
-options, copied exactly. Numbers are plain (no units, no $ or %, no thousands separators).
+options, copied exactly; "open" -> one plain sentence. Numbers are plain (no units, no $ or %, no
+thousands separators).
 
 {material}
 
@@ -88,7 +90,9 @@ def _num(x) -> float | None:
 
 
 def grade(q: dict, a) -> str:
-    """Return 'ok', 'wrong' or 'null'."""
+    """Return 'ok', 'wrong', 'null', or 'open' (ungraded free text)."""
+    if q["kind"] == "open":
+        return "open"
     if a is None:
         return "null"
     tol = q.get("tol", 0)
@@ -143,6 +147,26 @@ def run_reader(arm: dict, qs: list[dict], base: Path, model: str) -> dict:
     }
 
 
+def read_arm(arm: dict, qs: list[dict], base: Path, model: str) -> dict:
+    """Ask `open` questions in their own call first, so targeted questions cannot cue what the
+    reader finds salient (Xiong et al. 2020, curse of knowledge); then the graded ones."""
+    phases = [p for p in ([q for q in qs if q["kind"] == "open"], [q for q in qs if q["kind"] != "open"]) if p]
+    merged: dict = {"raw": "", "answers": {}}
+    for phase in phases:
+        res = run_reader(arm, phase, base, model)
+        if "error" in res:
+            return res
+        answers = parse_answers(res.get("raw", ""))
+        if answers is None:
+            return {**res, "answers": None}
+        merged["answers"].update(answers)
+        merged["raw"] += (res.get("raw") or "") + "\n"
+        for k in ("in_tok", "out_tok", "reason_tok", "cost_usd", "wall_s"):
+            if res.get(k) is not None:
+                merged[k] = (merged.get(k) or 0) + res[k]
+    return merged
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     ap.add_argument("spec", type=Path)
@@ -175,12 +199,12 @@ def main() -> int:
             for r in range(args.repeats)]
     rows: list[dict] = []
     with cf.ThreadPoolExecutor(args.workers) as ex:
-        futs = {ex.submit(run_reader, arm, it["questions"], base, model): (it, name, r)
+        futs = {ex.submit(read_arm, arm, it["questions"], base, model): (it, name, r)
                 for it, name, arm, r in jobs}
         for f in cf.as_completed(futs):
             it, name, r = futs[f]
             res = f.result()
-            answers = parse_answers(res.get("raw", "")) if "error" not in res else None
+            answers = res.pop("answers", None) if "error" not in res else None
             grades = {q["id"]: ("error" if answers is None else grade(q, answers.get(q["id"])))
                       for q in it["questions"]}
             row = {"item": it["id"], "arm": name, "rep": r, "answers": answers, "grades": grades, **res}
@@ -202,7 +226,8 @@ def main() -> int:
 
 def role_acc(it: dict, rows: list[dict], arm: str, role: str) -> float | None:
     qids = {q["id"] for q in it["questions"] if q.get("role", "untagged") == role}
-    g = [v for r in rows if r["item"] == it["id"] and r["arm"] == arm for k, v in r["grades"].items() if k in qids]
+    g = [v for r in rows if r["item"] == it["id"] and r["arm"] == arm
+         for k, v in r["grades"].items() if k in qids and v != "open"]
     return g.count("ok") / len(g) if g else None
 
 
@@ -245,7 +270,7 @@ def render_summary(spec: dict, rows: list[dict], model: str, repeats: int) -> st
         errored = any(v == "error" for r in rows if r["item"] == it["id"] for v in r["grades"].values())
         for name in it["arms"]:
             rs = [r for r in rows if r["item"] == it["id"] and r["arm"] == name]
-            g = [v for r in rs for v in r["grades"].values()]
+            g = [v for r in rs for v in r["grades"].values() if v != "open"]
             n = len(g) or 1
             acc[name] = g.count("ok") / n
 
@@ -260,14 +285,22 @@ def render_summary(spec: dict, rows: list[dict], model: str, repeats: int) -> st
             continue
         verdicts.append(verdict(it, rows))
     per_q = ["", "## Per question (share correct by arm)", ""]
+    opens = ["", "## Open answers (uncued; compare with the title yourself)", ""]
     for it in spec["items"]:
         for q in it["questions"]:
+            if q["kind"] == "open":
+                opens.append(f"- **{it['id']}.{q['id']}** {q['q']}")
+                for r in sorted((r for r in rows if r["item"] == it["id"]), key=lambda r: (r["arm"], r["rep"])):
+                    a = (r.get("answers") or {}).get(q["id"])
+                    opens.append(f"  - {r['arm']} rep{r['rep']}: {a}")
+                continue
             cells = []
             for name in it["arms"]:
                 g = [r["grades"][q["id"]] for r in rows if r["item"] == it["id"] and r["arm"] == name]
                 cells.append(f"{name} {g.count('ok')}/{len(g)}")
             per_q.append(f"- {it['id']}.{q['id']} ({q['q'][:70]}): " + ", ".join(cells))
-    return "\n".join(lines + ["", "## Verdicts (advisory)", ""] + verdicts + per_q) + "\n"
+    tail = opens if len(opens) > 3 else []
+    return "\n".join(lines + ["", "## Verdicts (advisory)", ""] + verdicts + per_q + tail) + "\n"
 
 
 if __name__ == "__main__":
