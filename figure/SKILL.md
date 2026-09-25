@@ -9,95 +9,105 @@ effort: medium
 
 # Figure
 
-Decide the form before any pixels, build it with the tool the medium wants, then check that a
-reader who sees only the figure gets the answer. The bundled `/dataviz` skill owns HTML chart
-styling (palette, marks, tooltips, a11y); this skill owns everything before and after that.
+A figure is an argument a reader should get right. This skill decides whether one is needed, what
+it shows and how it is checked; `/dataviz` styles HTML charts. The principles below are the
+contract. Tables and exemplars live in `references/` and only speed up the search.
 
-## 1. Write the claim first
+## Principles
 
-One sentence the reader should leave with, as a finding ("Schools alone turn the sign"), not a
-topic ("Costs by service"). That sentence becomes the title. If you cannot write it, you are
-exploring, not presenting; say so and make an exploratory view, not a publication figure.
+1. **Start from the reader's task.** Name it: look up a value, grasp a claim, see a shape, remember
+   it later, or explore. Most famous rules reverse across tasks: minimal design loses on recall,
+   ornament on precise reading, log scales on lay readers, interaction on everyone who only
+   scrolls. An error at the task level cannot be fixed by styling (Munzner's nested model).
 
-Then list the 2-4 questions a reader will ask of the figure and tag each:
-`claim` (the takeaway), `lookup` (a specific value), `shape` (a crossing, trend, spread, outlier).
+2. **The words are part of the figure.** The title states the finding. Numbers sit at the point
+   they describe, encoding notes at the axis, and 2-3 annotations mark what proves the claim.
+   Readers remember titles over data and still judge the chart neutral, so the title must name the
+   chart's most prominent feature; if it doesn't, change the chart, not the words. Every figure
+   can be restated as one stand-alone sentence; ship that sentence too.
 
-## 2. Sentence, table or chart
+3. **One comparison, inside one eyespan.** Name the comparison that carries the claim. Put its
+   items next to each other, give them the focal colour and grey the rest, and encode it as
+   position on a shared scale. When there are more comparisons, use small multiples with an
+   identical design, not more colours.
 
-| The content is... | Use |
-|---|---|
-| One or two numbers, or a claim with no shape | **A sentence.** Numbers in the prose. |
-| A trend that supports a sentence | Sentence + **inline sparkline** (Tufte word-sized graphic) |
-| Exact values the reader will look up; few rows | **Table**, sorted by the value that matters, key cells emphasised |
-| Every combination of a few assumptions (multiverse) | **Table-heatmap**: numbers in cells, shade by value, main case outlined |
-| Shape: crossing, spread, gradient, cluster, outlier | **Chart** |
-| The reader is an agent or script | **Table or JSON.** Never a chart. |
+4. **The default view carries everything.** Design the static figure first. Interaction and
+   motion are optional depth that most readers never touch: nothing needed for the claim hides
+   behind hover, click, tab or slider. Show variants side by side instead of behind a toggle.
+   Animate only sampling uncertainty, marks regrouping across views, or a narrated talk. An
+   explorable must read correctly untouched, with its defaults set to the main case.
 
-The test: if the takeaway survives as a sentence and nobody needs the lookups or shape, cut the
-chart. Measure it with the blind reader (step 5) when the call is not obvious.
+5. **Show the family, highlight the case.** Draw every run, specification, year or unit faintly,
+   with the one the reader cares about drawn strongly. Break an average open when the claim
+   depends on the variation inside it.
 
-## 3. Form by job
+6. **Scales and intervals are claims.** The axis range asserts an effect size: bars from zero,
+   dots and lines ranged to the effect you mean, stated in the text. Use log for ratio claims,
+   with a linear companion for lay readers. Name every interval; for lay readers, show outcomes
+   (quantile dotplot, icon array) rather than a bare 95% CI.
 
-`/dataviz` covers magnitude, trend, part-to-whole, deltas and stat tiles. The forms it lacks:
+7. **Show the seams.** Put what was measured (as distinct from what the reader will assume), the
+   source, the method and the framing choice in a notes line under the figure, never in the
+   title.
 
-| Job | Form | Avoid |
-|---|---|---|
-| Distribution of one variable | histogram, ECDF, beeswarm/strip (n < ~500), density only with a rug | bar of means |
-| Compare distributions | small-multiple histograms, box + jittered points, ridgeline for many groups | dynamite plot (bar + error whisker) |
-| Estimate with uncertainty | point + interval; **forest plot** for many estimates; CI band on lines | a bare line with no interval |
-| Relationship of two variables | scatter (+ fitted line with band); hexbin when dense | dual-axis line |
-| Robustness to assumptions | **multiverse table-heatmap** (every combination) or **specification curve** (sorted estimates over a dot-matrix of choices) | showing only the main case |
-| One assumption at a time | **sensitivity strip / tornado**: each row slides one input over its range, coloured by sign | a spaghetti of lines |
-| Accumulation of parts | **waterfall / staircase** with a running total column | stacked bar |
-| Rank change between two points | **slope chart** or dumbbell | grouped bars |
-| Many series over time | **small multiples** on shared axes; horizon charts when very many | 8+ coloured lines |
-| Flow between states | Sankey/alluvial, only for <= ~15 nodes | chord diagrams |
-| Network | adjacency matrix when dense; node-link only when sparse and the topology is the point | hairball |
-| Geography | choropleth normalised per capita; dot or proportional symbol for counts | raw counts on a choropleth |
-| Intrinsic 3D (molecules, terrain, point clouds) | interactive three.js / 3Dmol / py3Dmol with a sensible default camera | 3D bars, 3D pies, ever |
+8. **Ornament must be data or earn needed attention.** There is no data-ink quota. Pictographs
+   and metaphors that encode the data are fine, and beauty may hook a general audience, but
+   imagery unrelated to the data goes. A polished figure can mislead through its polish.
 
-Honesty rules that `/dataviz` does not state: bars start at zero (else use dots); aspect ratio
-banks the slopes you care about near 45°; show n and the interval, or say why there is none;
-log scale when the claim is about ratios; the same quantity keeps the same axis across panels.
+9. **If no figure makes it obvious, rethink the idea, not the styling.** The claim may be a
+   sentence, or it may need a different transform, axis or notation.
 
-## 4. Tool by medium
+10. **Judge by readers, not by your own eye.** Authors cannot see their own figure fresh (the
+    curse of knowledge). Clarity is checked with a blind reader against the data. Beauty has no
+    verifier here: the operator judges it.
 
-| Medium | Default | When else |
-|---|---|---|
-| Terminal / chat answer | markdown table, a sentence, unicode sparkline `▁▂▃▅▇` | nothing heavier |
-| HTML artifact or web page | **Observable Plot** (d3-based grammar, small code) + `/dataviz` tokens | **d3** for bespoke forms (staircase, sensitivity strip, custom multiverse); Vega-Lite when a lintable JSON spec must render in several media |
-| Svelte/React app | plain SVG in components, scales by hand or d3-scale (the immigration figures page uses no chart library) | LayerCake if many charts share scaffolding |
-| Paper / PDF | **matplotlib** with a house style (figures4papers reference: `pdf.fonttype=42`, column widths 89/183 mm) | pgfplots only when the document is LaTeX and font matching matters |
-| Diagram, not data | `/scientific-drawing` (Typst/CeTZ, TikZ, D2) | — |
-| Motion that explains | `/manim-animations` | — |
-| True 3D | three.js (web), py3Dmol (molecules) | — |
+**Where the principles yield.** Exploratory pieces that deliberately depict a system without a
+thesis (The Pudding, Lupi) drop the finding-title but keep principles 3-8, and say they are
+exploratory. Expert audiences keep their conventions (forest plots, equations, dense tables).
+Agent readers get a table or JSON.
 
-## 5. Render, look, then blind-read
+## Process
 
-1. **Render and look.** Screenshot the real output and view it with Read. Check against the
-   claim, then `/dataviz`'s anti-pattern list. Capture gotcha: `agent-browser screenshot <sel>`
-   can return blank images for elements below the fold; take `screenshot --full` and crop each
-   element by `getBoundingClientRect()` + `scrollY`.
-2. **Blind-read** when the sentence-vs-chart call matters or a page has several figures:
-   `scripts/blind_read.py SPEC.json --repeats 2`. A fresh `claude --safe-mode` reader answers
-   the pre-registered questions from one arm at a time: `full` (whole section image), `prose`
-   (the section's text only), `chart` (the graphic only). Answers are graded against values
-   **computed from the data, never read off the figure**. The summary reports accuracy per role
-   and tokens per arm, and gives an advisory verdict:
-   - the chart beats prose on `claim` → keep it;
-   - prose matches on `claim`, the chart wins only on `lookup`/`shape` → keep it only if the
-     reader needs those (your call, not the script's);
-   - prose matches on everything → a sentence will do.
-   `--from-results` regrades stored answers after a key fix without new reader calls.
-   A `[DEGRADED]` line means reader calls failed; there is no verdict for those items.
-
-Write questions a real reader asks, including at least one `claim` per figure. Lookup-only
-question sets bias the test toward charts.
+1. **Claim, task, comparison.** Write the claim sentence, the reader's task and the one
+   comparison. List 2-4 questions the reader will ask, tagged `claim`, `lookup`, `shape` or
+   `trap` (a question whose right answer runs against the figure's visual impression).
+2. **Sentence, table or chart.** Take the lightest form that answers the questions:
+   `references/forms-and-tools.md` § Sentence, table or chart.
+3. **Form and tool.** Choose from `references/forms-and-tools.md`, and borrow moves from
+   `references/craft-moves.md`.
+4. **Build.** HTML charts use `/dataviz` styling; paper figures use matplotlib in the
+   figures4papers house style; diagrams use `/scientific-drawing`; motion uses `/manim-animations`.
+5. **Check.**
+   - *Look.* Render it and view it with Read. Check that the title names the most prominent
+     feature, 2-3 annotations mark the proof, labels are direct, context is grey around one focal
+     colour, compared items sit in one eyespan, scales and intervals are named, and a notes line
+     exists. Capture gotcha: `agent-browser screenshot <sel>` returns blank images below the fold;
+     take `screenshot --full` and crop by `getBoundingClientRect()` + `scrollY`.
+   - *Blind-read* (`scripts/blind_read.py SPEC.json --repeats 2`). A fresh `claude --safe-mode`
+     reader with no backstory sees one arm at a time: `full` (the whole section), `prose` (the
+     text only) and `chart` (the graphic without its title). `open` questions ("what is the main
+     point?") run first in their own call, so nothing cues them; compare their answers with your
+     title. Graded answers are checked against values computed from the data, never read off
+     the figure. The advisory verdict per figure reads:
+     - the chart beats prose on `claim` → keep it;
+     - the chart beats prose only on `lookup`/`shape` → keep it if readers need those;
+     - prose matches everything → a sentence will do;
+     - `[MISLEADS]` → full-arm readers fail a `trap`; fix it before shipping.
+     Use `--from-results` to regrade stored answers after fixing the key. `[DEGRADED]` means
+     reader calls failed and those items get no verdict. Remember the reader is an LLM standing
+     in for a human.
+   - *Taste.* When the look matters (a published piece, a cover figure), render 2-3 variants side
+     by side and let the operator choose. Do not iterate on your own aesthetic judgment.
 
 ## Evidence
 
-- Built 2026-09-25 from the operator's request on the immigration figures page ("remove ones
-  where a sentence will do and show the ones where visualization helps").
-- First run (4 figures × 3 arms × 2 repeats, sonnet reader, `references/2026-09-25-first-run.md`):
-  chart-only crops answered 100% of questions on all four; prose alone answered takeaways on
-  matrix and flip but 0% of lookups/shape; image arms cost ~26K input tokens vs ~2.9K for prose.
+- Research behind the principles (2026-09-25; three lanes with read/skipped logs):
+  `agent-infra/research/2026-09-25-information-display-craft.md`. Anchors: Victor (*Magic Ink*,
+  *Explorable Explanations*, *Ladder of Abstraction*); Franconeri et al. 2021 (PSPI); Stokes et
+  al. 2022; Kim, Setlur & Agrawala 2021; Kong et al. 2018/2019; Correll et al. 2020; Robertson
+  et al. 2008; Tversky et al. 2002; Tse 2016; Tufte; Healy; Xiong et al. 2020.
+- First blind-read run on the immigration figures page: `references/2026-09-25-first-run.md`.
+  Chart-only crops answered every question; prose carried the takeaway for matrix and flip but
+  none of the lookups; image arms cost ~26K input tokens against ~2.9K for prose. An uncued
+  chart-only reader read the staircase as about "unauthorized immigrants", which the page does
+  not claim.
