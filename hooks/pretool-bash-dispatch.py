@@ -1057,11 +1057,37 @@ _NONGIT_TOOLS = {
     "sg",
 }
 _SHELL_RESET = {"|", "||", "&&", ";", "&", "|&", "(", ")", "{", "}"}
+# shlex(punctuation_chars=True) returns a run of adjacent operator characters as ONE token,
+# so `( ... | tail -2 ); git diff --no-ext-diff` yields `);` — a run the set above misses,
+# which carried `tail` into the git segment and blocked git's own flag. A run resets the
+# segment when it holds a separator; a redirection run (`>&` in `2>&1`, `&>`, `>|`) does not.
+_REDIRECTION_RUN = re.compile(r"[<>]{1,3}[&|]?|&>{1,2}|<>")
+
+
+def _is_shell_reset(token: str) -> bool:
+    if token in _SHELL_RESET:
+        return True
+    if not token or any(char not in "();<>|&\n" for char in token):
+        return False
+    if _REDIRECTION_RUN.fullmatch(token):
+        return False
+    return any(char in ";|&()\n" for char in token)
 
 
 def _noext_nongit_hit(cmd: str) -> str | None:
     try:
-        lex = shlex.shlex(cmd, posix=True, punctuation_chars=True)
+        from lib_bash_cmd_strip import strip_heredocs
+
+        cmd = strip_heredocs(cmd)  # a heredoc body is stdin data, never a command's flags
+    except Exception:  # fallback-ok — a missing stripper must not disable the guard
+        pass
+    # An unquoted newline ends a command, but shlex reads it as whitespace: make it an
+    # operator character instead. A comment's reader consumes the newline that ends it, so
+    # each newline is doubled first; a backslash-newline continuation joins its lines.
+    cmd = cmd.replace("\\\n", " ").replace("\n", "\n\n")
+    try:
+        lex = shlex.shlex(cmd, posix=True, punctuation_chars="();<>|&\n")
+        lex.whitespace = " \t\r"
         lex.whitespace_split = True
         toks = list(lex)
     except ValueError:
@@ -1070,7 +1096,7 @@ def _noext_nongit_hit(cmd: str) -> str | None:
     seg_nongit = False
     cur = None
     for t in toks:
-        if t in _SHELL_RESET:
+        if _is_shell_reset(t):
             expect_cmd, seg_nongit = True, False
             continue
         if expect_cmd:

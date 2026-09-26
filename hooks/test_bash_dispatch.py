@@ -28,6 +28,7 @@ DISPATCHER = os.path.join(HOOKS_DIR, "pretool-bash-dispatch.py")
 SNAPSHOT = os.path.join(HOOKS_DIR, "_bash_gates_pre_dispatch_snapshot.json")
 _DISPATCHER_NAMESPACE = runpy.run_path(DISPATCHER)
 _GIT_NOEXT_VERDICT = _DISPATCHER_NAMESPACE["_git_noext_inject_verdict"]
+_NOEXT_NONGIT_HIT = _DISPATCHER_NAMESPACE["_noext_nongit_hit"]
 
 
 def _if_matches(if_pattern, cmd):
@@ -163,6 +164,33 @@ def test_backgrounded_git_commit_blocks_both(sandbox):
     assert oracle["exit_code"] == 2
     assert disp["exit_code"] == 2
     assert "run_in_background" in oracle["block_msg"] or "FOREGROUND" in disp["block_msg"]
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        # shlex joins adjacent operators into one token; `);` and `)&&` still end the segment.
+        ("( cd /w && echo ok 2>&1 | tail -2 ); git -C /w diff --cached --no-ext-diff --stat", None),
+        ("(tail -2)&& git diff --no-ext-diff", None),
+        ("tail -2 >/dev/null);git log --no-ext-diff -1", None),
+        # Controls: a redirection run is not a separator, and real misuse still blocks.
+        ("tail -2 2>&1 --no-ext-diff", "tail"),
+        ("( rg --no-ext-diff foo )", "rg"),
+        ("git diff | grep --no-ext-diff x", "grep"),
+        # A heredoc body is stdin data; the command after its terminator is still scanned.
+        ("cat > m.txt <<'MSG'\nsee ( rg --no-ext-diff foo )\nMSG\ngit log -1", None),
+        ("cat > m.txt <<MSG\n( rg --no-ext-diff foo )\nMSG", None),
+        ("cat > m.txt <<'MSG'\nbody\nMSG\nrg --no-ext-diff x", "rg"),
+        # A newline ends a command, also after a comment; a quoted newline does not.
+        ("tail -5 log\ngit diff --no-ext-diff", None),
+        ("tail f # note\ngit diff --no-ext-diff", None),
+        ("git status\nrg --no-ext-diff x", "rg"),
+        ('git commit -m "a\nrg --no-ext-diff"', None),
+        ("rg x \\\n  --no-ext-diff", "rg"),
+    ],
+)
+def test_noext_nongit_segments_reset_on_joined_operator_runs(command, expected):
+    assert _NOEXT_NONGIT_HIT(command) == expected
 
 
 def test_git_diff_injects_no_ext_diff_both(git_sandbox):

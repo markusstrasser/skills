@@ -35,11 +35,19 @@ try:
 except ValueError:
     sys.exit(0)   # unbalanced quotes / unparseable → fail OPEN (never block on uncertainty)
 RESET = {'|','||','&&',';','&','|&','(',')','{','}'}
+# shlex joins adjacent operators into one token (e.g. ');'); a run holding a separator
+# resets the segment, a redirection run (the '>&' of 2>&1, '&>', '>|') does not.
+REDIRECT = re.compile(r'[<>]{1,3}[&|]?|&>{1,2}|<>')
+def is_reset(t):
+    if t in RESET: return True
+    if not t or any(c not in '();<>|&' for c in t): return False
+    if REDIRECT.fullmatch(t): return False
+    return any(c in ';|&()' for c in t)
 expect_cmd = True
 seg_nongit = False
 cur = None
 for t in toks:
-    if t in RESET:
+    if is_reset(t):
         expect_cmd = True; seg_nongit = False; continue
     if expect_cmd:
         if re.match(r'^[A-Za-z_][A-Za-z0-9_]*=', t):   # ENV=val prefix; still expecting the command word
