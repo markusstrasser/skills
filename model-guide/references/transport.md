@@ -1,6 +1,6 @@
 # Transport — verified lanes and llmx facts
 
-> Moved verbatim from model-guide/SKILL.md on 2026-09-25 (principle-first rewrite; skills HEAD before the rewrite). Inline `[historical: …]` tags are the only additions. Source lines: L31-46, L104-117, L146-161.
+> Moved from model-guide/SKILL.md on 2026-09-25 (principle-first rewrite; skills HEAD before the rewrite). Retired-model content pruned 2026-09-25 (git history keeps it). Source lines: L31-46, L104-117, L146-161.
 
 ## Verified Transport — configuration and execution evidence
 
@@ -12,11 +12,10 @@
 | Claude Agent-tool model pins | Opus pins recovered in the July 29 observations; Fable pins have no later verification here | Treat old failures as dated evidence. For model-sensitive evaluations inspect the provider run record; self-report alone is not independent proof. |
 | `opus` alias (`claude -p --model opus`) | 2026-09-22 probe, CLI 2.1.280, key stripped: JSON `modelUsage` reports `claude-opus-5-5` | The alias moved from Opus 5 to 5.5 on release day for every alias-based lane (`opus-low`, `--model opus` scripts). The Agent-tool `model: opus` pin was not probed. Pin `claude-opus-5` where Opus 5 behavior is required. |
 | `llmx chat --subscription -m claude-opus-5-5` | 2026-09-22 dry-run: `claude-cli`, subscription auth, exact ID, no warnings | Configuration only; no live llmx canary. The `lite_allowed_models` mirror does not list 5.5 yet. |
-| Cursor Grok 4.7 | **Verified live 2026-09-23** with `cursor-agent` signed in: `cursor-agent models` lists 4.7 as `grok-4.7-{low,medium,high,xhigh}[-fast]` — no `cursor-` prefix; the 2026-09-22 guess `cursor-grok-4.7-*` does not exist. 4.6 keeps its `cursor-grok-4.6-*` prefix. [historical: Grok ≤4.6 retired 2026-09-25, Pareto-frontier prune] Critique pin corrected to `grok-4.7-high`. `-e` is ignored on cursor-cli. | The IDE subagent slug `grok-4.7-high-fast` seen 2026-09-22 was already the real CLI form, not a separate IDE-only id. |
-| Grok Build CLI (`~/.grok/bin/grok`) | Updated 1.0.13 → **1.0.41** 2026-09-23; `grok models` now lists `grok-4.7` (default) and `grok-4.7-build-fast` alongside `grok-4.6`/`grok-4.5`. Live: `grok -p -m grok-4.7` replied; `grok-4.7-max` refused. | Every call carries ~26K tokens of CLI context. llmx default for `-p grok` is `grok-4.7`; 4.6 remains an explicit `-m`. [historical: retired 2026-09-25, Pareto-frontier prune] |
+| Cursor Grok 4.7 | **Verified live 2026-09-23** with `cursor-agent` signed in: `cursor-agent models` lists 4.7 as `grok-4.7-{low,medium,high,xhigh}[-fast]` — no `cursor-` prefix; the 2026-09-22 guess `cursor-grok-4.7-*` does not exist. Critique pin corrected to `grok-4.7-high`. `-e` is ignored on cursor-cli. | The IDE subagent slug `grok-4.7-high-fast` seen 2026-09-22 was already the real CLI form, not a separate IDE-only id. |
+| Grok Build CLI (`~/.grok/bin/grok`) | Updated 1.0.13 → **1.0.41** 2026-09-23; `grok models` now lists `grok-4.7` (default) and `grok-4.7-build-fast`. Live: `grok -p -m grok-4.7` replied; `grok-4.7-max` refused. | Every call carries ~26K tokens of CLI context. llmx default for `-p grok` is `grok-4.7`; |
 
-The [historical transport record](fable-routing-history.md) preserves
-old routing failures and their later corrections. Validate the actual lane a
+Validate the actual lane a
 caller uses; an alias or successful dry-run establishes configuration only.
 
 ## Transport facts (llmx — not judgment)
@@ -36,7 +35,7 @@ Mechanics and footguns: `/llmx-guide`.
 
 - **`llmx vision` is multi-provider as of 2026-07-22 (llmx `2b12289`) — it used to be Gemini-only
   and off-ledger.** It now routes through the normal dispatch path, so `-m` takes any
-  vision-capable model id (`gemini-3.6-flash` [historical: retired 2026-09-25, Pareto-frontier prune], `gpt-6-astra`, `gpt-6-luna`, `claude-opus-5`),
+  vision-capable model id (`gemini-3.8-flash`, `gpt-6-astra`, `gpt-6-luna`, `claude-opus-5`),
   provider is inferred, and `-e` effort works. Three consequences worth knowing:
   (1) it is **spend-guarded and policy-gated** like everything else — a Gemini vision call now
   needs `LLMX_GEMINI_OK=1`, where it previously dispatched freely;

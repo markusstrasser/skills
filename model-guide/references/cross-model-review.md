@@ -1,6 +1,6 @@
 # Cross-model review pattern
 
-> Moved verbatim from model-guide/SKILL.md on 2026-09-25 (principle-first rewrite; skills HEAD before the rewrite). Inline `[historical: …]` tags are the only additions. Source lines: L398-413, L415-419.
+> Moved from model-guide/SKILL.md on 2026-09-25 (principle-first rewrite; skills HEAD before the rewrite). Retired-model content pruned 2026-09-25 (git history keeps it). Source lines: L398-413, L415-419.
 
 ## Cross-Model Review Pattern
 
@@ -21,6 +21,6 @@ That verdict, calibrated: the cross-lab-vs-same-lab MARGIN is **≈0** — a sec
 
 ## Validation Checklists
 
-Post-output verification lists — All Outputs + per-model (Opus 5.5, Fable 5, Sonnet 5, GPT-5.6 Sol/Terra/Luna [historical: Fable 5 and GPT-5.6 retired 2026-09-25, Pareto-frontier prune],
+Post-output verification lists — All Outputs + per-model (Opus 5.5, Sonnet 5, GPT-6 Astra pro mode,
 GLM-5.2, Grok 4.7): [references/validation-checklists.md](validation-checklists.md).
 Consult after receiving output from a routed model, not at routing time.

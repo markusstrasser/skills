@@ -1,5 +1,15 @@
 # Model Guide Changelog
 
+## 2026-09-26 - Removed retired models (frontier-only guide)
+
+Operator direction (2026-09-25): "remove the old models". Deleted `opus-4-8-system-card.md`,
+`fable-5-dormant.md`, `fable-routing-history.md`, `gpt-5-6-suite.md`, `gpt-prompting-history.md`
+and `routing-tables.md`; pruned retired-model sections, table columns, rows and bullets from
+SKILL.md, BENCHMARKS, prompting guides, checklists, per-model files and topical references.
+Kept comparisons that support a current model's routing claim (e.g. Sonnet 5 vs Opus 4.8,
+Opus 5.5's server-side cyber reroute to Opus 4.8). The llmx API-lane gap for `gpt-5.6-*` is
+fixed by llmx `1aa8ed9`. Git history keeps all removed text.
+
 ## 2026-09-25 - Principle-first rewrite; per-model detail moved to references
 
 Operator direction (2026-09-25): "less little rules, more principles and constitutions";
@@ -50,7 +60,7 @@ supports 5.1, and the subscription dry-run selects its exact model and effort.
 This proves local configuration, not a new served-model or billing canary.
 Preserved the operator's interactive Fable default and existing headless Opus
 lanes. Prior status and transport claims are retained in
-[fable-routing-history.md](fable-routing-history.md).
+`fable-routing-history.md` (deleted 2026-09-25; git history).
 
 ## 2026-09-05 - GPT-6 Astra + Fable 5.1 + Gemini 3.8 Flash defaults
 

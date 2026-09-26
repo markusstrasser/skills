@@ -1,6 +1,6 @@
 # Claude Opus 5.5 — default Claude
 
-> Moved verbatim from model-guide/SKILL.md on 2026-09-25 (principle-first rewrite; skills HEAD before the rewrite). Inline `[historical: …]` tags are the only additions. Source lines: L29, L211-226.
+> Moved from model-guide/SKILL.md on 2026-09-25 (principle-first rewrite; skills HEAD before the rewrite). Retired-model content pruned 2026-09-25 (git history keeps it). Source lines: L29, L211-226.
 
 **Opus 5.5** (`claude-opus-5-5`, 2026-09-22) is the recommended Claude default for headless, review and analysis work: it matches or beats Fable 5.1 on most of its card at 40% of Fable's token price (§ Claude Opus 5.5). The `opus` alias already serves it. Lanes pinned to `claude-opus-5` stay on Opus 5 until re-pinned, and cyber or dual-use biology work belongs there. Moving the interactive setting off Fable 5.1 is the operator's call. Preserve explicit task and fallback selections; a fallback example does not redefine the general routing role.
 

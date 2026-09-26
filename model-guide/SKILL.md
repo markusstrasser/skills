@@ -34,7 +34,7 @@ Choose a model and effort from the principles below, then read the model's refer
 | claude-haiku-4-5 | Cheapest Claude for mechanical no-gate work | Lowest-cost Claude tier | Agent tool; llmx anthropic-direct |
 | [gpt-6-astra](references/models/gpt-6-astra.md) | Default GPT: headless cheap lane at `low`, Codex implementation, cross-lab reviewer, quantitative work (pro mode) | Beats Luna at any effort on quality; $0 on the subscription | codex-cli subscription (`llmx --subscription`, `codex exec`) |
 | [gpt-6-sol](references/models/gpt-6-sol-luna.md) | Metered mid tier; fallback when Astra's plan limit binds | Astra training at a lower serving cost | Codex subscription + API |
-| [gpt-6-luna](references/models/gpt-6-sol-luna.md) | Metered bulk extraction and mechanical work | Cheapest GPT; replaced gpt-5.3 ("6 luna wins") | Codex subscription + API |
+| [gpt-6-luna](references/models/gpt-6-sol-luna.md) | Metered bulk extraction and mechanical work | Cheapest GPT ("6 luna wins") | Codex subscription + API |
 | [grok-4.7](references/models/grok-4-7.md) | Opt-in read-only repo critique axis; Grok Build headless | Separate lab with workspace access; cost and speed edge | cursor-agent `grok-4.7-<effort>[-fast]`; `grok` CLI; xAI API unverified |
 | composer-2.5(-fast) | Built-in premise scout in `/critique` and `/code-review` | Repo-grounded caller and join checks by default | cursor-cli subscription |
 | [gemini-3.8-flash](references/models/gemini.md) | Critique cosigner only, never the sole reviewer | Cheap diverse reviewer in the 2G+2GPT mix | Metered API, `LLMX_GEMINI_OK=1` |
@@ -43,13 +43,13 @@ Choose a model and effort from the principles below, then read the model's refer
 | [GLM-5.2](references/models/glm-5-2.md) | Opt-in review cosigner and epistemic guardrail; not an extractor | Separate training lab; best measured calibration among routed models | OpenRouter/zai metered, `--axes …,glm` |
 | [kimi-k3](references/models/kimi-k3.md) | Opt-in long-horizon coding probe | Open-weight model from a separate lab; cache-cheap repeated context | `llmx -p kimi` metered; Kimi Code CLI |
 
-Retired 2026-09-25 (operator: allowlists hold the Pareto frontier only): the GPT-5.6 suite, GPT-5.4 and older including gpt-5.3, Fable 5, Opus 4.8 (Anthropic still uses it server-side as 5.5's cyber reroute), Grok ≤4.6, Gemini 3 and 3.5-3.7 Flash, and gemini-3-pro-preview. Their sections are kept as history: [GPT-5.6](references/gpt-5-6-suite.md), [Fable 5](references/fable-5-dormant.md), [Opus 4.8 card](references/opus-4-8-system-card.md).
+Retired 2026-09-25 (operator: allowlists hold the Pareto frontier only): every model not in this table; git history keeps their old guidance.
 
 ## Settled operator decisions
 
 - Claude runs on the subscription only; the metered API requires an explicit request.
 - Architecture, design and high-reasoning critique use Opus `max` plus GPT-6 Astra, never Sonnet (2026-06-20). **Open:** whether Sonnet 5 changes that verdict is the operator's call ([details](references/models/claude-sonnet-5.md)).
-- Allowlists hold the Pareto frontier only (2026-09-25). llmx refuses most retired ids, but `gpt-5.6-*` still dispatched on the API lane when probed that day ([known issues](references/known-issues.md)).
+- Allowlists hold the Pareto frontier only (2026-09-25). llmx refuses retired ids with the successor named.
 - Gemini is critique-only (2026-07-14 ADR); `gemini-3.1-pro-preview` was retired from routing on 2026-06-13.
 - GLM-5.2 is an opt-in cosigner, not an extractor (2026-06-19).
 - Moving the interactive setting off Fable 5.1 is the operator's call.
@@ -59,7 +59,7 @@ Retired 2026-09-25 (operator: allowlists hold the Pareto frontier only): the GPT
 
 - Per-model specs, prompting and watch-items: [references/models/](references/models/). Prompting guides: [Claude](references/PROMPTING_CLAUDE.md), [GPT](references/PROMPTING_GPT.md).
 - Choosing an executor tier (the "Dispatch Economics" section other skills cite): [dispatch-economics.md](references/dispatch-economics.md). Cosigner defaults: [cosigner-defaults.md](references/cosigner-defaults.md).
-- Verified lanes and llmx facts: [transport.md](references/transport.md). Pre-rewrite routing tables: [routing-tables.md](references/routing-tables.md).
+- Verified lanes and llmx facts: [transport.md](references/transport.md).
 - Scores: [BENCHMARKS.md](references/BENCHMARKS.md). System-card digests: [Opus 5.5](references/opus-5-5-system-card.md), [Opus 5](references/opus-5-system-card.md), [Sonnet 5](references/sonnet-5-system-card.md).
 - Checks after output: [validation-checklists.md](references/validation-checklists.md). Sources: [source-notes.md](references/source-notes.md). History: [CHANGELOG](references/CHANGELOG.md).
 

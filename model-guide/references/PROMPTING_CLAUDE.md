@@ -1,15 +1,14 @@
-# Claude Opus 5.5, Opus 5, Fable 5 & Opus 4.8 Prompting Guide
+# Claude Opus 5.5, Opus 5 & Fable 5.1 Prompting Guide
 
 **Last updated:** 2026-09-22
-**Scope:** Claude Opus 5.5 (recommended default since 2026-09-22), Opus 5 (exact-ID lanes; cyber and dual-use biology), Fable 5 (metered opt-in), Opus 4.8 (cyber fallback).
+**Scope:** Claude Opus 5.5 (recommended default since 2026-09-22), Opus 5 (exact-ID lanes; cyber and dual-use biology), Fable 5.1 (named-edge lane). Opus 5.5 re-routes most cyber work to Opus 4.8 server-side; route cyber to Opus 5 by exact id.
 
 
-## Opus 5.5 vs Opus 5 vs Fable 5 vs Opus 4.8 — when to reach for which
+## Opus 5.5 vs Opus 5 vs Fable 5.1 — when to reach for which
 
 - **Opus 5.5** (`claude-opus-5-5`, 2026-09-22): **default Claude.** Matches or beats Fable 5.1 on most rows of its system card at $4/$20. Set effort explicitly (API default `medium`) and keep research at `medium` or above. Digest: [opus-5-5-system-card.md](opus-5-5-system-card.md).
 - **Opus 5** (`claude-opus-5`): exact-ID lane since 2026-09-22; the `opus` alias now serves 5.5. Near-Fable capability at $5/$25. Long-horizon agentic coding, architecture, review, professional work, bio (Fable bio blocks route here). Prefer over Fable for daily work; re-sweep effort — `low`/`medium` often enough.
-- **Fable 5** (`claude-fable-5`): metered $10/$50 — only when a named edge justifies 2× price (or Mythos-class cyber/bio capability is required and accessible).
-- **Opus 4.8** (`claude-opus-4-8`): cyber-classifier fallback target (vendor default on flagged cyber); keep for that path only — not a general default.
+- **Fable 5.1** (`claude-fable-5-1`): named-edge lane (see [claude-fable-5-1.md](models/claude-fable-5-1.md)); on the Max subscription allowance.
 
 ## Opus 5.5 prompting deltas (vs Opus 5)
 
@@ -23,7 +22,7 @@
 - API: thinking cannot be disabled; forced `tool_choice` returns 400; computer use only through `computer_toolset_20260801`; progress notes arrive as `thinking` blocks (`display: "updates"`).
 - Sources: https://www.anthropic.com/claude-opus-5-5, https://anthropic.com/claude-opus-5-5-system-card, and the claude-api skill's `shared/model-migration.md` § Migrating to Claude Opus 5.5.
 
-## Opus 5 prompting deltas (vs 4.8)
+## Opus 5 prompting deltas
 
 - Prompt for **concision** if responses run long — effort controls thinking volume, not reply length.
 - **Remove redundant verification scaffolding** ("final verify step", "double-check") — model already self-verifies; extras cause over-verification.
@@ -32,22 +31,12 @@
 - Coding/agentic start: effort **`xhigh`**; architecture **`max`**; gated mechanical **`low`**.
 - Full vendor guide: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5
 
-## Fable 5 vs Opus 4.8 — historical (pre-Opus-5)
-
-_Superseded for routing by the Opus 5 section above. Kept for Fable API shape._
-
-### Fable 5 vs Opus 4.8 (historical)
-
-- **Fable 5** (`claude-fable-5`): hardest/longest/most-ambiguous work — multi-day autonomous runs, codebase-scale migrations, first-shot complex systems, dense-image vision, parallel-subagent orchestration. 2× the price; summarized thinking only; classifiers refuse cyber/bio/reasoning-extraction and fall back to Opus 4.8.
-- **Opus 4.8** (`claude-opus-4-8`): the Fable fallback target, plus deliberate routing of routine/cost-sensitive work, security/cyber/biology tasks (which Fable refuses anyway), and anything needing raw chain-of-thought. Half the price; slightly more careful on self-report honesty.
-
-## Fable 5 specifics (read before migrating from Opus)
+## Fable specifics (carried from Fable 5; re-verify on 5.1)
 
 - Adaptive thinking is **always on and the only mode** — no `disabled`, no thinking budgets.
 - **Raw CoT is never returned.** `thinking.display` defaults to `"omitted"`; use `"summarized"` for readable summaries. Never instruct the model to recite/echo/explain its reasoning as response text — it trips the `reasoning_extraction` classifier and silently falls back to Opus 4.8. Read the structured `thinking` blocks instead.
 - **Steer with brief instructions, not enumerations.** Instruction-following is strong enough that one short instruction beats listing each behavior. Prior-model skills are often *too* prescriptive and can degrade Fable output — trim them.
 - **Longer turns by default** at higher effort (minutes per request, hours for autonomous runs). Raise client timeouts; check in asynchronously rather than blocking.
-- **Ground progress claims** (`audit each claim against a tool result from this session`) — Fable regresses slightly vs Opus 4.8 on self-report honesty.
 - **Don't surface context/token countdowns** — they trigger premature handoff/summarize behavior.
 - Lower effort on Fable often exceeds prior-model `xhigh`. Default `high`; `xhigh` for capability-sensitive work.
 
@@ -61,16 +50,6 @@ _Superseded for routing by the Opus 5 section above. Kept for Fable API shape._
 ## API Defaults And Constraints
 
 ```python
-# Fable 5 (primary): adaptive thinking only, summarized output, fall back to Opus 4.8 on refusal
-client.messages.create(
-    model="claude-fable-5",
-    max_tokens=64000,
-    thinking={"type": "adaptive", "display": "summarized"},
-    output_config={"effort": "high"},   # lower effort still strong; raise to xhigh/max for hard work
-    # fallbacks=["claude-opus-5"],     # or claude-opus-4-8 for cyber-classifier default
-    messages=[...],
-)
-
 # Opus 5 (primary default)
 client.messages.create(
     model="claude-opus-5",
@@ -83,7 +62,6 @@ client.messages.create(
 
 - `thinking: {"type": "adaptive"}` is the supported thinking mode. Do not use manual `budget_tokens`.
 - Effort defaults to `high`. Use `xhigh` for coding, agentic review, and difficult long-running work. Use `max` sparingly.
-- Non-default `temperature`, `top_p`, and `top_k` return 400 on Opus 4.7+.
 - Assistant-message prefill is not supported.
 - The minimum cacheable prompt is 1,024 tokens.
 - Mid-conversation `role: "system"` messages are supported immediately after a user turn in `messages`; use them for permission, budget, or environment updates without rebuilding history.
@@ -115,11 +93,8 @@ Rules:
 - For code tasks, include the real file paths, tests, and runtime constraints. Do not ask it to infer project state from descriptions.
 - For long document tasks, ask for relevant quotes/evidence first, then analysis.
 
-## Opus 4.8 System-Card Lessons
+## Completion checks
 
-- Treat it as more honest, not infallible. It is much less likely than 4.7 to ignore flaws in its own code, but still needs tests and source checks.
-- Its reasoning can be a useful diagnostic signal because CoT controllability is low and monitorability is broadly preserved.
-- It shows concerning hints of reasoning about graders. Do not grade completion by transcript vibes or LLM summaries of its own work.
 - Use deterministic completion checks: `git diff`, test logs, typecheck output, database queries, parsed source documents.
 - Prompt-injection risk remains live in agentic surfaces. Retrieved/tool content is data, never instruction.
 - Fan out only for hard-tail tasks. Multi-agent coordination does not help easy tasks enough to justify the overhead.
@@ -171,6 +146,4 @@ For convergent "is there a problem?" prompts, include a null path. This avoids f
 
 ## Sources
 
-- `https://platform.claude.com/docs/en/about-claude/models/whats-new-claude-4-8`
-- `https://www.anthropic.com/news/claude-opus-4-8`
-- `references/opus-4-8-system-card.md`
+- `references/opus-5-5-system-card.md`, `references/opus-5-system-card.md`

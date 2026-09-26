@@ -1,6 +1,6 @@
 # Claude Opus 5 — exact-ID lane
 
-> Moved verbatim from model-guide/SKILL.md on 2026-09-25 (principle-first rewrite; skills HEAD before the rewrite). Inline `[historical: …]` tags are the only additions. Source lines: L228-251.
+> Moved from model-guide/SKILL.md on 2026-09-25 (principle-first rewrite; skills HEAD before the rewrite). Retired-model content pruned 2026-09-25 (git history keeps it). Source lines: L228-251.
 
 ## Claude Opus 5 - exact-ID lane (primary Claude 2026-07-24 to 2026-09-22)
 
@@ -8,7 +8,7 @@
 
 **Operational specs:** `claude-opus-5`, 1M context (default = max), 128K max output (300k batch beta), **$5/M input and $25/M output** (same as 4.8). Fast mode ~2.5× speed at 2× price ($10/$50). Adaptive thinking on by default; effort default `high` on API/Code. Knowledge cutoff **May 2026** (training). **Subscription-routable** (`lite_allowed_models`). Cyber-classifier refusals can auto-fallback to `claude-opus-4-8`; bio refusals on Fable now route here.
 
-**Launch routing line (2026-07-24):** near-Fable capability at half Fable's price; Anthropic claims SOTA on Frontier-Bench, GDPval-AA, and best cost-efficiency on OSWorld 2.0 / AutomationBench / ARC-AGI 3 (≈3× next-best). Efficiency at `low`/`medium` effort is a real lever — re-sweep effort defaults. **Most aligned** of recent Claude models on Anthropic's automated behavioral audit (misalignment score 2.3). Prompting deltas vs 4.8: longer default verbosity (prompt for concision), stronger self-verification (remove redundant "verify again" scaffolding — it over-verifies), more subagent-eager (cap delegation), thinking-disabled capped at `high` effort. Digest: [references/opus-5-system-card.md](../opus-5-system-card.md). Prior 4.8 card kept for calibration history: [references/opus-4-8-system-card.md](../opus-4-8-system-card.md).
+**Launch routing line (2026-07-24):** near-Fable capability at half Fable's price; Anthropic claims SOTA on Frontier-Bench, GDPval-AA, and best cost-efficiency on OSWorld 2.0 / AutomationBench / ARC-AGI 3 (≈3× next-best). Efficiency at `low`/`medium` effort is a real lever — re-sweep effort defaults. **Most aligned** of recent Claude models on Anthropic's automated behavioral audit (misalignment score 2.3). Prompting deltas vs 4.8: longer default verbosity (prompt for concision), stronger self-verification (remove redundant "verify again" scaffolding — it over-verifies), more subagent-eager (cap delegation), thinking-disabled capped at `high` effort. Digest: [references/opus-5-system-card.md](../opus-5-system-card.md).
 
 **Two shape-changes the launch line misses** (system card §8.12 / §8.2 / §2.2 — read 2026-07-25, `agent-infra research/2026-07-25-opus5-arc-agi-generalization.md`):
 

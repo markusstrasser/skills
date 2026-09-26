@@ -20,7 +20,7 @@ These are vendor-recommended starting points, not local performance measurements
 2. Use Responses for tool calling. Plain-text Chat Completions remains supported; a text-only caller does not need a new tool loop.
 3. Omit unsupported sampling/logprob parameters: `temperature`, `top_p`, `top_logprobs`; also Chat Completions `logprobs` and Responses `message.output_text.logprobs` in `include`.
 4. If a caller actually changes effort across responses, inspect `configuration_update` compatibility before adopting it. Preserve a stable prompt prefix; do not add state machinery to independent one-shot calls.
-5. If migrating an existing GPT-5.5-or-earlier cache-retention caller, use the documented `prompt_cache_options.ttl` replacement. No existing cache parameter means no migration is needed there.
+5. If migrating an existing older-GPT cache-retention caller, use the documented `prompt_cache_options.ttl` replacement. No existing cache parameter means no migration is needed there.
 6. For a configured EU data-residency endpoint, use Standard processing; Astra fast/priority is unsupported there. User geography alone is not endpoint residency.
 
 Verify request construction and command parsing offline first. Keep pricing/admission and authorization controls; a mocked request is not a successful live API call. Optional async tools, WebSocket steering and pro mode need an actual caller and their specific documentation.
@@ -28,5 +28,3 @@ Verify request construction and command parsing offline first. Keep pricing/admi
 ## Other GPT models and historical evidence
 
 Use the official guide for the exact model and current transport. Keep strict output schemas when a real consumer needs them, preserve source identity, and supply decisive code/data instead of vague task labels. For technical/numerical work, specify which calculations require independent checking.
-
-The [historical GPT guide](gpt-prompting-history.md) preserves prior model-specific observations and recipes. Its blanket bans on persistence/verification prompts and formatting prefix are superseded for Astra; do not transfer its reported error rates or model-selection verdicts without measurement.

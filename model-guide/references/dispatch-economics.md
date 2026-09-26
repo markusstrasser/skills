@@ -1,6 +1,6 @@
 # Dispatch Economics — executor tier by verifier
 
-> Moved verbatim from model-guide/SKILL.md on 2026-09-25 (principle-first rewrite; skills HEAD before the rewrite). Inline `[historical: …]` tags are the only additions. Source lines: L165-209.
+> Moved from model-guide/SKILL.md on 2026-09-25 (principle-first rewrite; skills HEAD before the rewrite). Retired-model content pruned 2026-09-25 (git history keeps it). Source lines: L165-209.
 
 ## Dispatch Economics (subagent executor tiers)
 
@@ -25,9 +25,9 @@ resolved transport and provider-reported model distinct; see Verified Transport.
 
 | Role | Current-best lane | Cost class | Evidence |
 |---|---|---|---|
-| **Synthesis** (open design problem, no oracle) | Opus 5.5 `max`; explicit Fable 5.1 via subscription with a named edge | Plan usage | The 2026-06-12 Fable 5 effort result is historical evidence, not a Fable 5.1 comparison. Check served-model evidence before relying on an Agent-tool Fable pin. |
+| **Synthesis** (open design problem, no oracle) | Opus 5.5 `max`; explicit Fable 5.1 via subscription with a named edge | Plan usage | Check served-model evidence before relying on an Agent-tool Fable pin. |
 | **Briefed execution** (full brief + mechanical gates) | `opus-low` (serves Opus 5.5 since 2026-09-22) or codex reasoning-low | $0 subscription | anim-workbench 2026-06-12 effort-tier/effort-integration/codex-lane (low ≈ medium/default, 0.57-0.59× tokens). |
-| **Review / cosign** | Opus 5.5 + GPT-6 Astra, cross-lab; opt-in GLM-5.2 or Grok-4.5 axis [historical: Grok ≤4.6 retired 2026-09-25, Pareto-frontier prune; the axis pins `grok-4.7-high`] | $0 subscription (+~$0.30-1/call opt-in) | `evals/DECISIONS.md` `cross-lab-review-margin` (margin≈0, count-delta real); GLM decision 2026-06-19. |
+| **Review / cosign** | Opus 5.5 + GPT-6 Astra, cross-lab; opt-in GLM-5.2 or Grok 4.7 axis (`grok-4.7-high`) | $0 subscription (+~$0.30-1/call opt-in) | `evals/DECISIONS.md` `cross-lab-review-margin` (margin≈0, count-delta real); GLM decision 2026-06-19. |
 | **Research / literature** | Independent source/model lanes for broad coverage when useful; a bounded lookup or synthesis can stay in one lane | $0 subscription | arc-agi feedback 2026-07-07: codex arm found a paper (PRISM, 2605.26998) the Claude arm missed. |
 | **Scout fan-out** (parallel audits/debug scouts) | Cross-model default, concurrency-capped ≤2 concurrent opus subagents / ≤2 concurrent model workers each, else sequential | $0 subscription | arc-agi feedback 2026-07-08: 4 concurrent opus agents × openrouter fan-out (28-way) killed 3/4 mid-run — opus session-limit + provider contention, both real ceilings. |
 | **OS-student serving** (open-weight model as trainee/actor under test) | Project-specific — measure, don't assume | GPU $/hr | Example only, not a universal verdict: arc-agi killed mistral-small-3.2-24B as an OS-tier base (dominated on every axis, 2026-07-11), rehabbed qwen3.6-27b via a no-think serving config, kept gemma-4-31B alive. Check your own project's standing-kills doc before reusing a verdict cross-project. Serving mechanics: `/modal` skill. |
@@ -42,7 +42,7 @@ resolved transport and provider-reported model distinct; see Verified Transport.
 
 **Effort knob mechanics:** the Agent tool exposes only `model:`. Per-dispatch effort exists via (1) headless `claude -p --model opus --effort low` (verified working, CLI 2.1.175; background Bash + `--output-format json` for usage), or (2) `.claude/agents/*.md` frontmatter `effort:` (does NOT hot-register mid-session — usable only in later sessions). Codex/GPT cheap cosign via llmx `--subscription` is $0 — probe with `--dry-run --subscription` first; transport table in `~/.claude/cache/llmx-routing.json`.
 
-**Agent-tool defaults can differ from the parent.** Inspect the role definition and applicable model overrides instead of inferring inheritance. Preserve bounded subtask scope and resource limits where the caller needs them. Earlier model-pin failures and the June sub-delegation stall are retained in the [routing history](fable-routing-history.md); they do not establish current Fable 5.1 execution or justify a universal delegation ban.
+**Agent-tool defaults can differ from the parent.** Inspect the role definition and applicable model overrides instead of inferring inheritance. Preserve bounded subtask scope and resource limits where the caller needs them. Earlier model-pin failures do not establish current Fable 5.1 execution or justify a universal delegation ban.
 
 **External validity:** all four evals are regime-1 (clear mechanical verifiers — tsc, deterministic scripts, numeric oracles) and screening-grade (n=1/arm). Only within-eval contrasts are clean — cross-eval comparisons are confounded by task, brief density (briefs improve as the author learns, flattering later arms), and harness (codex carries MCP servers + sandbox; opus arms ran bare). Every cheap-lane verdict is conditional on the dispatch-time classification "fully-briefed + mechanically gated" being honest — nothing here licenses cheap lanes for judgment-shaped or incomplete-spec work. The greenfield→integration replication trigger from the morning run is SATISFIED (effort-integration, port shape); the standing revocation trigger replaces it.
 
