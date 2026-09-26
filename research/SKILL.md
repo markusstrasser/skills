@@ -43,6 +43,7 @@ Read only the references needed for the current question:
 - **Domain-specific pitfalls:** read the applicable section of [DOMAINS.md](DOMAINS.md).
 - **Writing a reusable memo:** [output formats and provenance](references/memo-output.md). For numbers doing argumentative work, use the [quantitative bias checklist](references/quant-bias-checklist.md): construction items 1–33, plus section I when an institution produced the number.
 - **"What is missing?" / novelty / missed discovery:** [gap audits](references/gap-audits.md).
+- **Choosing the next move in a research project, or stalled:** [follow-up moves](references/follow-up-moves.md), the operator's recurring steering moves (reframes, reference-group checks, "what else must be true") with their triggers. It is a menu: pick by trigger, and don't run the list.
 - **A dead route, broken pointer, or other skill defect:** [known issues](references/known-issues.md), the append-only history. Log a new issue with `~/Projects/skills/hooks/append-skill-memento.sh research '<one-line issue>'`; the helper writes to that reference.
 
 $ARGUMENTS
