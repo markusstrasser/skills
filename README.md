@@ -137,6 +137,8 @@ operator-deck status          # coverage of the deck on this project
 ```
 
 Install once with `ln -s ~/Projects/skills/bin/operator-deck ~/.local/bin/`.
+In a session, `/steer` (or "read the steer skill") points a stuck or wrapping-up
+agent at the deck.
 
 ## Archive
 
