@@ -200,6 +200,18 @@ def main():
         print("BLOCK:Commit contains Co-Authored-By: Claude — remove it.")
         return
 
+    # Blocking: a body that starts on line 2. Git joins every line before the first blank one into
+    # the subject, and in a shared checkout the amend that would fix it is blocked. Only the heredoc
+    # fed to `commit -F -` is read, since another command's heredoc can come first.
+    fed = re.search(r"\bcommit\b[^\n]*?(?:-F\s*-|--file[= ]-)[^\n]*?<<-?\s*['\"]?(\w+)['\"]?[^\n]*\n"
+                    r"(.*?)\n\1(?:\n|$)", cmd, re.DOTALL)
+    if fed:
+        fed_lines = fed.group(2).split("\n")
+        if len(fed_lines) > 1 and fed_lines[0].strip() and fed_lines[1].strip():
+            print("BLOCK:Line 2 of the commit message is not blank, so git would join it to the "
+                  "subject. Put a blank line after the subject.")
+            return
+
     # Extract commit message from heredoc or -m flag
     msg = ""
     heredoc = re.search(r"<<\s*'?EOF'?\s*\n(.*?)\nEOF", cmd, re.DOTALL)
