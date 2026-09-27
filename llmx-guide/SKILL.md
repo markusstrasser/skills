@@ -110,6 +110,7 @@ Routing table: `critique/lenses/repo-audit-plan-review.md`. Preflight via `model
 | 9 | `--mode agent -e max` inherited the 300s chat default | Fixed in llmx `99de7a5`: agent floor 1800s, max floor 3600s; zero-byte `-o` after timeout is transport failure, never reviewer evidence |
 | 9 | `--mode agent` launches in `~/.cache/llmx/lite/research` with no repo tools | Fixed 2026-07-10: mode and lite profile are separate. Workspace agent preserves caller cwd; `--lite research` stays isolated. Live-smoke with `pwd` + `git log` after changes. |
 | 10 | Claude subscription call fails before dispatch when `--max-tokens` is set | Claude CLI does not expose that control. Omit `--max-tokens`; use explicit `--timeout` and let the model's native output ceiling apply. Subscription routes fail loud rather than silently billing API fallback. |
+| 11 | Claude chat call returns rc=0 with the model's reply to a user Stop hook in place of the answer (the empty cwd skipped project settings, not user hooks) | Fixed in llmx `72866bc`: chat and `--lite research` calls pass `disableAllHooks`, and a turn injected after the answer fails loud. Workspace `--mode agent` keeps hooks. Still validate outputs by content, never by rc alone. |
 
 Legacy: `--lite bare` still works but `--subscription --mode chat` is canonical.
 `--lite research` remains the isolated research-MCP profile for Claude/Codex.
