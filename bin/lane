@@ -9,6 +9,7 @@ usage() {
   cat >&2 <<'EOF'
 usage:
   lane run <name> --repo <path> --brief <file> [--worker codex|claude] [--no-worktree] [--base <ref>]
+      (claude worker: LANE_CLAUDE_MODEL=<m> LANE_CLAUDE_EFFORT=<e> env override the default opus/default effort)
   lane review <name> [--model <m>] [--effort <e>] [--focus <file>] [--out <file>] [--bg]
   lane ls [--stall-min <minutes>]
   lane stop <name>
@@ -440,7 +441,7 @@ launch_worker() {
         caffeinate -i codex exec -m gpt-6-sol -s workspace-write --add-dir "$HOME/.cache/uv" --skip-git-repo-check "$prompt" < /dev/null
         ;;
       claude)
-        caffeinate -i env -u ANTHROPIC_API_KEY claude -p --model opus --output-format stream-json --verbose "$prompt" < /dev/null
+        caffeinate -i env -u ANTHROPIC_API_KEY claude -p --model "${LANE_CLAUDE_MODEL:-opus}" ${LANE_CLAUDE_EFFORT:+--effort "$LANE_CLAUDE_EFFORT"} --output-format stream-json --verbose "$prompt" < /dev/null
         ;;
       fake)
         if [ "$resume_mode" = true ]; then printf "%s\n" "$prompt"; fi
