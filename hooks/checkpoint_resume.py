@@ -170,6 +170,16 @@ def select_for_read(claude_dir, current_session, now=None):
         if chosen["curated"]
         else []
     )
+    # The writer diverts beside a fresh hand-written file with no session stamp, but
+    # that file never joins `own`; name it so the resume does not silently pass it by.
+    unstamped_curated = [
+        c
+        for c in cands
+        if c is not chosen
+        and c["curated"]
+        and not c["session"]
+        and (now - c["mtime"]) / 3600.0 < DEFAULT_REMNANT_AGE_H
+    ]
     age_hours = max(0.0, (now - chosen["mtime"]) / 3600.0)
     is_current = bool(current_session and chosen["session"] == current_session)
     return {
@@ -184,6 +194,9 @@ def select_for_read(claude_dir, current_session, now=None):
         if extract_siblings
         else None,
         "sibling_count": len(cands) - 1,
+        "unstamped_curated": unstamped_curated[0]["basename"]
+        if unstamped_curated
+        else None,
     }
 
 
@@ -219,6 +232,12 @@ def resume_message(claude_dir, current_session, now=None):
             " (%.1fh old), NOT this resuming session — a handoff from another/earlier session"
             " that may be stale. Verify every 'done' claim against `git log --oneline -15`"
             " before acting on it." % (path, sess, age)
+        )
+    if sel["unstamped_curated"]:
+        msg += (
+            " A hand-written `%s` with no session stamp sits beside it; if it is this"
+            " session's brief, read it too and add a `<!-- session: <id> -->` line to"
+            " its header." % os.path.join(os.path.dirname(path), sel["unstamped_curated"])
         )
     return msg
 

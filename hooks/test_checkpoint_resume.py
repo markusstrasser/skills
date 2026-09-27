@@ -304,6 +304,47 @@ def test_writer_diverts_beside_a_curated_own_checkpoint(tmp_path):
     assert sel["extract_sibling"] == "checkpoint-autogen.md"
 
 
+def test_writer_diverts_beside_an_unstamped_hand_written_checkpoint(tmp_path):
+    """Regression (immigration-research 2026-09-27 22:43): no session stamp and no hook
+    signature must still count as curated; the extract goes beside it, never over it."""
+    claude_dir = tmp_path / "proj" / ".claude"
+    claude_dir.mkdir(parents=True)
+    curated = claude_dir / "checkpoint.md"
+    curated.write_text("# Resume Checkpoint — hand-written brief\n\n## NEXT\n- integrate the lanes\n\n---\n\n"
+                       "## PEER SESSION section\n- keep me\n")
+    before = curated.read_text()
+
+    _run_writer(tmp_path, "sess-ME")
+
+    assert curated.read_text() == before
+    extract = claude_dir / "checkpoint-autogen.md"
+    assert extract.is_file()
+    assert "Written by PreCompact hook at" in extract.read_text()
+    # The reader still points the resume at the stamped extract, but names the brief.
+    sel = cr.select_for_read(str(claude_dir), "sess-ME")
+    assert sel["basename"] == "checkpoint-autogen.md"
+    assert sel["unstamped_curated"] == "checkpoint.md"
+    assert str(curated) in cr.resume_message(str(claude_dir), "sess-ME")
+
+
+def test_writer_reclaims_a_stale_unstamped_hand_written_checkpoint(tmp_path):
+    """Negative control: an unstamped file past the remnant age is a dead remnant, not a
+    brief to protect; the writer reclaims it, and the reader no longer names it."""
+    claude_dir = tmp_path / "proj" / ".claude"
+    claude_dir.mkdir(parents=True)
+    stale = claude_dir / "checkpoint.md"
+    stale.write_text("# Resume Checkpoint — a dead session's brief\n\n## NEXT\n- old work\n")
+    _touch_mtime(str(stale), time.time() - (cr.DEFAULT_REMNANT_AGE_H + 1) * 3600)
+
+    _run_writer(tmp_path, "sess-ME")
+
+    assert not (claude_dir / "checkpoint-autogen.md").exists()
+    text = stale.read_text()
+    assert "Written by PreCompact hook at" in text
+    assert "old work" not in text
+    assert cr.select_for_read(str(claude_dir), "sess-ME")["unstamped_curated"] is None
+
+
 def test_writer_still_overwrites_its_own_signed_checkpoint(tmp_path):
     """Negative control: the hook's own fresh, unedited file keeps the overwrite path."""
     claude_dir = tmp_path / "proj" / ".claude"

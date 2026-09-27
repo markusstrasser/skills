@@ -367,7 +367,14 @@ def main():
             if _m and session and _m.group(1) != session:
                 if not is_stale_remnant(checkpoint_path, session):
                     checkpoint_path = os.path.join(checkpoint_dir, "checkpoint-autogen.md")
-            elif _m and session and is_curated(checkpoint_path):
+            # UNSTAMPED-CURATED (immigration-research 2026-09-27 22:43): this guard used to
+            # require a session stamp, so a hand-written checkpoint.md without one was
+            # overwritten, taking a curated brief and a peer session's section with it.
+            # An unstamped file has no known owner: like a peer's, it is protected while
+            # fresh and reclaimed once it is a stale remnant.
+            elif is_curated(checkpoint_path) and (
+                _m or not is_stale_remnant(checkpoint_path, session)
+            ):
                 # CURATED-CLOBBER GUARD (genomics 2026-09-07 02:31): the session's OWN
                 # checkpoint.md was hand-written (no hook signature, or edited after the
                 # stamped write) and carried a Pending Tasks list the transcript extract
