@@ -11,9 +11,11 @@ two mined lists and does the one whose trigger holds:
 A per-project ledger rotates the deck, never-drawn steps first and then the oldest, so
 over a project every step gets considered, not just the agent's few favourites.
 
-  operator-deck next [--n 3] [--peek]        draw candidates (records them unless --peek)
+  operator-deck next [--n 3] [--peek] [--pool think|all]
+                                             draw candidates (records them unless --peek);
+                                             think, the default, skips process steps
   operator-deck log ID... --outcome applied|na [--note TEXT]
-  operator-deck status                       coverage of the deck on this project
+  operator-deck status [--pool think|all]    coverage of the deck on this project
   operator-deck list                         every step with its id
   operator-deck --selftest
 
@@ -49,6 +51,22 @@ MOVE_RE = re.compile(
 )
 FRAMES_END = "## Question forms"
 MOVES_END = ("## Domain packs", "## Habits")
+
+# Steps about running agents, the workflow, engineering hygiene and report style. Agents do
+# these unprompted, so draws skip them and the deck serves thinking prompts and hole-poking
+# (operator, 2026-09-28: "it was more about thinking prompts and poking holes").
+# `next --pool all` still draws them.
+PROCESS_GROUPS = {"Running the research", "Working with agents", "Systems craft"}
+PROCESS_IDS = {"m-report-outcomes-before-activity", "m-end-on-the-next-test",
+               "m-explain-it-plainly", "m-make-every-chart-answer-a-question"}
+
+
+def is_process(d: dict) -> bool:
+    return d["group"] in PROCESS_GROUPS or d["id"] in PROCESS_IDS
+
+
+def pool(deck: list[dict], name: str = "think") -> list[dict]:
+    return deck if name == "all" else [d for d in deck if not is_process(d)]
 
 
 def slug(name: str) -> str:
@@ -95,6 +113,9 @@ def load_deck(frames: Path = FRAMES, moves: Path = MOVES) -> list[dict]:
     dup = {i for i in ids if ids.count(i) > 1}
     if dup or not any(d["kind"] == "frame" for d in deck) or not any(d["kind"] == "move" for d in deck):
         raise SystemExit(f"operator-deck: bad deck (duplicate ids {sorted(dup)} or an empty source)")
+    stale = (PROCESS_GROUPS - {d["group"] for d in deck}) | (PROCESS_IDS - set(ids))
+    if stale:
+        raise SystemExit(f"operator-deck: the process filter names steps or groups not in the deck: {sorted(stale)}")
     return deck
 
 
@@ -143,14 +164,16 @@ def order(deck: list[dict], ledger: list[dict], project: str) -> list[dict]:
     return sorted(deck, key=lambda d: (last.get(d["id"], 0.0), rank(d)))
 
 
-def cmd_next(deck: list[dict], project: str, n: int, peek: bool) -> str:
+def cmd_next(deck: list[dict], project: str, n: int, peek: bool, pool_name: str = "think") -> str:
+    cands = pool(deck, pool_name)
     ledger = read_ledger(project)
-    picks = order(deck, ledger, project)[:n]
-    seen = {r["id"] for r in ledger} & {d["id"] for d in deck}
+    picks = order(cands, ledger, project)[:n]
+    seen = {r["id"] for r in ledger} & {d["id"] for d in cands}
     if not peek:
         now = time.time()
         append(project, [{"ts": now, "id": d["id"], "outcome": "drawn"} for d in picks])
-    out = [f"Operator deck · {project} · {len(seen)}/{len(deck)} steps drawn so far",
+    scope = "" if pool_name == "all" else " (thinking prompts and hole-poking; process steps skipped)"
+    out = [f"Operator deck · {project} · {len(seen)}/{len(cands)} steps drawn so far{scope}",
            "Do the step whose When holds now (at most one or two); if none holds, say so in one line.",
            f"Then log it: operator-deck log <id> --outcome applied --note \"<what you did>\" "
            f"(and --outcome na for ones you checked that don't apply)", ""]
@@ -170,7 +193,8 @@ def cmd_log(deck: list[dict], project: str, ids: list[str], outcome: str, note: 
     return f"logged {len(ids)} × {outcome} for {project}"
 
 
-def cmd_status(deck: list[dict], project: str) -> str:
+def cmd_status(deck: list[dict], project: str, pool_name: str = "think") -> str:
+    deck = pool(deck, pool_name)
     ledger = [r for r in read_ledger(project) if r["id"] in {d["id"] for d in deck}]
     drawn = {r["id"] for r in ledger}
     applied = [r for r in ledger if r["outcome"] == "applied"]
@@ -190,8 +214,10 @@ def cmd_list(deck: list[dict]) -> str:
     for d in deck:
         if d["group"] != group:
             group = d["group"]
-            out.append(f"\n{d['kind']}s · {group}")
-        out.append(f"  {d['id']:52s} {d['name']}")
+            skip = "  [process: next skips these]" if group in PROCESS_GROUPS else ""
+            out.append(f"\n{d['kind']}s · {group}{skip}")
+        mark = "  [process]" if d["id"] in PROCESS_IDS else ""
+        out.append(f"  {d['id']:52s} {d['name']}{mark}")
     return "\n".join(out).lstrip("\n")
 
 
@@ -199,19 +225,25 @@ def selftest() -> int:
     deck = load_deck()
     assert len([d for d in deck if d["kind"] == "move"]) >= 50, "moves parse"
     assert len([d for d in deck if d["kind"] == "frame"]) >= 25, "frames parse"
+    think = pool(deck)
+    process = {d["id"] for d in deck} - {d["id"] for d in think}
+    assert process and len(think) >= 60, "the process filter removes some steps, not most"
     with tempfile.TemporaryDirectory() as tmp:
         os.environ["OPERATOR_DECK_HOME"] = tmp
-        first = order(deck, [], "t")[:3]
+        first = order(think, [], "t")[:3]
         cmd_next(deck, "t", 3, peek=False)
-        second = order(deck, read_ledger("t"), "t")[:3]
+        second = order(think, read_ledger("t"), "t")[:3]
         assert not {d["id"] for d in first} & {d["id"] for d in second}, "drawn steps rotate to the back"
-        for _ in range(len(deck)):
+        for _ in range(len(think)):
             cmd_next(deck, "t", 1, peek=False)
-        assert {r["id"] for r in read_ledger("t")} == {d["id"] for d in deck}, "a full rotation covers the deck"
+        assert {r["id"] for r in read_ledger("t")} == {d["id"] for d in think}, \
+            "a full rotation covers the thinking pool and never draws a process step"
+        cmd_next(deck, "t", len(process), peek=False, pool_name="all")
+        assert process <= {r["id"] for r in read_ledger("t")}, "--pool all draws the process steps"
         cmd_log(deck, "t", [first[0]["id"]], "applied", "x")
         assert "applied" in cmd_status(deck, "t")
     print(f"PASS  {len(deck)} steps ({sum(d['kind'] == 'move' for d in deck)} moves, "
-          f"{sum(d['kind'] == 'frame' for d in deck)} frames)")
+          f"{sum(d['kind'] == 'frame' for d in deck)} frames; {len(think)} drawn by default)")
     return 0
 
 
@@ -225,6 +257,9 @@ def main() -> int:
         if name == "next":
             p.add_argument("--n", type=int, default=3)
             p.add_argument("--peek", action="store_true", help="show without recording a draw")
+        if name in ("next", "status"):
+            p.add_argument("--pool", choices=("think", "all"), default="think",
+                           help="think (default) skips process steps; all includes them")
         if name == "log":
             p.add_argument("ids", nargs="+")
             p.add_argument("--outcome", choices=("applied", "na"), required=True)
@@ -238,11 +273,11 @@ def main() -> int:
     deck = load_deck()
     project = args.project or default_project()
     if args.cmd == "next":
-        print(cmd_next(deck, project, max(1, args.n), args.peek))
+        print(cmd_next(deck, project, max(1, args.n), args.peek, args.pool))
     elif args.cmd == "log":
         print(cmd_log(deck, project, args.ids, args.outcome, args.note))
     elif args.cmd == "status":
-        print(cmd_status(deck, project))
+        print(cmd_status(deck, project, args.pool))
     else:
         print(cmd_list(deck))
     return 0

@@ -128,7 +128,9 @@ explicitly without a note.
 steps instead of waiting for him to steer. It parses the steps in place from
 `research/references/follow-up-moves.md` and `references/operator-frames.md`.
 A per-project ledger (`~/.claude/operator-deck/<project>.jsonl`) rotates them,
-never-drawn first, so every step gets considered over a project:
+never-drawn first, so every step gets considered over a project. Draws are thinking
+prompts and hole-poking; steps about running agents, the workflow, systems hygiene
+and report style are skipped, since agents do those unprompted (`--pool all` includes them):
 
 ```bash
 operator-deck next            # the next three steps for this repo; do the one whose trigger holds

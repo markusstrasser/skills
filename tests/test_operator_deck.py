@@ -46,3 +46,15 @@ def test_draws_rotate_and_log(tmp_path: Path) -> None:
     assert not any(f"[{i}]" in second for i in ids)
     run("log", ids[0], "--outcome", "applied", "--note", "done", "--project", "p", home=tmp_path)
     assert "1 applied" in run("status", "--project", "p", home=tmp_path)
+
+
+def test_draws_skip_process_steps(tmp_path: Path) -> None:
+    # The deck serves thinking prompts and hole-poking. Steps about running agents, the
+    # workflow or report style stay listed but are drawn only with --pool all.
+    out = run("next", "--project", "p", "--n", "500", home=tmp_path)
+    assert "[m-what-else-must-be-true]" in out
+    assert "[f-run-agents-as-a-staffed-organization]" not in out
+    assert "[m-make-the-operator-s-judgment-cheap]" not in out
+    assert "[m-explain-it-plainly]" not in out
+    everything = run("next", "--project", "q", "--n", "500", "--pool", "all", home=tmp_path)
+    assert "[f-run-agents-as-a-staffed-organization]" in everything
