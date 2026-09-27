@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+"""operator-deck — let an agent prompt itself with the operator's usual thought steps.
+
+Instead of waiting for the operator to steer every few hours, an agent at a checkpoint
+(a result, a finished task, a loop tick, an idle stop) draws the next few steps from his
+two mined lists and does the one whose trigger holds:
+
+  references/operator-frames.md           how he thinks: lenses, taste, ambition (f-*)
+  research/references/follow-up-moves.md  what he asks for after a result (m-*)
+
+A per-project ledger rotates the deck, never-drawn steps first and then the oldest, so
+over a project every step gets considered, not just the agent's few favourites.
+
+  operator-deck next [--n 3] [--peek]        draw candidates (records them unless --peek)
+  operator-deck log ID... --outcome applied|na [--note TEXT]
+  operator-deck status                       coverage of the deck on this project
+  operator-deck list                         every step with its id
+  operator-deck --selftest
+
+--project defaults to the name of the current git repository (worktrees map to their
+main repository). Ledger: ~/.claude/operator-deck/<project>.jsonl, append-only
+(override the directory with OPERATOR_DECK_HOME).
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+SKILLS = Path(__file__).resolve().parent.parent
+FRAMES = SKILLS / "references" / "operator-frames.md"
+MOVES = SKILLS / "research" / "references" / "follow-up-moves.md"
+
+FRAME_RE = re.compile(
+    r"^- \*\*(?P<name>.+?)\*\* (?P<claim>.*?) \*When:\* (?P<when>.*?) \*Do:\* (?P<do>.*?)"
+    r" \*Misfire:\* (?P<misfire>.*?)(?: \*Seen in:\* .*)?$"
+)
+MOVE_RE = re.compile(
+    r"^- \*\*(?P<name>.+?)\*\* `(?P<mode>auto|propose|operator)`: (?P<do>.*?) \*When:\* (?P<when>.*?)"
+    r"(?: \*E\.g\.\* .*)?$"
+)
+FRAMES_END = "## Question forms"
+MOVES_END = ("## Domain packs", "## Habits")
+
+
+def slug(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:48].rstrip("-")
+
+
+def parse_frames(text: str) -> list[dict]:
+    items, family = [], None
+    for line in text.splitlines():
+        if line.startswith(FRAMES_END):
+            break
+        if line.startswith("## "):
+            family = line[3:].strip()
+        elif line.startswith("- **") and family:
+            m = FRAME_RE.match(line)
+            if not m:
+                raise SystemExit(f"operator-deck: frames line out of format ({FRAMES}): {line[:90]}")
+            name = m["name"].rstrip(".")
+            items.append({"id": "f-" + slug(name), "kind": "frame", "group": family, "name": name,
+                          "when": m["when"], "do": m["do"], "mode": ""})
+    return items
+
+
+def parse_moves(text: str) -> list[dict]:
+    items, section = [], None
+    for line in text.splitlines():
+        if line.startswith(MOVES_END):
+            break
+        if line.startswith("## "):
+            section = line[3:].strip()
+        elif line.startswith("- **") and section:
+            m = MOVE_RE.match(line)
+            if not m:
+                raise SystemExit(f"operator-deck: moves line out of format ({MOVES}): {line[:90]}")
+            name = m["name"].rstrip(".")
+            items.append({"id": "m-" + slug(name), "kind": "move", "group": section, "name": name,
+                          "when": m["when"], "do": m["do"], "mode": m["mode"]})
+    return items
+
+
+def load_deck(frames: Path = FRAMES, moves: Path = MOVES) -> list[dict]:
+    deck = parse_moves(moves.read_text()) + parse_frames(frames.read_text())
+    ids = [d["id"] for d in deck]
+    dup = {i for i in ids if ids.count(i) > 1}
+    if dup or not any(d["kind"] == "frame" for d in deck) or not any(d["kind"] == "move" for d in deck):
+        raise SystemExit(f"operator-deck: bad deck (duplicate ids {sorted(dup)} or an empty source)")
+    return deck
+
+
+def default_project() -> str:
+    try:
+        common = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                                capture_output=True, text=True, timeout=3).stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        common = ""
+    if common.endswith("/.git"):
+        return Path(common).parent.name
+    return Path.cwd().name
+
+
+def ledger_path(project: str) -> Path:
+    home = Path(os.environ.get("OPERATOR_DECK_HOME", Path.home() / ".claude" / "operator-deck"))
+    return home / f"{slug(project) or 'default'}.jsonl"
+
+
+def read_ledger(project: str) -> list[dict]:
+    p = ledger_path(project)
+    if not p.exists():
+        return []
+    rows = []
+    for line in p.read_text().splitlines():
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return rows
+
+
+def append(project: str, rows: list[dict]) -> None:
+    p = ledger_path(project)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("a") as f:
+        for r in rows:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+
+def order(deck: list[dict], ledger: list[dict], project: str) -> list[dict]:
+    last: dict[str, float] = {}
+    for r in ledger:
+        last[r["id"]] = max(last.get(r["id"], 0.0), float(r.get("ts", 0)))
+    rank = lambda d: hashlib.sha256(f"{project}:{d['id']}".encode()).hexdigest()  # stable per-project shuffle
+    return sorted(deck, key=lambda d: (last.get(d["id"], 0.0), rank(d)))
+
+
+def cmd_next(deck: list[dict], project: str, n: int, peek: bool) -> str:
+    ledger = read_ledger(project)
+    picks = order(deck, ledger, project)[:n]
+    seen = {r["id"] for r in ledger} & {d["id"] for d in deck}
+    if not peek:
+        now = time.time()
+        append(project, [{"ts": now, "id": d["id"], "outcome": "drawn"} for d in picks])
+    out = [f"Operator deck · {project} · {len(seen)}/{len(deck)} steps drawn so far",
+           "Do the step whose When holds now (at most one or two); if none holds, say so in one line.",
+           f"Then log it: operator-deck log <id> --outcome applied --note \"<what you did>\" "
+           f"(and --outcome na for ones you checked that don't apply)", ""]
+    for i, d in enumerate(picks, 1):
+        tag = f"{d['kind']} · {d['group']}" + (f" · {d['mode']}" if d["mode"] else "")
+        out += [f"{i}. [{d['id']}] {d['name']}  ({tag})", f"   When: {d['when']}", f"   Do: {d['do']}"]
+    return "\n".join(out)
+
+
+def cmd_log(deck: list[dict], project: str, ids: list[str], outcome: str, note: str) -> str:
+    known = {d["id"] for d in deck}
+    bad = [i for i in ids if i not in known]
+    if bad:
+        raise SystemExit(f"operator-deck: unknown id(s) {bad}; see `operator-deck list`")
+    now = time.time()
+    append(project, [{"ts": now, "id": i, "outcome": outcome, "note": note} for i in ids])
+    return f"logged {len(ids)} × {outcome} for {project}"
+
+
+def cmd_status(deck: list[dict], project: str) -> str:
+    ledger = [r for r in read_ledger(project) if r["id"] in {d["id"] for d in deck}]
+    drawn = {r["id"] for r in ledger}
+    applied = [r for r in ledger if r["outcome"] == "applied"]
+    na = {r["id"] for r in ledger if r["outcome"] == "na"}
+    out = [f"Operator deck · {project}: {len(drawn)}/{len(deck)} drawn, {len({r['id'] for r in applied})} applied, "
+           f"{len(na)} checked and not applicable, {len(deck) - len(drawn)} never drawn"]
+    for kind in ("move", "frame"):
+        tot = [d for d in deck if d["kind"] == kind]
+        out.append(f"  {kind}s: {sum(d['id'] in drawn for d in tot)}/{len(tot)} drawn")
+    for r in applied[-5:]:
+        out.append(f"  applied {time.strftime('%Y-%m-%d', time.localtime(r['ts']))} {r['id']}: {r.get('note', '')[:90]}")
+    return "\n".join(out)
+
+
+def cmd_list(deck: list[dict]) -> str:
+    out, group = [], None
+    for d in deck:
+        if d["group"] != group:
+            group = d["group"]
+            out.append(f"\n{d['kind']}s · {group}")
+        out.append(f"  {d['id']:52s} {d['name']}")
+    return "\n".join(out).lstrip("\n")
+
+
+def selftest() -> int:
+    deck = load_deck()
+    assert len([d for d in deck if d["kind"] == "move"]) >= 50, "moves parse"
+    assert len([d for d in deck if d["kind"] == "frame"]) >= 25, "frames parse"
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["OPERATOR_DECK_HOME"] = tmp
+        first = order(deck, [], "t")[:3]
+        cmd_next(deck, "t", 3, peek=False)
+        second = order(deck, read_ledger("t"), "t")[:3]
+        assert not {d["id"] for d in first} & {d["id"] for d in second}, "drawn steps rotate to the back"
+        for _ in range(len(deck)):
+            cmd_next(deck, "t", 1, peek=False)
+        assert {r["id"] for r in read_ledger("t")} == {d["id"] for d in deck}, "a full rotation covers the deck"
+        cmd_log(deck, "t", [first[0]["id"]], "applied", "x")
+        assert "applied" in cmd_status(deck, "t")
+    print(f"PASS  {len(deck)} steps ({sum(d['kind'] == 'move' for d in deck)} moves, "
+          f"{sum(d['kind'] == 'frame' for d in deck)} frames)")
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--selftest", action="store_true")
+    sub = ap.add_subparsers(dest="cmd")
+    for name in ("next", "log", "status", "list"):
+        p = sub.add_parser(name)
+        p.add_argument("--project", default="")
+        if name == "next":
+            p.add_argument("--n", type=int, default=3)
+            p.add_argument("--peek", action="store_true", help="show without recording a draw")
+        if name == "log":
+            p.add_argument("ids", nargs="+")
+            p.add_argument("--outcome", choices=("applied", "na"), required=True)
+            p.add_argument("--note", default="")
+    args = ap.parse_args()
+    if args.selftest:
+        return selftest()
+    if not args.cmd:
+        ap.print_help()
+        return 2
+    deck = load_deck()
+    project = args.project or default_project()
+    if args.cmd == "next":
+        print(cmd_next(deck, project, max(1, args.n), args.peek))
+    elif args.cmd == "log":
+        print(cmd_log(deck, project, args.ids, args.outcome, args.note))
+    elif args.cmd == "status":
+        print(cmd_status(deck, project))
+    else:
+        print(cmd_list(deck))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -14,7 +14,7 @@ Don't run the whole list, don't fire a move whose trigger is absent, and don't c
 
 Treat this as a menu, not a predictor. In a 2026-09-26 held-out test (54 real checkpoints), loading this file changed which moves the agent proposed, but not how often one of them matched the operator's actual next move: 11% with the file vs 9% without. Whether the extra moves are the ones he values is still his call.
 
-For the lenses, tastes and ambitions behind these moves, see [operator frames](../../references/operator-frames.md).
+For the lenses, tastes and ambitions behind these moves, see [operator frames](../../references/operator-frames.md). In long or unattended work, `operator-deck next` draws from both lists at each checkpoint and rotates them per project, so the agent prompts itself instead of waiting for him.
 
 ## Generators: new angles
 

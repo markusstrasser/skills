@@ -4,7 +4,9 @@ How the operator thinks: the lenses, models, tastes and ambitions behind his req
 
 **When to read:** at the start of a project or plan for him; before a report or recommendation he will judge; in an autonomous generate or Dreamer pass on his projects; when choosing between designs on his behalf.
 
-**How to use:** pick the one to three signatures whose *When* holds right now, apply the *Do*, and name the lens in plain words only if it changed your recommendation. Before reporting, ask yourself the question forms that fit. Don't run the list, and don't quote this file back to him.
+**How to use:** pick the one to three signatures whose *When* holds right now, apply the *Do*, and name the lens in plain words only if it changed your recommendation. Before reporting, ask yourself the question forms that fit. Don't quote this file back to him.
+
+**In long or unattended work,** don't wait for him to steer. At each checkpoint (a result, a finished task, a loop tick, a stall), run `operator-deck next`: it draws the next steps from this file and the follow-up moves, rotated per project so every step gets considered over time. Do the one whose *When* holds and log it with `operator-deck log`.
 
 Treat it as a menu. A moves catalog mined the same way changed which next steps agents proposed, but did not raise how often they matched his actual next step (a held-out test on 2026-09-26: 11% vs 9%). *Seen in* counts are evidence strength: a signature that shows up in one area is a stance he holds in that project; a signature that shows up across several areas is a habit of mind.
 

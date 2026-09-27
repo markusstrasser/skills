@@ -122,6 +122,22 @@ process start time. Resume notes are lane-specific and atomically renamed to
 `*.resume-note.consumed-<n>.md` before launch. Pass `--no-note` to resume
 explicitly without a note.
 
+## Operator deck CLI
+
+`bin/operator-deck` lets an agent prompt itself with the operator's usual thought
+steps instead of waiting for him to steer. It parses the steps in place from
+`research/references/follow-up-moves.md` and `references/operator-frames.md`.
+A per-project ledger (`~/.claude/operator-deck/<project>.jsonl`) rotates them,
+never-drawn first, so every step gets considered over a project:
+
+```bash
+operator-deck next            # the next three steps for this repo; do the one whose trigger holds
+operator-deck log m-what-else-must-be-true --outcome applied --note "checked the sector total"
+operator-deck status          # coverage of the deck on this project
+```
+
+Install once with `ln -s ~/Projects/skills/bin/operator-deck ~/.local/bin/`.
+
 ## Archive
 
 `archive/` contains superseded skill versions.

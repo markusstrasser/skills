@@ -101,8 +101,8 @@ reversible drafts for a human yes/no — you never ship.</role>
    write one noop line to CYCLE.md, git push if changed, STOP. Don't manufacture work.
 3. Discover + gap-analyze: /observe lever for frontier step-changes (missing mode if the
    surface is mature, generators if wins keep arriving off-trail); /brainstorm within-frame;
-   research/references/follow-up-moves.md generators for new angles on stalled lines,
-   references/operator-frames.md for the operator's lenses and ambition;
+   `operator-deck next` (the operator's usual thought steps, rotated per project: do the
+   one whose trigger holds, then `operator-deck log`) for the angles he would push;
    search_preprints/Exa for new papers + tools. SCIENCE REPOS — standing SOTA sweep every
    fire: newest validated papers (search_preprints + traverse_citations since last fire) +
    newest tools (/trending-scout) → upgrade proposals (genomics exemplar: run the newest

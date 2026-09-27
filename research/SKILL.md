@@ -45,6 +45,7 @@ Read only the references needed for the current question:
 - **"What is missing?" / novelty / missed discovery:** [gap audits](references/gap-audits.md).
 - **Choosing the next move in a research project, or stalled:** [follow-up moves](references/follow-up-moves.md), the operator's recurring steering moves (reframes, reference-group checks, "what else must be true") with their triggers. It is a menu: pick by trigger, and don't run the list.
 - **Anticipating how the operator will frame a problem (his lenses, question forms, taste, ambition):** [operator frames](../references/operator-frames.md). Also a menu: apply the one to three whose trigger holds.
+- **Long or unattended work, at each checkpoint (a result, a finished task, a stall), instead of waiting for the operator to steer:** run `operator-deck next`. It draws his usual thought steps from both lists, rotated per project so every step gets considered; do the one whose trigger holds and log it with `operator-deck log`.
 - **A dead route, broken pointer, or other skill defect:** [known issues](references/known-issues.md), the append-only history. Log a new issue with `~/Projects/skills/hooks/append-skill-memento.sh research '<one-line issue>'`; the helper writes to that reference.
 
 $ARGUMENTS
