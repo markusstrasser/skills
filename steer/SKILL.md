@@ -12,6 +12,9 @@ Ask what the operator would push on here. If nothing comes to mind, run
 
 Apply at most one whose When fits. If none fits, say so in one line and continue.
 
+Report what you did in plain words. The move names are agent-written labels he may
+not recognize ("run agents as a staffed organization" drew "wdym?"), so don't quote them.
+
 Log it: `operator-deck log <id> --outcome applied --note "…"` (`--outcome na` for one
 you checked that doesn't apply).
 
