@@ -441,7 +441,10 @@ launch_worker() {
         caffeinate -i codex exec -m gpt-6-sol -s workspace-write --add-dir "$HOME/.cache/uv" --skip-git-repo-check "$prompt" < /dev/null
         ;;
       claude)
-        caffeinate -i env -u ANTHROPIC_API_KEY claude -p --model "${LANE_CLAUDE_MODEL:-opus}" ${LANE_CLAUDE_EFFORT:+--effort "$LANE_CLAUDE_EFFORT"} --output-format stream-json --verbose "$prompt" < /dev/null
+      # A lane launched from inside a Claude session inherits the parent identity env; without
+      # stripping it the worker reports the PARENT session_id to hooks (touched-file trackers,
+      # commit ownership guards) and could message peers as the parent (2026-09-28, cost lanes).
+        caffeinate -i env -u ANTHROPIC_API_KEY -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDECODE -u CLAUDE_PID -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_BRIDGE_SESSION_ID -u CLAUDE_CODE_SESSION_ATTENDED -u CLAUDE_EFFORT claude -p --model "${LANE_CLAUDE_MODEL:-opus}" ${LANE_CLAUDE_EFFORT:+--effort "$LANE_CLAUDE_EFFORT"} --output-format stream-json --verbose "$prompt" < /dev/null
         ;;
       fake)
         if [ "$resume_mode" = true ]; then printf "%s\n" "$prompt"; fi
