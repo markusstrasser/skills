@@ -33,7 +33,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 
 # --- config ------------------------------------------------------------------
 MAILTO = "ax.strasser@gmail.com"  # Crossref polite pool
@@ -55,9 +55,9 @@ ARX = "{http://arxiv.org/schemas/atom}"
 
 # --- extraction --------------------------------------------------------------
 # arXiv new-style IDs: YYMM.NNNNN (4-5 digit suffix), optional version.
-ARXIV_RE = re.compile(r"(?:arxiv[:\s/]*|arxiv\.org/(?:abs|pdf)/)(\d{4}\.\d{4,5})(?:v\d+)?", re.I)
+ARXIV_RE = re.compile(r"(?:arxiv[:\s/]*|arxiv\.org/(?:abs|pdf)/)(\d{4}\.\d{4,5})(?:v\d+)?", re.IGNORECASE)
 # DOIs: 10.NNNN/suffix — strip trailing markdown/sentence punctuation.
-DOI_RE = re.compile(r"10\.\d{4,9}/[^\s)\]\}\"<>]+", re.I)
+DOI_RE = re.compile(r"10\.\d{4,9}/[^\s)\]\}\"<>]+", re.IGNORECASE)
 _DOI_TRAIL = '.,;:)]}>"\''
 
 
@@ -143,17 +143,20 @@ def resolve_doi(doi: str) -> Cite:
             return c
         c.status = "hallucinated"
         return c
-    msg = json.loads(body).get("message", {})
+    try:
+        msg = json.loads(body)["message"]
+        c.title = (msg.get("title") or [""])[0]
+        parts = (msg.get("published") or msg.get("issued") or {}).get("date-parts") or [[None]]
+        c.year = str(parts[0][0]) if parts and parts[0] and parts[0][0] else ""
+        container = msg.get("container-title") or []
+        typ = msg.get("type", "")
+        if typ == "posted-content" or (not container and typ not in ("journal-article", "proceedings-article")):
+            c.venue, c.arxiv_only = "", True  # preprint
+        else:
+            c.venue = container[0] if container else typ
+    except (ValueError, TypeError, KeyError, AttributeError, IndexError) as error:
+        return Cite("doi", doi, status="unreachable", note=f"Crossref response invalid: {error}")
     c.status = "resolved"
-    c.title = (msg.get("title") or [""])[0]
-    parts = (msg.get("published") or msg.get("issued") or {}).get("date-parts") or [[None]]
-    c.year = str(parts[0][0]) if parts and parts[0] and parts[0][0] else ""
-    container = msg.get("container-title") or []
-    typ = msg.get("type", "")
-    if typ == "posted-content" or (not container and typ not in ("journal-article", "proceedings-article")):
-        c.venue, c.arxiv_only = "", True  # preprint
-    else:
-        c.venue = container[0] if container else typ
     return c
 
 
@@ -196,15 +199,26 @@ def dblp_upgrade(title: str) -> str:
     Without the title guard, DBLP's approximate search returns a wrong top hit
     (e.g. "Attention Is All You Need" -> DAC 2021), producing misleading upgrade
     suggestions. Require high token overlap so the suggestion names the SAME paper.
+    Raise Unreachable on service/response failure so callers can report degradation.
     """
     qt = _toks(title)
     if len(qt) < 2:
         return ""
+    body = _get(DBLP.format(q=urllib.parse.quote(title)))
     try:
-        body = _get(DBLP.format(q=urllib.parse.quote(title)))
-    except Unreachable:
-        return ""
-    hits = (json.loads(body).get("result", {}).get("hits", {}) or {}).get("hit") or []
+        hit_summary = json.loads(body)["result"]["hits"]
+        hits = hit_summary.get("hit", [])
+        if not isinstance(hits, list):
+            raise TypeError("hit must be a list")
+        for hit in hits:
+            info = hit["info"]
+            if not isinstance(info, dict) or any(
+                not isinstance(info.get(key, ""), str)
+                for key in ("type", "venue", "title")
+            ):
+                raise ValueError("invalid publication metadata")
+    except (ValueError, TypeError, KeyError, AttributeError) as error:
+        raise Unreachable(f"DBLP response invalid: {error}") from error
     for h in hits:
         info = h.get("info", {})
         typ = info.get("type", "")
@@ -223,7 +237,11 @@ def dblp_upgrade(title: str) -> str:
 def resolve(c_in: Cite) -> Cite:
     c = resolve_arxiv(c_in.raw) if c_in.kind == "arxiv" else resolve_doi(c_in.raw)
     if c.status == "resolved" and c.arxiv_only:
-        c.upgrade = dblp_upgrade(c.title)
+        try:
+            c.upgrade = dblp_upgrade(c.title)
+        except Unreachable as error:
+            note = f"[DEGRADED] DBLP venue-upgrade lookup unavailable: {error}"
+            c.note = "; ".join(part for part in (c.note, note) if part)
     return c
 
 
@@ -263,6 +281,11 @@ def build_report(cites: list[Cite]) -> Report:
         r.advisories.append(f"arxiv_only_ratio {r.arxiv_only_ratio:.0%} > {ARXIV_ONLY_RATIO_MAX:.0%}")
     if r.unreachable:
         r.advisories.append(f"{r.unreachable} citation(s) unreachable (not counted; re-run)")
+    degraded = sum("[DEGRADED]" in citation.note for citation in cites)
+    if degraded:
+        r.advisories.append(
+            f"[DEGRADED] {degraded} venue-upgrade lookup(s) unavailable; see --json notes"
+        )
     r.cites = [asdict(c) for c in cites]
     return r
 
@@ -272,12 +295,12 @@ def brief(r: Report) -> str:
     halluc = [c["raw"] for c in r.cites if c["status"] == "hallucinated"]
     upgrades = [(c["raw"], c["upgrade"]) for c in r.cites if c.get("upgrade")]
     lines = [
-        f"gathered: {r.resolved}/{r.total} citations resolved "
-        f"(arxiv-only {r.arxiv_only}, unreachable {r.unreachable})",
-        f"missing:  {'HALLUCINATED → ' + ', '.join(halluc) if halluc else 'none unresolvable'}"
-        f"{' | advisories: ' + '; '.join(r.advisories) if r.advisories else ''}",
-        f"findings: {'BLOCK — hallucinated>0' if r.blocking else 'PASS (blocking gate clear)'}"
-        f"; resolved_rate {r.resolved_rate:.0%}; arxiv-only {r.arxiv_only_ratio:.0%}",
+        (f"gathered: {r.resolved}/{r.total} citations resolved "
+         f"(arxiv-only {r.arxiv_only}, unreachable {r.unreachable})"),
+        (f"missing:  {'HALLUCINATED → ' + ', '.join(halluc) if halluc else 'none unresolvable'}"
+         f"{' | advisories: ' + '; '.join(r.advisories) if r.advisories else ''}"),
+        (f"findings: {'BLOCK — hallucinated>0' if r.blocking else 'PASS (blocking gate clear)'}"
+         f"; resolved_rate {r.resolved_rate:.0%}; arxiv-only {r.arxiv_only_ratio:.0%}"),
         "drill:    verify_citations.py <memo> --json",
         "next:     fix/remove hallucinated cites; venue-upgrade where DBLP shows a published version",
     ]
@@ -294,7 +317,8 @@ def main() -> int:
     args = ap.parse_args()
 
     try:
-        text = open(args.memo, encoding="utf-8").read()
+        with open(args.memo, encoding="utf-8") as memo_file:
+            text = memo_file.read()
     except OSError as e:
         print(f"cannot read memo: {e}", file=sys.stderr)
         return 2
