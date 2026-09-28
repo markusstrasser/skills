@@ -24,6 +24,7 @@ cleanup() {
   if [ -n "$UNRELATED_PID" ]; then
     kill "$UNRELATED_PID" >/dev/null 2>&1 || true
   fi
+  chmod -R u+rwX "$TEST_TMP" 2>/dev/null || true
   rm -rf "$TEST_TMP"
 }
 trap cleanup EXIT INT TERM
@@ -383,6 +384,12 @@ reap_output=$("$LANE" reap first)
 grep -q '^lane: git diff --stat' <<<"$reap_output" || fail "reap did not print diff stat"
 grep -q '^scratch.txt$' <<<"$reap_output" || fail "reap did not list untracked files"
 [ -d "$REPO/.claude/worktrees/codex-first" ] || fail "non-forced reap removed worktree"
+# A lane's pre-commit leaves read-only trees; a bare `git worktree remove --force`
+# cannot delete inside them and strands the files after unregistering the tree.
+readonly_tree="$REPO/.claude/worktrees/codex-first/.claude/cache/index-trees/abc"
+mkdir -p "$readonly_tree/scripts"
+printf 'x\n' >"$readonly_tree/scripts/a.py"
+chmod -R a-w "$readonly_tree"
 "$LANE" reap first --force >/dev/null
 assert_no_file "$REPO/.claude/worktrees/codex-first"
 assert_no_file "$LANE_HOME/first.json"

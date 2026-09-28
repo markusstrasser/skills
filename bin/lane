@@ -1069,6 +1069,11 @@ cmd_reap() {
   if lane_group_is_alive "$pid" "$started_epoch"; then
     wait_for_group_exit "$pid" "$started_epoch" 10 || die "refusing to reap while process group $pid is still exiting"
   fi
+  # Lanes carry read-only trees (the genomics pre-commit's .claude/cache/index-trees, source
+  # epochs). Deleting inside them needs write on each directory, and `git worktree remove`
+  # unregisters the tree before it deletes, so a permission error strands the files where no
+  # worktree listing sees them. chmod -R never follows a symlink out of the tree.
+  chmod -R u+rwX "$worktree"
   git -C "$repo" worktree remove --force "$worktree"
   if git -C "$repo" show-ref --verify --quiet "refs/heads/$branch"; then
     git -C "$repo" branch -D -- "$branch"
