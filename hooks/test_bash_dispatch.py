@@ -1055,6 +1055,29 @@ def test_cd_that_cannot_persist_or_names_a_fixed_place_passes(sandbox, command):
     assert disp["exit_code"] == 0, disp.get("block_msg")
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "curl -sfL -o /dev/null https://raw.githubusercontent.com/x/y",
+        'for f in a b; do curl -sfL -o "$(basename $f)" "https://raw.githubusercontent.com/x/$f"; done',
+    ],
+)
+def test_a_url_containing_git_is_not_a_git_command(sandbox, command):
+    """2026-09-29: a lane's githubusercontent fetch was refused as "names git". That refusal is
+    Claude Code's own worktree-isolation check (`/git/i` on any non-simple command), not a gate
+    here; this pins that every gate in this dispatcher matches git as a command, not letters."""
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
+    assert disp["exit_code"] == 0, disp.get("block_msg")
+
+
+def test_a_real_git_command_next_to_it_still_blocks(sandbox):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "git add -A"}}
+    disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
+    assert disp["exit_code"] == 2
+    assert "git add -A" in disp["block_msg"]
+
+
 def test_timeout_around_modal_container_exec_passes_the_crawl_guard(sandbox):
     """`container exec` is a bounded stream the streaming guard requires a timeout on;
     the crawl guard must not refuse that same timeout (2026-09-02 contradiction)."""
