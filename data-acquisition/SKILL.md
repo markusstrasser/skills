@@ -181,5 +181,5 @@ Symlink or copy — don't commit. `.env` is gitignored.
 ## Evidence
 
 - 18+ ad-hoc acquisition scripts across `sources/*/scripts/` — same probe/stage/register pattern reinvented.
-- `immigration-public-data-acquisition-2026-04-11.md`, `iq-sex-differences-access-playbook.md` — manual playbooks.
+- `immigration-public-data-acquisition-2026-04-11.md` (immigration-research, deleted 2026-09-29; recover with `git show 933b831:research/<file>`), `iq-sex-differences-access-playbook.md` — manual playbooks.
 - SSD corpus (`/Volumes/2TBPNY/corpus/`) not consistently checked before re-downloads.
