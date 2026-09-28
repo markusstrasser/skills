@@ -111,3 +111,18 @@ def test_turn_budget_note_is_for_research_shaped_dispatches_only():
     assert "TURN-BUDGET" not in gate("Budget 12 turns. " + research)[0]
     assert "TURN-BUDGET" in gate("Survey the literature on Tiebout sorting; write a memo file.",
                                  stype="general-purpose", description="Tiebout evidence")[0]
+
+
+def test_a_refused_report_basename_is_named(tmp_path):
+    # 2026-09-28 anki: summary_NN.md in the brief → the harness refused 14 of 15 result writes.
+    brief = tmp_path / "BRIEF.md"
+    brief.write_text("Write FC/claude/out_NN.jsonl, then write FC/claude/summary_NN.md with the verdict.\n")
+    context, _ = gate(f"Read {brief} and follow it; write your results to the files it names.",
+                      stype="general-purpose", description="Fact-check batch")
+    assert "BLOCKED FILENAME: 'summary_NN.md'" in context
+
+
+def test_an_ordinary_result_name_is_not_flagged(tmp_path):
+    context, _ = gate("Write your result to out/result_01.md, first line **Verdict:**, then reply with its path.",
+                      stype="general-purpose", description="Fact-check batch")
+    assert "BLOCKED FILENAME" not in context

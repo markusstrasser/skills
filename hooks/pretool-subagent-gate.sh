@@ -430,6 +430,20 @@ if [ -n "$PROMPT" ] && [ "${HAS_FILE_OUTPUT:-0}" -gt 0 ]; then
     fi
 fi
 
+# Check 13: result-file basename the harness refuses for subagents
+# Claude Code (seen in 2.1.283) rejects a subagent Write whose basename matches
+# /^(REPORT|SUMMARY|FINDINGS|ANALYSIS).*\.md$/i with "Subagents should return findings as text".
+# 2026-09-28 anki fact-check: a brief naming summary_NN.md lost 14 of 15 result files, and
+# Check 10's stub-first inject points the agent at the same refused path.
+if [ -n "$PROMPT" ]; then
+    BLOCKED_MD=$(printf '%s' "$CHECK_TEXT" | grep -oiE '[A-Za-z0-9_./~<>-]*\.md\b' | awk -F/ '{print $NF}' \
+        | grep -iE '^(report|summary|findings|analysis)[^/]*\.md$' | head -1 || true)
+    if [ -n "$BLOCKED_MD" ]; then
+        CHECK_IDS="${CHECK_IDS}13,"
+        WARNINGS="${WARNINGS}SUBAGENT BLOCKED FILENAME: '$BLOCKED_MD' — Claude Code refuses subagent Writes to REPORT*/SUMMARY*/FINDINGS*/ANALYSIS*.md basenames. Rename the result file (e.g. result_NN.md or <slug>.md) or take the content from the agent's reply. "
+    fi
+fi
+
 # Check 11: Audit-bound inject for filesystem scout dispatches
 if [ -n "$PROMPT" ]; then
     AUDIT_INJECT=$(printf '%s' "$INPUT" | python3 "$HOME/Projects/skills/hooks/subagent_audit_bound.py" pretool 2>/dev/null \
