@@ -448,6 +448,13 @@ launch_worker() {
         ;;
       fake)
         if [ "$resume_mode" = true ]; then printf "%s\n" "$prompt"; fi
+        # A test holds the fake RUNNING until it releases it: the bare 1 s sleep lost the
+        # race with `lane run` itself at load average 112 (2026-09-29, DONE before the check).
+        held=0
+        while [ -n "${LANE_FAKE_HOLD:-}" ] && [ ! -e "$LANE_FAKE_HOLD" ] && [ "$held" -lt 300 ]; do
+          sleep 0.1
+          held=$((held + 1))
+        done
         sleep 1
         echo hi
         ;;

@@ -190,13 +190,14 @@ assert_eq "EXIT=7" "$(<"$LANE_HOME/failure.done")" "failure marker"
 assert_eq "DONE:7" "$(state_for failure)" "failed worker state"
 
 echo "test: run reports RUNNING and creates its isolated worktree"
-run_output=$("$LANE" run first --repo "$REPO" --brief "$BRIEF" --worker fake)
+run_output=$(LANE_FAKE_HOLD="$TEST_TMP/release-first" "$LANE" run first --repo "$REPO" --brief "$BRIEF" --worker fake)
 grep -q '^watch: while ' <<<"$run_output" || fail "run did not print a watch loop"
 assert_eq "RUNNING" "$(state_for first)" "initial state"
 [ -d "$REPO/.claude/worktrees/codex-first" ] || fail "worktree was not created"
 assert_eq "codex/first" "$(git -C "$REPO/.claude/worktrees/codex-first" branch --show-current)" "worktree branch"
 printf '%s\n' scratch >"$REPO/.claude/worktrees/codex-first/scratch.txt"
 assert_eq "1" "$(dirty_for first)" "worktree dirty count"
+touch "$TEST_TMP/release-first"
 
 echo "test: completion marker and DONE state"
 wait_for_file "$LANE_HOME/first.done"
