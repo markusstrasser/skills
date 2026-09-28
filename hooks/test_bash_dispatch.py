@@ -1018,6 +1018,43 @@ def test_worktree_paths_without_persistent_cd_pass(sandbox, command):
     assert disp["exit_code"] == 0
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cd $WT && ls",
+        'cd "$WT" && git status --short',
+        "cd ${LANE}/scripts; uv run pytest -q",
+        'cd "$HOME/$SUB" && ls',
+        'cd "$(git rev-parse --show-toplevel)" && ls',
+        'echo "(" && cd $WT',
+    ],
+)
+def test_persistent_cd_to_an_unreadable_target_blocks(sandbox, command):
+    """`cd $WT && …` passed the literal .claude/worktrees check: the variable hid the path."""
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
+    assert disp["exit_code"] == 2
+    assert "persistent cwd" in disp["block_msg"]
+    assert "subshell" in disp["block_msg"]
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        '(cd "$WT" && ls)',
+        'git -C "$WT" status',
+        'cd "$HOME/Projects/genomics" && git status --short',
+        "cd ${HOME} && ls",
+        "echo \"run: cd $WT\" >/dev/null",
+        "cat >/dev/null <<'EOF'\ncd \"$ROOT\"\nEOF\nls",
+    ],
+)
+def test_cd_that_cannot_persist_or_names_a_fixed_place_passes(sandbox, command):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
+    assert disp["exit_code"] == 0, disp.get("block_msg")
+
+
 def test_timeout_around_modal_container_exec_passes_the_crawl_guard(sandbox):
     """`container exec` is a bounded stream the streaming guard requires a timeout on;
     the crawl guard must not refuse that same timeout (2026-09-02 contradiction)."""

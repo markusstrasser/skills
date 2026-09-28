@@ -2224,6 +2224,31 @@ def gate_opus_concurrency_advisory(raw_payload: str) -> GateResult:
 _WORKTREE_CD_RE = re.compile(
     r"(?:^|[\s;&|])cd\s+[\"']?([^\s\"';&|()]*\.claude/worktrees/[^\s\"';&|()]*)"
 )
+# Any persistent cd target, quoted or bare, for the dynamic check below.
+_CD_TARGET_RE = re.compile(r"(?:^|[\s;&|])cd\s+(\"[^\"]*\"|'[^']*'|[^\s\"';&|()]+)")
+# A quoted string is an argument to something else (`echo "…cd $X…"`, `ssh h 'cd $X'`,
+# `bash -c "cd $X"`) unless it directly follows cd, and none of those move this shell.
+_QUOTED_ARG_RE = re.compile(r"(\bcd\s+)?(\"[^\"]*\"|'[^']*')")
+_HOME_PREFIX_RE = re.compile(r"^(?:\$HOME|\$\{HOME\})(?=/|$)")
+# A here-document body is data (a script being written), never this shell's commands.
+_HEREDOC_RE = re.compile(r"<<-?\s*([\"']?)(\w+)\1[^\n]*\n.*?\n[ \t]*\2[ \t]*(?=\n|$)", re.DOTALL)
+
+
+def _dynamic_cd_target(cmd: str) -> str | None:
+    """The first persistent ``cd`` target whose value this guard cannot read, or None.
+
+    ``cd $WT && ...`` into a lane worktree passed the literal ``.claude/worktrees`` check:
+    the variable hides the path. Any ``$`` or backtick left after a leading ``$HOME``
+    counts; ``$HOME`` alone names a fixed place.
+    """
+    for match in _CD_TARGET_RE.finditer(cmd):
+        target = match.group(1)
+        if target[:1] in "\"'":
+            target = target[1:-1]
+        rest = _HOME_PREFIX_RE.sub("", target)
+        if "$" in rest or "`" in rest:
+            return target
+    return None
 
 
 def gate_worktree_cd_guard(raw_payload: str) -> GateResult:
@@ -2235,18 +2260,21 @@ def gate_worktree_cd_guard(raw_payload: str) -> GateResult:
     2026-09-02 in one hour: a false-empty ``git log`` bisect, a 373 MB venv built
     inside the worktree, and an edit that landed in the wrong tree. A subshell
     ``(cd <wt> && ...)`` cannot persist and passes; ``git -C <wt>`` and absolute
-    paths are the intended spellings.
+    paths are the intended spellings. A persistent ``cd`` to a target the guard
+    cannot read (``cd $WT``, ``cd "$(...)"``) blocks too, since it may be a worktree.
     """
     try:
         data = json.loads(raw_payload)
     except Exception:
         return GateResult(0, "", "")
     cmd = (data.get("tool_input") or {}).get("command", "") or ""
-    if "worktrees" not in cmd or "cd" not in cmd:
+    if "cd" not in cmd:
         return GateResult(0, "", "")
-    # A cd inside ( ... ) or $( ... ) cannot change the persistent cwd: strip
-    # parenthesised groups innermost-first before matching.
-    stripped = cmd
+    # Here-document bodies and quoted arguments of other commands go first, so a quoted
+    # paren cannot unbalance the subshell strip. A cd inside ( ... ) or $( ... ) cannot
+    # change the persistent cwd: strip parenthesised groups innermost-first before matching.
+    stripped = _HEREDOC_RE.sub(" ", cmd)
+    stripped = _QUOTED_ARG_RE.sub(lambda m: m.group(0) if m.group(1) else " ", stripped)
     for _ in range(8):
         reduced = re.sub(r"\([^()]*\)", "", stripped)
         if reduced == stripped:
@@ -2254,7 +2282,18 @@ def gate_worktree_cd_guard(raw_payload: str) -> GateResult:
         stripped = reduced
     match = _WORKTREE_CD_RE.search(stripped)
     if match is None:
-        return GateResult(0, "", "")
+        dynamic = _dynamic_cd_target(stripped)
+        if dynamic is None:
+            return GateResult(0, "", "")
+        msg = (
+            f"BLOCK: `cd {dynamic}` moves this session's persistent cwd to a path this guard "
+            "cannot read; if it is a lane worktree, every later Bash call (git log ranges, "
+            "uv run, edits) runs against the worktree, not main (genomics catalog M122).\n"
+            f'Use `git -C "{dynamic}" ...`, absolute paths, or a subshell '
+            f'`(cd "{dynamic}" && ...)`, which cannot persist.\n'
+        )
+        _log_trigger("worktree-cd-guard", "block", cmd[:80], cmd)
+        return GateResult(2, msg, "")
     target = match.group(1)
     msg = (
         f"BLOCK: `cd {target}` would leave this session's persistent cwd inside a lane "
