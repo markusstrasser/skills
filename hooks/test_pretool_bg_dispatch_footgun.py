@@ -56,6 +56,28 @@ def test_uv_run_console_entrypoint_silent():
     assert run("uv run pytest -q") == ""
 
 
+HANGING = 'import subprocess\nsubprocess.run(["codex", "--search", "exec", "-m", "m", "prompt"])\n'
+CLOSED = 'import subprocess\nsubprocess.run(["codex", "exec", "prompt"], stdin=subprocess.DEVNULL)\n'
+
+
+def test_script_spawned_codex_fires():
+    import tempfile
+    d = Path(tempfile.mkdtemp())
+    (d / "run_astra.py").write_text(HANGING)
+    # anki 2026-09-28 shape: VAR assignment + `cd $VAR/sub` + relative script
+    (d / "probe").mkdir()
+    (d / "probe" / "run_astra.py").write_text(HANGING)
+    assert "spawns `codex exec`" in run(f"python3 {d}/run_astra.py 5")
+    assert "spawns `codex exec`" in run(f"F={d} && cd $F/probe && timeout 60 uv run python3 run_astra.py 1")
+
+
+def test_script_spawned_codex_closed_silent():
+    import tempfile
+    d = Path(tempfile.mkdtemp())
+    (d / "run_astra.py").write_text(CLOSED)
+    assert run(f"python3 {d}/run_astra.py 5") == ""
+
+
 def test_foreground_silent():
     assert run("codex exec 'x'", bg=False) == ""
 

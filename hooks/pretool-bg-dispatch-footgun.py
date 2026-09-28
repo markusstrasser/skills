@@ -14,6 +14,8 @@ Fires ONLY when tool_input.run_in_background is true. Two independent checks, ei
       blocks on stdin EOF that never comes (silent hang). Also nudges off deprecated `--full-auto`.
   (b) relative-interpreter-path: an interpreter (node / python[3] / `uv run <tool>`) invoked on a
       RELATIVE path with no leading `cd ` → bg shells do not inherit the foreground cwd.
+  (c) script-spawned-codex: the command runs a script whose source spawns `codex exec` with no
+      stdin close (DEVNULL / stdin= / /dev/null) → same hang, invisible to (a).
 
 Advisory (hookSpecificOutput.additionalContext); fail-open on any parse error. Reversibility:
 delete the hook + registration.
@@ -23,6 +25,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from pathlib import Path
 
 
 def _strip_quotes(cmd: str) -> str:
@@ -46,6 +49,42 @@ def check_codex_exec(cmd: str) -> str | None:
         "redirect output to a log file, and never pipe through `| tail` (buffers until EOF, so a "
         "kill swallows all output)." + extra
     )
+
+
+_ASSIGN = re.compile(r"(?:^|&&|;|\s)([A-Za-z_]\w*)=(\"[^\"]*\"|'[^']*'|[^\s;&|]+)")
+_SCRIPT = re.compile(r"(?:^|\s)([^\s;&|<>'\"]+\.(?:py|sh|mjs|js))(?=\s|$|;|&|\))")
+_CODEX_ARGV = re.compile(r"""["']codex["'].{0,200}?["']exec["']|\bcodex\s+exec\b""", re.S)
+_STDIN_CLOSED = re.compile(r"DEVNULL|stdin\s*=|/dev/null|\binput\s*=")
+
+
+def check_script_spawned_codex(cmd: str, cwd: str | None) -> str | None:
+    """Warn if a background command runs a script that spawns `codex exec` without closing stdin.
+
+    check_codex_exec only sees the command text; a wrapper script (subprocess.run(["codex", "exec",
+    ...])) inherits the background shell's never-closing stdin and hangs the same way (anki fact-check
+    probe 2026-09-28). Resolves literal paths, `VAR=value` assignments and the last `cd` target.
+    """
+    env_vars = {k: v.strip("\"'") for k, v in _ASSIGN.findall(cmd)}
+    expanded = re.sub(r"\$\{?([A-Za-z_]\w*)\}?", lambda m: env_vars.get(m.group(1), m.group(0)), cmd)
+    cds = re.findall(r"(?:^|&&|;)\s*cd\s+([^\s;&|]+)", expanded)
+    base = Path(cds[-1].strip("\"'")).expanduser() if cds else Path(cwd or ".")
+    for token in _SCRIPT.findall(expanded):
+        p = Path(token).expanduser()
+        p = p if p.is_absolute() else base / p
+        try:
+            if not p.is_file() or p.stat().st_size > 1_000_000:
+                continue
+            text = p.read_text(errors="ignore")
+        except OSError:
+            continue
+        if _CODEX_ARGV.search(text) and not _STDIN_CLOSED.search(text):
+            return (
+                f"background script `{p.name}` spawns `codex exec` without closing stdin — the child "
+                "inherits the background shell's stdin and hangs on 'Reading additional input from "
+                "stdin...'. Pass stdin=subprocess.DEVNULL (or `< /dev/null`) in the script, or launch "
+                "via bgrun (it closes stdin)."
+            )
+    return None
 
 
 # interpreter followed by a token that does NOT begin with / ~ $ - (i.e. a relative path/arg)
@@ -85,7 +124,9 @@ def main() -> None:
         sys.exit(0)
     cmd = ti.get("command", "") or ""
     stripped = _strip_quotes(cmd)
-    warnings = [w for w in (check_codex_exec(stripped), check_relative_path(stripped)) if w]
+    checks = (check_codex_exec(stripped), check_relative_path(stripped),
+              check_script_spawned_codex(cmd, env.get("cwd")))
+    warnings = [w for w in checks if w]
     if not warnings:
         sys.exit(0)
     msg = "[bg-dispatch-footgun] " + "  ".join(warnings)
