@@ -26,6 +26,21 @@ renewal; `_Client._close` can still clear another cached client. This host SDK
 change leaves the declared genomics toolchain identities unchanged. It does not
 establish a fix for Volume block-HTTP 404s or replace live rehearsal evidence.
 
+## Platform changelog 2026-08-14 → 09-17 (reviewed 2026-09-29)
+
+Dashboard/product changes only; no SDK release. PyPI stable is still 1.5.5
+(1.5.6 exists only as `.dev` builds), and `modal changelog --newer` is empty.
+The genomics pin stays unchanged.
+
+| Change | Relevance here |
+|---|---|
+| Usage page: network egress **per app** (09-17) | Use it to attribute egress cost (B2 publish, `volume get` relays) to a specific app before guessing. It is a dashboard view; no SDK/billing-report field has been verified. |
+| Container Metrics: custom-range zoom (09-11), synced time cursor (09-10) | Makes it easier to line up memory/CPU charts across stages when a worker dies. It still does not show worker progress; see the worker-written-surface rule. |
+| Container inputs view: filter by date/status, shareable URLs (09-02) | Quick way to find failed/preempted inputs for one app. Receipts remain the authority. |
+| Sandboxes: Exit Reasons chart separating memory-limit OOM from memory-manager OOM (08-26); per-Sandbox CPU/mem/pressure charts (09-02); Sidecars public alpha (08-28); `MODAL_SANDBOX_V2=1` opt-in to V2 (08-14) | Genomics uses `modal.Sandbox` only in the image-proof scripts (`genome_kernel_*_proof.py`, `modal_probe.py`), so V2 has not been tested there. Before flipping V2 globally, run one image proof with the variable set. Stages are Functions, so none of these charts cover them. |
+| Unauthenticated web endpoint controls (filter, audit, per-env block) (09-15) | Genomics has no web endpoints. This matters only if an `@app.server` status endpoint ships later. |
+| RBAC user groups/SCIM (09-15), SSO XML metadata (09-14), configurable default roles in Restricted Envs (08-19), per-app/env Slack notification routing (09-02), Proxy region choice (08-31), "Last deployed by" filter (08-19), usage-limit/threshold-billing UI redesign (08-27) | Workspace admin/UI only; no pipeline action. |
+
 ## Historical 1.5.2 baseline (genomics pin superseded above)
 
 **Shell-global CLI** is a `uv tool` install (`~/.local/bin/modal` →
