@@ -1,5 +1,13 @@
 # Model Guide Changelog
 
+## 2026-09-28 - Opus 5.5 vendor prompting guide absorbed
+
+Operator pasted the vendor guide "Prompting Claude Opus 5.5". Most points were already in
+`PROMPTING_CLAUDE.md` § Opus 5.5 deltas. New bullets there: text-only end of turn in unattended
+runs, `max_tokens` sized for thinking, effort unreachable over the OpenAI-compat endpoint,
+time budgets for agent teams, frontend named-pattern bans, multi-source explore line. Code fix:
+llmx `cca9e08` (anthropic-direct thinking headroom).
+
 ## 2026-09-26 - Removed retired models (frontier-only guide)
 
 Operator direction (2026-09-25): "remove the old models". Deleted `opus-4-8-system-card.md`,

@@ -1,6 +1,6 @@
 # Claude Opus 5.5, Opus 5 & Fable 5.1 Prompting Guide
 
-**Last updated:** 2026-09-22
+**Last updated:** 2026-09-28
 **Scope:** Claude Opus 5.5 (recommended default since 2026-09-22), Opus 5 (exact-ID lanes; cyber and dual-use biology), Fable 5.1 (named-edge lane). Opus 5.5 re-routes most cyber work to Opus 4.8 server-side; route cyber to Opus 5 by exact id.
 
 
@@ -21,6 +21,19 @@
 - **Ask for the strongest opposing case on contested topics.** It tends to mention the other side briefly and offer to argue it later.
 - API: thinking cannot be disabled; forced `tool_choice` returns 400; computer use only through `computer_toolset_20260801`; progress notes arrive as `thinking` blocks (`display: "updates"`).
 - Sources: https://www.anthropic.com/claude-opus-5-5, https://anthropic.com/claude-opus-5-5-system-card, and the claude-api skill's `shared/model-migration.md` § Migrating to Claude Opus 5.5.
+
+### From the vendor prompting guide (2026-09-28)
+
+Source: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5-5. Items already covered above are not repeated.
+
+- **A text-only end of turn is a progress report, not completion.** On long multi-part tasks 5.5 sometimes ends a turn with an update. Unattended loops (`claude -p`, `lane`, `/loop`) should keep the task list in a file or to-do tool. When a turn ends with items still open and no blocker named, send one message that names those items, and stop after 2–3 automatic continuations so a stuck run can be reviewed. The guide's system-prompt paragraph names four unwanted stops: announcing the next step instead of taking it, offering to continue, listing decisions that block nothing, and stopping at a milestone. Use it only for fully unattended runs, from the first request. It costs more tool calls. Our `stop_loop_ended_on_question.py` shadow hook measures a narrower case of the same failure.
+- **Size `max_tokens` for thinking.** Thinking counts toward the limit even when it is not returned; the vendor uses 128K for agentic coding. llmx `anthropic-direct` reserves medium-effort headroom on top of `--max-tokens` (llmx `cca9e08`).
+- **Effort cannot be set over Anthropic's OpenAI-compatible endpoint.** It documents `reasoning_effort` as ignored, so `llmx -p anthropic-direct` always runs 5.5 at `medium`. To choose effort, use the subscription lane (`claude --effort`) or the native Messages API. On the native API, a per-message effort change (beta) keeps the prompt cache; changing the top-level `effort` invalidates it.
+- **Drop "think carefully" lines.** Effort controls thinking depth. A sweep on 2026-09-28 found no such line in live skills or hooks.
+- **Time budgets speed up agent teams.** Appending `elapsed 340s / 1200s` to each message returned to a lead agent makes it parallelize more and finish sooner. Without a budget, show elapsed time plus "the earlier a correct result is obtained, the better." The budget is advisory, so keep a hard timeout. Verify quality, since it may verify less under time pressure. Not wired into our dispatch yet.
+- **Frontend: list specific styles to avoid.** "Avoid a generic look" just swaps one default for another. Name the patterns: cream background, italic accent words, `01/02/03` section labels, monospace labels, pill buttons. Iterate on what the first output used.
+- **Loosely specified multi-source tasks:** one line helps: "explore broadly with tool calls … including ones the task does not explicitly mention." Only use it where the searched records are trusted.
+- **Leave out for agentic work:** the chat-only "treat earlier answers as settled" line, because it suppresses self-correction.
 
 ## Opus 5 prompting deltas
 
