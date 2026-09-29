@@ -86,3 +86,13 @@
 - **[2026-09-05] Manifest validation crashed when --manifest used a relative path, including diagnostic output for external files. The CLI now resolves paths and renders external locations safely; subprocess regressions cover success and invalid JSON.**
 
 - **[2026-09-16] GPT axes reported empty_output with codex exit 1 and a banner-only error: that was a ChatGPT subscription usage limit hidden by llmx keeping the head of codex stderr. Fixed in llmx@9a3deae (ERROR lines surface; plan limits exit 6 as quota). If a GPT axis fails in seconds, run one tiny llmx call and read the exit code before re-dispatching.**
+
+- **[2026-09-30] FIXED — close triage treated literal fenced evidence as missing local files.**
+  The tox feasibility packet was blocked by a CLI placeholder, a truncated quoted
+  link, remote Volume paths and runtime `SUCCESS.json` literals. The dead-reference
+  scanner now excludes fenced blocks while retaining blocking checks for prose
+  references and Markdown links outside them. It also preserves absolute and
+  parent-relative paths instead of stripping their leading path characters.
+  Regressions reproduce both failures and retain a genuinely missing-file control.
+  This check establishes local reference existence, not semantic validity of quoted
+  code or examples; those remain part of native review.

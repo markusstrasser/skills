@@ -204,13 +204,27 @@ def _diff_files(repo: Path, base: str | None, head: str | None) -> set[str]:
 def _scan_dead_refs(packet_text: str, repo: Path) -> list[str]:
     dead: list[str] = []
     seen: set[str] = set()
+    fence_char = ""
+    fence_length = 0
     for line in packet_text.splitlines():
+        # Fenced blocks quote source, shell examples, logs, or remote output.
+        # A filename there does not assert that a local repository file exists.
+        # Respect fence character/length so nested examples cannot end a quote.
+        fence = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
+        if fence_char:
+            if (fence and fence[1][0] == fence_char
+                    and len(fence[1]) >= fence_length and not fence[2].strip()):
+                fence_char = ""
+            continue
+        if fence:
+            fence_char, fence_length = fence[1][0], len(fence[1])
+            continue
         # Unified-diff headers are evidence about the packet, not prose
         # references. Their a/ and b/ prefixes are not repository paths.
         if line.startswith(("diff --git ", "--- ", "+++ ")):
             continue
         for match in PATH_LIKE.finditer(line):
-            rel = match.group(1).lstrip("./")
+            rel = match.group(1).removeprefix("./")
             if rel.startswith(("a/", "b/")):
                 rel = rel[2:]
             if rel in seen or rel.startswith("http"):

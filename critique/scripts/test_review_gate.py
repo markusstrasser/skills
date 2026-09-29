@@ -207,6 +207,37 @@ class ReviewGateTest(unittest.TestCase):
 
         self.assertEqual(rg._scan_dead_refs(packet, self.repo), [])
 
+    def test_scan_dead_refs_ignores_literal_fenced_evidence(self) -> None:
+        packet = "\n".join((
+            "See `real.py`.",
+            "```sh",
+            "collect artifacts/NEW_QUERY_ID/DISPATCH_FILE.json",
+            "```",
+            "````text",
+            "Quoted source or report excerpt:",
+            "```python",
+            "result = folder / 'SUCCESS.json'",
+            "```",
+            "rite-analyze-ffed63c3-result.json)",
+            "`results/run/feasibility.json` on a remote Volume.",
+            "````",
+            "~~~python",
+            "result = folder / 'other-runtime.json'",
+            "~~~",
+            "See `missing.py` and [missing config](configs/missing.json).",
+        ))
+        self.assertEqual(
+            rg._scan_dead_refs(packet, self.repo),
+            ["missing.py", "configs/missing.json"],
+        )
+
+    def test_scan_dead_refs_preserves_absolute_and_parent_paths(self) -> None:
+        parent_file = self.repo.parent / (self.repo.name + "-evidence.json")
+        parent_file.write_text("{}")
+        self.addCleanup(parent_file.unlink)
+        packet = f"See `{parent_file}` and `../{parent_file.name}`."
+        self.assertEqual(rg._scan_dead_refs(packet, self.repo), [])
+
     def test_triage_recommends_cross2_preset(self) -> None:
         manifest = {
             "review_targets": {
