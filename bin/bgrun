@@ -125,8 +125,13 @@ printf 'bgrun: cwd=%s\n' "$PWD" > "$log"
 
 # Match bin/lane: noninteractive in-script job control creates a separate group.
 # `bash -m` at startup cannot enable it in Codex's non-TTY exec environment.
-set -m
-nohup env PYTHONUNBUFFERED=1 bash -c '
+# A new SESSION, not only a new group: on 2026-09-29 closing a Claude Code session SIGTERMed a
+# bgrun replay mid-commit although its supervisor led its own group (`set -m`) and had launchd as
+# parent; it still shared the tool shell's session. setsid() refuses a group leader, so there is
+# no `set -m`: perl makes the job lead a new session and group (sid = pgid = pid), which keeps
+# `kill -- -$launch_pid` exact. macOS ships no setsid(1).
+nohup /usr/bin/perl -MPOSIX -e 'POSIX::setsid() or die "bgrun: setsid: $!\n"; exec { $ARGV[0] } @ARGV or die "bgrun: exec: $!\n"' \
+  env PYTHONUNBUFFERED=1 bash -c '
   caffeinate -i "$@" > "$0.log.tmp" 2>&1  # caffeinate: idle-sleep killed an unattended 14-min audit overnight (genomics 2026-09-01)
   rc=$?
   cat "$0.log.tmp" >> "$0.log" 2>/dev/null || true
@@ -135,8 +140,13 @@ nohup env PYTHONUNBUFFERED=1 bash -c '
   mv "$0.done.tmp.$$" "$0.done"
 ' "$dir/$name" "$@" 9>&- </dev/null >/dev/null 2>&1 &
 launch_pid=$!
-set +m
 disown "$launch_pid" 2>/dev/null || true
+# The job leads its group only after perl's setsid(); wait for that before the isolation checks.
+for _ in $(seq 1 250); do
+  [ "$(ps -o pgid= -p "$launch_pid" 2>/dev/null | tr -d ' ')" = "$launch_pid" ] && break
+  kill -0 "$launch_pid" 2>/dev/null || break
+  sleep 0.02
+done
 echo "$launch_pid" > "$pid_file"
 launch_started=$(started_identity "$launch_pid" || true)
 if [ -n "$launch_started" ]; then printf '%s\n' "$launch_started" > "$started_file"; fi

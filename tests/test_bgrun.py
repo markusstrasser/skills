@@ -239,6 +239,52 @@ def test_tool_process_group_cleanup_does_not_kill_the_job(job, tmp_path: Path) -
             harness.wait(timeout=5)
 
 
+def kill_session(sid: int) -> None:
+    """SIGKILL every process whose session is `sid` (macOS pkill has no -s)."""
+    listing = subprocess.run(["ps", "-axo", "pid="], capture_output=True, text=True, check=True)
+    for pid in (int(token) for token in listing.stdout.split()):
+        try:
+            if os.getsid(pid) == sid:
+                os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+
+def test_tool_session_cleanup_does_not_kill_the_job(job, tmp_path: Path) -> None:
+    # 2026-09-29: closing a Claude Code session SIGTERMed a bgrun replay whose supervisor led its
+    # own group but shared the tool shell's session. The harness leads a new session; killing
+    # every process in that session must leave the job running to completion.
+    directory, env, run = job
+    harness_script = tmp_path / "harness.py"
+    child = "from pathlib import Path; import time; Path('started').touch(); time.sleep(0.6); Path('finished').touch()"
+    harness_script.write_text(
+        "import subprocess, sys, time\n"
+        f"result = subprocess.run({[str(BGRUN), 'case', '--', sys.executable, '-c', child]!r}, capture_output=True)\n"
+        "assert result.returncode == 0, result.stderr\n"
+        "time.sleep(20)\n"
+    )
+    harness = subprocess.Popen(
+        [sys.executable, str(harness_script)],
+        env=env,
+        cwd=directory,
+        start_new_session=True,
+    )
+    try:
+        wait_file(directory / "started")
+        supervisor = int(wait_file(directory / "case.pid"))
+        assert os.getsid(supervisor) != harness.pid
+        assert os.getpgid(supervisor) == supervisor
+        kill_session(harness.pid)
+        harness.wait(timeout=5)
+        wait_file(directory / "finished")
+        assert run("--wait", "case").returncode == 0
+        assert (directory / "case.done").read_text() == "0\n"
+    finally:
+        if harness.poll() is None:
+            kill_session(harness.pid)
+            harness.wait(timeout=5)
+
+
 def test_killed_launch_owner_does_not_leave_a_stale_lock(job) -> None:
     directory, env, run = job
     pause = directory / "pause-rm"
