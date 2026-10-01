@@ -18,7 +18,9 @@ SCRIPT="$AGENT_INFRA/scripts/refresh_codebase_map_on_commit.py"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 cd "$REPO_ROOT" || exit 0
 
-if ! uv run --directory "$AGENT_INFRA" python3 "$SCRIPT" --repo-root "$REPO_ROOT"; then
+# A caller may select its own shared venv. This advisory must neither target
+# that environment nor install/remove packages beneath concurrent processes.
+if ! env -u UV_PROJECT_ENVIRONMENT -u VIRTUAL_ENV uv run --no-sync --directory "$AGENT_INFRA" python3 "$SCRIPT" --repo-root "$REPO_ROOT"; then
   echo "[pre-commit-codebase-map] refresh failed (non-blocking)" >&2
 fi
 exit 0
