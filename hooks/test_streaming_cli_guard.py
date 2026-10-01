@@ -85,6 +85,40 @@ def test_bounded_or_static_stream_passes(command: str) -> None:
     assert _run(command).returncode == 0
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "modal app logs ap-123 --tail 200",
+        "modal app logs --tail=200 ap-123",
+        "uv run --no-sync python3 -m modal app logs ap-123 -n 200 --since 2h",
+        "modal app logs ap-123 --since=2h",
+        "modal app logs ap-123 --until 2026-10-01T16:00:00",
+        "modal app logs ap-123 --search --follow --tail 20",
+        "modal app logs ap-123 --tail 20 | head -5",
+        "bash -c 'modal app logs ap-123 --tail 20'",
+    ],
+)
+def test_explicit_non_follow_log_fetch_passes(command: str) -> None:
+    assert _run(command).returncode == 0
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "modal app logs ap-123 -f",
+        "modal app logs ap-123 --follow --tail 20",
+        "modal app logs ap-123 --since 2h --follow",
+        "modal app logs ap-123 --tail 20 --follow=true",
+        "modal app logs ap-123 --search --tail",
+        "modal app logs ap-123 -- --tail 20",
+        "modal app logs ap-123 --tail 20; modal app logs ap-456 -f",
+        "modal app logs ap-123 --tail 20; tail -f /tmp/log",
+    ],
+)
+def test_fetch_text_never_bounds_a_live_stream(command: str) -> None:
+    assert _run(command).returncode == 2
+
+
 def test_heredoc_body_mentioning_a_stream_is_not_a_stream() -> None:
     command = (
         "S=/tmp/x; cat > $S/brief.md <<'EOF'\n"

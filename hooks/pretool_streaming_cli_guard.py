@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 """Require a timeout on each guarded CLI invocation, never on argument prose.
 
-The existing app-logs/container-exec policy remains independent of installed CLI
-defaults. A downstream head does not bound a quiet producer. Shell syntax and
+Bare app logs remain bounded because older CLI versions stream by default.
+Explicit finite-fetch options are accepted when follow is absent: Modal 1.5.5
+fetches and exits for these options, and older CLIs reject unsupported options.
+A downstream head does not bound a quiet producer. Shell syntax and
 substitution extraction reuse their existing owners; this module classifies only
 the executable and its wrappers. It never executes inspected command text.
 
 Evidence: exec leaks in Codex 019d6d86; help denied in 01a01da9 (2026-08-23);
 heredoc prose denied in genomics fe315f9b (2026-09-02); finite search/docs commands
 denied in the 2026-09-13 genomics propagation campaign (regression tests).
+Retuned 2026-10-02 after exact CNVnator bootstrap diagnosis was blocked despite
+using non-follow --tail/--since fetches; the installed CLI help and bounded
+fetch both confirmed that this invocation exits.
 """
 
 from __future__ import annotations
@@ -105,7 +110,19 @@ def _stream(words: list[str]) -> bool:
         if _has_help(args, _MODAL_VALUES):
             return False
         args = _after_options(args, _MODAL_VALUES)
-        return args[:2] in (["app", "logs"], ["container", "exec"])
+        if args[:2] == ["app", "logs"]:
+            options = tuple(_option_tokens(args[2:], _MODAL_VALUES))
+            follows = any(
+                word in {"-f", "--follow"} or word.startswith("--follow=")
+                for word in options
+            )
+            fetches = any(
+                word in {"--tail", "-n", "--since", "--until"}
+                or word.startswith(("--tail=", "--since=", "--until="))
+                for word in options
+            )
+            return follows or not fetches
+        return args[:2] == ["container", "exec"]
     if executable == "tail":
         value_options = {"-n", "-c", "--lines", "--bytes", "--pid", "--sleep-interval"}
         if _has_help(args, value_options):
