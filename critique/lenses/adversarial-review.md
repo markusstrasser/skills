@@ -12,7 +12,7 @@ Run deterministic triage before choosing a larger model panel. Triage recommends
 
 - Formal/math/Bayes/proof/invariant subparts may add `formal`; perceived importance alone is not an effort-escalation reason.
 - Domain-dense packets may add `domain`; larger structural reviews may use `deep`.
-- Extra `composer`, `claude`, `glm`, or `grok` cosigners are opt-in for a specific need. Composer is packet-only here and is excluded from closeout design; the diff layer already owns its review.
+- Extra `claude`, `glm`, or `grok` cosigners are opt-in for a specific need. The `composer` axis was retired 2026-10-07.
 - `full` includes the divergent `alternatives` axis. Select it only when alternatives are part of the requested work and keep that output separate from convergent findings.
 - Repo-scale audit inventories with remediation plans use [Audit-plan](repo-audit-plan-review.md), including its lane-evidence prerequisite and lean critics.
 

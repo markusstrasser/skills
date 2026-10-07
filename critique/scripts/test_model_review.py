@@ -4,6 +4,7 @@ import importlib.util
 import contextlib
 import json
 import os
+import subprocess
 import tempfile
 import time
 import unittest
@@ -351,7 +352,7 @@ class CallLlmxTest(unittest.TestCase):
         fmt = captured.get("response_format", {})
         self.assertNotIn("additionalProperties", str(fmt))
 
-    def test_call_llmx_honors_cli_transport_for_composer(self) -> None:
+    def test_call_llmx_honors_subscription_auth_from_profile(self) -> None:
         """CLI-transport profiles must keep auth=subscription from the profile."""
         captured = {}
 
@@ -368,15 +369,15 @@ class CallLlmxTest(unittest.TestCase):
             out = Path(td) / "out.md"
             with patched_llmx_chat(capture_chat):
                 model_review._call_llmx(
-                    profile=model_review.dispatch_core.PROFILES["composer_review"],
+                    profile=model_review.dispatch_core.PROFILES["gpt_general"],
                     context_path=ctx,
                     prompt="test",
                     output_path=out,
                     timeout=10,
                 )
-        self.assertEqual(captured.get("provider"), "cursor")
+        self.assertEqual(captured.get("provider"), "openai")
         self.assertEqual(
-            captured.get("auth"), "subscription", "composer must use profile auth=subscription"
+            captured.get("auth"), "subscription", "profile auth=subscription must reach llmx"
         )
         self.assertEqual(captured.get("mode"), "chat")
 
@@ -490,7 +491,7 @@ class AxisResolutionTest(unittest.TestCase):
         axes = model_review.resolve_axes("standard,grok")
         self.assertIn("grok", axes)
         self.assertTrue(model_review.axis_needs_repo_workspace("grok"))
-        self.assertFalse(model_review.axis_needs_repo_workspace("composer"))
+        self.assertFalse(model_review.axis_needs_repo_workspace("claude"))
         self.assertEqual(model_review.AXES["grok"]["profile"], "grok_review")
         profile = model_review.dispatch_core.PROFILES["grok_review"]
         self.assertEqual(profile.model, "grok-4.7-high")
@@ -1449,7 +1450,7 @@ class PremiseScoutTest(unittest.TestCase):
             project.mkdir()
             ctx = project / "plan.md"
             ctx.write_text("# plan\nconvert foo() everywhere")
-            with patch.object(model_review, "_resolve_cursor_agent_bin", return_value=None):
+            with patch.object(model_review, "_resolve_codex_bin", return_value=None):
                 result = model_review.run_premise_scout(
                     review_dir=review_dir,
                     project_dir=project,
@@ -1463,6 +1464,119 @@ class PremiseScoutTest(unittest.TestCase):
             data = json.loads(result.json_path.read_text())
             self.assertTrue(data.get("skipped"))
             self.assertIsNone(data.get("conviction_after"))
+
+    def _scout_fixture(self, td: str) -> tuple[Path, Path, Path]:
+        review_dir = Path(td) / "run"
+        review_dir.mkdir()
+        project = Path(td) / "proj"
+        project.mkdir()
+        ctx = project / "plan.md"
+        ctx.write_text("# plan\nconvert foo() everywhere")
+        return review_dir, project, ctx
+
+    @staticmethod
+    def _fake_codex(outcomes: list[tuple[int, str, str]], calls: list[list[str]]):
+        """Each outcome: (exit_code, final_message, jsonl_stdout). Writes -o like codex."""
+
+        def run(cmd, **kwargs):
+            calls.append(list(cmd))
+            code, message, events = outcomes[len(calls) - 1]
+            if message:
+                Path(cmd[cmd.index("-o") + 1]).write_text(message)
+            return subprocess.CompletedProcess(cmd, code, stdout=events, stderr="")
+
+        return run
+
+    def test_premise_scout_runs_codex_read_only_on_astra_low(self) -> None:
+        usage = {"input_tokens": 900, "output_tokens": 40, "reasoning_output_tokens": 12}
+        events = json.dumps({"type": "turn.completed", "usage": usage}) + "\n"
+        message = '## Premises checked\n- ok\n```json\n{"conviction_after": "high"}\n```'
+        calls: list[list[str]] = []
+        with tempfile.TemporaryDirectory() as td:
+            review_dir, project, ctx = self._scout_fixture(td)
+            with (
+                patch.object(model_review, "_resolve_codex_bin", return_value="/usr/bin/codex"),
+                patch.object(
+                    model_review.subprocess, "run", self._fake_codex([(0, message, events)], calls)
+                ),
+            ):
+                result = model_review.run_premise_scout(
+                    review_dir=review_dir,
+                    project_dir=project,
+                    context_path=ctx,
+                    topic="foo conversion",
+                    question="verify callers",
+                )
+            self.assertFalse(result.skipped)
+            self.assertEqual(result.conviction, "high")
+            cmd = calls[0]
+            self.assertEqual(cmd[:2], ["/usr/bin/codex", "exec"])
+            self.assertEqual(cmd[cmd.index("-s") + 1], "read-only")
+            self.assertEqual(cmd[cmd.index("-C") + 1], str(project.resolve()))
+            self.assertEqual(cmd[cmd.index("-m") + 1], "gpt-6-astra")
+            self.assertIn("model_reasoning_effort=low", cmd)
+            data = json.loads(result.json_path.read_text())
+            self.assertEqual(data["served_model"], "gpt-6-astra")
+            self.assertEqual(data["reasoning_effort"], "low")
+            self.assertEqual(data["usage"], usage)
+            self.assertIn("Premises checked", result.markdown_path.read_text())
+
+    def test_premise_scout_falls_back_to_sol_high_on_plan_limit(self) -> None:
+        limit = json.dumps(
+            {"type": "error", "message": "You've hit your usage limit. Try again at 4:21 PM."}
+        )
+        message = '```json\n{"conviction_after": "medium"}\n```'
+        calls: list[list[str]] = []
+        with tempfile.TemporaryDirectory() as td:
+            review_dir, project, ctx = self._scout_fixture(td)
+            with (
+                patch.object(model_review, "_resolve_codex_bin", return_value="/usr/bin/codex"),
+                patch.object(
+                    model_review.subprocess,
+                    "run",
+                    self._fake_codex([(1, "", limit + "\n"), (0, message, "")], calls),
+                ),
+            ):
+                result = model_review.run_premise_scout(
+                    review_dir=review_dir,
+                    project_dir=project,
+                    context_path=ctx,
+                    topic="t",
+                    question="q",
+                )
+            self.assertFalse(result.skipped)
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(calls[1][calls[1].index("-m") + 1], "gpt-6-sol")
+            self.assertIn("model_reasoning_effort=high", calls[1])
+            data = json.loads(result.json_path.read_text())
+            self.assertEqual(data["served_model"], "gpt-6-sol")
+            self.assertEqual([a["model"] for a in data["attempts"]], ["gpt-6-astra", "gpt-6-sol"])
+
+    def test_premise_scout_does_not_fall_back_on_other_failures(self) -> None:
+        calls: list[list[str]] = []
+        failure = json.dumps({"type": "error", "message": "stream disconnected"}) + "\n"
+        with tempfile.TemporaryDirectory() as td:
+            review_dir, project, ctx = self._scout_fixture(td)
+            with (
+                patch.object(model_review, "_resolve_codex_bin", return_value="/usr/bin/codex"),
+                patch.object(
+                    model_review.subprocess, "run", self._fake_codex([(1, "", failure)], calls)
+                ),
+            ):
+                result = model_review.run_premise_scout(
+                    review_dir=review_dir,
+                    project_dir=project,
+                    context_path=ctx,
+                    topic="t",
+                    question="q",
+                )
+            self.assertTrue(result.skipped)
+            self.assertEqual(len(calls), 1)
+            self.assertIn("stream disconnected", result.skip_reason)
+
+    def test_composer_axis_is_retired_with_pointer(self) -> None:
+        with self.assertRaisesRegex(ValueError, "retired 2026-10-07"):
+            model_review.resolve_axes("standard,composer")
 
     def test_check_scout_conviction_gate_blocks_low_irreversible(self) -> None:
         scout = model_review.PremiseScoutResult(
@@ -1873,7 +1987,7 @@ class GrokPreflightTest(unittest.TestCase):
         completed = self._completed(
             ["cursor-agent", "models"],
             exit_code=0,
-            stdout="composer-2.5 - Composer 2.5\n",
+            stdout="grok-4.7-low - Grok 4.7 Low\n",
         )
         with tempfile.TemporaryDirectory() as temp_dir:
             with (

@@ -136,16 +136,19 @@ Verify every claim that changes **sequencing, deletion, unification, or blast ra
 not "top 10 by severity." At least one repo-access pass:
 
 ```bash
-agent -p --mode ask --trust --model composer-2.5 \
-  --workspace "$REPO" --output-format text \
-  -f "$REPO/.model-review/<topic>-critique-combined.md" \
-  "Fact-check decision-dependent claims with file:line. Mark feasible one-session vs multi-session."
+codex exec -s read-only -C "$REPO" -m gpt-6-astra -c model_reasoning_effort=low \
+  -o "$REPO/.model-review/<topic>-verify.md" \
+  "Fact-check decision-dependent claims with file:line. Mark feasible one-session vs multi-session." \
+  < "$REPO/.model-review/<topic>-critique-combined.md"
 ```
+
+(Composer 2.5, the old verify lane, was retired 2026-10-07; on a Codex plan-limit error rerun with
+`-m gpt-6-sol -c model_reasoning_effort=high`.)
 
 Or orchestrator Read/Grep on load-bearing claims. **Critics receive the verified subset**
 plus full inventory summary — not unverified bulk.
 
-Composer verify here is **verify bucket only** — not a third sequencing critic unless
+The codex verify here is **verify bucket only** — not a third sequencing critic unless
 Claude/Codex disagree.
 
 ### Step 4 — Lean critics (2 max, orthogonal, background)

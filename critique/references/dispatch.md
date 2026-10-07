@@ -21,10 +21,11 @@ Optional axes are outside the presets:
 | Axis | Use and contract |
 |---|---|
 | `formal` | Math, Bayes/stats, proofs or formal invariants; `formal_review` profile at high effort |
-| `composer` | Third lineage for a plan/design packet; neutral empty cwd, packet-only; never a duplicate diff review or closeout design axis |
 | `claude` | Third-family review for a load-bearing subpart; `claude_review` subscription profile |
 | `glm` | Explicit additional model family; metered profile |
 | `grok` | Repo-grounded premise falsification; exact Cursor registry and repo canary required |
+
+The `composer` axis was retired 2026-10-07 (Composer 2.5 outdated); `model-review.py` refuses it with a pointer and `review_gate` blocks a manifest that still names it.
 
 User-facing review normally requires a GPT-backed axis. Pair a lone opt-in cosigner with a GPT axis; `--allow-non-gpt` is an explicit specialized exception, not a default. Do not increase effort merely because a topic feels important.
 
@@ -56,9 +57,11 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
 
 Pass `--dispatch-manifest` explicitly and keep it paired with the packet just triaged. Explicit CLI flags win over manifest settings. Auto-discovery only loads a manifest matching the packet hash or recorded path; an explicitly passed manifest is honored, so the caller remains responsible for its freshness. Re-triage after changing packet content.
 
-The close gate rejects a `composer` design axis because the diff layer owns Composer via `/code-review`. Neither a broader preset nor another lineage licenses a second critique of the same diff.
+The diff layer belongs to `/code-review`. Neither a broader preset nor another lineage licenses a second critique of the same diff.
 
 ## Repo scope and premise scout
+
+The scout runs `codex exec -s read-only -C <project>` on `premise_scout` (gpt-6-astra, low effort, codex-cli subscription). On a Codex plan/usage-limit failure only, it retries once on `premise_scout_fallback` (gpt-6-sol, high effort). `voi-scout.json` records `served_model`, `reasoning_effort`, token `usage` and every attempt. A missing `codex` binary or any other failure is a recorded skip.
 
 `--context-scope` accepts only `repo` and `packet`.
 
@@ -79,7 +82,6 @@ Use the shared script for normal model/close design dispatch. The audit-plan len
 
 - `claude_review` uses the current Opus profile through llmx `anthropic` with `auth=subscription` (claude-cli). Never switch to `anthropic-direct`/API by default. The profile locks overrides to `timeout`; API-only output knobs can force billing or fail.
 - General and mechanical GPT profiles use subscription transport. Subscription extraction uses a strict JSON prompt and local parsing because that transport cannot enforce JSON Schema. Do not add API-only `max_tokens` or search controls.
-- The Composer profile is usage-metered through Cursor. It has no reasoning-effort tiers and accepts only its supported timeout override; `max_tokens`, search and stream are not supported.
 - The Grok axis pins `grok-4.7-high` (no `cursor-` prefix, verified live 2026-09-23) in a read-only repo workspace and fails closed on exact-registry or unrevealed HEAD-canary drift. Bare `grok-4.7` means xAI / Grok Build; llmx Cursor is packet-only. Probe the intended repo with `model-review.py --preflight --axes grok --project "$(pwd)"`.
 - Plain `--preflight` performs import/routing checks plus a cached live subscription entitlement call; it makes no Grok call unless `--axes grok` is supplied.
 - Fable is not a script axis. Historical `fable-subagent` instructions are superseded. A Fable-specific request needs the current [model guide](../../model-guide/SKILL.md) and its verified transport/billing procedure; do not treat an Agent model pin as proof of the served model.

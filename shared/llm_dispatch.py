@@ -207,27 +207,6 @@ PROFILES: dict[str, DispatchProfile] = {
         # claude-cli headless has no max_tokens — setting it forces API fallback (billing).
         allowed_overrides=("timeout",),
     ),
-    "composer_review": DispatchProfile(
-        # Opt-in cheap cosigner: Cursor Composer 2.5 via the llmx `cursor`
-        # transport (cursor-agent headless, Cursor app subscription). A
-        # genuinely different lineage (Cursor) for adversarial diversity.
-        # Cost is usage-metered (Cursor "Auto + Composer" included pool, then
-        # ~$0.50/M in, $2.50/M out) — cheap, NOT flat-free. Validated
-        # frontier-equal on injected-defect review
-        # (evals/cross_lab_review/COMPOSER_ARM_RESULTS.md, 2026-06-14).
-        # CRITICAL: cursor-cli has NO api_fallback — max_tokens/search/stream
-        # all RAISE. So none are set here, and allowed_overrides is locked to
-        # `timeout` only so a caller can't pass --max-tokens/--search and crash
-        # the axis. Composer has no reasoning-effort tiers either (left None).
-        name="composer_review",
-        intent="Cursor Composer 2.5 adversarial review (opt-in cosigner)",
-        provider="cursor",
-        model="composer-2.5",
-        timeout=600,
-        auth="subscription",
-        input_token_limit=120000,
-        allowed_overrides=("timeout",),
-    ),
     "glm_review": DispatchProfile(
         # Opt-in fourth-lineage cosigner: Z.ai GLM-5.2 via the llmx `zai` provider
         # (routed through OpenRouter today, OPENROUTER_API_KEY). A genuinely NEW
@@ -245,25 +224,34 @@ PROFILES: dict[str, DispatchProfile] = {
         input_token_limit=200000,
         allowed_overrides=("timeout",),
     ),
-    "composer_screen": DispatchProfile(
-        # Fast screening tier — per-repo drift/diff triage, observe candidate pass.
-        name="composer_screen",
-        intent="Cursor Composer 2.5-fast cheap screen (triage only)",
-        provider="cursor",
-        model="composer-2.5-fast",
-        timeout=300,
-        auth="subscription",
-        input_token_limit=80000,
-        allowed_overrides=("timeout",),
-    ),
     "premise_scout": DispatchProfile(
         # Repo-grounded premise falsifier — NOT a cosigner axis. Invoked by
-        # model-review.py via cursor-agent --workspace before packet-only axes.
+        # model-review.py via `codex exec -s read-only -C <project>` before
+        # packet-only axes. 2026-10-07: Composer 2.5 retired as outdated; the
+        # operator chose GPT-6 Astra at low effort (codex-cli subscription, $0).
+        # provider "openai" + auth "subscription" is this file's codex-cli lane.
         name="premise_scout",
         intent="VOI premise scout: grep/read repo to falsify design premises",
-        provider="cursor",
-        model="composer-2.5",
+        provider="openai",
+        model="gpt-6-astra",
         timeout=300,
+        reasoning_effort="low",
+        auth="subscription",
+        mode="chat",
+        input_token_limit=120000,
+        allowed_overrides=("timeout",),
+    ),
+    "premise_scout_fallback": DispatchProfile(
+        # Served only when the Astra scout fails on a Codex plan/usage limit
+        # (llmx exit-6 class). Operator 2026-10-07: "gpt 6.1 sol high" → the
+        # live slug is gpt-6-sol; model-guide names Sol as Astra's plan-limit
+        # fallback.
+        name="premise_scout_fallback",
+        intent="Premise scout fallback when the Astra plan limit is exhausted",
+        provider="openai",
+        model="gpt-6-sol",
+        timeout=300,
+        reasoning_effort="high",
         auth="subscription",
         mode="chat",
         input_token_limit=120000,
@@ -286,6 +274,18 @@ PROFILES: dict[str, DispatchProfile] = {
     ),
 }
 
+# Retired profile names refuse with a successor instead of "unknown profile".
+_COMPOSER_RETIRED = (
+    "Cursor Composer 2.5 retired 2026-10-07 as outdated; use `fast_extract` "
+    "(gpt-6-astra, low effort, codex-cli subscription) for packet screens; repo-grounded "
+    "premise checks run as `codex exec -s read-only -C <repo> -m gpt-6-astra` (the /critique "
+    "premise scout)"
+)
+RETIRED_PROFILES = {
+    "composer_review": _COMPOSER_RETIRED,
+    "composer_screen": _COMPOSER_RETIRED,
+}
+
 MODEL_TO_PROFILE = {
     "gemini-3.1-flash-lite-preview": "observe_bulk",
     "gemini-3.8-flash": "deep_review",
@@ -295,8 +295,6 @@ MODEL_TO_PROFILE = {
     "gpt-6-sol": "formal_review",
     "gpt-6-luna": "gpt_general",  # explicit Luna pin; effort is the cheap/mechanical dial
     "claude-opus-5": "claude_review",
-    "composer-2.5": "composer_review",
-    "composer-2.5-fast": "composer_screen",
     "glm-5.2": "glm_review",
     "grok-4.7-high": "grok_review",
 }
@@ -607,6 +605,8 @@ def map_model_to_profile(model: str) -> str:
 def resolve_profile(
     profile_name: str, overrides: DispatchOverrides | None = None
 ) -> tuple[DispatchProfile, dict[str, Any]]:
+    if profile_name in RETIRED_PROFILES:
+        raise ValueError(f"profile '{profile_name}' is retired: {RETIRED_PROFILES[profile_name]}")
     if profile_name not in PROFILES:
         raise ValueError(f"unknown profile '{profile_name}'")
     profile = PROFILES[profile_name]

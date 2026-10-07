@@ -96,3 +96,11 @@
   Regressions reproduce both failures and retain a genuinely missing-file control.
   This check establishes local reference existence, not semantic validity of quoted
   code or examples; those remain part of native review.
+
+- **[2026-10-07] RETIRED — Composer 2.5 premise scout and `composer` axis.** Operator: Composer
+  2.5 is outdated; successor GPT-6 Astra at low effort (codex-cli subscription), with GPT-6 Sol at
+  high effort as the plan-limit fallback. The premise scout now runs `codex exec -s read-only -C
+  <project>` and records `served_model`, effort, token usage and attempts in `voi-scout.json`;
+  the `composer` axis refuses with a pointer, and `review_gate` blocks a manifest that names it.
+  Earlier entries that call the Composer scout the repo-grounded falsifier describe the lane as it
+  was.

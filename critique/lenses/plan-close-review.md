@@ -41,7 +41,7 @@ For a concrete bug found later, prove that its regression test fails on the pre-
 
 ## Phase 2: Review each layer once
 
-**Diff layer:** run `/code-review high` over the plan's commits. Composer is that skill's default provider. Do not also run a critique `composer` axis on the diff; `--all-providers` recall mode belongs only to the diff scope. Verify scout findings against the code before applying them, and finish disposition before the closeout commit.
+**Diff layer:** run `/code-review high` over the plan's commits. GPT-6 Astra via codex is that skill's default provider. Do not also run a critique axis on the diff; `--both` recall mode belongs only to the diff scope. Verify scout findings against the code before applying them, and finish disposition before the closeout commit.
 
 Include an execution-grounded instruction to run the changed code paths where the reviewer has tools, or run them locally and provide the evidence. Record what actually ran; packet-only judgment is not execution.
 
@@ -89,7 +89,7 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
   --mode close --review-dir "$REVIEW_DIR"
 ```
 
-Stop on blockers, including missing verification evidence, dead closeout references, oversize packets, or the forbidden Composer design axis. The matching packet's existing model review satisfies the design pass; passing the readiness gate does not require dispatching it again.
+Stop on blockers, including missing verification evidence, dead closeout references, oversize packets, or the retired `composer` axis. The matching packet's existing model review satisfies the design pass; passing the readiness gate does not require dispatching it again.
 
 Then run the deterministic integration audit to check that the diff did not implement findings marked HALLUCINATED:
 

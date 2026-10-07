@@ -567,11 +567,12 @@ def cmd_triage(args: argparse.Namespace) -> int:
             manifest_axes=manifest_axes,
         )
         axes = manifest_axes or preset or "standard"
-        if args.mode == "close" and "composer" in {a.strip() for a in axes.split(",")}:
+        if "composer" in {a.strip() for a in axes.split(",")}:
             blockers.append(
                 _format_blocker(
                     "review-gate",
-                    "closeout design must not use composer axis — diff layer owns Composer via /code-review",
+                    "composer axis retired 2026-10-07 (Composer 2.5 outdated); model-review "
+                    "refuses it — use claude/glm/grok for a third lineage",
                     "/critique model --axes standard --context .model-review/plan-close-context.md",
                 )
             )

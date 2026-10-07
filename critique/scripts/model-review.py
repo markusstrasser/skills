@@ -14,7 +14,7 @@ Usage:
     # With project dir for goals/governance doc discovery (docs/GOALS.md)
     model-review.py --context plan.md --topic "data wiring" --project ~/Projects/intel --question "Review this plan"
 
-    # Default: premise scout (cursor-agent, repo workspace) then standard axes
+    # Default: premise scout (codex exec, read-only repo sandbox) then standard axes
     model-review.py --context plan.md --topic "gateway outbox" --fork "callers exist" --axes standard --question "Review"
 """
 
@@ -396,37 +396,6 @@ Ranked list of the 5 most impactful changes, each with a testable verification c
 ## 6. Blind Spots In My Own Analysis
 What am I (Claude) likely getting wrong? Where should you distrust my assessment?""",
     },
-    "composer": {
-        "label": "Cursor Composer 2.5 (cheap third-lineage adversarial)",
-        "profile": "composer_review",
-        "prompt": """\
-<system>
-You are reviewing as an independent cosigner from Cursor's Composer model — a different lineage than the other reviewers (Gemini, GPT, Claude). Your value is a distinct failure-mode profile: find what they would miss. Be concrete, reference specific code/config/claims. No platitudes. COMMIT to verdicts — when you flag a mechanism as a bug, state plainly that it IS a bug; do not hedge it behind "if you meant X". It is {date}.
-Budget: ~2000 words. Dense tables and lists over prose.
-</system>
-
-{question}
-
-RESPOND WITH EXACTLY THESE SECTIONS:
-
-## 1. Strengths and Weaknesses
-What holds up, what doesn't. Reference actual code/config. Be specific about both errors and what's correct.
-
-## 2. What Was Missed
-Patterns, problems, or opportunities not identified. Cite files, line ranges, gaps.
-
-## 3. Better Approaches
-For each: Agree (with refinements), Disagree (with alternative), or Upgrade (better version).
-
-## 4. What I'd Prioritize Differently
-Ranked list of the 5 most impactful changes, each with a testable verification criterion.
-
-## 5. Goals & Principles Alignment
-{principles_instruction}
-
-## 6. Blind Spots In My Own Analysis
-Where should you distrust my assessment?""",
-    },
     "glm": {
         "label": "Z.ai GLM-5.2 (fourth-lineage adversarial)",
         "profile": "glm_review",
@@ -590,15 +559,23 @@ def write_structural_assumptions_artifact(review_dir: Path, assumptions: list[st
 
 
 # Presets map a single name to a list of axes.
-# `claude` (subscription profile), `composer` (Cursor Composer 2.5,
-# metered Cursor pool — "sub" but not free), `glm` (Z.ai GLM-5.2, metered
+# `claude` (subscription profile), `glm` (Z.ai GLM-5.2, metered
 # OpenRouter — a genuinely NEW fourth lab), and `grok` (Grok 4.6 via a
 # read-only cursor-agent repo workspace) are opt-in cosigners — intentionally
 # NOT in any preset. Request explicitly with `--axes standard,<axis>`.
+# The `composer` axis was retired 2026-10-07 (see RETIRED_AXES).
 #
 # cross2/lens2 = diagonal 2×2 (S_G + M_P). cross4/lens4/standard = full grid.
 # model-review CLI default stays `standard` until evals/critique_replay/ROUTING_VERDICT.md
 # promotes cross2 (see review_gate triage `preset` field).
+RETIRED_AXES = {
+    "composer": (
+        "Cursor Composer 2.5 was retired 2026-10-07 as outdated (operator decision). "
+        "For a third lineage on a packet use `claude`, `glm` or `grok`; the repo-grounded "
+        "premise scout now runs on gpt-6-astra (low effort) via `codex exec`."
+    ),
+}
+
 PRESETS = {
     # Legacy default: 2× Gemini + 2× GPT-medium (4 lenses).
     "standard": ["arch", "gaps", "correctness", "contracts"],
@@ -617,7 +594,8 @@ PRESETS = {
 # 90s was too tight: 21/22 runs Jun 1-20 timed out and failed open, making the
 # premise gate vacuous. A real arc-agi repo packet measured 229.5s for cursor-agent
 # ask-mode to complete (2026-06-20), so 360s gives genuine headroom over the observed
-# latency. Cost: serial latency before axes (still well under the 900s overall budget);
+# latency. Since 2026-10-07 the scout runs `codex exec` (gpt-6-astra low); the
+# bound is unchanged and covers a fallback attempt on its own fresh timeout. Cost: serial latency before axes (still well under the 900s overall budget);
 # scout has its own timeout and does not consume axis budget.
 PREMISE_SCOUT_TIMEOUT = 360
 PREMISE_SCOUT_CONTEXT_CAP = 120_000  # chars of packet fed to scout stdin
@@ -1247,6 +1225,78 @@ def should_run_premise_scout(
     return scout and context_scope == "repo" and has_context
 
 
+# Codex/plan-limit failure text that triggers the Sol fallback (llmx exit-6 class:
+# "You've hit your usage limit ... try again at 4:21 PM."). Mirrors the quota
+# markers in llmx cli_backends._QUOTA_MARKERS; rate limits (exit 3) are transient
+# and do not switch models.
+_SCOUT_PLAN_LIMIT_MARKERS = (
+    "hit your usage limit",
+    "usage limit",
+    "plan limit",
+    "monthly spend limit",
+    "insufficient_quota",
+    "insufficient quota",
+    "usage cap",
+)
+
+
+def _resolve_codex_bin() -> str | None:
+    return shutil.which("codex")
+
+
+def _codex_scout_command(
+    binary: str,
+    project_dir: Path,
+    profile: dispatch_core.DispatchProfile,
+    last_message_path: Path,
+) -> list[str]:
+    """Read-only codex exec rooted at the project; prompt on stdin, final message to a file."""
+    return [
+        binary,
+        "exec",
+        "-s",
+        "read-only",
+        "-C",
+        str(project_dir.resolve()),
+        "--skip-git-repo-check",
+        "--ephemeral",
+        "--json",
+        "-m",
+        profile.model,
+        "-c",
+        f"model_reasoning_effort={profile.reasoning_effort or 'low'}",
+        "-o",
+        str(last_message_path),
+        "-",
+    ]
+
+
+def _parse_codex_events(stdout: str) -> tuple[dict | None, str]:
+    """Return (usage, error_text) from `codex exec --json` JSONL events."""
+    usage: dict | None = None
+    errors: list[str] = []
+    for line in (stdout or "").splitlines():
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        kind = str(event.get("type") or "")
+        if kind == "turn.completed" and isinstance(event.get("usage"), dict):
+            usage = dict(event["usage"])
+        elif kind in ("error", "turn.failed"):
+            detail = event.get("message") or event.get("error") or event
+            errors.append(json.dumps(detail) if not isinstance(detail, str) else detail)
+    return usage, " | ".join(errors)
+
+
+def _is_plan_limit(detail: str) -> bool:
+    lowered = detail.casefold()
+    return any(marker in lowered for marker in _SCOUT_PLAN_LIMIT_MARKERS)
+
+
 def run_premise_scout(
     *,
     review_dir: Path,
@@ -1257,22 +1307,22 @@ def run_premise_scout(
     fork: str | None = None,
     timeout: int = PREMISE_SCOUT_TIMEOUT,
 ) -> PremiseScoutResult:
-    """Repo-grounded premise falsifier via cursor-agent (Composer 2.5, workspace=project).
+    """Repo-grounded premise falsifier via `codex exec` in a read-only sandbox.
+
+    Default model: profile `premise_scout` (gpt-6-astra, low effort, codex-cli
+    subscription). On a Codex plan/usage-limit failure only, retries once on
+    `premise_scout_fallback` (gpt-6-sol, high effort). voi-scout.json records the
+    model that served the run, its effort, every attempt and the token usage.
 
     Scout runs outside the axis dispatch budget — it has its own fixed timeout and
     must not consume wall-clock reserved for parallel axis dispatch (scout timeout
     previously cascaded into all axes skipped as budget_exhausted).
     """
-    scout_profile = dispatch_core.PROFILES["premise_scout"]
-    scout_model = scout_profile.model
-    effective_timeout = timeout
-    bin_path = _resolve_cursor_agent_bin()
     md_path = review_dir / "premise-scout.md"
     json_path = review_dir / "voi-scout.json"
+    bin_path = _resolve_codex_bin()
     if not bin_path:
-        payload = _scout_skip_payload(
-            fork=fork, topic=topic, skip_reason="cursor-agent not installed"
-        )
+        payload = _scout_skip_payload(fork=fork, topic=topic, skip_reason="codex not installed")
         json_path.write_text(json.dumps(payload, indent=2) + "\n")
         return PremiseScoutResult(True, payload["skip_reason"], None, json_path, None)
 
@@ -1285,47 +1335,77 @@ def run_premise_scout(
         question=question,
         packet=packet,
     )
-    cmd = [
-        bin_path,
-        "-p",
-        "--mode",
-        "ask",
-        "--trust",
-        "--model",
-        scout_model,
-        "--workspace",
-        str(project_dir.resolve()),
-        "--output-format",
-        "text",
-    ]
-    print(
-        f"[premise-scout] cursor-agent workspace={project_dir} fork={fork or topic!r}",
-        file=sys.stderr,
-    )
-    try:
-        proc = subprocess.run(
-            cmd,
-            input=prompt,
-            capture_output=True,
-            text=True,
-            timeout=effective_timeout,
-            cwd=str(project_dir),
+    attempts: list[dict] = []
+    last_message_path = review_dir / "premise-scout.last-message.txt"
+    stdout = ""
+    served: dispatch_core.DispatchProfile | None = None
+    usage: dict | None = None
+    for profile_name in ("premise_scout", "premise_scout_fallback"):
+        profile = dispatch_core.PROFILES[profile_name]
+        last_message_path.unlink(missing_ok=True)
+        cmd = _codex_scout_command(bin_path, project_dir, profile, last_message_path)
+        print(
+            f"[premise-scout] codex exec read-only model={profile.model} "
+            f"effort={profile.reasoning_effort} cwd={project_dir} fork={fork or topic!r}",
+            file=sys.stderr,
         )
-    except subprocess.TimeoutExpired:
-        payload = _scout_skip_payload(
-            fork=fork, topic=topic, skip_reason=f"timeout after {effective_timeout}s"
-        )
-        json_path.write_text(json.dumps(payload, indent=2) + "\n")
-        return PremiseScoutResult(True, payload["skip_reason"], None, json_path, None)
+        started_at = time.time()
+        try:
+            proc = subprocess.run(
+                cmd,
+                input=prompt,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                cwd=str(project_dir),
+            )
+        except subprocess.TimeoutExpired:
+            reason = f"timeout after {timeout}s"
+            attempts.append({"model": profile.model, "ok": False, "error": reason})
+            payload = _scout_skip_payload(fork=fork, topic=topic, skip_reason=reason)
+            payload["attempts"] = attempts
+            json_path.write_text(json.dumps(payload, indent=2) + "\n")
+            return PremiseScoutResult(True, reason, None, json_path, None)
 
-    stdout = (proc.stdout or "").strip()
-    stderr = (proc.stderr or "").strip()
-    if proc.returncode != 0 or not stdout:
-        reason = stderr[:500] or f"exit {proc.returncode}"
+        usage, event_error = _parse_codex_events(proc.stdout or "")
+        stdout = (
+            last_message_path.read_text(errors="replace").strip()
+            if last_message_path.exists()
+            else ""
+        )
+        stderr = (proc.stderr or "").strip()
+        attempt = {
+            "model": profile.model,
+            "reasoning_effort": profile.reasoning_effort,
+            "exit_code": proc.returncode,
+            "latency_s": round(time.time() - started_at, 1),
+            "usage": usage,
+            "ok": proc.returncode == 0 and bool(stdout),
+        }
+        if attempt["ok"]:
+            attempts.append(attempt)
+            served = profile
+            break
+        detail = event_error or stderr[-500:] or f"exit {proc.returncode}"
+        attempt["error"] = detail[:500]
+        attempts.append(attempt)
+        if profile_name == "premise_scout" and _is_plan_limit(detail):
+            print(
+                "[premise-scout] Astra plan limit hit — falling back to "
+                f"{dispatch_core.PROFILES['premise_scout_fallback'].model}",
+                file=sys.stderr,
+            )
+            continue
+        break
+
+    if served is None:
+        reason = str(attempts[-1].get("error") or "scout failed")[:500]
         payload = _scout_skip_payload(fork=fork, topic=topic, skip_reason=reason)
+        payload["attempts"] = attempts
         json_path.write_text(json.dumps(payload, indent=2) + "\n")
         return PremiseScoutResult(True, reason, None, json_path, None)
 
+    last_message_path.unlink(missing_ok=True)
     md_path.write_text(stdout + "\n")
     parsed = _extract_json_block(stdout)
     if parsed is None:
@@ -1339,6 +1419,10 @@ def run_premise_scout(
         }
     parsed.setdefault("fork", fork or topic)
     parsed["skipped"] = False
+    parsed["served_model"] = served.model
+    parsed["reasoning_effort"] = served.reasoning_effort
+    parsed["usage"] = usage
+    parsed["attempts"] = attempts
     json_path.write_text(json.dumps(parsed, indent=2) + "\n")
     conviction = str(parsed.get("conviction_after") or "unknown")
     return PremiseScoutResult(False, None, md_path, json_path, conviction)
@@ -1456,6 +1540,8 @@ def resolve_axes(raw_axes: str, *, allow_non_gpt: bool = False) -> list[str]:
                 axis_names.extend(PRESETS[token])
             elif token in AXES:
                 axis_names.append(token)
+            elif token in RETIRED_AXES:
+                raise ValueError(f"axis '{token}' is retired: {RETIRED_AXES[token]}")
             else:
                 raise ValueError(
                     f"unknown axis '{token}'. Available axes: {', '.join(sorted(AXES.keys()))}; "

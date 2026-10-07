@@ -132,8 +132,6 @@
   "uses": {
     "dispatch_profiles": [
       "observe_bulk",
-      "composer_review",
-      "composer_screen",
       "fast_extract",
       "cheap_tick",
       "deep_review",
