@@ -27,7 +27,7 @@ Output:
 
 **Dispatch note (the strong form):** run this adversarially via a **different-lineage** model — a
 same-lineage auditor shares the blind spots. `scripts/spirit_audit.sh <contract> <artifact>…` fans
-out Cursor Composer 2.5 (third-lineage, measured literal-contract-follower) over the artifacts; or
-invoke `/critique` with the `composer` axis. Cross-domain examples: an intel thesis (alpha confounded
+out GPT-6 Astra at low effort (codex-cli subscription; it replaced Cursor Composer 2.5, retired
+2026-10-07) over the artifacts; or invoke `/critique` with a cross-lab axis (`glm`, `grok`). Cross-domain examples: an intel thesis (alpha confounded
 with beta? lookahead leakage?), a genomics gate (a command-green gate masking a real regression?),
 a research memo (cherry-picked evidence = degenerate-pass).

@@ -9,13 +9,16 @@
 # Anchor: agent-infra decisions/2026-06-16-improve-dispatch-route-to-cursor-agent.md (Fix B).
 # Verified CLI surface (cursor-agent 2026.06.15): --mode {plan,ask}, ask=read-only;
 # NO native --timeout (wrap with shell timeout); -f/--force auto-approves read commands;
-# --workspace roots it. Model = Composer ONLY (Cursor's native lane — best price/perf,
-# operator directive 2026-06-19). A non-Composer --model (opus/gpt/…) is off-policy AND
-# hook-blocked by pretool-cursor-model-guard.py: cursor proxies frontier models at separate
-# metered rates. --model accepts composer tiers only (composer-2.5 / composer-2.5-fast).
+# --workspace roots it. 2026-10-07: Composer 2.5 (this script's old default and only model)
+# was retired as outdated; its successor is gpt-6-astra at low effort via
+# `codex exec -s read-only -C <dir> -m gpt-6-astra -c model_reasoning_effort=low -o <out> -`,
+# which is now the default read-only repo lane. This script has NO default model any more:
+# --model must be an exact admitted Cursor Grok slug (grok-4.7-{low,medium,high,xhigh}[-fast]).
+# opus/gpt/claude pins are off-policy AND hook-blocked by pretool-cursor-model-guard.py:
+# cursor proxies frontier models at separate metered rates.
 #
 # Usage:
-#   cursor_dispatch.sh --prompt "<text>" --out <artifact> [--workspace DIR] [--model M] [--timeout S]
+#   cursor_dispatch.sh --prompt "<text>" --out <artifact> --model grok-4.7-low [--workspace DIR] [--timeout S]
 # Exit codes (any non-zero → caller FALLBACK to claude Agent lane):
 #   0  success — ANSI-stripped, non-empty analysis written to --out
 #   10 cursor-agent binary not found
@@ -26,7 +29,7 @@
 #    2 usage error
 set -uo pipefail
 
-MODEL="composer-2.5"                    # Composer ONLY (best price/perf; non-composer is hook-blocked + off-policy)
+MODEL=""                                # required: exact grok-4.7-* slug (Composer retired 2026-10-07)
 WORKSPACE="$PWD"
 TIMEOUT=600                              # cursor-agent has no native timeout; bound it here
 PROMPT=""
@@ -43,6 +46,12 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$PROMPT" ] && [ -n "$OUT" ] || { echo "usage: --prompt and --out required" >&2; exit 2; }
+case "$MODEL" in
+  grok-4.7-low|grok-4.7-medium|grok-4.7-high|grok-4.7-xhigh) ;;
+  grok-4.7-low-fast|grok-4.7-medium-fast|grok-4.7-high-fast|grok-4.7-xhigh-fast) ;;
+  composer*) echo "usage: $MODEL retired 2026-10-07; use codex exec -s read-only -m gpt-6-astra -c model_reasoning_effort=low, or --model grok-4.7-low" >&2; exit 2;;
+  *) echo "usage: --model must be an exact grok-4.7-{low,medium,high,xhigh}[-fast] slug (Composer retired 2026-10-07; default lane is codex exec gpt-6-astra low)" >&2; exit 2;;
+esac
 
 # Preflight 1 — binary present (bare runners / Docker may lack it).
 command -v cursor-agent >/dev/null 2>&1 || { echo "FALLBACK: cursor-agent not found" >&2; exit 10; }

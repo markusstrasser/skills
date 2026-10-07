@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Steer / interaction miner — full-corpus transcript mining via Composer 2.5 (cheap, parallel).
+"""Steer / interaction miner — full-corpus transcript mining via GPT-6 Astra low (codex exec, parallel).
 
 The full-coverage, multi-signal counterpart to /observe's recent-window analysis. Mines Claude Code
 session transcripts for human-agent interaction signals:
@@ -8,17 +8,18 @@ session transcripts for human-agent interaction signals:
   - agent_miss   : a concrete agent mistake / violated discipline            -> /observe + which-hook-to-build
 
 Pipeline: agentlogs.db universe -> extract (collapse tool noise) -> FREE human-turn pre-filter (skip
-autonomous sessions) -> Composer 2.5 ask-mode (parallel) -> JSONL -> scanned-ledger keyed by
-(vendor, session) for idempotent / incremental re-runs.
+autonomous sessions) -> `codex exec` gpt-6-astra low, read-only sandbox, transcript on stdin
+(parallel) -> JSONL -> scanned-ledger keyed by (vendor, session) for idempotent / incremental re-runs.
 
-Cost ~ $0.085 per interactive session (Composer $0.50/M in, $2.50/M out; cacheRead counted at full
-input rate = conservative upper bound). Budget-capped. NOTE: >3 workers overshoots the cap by
-~$0.5-0.8 (in-flight calls finish past the cut) — keep workers <=3 for a tight budget.
+2026-10-07: Cursor Composer 2.5 (the old lane, ~$0.085/session metered) was retired as outdated;
+the operator's successor is GPT-6 Astra at low effort on the codex-cli subscription ($0 marginal).
+The cap is therefore a TOKEN budget (input + output + reasoning), and the run reports all three.
+In-flight calls finish past the cut, so >3 workers overshoots the cap slightly.
 
 Usage:
-  uv run python3 mine_steers.py --from-agentlogs --prompt-mode multi --budget 5 --out signals.jsonl
+  uv run python3 mine_steers.py --from-agentlogs --prompt-mode multi --token-budget 15000000 --out signals.jsonl
   uv run python3 mine_steers.py --from-agentlogs --prompt-mode steers --per-month 25 --workers 3
-Requires: cursor-agent (`agent`) logged in (Cursor subscription); ~/.claude/agentlogs.db.
+Requires: codex-cli logged in (ChatGPT subscription); ~/.claude/agentlogs.db.
 Re-runs skip already-scanned sessions via the ledger, so a daily incremental pass is ~free.
 """
 import json, os, sys, subprocess, threading, random, argparse, sqlite3
@@ -86,8 +87,37 @@ def extract(path):
     return out, n_prose
 
 
-def cost_of(u):
-    return (u.get("inputTokens", 0) + u.get("cacheReadTokens", 0)) * 0.5e-6 + u.get("outputTokens", 0) * 2.5e-6
+MODEL = "gpt-6-astra"
+EFFORT = "low"
+
+
+def tokens_of(u):
+    """(input, output, reasoning) from a codex `turn.completed` usage block."""
+    return (
+        int(u.get("input_tokens", 0) or 0),
+        int(u.get("output_tokens", 0) or 0),
+        int(u.get("reasoning_output_tokens", 0) or 0),
+    )
+
+
+def run_codex(prompt, transcript, last_path):
+    """codex exec, read-only sandbox in the empty WS dir; transcript appended from stdin."""
+    cmd = ["codex", "exec", "-s", "read-only", "-C", WS, "--skip-git-repo-check", "--ephemeral",
+           "--json", "-m", MODEL, "-c", f"model_reasoning_effort={EFFORT}", "-o", last_path, prompt]
+    res = subprocess.run(cmd, input=transcript, capture_output=True, text=True, encoding="utf-8",
+                         errors="replace", timeout=240)
+    usage = {}
+    for ln in (res.stdout or "").splitlines():
+        try:
+            ev = json.loads(ln)
+        except Exception:
+            continue
+        if ev.get("type") == "turn.completed":
+            usage = ev.get("usage") or {}
+    if res.returncode != 0 or not os.path.exists(last_path):
+        raise RuntimeError(f"codex exit {res.returncode}: {(res.stderr or '')[-300:]}")
+    text = open(last_path, encoding="utf-8", errors="replace").read()
+    return text, usage
 
 
 def candidates_from_agentlogs(db, min_lines, vendor):
@@ -106,7 +136,7 @@ def candidates_from_agentlogs(db, min_lines, vendor):
 
 
 lock = threading.Lock()
-state = {"spent": 0.0, "scanned": 0, "skipped": 0, "steers": 0, "err": 0, "already": 0}
+state = {"tok_in": 0, "tok_out": 0, "tok_reason": 0, "scanned": 0, "skipped": 0, "steers": 0, "err": 0, "already": 0}
 scanned_keys = set()
 ledger_fh = None
 
@@ -134,37 +164,34 @@ def process(rec, budget, out_fh, vendor):
         if (vendor + ":" + session) in scanned_keys:
             state["already"] += 1
             return ("already", month, 0)
-        if state["spent"] >= budget:
+        if state["tok_in"] + state["tok_out"] + state["tok_reason"] >= budget:
             return ("budget", month, 0)
     md, nprose = extract(path)
     if md is None or nprose < 2:
         with lock: state["skipped"] += 1
         record(vendor, session, "skip_no_human", 0, 0.0)
         return ("skip", month, 0)
-    mdpath = os.path.join(WS, session + ".md")
-    open(mdpath, "w", encoding="utf-8").write(md)
-    prompt = ACTIVE_INSTR + f"\n\nRead the file {session}.md in this workspace and extract from it per the spec above."
+    last_path = os.path.join(WS, session + ".last.txt")
+    prompt = ACTIVE_INSTR + "\n\nThe transcript is the <stdin> block below; extract from it per the spec above."
     try:
-        res = subprocess.run(["agent", "-p", "--mode", "ask", "--trust", "--model", "composer-2.5",
-                              "--output-format", "json", "--workspace", WS, prompt],
-                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=240)
-        obj = json.loads(res.stdout)
+        result, u = run_codex(prompt, md, last_path)
     except Exception:
         with lock: state["err"] += 1
         record(vendor, session, "err", 0, 0.0)
         return ("err", month, 0)
     finally:
-        try: os.remove(mdpath)
+        try: os.remove(last_path)
         except Exception: pass
-    u = obj.get("usage", {}); c = cost_of(u)
+    t_in, t_out, t_reason = tokens_of(u); c = 0.0  # subscription lane: $0 marginal, tokens tracked
     signals = []
-    for ln in obj.get("result", "").splitlines():
+    for ln in result.splitlines():
         ln = ln.strip()
         if ln.startswith("{"):
             try: signals.append(json.loads(ln))
             except Exception: pass
     with lock:
-        state["spent"] += c; state["scanned"] += 1; state["steers"] += len(signals)
+        state["tok_in"] += t_in; state["tok_out"] += t_out; state["tok_reason"] += t_reason
+        state["scanned"] += 1; state["steers"] += len(signals)
         for s in signals:
             s["_month"] = month; s["_session"] = session
             out_fh.write(json.dumps(s, ensure_ascii=False) + "\n")
@@ -181,7 +208,8 @@ def main():
     ap.add_argument("--vendor", default="claude")
     ap.add_argument("--min-lines", type=int, default=40, help="Pre-filter: skip tiny (autonomous) sessions.")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--budget", type=float, default=4.5)
+    ap.add_argument("--token-budget", type=int, default=15_000_000,
+                    help="Stop starting sessions once input+output+reasoning tokens reach this.")
     ap.add_argument("--per-month", type=int, default=0, help="Stratified sample N per month (0 = all).")
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--seed", type=int, default=7)
@@ -219,18 +247,21 @@ def main():
             try: scanned_keys.add(json.loads(ln)["vendor"] + ":" + json.loads(ln)["session"])
             except Exception: pass
     ledger_fh = open(a.ledger, "a", encoding="utf-8")
-    sys.stderr.write(f"work={len(work)} by_month={bymc} budget=${a.budget} mode={a.prompt_mode} "
+    sys.stderr.write(f"work={len(work)} by_month={bymc} model={MODEL}/{EFFORT} "
+                     f"token_budget={a.token_budget} mode={a.prompt_mode} "
                      f"ledger_known={len(scanned_keys)}\n"); sys.stderr.flush()
     out_fh = open(a.out, "w", encoding="utf-8")
     pms = {}; pmc = {}
     with ThreadPoolExecutor(max_workers=a.workers) as ex:
-        futs = [ex.submit(process, r, a.budget, out_fh, a.vendor) for r in work]
+        futs = [ex.submit(process, r, a.token_budget, out_fh, a.vendor) for r in work]
         for f in as_completed(futs):
             tag, month, n = f.result()
             if tag == "ok":
                 pms[month] = pms.get(month, 0) + n; pmc[month] = pmc.get(month, 0) + 1
     out_fh.close()
-    sys.stderr.write(f"\nDONE spent=${state['spent']:.3f} scanned={state['scanned']} "
+    sys.stderr.write(f"\nDONE model={MODEL}/{EFFORT} in_tok={state['tok_in']} "
+                     f"out_tok={state['tok_out']} reason_tok={state['tok_reason']} "
+                     f"scanned={state['scanned']} "
                      f"skipped_no_human={state['skipped']} already_in_ledger={state['already']} "
                      f"errors={state['err']} signals={state['steers']}\n")
     for m in sorted(pmc):
