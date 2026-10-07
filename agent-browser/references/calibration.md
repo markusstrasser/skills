@@ -4,7 +4,7 @@ Append new dated sections; do not rewrite prior results.
 
 ## 2026-07-20 — initial v0.31.2 calibration
 
-Scope: the original skill at commit `14a5129`, tested against work that was not used to write it.
+Scope: the original skill at commit `1598b57`, tested against work that was not used to write it.
 
 ### Held-out friction
 

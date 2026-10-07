@@ -453,7 +453,7 @@ if not new_changes or not auto_commit_enabled:
     #   (2) UNATTRIBUTABLE subprocess output (in NO ledger) -- COUNT ONLY, never paths
     #       and never a commit instruction (see the attribution floor below); surfaced
     #       ONLY when no peer shares the checkout, else it is pure noise
-    #       (4 firings on peer debug files, 85bd3604 2026-06-19; suppressed per d1907d3).
+    #       (4 firings on peer debug files, 85bd3604 2026-06-19; suppressed per f3e0bff).
     # Files stay in the working tree + git status either way -- no data loss.
     parts = []
     if new_changes and not auto_commit_enabled:

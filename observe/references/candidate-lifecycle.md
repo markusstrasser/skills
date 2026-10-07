@@ -12,7 +12,7 @@ two mentions in one retro is one source, not two.
 **Denominator rule (every extractor, every mode).** Each miner reports files scanned, records
 parsed, items matched — and the output quotes them. A bare `0 found` is indistinguishable from a
 broken parser; the `#f` extractor returned a silent false-zero for months because nothing forced
-`matched 0 / parsed 0` into view (fixed skills@837f4d2). `matched 0` with a healthy denominator is
+`matched 0 / parsed 0` into view (fixed skills@9b59627). `matched 0` with a healthy denominator is
 signal. **`parsed 0` is a BROKEN SOURCE** — fix it before trusting the run.
 
 **Two-stream status discipline (F1, `agent-infra/.claude/rules/gov-id.md`).** Pick the glyph by what

@@ -301,7 +301,7 @@ if missing:
     sys.exit(2)
 
 # Advisory checklist RETIRED 2026-07-10 (was: once-per-session additionalContext self-check,
-# wired live by 9a8678c after being silently dead). Observed live 2026-07-10: it fires only
+# wired live by 2cc6906 after being silently dead). Observed live 2026-07-10: it fires only
 # when tags are ALREADY present, duplicates the block path's discipline, and costs the agent
 # a full extra turn answering it. The blocking path above is the enforcement; tags-present
 # sessions now stop silently.

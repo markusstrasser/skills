@@ -83,3 +83,6 @@ critique/scripts/.model-review/
 # .model-review is critique-run SCRATCH at any depth (SKILL.md: "stays gitignored"); meaningful
 # outputs converge to docs/audit/. Fully ignored — derived artifacts do not belong in git.
 .model-review/
+
+# personal health reference — local only, purged from history 2026-10-07
+bio-verify/references/selve-claim-patterns.md

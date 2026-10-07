@@ -6,9 +6,9 @@ Why single-sourced (epistemic principle: a shared invariant has ONE definition):
 two hooks (pretool-no-background-commit and the now-retired regex-based
 pretool-bash-loop-guard) each carried a private copy of "sanitize the command
 string before matching", and the copies diverged 4 times in 3 days — every
-divergence was a live false block or silent pass: c1323e8 (heredoc body false-blocked loop-guard), ff79b2d (heredoc body
-false-blocked a codex-brief write in no-background-commit), 7af4faa (quoted
-prose 'then' at EOL false-blocked a commit), 681a068 (pipe-masked commit passed
+divergence was a live false block or silent pass: 08d1b6b (heredoc body false-blocked loop-guard), de77a29 (heredoc body
+false-blocked a codex-brief write in no-background-commit), 8812a43 (quoted
+prose 'then' at EOL false-blocked a commit), ececa96 (pipe-masked commit passed
 silently). A stripper that differs between guards means the same command is
 data to one hook and code to another. Consumers IMPORT these functions; never
 re-state them. test_lib_bash_cmd_strip.py pins the 4 historical edge cases and

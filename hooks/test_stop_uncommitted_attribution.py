@@ -28,7 +28,7 @@ from pathlib import Path
 # precommit-trigger: stop-uncommitted-warn.sh test_stop_uncommitted_attribution.py
 # ^ validate-changed-hooks.sh runs this test when the hook (or this test) is staged. The
 #   inline-single-quote idiom that silently kills this bash-embedded hook has recurred twice
-#   (2026-06-11, then f8e2168); test_embedded_python_parses + the attribution cases now block
+#   (2026-06-11, then b46905f); test_embedded_python_parses + the attribution cases now block
 #   the next reintroduction at commit time instead of weeks later.
 
 SCRIPT = Path(__file__).resolve().parent / "stop-uncommitted-warn.sh"
@@ -100,7 +100,7 @@ class StopUncommittedAttributionTest(unittest.TestCase):
     def _write_settled(self, rel: str, content: str) -> None:
         """Write a repo file and backdate its mtime past the hook's 90s in-flight
         window. The Stop hook defers files written in the last 90s as still-being-
-        written subagent stubs (stop-uncommitted-warn.sh, commit f8e2168); a fresh
+        written subagent stubs (stop-uncommitted-warn.sh, commit b46905f); a fresh
         write here would be deferred, never committed, masking the attribution
         behavior these tests target. In-flight deferral is covered separately by
         test_inflight_file_deferred."""
