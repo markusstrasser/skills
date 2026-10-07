@@ -57,22 +57,17 @@ cd ~/Projects/agent-infra && uv run python3 "$SCOUT" ~/Projects/$PROJECT \
 ```
 
 **Provider order (local-first):**
-1. **`openai`** (default) — `gpt-6-astra` via codex-cli subscription ($0). Operator decision
-   2026-10-07: Astra at low effort replaces Composer. The scout script
-   (`agent-infra/scripts/code-review-scout.py`) still pins `--reasoning-effort medium` for this
-   provider and still defaults `--provider` to `cursor`; always pass `--provider openai` until
-   that script is updated. On a Codex plan-limit error (llmx exit 6), rerun the same command
-   with `gpt-6-sol` at high effort.
-2. **`google`** — Gemini via llmx (paid API path since 2026-05-31). Use when the Codex plan is
-   exhausted and Sol is unavailable.
-3. **`cursor`** — retired with Composer 2.5 (2026-10-07); the scout's `cursor` provider pins
-   `composer-2.5`, which llmx refuses with exit 2. Do not select it.
+1. **`openai`** (default) — `gpt-6-astra` at low effort via codex-cli subscription ($0).
+   Operator decision 2026-10-07: Astra low replaces Composer 2.5.
+2. **`sol`** — `gpt-6-sol` at high effort, subscription. Rerun with `--provider sol` on a Codex
+   plan-limit error for Astra (llmx exit 6).
+3. **`google`** — Gemini via llmx (paid API path since 2026-05-31). Use when both Codex models
+   are exhausted.
 
-If the scout reports rate limiting on openai, re-run with `--provider google`.
+Composer 2.5 and the scout's `cursor` provider were retired 2026-10-07.
 For an explicitly selected high-recall review or a concrete unresolved risk that needs another
-model, use `--both` (google + openai). `--all-providers` still includes the retired `cursor`
-provider, so its Composer batches fail; avoid it until the scout drops that provider. Module size
-alone does not require a broader panel.
+model, use `--both` (google + openai; `--all-providers` is the same set). Module size alone does
+not require a broader panel.
 
 **Timeout:** Set Bash timeout to 600000 (10 min) — large projects have 40+ batches.
 
