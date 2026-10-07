@@ -291,7 +291,7 @@ SEARCH_TOOL_RE = re.compile(
 )
 
 # llmx subscription-eligible allowlist (llmx-routing.md, pruned to the Pareto
-# frontier 2026-09-25 — retired ids are refused by llmx itself;
+# frontier 2026-09-25, composer-2.5 retired 2026-10-07 — retired ids are refused by llmx itself;
 # rederive by tripping the transport error or `llmx info`). A call naming one
 # of these WITHOUT --subscription/--lite/-p/--provider silently routes
 # API-direct and BILLS per-token — "the --subscription flag IS the $0"
@@ -301,7 +301,6 @@ _LLMX_SUBSCRIPTION_MODELS = {
     "claude-fable-5-1",
     "claude-opus-5",
     "claude-opus-5-5",
-    "composer-2.5",
     "gpt-6-astra",
     "gpt-6",
     "gpt-6-sol",

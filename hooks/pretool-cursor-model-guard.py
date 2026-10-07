@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 # Gov-ID: hook:cursor-model-guard
-# goal: cursor-agent may run native Composer or exact admitted Cursor Grok
-#       slugs — never generic proxied frontier models
+# goal: cursor-agent may run only exact admitted Cursor Grok slugs — never
+#       retired Composer or generic proxied frontier models
 # verifier: selftest
 # blast_radius: shared
 """BLOCK `cursor-agent` model pins outside the admitted Cursor-native set.
 
 Cursor's CLI can proxy frontier models (opus, gpt, claude, …) at their own
-metered rates. Composer remains the default lane. Verified live 2026-09-23
+metered rates. Composer 2.5 / 2.5-fast were retired 2026-10-07 (operator:
+outdated; successor gpt-6-astra low via `codex exec`), so a composer pin blocks,
+and so does a prompt run (`-p`/`--print`) with no `--model`, because the account
+default is Composer. Verified live 2026-09-23
 with `cursor-agent` signed in: the registry admits exact `grok-4.7-{low,medium,
 high,xhigh}` slugs (trailing `-fast` optional) — NO `cursor-` prefix, unlike 4.6.
 The `cursor-grok-4.6-*` slugs were retired 2026-09-25 (Pareto-frontier prune). A 2026-09-22 guess admitted invented
@@ -16,8 +19,8 @@ Bare `grok-4.7` / `grok-4.6` (no effort suffix), retired 4.5/4.6 aliases, and
 generic opus/gpt/claude/gemini/sonnet pins remain off-policy.
 
 Enforcement, not instruction: a prior session called cursor with a foreign
-model anyway. No explicit `--model` is fine — the account default is Composer.
-We only block an explicit model outside the admitted set.
+model anyway. Non-prompt subcommands (`agent models`, `--version`, `status`)
+need no model; a prompt run must pin an admitted slug.
 """
 from __future__ import annotations
 
@@ -37,7 +40,7 @@ _MODEL = re.compile(r"(?:--model[=\s]+|(?<![\w-])-m\s+)([\"']?)([A-Za-z0-9._/-]+
 # dispatch-cursor-arm.sh <workspace> <model> ask "<prompt>" — model is arg #2
 _ARM_MODEL = re.compile(r"\bdispatch-cursor-arm\.sh\s+\S+\s+([A-Za-z0-9._/-]+)")
 
-# Composer stays open to native future tiers. Grok is deliberately exact: registry
+# Grok is deliberately exact: registry
 # drift previously made stale aliases silently unsafe, so no wildcard family match.
 # 4.7 and 4.6 use DIFFERENT slug shapes on the live Cursor registry (verified
 # 2026-09-23; 4.6 retired 2026-09-25) — 4.7 carries no `cursor-` prefix, 4.6 did — so a single
@@ -45,15 +48,28 @@ _ARM_MODEL = re.compile(r"\bdispatch-cursor-arm\.sh\s+\S+\s+([A-Za-z0-9._/-]+)")
 # ids (e.g. `cursor-grok-4.7-max`). Admission is exact membership in one
 # explicit set built from the two real shapes, never a wildcard.
 _COMPOSER = re.compile(r"^composer(?:[-.]|$)", re.IGNORECASE)
+# A prompt run: without --model it falls to the account default (Composer).
+_PROMPT_RUN = re.compile(r"(?:^|\s)(?:-p|--print)(?=\s|$)")
 _GROK_EFFORTS = ("low", "medium", "high", "xhigh")
 _CURSOR_GROK_MODELS = frozenset(
     {f"grok-4.7-{effort}" for effort in _GROK_EFFORTS}
     | {f"grok-4.7-{effort}-fast" for effort in _GROK_EFFORTS}
 )
 
+_RETIRED_MSG = (
+    "BLOCKED: cursor-agent model '{model}' is retired (Composer 2.5, retired 2026-10-07 as "
+    "outdated). Successor: gpt-6-astra at low effort via "
+    "`codex exec -s read-only -C <repo> -m gpt-6-astra -c model_reasoning_effort=low` "
+    "(or `llmx chat -m gpt-6-astra --reasoning-effort low`). For a Cursor-native read-only "
+    "lane pin an exact grok-4.7-{{low,medium,high,xhigh}} slug."
+)
+_NO_MODEL_MSG = (
+    "BLOCKED: cursor-agent prompt run without --model uses the account default, which is "
+    "Composer (retired 2026-10-07). Pin an exact grok-4.7-{low,medium,high,xhigh} slug, or "
+    "use `codex exec -m gpt-6-astra -c model_reasoning_effort=low` (Composer's successor)."
+)
 _MSG = (
-    "BLOCKED: cursor-agent model '{model}' is not admitted. Use native Composer "
-    "(composer-2.5 / composer-2.5-fast) or an exact live Cursor Grok slug "
+    "BLOCKED: cursor-agent model '{model}' is not admitted. Use an exact live Cursor Grok slug "
     "grok-4.7-{{low,medium,high,xhigh}} (no cursor- prefix) with optional trailing -fast. "
     "Bare grok-4.7 is xAI API (use the grok CLI or llmx for it); retired 4.5/4.6 slugs and fast-prefix aliases are forbidden. For opus/gpt use "
     "`claude -p` / `codex exec` / `llmx`, not cursor."
@@ -61,7 +77,7 @@ _MSG = (
 
 
 def _model_allowed(model: str) -> bool:
-    return bool(_COMPOSER.match(model) or model.lower() in _CURSOR_GROK_MODELS)
+    return model.lower() in _CURSOR_GROK_MODELS
 
 
 def _is_cursor(cmd: str) -> bool:
@@ -88,15 +104,21 @@ def verdict(cmd: str) -> tuple[str, str]:
             if arm:
                 models.append(arm.group(1))
         for model in models:
+            if _COMPOSER.match(model):
+                return "block", _RETIRED_MSG.format(model=model)
             if not _model_allowed(model):
                 return "block", _MSG.format(model=model)
+        if not models and _PROMPT_RUN.search(seg) and not _DISPATCH_ARM.search(seg):
+            return "block", _NO_MODEL_MSG
     return "pass", ""
 
 
 def _selftest() -> int:
     cases = [
-        ("agent -p --mode ask --trust --model composer-2.5 'hi'", "pass"),
-        ("agent -p --trust --model composer-2.5-fast 'x'", "pass"),
+        # Composer retired 2026-10-07 — every tier refuses.
+        ("agent -p --mode ask --trust --model composer-2.5 'hi'", "block"),
+        ("agent -p --trust --model composer-2.5-fast 'x'", "block"),
+        ("cursor-agent -p --model=composer-3 'x'", "block"),
         ("agent -p --mode ask --trust --model grok-4.7-low 'x'", "pass"),
         ("agent -p --mode ask --trust --model grok-4.7-high 'x'", "pass"),
         ("agent -p --mode ask --trust --model grok-4.7-high-fast 'x'", "pass"),
@@ -115,10 +137,14 @@ def _selftest() -> int:
         ("agent -p --trust --model gpt-5.5 'do it'", "block"),
         ("agent -p --trust -m claude-opus-5-5 'x'", "block"),
         ("agent -p --trust --model=sonnet 'x'", "block"),
-        ("cursor-agent -p --trust 'no model = account default'", "pass"),
+        # no model on a prompt run = account default = retired Composer
+        ("cursor-agent -p --trust 'no model = account default'", "block"),
+        ("agent --print --mode ask 'x'", "block"),
+        ("cursor-agent --version", "pass"),
         ("agent models", "pass"),  # bare agent, no cursor flag → not matched
         ("agent status", "pass"),
-        ("~/Projects/evals/bin/dispatch-cursor-arm.sh /tmp/wt composer-2.5 ask 'x' o.txt", "pass"),
+        ("~/Projects/evals/bin/dispatch-cursor-arm.sh /tmp/wt composer-2.5 ask 'x' o.txt", "block"),
+        ("~/Projects/evals/bin/dispatch-cursor-arm.sh /tmp/wt grok-4.7-low ask 'x' o.txt", "pass"),
         ("dispatch-cursor-arm.sh /tmp/wt opus ask 'x' o.txt", "block"),
         ("llmx chat -m claude-opus-5-5 'hi'", "pass"),  # not cursor
         ("python3 -m agent_infra.foo", "pass"),
@@ -127,7 +153,7 @@ def _selftest() -> int:
         # dual-lane: cursor-agent (no model) + a SEPARATE llmx -m foreign → not cursor routing (FP fix, 2026-06-22)
         ("which cursor-agent; llmx chat --subscription -m gpt-5.5 'ping'", "pass"),
         ("cursor-agent --version; llmx -m claude-opus-5-5 'x'", "pass"),
-        ("cursor-agent -p --model composer-2.5 'a' && llmx -m opus 'b'", "pass"),
+        ("cursor-agent -p --model grok-4.7-low 'a' && llmx -m opus 'b'", "pass"),
         # but a foreign model IN the cursor segment still blocks
         ("cursor-agent -p --model gpt-5.5 'a' && echo done", "block"),
     ]

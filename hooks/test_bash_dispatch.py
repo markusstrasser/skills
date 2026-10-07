@@ -749,7 +749,7 @@ def test_cursor_agent_foreign_model_blocks_both(sandbox):
     oracle, disp = _both(envelope, sandbox)
     assert oracle["exit_code"] == 2
     assert disp["exit_code"] == 2
-    assert "Composer" in oracle["block_msg"] or "Composer" in disp["block_msg"]
+    assert "grok-4.7" in oracle["block_msg"] or "grok-4.7" in disp["block_msg"]
 
 
 def test_destructive_git_ref_never_hard_blocks_both(git_sandbox):
