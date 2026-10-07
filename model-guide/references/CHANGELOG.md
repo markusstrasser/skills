@@ -1,5 +1,16 @@
 # Model Guide Changelog
 
+## 2026-10-07 - Composer 2.5 retired; successor GPT-6 Astra at low effort
+
+Operator decision (2026-10-07): "llmx shouldn't use composer 2.5 anymore ... it's outdated". He
+chose GPT-6 Astra at `low` (codex-cli subscription, $0) over Grok 4.7 medium and over dropping the
+scout, and named Sol at high effort as the fallback ("gpt 6.1 sol high"; the live slug is
+`gpt-6-sol`). Removed the composer-2.5(-fast) roster row; the Retired line names both ids. Skills
+callers moved: the `/critique` premise scout runs `codex exec -s read-only` on Astra low with a
+Sol-high fallback on a Codex plan limit, `/code-review` defaults to the scout's `openai` provider,
+the `composer_review`/`composer_screen` dispatch profiles and the `composer` critique axis refuse
+with a pointer, and the cursor-model guard blocks Composer pins and model-less cursor prompt runs.
+
 ## 2026-09-28 - Opus 5.5 vendor prompting guide absorbed
 
 Operator pasted the vendor guide "Prompting Claude Opus 5.5". Most points were already in

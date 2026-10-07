@@ -13,7 +13,7 @@ prompt in [gemini-dispatch-prompt.md](gemini-dispatch-prompt.md) · staging proc
 2. **Extract + pre-filter** ([transcript preparation](transcript-extraction.md)). Operational context per [transcript-extraction.md](transcript-extraction.md)
    Step 1.3.
 3. **Classify** ([analysis dispatch](analysis-dispatch.md)), then **precision-pass**: in Cursor the subagent analysis *is* the
-   precision pass; headless, run a `composer_review` screen on HIGH-severity candidates only (max 3
+   precision pass; headless, run a `fast_extract` (gpt-6-astra low) screen on HIGH-severity candidates only (max 3
    clusters, ~20 lines of evidence each) demanding `VERDICT promote|drop|needs_more_evidence` plus a
    cited transcript line or `MISSING`. Skip entirely when headless returned zero candidates.
 4. **Stage + summarize** — sessions analyzed, shape anomalies, signals staged, candidates by

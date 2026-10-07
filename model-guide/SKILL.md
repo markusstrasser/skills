@@ -32,18 +32,17 @@ Choose a model and effort from the principles below, then read the model's refer
 | [claude-opus-5](references/models/claude-opus-5.md) | Cyber and dual-use biology work; lanes pinned to it | No bio classifier; 5.5 re-routes cyber | Subscription, exact id only |
 | [claude-sonnet-5](references/models/claude-sonnet-5.md) | Cost tier: gated coding, no-gate mechanical work, injection-heavy input | Strongest prompt-injection robustness at a lower price than Opus | Agent tool / `claude -p`; not on the llmx subscription allowlist |
 | claude-haiku-4-5 | Cheapest Claude for mechanical no-gate work | Lowest-cost Claude tier | Agent tool; llmx anthropic-direct |
-| [gpt-6-astra](references/models/gpt-6-astra.md) | Default GPT: headless cheap lane at `low`, Codex implementation, cross-lab reviewer, quantitative work (pro mode) | Beats Luna at any effort on quality; $0 on the subscription | codex-cli subscription (`llmx --subscription`, `codex exec`) |
+| [gpt-6-astra](references/models/gpt-6-astra.md) | Default GPT: headless cheap lane at `low` (incl. the `/critique` premise scout and `/code-review` scout), Codex implementation, cross-lab reviewer, quantitative work (pro mode) | Beats Luna at any effort on quality; $0 on the subscription | codex-cli subscription (`llmx --subscription`, `codex exec`) |
 | [gpt-6-sol](references/models/gpt-6-sol-luna.md) | Metered mid tier; fallback when Astra's plan limit binds | Astra training at a lower serving cost | Codex subscription + API |
 | [gpt-6-luna](references/models/gpt-6-sol-luna.md) | Metered bulk extraction and mechanical work | Cheapest GPT ("6 luna wins") | Codex subscription + API |
 | [grok-4.7](references/models/grok-4-7.md) | Opt-in read-only repo critique axis; Grok Build headless | Separate lab with workspace access; cost and speed edge | cursor-agent `grok-4.7-<effort>[-fast]`; `grok` CLI; xAI API unverified |
-| composer-2.5(-fast) | Built-in premise scout in `/critique` and `/code-review` | Repo-grounded caller and join checks by default | cursor-cli subscription |
 | [gemini-3.8-flash](references/models/gemini.md) | Critique cosigner only, never the sole reviewer | Cheap diverse reviewer in the 2G+2GPT mix | Metered API, `LLMX_GEMINI_OK=1` |
 | [gemini-3.1-pro-preview](references/models/gemini.md) | Explicit `-m` one-offs (ARC-AGI-2, GPQA, video) | Registered, not a default anywhere | Metered API |
 | [gemini-3.5/3.1-flash-lite](references/models/gemini.md) | Registered for pricing, not routed | Lets the spend guard price them | Metered API |
 | [GLM-5.2](references/models/glm-5-2.md) | Opt-in review cosigner and epistemic guardrail; not an extractor | Separate training lab; best measured calibration among routed models | OpenRouter/zai metered, `--axes …,glm` |
 | [kimi-k3](references/models/kimi-k3.md) | Opt-in long-horizon coding probe | Open-weight model from a separate lab; cache-cheap repeated context | `llmx -p kimi` metered; Kimi Code CLI |
 
-Retired 2026-09-25 (operator: allowlists hold the Pareto frontier only): every model not in this table; git history keeps their old guidance.
+Retired 2026-09-25 (operator: allowlists hold the Pareto frontier only): every model not in this table; git history keeps their old guidance. Retired 2026-10-07 (operator: "outdated"): composer-2.5 and composer-2.5-fast; successor gpt-6-astra at `low` effort, with gpt-6-sol at `high` when Astra's plan limit binds.
 
 ## Settled operator decisions
 

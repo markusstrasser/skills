@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: "Use when: /code-review, review diff/PR/change, scout loop. Composer default scout; validates against code. NOT plan/findings review (/critique)."
+description: "Use when: /code-review, review diff/PR/change, scout loop. GPT-6 Astra (codex) default scout; validates against code. NOT plan/findings review (/critique)."
 user-invocable: true
 argument-hint: '[project focus] — e.g., "intel optimization", "genomics dead-code", or blank for auto-rotation'
 allowed-tools:
@@ -16,8 +16,9 @@ effort: medium
 
 # Continuous Code Review
 
-Run the code-review scout (local CLI — **Cursor Composer 2.5** default via `cursor-agent`),
-validate findings against actual source code, implement safe fixes.
+Run the code-review scout (local CLI — **GPT-6 Astra** via codex-cli subscription by default),
+validate findings against actual source code, implement safe fixes. Cursor Composer 2.5, the
+previous default, was retired 2026-10-07 as outdated; llmx now refuses it.
 
 **Not the Claude Code vendor `/code-review` plugin** — this is our local skill + scout scripts
 in `agent-infra/scripts/`. Critique/execute closeouts call this skill.
@@ -52,18 +53,26 @@ the changed files. Select the depth preset below from the requested coverage and
 
 ```bash
 cd ~/Projects/agent-infra && uv run python3 "$SCOUT" ~/Projects/$PROJECT \
-  --focus $FOCUS --provider cursor --workers 2
+  --focus $FOCUS --provider openai --workers 2
 ```
 
 **Provider order (local-first):**
-1. **`cursor`** (default) — `composer-2.5` via `cursor-agent` / llmx cursor transport.
-   Frontier-equal on injected-defect review; tight output contract required.
-2. **`google`** — Gemini via llmx (paid API path since 2026-05-31). Use on Cursor pool exhaustion.
-3. **`openai`** — the configured model via codex-cli. Fallback when Gemini rate-limits.
+1. **`openai`** (default) — `gpt-6-astra` via codex-cli subscription ($0). Operator decision
+   2026-10-07: Astra at low effort replaces Composer. The scout script
+   (`agent-infra/scripts/code-review-scout.py`) still pins `--reasoning-effort medium` for this
+   provider and still defaults `--provider` to `cursor`; always pass `--provider openai` until
+   that script is updated. On a Codex plan-limit error (llmx exit 6), rerun the same command
+   with `gpt-6-sol` at high effort.
+2. **`google`** — Gemini via llmx (paid API path since 2026-05-31). Use when the Codex plan is
+   exhausted and Sol is unavailable.
+3. **`cursor`** — retired with Composer 2.5 (2026-10-07); the scout's `cursor` provider pins
+   `composer-2.5`, which llmx refuses with exit 2. Do not select it.
 
-If the scout reports rate limiting on cursor, re-run with `--provider google` or `--provider openai`.
-Use `--all-providers` for an explicitly selected high-recall review or a concrete unresolved risk
-that needs another model. Module size alone does not require a broader panel.
+If the scout reports rate limiting on openai, re-run with `--provider google`.
+For an explicitly selected high-recall review or a concrete unresolved risk that needs another
+model, use `--both` (google + openai). `--all-providers` still includes the retired `cursor`
+provider, so its Composer batches fail; avoid it until the scout drops that provider. Module size
+alone does not require a broader panel.
 
 **Timeout:** Set Bash timeout to 600000 (10 min) — large projects have 40+ batches.
 
@@ -158,8 +167,8 @@ Beyond line-level smells, flag shallow / over-abstracted design — vocabulary f
 
 | Preset | Scout focus | Provider | Notes |
 |--------|-------------|----------|-------|
-| `low` | patterns | cursor | Per-phase gate; ≤4 findings target |
-| `high` | security + patterns | cursor + `--all-providers` on diff scope | Slice closeout; recall mode |
+| `low` | patterns | openai | Per-phase gate; ≤4 findings target |
+| `high` | security + patterns | openai + `--both` on diff scope | Slice closeout; recall mode |
 
 For **diff-scoped** review (plan closeout), pass only changed files via `--module` or a hand-built
 context packet — don't scan the whole repo. **Fail fast: confirm the ref resolves (`git rev-parse`)

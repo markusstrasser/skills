@@ -114,11 +114,12 @@ Example:
    verified_at=2026-04-18T19:40Z. No fatal signals in last 80 lines."
 ```
 
-### Step 2: Composer interpret (optional, default ON for multi-signal triage)
+### Step 2: Cheap-model interpret (optional, default ON for multi-signal triage)
 
 After fetching structured ground truth, you may need to **interpret** ambiguous signals
 (stack traces, partial logs, conflicting fields). Do NOT paraphrase from memory — pass the
-raw structured payload to Composer with a tight output contract:
+raw structured payload to GPT-6 Astra at low effort (`fast_extract`; it replaced Composer 2.5,
+retired 2026-10-07) with a tight output contract:
 
 ```bash
 # Write fetched ground truth to a file first (never inline a huge blob in the prompt)
@@ -127,16 +128,16 @@ cat > /tmp/status-ground-truth.json <<'EOF'
 EOF
 
 uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
-  --profile composer_review \
+  --profile fast_extract \
   --context /tmp/status-ground-truth.json \
   --prompt "Interpret this ground truth. Output JSON only: {\"status\": running|crashed|completed|stalled|unknown, \"confidence\": high|low, \"evidence_fields\": [\"...\"], \"recommended_next_probe\": \"...\"}. Cite field names from the input — no invented uptime or exit codes." \
   --output /tmp/status-interpret.md
 ```
 
 **Rules:**
-- Composer interprets **fetched** data only — if you skipped Step 1 (fetch), do not run Step 2.
+- The model interprets **fetched** data only — if you skipped Step 1 (fetch), do not run Step 2.
 - When `confidence` is `low`, run the `recommended_next_probe` before claiming status.
-- The human-facing claim must still cite the **structured fields**, not Composer's paraphrase alone.
+- The human-facing claim must still cite the **structured fields**, not the model's paraphrase alone.
 
 Skip Step 2 when ground truth is already unambiguous (single boolean `is_running`, explicit
 `state=stopped`, zero exit code with empty queue).

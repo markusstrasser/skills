@@ -6,7 +6,7 @@ Load when the selected mode requires model analysis. Deterministic and local-onl
 
 | Harness | Default analysis | API dispatch |
 |---------|-----------------|--------------|
-| **Cursor** (Agent tool available) | parent + parallel Composer subagents (`--multitask`) | **OFF** unless `--headless` |
+| **Cursor** (Agent tool available) | parent + parallel Cursor subagents (`--multitask`) | **OFF** unless `--headless` |
 | **Claude Code / launchd / `/loop`** | deterministic extract → `observe_bulk` | ON |
 
 **Profiles.** Headless bulk classify → `observe_bulk` (`gemini-3.1-flash-lite-preview`, 1M ctx,

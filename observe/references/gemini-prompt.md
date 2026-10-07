@@ -2,7 +2,7 @@
 
 # Gemini Pattern Extraction Prompt
 
-Headless only: dispatch compressed transcripts via `observe_bulk` (`gemini-3.1-flash-lite-preview`). In Cursor, use parallel Composer subagents instead.
+Headless only: dispatch compressed transcripts via `observe_bulk` (`gemini-3.1-flash-lite-preview`). In Cursor, use parallel Cursor subagents instead.
 
 ```bash
 OBSERVE_PROJECT_ROOT="${OBSERVE_PROJECT_ROOT:-$HOME/Projects/agent-infra}"

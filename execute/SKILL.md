@@ -48,21 +48,22 @@ For each phase in the slice, in order:
    the plan was written; verify the assumptions (joins exist, deps present, schema shape) before building
    consumers against them. If a probe fails, that's a divergence → step 5.
 
-   **Composer premise probe (default at every phase boundary):** before building, dispatch a read-only
-   falsification pass on the phase's load-bearing premises — uses `composer-2.5` (not `-fast`; reasoning
-   over repo structure). Pattern:
+   **Repo premise probe (default at every phase boundary):** before building, dispatch a read-only
+   falsification pass on the phase's load-bearing premises — GPT-6 Astra at low effort in a read-only
+   codex sandbox rooted at the repo (Composer 2.5, the old lane, was retired 2026-10-07; on a Codex
+   plan-limit error rerun with `-m gpt-6-sol -c model_reasoning_effort=high`). Pattern:
 
    ```bash
-   # Assemble premises from the plan phase (callers exist? join keys on both sides? helper already exists?)
-   uv run python3 ~/Projects/skills/scripts/llm-dispatch.py \
-     --profile composer_review \
-     --context /tmp/phase-premises.md \
-     --prompt "For each numbered premise: PASS|FAIL|UNKNOWN + file:line evidence or MISSING. Commit — no hedge-only lists. FAIL on any load-bearing premise blocks the phase." \
-     --output /tmp/phase-premises-verdict.md
+   # /tmp/phase-premises.md: the numbered premises from the plan phase (callers exist? join keys on
+   # both sides? helper already exists?) followed by: "For each numbered premise: PASS|FAIL|UNKNOWN +
+   # file:line evidence or MISSING. Commit — no hedge-only lists. FAIL on any load-bearing premise
+   # blocks the phase."
+   codex exec -s read-only -C "$REPO" -m gpt-6-astra -c model_reasoning_effort=low \
+     -o /tmp/phase-premises-verdict.md - < /tmp/phase-premises.md
    ```
 
    Any `FAIL` on a load-bearing premise → divergence (step 5) before writing code. This replaces
-   ad-hoc greps for plan reviews; still verify Composer claims with Read/Grep (it can hedge).
+   ad-hoc greps for plan reviews; still verify the scout's claims with Read/Grep (it can hedge).
 2. **Build.** Independent work → parallel subagents, **`isolation: "worktree"`** for anything that touches
    files (hard isolation beats soft; soft hurts on open-ended tasks). Each code subagent returns a
    **manifest of files-touched + files-skipped-with-reason**; diff it against intent before accepting.
@@ -151,7 +152,7 @@ For each phase in the slice, in order:
 4. **Commit.** Granular semantic commits, one logical change each. **Never `git add -A`/`.`** — stage
    specific paths. Foreground commits only (a hook-blocked commit returns exit 0 from a backgrounded call).
 5. **Gate.** Do not advance to the next phase until this phase's end-state holds and is committed.
-   Then run **`/code-review low`** (Skill tool — local scout, Cursor Composer) on the phase's commits:
+   Then run **`/code-review low`** (Skill tool — local scout, GPT-6 Astra via codex) on the phase's commits:
    a precision-only pass (≤4 findings) that catches the dropped-guard / inverted-condition class while
    the phase is hot and cheap to fix. Bugs compound across phases — this is the same logic as the
    multi-phase checkpoint rule. Pass the path-scoped `.claude/rules/` files covering the diff as review
@@ -177,11 +178,10 @@ that contradicts what you see, and don't silently abandon it either. Research / 
 ## Done
 1. **Completeness check** (`../decide/references/checklists.md`): every phase in the slice landed AND its
    end-state was verified AND committed. Mechanically verify; don't assert.
-2. **Two-layer slice review:** **`/code-review high`** (local skill — Cursor Composer + optional
-   `--all-providers`) over the WHOLE slice — recall mode ("a missed bug ships"), where cross-cutting
+2. **Two-layer slice review:** **`/code-review high`** (local skill — GPT-6 Astra scout + optional
+   `--both`) over the WHOLE slice — recall mode ("a missed bug ships"), where cross-cutting
    issues invisible to the per-phase low passes surface — then **`/critique close`** for the
-   design/architecture layer (Phase 2 includes `composer` axis by default; diff layer is the local
-   `/code-review` pass — don't run it twice). Dispatch WITHOUT auto-fix; this session owns commits.
+   design/architecture layer (diff layer is the local `/code-review` pass — don't run it twice). Dispatch WITHOUT auto-fix; this session owns commits.
 3. Report: what shipped (verified), what diverged (and why), what tooling you built inline, what's next
    (the next slice / deferred items).
 

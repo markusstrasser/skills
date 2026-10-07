@@ -15,9 +15,10 @@ residue. `audit` asks *is this correct*; `conventions` asks *does this match the
    [axes.md](axes.md). One block per check: `AXIS / CHECK / FOUND / SEVERITY / FILES`. Collect them
    all before dispatching anything.
 3. **Classify the ambiguous residue (~1 min).** Default Flash (`fast_extract`) with the prompts in
-   [flash-prompts.md](flash-prompts.md); **repo-grounded ambiguous cases → Composer** (`composer_review`),
-   which reads the workspace and follows tight contracts better on structural "does this actually
-   match?" questions (slower ~25s, higher contract fidelity). **One combined context file per axis**
+   [flash-prompts.md](flash-prompts.md); **repo-grounded ambiguous cases → a read-only codex scout**
+   (`codex exec -s read-only -C <repo> -m gpt-6-astra -c model_reasoning_effort=low`; it replaced
+   Composer 2.5, retired 2026-10-07), which reads the workspace on structural "does this actually
+   match?" questions. **One combined context file per axis**
    (`awk 'FNR==1{print "\n=== FILE: " FILENAME " ===\n"}1' …`), not multiple `-f` flags. Full files
    for modules <500 lines, first 80 lines for large ones.
 4. **Verify (~2 min).** Flash hallucinates specifics. Before any finding enters the report: check

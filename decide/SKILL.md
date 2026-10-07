@@ -133,27 +133,29 @@ same-model (FM11 peer-review theater).
 
 **For codebase-coupled decisions, ALSO run REPO-GROUNDED agents — not only cold API models.** A cold
 reviewer (Gemini/GPT over a pasted spec) produces good *generic* failure modes but cannot tell which
-are *already handled by existing code*. Run cursor agents with real repo read access:
-`cursor-agent -p --mode ask --trust --model composer-2.5 "verify the design against the
-ACTUAL code, cite file:line — which findings are already-handled vs genuinely-open"`. They routinely
+are *already handled by existing code*. Run repo-grounded agents with real read access:
+`codex exec -s read-only -C <repo> -m gpt-6-astra -c model_reasoning_effort=low - <<< "verify the
+design against the ACTUAL code, cite file:line — which findings are already-handled vs
+genuinely-open"` (Composer 2.5, the old lane, was retired 2026-10-07). They routinely
 **overturn the cold round's "must-build" list** (lived 2026-06-16: a cold round flagged the release
 boundary + overlay model + retraction as "build these"; repo-grounded review showed all three already
-built but *dark/unwired* — changing the decision from greenfield to convergence). **Cursor transport
-uses the CURSOR model (`composer-2.5`) — NEVER route opus/gpt/sonnet through cursor-agent** (#g
-2026-06-18: off-policy + separately metered; hook-enforced by `pretool-cursor-model-guard.py`; the
-cursor-agent skill is the single owner — load it, don't re-state a model). The repo-grounding comes
-from cursor's LIVE REPO ACCESS, not the model. For any NON-cursor arch critique (cold cross-lab via
+built but *dark/unwired* — changing the decision from greenfield to convergence). **NEVER route
+opus/gpt/sonnet through cursor-agent** (#g 2026-06-18: off-policy + separately metered;
+hook-enforced by `pretool-cursor-model-guard.py`, which since 2026-10-07 admits only exact
+`grok-4.7-*` slugs). The repo-grounding comes from LIVE REPO ACCESS (a read-only sandbox rooted at
+the repo), not the model. For any non-repo arch critique (cold cross-lab via
 llmx), use a FRONTIER tier (opus / gpt-high), never a weak model — a sonnet repo-critique once built
 a "HALT, reverse the spine" conclusion on a search-error false premise.
 
-**Scale to a PANEL of 3–6 repo-grounded cursor agents for a codebase-coupled arch decision** (operator
-directive 2026-06-16, "whatever it takes for good design") — all repo-grounded cursor agents run
-`composer-2.5` (cursor's model; #g 2026-06-18). Model diversity is NOT obtained by swapping cursor's
-model — it comes from a SEPARATE cold cross-lab pass (llmx gemini/gpt) scoped to generic,
-non-repo-specific design critique. The cursor panel is ROLE-diverse: **≥1 dedicated FACT-CHECKER** tasked to resolve EVERY `file:line` / count / zero-consumer
+**Scale to a PANEL of 3–6 repo-grounded agents for a codebase-coupled arch decision** (operator
+directive 2026-06-16, "whatever it takes for good design") — read-only `codex exec` lanes on
+gpt-6-astra (low effort; `gpt-6-sol` high on a plan limit), or Claude subagents; add the opt-in
+Cursor `grok-4.7-*` lane for a second repo-grounded lab. Model diversity also comes from a SEPARATE
+cold cross-lab pass (llmx gemini/gpt) scoped to generic, non-repo-specific design critique. The
+repo-grounded panel is ROLE-diverse: **≥1 dedicated FACT-CHECKER** tasked to resolve EVERY `file:line` / count / zero-consumer
 claim in the plan → PRESENT / ABSENT / MISMATCH, plus arch/spine critics and **≥1 innovation /
-alternative-mechanism explorer**. `/critique model` already runs a cursor premise-scout by default
-(`model-review.py`, line ~17 — "the only axis that can falsify a plan's premises; packet-only reviewers
+alternative-mechanism explorer**. `/critique model` already runs a repo premise-scout by default
+(`codex exec` read-only on Astra low since 2026-10-07; `model-review.py`, line ~17 — "the only axis that can falsify a plan's premises; packet-only reviewers
 went 0-for-5"); this scales it up and makes the fact-check role explicit. **Why the dedicated fact-checker
 (the ADR-0029 lesson):** 5 ground-truth errors survived 4 critique rounds *including* two repo-grounded
 ones — because the cursor critics were aimed at ARCHITECTURE (and nailed the spine) but were never tasked

@@ -17,13 +17,14 @@ Formalizes the genomics bug-hunt pattern: **scouts write, orchestrator model jud
 |------|-----|
 | **Operator** | Human — goals, approval, irreversible apply |
 | **Orchestrator model** | Frontier parent (Opus, etc.) — dispatch, triage, propose fixes |
-| **Scout** | Composer ask-mode — audit files only |
+| **Scout** | GPT-6 Astra low in a read-only codex sandbox (`--backend codex --effort low`) — audit files only |
 
 ## Flow
 
 ```bash
 J="just -f ~/Projects/agent-infra/justfile"
-$J adversarial-debug-scout ~/Projects/genomics recent --prompt "cardinal rule + RESEARCH_ONLY"
+$J adversarial-debug-scout ~/Projects/genomics recent \
+  --backend codex --effort low --prompt "cardinal rule + RESEARCH_ONLY"
 $J debug-until-dry ~/Projects/genomics &     # or: wave loop until no new confirmed bugs
 # orchestrator model reads docs/audit/*-debug-handoff.md — validates SUSPECT, fixes confirmed
 # findings inline, notes rejections in the memo; operator approves tier-1/2 apply.
@@ -33,7 +34,10 @@ $J debug-until-dry ~/Projects/genomics &     # or: wave loop until no new confir
 
 ## Rules
 
-1. Scouts run **cursor ask-mode only** (`agent-infra/scripts/debug_scout.py`) — no edits, no commit.
+1. Scouts run **read-only only** (`agent-infra/scripts/debug_scout.py`) — no edits, no commit. Pass
+   `--backend codex --effort low`: the script's `cursor` backend still defaults to Composer 2.5,
+   retired 2026-10-07 (llmx and the cursor-model guard refuse it); `--backend cursor` needs an
+   explicit `--model grok-4.7-*`.
 2. Output → `{repo}/docs/audit/YYYY-MM-DD-debug-{run}-{slug}.md`
 3. **Orchestrator model** reads the handoffs and triages inline — scouts do not implement fixes.
 5. **Operator** approves tier-1/2 apply and taste calls.

@@ -85,11 +85,11 @@ def test_claude_has_lean_flags():
 
 
 def test_cursor_has_ask_mode_and_apikey():
-    """cursor `--mode ask` is the LEAN Composer path (vs the 38K agent); `--api-key` is the
-    programmatic auth. The lean Composer arm depends on `--mode ask` existing with the `ask` choice."""
+    """cursor `--mode ask` is the LEAN cursor path (vs the 38K agent); `--api-key` is the
+    programmatic auth. The lean Grok ask arm depends on `--mode ask` existing with the `ask` choice."""
     h = _help(["cursor-agent", "--help"])
     assert "--mode" in h, "cursor-agent lost --mode"
-    assert "ask" in h, "cursor-agent --mode lost the 'ask' choice (lean Composer path)"
+    assert "ask" in h, "cursor-agent --mode lost the 'ask' choice (lean ask path)"
     assert "--api-key" in h, "cursor-agent lost --api-key"
 
 
@@ -153,7 +153,7 @@ def test_live_codex_bare_and_effort_apply():
 
 @live
 def test_live_cursor_ask_mode_is_lean():
-    """cursor `--mode ask` must produce output (the lean Composer path). Also a latency tripwire:
+    """cursor `--mode ask` must produce output (the lean ask path). Also a latency tripwire:
     ask mode should be FAST (~tens of seconds); if it balloons toward agent-mode times, the
     ephemeral path may have regressed to the full harness."""
     if shutil.which("cursor-agent") is None:
@@ -167,6 +167,9 @@ def test_live_cursor_ask_mode_is_lean():
             "-p",
             "--mode",
             "ask",
+            # Pin the model: the account default is Composer, retired 2026-10-07.
+            "--model",
+            "grok-4.7-low",
             "--output-format",
             "text",
             "Reply with exactly: OK",
