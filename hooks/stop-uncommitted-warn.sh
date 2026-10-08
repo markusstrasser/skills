@@ -262,16 +262,28 @@ _now = _time.time()
 # into an active subagent build). Conditioning on live subagent activity keeps
 # solo session-end checkpoints intact; fail-safe both ways (defer, never drop).
 _IN_FLIGHT_S = 90
-try:
-    _tasks_dir = os.path.join(
-        "/private/tmp", f"claude-{os.getuid()}",
-        os.path.abspath(cwd).replace("/", "-"), session_id, "tasks")
-    for _t in os.listdir(_tasks_dir):
-        if (_now - os.path.getmtime(os.path.join(_tasks_dir, _t))) < 900:
-            _IN_FLIGHT_S = 900
-            break
-except OSError:
-    pass
+# Scan every session dir for this checkout, not only this session id: after a context
+# continuation the harness writes task outputs under a different session dir, so the
+# id-only path saw no live subagents and tried to checkpoint files a landing tool had
+# staged mid-commit (genomics 2026-10-08). Any recent task output on this checkout
+# widens the window; fail-safe (defer, never drop).
+import glob as _glob
+_slug_dir = os.path.join(
+    "/private/tmp", f"claude-{os.getuid()}", os.path.abspath(cwd).replace("/", "-"))
+for _tasks_dir in _glob.glob(os.path.join(_slug_dir, "*", "tasks")):
+    try:
+        _names = os.listdir(_tasks_dir)
+    except OSError:
+        continue
+    for _t in _names:
+        try:
+            if (_now - os.path.getmtime(os.path.join(_tasks_dir, _t))) < 900:
+                _IN_FLIGHT_S = 900
+                break
+        except OSError:
+            continue
+    if _IN_FLIGHT_S == 900:
+        break
 # Teammate/mailbox agents (SendMessage-driven) write repo files with NO
 # tasks/*.output heartbeat, so the widening above misses them: their mid-burst
 # build files look mtime-settled at 90s, flow into auto-commit, and when a repo
@@ -302,6 +314,13 @@ new_changes = [f for f in new_changes if f not in in_flight]
 # in exactly this state (2026-06-13, 2026-07-12, 2026-07-17, 2026-09-17).
 if _IN_FLIGHT_S == 900:
     auto_commit_enabled = False
+# Paths staged before the hook ran belong to a writer between `git add` and `git commit`
+# (a landing tool, a peer). A --only checkpoint of one of them splits that commit, so
+# defer them; other session files still checkpoint, and --only leaves the rest of the
+# index staged (genomics 2026-10-08: land_lane had staged a lane commit when Stop tried
+# to checkpoint one of its files).
+_staged_set = set(f for f in staged.split("\n") if f.strip())
+new_changes = [f for f in new_changes if f not in _staged_set]
 
 # Automation-write ledger — the third writer class beyond own/peer sessions.
 # launchd jobs + generators (fm.py, digest/sensor writers) write tracked files
