@@ -10,6 +10,7 @@ usage() {
 usage:
   lane run <name> --repo <path> --brief <file> [--worker codex|claude] [--no-worktree] [--base <ref>]
       (claude worker: LANE_CLAUDE_MODEL=<m> LANE_CLAUDE_EFFORT=<e> env override the default opus/default effort)
+      (codex worker: LANE_CODEX_MODEL=<m> LANE_CODEX_EFFORT=<e> env override the default gpt-6-astra/config effort)
   lane review <name> [--model <m>] [--effort <e>] [--focus <file>] [--out <file>] [--bg]
   lane ls [--stall-min <minutes>]
   lane stop <name>
@@ -440,7 +441,14 @@ launch_worker() {
     cd "$worktree" || exit 125
     case "$worker" in
       codex)
-        caffeinate -i codex exec -m gpt-6-sol -s workspace-write --add-dir "$HOME/.cache/uv" --skip-git-repo-check "$prompt" < /dev/null
+        # The model guide names gpt-6-astra for Codex implementation; gpt-6-sol is its fallback
+        # when the Astra plan limit binds. The 2026-09-25 rename mapped retired gpt-5.6 to sol here.
+        # No apostrophes in this block: it is the body of a single-quoted bash -c script.
+        codex_args=(-m "${LANE_CODEX_MODEL:-gpt-6-astra}")
+        if [ -n "${LANE_CODEX_EFFORT:-}" ]; then
+          codex_args+=(-c "model_reasoning_effort=\"$LANE_CODEX_EFFORT\"")
+        fi
+        caffeinate -i codex exec "${codex_args[@]}" -s workspace-write --add-dir "$HOME/.cache/uv" --skip-git-repo-check "$prompt" < /dev/null
         ;;
       claude)
       # A lane launched from inside a Claude session inherits the parent identity env; without
@@ -710,7 +718,7 @@ cmd_review() {
   [ "$#" -ge 1 ] || die "review requires a name"
   local name="$1"
   shift
-  local model="gpt-6-sol"
+  local model="gpt-6-astra"
   local effort="high"
   local focus=""
   local out="$LANE_HOME/$name.review.md"

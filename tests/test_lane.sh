@@ -156,7 +156,7 @@ wait_for_file "$LANE_HOME/codexargs.done"
 expected_codex=$(printf '%s\n' \
   exec \
   -m \
-  gpt-6-sol \
+  gpt-6-astra \
   -s \
   workspace-write \
   --add-dir \
@@ -165,6 +165,21 @@ expected_codex=$(printf '%s\n' \
   "Do the task in $BRIEF_REAL.")
 assert_eq "$expected_codex" "$(<"$LANE_CAPTURE/codex.args")" "codex arguments"
 assert_eq "$REPO_REAL" "$(<"$LANE_CAPTURE/codex.cwd")" "codex cwd"
+LANE_CODEX_MODEL=gpt-6-sol LANE_CODEX_EFFORT=xhigh "$LANE" run codexoverride --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/codexoverride.done"
+expected_override=$(printf '%s\n' \
+  exec \
+  -m \
+  gpt-6-sol \
+  -c \
+  'model_reasoning_effort="xhigh"' \
+  -s \
+  workspace-write \
+  --add-dir \
+  "$HOME/.cache/uv" \
+  --skip-git-repo-check \
+  "Do the task in $BRIEF_REAL.")
+assert_eq "$expected_override" "$(<"$LANE_CAPTURE/codex.args")" "codex model and effort env override"
 for key in name repo worktree brief pid started_at started_epoch worker; do
   grep -q "\"$key\"" "$LANE_HOME/codexargs.json" || fail "metadata omitted $key"
 done
@@ -290,7 +305,7 @@ wait_for_absent "$LANE_HOME/first.review.lock"
 assert_eq "EXIT=0" "$(<"$LANE_HOME/first.review.done")" "background review marker"
 assert_eq "DONE:0" "$(review_for first)" "completed review state"
 background_args="$LANE_CAPTURE/background.args"
-assert_eq "gpt-6-sol" "$(arg_after -m "$background_args")" "default review model"
+assert_eq "gpt-6-astra" "$(arg_after -m "$background_args")" "default review model"
 assert_eq "high" "$(arg_after -e "$background_args")" "default review effort"
 assert_eq "$LANE_HOME/first.review.md" "$(arg_after -o "$background_args")" "default review output"
 
