@@ -51,7 +51,7 @@ For each phase in the slice, in order:
    **Repo premise probe (default at every phase boundary):** before building, dispatch a read-only
    falsification pass on the phase's load-bearing premises — GPT-6 Astra at low effort in a read-only
    codex sandbox rooted at the repo (Composer 2.5, the old lane, was retired 2026-10-07; on a Codex
-   plan-limit error rerun with `-m gpt-6-sol -c model_reasoning_effort=high`). Pattern:
+   plan-limit error rerun with `-m gpt-6.1-sol -c model_reasoning_effort=high`). Pattern:
 
    ```bash
    # /tmp/phase-premises.md: the numbered premises from the plan phase (callers exist? join keys on

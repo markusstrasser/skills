@@ -61,7 +61,7 @@ The diff layer belongs to `/code-review`. Neither a broader preset nor another l
 
 ## Repo scope and premise scout
 
-The scout runs `codex exec -s read-only -C <project>` on `premise_scout` (gpt-6-astra, low effort, codex-cli subscription). On a Codex plan/usage-limit failure only, it retries once on `premise_scout_fallback` (gpt-6-sol, high effort). `voi-scout.json` records `served_model`, `reasoning_effort`, token `usage` and every attempt. A missing `codex` binary or any other failure is a recorded skip.
+The scout runs `codex exec -s read-only -C <project>` on `premise_scout` (gpt-6-astra, low effort, codex-cli subscription). On a Codex plan/usage-limit failure only, it retries once on `premise_scout_fallback` (gpt-6.1-sol, high effort). `voi-scout.json` records `served_model`, `reasoning_effort`, token `usage` and every attempt. A missing `codex` binary or any other failure is a recorded skip.
 
 `--context-scope` accepts only `repo` and `packet`.
 

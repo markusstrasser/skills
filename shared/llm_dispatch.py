@@ -104,7 +104,7 @@ PROFILES: dict[str, DispatchProfile] = {
         intent="Formal or quantitative GPT-backed review",
         provider="openai",
         # 2026-09-05: GPT-6 Astra is the flagship GPT / Codex default.
-        # gpt-6-sol / gpt-6-luna are the cheaper named cost tiers.
+        # gpt-6.1-sol / gpt-6-luna are the cheaper named cost tiers.
         model="gpt-6-astra",
         timeout=600,
         # 2026-06-10: formal is the GPT reasoning axis for reviews — operator
@@ -243,13 +243,13 @@ PROFILES: dict[str, DispatchProfile] = {
     ),
     "premise_scout_fallback": DispatchProfile(
         # Served only when the Astra scout fails on a Codex plan/usage limit
-        # (llmx exit-6 class). Operator 2026-10-07: "gpt 6.1 sol high" → the
-        # live slug is gpt-6-sol; model-guide names Sol as Astra's plan-limit
-        # fallback.
+        # (llmx exit-6 class). Operator 2026-10-07: "gpt 6.1 sol high"; the
+        # slug is gpt-6.1-sol since 2026-10-09; model-guide names Sol as
+        # Astra's plan-limit fallback.
         name="premise_scout_fallback",
         intent="Premise scout fallback when the Astra plan limit is exhausted",
         provider="openai",
-        model="gpt-6-sol",
+        model="gpt-6.1-sol",
         timeout=300,
         reasoning_effort="high",
         auth="subscription",
@@ -292,7 +292,8 @@ MODEL_TO_PROFILE = {
     "gemini-3.1-pro-preview": "legacy_pro_review",  # demoted 2026-05-24
     "gpt-6-astra": "formal_review",
     "gpt-6": "formal_review",
-    "gpt-6-sol": "formal_review",
+    "gpt-6.1-sol": "formal_review",
+    "gpt-6-sol": "formal_review",  # llmx alias → gpt-6.1-sol; kept for old pins
     "gpt-6-luna": "gpt_general",  # explicit Luna pin; effort is the cheap/mechanical dial
     "claude-opus-5": "claude_review",
     "glm-5.2": "glm_review",

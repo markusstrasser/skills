@@ -303,6 +303,7 @@ _LLMX_SUBSCRIPTION_MODELS = {
     "claude-opus-5-5",
     "gpt-6-astra",
     "gpt-6",
+    "gpt-6.1-sol",
     "gpt-6-sol",
     "gpt-6-luna",
     "grok-4.7",

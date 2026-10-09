@@ -1,5 +1,14 @@
 # Model Guide Changelog
 
+## 2026-10-09 - GPT-6.1 Sol replaces GPT-6 Sol
+
+Operator ruling (2026-10-09): "why wouldn't they move to the newer model". Every live `gpt-6-sol`
+pin moved to `gpt-6.1-sol` (same $2/$10 price, 1.05M context). llmx 71eef03 keeps `gpt-6-sol` as an
+upgrade alias. Sol 6.1 drops the `none`/`minimal` efforts (llmx maps both to low). Codex CLI needs
+≥0.162 to serve it on the ChatGPT plan. No 6.1 Luna or Astra exists. Renamed
+`references/models/gpt-6-sol-luna.md` to `gpt-6.1-sol-luna.md`; its vendor benchmarks are labelled
+GPT-6 Sol (pre-6.1), not transferred. Source: developers.openai.com/api/docs/models/gpt-6.1-sol.
+
 ## 2026-10-07 - Composer 2.5 retired; successor GPT-6 Astra at low effort
 
 Operator decision (2026-10-07): "llmx shouldn't use composer 2.5 anymore ... it's outdated". He

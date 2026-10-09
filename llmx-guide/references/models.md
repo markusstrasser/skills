@@ -3,7 +3,7 @@
 | ID | Role | $/MTok in/out | Effort |
 |---|---|---|---|
 | `gpt-6-astra` (alias `gpt-6`) | **Default OpenAI / Codex flagship** | $10 / $50 | low…max (`none`/`minimal` → `low`) |
-| `gpt-6-sol` | Mid cost tier (successor to gpt-5.6-sol/-terra) | see `llmx info` | none…max |
+| `gpt-6.1-sol` | Mid cost tier (successor to gpt-6-sol, which aliases to it) | see `llmx info` | low…max (no none/minimal) |
 | `gpt-6-luna` | Cheap/fast / mechanical (successor to gpt-5.6-luna) | see `llmx info` | none…max |
 
 Retired 2026-09-25 (refused by llmx routing; accounting-only): `gpt-5.6`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `claude-fable-5` (→ `claude-fable-5-1`), `claude-opus-4-8` (→ `claude-opus-5-5`), `gemini-3-flash-preview` (→ `gemini-3.8-flash`), `grok-4.6` / `cursor-grok-4.6-*` (→ `grok-4.7-*`).
@@ -26,7 +26,7 @@ Default provider model: **Astra**. Codex `~/.codex/config.toml` selects Astra; o
 | Gemini 3 Pro Image | `gemini-3-pro-image-preview` | Available via `llmx image --provider google -m pro` |
 | GPT-5.3 Instant | `gpt-5.3-chat-latest` | Reasoning max: **medium only**. Auto-defaults. Superseded by GPT-6 Luna (cheap/fast, above) — prefer the newer pin for new work. |
 | GPT-6 Astra | `gpt-6-astra` (alias `gpt-6`) | **Default OpenAI / Codex model.** $10/$50 API; $0 via `--subscription` codex-cli. Effort `low`…`max`; `none`/`minimal` map to `low`. |
-| GPT-6 Sol | `gpt-6-sol` | Cost tier. Effort `none`…`max`. Successor to retired gpt-5.6 / -sol / -terra. |
+| GPT-6.1 Sol | `gpt-6.1-sol` | Cost tier. Effort `low`…`max` (`none`/`minimal` unsupported; llmx maps them to low). `gpt-6-sol` aliases to it. |
 | GPT-6 Luna | `gpt-6-luna` | Cheap/mechanical GPT. Effort `none`…`max`. Successor to retired gpt-5.6-luna. |
 | GPT-5.4 | `gpt-5.4` | Older GPT. Prefer GPT-6 Sol/Luna for new work. |
 | GPT-5.2 (legacy) | `gpt-5.2` | Legacy OpenAI default. |

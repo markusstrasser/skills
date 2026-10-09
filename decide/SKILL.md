@@ -149,7 +149,7 @@ a "HALT, reverse the spine" conclusion on a search-error false premise.
 
 **Scale to a PANEL of 3–6 repo-grounded agents for a codebase-coupled arch decision** (operator
 directive 2026-06-16, "whatever it takes for good design") — read-only `codex exec` lanes on
-gpt-6-astra (low effort; `gpt-6-sol` high on a plan limit), or Claude subagents; add the opt-in
+gpt-6-astra (low effort; `gpt-6.1-sol` high on a plan limit), or Claude subagents; add the opt-in
 Cursor `grok-4.7-*` lane for a second repo-grounded lab. Model diversity also comes from a SEPARATE
 cold cross-lab pass (llmx gemini/gpt) scoped to generic, non-repo-specific design critique. The
 repo-grounded panel is ROLE-diverse: **≥1 dedicated FACT-CHECKER** tasked to resolve EVERY `file:line` / count / zero-consumer

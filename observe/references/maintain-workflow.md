@@ -115,7 +115,7 @@ drain) come first — they are why this runs on a loop.
 - **Repo-coupled critique/analysis → the read-only codex lane (default).**
   `timeout 600 codex exec -s read-only -C <dir> -m gpt-6-astra -c model_reasoning_effort=low -o <artifact> "<task>"`
   (GPT-6 Astra low replaced Cursor Composer 2.5, retired 2026-10-07; on a Codex plan-limit error
-  rerun with `-m gpt-6-sol -c model_reasoning_effort=high`). Read-only, repo-aware (it flags
+  rerun with `-m gpt-6.1-sol -c model_reasoning_effort=high`). Read-only, repo-aware (it flags
   "already handled at file:line" a cold API model cannot), not gated by `CLAUDE_PROCS`.
   `scripts/cursor_dispatch.sh` remains only for an explicit `--model grok-4.7-*` Cursor lane.
   **Mandatory fallback:** any non-zero exit or empty artifact → re-dispatch the SAME task to the

@@ -143,7 +143,7 @@ codex exec -s read-only -C "$REPO" -m gpt-6-astra -c model_reasoning_effort=low 
 ```
 
 (Composer 2.5, the old verify lane, was retired 2026-10-07; on a Codex plan-limit error rerun with
-`-m gpt-6-sol -c model_reasoning_effort=high`.)
+`-m gpt-6.1-sol -c model_reasoning_effort=high`.)
 
 Or orchestrator Read/Grep on load-bearing claims. **Critics receive the verified subset**
 plus full inventory summary — not unverified bulk.

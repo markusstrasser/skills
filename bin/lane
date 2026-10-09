@@ -441,7 +441,7 @@ launch_worker() {
     cd "$worktree" || exit 125
     case "$worker" in
       codex)
-        # The model guide names gpt-6-astra for Codex implementation; gpt-6-sol is its fallback
+        # The model guide names gpt-6-astra for Codex implementation; gpt-6.1-sol is its fallback
         # when the Astra plan limit binds. The 2026-09-25 rename mapped retired gpt-5.6 to sol here.
         # No apostrophes in this block: it is the body of a single-quoted bash -c script.
         codex_args=(-m "${LANE_CODEX_MODEL:-gpt-6-astra}")

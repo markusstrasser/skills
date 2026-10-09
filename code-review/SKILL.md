@@ -59,7 +59,7 @@ cd ~/Projects/agent-infra && uv run python3 "$SCOUT" ~/Projects/$PROJECT \
 **Provider order (local-first):**
 1. **`openai`** (default) — `gpt-6-astra` at low effort via codex-cli subscription ($0).
    Operator decision 2026-10-07: Astra low replaces Composer 2.5.
-2. **`sol`** — `gpt-6-sol` at high effort, subscription. Rerun with `--provider sol` on a Codex
+2. **`sol`** — `gpt-6.1-sol` at high effort, subscription. Rerun with `--provider sol` on a Codex
    plan-limit error for Astra (llmx exit 6).
 3. **`google`** — Gemini via llmx (paid API path since 2026-05-31). Use when both Codex models
    are exhausted.

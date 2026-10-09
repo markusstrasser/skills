@@ -29,7 +29,7 @@ def test_simple_command_first_token():
 
 
 def test_llmx_first_token():
-    tok, _ = fingerprint_command("llmx chat -m gpt-6-sol -e high 'ping'")
+    tok, _ = fingerprint_command("llmx chat -m gpt-6.1-sol -e high 'ping'")
     assert tok == "llmx"
 
 
@@ -78,7 +78,7 @@ def test_raw_command_never_in_return_value():
     """Negative control: neither return element may equal or contain the
     full raw command — a fingerprint that leaked the command would defeat
     the whole point of not persisting it."""
-    cmd = "llmx chat -m gpt-6-sol --subscription 'a very specific secret-looking prompt'"
+    cmd = "llmx chat -m gpt-6.1-sol --subscription 'a very specific secret-looking prompt'"
     tok, sha = fingerprint_command(cmd)
     assert cmd not in tok
     assert cmd not in sha

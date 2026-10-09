@@ -1311,7 +1311,7 @@ def run_premise_scout(
 
     Default model: profile `premise_scout` (gpt-6-astra, low effort, codex-cli
     subscription). On a Codex plan/usage-limit failure only, retries once on
-    `premise_scout_fallback` (gpt-6-sol, high effort). voi-scout.json records the
+    `premise_scout_fallback` (gpt-6.1-sol, high effort). voi-scout.json records the
     model that served the run, its effort, every attempt and the token usage.
 
     Scout runs outside the axis dispatch budget — it has its own fixed timeout and

@@ -1546,11 +1546,11 @@ class PremiseScoutTest(unittest.TestCase):
                 )
             self.assertFalse(result.skipped)
             self.assertEqual(len(calls), 2)
-            self.assertEqual(calls[1][calls[1].index("-m") + 1], "gpt-6-sol")
+            self.assertEqual(calls[1][calls[1].index("-m") + 1], "gpt-6.1-sol")
             self.assertIn("model_reasoning_effort=high", calls[1])
             data = json.loads(result.json_path.read_text())
-            self.assertEqual(data["served_model"], "gpt-6-sol")
-            self.assertEqual([a["model"] for a in data["attempts"]], ["gpt-6-astra", "gpt-6-sol"])
+            self.assertEqual(data["served_model"], "gpt-6.1-sol")
+            self.assertEqual([a["model"] for a in data["attempts"]], ["gpt-6-astra", "gpt-6.1-sol"])
 
     def test_premise_scout_does_not_fall_back_on_other_failures(self) -> None:
         calls: list[list[str]] = []

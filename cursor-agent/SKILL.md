@@ -11,7 +11,7 @@ effort: low
 
 Headless Cursor Agent from any terminal. Announced [2025-08-07](https://cursor.com/blog/cli); docs: [cursor.com/docs/cli](https://cursor.com/docs/cli).
 
-**Composer 2.5 / 2.5-fast are retired (operator, 2026-10-07: "outdated").** Their jobs moved to GPT-6 Astra at `low` effort on the codex-cli subscription ($0): `codex exec -s read-only -C <repo> -m gpt-6-astra -c model_reasoning_effort=low -o <out> -`, with `gpt-6-sol` at `high` effort when Astra's plan limit binds. The `pretool-cursor-model-guard` hook blocks any `composer*` pin and any prompt run (`-p`) without `--model`, because the account default is Composer.
+**Composer 2.5 / 2.5-fast are retired (operator, 2026-10-07: "outdated").** Their jobs moved to GPT-6 Astra at `low` effort on the codex-cli subscription ($0): `codex exec -s read-only -C <repo> -m gpt-6-astra -c model_reasoning_effort=low -o <out> -`, with `gpt-6.1-sol` at `high` effort when Astra's plan limit binds. The `pretool-cursor-model-guard` hook blocks any `composer*` pin and any prompt run (`-p`) without `--model`, because the account default is Composer.
 
 **The only admitted Cursor models are exact Grok 4.7 slugs**, an opt-in read-only review lane: `grok-4.7-{low,medium,high,xhigh}` (no `cursor-` prefix, verified live 2026-09-23) and matching trailing `-fast` variants. The `cursor-grok-4.6-*` slugs were retired 2026-09-25. Cursor subscription auth — not xAI API, llmx, or `claude -p`. **Never pass generic proxied models** (opus/gpt/claude/gemini/sonnet) or bare `grok-4.7`. For Opus/GPT use `claude -p` / `codex exec` / `llmx`. Re-list with `cursor-agent models` before a model-sensitive dispatch.
 
