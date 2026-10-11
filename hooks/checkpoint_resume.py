@@ -34,12 +34,14 @@ so the divert only protects a live peer, not a corpse — keeping non-hook reade
 (the CLAUDE.md "read .claude/checkpoint.md" convention) on fresh content too.
 """
 
+import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
 import time
+from typing import NoReturn
 
 # The autogen resume pair — NOT the many manual topical checkpoints
 # (checkpoint-markus-currency.md, checkpoint-clinical-waves.md, ...), which are
@@ -237,7 +239,8 @@ def resume_message(claude_dir, current_session, now=None):
         msg += (
             " A hand-written `%s` with no session stamp sits beside it; if it is this"
             " session's brief, read it too and add a `<!-- session: <id> -->` line to"
-            " its header." % os.path.join(os.path.dirname(path), sel["unstamped_curated"])
+            " its header."
+            % os.path.join(os.path.dirname(path), sel["unstamped_curated"])
         )
     return msg
 
@@ -262,7 +265,211 @@ def is_stale_remnant(path, current_session, now=None, max_age_h=DEFAULT_REMNANT_
     return age_hours >= max_age_h
 
 
+_NATIVE_INJECTED_USER_KINDS = frozenset(
+    {
+        "agents_md.instructions",
+        "environments.environment_context",
+        "additional_content.codex_apps_open_page",
+    }
+)
+
+
+def read_current_decisions(
+    checkpoint,
+    current_session,
+    transcript,
+    expected_sha256,
+    required_scope=None,
+    required_state=None,
+):
+    """Read a ROOT-reviewed projection in an explicitly selected checkpoint.
+
+    This never auto-selects a manual file or grants launch authority. The caller
+    supplies the reviewed JSON-block hash and native Codex journal. Raw user
+    messages remain authoritative; semantic interpretation needs human/root
+    review. Tool-only journal appends do not stale the view; a new human input does.
+    Currency is relative to the inspected journal, not proof that its full human
+    history was retained: removing a complete suffix after the pinned sources
+    cannot be detected without an external high-water mark. The checkpoint keeps
+    the full reviewed source pins and supersession history; this result names its
+    head and active entries, and is not a self-contained audit record.
+    """
+
+    def refuse(reason) -> NoReturn:
+        raise ValueError("CURRENT_DECISIONS_REFUSED: " + reason)
+
+    stamp = read_session_stamp(checkpoint)
+    if stamp and stamp != current_session:
+        refuse("FOREIGN_CHECKPOINT_SESSION")
+    with open(checkpoint, "rb") as reader:
+        checkpoint_bytes = reader.read()
+    openings = list(
+        re.finditer(rb"(?m)^```current-decisions-json[^\n]*(?:\n|$)", checkpoint_bytes)
+    )
+    if not openings:
+        refuse("MISSING_DECISION_VIEW")
+    if openings[-1].group() != b"```current-decisions-json\n":
+        refuse("INCOMPLETE_DECISION_VIEW")
+    latest_start = openings[-1].end()
+    closing = re.search(rb"(?m)^```(?:\n|$)", checkpoint_bytes[latest_start:])
+    if closing is None:
+        refuse("INCOMPLETE_DECISION_VIEW")
+    payload = checkpoint_bytes[latest_start : latest_start + closing.start()]
+    if hashlib.sha256(payload).hexdigest() != expected_sha256:
+        refuse("DECISION_VIEW_DIGEST_CHANGED")
+    view = json.loads(payload)
+    if (
+        view["version"] != 1
+        or view["session_id"] != current_session
+        or view["checkpoint_path"] != os.path.abspath(checkpoint)
+        or view["native_journal"] != os.path.abspath(transcript)
+    ):
+        refuse("FOREIGN_DECISION_VIEW")
+    sources = view["sources"]
+    by_line = {source["line"]: name for name, source in sources.items()}
+    if len(by_line) != len(sources) or not sources:
+        refuse("INVALID_SOURCE_PINS")
+    found, latest_user = {}, None
+    with open(transcript, "rb") as reader:
+        for line_number, raw in enumerate(reader, 1):
+            record = json.loads(raw)
+            native = record.get("payload", {})
+            if line_number == 1 and (
+                record.get("type") != "session_meta"
+                or native.get("id") != current_session
+                or native.get("cwd") != view["repo_root"]
+            ):
+                refuse("FOREIGN_NATIVE_SESSION")
+            if line_number != 1 and record.get("type") == "session_meta":
+                refuse("MULTI_SESSION_NATIVE_JOURNAL")
+            meta = native.get("internal_chat_message_metadata_passthrough")
+            kinds = meta.get("content_item_kinds") if isinstance(meta, dict) else None
+            if (
+                isinstance(meta, dict)
+                and "content_item_kinds" in meta
+                and (
+                    not isinstance(kinds, list)
+                    or not kinds
+                    or any(not isinstance(kind, str) or not kind for kind in kinds)
+                )
+            ):
+                refuse("UNKNOWN_USER_PROVENANCE")
+            if (
+                record.get("type") == "response_item"
+                and native.get("type") == "message"
+                and native.get("role")
+                not in {"user", "assistant", "developer", "system", "tool"}
+            ) or (
+                native.get("role") != "user"
+                and isinstance(kinds, list)
+                and any(
+                    isinstance(kind, str) and kind.startswith("user.") for kind in kinds
+                )
+            ):
+                refuse("UNKNOWN_USER_RECORD")
+            is_direct = False
+            if native.get("role") == "user":
+                if (
+                    record.get("type") != "response_item"
+                    or native.get("type") != "message"
+                ):
+                    refuse("UNKNOWN_USER_RECORD")
+                if not isinstance(meta, dict):
+                    refuse("UNKNOWN_USER_PROVENANCE")
+                kinds = meta.get("content_item_kinds")
+                if (
+                    not isinstance(kinds, list)
+                    or not kinds
+                    or any(not isinstance(kind, str) or not kind for kind in kinds)
+                ):
+                    refuse("UNKNOWN_USER_PROVENANCE")
+                if any(
+                    not (kind.startswith("user.") and len(kind) > len("user."))
+                    and kind not in _NATIVE_INJECTED_USER_KINDS
+                    for kind in kinds
+                ):
+                    refuse("UNKNOWN_USER_PROVENANCE")
+                is_direct = any(kind.startswith("user.") for kind in kinds)
+            if is_direct:
+                latest_user = line_number
+            is_user = is_direct and isinstance(kinds, list) and "user.text" in kinds
+            if line_number not in by_line:
+                continue
+            name = by_line[line_number]
+            pin = sources[name]
+            retained = record.get("metadata", {}).get("retained_source", {})
+            if (
+                not is_user
+                or hashlib.sha256(raw).hexdigest() != pin["sha256"]
+                or native.get("id") != pin["message_id"]
+                or meta.get("turn_id") != pin["turn_id"]
+                or record.get("timestamp") != pin["timestamp"]
+                or retained.get("complete") is not pin["retained_complete"]
+            ):
+                refuse("DIRECT_USER_SOURCE_CHANGED")
+            found[name] = "\n".join(
+                block["text"]
+                for block in native["content"]
+                if block.get("type") == "input_text"
+            )
+    if len(found) != len(sources):
+        refuse("DIRECT_USER_SOURCE_MISSING")
+    if latest_user != sources[view["seen_user_source"]]["line"]:
+        refuse("STALE_DECISION_VIEW_NEW_USER_INPUT")
+    active, seen_ids = {}, set()
+    for entry in view["entries"]:
+        scope, identity = entry["scope"], entry["id"]
+        predecessor = active.get(scope)
+        if (
+            not identity
+            or identity in seen_ids
+            or not entry["quote"]
+            or entry["quote"] not in found[entry["source"]]
+            or entry["state"] not in {"held", "approved", "go-required", "operator-go"}
+            or entry["supersedes"] != (predecessor["id"] if predecessor else None)
+            or (
+                predecessor
+                and sources[entry["source"]]["line"]
+                < sources[predecessor["source"]]["line"]
+            )
+        ):
+            refuse("INVALID_OR_FOREIGN_SUPERSESSION")
+        seen_ids.add(identity)
+        active[scope] = entry
+    if required_scope and (
+        required_scope not in active
+        or active[required_scope]["state"] != required_state
+    ):
+        refuse(
+            "PRODUCTION_GO_REQUIRED"
+            if required_scope == "production"
+            else "REQUIRED_CURRENT_DECISION_MISSING"
+        )
+    return {
+        "is_current": True,
+        "launch_authority": False,
+        "session_id": current_session,
+        "source_head": sources[view["seen_user_source"]],
+        "active": active,
+    }
+
+
 def _main(argv):
+    if len(argv) in (6, 8) and argv[1] == "current-decisions":
+        try:
+            decision = read_current_decisions(*argv[2:])
+        except (
+            OSError,
+            ValueError,
+            KeyError,
+            TypeError,
+            IndexError,
+            AttributeError,
+        ) as error:
+            sys.stderr.write("CURRENT_DECISIONS_REFUSED: " + str(error) + "\n")
+            return 65
+        sys.stdout.write(json.dumps(decision))
+        return 0
     if len(argv) >= 3 and argv[1] == "project-root":
         sys.stdout.write(project_root(argv[2]))
         return 0
@@ -280,6 +487,8 @@ def _main(argv):
     sys.stderr.write(
         "usage: checkpoint_resume.py {resume-message|select-read} <claude_dir> <session_id>\n"
         "       checkpoint_resume.py project-root <cwd>\n"
+        "       checkpoint_resume.py current-decisions <checkpoint> <session_id> "
+        "<native_journal> <reviewed_view_sha256> [<scope> <state>]\n"
     )
     return 2
 
