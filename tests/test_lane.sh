@@ -7,6 +7,8 @@ TEST_TMP=$(mktemp -d "${TMPDIR:-/tmp}/lane-test.XXXXXX")
 mkdir -p "$TEST_TMP/lanes"
 LANE_HOME=$(cd "$TEST_TMP/lanes" && pwd -P)
 export LANE_HOME
+unset LANE_CODEX_MODEL LANE_CODEX_EFFORT LANE_CODEX_ADD_DIRS LANE_CODEX_NETWORK
+unset LANE_CLAUDE_MODEL LANE_CLAUDE_EFFORT
 REPO="$TEST_TMP/repo"
 BRIEF="$TEST_TMP/brief.md"
 FAKE_BIN="$TEST_TMP/bin"
@@ -16,7 +18,7 @@ UNRELATED_PID=""
 
 cleanup() {
   local name
-  for name in first hang inline codexargs claudeargs failure; do
+  for name in first hang inline codexargs codexoverride claudeargs claudeoverride failure; do
     if [ -f "$LANE_HOME/$name.json" ]; then
       "$LANE" stop "$name" >/dev/null 2>&1 || true
     fi
@@ -71,6 +73,10 @@ wait_for_absent() {
 
 json_value() {
   python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))[sys.argv[2]])' "$1" "$2"
+}
+
+worker_setting() {
+  python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["worker_settings"][sys.argv[2]])' "$1" "$2"
 }
 
 set_started_epoch() {
@@ -167,16 +173,18 @@ expected_codex=$(printf '%s\n' \
   "$CODEX_PROMPT")
 assert_eq "$expected_codex" "$(<"$LANE_CAPTURE/codex.args")" "codex arguments"
 assert_eq "$REPO_REAL" "$(<"$LANE_CAPTURE/codex.cwd")" "codex cwd"
-LANE_CODEX_MODEL=gpt-6.1-sol LANE_CODEX_EFFORT=xhigh LANE_CODEX_ADD_DIRS="$TEST_TMP/slots:" LANE_CODEX_NETWORK=1 "$LANE" run codexoverride --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null
+override_output=$(LANE_CODEX_MODEL=gpt-6.1-sol LANE_CODEX_EFFORT=high LANE_CODEX_ADD_DIRS="$TEST_TMP/slots:$TEST_TMP/extra root:" LANE_CODEX_NETWORK=1 "$LANE" run codexoverride --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree)
 wait_for_file "$LANE_HOME/codexoverride.done"
 expected_override=$(printf '%s\n' \
   exec \
   -m \
   gpt-6.1-sol \
   -c \
-  'model_reasoning_effort="xhigh"' \
+  'model_reasoning_effort="high"' \
   --add-dir \
   "$TEST_TMP/slots" \
+  --add-dir \
+  "$TEST_TMP/extra root" \
   -c \
   'sandbox_workspace_write.network_access=true' \
   -s \
@@ -186,6 +194,42 @@ expected_override=$(printf '%s\n' \
   --skip-git-repo-check \
   "$CODEX_PROMPT")
 assert_eq "$expected_override" "$(<"$LANE_CAPTURE/codex.args")" "codex model and effort env override"
+
+echo "test: codex resume retains settings without caller exports"
+resume_output=$("$LANE" resume codexoverride --no-note)
+wait_for_file "$LANE_HOME/codexoverride.done"
+assert_eq "$expected_override" "$(<"$LANE_CAPTURE/codex.args")" "resumed codex settings"
+settings_line="lane: settings codex_model=gpt-6.1-sol codex_effort=high add_dirs=$TEST_TMP/slots:$TEST_TMP/extra root network=1"
+grep -Fxq "$settings_line" <<<"$override_output" || fail "run omitted effective codex settings"
+grep -Fxq "$settings_line" <<<"$resume_output" || fail "resume omitted effective codex settings"
+assert_eq "gpt-6.1-sol" "$(worker_setting "$LANE_HOME/codexoverride.json" codex_model)" "recorded codex model"
+assert_eq "high" "$(worker_setting "$LANE_HOME/codexoverride.json" codex_effort)" "recorded codex effort"
+assert_eq "$TEST_TMP/slots:$TEST_TMP/extra root" "$(worker_setting "$LANE_HOME/codexoverride.json" codex_add_dirs)" "recorded writable roots"
+assert_eq "1" "$(worker_setting "$LANE_HOME/codexoverride.json" codex_network)" "recorded network"
+assert_eq "gpt-6-astra" "$(worker_setting "$LANE_HOME/codexargs.json" codex_model)" "recorded default codex model"
+assert_eq "" "$(worker_setting "$LANE_HOME/codexargs.json" codex_effort)" "recorded config effort"
+assert_eq "0" "$(worker_setting "$LANE_HOME/codexargs.json" codex_network)" "recorded default network"
+
+echo "test: resume effort override wins and becomes the recorded setting"
+LANE_CODEX_EFFORT=xhigh "$LANE" resume codexoverride --no-note >/dev/null
+wait_for_file "$LANE_HOME/codexoverride.done"
+assert_eq "gpt-6.1-sol" "$(arg_after -m "$LANE_CAPTURE/codex.args")" "override retained model"
+assert_eq 'model_reasoning_effort="xhigh"' "$(arg_after -c "$LANE_CAPTURE/codex.args")" "resumed effort override"
+"$LANE" resume codexoverride --no-note >/dev/null
+wait_for_file "$LANE_HOME/codexoverride.done"
+assert_eq 'model_reasoning_effort="xhigh"' "$(arg_after -c "$LANE_CAPTURE/codex.args")" "second resume retained effort override"
+
+echo "test: exported empty settings clear recorded overrides"
+LANE_CODEX_MODEL= LANE_CODEX_EFFORT= LANE_CODEX_ADD_DIRS= LANE_CODEX_NETWORK=0 "$LANE" resume codexoverride --no-note >/dev/null
+wait_for_file "$LANE_HOME/codexoverride.done"
+assert_eq "$expected_codex" "$(<"$LANE_CAPTURE/codex.args")" "empty exports restore default codex arguments"
+
+echo "test: legacy resume warns and uses caller environment"
+python3 -c 'import json, sys; path = sys.argv[1]; data = json.load(open(path, encoding="utf-8")); del data["worker_settings"]; open(path, "w", encoding="utf-8").write(json.dumps(data) + "\n")' "$LANE_HOME/codexoverride.json"
+legacy_output=$(LANE_CODEX_MODEL=gpt-6.1-sol LANE_CODEX_EFFORT=high LANE_CODEX_ADD_DIRS="$TEST_TMP/slots:$TEST_TMP/extra root" LANE_CODEX_NETWORK=1 "$LANE" resume codexoverride --no-note 2>&1)
+wait_for_file "$LANE_HOME/codexoverride.done"
+grep -Fq 'original worker settings are unknown; using caller environment' <<<"$legacy_output" || fail "legacy resume omitted settings warning"
+assert_eq "$expected_override" "$(<"$LANE_CAPTURE/codex.args")" "legacy codex environment fallback"
 for key in name repo worktree brief pid started_at started_epoch worker; do
   grep -q "\"$key\"" "$LANE_HOME/codexargs.json" || fail "metadata omitted $key"
 done
@@ -204,6 +248,28 @@ unset ANTHROPIC_API_KEY
 expected_claude=$(printf '%s\n' -p --model opus --output-format stream-json --verbose "Do the fake task.")
 assert_eq "$expected_claude" "$(<"$LANE_CAPTURE/claude.args")" "claude arguments"
 assert_eq "$REPO_REAL" "$(<"$LANE_CAPTURE/claude.cwd")" "claude cwd"
+assert_eq "opus" "$(worker_setting "$LANE_HOME/claudeargs.json" claude_model)" "recorded default claude model"
+assert_eq "" "$(worker_setting "$LANE_HOME/claudeargs.json" claude_effort)" "recorded default claude effort"
+
+echo "test: claude resume retains model and effort without caller exports"
+claude_output=$(LANE_CLAUDE_MODEL=sonnet LANE_CLAUDE_EFFORT=high "$LANE" run claudeoverride --repo "$REPO" --brief "$BRIEF" --worker claude --no-worktree)
+wait_for_file "$LANE_HOME/claudeoverride.done"
+expected_claude_override=$(printf '%s\n' -p --model sonnet --effort high --output-format stream-json --verbose "Do the fake task.")
+assert_eq "$expected_claude_override" "$(<"$LANE_CAPTURE/claude.args")" "initial claude overrides"
+claude_resume_output=$("$LANE" resume claudeoverride --no-note)
+wait_for_file "$LANE_HOME/claudeoverride.done"
+assert_eq "$expected_claude_override" "$(<"$LANE_CAPTURE/claude.args")" "resumed claude settings"
+grep -Fxq 'lane: settings claude_model=sonnet claude_effort=high' <<<"$claude_output" || fail "run omitted effective claude settings"
+grep -Fxq 'lane: settings claude_model=sonnet claude_effort=high' <<<"$claude_resume_output" || fail "resume omitted effective claude settings"
+assert_eq "sonnet" "$(worker_setting "$LANE_HOME/claudeoverride.json" claude_model)" "recorded claude model"
+assert_eq "high" "$(worker_setting "$LANE_HOME/claudeoverride.json" claude_effort)" "recorded claude effort"
+LANE_CLAUDE_EFFORT=low "$LANE" resume claudeoverride --no-note >/dev/null
+wait_for_file "$LANE_HOME/claudeoverride.done"
+assert_eq "sonnet" "$(arg_after --model "$LANE_CAPTURE/claude.args")" "claude override retained model"
+assert_eq "low" "$(arg_after --effort "$LANE_CAPTURE/claude.args")" "claude effort override"
+LANE_CLAUDE_MODEL= LANE_CLAUDE_EFFORT= "$LANE" resume claudeoverride --no-note >/dev/null
+wait_for_file "$LANE_HOME/claudeoverride.done"
+assert_eq "$expected_claude" "$(<"$LANE_CAPTURE/claude.args")" "empty exports restore default claude arguments"
 
 echo "test: worker failures still produce an exit marker"
 CODEX_FAKE_RC=7 "$LANE" run failure --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null

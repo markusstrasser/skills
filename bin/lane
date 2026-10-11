@@ -4,6 +4,7 @@ set -euo pipefail
 
 LANE_HOME="${LANE_HOME:-${HOME:?lane: HOME is not set}/.cache/lanes}"
 DEFAULT_STALL_MIN=20
+WORKER_SETTINGS=""
 
 usage() {
   cat >&2 <<'EOF'
@@ -16,6 +17,7 @@ usage:
   lane ls [--stall-min <minutes>]
   lane stop <name>
   lane resume <name> [--note <file>|--no-note]
+      (exported worker settings override recorded settings; all others are retained)
   lane reap <name> [--force]
 EOF
 }
@@ -84,6 +86,76 @@ review_lock_path() {
   printf '%s/%s.review.lock\n' "$LANE_HOME" "$1"
 }
 
+resolve_worker_settings() {
+  local metadata="${1:-}"
+  local resolved
+  local key
+  local value
+  require_python
+  resolved=$(python3 - "$metadata" <<'PY'
+import json
+import os
+import sys
+
+# Empty effort means no CLI override: use the worker's configured/default effort.
+defaults = {
+    "codex_model": "gpt-6-astra",
+    "codex_effort": "",
+    "codex_add_dirs": "",
+    "codex_network": "0",
+    "claude_model": "opus",
+    "claude_effort": "",
+}
+recorded = {}
+if sys.argv[1]:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        metadata = json.load(handle)
+    if "worker_settings" not in metadata:
+        print("lane: warning: original worker settings are unknown; using caller environment", file=sys.stderr)
+    else:
+        recorded = metadata["worker_settings"]
+        if not isinstance(recorded, dict) or any(
+            not isinstance(recorded.get(key), str) for key in defaults
+        ):
+            sys.exit("lane: invalid recorded worker settings")
+
+settings = {}
+for key, default in defaults.items():
+    env_key = "LANE_" + key.upper()
+    value = os.environ.get(env_key, recorded.get(key, default))
+    if any(char in value for char in "\t\r\n"):
+        sys.exit(f"lane: {env_key} must not contain tabs or newlines")
+    if key.endswith("_model"):
+        value = value or default
+    elif key == "codex_add_dirs":
+        value = ":".join(directory for directory in value.split(":") if directory)
+    elif key == "codex_network":
+        value = "1" if value == "1" else "0"
+    settings[key] = value
+    print(f"{env_key}\t{value}")
+print("WORKER_SETTINGS\t" + json.dumps(settings, sort_keys=True))
+PY
+  ) || die "could not resolve worker settings"
+  while IFS=$'\t' read -r key value; do
+    if [ "$key" = WORKER_SETTINGS ]; then
+      WORKER_SETTINGS="$value"
+    else
+      export "$key=$value"
+    fi
+  done <<<"$resolved"
+}
+
+print_worker_settings() {
+  case "$1" in
+    claude)
+      echo "lane: settings claude_model=$LANE_CLAUDE_MODEL claude_effort=${LANE_CLAUDE_EFFORT:-default}"
+      ;;
+    *)
+      echo "lane: settings codex_model=$LANE_CODEX_MODEL codex_effort=${LANE_CODEX_EFFORT:-config} add_dirs=$LANE_CODEX_ADD_DIRS network=$LANE_CODEX_NETWORK"
+      ;;
+  esac
+}
+
 json_write() {
   local output="$1"
   local tmp="${output}.tmp.$$"
@@ -107,6 +179,7 @@ import sys
     base,
     branch,
     no_worktree,
+    worker_settings,
 ) = sys.argv[1:]
 payload = {
     "name": name,
@@ -120,6 +193,7 @@ payload = {
     "base": base,
     "branch": branch,
     "no_worktree": no_worktree == "true",
+    "worker_settings": json.loads(worker_settings),
 }
 with open(output, "w", encoding="utf-8") as handle:
     json.dump(payload, handle, indent=2, sort_keys=True)
@@ -420,6 +494,11 @@ launch_worker() {
     fi
   fi
 
+  if [ "$resume_mode" = false ]; then
+    resolve_worker_settings
+  fi
+  print_worker_settings "$worker"
+
   mkdir -p "$LANE_HOME"
   rm -f "$marker"
   : >"$log"
@@ -445,19 +524,18 @@ launch_worker() {
     cd "$worktree" || exit 125
     case "$worker" in
       codex)
-        # The model guide names gpt-6-astra for Codex implementation; gpt-6.1-sol is its fallback
-        # when the Astra plan limit binds. The 2026-09-25 rename mapped retired gpt-5.6 to sol here.
+        # Defaults and resume overrides are resolved in the parent before launch.
         # No apostrophes in this block: it is the body of a single-quoted bash -c script.
-        codex_args=(-m "${LANE_CODEX_MODEL:-gpt-6-astra}")
-        if [ -n "${LANE_CODEX_EFFORT:-}" ]; then
+        codex_args=(-m "$LANE_CODEX_MODEL")
+        if [ -n "$LANE_CODEX_EFFORT" ]; then
           codex_args+=(-c "model_reasoning_effort=\"$LANE_CODEX_EFFORT\"")
         fi
         # Extra writable roots, colon-separated (e.g. a host cpu-slot directory).
-        IFS=: read -r -a extra_dirs <<< "${LANE_CODEX_ADD_DIRS:-}"
+        IFS=: read -r -a extra_dirs <<< "$LANE_CODEX_ADD_DIRS"
         for extra_dir in "${extra_dirs[@]}"; do
           if [ -n "$extra_dir" ]; then codex_args+=(--add-dir "$extra_dir"); fi
         done
-        if [ "${LANE_CODEX_NETWORK:-0}" = 1 ]; then
+        if [ "$LANE_CODEX_NETWORK" = 1 ]; then
           codex_args+=(-c "sandbox_workspace_write.network_access=true")
         fi
         caffeinate -i codex exec "${codex_args[@]}" -s workspace-write --add-dir "$HOME/.cache/uv" --skip-git-repo-check "$prompt" < /dev/null
@@ -466,7 +544,7 @@ launch_worker() {
       # A lane launched from inside a Claude session inherits the parent identity env; without
       # stripping it the worker reports the PARENT session_id to hooks (touched-file trackers,
       # commit ownership guards) and could message peers as the parent (2026-09-28, cost lanes).
-        caffeinate -i env -u ANTHROPIC_API_KEY -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDECODE -u CLAUDE_PID -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_BRIDGE_SESSION_ID -u CLAUDE_CODE_SESSION_ATTENDED -u CLAUDE_EFFORT claude -p --model "${LANE_CLAUDE_MODEL:-opus}" ${LANE_CLAUDE_EFFORT:+--effort "$LANE_CLAUDE_EFFORT"} --output-format stream-json --verbose "$prompt" < /dev/null
+        caffeinate -i env -u ANTHROPIC_API_KEY -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDECODE -u CLAUDE_PID -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_BRIDGE_SESSION_ID -u CLAUDE_CODE_SESSION_ATTENDED -u CLAUDE_EFFORT claude -p --model "$LANE_CLAUDE_MODEL" ${LANE_CLAUDE_EFFORT:+--effort "$LANE_CLAUDE_EFFORT"} --output-format stream-json --verbose "$prompt" < /dev/null
         ;;
       fake)
         if [ "$resume_mode" = true ]; then printf "%s\n" "$prompt"; fi
@@ -518,7 +596,7 @@ launch_worker() {
   if [ -z "$started_epoch" ]; then
     echo "lane: warning: could not record started_epoch for process group $launch_pid" >&2
   fi
-  if ! json_write "$metadata" "$name" "$repo" "$worktree" "$brief" "$launch_pid" "$started_at" "$started_epoch" "$worker" "$base" "$branch" "$no_worktree"; then
+  if ! json_write "$metadata" "$name" "$repo" "$worktree" "$brief" "$launch_pid" "$started_at" "$started_epoch" "$worker" "$base" "$branch" "$no_worktree" "$WORKER_SETTINGS"; then
     kill -TERM -- "-$launch_pid" 2>/dev/null || true
     die "could not write metadata: $metadata"
   fi
@@ -1028,6 +1106,7 @@ cmd_resume() {
   no_worktree=$(json_get "$metadata" no_worktree) || die "invalid metadata: $metadata"
   [ -f "$brief" ] || die "brief no longer exists: $brief"
   [ -d "$worktree" ] || die "worktree no longer exists: $worktree"
+  resolve_worker_settings "$metadata"
   if [ "$no_note" = "false" ]; then
     note_path="$LANE_HOME/$name.resume-note.md"
     if [ -n "$note_source" ]; then
