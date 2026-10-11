@@ -104,3 +104,9 @@
   the `composer` axis refuses with a pointer, and `review_gate` blocks a manifest that names it.
   Earlier entries that call the Composer scout the repo-grounded falsifier describe the lane as it
   was.
+- **[2026-10-11] Invalid Gemini key passed preflight.** `--preflight` probed only the Claude
+  subscription, so an `API_KEY_INVALID` Gemini key failed the arch and gaps axes mid-critique.
+  Preflight now makes one bounded live Gemini call whenever the requested axes include a Gemini axis
+  or name none (`run_gemini_preflight`); a persistent rate limit (llmx exit 3) is reported as
+  degraded, not failed, because the arch axis falls back to GPT. Regression:
+  `GeminiPreflightTest` in `scripts/test_model_review.py`.

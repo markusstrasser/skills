@@ -1521,6 +1521,66 @@ def axis_uses_gpt(axis_name: str) -> bool:
     return "gpt" in model_name
 
 
+def axis_uses_gemini(axis_name: str) -> bool:
+    model_name = dispatch_core.PROFILES[str(AXES[axis_name]["profile"])].model.lower()
+    return "gemini" in model_name
+
+
+def preflight_needs_gemini(tokens: set[str]) -> bool:
+    """No requested axes means the manifest's preset decides, and it may carry Gemini."""
+    if not tokens:
+        return True
+    names = {name for token in tokens for name in PRESETS.get(token, [token])}
+    return any(name in AXES and axis_uses_gemini(name) for name in names)
+
+
+def run_gemini_preflight(model: str = GEMINI_PRIMARY_MODEL) -> dict:
+    """One bounded live Gemini call, so an invalid or revoked API key fails before any axis.
+
+    The Anthropic probe covers only the subscription lane. On 2026-10-11 an invalid Gemini
+    key (API_KEY_INVALID) passed preflight and failed the arch and gaps axes mid-critique.
+    """
+    import tempfile
+
+    llmx_bin = shutil.which("llmx")
+    if not llmx_bin:
+        return {"ok": False, "model": model, "error": "llmx not on PATH"}
+    with tempfile.TemporaryDirectory() as temp_dir:
+        reply_path = Path(temp_dir) / "gemini-probe.md"
+        try:
+            probe = subprocess.run(
+                [
+                    llmx_bin,
+                    "chat",
+                    "-m",
+                    model,
+                    "--timeout",
+                    "60",
+                    "-o",
+                    str(reply_path),
+                    "Reply exactly OK.",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                env={**os.environ, "LLMX_GEMINI_OK": "1"},
+            )
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "model": model, "error": "timeout after 120s"}
+        reply = reply_path.read_text().strip() if reply_path.exists() else ""
+    check = {
+        "ok": probe.returncode == 0 and reply.upper().startswith("OK"),
+        "model": model,
+        "exit_code": probe.returncode,
+        "reply": reply[:40],
+        "stderr": (probe.stderr or "").strip()[-400:],
+    }
+    if probe.returncode == 3:
+        # llmx exit 3 is a persistent rate limit: transient, and the arch axis retries on GPT.
+        check.update(ok=True, degraded="rate limited; the arch axis falls back to GPT")
+    return check
+
+
 def resolve_axes(raw_axes: str, *, allow_non_gpt: bool = False) -> list[str]:
     axes_text = raw_axes.strip()
     if axes_text == "simple":
@@ -3299,8 +3359,10 @@ def verify_claims(
     return str(out_path)
 
 
-def run_preflight(project_dir: Path | None = None, *, include_grok: bool = False) -> int:
-    """Probe llmx readiness; optionally prove the repo-bound Grok transport."""
+def run_preflight(
+    project_dir: Path | None = None, *, include_grok: bool = False, include_gemini: bool = False
+) -> int:
+    """Probe llmx readiness; optionally prove the Grok transport and the Gemini API key."""
     import shutil
     import subprocess
 
@@ -3414,6 +3476,8 @@ def run_preflight(project_dir: Path | None = None, *, include_grok: bool = False
             **grok_checks,
             "ok": grok_exit == 0 and bool(grok_checks.get("ok")),
         }
+    if include_gemini:
+        checks["gemini_preflight"] = run_gemini_preflight()
 
     out = project_dir / ".model-review" / "preflight-latest.json"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -3587,6 +3651,7 @@ def main() -> int:
         return run_preflight(
             preflight_project,
             include_grok="grok" in requested_preflight_axes,
+            include_gemini=preflight_needs_gemini(requested_preflight_axes),
         )
 
     project_dir = (args.project or Path.cwd()).expanduser().resolve()

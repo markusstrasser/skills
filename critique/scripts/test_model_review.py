@@ -966,7 +966,9 @@ class ModelReviewMainTest(unittest.TestCase):
             ),
         ):
             self.assertEqual(model_review.main(), 0)
-            mock_preflight.assert_called_once_with(Path.cwd().resolve(), include_grok=False)
+            mock_preflight.assert_called_once_with(
+                Path.cwd().resolve(), include_grok=False, include_gemini=True
+            )
 
     def test_cli_preflight_opts_into_grok_for_requested_project(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -987,7 +989,9 @@ class ModelReviewMainTest(unittest.TestCase):
                 ),
             ):
                 self.assertEqual(model_review.main(), 0)
-            preflight.assert_called_once_with(project_dir.resolve(), include_grok=True)
+            preflight.assert_called_once_with(
+                project_dir.resolve(), include_grok=True, include_gemini=False
+            )
 
     def test_cli_rejects_removed_greedy_context_files_flag(self) -> None:
         with (
@@ -1925,6 +1929,77 @@ class PreflightTest(unittest.TestCase):
         self.assertEqual(return_code, 0)
         grok_preflight.assert_called_once_with(project_dir.resolve())
         self.assertTrue(payload["grok_preflight"]["ok"])
+
+
+class GeminiPreflightTest(unittest.TestCase):
+    """On 2026-10-11 an API_KEY_INVALID key passed preflight and failed the Gemini axes."""
+
+    @staticmethod
+    def _gemini_run(*, exit_code: int, reply: str | None, stderr: str = ""):
+        def fake_run(args, **kwargs):
+            assert args[1:4] == ["chat", "-m", model_review.GEMINI_PRIMARY_MODEL], args
+            assert kwargs["env"]["LLMX_GEMINI_OK"] == "1"
+            if reply is not None:
+                Path(args[args.index("-o") + 1]).write_text(reply)
+            return subprocess.CompletedProcess(args, exit_code, stdout="", stderr=stderr)
+
+        return fake_run
+
+    def _probe(self, **kwargs) -> dict:
+        with (
+            patch("shutil.which", return_value="/usr/bin/llmx"),
+            patch.object(subprocess, "run", side_effect=self._gemini_run(**kwargs)),
+        ):
+            return model_review.run_gemini_preflight()
+
+    def test_invalid_key_fails_the_probe(self) -> None:
+        check = self._probe(exit_code=1, reply=None, stderr="400 API_KEY_INVALID: key not valid")
+        self.assertFalse(check["ok"])
+        self.assertIn("API_KEY_INVALID", check["stderr"])
+
+    def test_live_ok_reply_passes(self) -> None:
+        self.assertTrue(self._probe(exit_code=0, reply="OK")["ok"])
+
+    def test_exit_zero_without_a_reply_fails(self) -> None:
+        self.assertFalse(self._probe(exit_code=0, reply="")["ok"])
+
+    def test_rate_limit_is_degraded_not_failed(self) -> None:
+        check = self._probe(exit_code=3, reply=None)
+        self.assertTrue(check["ok"])
+        self.assertIn("rate limited", check["degraded"])
+
+    def test_failed_gemini_probe_fails_the_whole_preflight(self) -> None:
+        gemini_run = self._gemini_run(exit_code=1, reply=None, stderr="API_KEY_INVALID")
+
+        def fake_run(args, **kwargs):
+            if args[1:3] == ["info", "--json"]:
+                return subprocess.CompletedProcess(args, 0, stdout='{"cli_providers": {}}')
+            if args[1:3] == ["chat", "--dry-run"]:
+                return subprocess.CompletedProcess(args, 0, stdout='{"auth": "subscription"}')
+            if args[1] == "probe":
+                return subprocess.CompletedProcess(
+                    args, 0, stdout='{"verdict": "available", "status_code": 0}'
+                )
+            return gemini_run(args, **kwargs)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = Path(temp_dir)
+            with (
+                patch("shutil.which", return_value="/usr/bin/llmx"),
+                patch.object(subprocess, "run", side_effect=fake_run),
+            ):
+                return_code = model_review.run_preflight(project_dir, include_gemini=True)
+            payload = json.loads((project_dir / ".model-review/preflight-latest.json").read_text())
+
+        self.assertEqual(return_code, 1)
+        self.assertFalse(payload["gemini_preflight"]["ok"])
+
+    def test_gemini_probe_follows_the_requested_axes(self) -> None:
+        self.assertTrue(model_review.preflight_needs_gemini(set()))
+        self.assertTrue(model_review.preflight_needs_gemini({"standard"}))
+        self.assertTrue(model_review.preflight_needs_gemini({"correctness", "arch"}))
+        self.assertFalse(model_review.preflight_needs_gemini({"correctness", "formal"}))
+        self.assertFalse(model_review.preflight_needs_gemini({"grok"}))
 
 
 class GrokPreflightTest(unittest.TestCase):
