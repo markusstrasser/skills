@@ -11,6 +11,7 @@ usage:
   lane run <name> --repo <path> --brief <file> [--worker codex|claude] [--no-worktree] [--base <ref>]
       (claude worker: LANE_CLAUDE_MODEL=<m> LANE_CLAUDE_EFFORT=<e> env override the default opus/default effort)
       (codex worker: LANE_CODEX_MODEL=<m> LANE_CODEX_EFFORT=<e> env override the default gpt-6-astra/config effort)
+      (codex worker: LANE_CODEX_ADD_DIRS=<a:b> adds writable roots; LANE_CODEX_NETWORK=1 enables network; the git dir is always writable so lanes can commit)
   lane review <name> [--model <m>] [--effort <e>] [--focus <file>] [--out <file>] [--bg]
   lane ls [--stall-min <minutes>]
   lane stop <name>
@@ -447,6 +448,18 @@ launch_worker() {
         codex_args=(-m "${LANE_CODEX_MODEL:-gpt-6-astra}")
         if [ -n "${LANE_CODEX_EFFORT:-}" ]; then
           codex_args+=(-c "model_reasoning_effort=\"$LANE_CODEX_EFFORT\"")
+        fi
+        # A worktree keeps its index, refs and objects in the shared git dir outside the
+        # workspace, so without it the sandbox refuses every commit (2026-10-11, Sol lanes).
+        git_common=$(cd "$(git rev-parse --git-common-dir)" && pwd) || exit 125
+        codex_args+=(--add-dir "$git_common")
+        # Extra writable roots, colon-separated (e.g. a host cpu-slot directory).
+        IFS=: read -r -a extra_dirs <<< "${LANE_CODEX_ADD_DIRS:-}"
+        for extra_dir in "${extra_dirs[@]}"; do
+          if [ -n "$extra_dir" ]; then codex_args+=(--add-dir "$extra_dir"); fi
+        done
+        if [ "${LANE_CODEX_NETWORK:-0}" = 1 ]; then
+          codex_args+=(-c "sandbox_workspace_write.network_access=true")
         fi
         caffeinate -i codex exec "${codex_args[@]}" -s workspace-write --add-dir "$HOME/.cache/uv" --skip-git-repo-check "$prompt" < /dev/null
         ;;

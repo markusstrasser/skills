@@ -157,6 +157,8 @@ expected_codex=$(printf '%s\n' \
   exec \
   -m \
   gpt-6-astra \
+  --add-dir \
+  "$REPO_REAL/.git" \
   -s \
   workspace-write \
   --add-dir \
@@ -165,7 +167,7 @@ expected_codex=$(printf '%s\n' \
   "Do the task in $BRIEF_REAL.")
 assert_eq "$expected_codex" "$(<"$LANE_CAPTURE/codex.args")" "codex arguments"
 assert_eq "$REPO_REAL" "$(<"$LANE_CAPTURE/codex.cwd")" "codex cwd"
-LANE_CODEX_MODEL=gpt-6.1-sol LANE_CODEX_EFFORT=xhigh "$LANE" run codexoverride --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null
+LANE_CODEX_MODEL=gpt-6.1-sol LANE_CODEX_EFFORT=xhigh LANE_CODEX_ADD_DIRS="$TEST_TMP/slots:" LANE_CODEX_NETWORK=1 "$LANE" run codexoverride --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null
 wait_for_file "$LANE_HOME/codexoverride.done"
 expected_override=$(printf '%s\n' \
   exec \
@@ -173,6 +175,12 @@ expected_override=$(printf '%s\n' \
   gpt-6.1-sol \
   -c \
   'model_reasoning_effort="xhigh"' \
+  --add-dir \
+  "$REPO_REAL/.git" \
+  --add-dir \
+  "$TEST_TMP/slots" \
+  -c \
+  'sandbox_workspace_write.network_access=true' \
   -s \
   workspace-write \
   --add-dir \
