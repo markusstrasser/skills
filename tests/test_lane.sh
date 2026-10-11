@@ -151,20 +151,20 @@ chmod +x "$FAKE_BIN/codex" "$FAKE_BIN/claude" "$FAKE_BIN/ps" "$FAKE_BIN/llmx"
 export PATH="$FAKE_BIN:$PATH"
 
 echo "test: codex and claude worker commands match the dispatch contract"
+CODEX_PROMPT="Do the task in $BRIEF_REAL.
+Git metadata is read-only in this sandbox: edit files and run checks, but do not merge, stage or commit. The parent does that. End by listing every path you changed."
 "$LANE" run codexargs --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null
 wait_for_file "$LANE_HOME/codexargs.done"
 expected_codex=$(printf '%s\n' \
   exec \
   -m \
   gpt-6-astra \
-  --add-dir \
-  "$REPO_REAL/.git" \
   -s \
   workspace-write \
   --add-dir \
   "$HOME/.cache/uv" \
   --skip-git-repo-check \
-  "Do the task in $BRIEF_REAL.")
+  "$CODEX_PROMPT")
 assert_eq "$expected_codex" "$(<"$LANE_CAPTURE/codex.args")" "codex arguments"
 assert_eq "$REPO_REAL" "$(<"$LANE_CAPTURE/codex.cwd")" "codex cwd"
 LANE_CODEX_MODEL=gpt-6.1-sol LANE_CODEX_EFFORT=xhigh LANE_CODEX_ADD_DIRS="$TEST_TMP/slots:" LANE_CODEX_NETWORK=1 "$LANE" run codexoverride --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null
@@ -176,8 +176,6 @@ expected_override=$(printf '%s\n' \
   -c \
   'model_reasoning_effort="xhigh"' \
   --add-dir \
-  "$REPO_REAL/.git" \
-  --add-dir \
   "$TEST_TMP/slots" \
   -c \
   'sandbox_workspace_write.network_access=true' \
@@ -186,7 +184,7 @@ expected_override=$(printf '%s\n' \
   --add-dir \
   "$HOME/.cache/uv" \
   --skip-git-repo-check \
-  "Do the task in $BRIEF_REAL.")
+  "$CODEX_PROMPT")
 assert_eq "$expected_override" "$(<"$LANE_CAPTURE/codex.args")" "codex model and effort env override"
 for key in name repo worktree brief pid started_at started_epoch worker; do
   grep -q "\"$key\"" "$LANE_HOME/codexargs.json" || fail "metadata omitted $key"
