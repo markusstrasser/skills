@@ -21,7 +21,7 @@ Optional axes are outside the presets:
 | Axis | Use and contract |
 |---|---|
 | `formal` | Math, Bayes/stats, proofs or formal invariants; `formal_review` profile at high effort |
-| `claude` | Third-family review for a load-bearing subpart; `claude_review` subscription profile |
+| `claude` | Third-family review for a load-bearing subpart; add it for architecture designs, per the settled routing in `model-guide` (Opus for architecture critique). `claude_review` subscription profile |
 | `glm` | Explicit additional model family; metered profile |
 | `grok` | Repo-grounded premise falsification; exact Cursor registry and repo canary required |
 

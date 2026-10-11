@@ -16,7 +16,8 @@ Review plans and designs, verify model findings against code, or close an implem
 | Request or current artifact | Route | Read when selected |
 |---|---|---|
 | Diff, PR, or “review this diff” | `/code-review` only | The code-review skill; do not also critique the same diff |
-| Explicit `model`, or a plan/design with no later state | `model` | [Adversarial review](lenses/adversarial-review.md) |
+| A new execution route before its first paid or irreversible launch | One repo-access reviewer traces the route's code; not `model`, whose critics cannot see code | `~/.claude/rules/plan-review-gate.md` (“Also trigger”) |
+| Explicit `model`, or a plan, design or retirement decision with no later state | `model` | [Adversarial review](lenses/adversarial-review.md) |
 | Explicit `audit-plan`, or audit backlog (≥15 open items) plus remediation plan | `audit-plan` | [Repo audit plan review](lenses/repo-audit-plan-review.md) |
 | Explicit `verify`, or findings/audit output with no plan | `verify` | [Verification](lenses/verification.md) |
 | Explicit `close`, or a recent plan with implementation commits since plan start | `close` | [Plan close review](lenses/plan-close-review.md) |
