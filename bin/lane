@@ -82,6 +82,10 @@ review_pid_path() {
   printf '%s/%s.review.pid\n' "$LANE_HOME" "$1"
 }
 
+review_log_path() {
+  printf '%s/%s.review.log\n' "$LANE_HOME" "$1"
+}
+
 review_lock_path() {
   printf '%s/%s.review.lock\n' "$LANE_HOME" "$1"
 }
@@ -949,7 +953,8 @@ $(<"$focus")"
     llmx_args+=(-f "$brief")
   fi
   llmx_args+=(-o "$out" "$prompt")
-  rm -f "$marker" "$pid_file"
+  review_log=$(review_log_path "$name")
+  rm -f "$marker" "$pid_file" "$review_log"
   if [ "$bg" = "true" ]; then
     nohup bash -c '
       lock=$1
@@ -964,7 +969,7 @@ $(<"$focus")"
       printf "EXIT=%s\n" "$rc" >"$tmp"
       mv "$tmp" "$marker"
       exit "$rc"
-    ' lane-review "$lock" "$marker" llmx "${llmx_args[@]}" </dev/null >/dev/null 2>&1 &
+    ' lane-review "$lock" "$marker" llmx "${llmx_args[@]}" </dev/null >"$review_log" 2>&1 &
     review_pid=$!
     trap - EXIT INT TERM
     review_started_epoch=$(process_started_epoch "$review_pid")
@@ -975,6 +980,7 @@ $(<"$focus")"
     echo "lane: review pid=$review_pid"
     echo "  out:  $out"
     echo "  done: $marker (contains EXIT=<rc>)"
+    echo "  log:  $review_log (llmx stdout+stderr)"
     return
   fi
 

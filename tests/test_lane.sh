@@ -387,6 +387,7 @@ wait_for_file "$LANE_HOME/first.review.done"
 wait_for_absent "$LANE_HOME/first.review.lock"
 assert_eq "EXIT=9" "$(<"$LANE_HOME/first.review.done")" "failed background review marker"
 assert_eq "DONE:9" "$(review_for first)" "failed background review state"
+grep -Fq "fake llmx stdout" "$LANE_HOME/first.review.log" || fail "background review discarded llmx output (exit 3 left no diagnosis)"
 
 echo "test: zero-minute stall threshold and exact stop archive"
 printf '%s\n' \
