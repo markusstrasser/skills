@@ -40,6 +40,8 @@ order 10/35/60/85% of the clip; `--json` also gives the original video `path`.
   never record why Markus saved something.
 - Saved items are all positives: the library knows what he kept, not what he
   rejects. Do not infer dislikes from absence.
-- The library needs the 2TBPNY volume mounted to open media. If search
+- Images open from a local copy (`_system/state/media/taste/files/`), so the
+  2TBPNY drive need not be mounted. A hit marked `[DEGRADED]` has no copy yet:
+  mount the drive and run `just taste-mirror` in the personal repo. If search
   reports a missing index, run `media taste index` (see the personal justfile).
 - New saves get described with `just taste-update --apply` in the personal repo.
