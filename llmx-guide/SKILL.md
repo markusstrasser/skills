@@ -23,8 +23,10 @@ For profile-based dispatch with a context manifest, `~/Projects/skills/scripts/l
 **Measuring spend / "cost per X"?** Don't build a usage dispatcher — llmx already logs every
 **API-transport** call (prompt/completion/**reasoning**/cached tokens + **caller**) to
 `~/.claude/llmx-usage.jsonl`; `python ~/Projects/llmx/scripts/usage_summary.py --by caller` rolls it
-to estimated `$` (reasoning counted as output). Caveats: CLI/subscription transports log NULL tokens
-(only API transports metered); the PRICING table goes stale — fix it in place, don't fork.
+to estimated `$` (reasoning counted as output). Caveats: ~~CLI/subscription transports log NULL tokens
+(only API transports metered)~~ [stale: claude-cli, grok-cli and codex-cli log real tokens; `prompt_tokens`
+is TOTAL input, partitioned by `cached_tokens`/`cache_write_tokens` — footgun 12]; the PRICING table goes
+stale — fix it in place, don't fork.
 
 ## Canonical patterns
 
@@ -111,6 +113,7 @@ Routing table: `critique/lenses/repo-audit-plan-review.md`. Preflight via `model
 | 9 | `--mode agent` launches in `~/.cache/llmx/lite/research` with no repo tools | Fixed 2026-07-10: mode and lite profile are separate. Workspace agent preserves caller cwd; `--lite research` stays isolated. Live-smoke with `pwd` + `git log` after changes. |
 | 10 | Claude subscription call fails before dispatch when `--max-tokens` is set | Claude CLI does not expose that control. Omit `--max-tokens`; use explicit `--timeout` and let the model's native output ceiling apply. Subscription routes fail loud rather than silently billing API fallback. |
 | 11 | Claude chat call returns rc=0 with the model's reply to a user Stop hook in place of the answer (the empty cwd skipped project settings, not user hooks) | Fixed in llmx `72866bc`: chat and `--lite research` calls pass `disableAllHooks`, and a turn injected after the answer fails loud. Workspace `--mode agent` keeps hooks. Still validate outputs by content, never by rc alone. |
+| 12 | claude-cli/grok-cli usage rows logged `prompt_tokens` = Anthropic `input_tokens` (excludes cache; e.g. 2 of ~25k) and dropped `cache_creation_input_tokens`; reasoning was double-counted in output | Fixed 2026-10-12 (`_anthropic_shaped_usage` in `cli_backends.py`): prompt = input + cache read + cache write, `cache_write_tokens` logged, `completion_includes_reasoning=True`, claude `reported_cost_usd` kept. Unknown usage token fields or missing cache fields write a `[DEGRADED]` note + stderr warning. Rows before 2026-10-12 under-report input. Regression: `tests/test_usage_accounting.py` live fixture. |
 
 Legacy: `--lite bare` still works but `--subscription --mode chat` is canonical.
 `--lite research` remains the isolated research-MCP profile for Claude/Codex.
