@@ -18,7 +18,7 @@ UNRELATED_PID=""
 
 cleanup() {
   local name
-  for name in first hang inline codexargs codexoverride claudeargs claudeoverride failure; do
+  for name in first hang inline codexargs codexoverride claudeargs claudeoverride failure rvcache rvown rvnone; do
     if [ -f "$LANE_HOME/$name.json" ]; then
       "$LANE" stop "$name" >/dev/null 2>&1 || true
     fi
@@ -339,7 +339,7 @@ assert_file "$foreground_args"
 assert_eq "test-model" "$(arg_after -m "$foreground_args")" "review model"
 assert_eq "medium" "$(arg_after -e "$foreground_args")" "review effort"
 assert_eq "900" "$(arg_after --timeout "$foreground_args")" "review timeout"
-assert_eq "2" "$(grep -c '^-f$' "$foreground_args")" "review file arguments"
+assert_eq "3" "$(grep -c '^-f$' "$foreground_args")" "review file arguments (patch, report, brief)"
 grep -Fxq "$LANE_HOME/first.patch" "$foreground_args" || fail "llmx arguments omitted patch"
 grep -Fxq "$FIRST_WORKTREE/docs/audit/deep/current-report.md" "$foreground_args" || fail "llmx arguments omitted newest report"
 if grep -Fxq "$FIRST_WORKTREE/docs/audit/old-report.md" "$foreground_args"; then fail "llmx received a stale report"; fi
@@ -494,5 +494,43 @@ echo "test: invalid stall threshold fails closed"
 if "$LANE" ls --stall-min nope >/dev/null 2>&1; then
   fail "ls accepted a non-numeric stall threshold"
 fi
+
+echo "test: review attaches the lane's cache result, not an unchanged tracked report made newest by mtime"
+"$LANE" run rvcache --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+wait_for_file "$LANE_HOME/rvcache.done"
+RVCACHE_WT="$REPO_REAL/.claude/worktrees/codex-rvcache"
+mkdir -p "$RVCACHE_WT/docs/audit/x" "$RVCACHE_WT/.claude/cache"
+printf '%s\n' unrelated >"$RVCACHE_WT/docs/audit/x/old-report.md"
+git -C "$RVCACHE_WT" add docs/audit/x/old-report.md
+git -C "$RVCACHE_WT" commit -qm "tracked unrelated report"
+printf '%s\n' result >"$RVCACHE_WT/.claude/cache/rvcache-result.md"
+touch -t 202001010000 "$RVCACHE_WT/.claude/cache/rvcache-result.md"
+touch "$RVCACHE_WT/docs/audit/x/old-report.md"
+rv_stdout=$(LLMX_CAPTURE_NAME=rvcache "$LANE" review rvcache --out "$TEST_TMP/rvcache.md")
+grep -Fxq "$RVCACHE_WT/.claude/cache/rvcache-result.md" "$LANE_CAPTURE/rvcache.args" || fail "review omitted the lane cache result"
+if grep -Fxq "$RVCACHE_WT/docs/audit/x/old-report.md" "$LANE_CAPTURE/rvcache.args"; then fail "review attached an unchanged tracked report"; fi
+grep -Fxq "lane: report: $RVCACHE_WT/.claude/cache/rvcache-result.md" <<<"$rv_stdout" || fail "review did not print the attached report"
+
+echo "test: review attaches the brief from metadata"
+grep -Fxq "$BRIEF_REAL" "$LANE_CAPTURE/rvcache.args" || fail "review omitted the brief"
+grep -Fxq "lane: brief: $BRIEF_REAL" <<<"$rv_stdout" || fail "review did not print the attached brief"
+
+echo "test: review attaches a report the lane added in its own diff"
+"$LANE" run rvown --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+wait_for_file "$LANE_HOME/rvown.done"
+RVOWN_WT="$REPO_REAL/.claude/worktrees/codex-rvown"
+mkdir -p "$RVOWN_WT/docs/audit/topic"
+printf '%s\n' mine >"$RVOWN_WT/docs/audit/topic/new-report.md"
+LLMX_CAPTURE_NAME=rvown "$LANE" review rvown --out "$TEST_TMP/rvown.md" >/dev/null
+grep -Fxq "$RVOWN_WT/docs/audit/topic/new-report.md" "$LANE_CAPTURE/rvown.args" || fail "review omitted the lane's own report"
+
+echo "test: review with no report fails loud in header and prompt"
+"$LANE" run rvnone --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+wait_for_file "$LANE_HOME/rvnone.done"
+rv_stdout=$(LLMX_CAPTURE_NAME=rvnone "$LANE" review rvnone --out "$TEST_TMP/rvnone.md")
+grep -Fxq '# no lane report found' "$LANE_HOME/rvnone.patch" || fail "patch header omitted no-report note"
+grep -Fq 'No lane report was found' "$LANE_CAPTURE/rvnone.args" || fail "prompt omitted no-report sentence"
+assert_eq "2" "$(grep -c '^-f$' "$LANE_CAPTURE/rvnone.args")" "no-report file arguments (patch + brief)"
+grep -Fxq "lane: report: none" <<<"$rv_stdout" || fail "review did not print report: none"
 
 echo "PASS: lane lifecycle"

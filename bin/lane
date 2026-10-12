@@ -13,7 +13,7 @@ usage:
       (claude worker: LANE_CLAUDE_MODEL=<m> LANE_CLAUDE_EFFORT=<e> env override the default opus/default effort)
       (codex worker: LANE_CODEX_MODEL=<m> LANE_CODEX_EFFORT=<e> env override the default gpt-6-astra/config effort)
       (codex worker: LANE_CODEX_ADD_DIRS=<a:b> adds writable roots; LANE_CODEX_NETWORK=1 enables network; git metadata stays read-only, so the parent merges and commits)
-  lane review <name> [--model <m>] [--effort <e>] [--focus <file>] [--out <file>] [--bg]
+  lane review <name> [--model <m>] [--effort <e>] [--focus <file>] [--report <file>] [--out <file>] [--bg]
   lane ls [--stall-min <minutes>]
   lane stop <name>
   lane resume <name> [--note <file>|--no-note]
@@ -683,24 +683,40 @@ cmd_run() {
   launch_worker "$name" "$repo_root" "$worktree" "$brief" "$worker" "$base" "$branch" "$no_worktree" false ""
 }
 
-newest_audit_report() {
-  local worktree="$1"
+lane_report() {
+  local name="$1"
+  local worktree="$2"
+  if [ -f "$worktree/.claude/cache/$name-result.md" ]; then
+    printf '%s\n' "$worktree/.claude/cache/$name-result.md"
+    return
+  fi
   require_python
-  python3 - "$worktree/docs/audit" <<'PY'
+  git -C "$worktree" status --porcelain -z --untracked-files=all | python3 -c '
 import os
 import sys
 
 root = sys.argv[1]
+entries = sys.stdin.buffer.read().split(b"\0")
 candidates = []
-if os.path.isdir(root):
-    for directory, _, files in os.walk(root):
-        for filename in files:
-            if filename.endswith("-report.md"):
-                path = os.path.join(directory, filename)
-                candidates.append((os.stat(path).st_mtime_ns, path))
+index = 0
+while index < len(entries):
+    entry = entries[index].decode("utf-8", "surrogateescape")
+    index += 1
+    if len(entry) < 4:
+        continue
+    code, path = entry[:2], entry[3:]
+    if code[0] in "RC":
+        index += 1
+    if "D" in code:
+        continue
+    if not (path.endswith("-report.md") or path.endswith("-result.md")):
+        continue
+    full = os.path.join(root, path)
+    if os.path.isfile(full):
+        candidates.append((os.stat(full).st_mtime_ns, full))
 if candidates:
     print(max(candidates)[1])
-PY
+' "$worktree"
 }
 
 build_review_patch() {
@@ -720,6 +736,9 @@ build_review_patch() {
   local rc
 
   printf '# lane review patch: %s\n# worktree: %s\n' "$name" "$worktree" >"$header"
+  if [ -z "$report" ]; then
+    printf '# no lane report found\n' >>"$header"
+  fi
   case "$report" in
     "$worktree"/*) report_relative=${report#"$worktree"/} ;;
   esac
@@ -818,6 +837,7 @@ cmd_review() {
   local patch
   local patch_lines
   local report=""
+  local brief=""
   local prompt
   local marker
   local pid_file
@@ -850,6 +870,11 @@ cmd_review() {
         out="$2"
         shift 2
         ;;
+      --report)
+        [ "$#" -ge 2 ] || die "--report requires a file"
+        report=$(absolute_file "$2" "report file")
+        shift 2
+        ;;
       --bg)
         bg="true"
         shift
@@ -880,19 +905,35 @@ cmd_review() {
   trap 'exit 130' INT
   trap 'exit 143' TERM
 
-  if [ -n "$focus" ]; then
+  if [ -z "$report" ] && [ -n "$focus" ]; then
     case "$(basename "$focus")" in
       *-report.md) report="$focus" ;;
-      *) report=$(newest_audit_report "$worktree") ;;
+      *) ;;
     esac
-  else
-    report=$(newest_audit_report "$worktree")
+  fi
+  if [ -z "$report" ]; then
+    report=$(lane_report "$name" "$worktree")
+  fi
+  brief=$(json_get "$metadata" brief 2>/dev/null || true)
+  if [ -n "$brief" ] && [ ! -f "$brief" ]; then
+    brief=""
   fi
   patch=$(build_review_patch "$name" "$worktree" "$report")
+  echo "lane: report: ${report:-none}"
+  echo "lane: brief: ${brief:-none}"
   patch_lines=$(wc -l <"$patch" | tr -d '[:space:]')
   echo "lane: patch: $patch ($patch_lines lines)"
   prompt='Review the attached patch for correctness across these axes: functional behavior, edge cases and failure handling, concurrency and state safety, and test/contract coverage.
 Return severity-ranked findings under each axis. Every finding must cite file:line from the patch and give a concrete failure scenario. If an axis has no finding, say exactly "no defect found" for that axis. Do not restate the diff.'
+  if [ -z "$report" ]; then
+    if [ -n "$brief" ]; then
+      prompt="$prompt
+No lane report was found; only the patch and the lane brief are available."
+    else
+      prompt="$prompt
+No lane report was found; only the patch is available."
+    fi
+  fi
   if [ -n "$focus" ] && [ "$focus" != "$report" ]; then
     prompt="$prompt
 
@@ -903,6 +944,9 @@ $(<"$focus")"
   llmx_args=(chat --subscription -m "$model" -e "$effort" --timeout 900 -f "$patch")
   if [ -n "$report" ]; then
     llmx_args+=(-f "$report")
+  fi
+  if [ -n "$brief" ]; then
+    llmx_args+=(-f "$brief")
   fi
   llmx_args+=(-o "$out" "$prompt")
   rm -f "$marker" "$pid_file"
