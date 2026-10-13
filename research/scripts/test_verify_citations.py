@@ -93,9 +93,53 @@ class AdvisoryResponseTests(unittest.TestCase):
                 self.assertEqual(vc.dblp_upgrade(title), expected)
 
 
+class ExtractionTests(unittest.TestCase):
+    """Bare arXiv IDs must be extracted; a memo citing only bare IDs is not 'vacuous'."""
+
+    def test_bare_ids_extracted(self):
+        text = ("| A1 | **2610.07625** SLA | x |\n(2609.15309; 2507.02554v2), "
+                "arXiv:2610.07447 and https://arxiv.org/abs/2608.30724")
+        arxiv, _ = vc.extract(text)
+        self.assertEqual(arxiv, {"2610.07625", "2609.15309", "2507.02554", "2610.07447", "2608.30724"})
+
+    def test_non_ids_ignored(self):
+        text = ("doi 10.1016/j.cell.2105.12345 · $5,334 · 0.2260 · 2026.10 · 1234.56789 "
+                "· v1.2345.6789 · 2613.12345")
+        arxiv, _ = vc.extract(text)
+        self.assertEqual(arxiv, set())
+
+
+class ArxivThrottleTests(unittest.TestCase):
+    """HTTP 429 from export.arxiv.org is backed off and retried, not reported 'unreachable'."""
+
+    def test_429_then_success_resolves(self):
+        url = vc.ARXIV.format(aid="2610.07447")
+        calls = iter([vc._Throttled(429, None), vc._Throttled(429, 1.0), b"<ok/>"])
+
+        def fake_once(_url):
+            item = next(calls)
+            if isinstance(item, Exception):
+                raise item
+            return item
+
+        with patch.object(vc, "_get_once", side_effect=fake_once), patch.object(vc.time, "sleep"):
+            self.assertEqual(vc._get(url), b"<ok/>")
+
+    def test_persistent_429_is_unreachable(self):
+        url = vc.ARXIV.format(aid="2610.07447")
+        with patch.object(vc, "_get_once", side_effect=vc._Throttled(429, None)), \
+                patch.object(vc.time, "sleep"):
+            with self.assertRaises(vc.Unreachable):
+                vc._get(url)
+
+
 def main() -> int:
     result = unittest.TextTestRunner().run(
-        unittest.defaultTestLoader.loadTestsFromTestCase(AdvisoryResponseTests)
+        unittest.TestSuite([
+            unittest.defaultTestLoader.loadTestsFromTestCase(AdvisoryResponseTests),
+            unittest.defaultTestLoader.loadTestsFromTestCase(ExtractionTests),
+            unittest.defaultTestLoader.loadTestsFromTestCase(ArxivThrottleTests),
+        ])
     )
     if not result.wasSuccessful():
         return 1

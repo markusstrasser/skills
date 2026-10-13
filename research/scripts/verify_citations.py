@@ -28,6 +28,8 @@ import argparse
 import json
 import re
 import sys
+import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -47,7 +49,7 @@ ARXIV_ONLY_RATIO_MAX = 0.60   # advisory
 
 CROSSREF = "https://api.crossref.org/works/{doi}?mailto=" + urllib.parse.quote(MAILTO)
 DOI_ORG = "https://doi.org/{doi}"  # universal content-negotiation resolver (all registrants)
-ARXIV = "http://export.arxiv.org/api/query?id_list={aid}"
+ARXIV = "https://export.arxiv.org/api/query?id_list={aid}"  # http 301-redirects: 2 requests per id
 DBLP = "https://dblp.org/search/publ/api?format=json&h=3&q={q}"
 
 ATOM = "{http://www.w3.org/2005/Atom}"
@@ -56,6 +58,9 @@ ARX = "{http://arxiv.org/schemas/atom}"
 # --- extraction --------------------------------------------------------------
 # arXiv new-style IDs: YYMM.NNNNN (4-5 digit suffix), optional version.
 ARXIV_RE = re.compile(r"(?:arxiv[:\s/]*|arxiv\.org/(?:abs|pdf)/)(\d{4}\.\d{4,5})(?:v\d+)?", re.IGNORECASE)
+# Bare IDs ("**2610.07625**" in a table) — memos cite this way; without it a memo full of them
+# passed as "vacuous". YYMM month guard + digit/dot boundaries keep DOIs and decimals out.
+ARXIV_BARE_RE = re.compile(r"(?<![\w.])(\d{2}(?:0[1-9]|1[0-2])\.\d{4,5})(?:v\d+)?(?![\w.]*\d)")
 # DOIs: 10.NNNN/suffix — strip trailing markdown/sentence punctuation.
 DOI_RE = re.compile(r"10\.\d{4,9}/[^\s)\]\}\"<>]+", re.IGNORECASE)
 _DOI_TRAIL = '.,;:)]}>"\''
@@ -63,6 +68,7 @@ _DOI_TRAIL = '.,;:)]}>"\''
 
 def extract(text: str) -> tuple[set[str], set[str]]:
     arxiv = {m.group(1) for m in ARXIV_RE.finditer(text)}
+    arxiv |= {m.group(1) for m in ARXIV_BARE_RE.finditer(text)}
     dois = set()
     for m in DOI_RE.finditer(text):
         d = m.group(0)
@@ -78,7 +84,42 @@ class Unreachable(Exception):
     """Transient failure (timeout / 5xx / network) — NOT a hallucination."""
 
 
+# export.arxiv.org asks for one request per 3 s; parallel workers drew HTTP 429 on 25 of 70 ids
+# (2026-10-13), each reported "unreachable". Serialize arXiv calls and back off on 429/503.
+ARXIV_MIN_INTERVAL = 3.0
+ARXIV_RETRIES = 3
+_arxiv_lock = threading.Lock()
+_arxiv_last = 0.0
+
+
 def _get(url: str) -> bytes:
+    if url.startswith(ARXIV.split("?")[0]):
+        global _arxiv_last
+        with _arxiv_lock:
+            for attempt in range(ARXIV_RETRIES + 1):
+                wait = _arxiv_last + ARXIV_MIN_INTERVAL - time.monotonic()
+                if wait > 0:
+                    time.sleep(wait)
+                _arxiv_last = time.monotonic()
+                try:
+                    return _get_once(url)
+                except _Throttled as e:
+                    if attempt == ARXIV_RETRIES:
+                        raise Unreachable(f"{url} -> HTTP {e.code} after {ARXIV_RETRIES} retries") from None
+                    time.sleep(min(e.retry_after or ARXIV_MIN_INTERVAL * 2 ** (attempt + 1), 60))
+    try:
+        return _get_once(url)
+    except _Throttled as e:
+        raise Unreachable(f"{url} -> HTTP {e.code}") from None
+
+
+class _Throttled(Exception):
+    def __init__(self, code: int, retry_after: float | None):
+        super().__init__(code)
+        self.code, self.retry_after = code, retry_after
+
+
+def _get_once(url: str) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
@@ -86,6 +127,9 @@ def _get(url: str) -> bytes:
     except urllib.error.HTTPError as e:
         if e.code == 404:
             return b""  # definitive: does not exist
+        if e.code in (429, 503):
+            ra = e.headers.get("Retry-After") if e.headers else None
+            raise _Throttled(e.code, float(ra) if ra and ra.isdigit() else None) from None
         raise Unreachable(f"{url} -> HTTP {e.code}")
     except Exception as e:  # noqa: BLE001 — URLError, timeout, socket, etc.
         raise Unreachable(f"{url} -> {e}")
