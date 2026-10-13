@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 _ARC_ROOT_NAME = "arc-agi"
@@ -223,8 +224,29 @@ def verdict(cmd: str, cwd: str = "") -> tuple[str, str]:
     )
 
 
+def _fixture(base: Path) -> str:
+    """Minimal arc-agi tree so the selftest never depends on a live checkout."""
+    root = (base / _ARC_ROOT_NAME).resolve()
+    files = {
+        "agent/pyproject.toml": "[project]\nname = 'agent'\n",
+        "experiments/render_trace.py": "import arc_agi\n",
+        "experiments/gate_goal_term/smoke_novelty_divergence.py": "from arcengine import GameAction\n",
+        "experiments/harness_format_ab/converter/gate2_admission.py": "import json\n",
+        "experiments/probe_selector_abc/tests/test_bridge2.py": "import arc_agi\n",
+    }
+    for rel, text in files.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    return str(root)
+
+
 def _selftest() -> int:
-    root = "/Users/alien/Projects/arc-agi"
+    with tempfile.TemporaryDirectory() as tmp:
+        return _selftest_in(_fixture(Path(tmp)))
+
+
+def _selftest_in(root: str) -> int:
     agent = f"{root}/agent"
     cases: list[tuple[str, str, str]] = [
         # block/rewrite targets
