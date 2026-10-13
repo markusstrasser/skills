@@ -10,4 +10,6 @@
 
 The September prompting guidance recommends testing effort per workload: names do not imply equivalent quality across models, low effort may search less, and high effort can duplicate long deliverables in reasoning and the reply. Use the requested effort; tune only against the task's verifier. The existing source digest and migration dispositions are in agent-infra `research/2026-09-01-fable-5.1-tabula-rasa.md` §1 and §10.
 
+**Watch: `high` can lose to `medium` on long single-response tasks.** On the Endless Exam tool-free track (one response, 128K output cap) Fable 5.1 fell from 71.9 at `medium` to 43.7 at `high` because 32 of 69 responses exhausted the output budget; Opus 5.5 rose 66.7 → 69.8 over the same step (arXiv:2609.24555 §5; agent-infra `research/2026-10-13-recent-frontier-autoresearch-results.md`). For a one-shot long derivation or construction, prefer `medium` or give tools and a written-output target.
+
 **Against Opus 5.5 (2026-09-22 card):** Fable 5.1 keeps a narrow lead on OfficeQA table reasoning (80.2 vs 78.9) and is marginally less evasive on controversial topics. It ties on DRACO deep research and trails on most other rows at 2.5 times the token price. Its `low` effort holds up on research far better than Opus 5.5's. Details in § Claude Opus 5.5.
