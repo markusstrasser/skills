@@ -168,7 +168,7 @@ Don't auto-implement — divergent ideas need convergent validation first.
 - **Skipping coverage artifacts.** If you cannot name the matrix cells you covered, you do not yet know what was actually explored.
 - **Using brainstorm as a decision memo.** It produces candidate space plus coverage, not the final call.
 - **Synthesizing without extracting.** Drops ideas silently. Always extract first.
-- **Treating model choice (or parallel multi-agent fan-out) as the diversity mechanism.** The prompting structure (stratification, verbalized sampling, denial, domains, inversions) produces divergence. Parallel agents converge and closed loops semantically collapse — model/agent count is for volume and availability only.
+- **Treating model choice (or parallel multi-agent fan-out) as the diversity mechanism.** The prompting structure (stratification, verbalized sampling, denial, domains, inversions) produces divergence. Parallel agents converge and closed loops semantically collapse — model/agent count is for volume and availability only. (Different in a *verifier-gated search loop*: forks that keep the work but drop the chat history, with a grader picking the winner, do escape idea basins — arXiv:2610.07447. That gain is context reset plus selection; brainstorm has no grader, so it does not transfer here.)
 - **Using expert/authority personas during generation.** "Senior scientist" framing suppresses semantic diversity. Generate with independent/neutral framing; bring expertise in at the convergent (`/critique`) stage.
 
 ## Reference Files
