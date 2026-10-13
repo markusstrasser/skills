@@ -32,6 +32,14 @@ assert _arc_spec.loader is not None
 _arc_spec.loader.exec_module(_arc_mod)
 arc_verdict = _arc_mod.verdict
 
+_emb_spec = importlib.util.spec_from_file_location(
+    "pretool_emb_project_guard", _HOOKS / "pretool-emb-project-guard.py"
+)
+_emb_mod = importlib.util.module_from_spec(_emb_spec)
+assert _emb_spec.loader is not None
+_emb_spec.loader.exec_module(_emb_mod)
+emb_verdict = _emb_mod.verdict
+
 # Single-source zsh syntax preflight — do not re-privatize.
 _syntax_spec = importlib.util.spec_from_file_location(
     "pretool_bash_loop_guard", _HOOKS / "pretool_bash_loop_guard.py"
@@ -123,6 +131,12 @@ def handle(mode: str, payload: dict) -> int:
     if arc_action == "rewrite" and arc_msg:
         cmd = arc_msg
 
+    emb_action, emb_msg = emb_verdict(cmd, cwd)
+    if emb_action == "block":
+        _deny(emb_msg)
+    if emb_action == "rewrite" and emb_msg:
+        cmd = emb_msg
+
     if cmd != original:
         if mode in ("pretool", "preToolUse"):
             _allow(updated_command=cmd)
@@ -133,6 +147,8 @@ def handle(mode: str, payload: dict) -> int:
             hint = "uv run python3"
         elif arc_action == "rewrite":
             hint = "uv run --directory agent"
+        elif emb_action == "rewrite":
+            hint = "uv run --project ~/Projects/emb"
         _deny(f"Use `{hint}` instead. Suggested: {cmd}")
     _allow()
     return 0
@@ -157,7 +173,11 @@ def _selftest() -> int:
         ok = got == want
         bad += not ok
         print(f"  {'ok' if ok else 'FAIL'} want={want} got={got} {payload!r}")
-    for name in ("pretool-uv-python-guard.py", "pretool-arc-agi-agent-cwd-guard.py"):
+    for name in (
+        "pretool-uv-python-guard.py",
+        "pretool-arc-agi-agent-cwd-guard.py",
+        "pretool-emb-project-guard.py",
+    ):
         r = subprocess.run(
             [sys.executable, str(_HOOKS / name), "--selftest"],
             capture_output=True,
