@@ -137,5 +137,5 @@ Always verify downloads — HTML traps, truncated files, wrong schemas are commo
 1. **Don't build agent-browser/Playwright automation for SSO sites.** Use claude-in-chrome.
 2. **Don't retry a wall with fancier code.** If the blocker is access-tier (not technical), stop coding.
 3. **Don't accumulate probe/download scripts.** Document the lesson, delete the script.
-4. **Don't use `browser_cookie3`.** Use `chrome_cookies` module instead (selve/scripts/tools/chrome_cookies.py). Same Keychain+AES approach but maintained, with auto-profile detection. Neither works for SSO.
+4. **Don't use `browser_cookie3`.** Use `chrome_cookies` module instead (`~/Projects/ext/tools/chrome_cookies.py`; `--state FILE` for agent-browser). Same Keychain+AES approach but maintained, with auto-profile detection. Neither works for SSO.
 5. **Don't pay for Scrapfly/Browserbase before trying curl_cffi.** Free first, paid last.

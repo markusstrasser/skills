@@ -1,6 +1,8 @@
 # Chrome Cookie Extraction (macOS)
 
-**Module:** `~/Projects/selve/scripts/tools/chrome_cookies.py`
+**Module:** `~/Projects/ext/tools/chrome_cookies.py` (moved from `selve/scripts/tools/` with the media acquisition, ext 2b53dff; the old path no longer exists). Run from `~/Projects/ext`: `uv run python3 tools/chrome_cookies.py …`.
+
+**Headless browser reuse (2026-10-13):** `uv run python3 tools/chrome_cookies.py --state /path/state.json <domain>` writes an agent-browser/Playwright storage state (mode 600); then `agent-browser --state /path/state.json open <url>`. Verified: Pinterest search loads logged in, no login wall.
 
 Extracts cookies directly from Chrome/Chromium/Brave's encrypted SQLite database on macOS. No browser extensions, no API keys, no OAuth. Works while Chrome is running.
 
@@ -19,7 +21,7 @@ Extracts cookies directly from Chrome/Chromium/Brave's encrypted SQLite database
 ## API
 
 ```python
-from scripts.tools.chrome_cookies import get_cookies, get_session_headers
+from tools.chrome_cookies import get_cookies, get_session_headers
 
 # Basic: get decrypted cookie values
 cookies = get_cookies("instagram.com", names=["sessionid", "csrftoken"])
@@ -44,22 +46,22 @@ resp = session.get("https://i.instagram.com/api/v1/...")
 
 ```bash
 # Auto-detect profile, extract specific cookies
-uv run python scripts/tools/chrome_cookies.py instagram.com sessionid csrftoken
+uv run python3 tools/chrome_cookies.py instagram.com sessionid csrftoken
 
 # All cookies for a domain
-uv run python scripts/tools/chrome_cookies.py pinterest.com
+uv run python3 tools/chrome_cookies.py pinterest.com
 
 # As HTTP headers (for curl piping)
-uv run python scripts/tools/chrome_cookies.py --headers instagram.com sessionid csrftoken
+uv run python3 tools/chrome_cookies.py --headers instagram.com sessionid csrftoken
 
 # JSON output
-uv run python scripts/tools/chrome_cookies.py --json instagram.com sessionid
+uv run python3 tools/chrome_cookies.py --json instagram.com sessionid
 
 # List profiles
-uv run python scripts/tools/chrome_cookies.py --list-profiles
+uv run python3 tools/chrome_cookies.py --list-profiles
 
 # Explicit profile + browser
-uv run python scripts/tools/chrome_cookies.py --profile "Profile 2" --browser brave x.com ct0
+uv run python3 tools/chrome_cookies.py --profile "Profile 2" --browser brave x.com ct0
 ```
 
 ## Platform-Specific Headers

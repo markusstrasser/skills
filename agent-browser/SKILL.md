@@ -48,6 +48,7 @@ Also: `eval <js>` · `set viewport <w> <h>` / `set device <name>` · `network re
 
 ## Gotchas
 
+- **Operator's logged-in sites** (Pinterest, course platforms, X): don't ask for a cookie file or hand-roll Keychain decryption. Run `uv run --project ~/Projects/ext python3 ~/Projects/ext/tools/chrome_cookies.py --state <file> <domain>`, then `agent-browser --state <file> open <url>`. It auto-picks the Chrome profile holding the session; delete the state file when done.
 - Bundled-Chrome download (`agent-browser install`) can time out; system-Chrome fallback works — don't block on it.
 - Interactive and JSON snapshots can omit state attributes even when the page exposes them. If a decision depends on state such as `aria-pressed`, query the principal value directly (`agent-browser get attr @eN aria-pressed`) instead of inferring it from the snapshot.
 - `close` closes the browser pages, but the session daemon may remain active. In `session info --json`, distinguish daemon `active` from `runtime.browserLaunched` and `pageCount`; use `close --all` only when every session should be reset.
