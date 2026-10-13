@@ -1,7 +1,7 @@
 {
   "name": "decide",
   "kind": "orchestrator",
-  "intent_class": "decision",
+  "intent_class": "convergent",
   "summary": "Consequential architecture/design/strategy decision arc — diverge, settle principle, ground, escalating cross-model critique, capture — with anti-sycophancy and completeness discipline.",
   "entrypoint": {
     "type": "skill_doc",
@@ -9,7 +9,7 @@
   },
   "modes": {
     "default": {
-      "intent_class": "decision",
+      "intent_class": "convergent",
       "requires_packet": false,
       "requires_gpt": true,
       "artifacts": [
@@ -20,7 +20,7 @@
       ]
     },
     "quick": {
-      "intent_class": "decision",
+      "intent_class": "convergent",
       "requires_packet": false,
       "requires_gpt": true,
       "artifacts": [
@@ -40,5 +40,6 @@
     "decide/SKILL.md",
     "decide/references/checklists.md",
     "decide/references/templates.md"
-  ]
+  ],
+  "uses": {}
 }

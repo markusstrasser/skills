@@ -1,7 +1,7 @@
 {
   "name": "execute",
   "kind": "orchestrator",
-  "intent_class": "execution",
+  "intent_class": "convergent",
   "summary": "Execute an approved plan to verified-done with hygiene — phase-gated, probe/verify/commit discipline, worktree-isolated parallel subagents, inline tooling-building, disagree-self-check on divergence, /critique close.",
   "entrypoint": {
     "type": "skill_doc",
@@ -9,7 +9,7 @@
   },
   "modes": {
     "default": {
-      "intent_class": "execution",
+      "intent_class": "convergent",
       "requires_packet": false,
       "requires_gpt": false,
       "artifacts": [
@@ -29,5 +29,6 @@
   "references": [
     "execute/SKILL.md",
     "decide/references/checklists.md"
-  ]
+  ],
+  "uses": {}
 }

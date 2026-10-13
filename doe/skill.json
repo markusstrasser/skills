@@ -1,7 +1,7 @@
 {
   "name": "doe",
   "kind": "worker",
-  "intent_class": "design-generation",
+  "intent_class": "convergent",
   "summary": "Generates experiment designs (arms/shams/controls/bands/power/stopping-rule) from a hypothesis + budget, checked against a dated catalogue of this project's own attack-caught design defects.",
   "entrypoint": {
     "type": "skill_doc",
@@ -9,7 +9,7 @@
   },
   "modes": {
     "default": {
-      "intent_class": "design-generation",
+      "intent_class": "convergent",
       "requires_packet": false,
       "requires_gpt": false,
       "artifacts": [
