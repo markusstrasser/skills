@@ -1,0 +1,11 @@
+#!/bin/bash
+# ripgrep that never searches a socket stdin. Some agent-harness calls (Claude Code's Bash tool) hand commands a
+# socket as stdin; given no path, ripgrep searches a readable stdin instead of the working directory, and a socket
+# that never closes blocks it forever (pitchtest 2026-10-13: a chained re-cut hung 7 min on `rg PAT --type py`).
+# Pipes, files and terminals pass through unchanged. Symlinked from ~/.local/bin/rg. Regression: tests/test_rg_wrapper.sh.
+real=/opt/homebrew/bin/rg
+[ -x "$real" ] || { echo "rg wrapper: $real is missing (brew install ripgrep)" >&2; exit 2; }
+if [ -S /dev/fd/0 ]; then
+  exec "$real" "$@" < /dev/null
+fi
+exec "$real" "$@"
