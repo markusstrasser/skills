@@ -283,7 +283,11 @@ no adversarial model required.)
   (arXiv 2610.07447 §6.2), so pilot where the arms actually sit. A loop-policy arm (fork, restart,
   tree search, long session) needs **equal-compute** controls: one long run AND the same budget
   split into independent runs (best-of-N); a policy that only beats the single run may just be
-  buying samples (2610.07447 Table 1; 2609.15309). If the claim is about an *idea*, not the
+  buying samples (2610.07447 Table 1; 2609.15309). A best-of-N or fork arm selects its winner
+  with the rule a deployment would have (validation score or the agent's own pick), never the
+  hidden test: parallel sessions raised the test-selected ceiling but lost it under agent
+  selection (arXiv 2609.40303), and test-vs-validation selection is worth 9–13 points on
+  MLE-bench lite (arXiv 2507.02554). If the claim is about an *idea*, not the
   artifact, each idea arm needs ≥2 fresh-session implementations: one implementation draw
   reversed the idea-level winner in 26–44% of decisions (arXiv 2607.26587).
 
