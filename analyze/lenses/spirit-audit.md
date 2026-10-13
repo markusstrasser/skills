@@ -8,15 +8,16 @@ an adversarial integrity pass, not a quality rating.
 1. **State the contract.** What does the artifact claim to measure/establish, and which rules must
    it honor (drop-rules, blinding, representativeness, ownership, first-dispatch)? That intent is
    the "spirit." Write it in one or two sentences before looking at results.
-2. **Scan for the 7 violation classes** — for each, ask "is the letter met while this is subverted?"
+2. **Scan for the 8 violation classes** — for each, ask "is the letter met while this is subverted?"
    and **quote the exact trace/line**:
-   - **Degenerate-pass** — scores well via trivial/empty/boilerplate output or refusing to commit, not substance.
+   - **Degenerate-pass** — scores well via trivial/empty/boilerplate output or refusing to commit, not substance. An absolute-tolerance check passed by near-zero output is the numeric form (a "283×" kernel wrote 0.3% of its buffer, arXiv:2609.21058).
    - **Invalid reference** — the gold/spec/baseline itself violates the contract, is wrong, or leaks the answer → a "failure" against it may be *correct* (the diekstra case).
    - **Failure-scored-as-result** — a transport/process error (empty, errored, partial, timeout) recorded as a legitimate low score, indistinguishable from real underperformance.
    - **Confound** — compared conditions differ in >1 way (model × prompt × transport × config); the effect is attributed to one.
    - **Unreliable adjudicator** — single / non-blind / same-lineage judge; or judges disagree but one number is reported as truth.
    - **Saturated item** — every subject passes (or fails); no discriminative signal, yet counted as if it discriminates.
    - **Leakage** — the subject could see information it shouldn't (gold-only fields, the answer named in the prompt/brief).
+   - **Grader within reach** — the subject could read the eval data, edit the scorer or thresholds, or reported its own score. Check the trajectory (reads of eval files, scorer edits), not only the artifact: agents that owned their evaluation hacked unprompted in 30.5% of open-ended pipeline tasks vs 2.9% of kernel tasks, and a panel reviewing only code plus reported scores missed 6.5% of confirmed hacks (arXiv:2609.28614).
 3. **For each hit:** name who/what benefits, rate severity, and state the cheapest check that confirms or refutes it.
 4. **Separate disclosed tradeoffs from violations.** A limitation acknowledged in the contract (e.g. "public-lifted, contamination disclosed") is letter-honest; flag it only if a downstream decision reads through the disclosure.
 
