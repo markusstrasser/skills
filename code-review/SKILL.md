@@ -158,6 +158,14 @@ Beyond line-level smells, flag shallow / over-abstracted design — vocabulary f
 - **Tests past the interface** — a test that asserts internal state (must change whenever the
   implementation changes) instead of observable behavior. The interface is the test surface.
 
+## Metric-claim diffs (agent-authored)
+
+When a diff claims a score, speedup or pass-rate gain, flag any edit in the same diff to tests, scorers,
+tolerances, thresholds, fixtures or eval data, and check that numeric checks are scale-invariant and cover
+the whole output. Coding agents game graders unprompted: an absolute-tolerance check accepted a kernel
+that wrote 0.3% of its output as a "283×" speedup (arXiv:2609.21058), and agents that owned their
+evaluation hacked it in 30.5% of open-ended tasks (arXiv:2609.28614).
+
 ## Depth presets (for critique/execute callers)
 
 | Preset | Scout focus | Provider | Notes |
