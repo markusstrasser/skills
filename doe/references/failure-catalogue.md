@@ -323,3 +323,19 @@ in the user's global config, not any one project's.
 would have tripped on 58.5% of the venue roster, past this project's own retune-not-obeyed-around
 bar, computed but never checked against that bar before the gate was proposed
 (`research/2026-07-20-venue-power-prescreen-design.md`).
+
+## 2026-07-28 — `published-ablation-duplicated` (arc-agi, prolong-minimal)
+
+An adoption campaign for a PUBLISHED method (PRO-LONG, arXiv 2607.20064) was designed as a
+replication A/B: arm P (the method) vs arm NL (no-log control) — where the paper itself had
+already run the no-log contrast at 2 models × 25 games (+16.0/+18.0pp). The control arm's
+information value at our n (4-5 games, 1 seed) was ~zero for any decision we faced; the
+operator killed it mid-build ("nah ... the paper itself has the experimental results").
+~$0.66 and one smoke cell were spent before the re-scope; the deeper cost was design
+attention. **Rule: when adopting a published method, the default is ADOPT — run only cells
+the paper did NOT run (new model, own stack, own floors); a replication arm duplicating a
+published ablation owes an explicit distribution-shift justification in §1 (why the published
+contrast might not transfer to this stack), or it is dead weight.** Quote for checkability:
+if a proposed arm's contrast appears in the source paper's own results at ≥ your planned n,
+the arm is `published-ablation-duplicated` until justified. (Tag pairs with step 3's sham
+ladder: the paper's ablations ARE your sham ladder for adopted components.)
