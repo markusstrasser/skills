@@ -164,6 +164,22 @@ just image-run markus camel-desert        # bare names under ~/Documents/image-g
 - **Face blur:** inswapper's 128px face reads softer than the body — pass `--enhance
   0.6` on the swap (GPEN-1024 restore, the measured default). Tune 0.3–0.7; he rejects
   plastic, don't exceed ~0.7.
+- **Swap-seam feather (2026-08-11): profile ships `finish.feather_beard: 0.35`
+  (saturated).** 0.05–0.25 is a forbidden zone — it converts the hard mid-beard paste
+  seam into a visible blend-blur band Markus rejects at pixel zoom. **Bearded CLOSE-UPS
+  are PARKED**: swap residue (bank beard past the gen's beard line) survives feather,
+  frequency-sep, CAF, and gpt-inpaint — full verdict in imagegen
+  `docs/research/2026-08-11-jaw-double-mechanism.md` (Addendum 4). For beard-salient
+  dim scenes: stubble grooming override ("uniform two-day shadow, no dense beard mass,
+  no sharp beard edge") or hands-hidden/waist-up framing. Post-hoc repairs + 2x/4x
+  Real-ESRGAN upscale: `image_engine.py retouch --help` (toolbelt, 2026-08-11).
+- **Markus-flagged artifact protocol:** his eye beats agent reads AND Flash on
+  texture/seam classes. First deliverable after a flag = labeled grid overlay to
+  confirm the location; every "fixed" claim ships with a ≥3× crop of the exact
+  region; two rejections of one class = change mechanism or park, never re-litigate.
+- **His own old travel photos are the best scene templates** (Grand Canyon/Hoover/
+  Salzburg: 3 keepers in one day) — ask for more old photos before scraping
+  screenshots; drop caps (full hair is identity), keep scenes faithful.
 - **Finish = SUBTLE, not bokeh** (`[[feedback_image_finish_subtle_not_bokeh.md]]`):
   light grain + background MOSTLY IN FOCUS. `cohere_photo.py --downscale 0.92
   --soften 0.7 --grain 3`. Heavy matte-DoF bokeh reads "too professional/staged" —
