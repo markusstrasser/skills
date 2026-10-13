@@ -276,6 +276,16 @@ no adversarial model required.)
   seq_stop.py` has ready SPRT (Wald boundaries) / O'Brien-Fleming / successive-halving
   implementations if a sequential design is the right shape; state explicitly whether you're
   using fixed-n or sequential stopping and why.
+- **Agent-run arms** (whole agent sessions or loops, not single calls): size n from measured
+  run-to-run spread, never from a convention. Identical runs of one agent-model pairing varied
+  more than pairings differed, and ranking them took tens to >100 runs each (arXiv 2609.33812,
+  open-weight models). Spread peaks near half of attainable score and collapses at both ends
+  (arXiv 2610.07447 §6.2), so pilot where the arms actually sit. A loop-policy arm (fork, restart,
+  tree search, long session) needs **equal-compute** controls: one long run AND the same budget
+  split into independent runs (best-of-N); a policy that only beats the single run may just be
+  buying samples (2610.07447 Table 1; 2609.15309). If the claim is about an *idea*, not the
+  artifact, each idea arm needs ≥2 fresh-session implementations: one implementation draw
+  reversed the idea-level winner in 26–44% of decisions (arXiv 2607.26587).
 
 ### 8a. Runtime semantics — separate spend ceilings from stall watchdogs
 
