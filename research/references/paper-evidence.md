@@ -27,6 +27,7 @@ Treat a returned paper-quality card as evidence. Surface its components rather t
 - **`NON_HUMAN_ONLY`:** state organism and what transfer is and is not supported. Biological mechanism is not human clinical efficacy.
 - **`CASE_REPORT_ONLY`:** establishes existence, not magnitude.
 - Surface consequential design details: population, sample size, blinding, comparator, preregistration, single-center design, funding/COI, data availability, and replication.
+- **AI-agent and autoresearch results:** surface runs per cell, whether arms had equal compute (tokens or wall time), how the winner was selected (hidden test vs validation or the agent's own pick), the model tier, and whether the grader was within the agent's reach. Identical agent runs can vary more than the arms being compared (arXiv:2609.33812), and 5 of the 7 strongest frontier autoresearch papers of Aug–Oct 2026 ran one attempt per cell (agent-infra `research/2026-10-13-recent-frontier-autoresearch-results.md`). Label pre-frontier or small-model results as uncertain transfer.
 
 For example: `RCT, n=200, human, double-blind, placebo, government-funded`; or `VETOED — candidate gene association study`. Explain any reliance on a vetoed result rather than silently treating it as normal support. For clinical/biological interpretation, use the [shared epistemics reference](../../references/epistemics/SKILL.md).
 
