@@ -35,12 +35,13 @@ disagrees with them.
   reason. He accepted one with "i generally don't like binary questions but this one is fine".
 - **Numbers carry a precision class** in the attribute block: `.exact`, `.approx`, `.oom`, `.range`
   or `.ineq`, as in `{#k3f9a2 .oom}`.
-- **A source name never carries the question.** Say in plain words what was studied (who, in what
-  setting, measured how): `[US orchestra auditions, player behind a screen]`, not
-  `[Goldin & Rouse 2000]`. The citation only attributes, in `src:` or a src span. Test: would he
-  know what this asks in two years without having read the paper? The one-answer panel cannot catch
-  this, because its models have read the paper. His words: "why dafuq would I know what Goldin &
-  Rouse is in 2 years from now?"
+- **The question states its setting:** who, where and what was measured, in the question itself,
+  not only in ctx, so the fact works from the card's own context. Ask which auditions (US symphony
+  orchestras, player behind a screen), not just "per Goldin & Rouse". A citation such as
+  `[Goldin & Rouse 2000]` may stay as an optional extra narrowing; it never replaces the setting.
+  His words, 2026-10-14: "just make sure there's enough context in the question so that the paper
+  is just an extra narrowing", "not me having to remember the exact paper by name". The one-answer
+  check reports a miss as `missing-context`.
 - **Prefer why-cards.** Ask for the cause or the mechanism. On a fact card, put the one-clause cause
   in ctx: `no nucleus → can't repair`.
 - **Cut material is dropped by default.** Text trimmed from ctx becomes its own card only when it is
@@ -49,8 +50,7 @@ disagrees with them.
 - **Verify facts.** Check every number and claim against a source, including those in the question
   and ctx. The one-answer check tests the cue, not the fact.
 - **Hand checks** the panel misses: does the question give the answer away? Does the bold line
-  answer the question asked? Does the answer hide two retrieval targets in one sentence? Would he
-  follow the question without the paper it cites?
+  answer the question asked? Does the answer hide two retrieval targets in one sentence?
 
 ## QA loop against Spaced
 
@@ -67,7 +67,8 @@ Agents propose; he decides.
    `uv run --project lab python lab/one_answer.py --spaced <id>…`, or
    `--suggestions open --post`, which files each verdict through `POST /api/agent/suggestion-check`.
    `ambiguous`: add constraints. `converges-elsewhere`: the panel agrees on another answer, so fix
-   the cue or check the back. Fix once; if it still fails, ask him.
+   the cue or check the back. `missing-context`: put the setting into the question. Fix once; if
+   it still fails, ask him.
 4. **File.**
    `POST /api/agent/suggest-edit {agent, reason, edits: [{card, text, kind, supersedes?}]}`.
    - `kind` is `refactor` when the old intervals belong to a different question (accepting resets
