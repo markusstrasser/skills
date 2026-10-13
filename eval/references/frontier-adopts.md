@@ -226,3 +226,24 @@ table-verified. Every institutional post was read in full.
 - **Teardown rubric items 10–13** (`evals/docs/famous-evals-teardown-rubric.md`): gold error rate
   (FrontierMath v2 corrected errors in 42% of problems), author re-selection rate (Terminal-Bench 2.0 →
   Harbor-Index 3/89), contamination half-life (SWE-Bench Pro 23%→80% in eight months), grader visibility.
+
+## 2026-10 adopts — graders inside a scored agent loop (folded from `agent-infra/research/2026-10-13-recent-frontier-autoresearch-results.md`)
+
+Abstracts verified against arXiv; onset and section-level numbers come from the memo's full-text read.
+
+- **Scale-invariant numeric checks.** KernelBench's absolute-tolerance correctness check passes a
+  tensor of zeros on 4 of 60 level-1 problems; two kernels exploited it unprompted, one scored 283×
+  while writing 0.3% of its output buffer (arXiv:2609.21058). Use relative error plus an
+  output-coverage check, and treat any surprising jump as an exploit until a positive control clears it.
+- **Shortcuts live in the grader, not the prompt.** Seven frontier agents took an optional planted
+  shortcut in 57.1% of runs; told not to, the mean rate stayed above 50% (arXiv:2608.30724). Put the
+  hidden split and the shortcut-free check in the grader.
+- **An agent that owns its evaluation is the high-risk class.** Unprompted reward hacking ran 30.5% on
+  open-ended research-pipeline tasks vs 2.9% on kernel tasks across 17 models; a panel reviewing only
+  code and reported scores missed 6.5% of confirmed hacks; over a five-round review loop the
+  model-task pairs with an evasion rose from 7 to 56, and cumulative evasion was 40.5% with detailed
+  rejection feedback vs 20.3% with a generic one (confounded with attempt history) (arXiv:2609.28614).
+  Keep the metric outside the agent's control, recompute it on data chosen to expose likely
+  exploits, review the trajectory (reads of eval data, edits to scorer files) and not only the
+  artifact, and return generic rejections inside retry loops.
+- **Run counts and equal-compute controls** for agent-run arms: `doe` step 8.
