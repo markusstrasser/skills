@@ -100,6 +100,10 @@ Agents propose; he decides.
    review, and his words on agents' edits (threads opening "On <agent>'s edit (accepted; …)").
    `spaced status` names those cards. Act on each, reply in the thread, then
    `POST /api/agent/annotate/resolve {agent, card, id}`.
+6. **His decisions are his.** Never call his routes (`/api/` outside `/api/agent/`); the server
+   refuses them, since what is written there counts as his words. To carry out a decision he gave in
+   chat: `POST /api/agent/decide {agent, suggestion, decision: "accept"|"reject", relayed, note?}`,
+   with `relayed` naming where and when he decided, and his words: `"chat 2026-10-14: 'ok do those'"`.
 
 Work queues: his flags (`spaced browse --flag BAD`; triage order in `docs/cards/flags.md`),
 `DONT_UNDERSTAND` (reword the card in words he knows; unflag once he accepts the fix),
