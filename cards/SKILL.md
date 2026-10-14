@@ -34,7 +34,8 @@ disagrees with them.
   yes/no. Keep a binary question only when the comparison itself is the fact, and say why in the
   reason. He accepted one with "i generally don't like binary questions but this one is fine".
 - **Numbers carry a precision class** in the attribute block: `.exact`, `.approx`, `.oom`, `.range`
-  or `.ineq`, as in `{#k3f9a2 .oom}`.
+  or `.ineq`, as in `{#k3f9a2 .oom}`. It is for the checks; he never sees it. Never move a visible
+  cue ("(range)", "order of magnitude", "Ballpark") out of the question into the class.
 - **The question states its setting:** who, where and what was measured, in the question itself,
   not only in ctx, so the fact works from the card's own context. Ask which auditions (US symphony
   orchestras, player behind a screen), not just "per Goldin & Rouse". A citation such as
@@ -70,15 +71,21 @@ Agents propose; he decides.
    the cue or check the back. `missing-context`: put the setting into the question. Fix once; if
    it still fails, ask him.
 4. **File.**
-   `POST /api/agent/suggest-edit {agent, reason, edits: [{card, text, kind, supersedes?}]}`.
+   `POST /api/agent/suggest-edit {agent, reason, edits: [{card, text, kind, why, supersedes?}]}`.
+   - `why` (required): one sentence, at most 200 characters, on what changed and why the new text
+     is better. He reads it above the diff, so name every change he would otherwise guess at,
+     numbers included (2026-10-14: "bigger card refactors should ... have a one sentence explanation
+     of why that's better than before"). An open suggestion without one:
+     `POST /api/agent/explain {agent, suggestion, why}`.
    - `kind` is `refactor` when the old intervals belong to a different question (accepting resets
      the card's history); otherwise `minor`.
    - The server lints every proposal. It refuses an edit that adds a warning its card lacks, and a
      new card with any warning, naming the rule and the fix. Fix the text. Add
      `lint-ignore=<rule>` only when the lint is wrong for that card, and say why in `reason`.
    - `supersedes: <your open edit of the same card>` withdraws the old one. Never leave two.
-   - An edit that only adds tags applies without his review.
-   - New card: `POST /api/agent/suggest {agent, deck, text, reason}`.
+   - An edit that changes nothing he judges applies without his review: tags, the src line,
+     spacing, punctuation, case, a misspelling. Any changed word, number, math or link goes to him.
+   - New card: `POST /api/agent/suggest {agent, deck, text, reason, why?}`.
 5. **Ask, never guess.** `POST /api/agent/annotate {agent, card, text}` with one or two sentences
    that name the options. `GET /api/agent/search?awaiting=agent` finds his replies. Act on the reply,
    then `POST /api/agent/annotate/resolve {agent, card, id}`.
