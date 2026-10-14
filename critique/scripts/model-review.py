@@ -1568,7 +1568,6 @@ def run_gemini_preflight(model: str = GEMINI_PRIMARY_MODEL) -> dict:
                 capture_output=True,
                 text=True,
                 timeout=120,
-                env={**os.environ, "LLMX_GEMINI_OK": "1"},
             )
         except subprocess.TimeoutExpired:
             return {"ok": False, "model": model, "error": "timeout after 120s"}
@@ -3498,11 +3497,6 @@ def run_preflight(
 
 
 def main() -> int:
-    # Gemini is critique-only by operator policy (2026-07-14, llmx
-    # spend_guard.enforce_gemini_policy). This engine IS the allowed lane —
-    # authorize its own llmx subprocess dispatches (gemini axes: arch/gaps).
-    os.environ.setdefault("LLMX_GEMINI_OK", "1")
-
     parser = argparse.ArgumentParser(
         description="Model-review dispatch: context assembly + parallel llmx + output collection",
         formatter_class=argparse.RawDescriptionHelpFormatter,

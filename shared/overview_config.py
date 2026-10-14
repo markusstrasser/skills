@@ -7,8 +7,7 @@ from pathlib import Path
 # Default model for overview generation (code-structure summarization — a
 # cheap, high-volume job, so the cheap tier is correct). Single source of truth
 # for both the live path (per-project config) and the cross-project batch path.
-# 2026-07-14: Luna low via codex-cli subscription ($0) — Gemini is critique-only
-# (agent-infra decisions/2026-07-14-gemini-critique-only-policy.md).
+# Subscription GPT via codex-cli ($0); chosen 2026-07-14 when Gemini was critique-only.
 DEFAULT_OVERVIEW_MODEL = "gpt-6-astra"
 
 

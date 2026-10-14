@@ -36,8 +36,8 @@ Choose a model and effort from the principles below, then read the model's refer
 | [gpt-6.1-sol](references/models/gpt-6.1-sol-luna.md) | Metered mid tier; fallback when Astra's plan limit binds | Astra training at a lower serving cost | Codex subscription + API |
 | [gpt-6-luna](references/models/gpt-6.1-sol-luna.md) | Metered bulk extraction and mechanical work | Cheapest GPT ("6 luna wins") | Codex subscription + API |
 | [grok-4.7](references/models/grok-4-7.md) | Opt-in read-only repo critique axis; Grok Build headless | Separate lab with workspace access; cost and speed edge | cursor-agent `grok-4.7-<effort>[-fast]`; `grok` CLI; xAI API unverified |
-| [gemini-3.8-flash](references/models/gemini.md) | Search-grounded and vision dispatch; critique cosigner until 2026-10-14 | Cheap diverse reviewer | Metered API, `LLMX_GEMINI_OK=1` |
-| [gemini-4-argon](references/models/gemini.md) | Critique Gemini axes (`arch`, `gaps`) since 2026-10-14 (operator), never the sole reviewer | Third-party knowledge-work lead (Vals Index #1) at about half Opus 5.5's cost; weak agentic coder; Google's own long-context numbers unreplicated | Metered API, `LLMX_GEMINI_OK=1` |
+| [gemini-3.8-flash](references/models/gemini.md) | Search-grounded and vision dispatch; critique cosigner until 2026-10-14 | Cheap diverse reviewer | Metered API (`GEMINI_API_KEY_METERED`) |
+| [gemini-4-argon](references/models/gemini.md) | Critique Gemini axes (`arch`, `gaps`) since 2026-10-14 (operator), never the sole reviewer | Third-party knowledge-work lead (Vals Index #1) at about half Opus 5.5's cost; weak agentic coder; Google's own long-context numbers unreplicated | Metered API (`GEMINI_API_KEY_METERED`) |
 | [gemini-3.1-pro-preview](references/models/gemini.md) | Explicit `-m` one-offs (ARC-AGI-2, GPQA, video) | Registered, not a default anywhere | Metered API |
 | [gemini-3.5/3.1-flash-lite](references/models/gemini.md) | Registered for pricing, not routed | Lets the spend guard price them | Metered API |
 | [GLM-5.2](references/models/glm-5-2.md) | Opt-in review cosigner and epistemic guardrail; not an extractor | Separate training lab; best measured calibration among routed models | OpenRouter/zai metered, `--axes …,glm` |
@@ -50,7 +50,7 @@ Retired 2026-09-25 (operator: allowlists hold the Pareto frontier only): every m
 - Claude runs on the subscription only; the metered API requires an explicit request.
 - Architecture, design and high-reasoning critique use Opus `max` plus GPT-6 Astra, never Sonnet (2026-06-20). **Open:** whether Sonnet 5 changes that verdict is the operator's call ([details](references/models/claude-sonnet-5.md)).
 - Allowlists hold the Pareto frontier only (2026-09-25). llmx refuses retired ids with the successor named.
-- Gemini is critique-only (2026-07-14 ADR); `gemini-3.1-pro-preview` was retired from routing on 2026-06-13.
+- Gemini was critique-only from 2026-07-14 until the operator lifted it on 2026-10-14; it is now an ordinary metered provider; `gemini-3.1-pro-preview` was retired from routing on 2026-06-13.
 - GLM-5.2 is an opt-in cosigner, not an extractor (2026-06-19).
 - Moving the interactive setting off Fable 5.1 is the operator's call.
 - `opus-low` is licensed for briefed, gated execution only; research and synthesis run at `medium` or higher.

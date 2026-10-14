@@ -37,8 +37,8 @@ Mechanics and footguns: `/llmx-guide`.
   and off-ledger.** It now routes through the normal dispatch path, so `-m` takes any
   vision-capable model id (`gemini-3.8-flash`, `gpt-6-astra`, `gpt-6-luna`, `claude-opus-5`),
   provider is inferred, and `-e` effort works. Three consequences worth knowing:
-  (1) it is **spend-guarded and policy-gated** like everything else — a Gemini vision call now
-  needs `LLMX_GEMINI_OK=1`, where it previously dispatched freely;
+  (1) it is **spend-guarded** like everything else (the Gemini `LLMX_GEMINI_OK=1` gate it
+  also enforced was removed on 2026-10-14);
   (2) it **writes real token counts to the usage ledger**, so vision cost no longer has to be
   estimated (evals/figure_vision_bakeoff had been substituting a `len(response)/4` proxy);
   (3) media **fails loud** rather than being dropped — video to an OpenAI-compat endpoint, an

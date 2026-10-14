@@ -11,7 +11,7 @@ GENERATE="$HOME/Projects/skills/hooks/generate-overview.sh"
 [[ -f "$CONF" ]] || exit 0
 [[ -x "$GENERATE" ]] || exit 0
 
-# 2026-07-14: Gemini is critique-only; Luna via codex-cli subscription ($0).
+# Luna via codex-cli subscription ($0).
 export OVERVIEW_MODEL="gpt-6-luna"
 
 echo "Regenerating overviews after pull (background)..."

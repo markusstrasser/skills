@@ -1938,7 +1938,6 @@ class GeminiPreflightTest(unittest.TestCase):
     def _gemini_run(*, exit_code: int, reply: str | None, stderr: str = ""):
         def fake_run(args, **kwargs):
             assert args[1:4] == ["chat", "-m", model_review.GEMINI_PRIMARY_MODEL], args
-            assert kwargs["env"]["LLMX_GEMINI_OK"] == "1"
             if reply is not None:
                 Path(args[args.index("-o") + 1]).write_text(reply)
             return subprocess.CompletedProcess(args, exit_code, stdout="", stderr=stderr)

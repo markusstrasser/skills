@@ -1,20 +1,19 @@
-# Gemini — critique-only policy
+# Gemini
 
 > Moved from model-guide/SKILL.md on 2026-09-25 (principle-first rewrite; skills HEAD before the rewrite). Retired-model content pruned 2026-09-25 (git history keeps it). Source lines: L126-145, L162.
 
-**Current policy (2026-07-14 ADR, `agent-infra/decisions/2026-07-14-gemini-critique-only-policy.md`):** Gemini is critique-only. llmx refuses `gemini-*` without `LLMX_GEMINI_OK=1`; the key is meant to live only as `GEMINI_API_KEY_CRITIQUE_ONLY`. Frontier ids (2026-09-25; cosigner updated 2026-10-14): `gemini-4-argon` (critique cosigner since 2026-10-14), `gemini-3.8-flash` (cosigner until 2026-10-14; search-grounded and vision dispatch), `gemini-3.1-pro-preview` (explicit `-m` one-offs only), `gemini-3.5-flash-lite` / `gemini-3.1-flash-lite` (registered for pricing, not routed).
+**Policy:** Gemini is an ordinary metered provider; the key arrives as `GEMINI_API_KEY_METERED` like other paid keys. It was critique-only from 2026-07-14 (`agent-infra/decisions/2026-07-14-gemini-critique-only-policy.md`) until the operator lifted it on 2026-10-14 (llmx 2a6e46f removed the `LLMX_GEMINI_OK` gate). Frontier ids (2026-09-25; cosigner updated 2026-10-14): `gemini-4-argon` (critique cosigner since 2026-10-14), `gemini-3.8-flash` (cosigner until 2026-10-14; search-grounded and vision dispatch), `gemini-3.1-pro-preview` (explicit `-m` one-offs only), `gemini-3.5-flash-lite` / `gemini-3.1-flash-lite` (registered for pricing, not routed).
 
 - **Flash-Lite pair is REGISTERED, NOT ROUTED.** `gemini-3.5-flash-lite` and `gemini-3.1-flash-lite` are in llmx only so the spend guard can price them. Prices (ai.google.dev pricing, 2026-07-22): 3.5 Flash-Lite **$0.30/$2.50**, 3.1 Flash-Lite **$0.25/$1.50**. Effort ladders probed live: 3.5-Flash-Lite accepts `minimal`, 3.1-Flash-Lite **rejects** it.
 - **Do NOT reach for Flash-Lite as the cheap extraction lane — Astra-low on subscription (or `gpt-6-luna` metered) stays it.** GPT tiers are
-  **$0 on the ChatGPT subscription**; Flash-Lite is metered under a policy that only permits
-  /critique. A metered lane cannot beat a $0 lane on cost, so Flash-Lite would have to win big on
+  **$0 on the ChatGPT subscription**; Flash-Lite is metered. A metered lane cannot beat a $0 lane on cost, so Flash-Lite would have to win big on
   quality, and our own screening probe says it does not (see below).
 
 - **`gemini-3.1-pro-preview` is RETIRED as a routing option (2026-06-13, operator).** Do not route here for critique/synthesis/review — the cosigner is `gemini-4-argon` since 2026-10-14 (`gemini-3.8-flash` before). (Benchmark records in `references/BENCHMARKS.md` are kept as evidence; this is a routing retirement, not a data scrub. Callable via explicit `-m` if a one-off ever needs ARC-AGI-2/GPQA/video, but it is not a default anywhere.)
 
 ## Gemini 4 Argon (`gemini-4-argon`, stable 2026-10-13)
 
-Registered in llmx 2026-10-14 (llmx `7aba790`); still behind the critique-only gate (`LLMX_GEMINI_OK=1`). Not a default anywhere yet.
+Registered in llmx 2026-10-14 (llmx `7aba790`). Not a default anywhere yet.
 
 - **Live facts (probed 2026-10-14):** `generateContent` works on the paid key. `thinkingLevel` accepts `low|medium|high`; `minimal` → 400 "not supported", `none`/`xhigh`/`max` → 400 invalid enum. Unified 1M in+out token window. `high` on a one-sentence prompt: 507 reasoning / 40 output tokens, 7.9 s.
 - **Price:** intro $2/$10 per MTok, then $4/$20 (ai.google.dev says from 2026-12-01; the launch blog says 2026-11-30). Output includes thinking. Implicit caching only. Not on the free tier. Vals measured $15.68 per Vals Index test versus $32.14 for Opus 5.5 and $28.71 for Fable 5.1.
