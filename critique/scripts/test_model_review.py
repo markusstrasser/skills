@@ -2205,5 +2205,86 @@ class VerifyClaimsAnchorResolutionTest(unittest.TestCase):
             self.assertTrue(out.exists())
 
 
+class VerifyClaimsExistingFileTest(unittest.TestCase):
+    """Regression: claims citing files that exist were labelled HALLUCINATED
+    ("<file> not found"). 2026-10-14 immigration-research reviews, five rows:
+    - builder.py (24 files), RESULT.md (254): "ambiguous" returns found_path=None,
+      and the missing branch tested found_path before the ambiguous branch;
+    - premise-scout.md: the review's own packet file, under the excluded .model-review/;
+    - "model.json" in the text was captured as "model.js" (2 model.json files); the
+      saved-review probe also found .cljc -> .clj, .tsv -> .ts, square.shift -> square.sh.
+    A file that exists nowhere must still read HALLUCINATED.
+    """
+
+    def _verify(
+        self, descriptions: list[str], files: list[str], packet: tuple[str, ...] = ()
+    ) -> dict[int, tuple[str, str]]:
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        project = Path(td.name) / "project"
+        for rel in files:
+            (project / rel).parent.mkdir(parents=True, exist_ok=True)
+            (project / rel).write_text("placeholder\n")
+        review_dir = project / ".model-review" / "2026-10-14-run"
+        review_dir.mkdir(parents=True)
+        sources = []
+        for name in packet:
+            (review_dir / name).write_text("scout totals\n")
+            sources.append(str(review_dir / name))
+        (review_dir / "shared-context.manifest.json").write_text(
+            json.dumps({"source_paths": sources})
+        )
+        findings = [
+            {"id": i, "title": f"finding {i}", "description": d, "file": "", "line": 0, "fix": ""}
+            for i, d in enumerate(descriptions, 1)
+        ]
+        (review_dir / "findings.json").write_text(json.dumps({"findings": findings}))
+        disposition = review_dir / "disposition.md"
+        disposition.write_text("# Review Findings\n\n1. placeholder\n")
+        out = Path(model_review.verify_claims(review_dir, str(disposition), project))
+        rows = {}
+        for line in out.read_text().splitlines():
+            cells = [c.strip() for c in line.split("|")]
+            if len(cells) == 6 and cells[1].isdigit():
+                rows[int(cells[1])] = (cells[2], cells[4])
+        return rows
+
+    def test_basename_with_several_matches_is_ambiguous_not_hallucinated(self) -> None:
+        rows = self._verify(
+            ["Trace builder.py before revising the low end.", "Fix nowhere.py first."],
+            files=["lane_a/builder.py", "lane_b/builder.py"],
+        )
+        self.assertEqual(rows[1][0], "INCONCLUSIVE")
+        self.assertIn("builder.py matched multiple files", rows[1][1])
+        self.assertEqual(rows[2], ("HALLUCINATED", "nowhere.py not found"))
+
+    def test_packet_file_under_model_review_is_grounded(self) -> None:
+        rows = self._verify(
+            ["Totals agree with premise-scout.md.", "Totals agree with ghost-scout.md."],
+            files=[".model-review/2026-10-13-other/premise-scout.md"],
+            packet=("premise-scout.md",),
+        )
+        self.assertNotEqual(rows[1][0], "HALLUCINATED")
+        self.assertIn(".model-review/2026-10-14-run/premise-scout.md", rows[1][1])
+        self.assertEqual(rows[2], ("HALLUCINATED", "ghost-scout.md not found"))
+
+    def test_extension_must_end_the_name(self) -> None:
+        rows = self._verify(
+            [
+                "The reviewer lacks model.json detail.",
+                "See ghost.json.",
+                "See Widget.tsx and editor.cljs.",
+                "Calling square.shift([1, 0]) mutates the vertices.",
+            ],
+            files=["a/derived/model.json", "b/derived/model.json", "ui/Widget.tsx", "ui/editor.cljs"],
+        )
+        self.assertEqual(rows[1][0], "INCONCLUSIVE")
+        self.assertIn("model.json matched multiple files", rows[1][1])
+        self.assertEqual(rows[2], ("HALLUCINATED", "ghost.json not found"))
+        self.assertIn("ui/Widget.tsx", rows[3][1])
+        self.assertIn("ui/editor.cljs", rows[3][1])
+        self.assertEqual(rows[4], ("INCONCLUSIVE", "no file references or structured file anchors"))
+
+
 if __name__ == "__main__":
     unittest.main()

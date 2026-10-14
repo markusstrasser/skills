@@ -3066,6 +3066,7 @@ def verify_claims(
         ".cfg",
         ".clj",
         ".cljc",
+        ".cljs",
         ".css",
         ".edn",
         ".html",
@@ -3085,6 +3086,15 @@ def verify_claims(
     def _is_text_verifiable(path: Path) -> bool:
         return path.suffix.lower() in _TEXT_VERIFY_SUFFIXES
 
+    # Files handed to the reviewers in the packet are grounded even inside a cruft dir
+    # (the review's own .model-review/<run>/premise-scout.md) or outside project_dir.
+    # Before this, citing them read as HALLUCINATED (2026-10-14, immigration-research).
+    _packet_sources = [
+        Path(p)
+        for p in _load_json(review_dir / "shared-context.manifest.json").get("source_paths") or []
+        if isinstance(p, str) and p
+    ]
+
     def _resolve_reference(filepath: str) -> tuple[str, Path | None, str]:
         exact_path = project_dir / filepath
         if exact_path.exists():
@@ -3093,6 +3103,16 @@ def verify_claims(
         if len(candidates) == 1:
             return "basename", candidates[0], filepath
         if len(candidates) > 1:
+            return "ambiguous", None, filepath
+        relative = filepath.lstrip("/")
+        packet_hits = [
+            p
+            for p in _packet_sources
+            if (p.as_posix() == filepath or p.as_posix().endswith("/" + relative)) and p.exists()
+        ]
+        if len(packet_hits) == 1:
+            return "packet", packet_hits[0], filepath
+        if len(packet_hits) > 1:
             return "ambiguous", None, filepath
 
         # Path-prefixed reference (e.g. "scripts/foo.py") missed because the
@@ -3189,9 +3209,11 @@ def verify_claims(
         file_refs = []
         if structured_file:
             file_refs.append((structured_file, str(structured_line) if structured_line > 0 else ""))
+        # (?!\w): the extension must end the name. Without it "model.json" was captured
+        # as "model.js" and read as HALLUCINATED (2026-10-14); tsx/cljs keep those refs whole.
         file_refs.extend(
             re.findall(
-                r"`?([a-zA-Z_][\w/.-]*\.(?:py|js|ts|md|sh|json|yaml|yml|toml|cfg|sql|html|css|clj|cljc|edn))(?::(\d+))?`?",
+                r"`?([a-zA-Z_][\w/.-]*\.(?:py|js|ts|tsx|md|sh|json|yaml|yml|toml|cfg|sql|html|css|clj|cljc|cljs|edn)(?!\w))(?::(\d+))?`?",
                 body_text,
             )
         )
@@ -3223,12 +3245,14 @@ def verify_claims(
         reference_results: list[tuple[str, Path, str]] = []
         for filepath, line_str in file_refs:
             resolution, found_path, display_path = _resolve_reference(filepath)
-            if resolution == "missing" or found_path is None:
+            # "ambiguous" carries found_path=None, so it must be tested before the
+            # missing branch: a basename with 24 matches read as "not found" (2026-10-14).
+            if resolution == "ambiguous":
+                notes.append(f"{filepath} matched multiple files")
+                reference_results.append((resolution, Path(filepath), line_str))
+            elif resolution == "missing" or found_path is None:
                 verdict = "HALLUCINATED"
                 notes.append(f"{filepath} not found")
-                reference_results.append((resolution, Path(filepath), line_str))
-            elif resolution == "ambiguous":
-                notes.append(f"{filepath} matched multiple files")
                 reference_results.append((resolution, Path(filepath), line_str))
             elif not _is_text_verifiable(found_path):
                 notes.append(
