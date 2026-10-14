@@ -8,6 +8,9 @@
 # buffering swallows it on kill). Writes <dir>/<name>.pid at launch and
 # <dir>/<name>.done containing the exit code at completion. Prints the paths
 # and a liveness-aware `bgrun --wait <name>` command.
+# A killed job also writes .done (rc 143 for SIGTERM), so a dependent that
+# waits on the file's existence starts early: test its content (`= 0`), or
+# have the job touch its own marker after the step that matters.
 #
 # Dir: $BGRUN_DIR if set, else ${TMPDIR:-/tmp}/bgrun. Existing markers for the
 # same name are cleared at launch only after a prior live job is ruled out.
