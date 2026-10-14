@@ -26,6 +26,14 @@ renewal; `_Client._close` can still clear another cached client. This host SDK
 change leaves the declared genomics toolchain identities unchanged. It does not
 establish a fix for Volume block-HTTP 404s or replace live rehearsal evidence.
 
+## Platform note 2026-10-12: faster grep on Volumes v2
+
+Modal prefetches metadata and content for small files on **Volumes v2**: grep from a
+Sandbox runs ~10x faster cold and ~6x warm. It does nothing for a v1 volume.
+`genomics-data` is v1 (`modal.Volume.from_name("genomics-data").hydrate()._get_metadata().version`
+returned 1 on 2026-10-14), so genomics receipt/manifest crawls see no change. Weigh it
+only if a v2 migration is ever proposed for small-file-heavy reads.
+
 ## Platform changelog 2026-08-14 → 09-17 (reviewed 2026-09-29)
 
 Dashboard/product changes only; no SDK release. PyPI stable is still 1.5.5
