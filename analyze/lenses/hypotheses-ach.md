@@ -32,8 +32,9 @@ tournament precision 2.4x, success@5 55.1% -> 57.1%). Facts-first extraction
 removes narrative anchoring that debiasing instructions only dent (arXiv
 2607.27384). Diagnostic agents close before requesting the discriminating data
 (arXiv 2607.10275). Step 4's columns are the part of guided reflection that
-works; "be careful" instructions alone are inert (Norman 2014: 45.0% vs 44.5%;
-Staal 2022 meta g=0.20). Subjects who could not guess the rule found it by
+works; "be careful" instructions alone are inert (Norman 2014: 44.5% vs 45.0%).
+Structured reasoning tools as a class give a small gain (Staal 2022: g=0.20, with
+no tool type, including guided reflection, beating the others). Subjects who could not guess the rule found it by
 generalizing from experiments (Klahr & Dunbar 1988).
 
 Output:

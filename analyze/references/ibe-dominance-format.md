@@ -19,7 +19,7 @@ For each surviving hypothesis (posterior > 0.10), evaluate on 5 dimensions:
 - Compare hypotheses pairwise on each criterion: H1 > H2, H1 = H2, or H1 < H2
 - **Dominance:** H1 dominates H2 if H1 >= H2 on all criteria and H1 > H2 on at least one
 - **Non-dominance:** if neither dominates, state the tradeoff explicitly ("H1 is more parsimonious but H2 has broader scope")
-- **Loveliness is not likeliness.** Parsimony and scope stand in for probability only when base rates are missing; people judge simpler and broader explanations more likely regardless (Lombrozo 2007). With base rates available, the base rates dominate.
+- **Loveliness is not likeliness.** People treat simplicity as a prior: they judge simpler explanations more likely and need disproportionate evidence before favouring a complex one, and only unambiguous probability information overrides this (Lombrozo 2007, Exps 2-4). When base rates exist, compute with them explicitly; the pull toward the simpler story does not go away on its own.
 - **Fertility is the tiebreaker.** When tradeoffs are close, the hypothesis generating more NEW checkable predictions wins -- it's more falsifiable
 
 ## Why Not Numeric Totals

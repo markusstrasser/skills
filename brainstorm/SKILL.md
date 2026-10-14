@@ -85,7 +85,7 @@ See `references/synthesis-templates.md` for pre-flight scripts.
 
 State clearly: the question, current approach (if any), hard constraints vs soft preferences, evaluation criteria.
 
-**Reformulate before generating.** Write 3 distinct constructions of the problem: a different goal, a different obstacle to attack, or a different constraint set ("where do we get a jack?" vs "how do we raise the car?"). Generate against at least two. Problem construction predicts solution originality and matters most when the problem is ill-defined or its cues conflict (Reiter-Palmon et al. 1997; 2018). `--quick` on a well-specified task may skip this.
+**Reformulate before generating.** Write 3 distinct constructions of the problem: a different goal, a different obstacle to attack, or a different constraint set ("where do we get a jack?" vs "how do we raise the car?"). Generate against at least two. Problem-construction ability predicts originality, most when cues conflict (Reiter-Palmon et al. 1997). Instructing people to reformulate has weak support: null in 1997 and marginal for teams in 2018. Keep it because it is cheap. `--quick` on a well-specified task may skip this.
 
 ### Step 2: Initial Generation
 
