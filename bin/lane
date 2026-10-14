@@ -385,6 +385,26 @@ dirty_count() {
   echo "${count:-0}"
 }
 
+# A repo's prepare script may symlink the worktree's project uv cache outside the worktree
+# (genomics: pyproject `cache-dir = ".uv-cache"`, linked to main's cache). Codex runs
+# commands with shell_environment_policy.inherit = "core", so the UV_CACHE_DIR exported at
+# launch never reaches them and uv writes through that symlink. Without the target as a
+# writable root, every `uv run` in the lane fails with EPERM (genomics lane-smoke, 2026-10-14).
+add_uv_cache_writable_root() {
+  local worktree="$1"
+  local target
+  [ -L "$worktree/.uv-cache" ] || return 0
+  if ! target=$(cd "$worktree/.uv-cache" 2>/dev/null && pwd -P); then
+    echo "lane: $worktree/.uv-cache is a dangling symlink — uv will fail inside the sandbox" >&2
+    return 0
+  fi
+  case ":$LANE_CODEX_ADD_DIRS:" in
+    *":$target:"*) return 0 ;;
+  esac
+  LANE_CODEX_ADD_DIRS="${LANE_CODEX_ADD_DIRS:+$LANE_CODEX_ADD_DIRS:}$target"
+  export LANE_CODEX_ADD_DIRS
+}
+
 # Per-worktree bootstrap: run the repo's `.agents/prepare` (Delta/agent-skills
 # convention; `.claude/prepare` as a local override) inside a freshly created
 # worktree. Must be fast, idempotent and non-interactive — a lane never blocks on it.
@@ -500,6 +520,9 @@ launch_worker() {
 
   if [ "$resume_mode" = false ]; then
     resolve_worker_settings
+  fi
+  if [ "$worker" = codex ]; then
+    add_uv_cache_writable_root "$worktree"
   fi
   print_worker_settings "$worker"
 

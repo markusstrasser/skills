@@ -18,7 +18,7 @@ UNRELATED_PID=""
 
 cleanup() {
   local name
-  for name in first hang inline codexargs codexoverride claudeargs claudeoverride failure rvcache rvown rvnone; do
+  for name in first hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride failure rvcache rvown rvnone; do
     if [ -f "$LANE_HOME/$name.json" ]; then
       "$LANE" stop "$name" >/dev/null 2>&1 || true
     fi
@@ -194,6 +194,28 @@ expected_override=$(printf '%s\n' \
   --skip-git-repo-check \
   "$CODEX_PROMPT")
 assert_eq "$expected_override" "$(<"$LANE_CAPTURE/codex.args")" "codex model and effort env override"
+
+echo "test: codex adds the target of a symlinked project uv cache as a writable root"
+mkdir -p "$TEST_TMP/shared-uv"
+ln -s "$TEST_TMP/shared-uv" "$REPO/.uv-cache"
+SHARED_UV_REAL=$(cd "$TEST_TMP/shared-uv" && pwd -P)
+uvcache_output=$("$LANE" run codexuvcache --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree)
+wait_for_file "$LANE_HOME/codexuvcache.done"
+rm "$REPO/.uv-cache"
+expected_uvcache=$(printf '%s\n' \
+  exec \
+  -m \
+  gpt-6-astra \
+  --add-dir \
+  "$SHARED_UV_REAL" \
+  -s \
+  workspace-write \
+  --add-dir \
+  "$HOME/.cache/uv" \
+  --skip-git-repo-check \
+  "$CODEX_PROMPT")
+assert_eq "$expected_uvcache" "$(<"$LANE_CAPTURE/codex.args")" "codex uv-cache writable root"
+grep -Fq "add_dirs=$SHARED_UV_REAL network=" <<<"$uvcache_output" || fail "settings line omitted the uv-cache root"
 
 echo "test: codex resume retains settings without caller exports"
 resume_output=$("$LANE" resume codexoverride --no-note)
