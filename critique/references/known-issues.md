@@ -116,3 +116,5 @@
 - **[2026-10-14] Pre-existing failure, seen 2026-10-14: critique/scripts/test_build_plan_close_context.py::test_manifest_includes_review_targets fails on HEAD as well (checked in a clean worktree), so it is not caused by the Argon/Opus preset change. Not yet diagnosed.**
 
 - **[2026-10-14] 2026-10-14 immigration-research: the documented 'uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py' run from the reviewed repo made uv remove and rebuild that repo's .venv (CPython 3.13.15, 35 locked packages). Docs and review_gate's suggested command now use 'uv run --no-project'; regression scripts/test_skill_commands.py.**
+
+- **[2026-10-14] Manual repo-access review via `codex exec` from a run_in_background Bash hangs at "Reading additional input from stdin..." (0 CPU, no session file) when stdin is left open; pass `< /dev/null` or give the prompt on stdin as model-review.py's scout does (pitchtest 2026-10-14, lv20 route review).**
