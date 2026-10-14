@@ -158,7 +158,7 @@ export PATH="$FAKE_BIN:$PATH"
 
 echo "test: codex and claude worker commands match the dispatch contract"
 CODEX_PROMPT="Do the task in $BRIEF_REAL.
-Git metadata is read-only in this sandbox: edit files and run checks, but do not merge, stage or commit. The parent does that. End by listing every path you changed."
+Git metadata is read-only in this sandbox: edit files and run checks, but do not merge, stage or commit. The parent does that. The sandbox also denies ps and sysctl, so /usr/bin/time -l exits 1 after a successful command: measure time and memory from Python (time.perf_counter, resource.getrusage). End by listing every path you changed."
 "$LANE" run codexargs --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null
 wait_for_file "$LANE_HOME/codexargs.done"
 expected_codex=$(printf '%s\n' \

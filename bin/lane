@@ -464,8 +464,10 @@ build_prompt() {
   else
     # The Codex sandbox keeps a worktree's git metadata read-only even under --add-dir
     # (2026-10-11: a Sol lane merge died on ORIG_HEAD.lock in .git/worktrees/<lane>).
+    # It also denies ps and sysctl: on 2026-10-14 `/usr/bin/time -l` exited 1 after a successful child
+    # ("sysctl kern.clockrate: Operation not permitted"), so a worker's timing wrapper failed a passing run.
     prompt="Do the task in $brief.
-Git metadata is read-only in this sandbox: edit files and run checks, but do not merge, stage or commit. The parent does that. End by listing every path you changed."
+Git metadata is read-only in this sandbox: edit files and run checks, but do not merge, stage or commit. The parent does that. The sandbox also denies ps and sysctl, so /usr/bin/time -l exits 1 after a successful command: measure time and memory from Python (time.perf_counter, resource.getrusage). End by listing every path you changed."
   fi
   if [ -n "$resume_note" ]; then
     prompt="$(<"$resume_note")
