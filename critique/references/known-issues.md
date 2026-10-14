@@ -110,3 +110,5 @@
   or name none (`run_gemini_preflight`); a persistent rate limit (llmx exit 3) is reported as
   degraded, not failed, because the arch axis falls back to GPT. Regression:
   `GeminiPreflightTest` in `scripts/test_model_review.py`.
+
+- **[2026-10-14] 2026-10-14 genomics post-ship plan: packet-only axes (gemini-flash x2, astra x2, opus) plus a low-effort scout missed 15 code-level findings (3 blockers) that a repo-grounded codex exec -s read-only gpt-6.1-sol high review then found, all verified at source (~10 min, 5.3M input tokens mostly cached); for plans whose premises are live callers, add a repo-grounded Sol reviewer before adjudication**
