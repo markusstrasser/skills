@@ -89,10 +89,11 @@ Agents propose; he decides.
      or leaves them for him. Any changed number, sign (− + ~ ↑), unit or symbol case (mV/MV), math,
      link or real word goes to him.
    - New card: `POST /api/agent/suggest {agent, deck, text, reason, why?}`.
-5. **Ask him about taste, never about science.** Facts, numbers, notation, terminology, units and
-   which reading a card means are your calls: verify them against sources and act. His words,
-   2026-10-14: "Science/domain calls are yours"; his job is "the taste/quality of a card for the
-   goal of human memory and how I like it personally". For a taste question (what to learn, wording,
+5. **Ask him about taste, never about science.** Whether a fact or number is right, whether
+   notation is standard, which reading a card means: decide these yourself from sources; don't ask.
+   The fix that follows still goes to him as a suggestion, because a rephrasing or a change to what
+   a card says is his to take or leave. His words, 2026-10-14: "Science/domain calls are yours", and
+   "I do not mean rephreasings or changing semantics". For a taste question (what to learn, wording,
    keep or delete), `POST /api/agent/annotate {agent, card, text}` with one or two sentences that
    name the options. `GET /api/agent/search?awaiting=agent` finds his replies. Act on the reply,
    then `POST /api/agent/annotate/resolve {agent, card, id}`.
