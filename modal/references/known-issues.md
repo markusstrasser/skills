@@ -28,3 +28,7 @@ Append-only incident history. Consult for a matching failure; dated entries may 
 - **[2026-10-14] modal 1.6 `modal app logs <app>` fetches the last 100 entries and EXITS (no follow) unless -f; a background watcher that assumed streaming died at once (pitchtest lv20 2026-10-14). Watchers: poll `--tail N` in a loop, or use -f and restart on exit.**
 
 - **[2026-10-14] Correction to the app-logs entry above: polling a fixed `--tail N` window races — a fast app pushes an early line out before a slower one catches up (pitchtest lv20 9K watcher never fired). Accumulate (append + sort -u) or use `--since <start>`, and test the watcher against the slowest AND fastest stream.**
+
+- **[2026-10-15] 2026-10-15: genomics uv.lock now pins modal 1.6.1 (CLI and venv both 1.6.1); the SKILL.md "Modal 1.5.5, parity required" baseline is stale. 1.6.1 retries internal failures (MAX_INTERNAL_FAILURE_COUNT) outside retries=0 on .remote(); budget paid probes per attempt.**
+
+- **[2026-10-15] Modal 1.6.1 FunctionCreate refuses (server-side, no client check): serialized=True fn on a different Python minor than the image; nonpreemptible=True on GPU fns; scaledown_window<2. Volume mounts are symlinks to /__modal/volumes/<id> — resolve() before O_NOFOLLOW-style authenticated readers. genomics 2026-10-15 p15 probe.**
