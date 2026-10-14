@@ -39,6 +39,8 @@ A failed or hanging backend says nothing about whether the paper exists or what 
 - Prefer an accessible official repository or publisher copy. A configured crawler may retrieve public text when the ordinary downloader fails. Save the accessed text and its source URL when it becomes evidence.
 - For genuinely restricted full text, use institutional access only within the user's authorization or report the limit. Do not purchase a paper or treat an access-control challenge as permission to bypass it.
 
+For AI/ML and other arXiv topics, where S2 keyword search often returns nothing, use `search_papers` with `backend="alphaxiv"`: full-text keyword search whose hits carry page-numbered match snippets, with inclusive `published_after`/`published_before` bounds. Use `alphaxiv_embedding` for plain-language semantic queries. The pools are fixed server-side, at about 25 and 15 hits.
+
 For dated arXiv searches, verify the returned dates and query semantics. Historical Exa date-filter leakage and arXiv OR-group failures are recorded in [known issues](known-issues.md). A noisy result set can be a malformed or ignored query, not a negative scientific result.
 
 The [historical retrieval ladder](tool-history.md#fetch_paper-failure-recovery--green-oa--cloudflare-retrieval-ladder) preserves the 2026-07-04 green-OA incident and exact provider-specific observations. Read it only when that recovery path applies.
