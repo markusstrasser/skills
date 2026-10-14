@@ -11,10 +11,10 @@ When using `web_search_advanced_exa`, set `category` to narrow results:
 | Domain | Category | When |
 |--------|----------|------|
 | Finance/investing | `financial report` | SEC filings, earnings, annual reports |
-| Academic research | `research paper` | Supplements S2, better recency than S2 free tier |
+| Academic research | `publication` | Supplements S2. Since 2026-07 hits are `exa.ai/library/publication/...` cards; cite the DOI in `entities[].properties.doi` and check it is the primary version (Zenodo/preprint copies rank first) |
 | Current events | `news` | Press releases, regulatory announcements |
 | Company analysis | `company` | Company profiles, products, overview |
-| Code/technical | `github` | Repos, issues, discussions |
+| Code/technical | `github` (deprecated by Exa 2026-07) | Repos, issues, discussions; prefer a plain search with a github.com domain filter |
 
 Omit `category` when the query spans domains or when you want diverse source types.
 
