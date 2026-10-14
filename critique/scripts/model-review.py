@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 import re
@@ -29,6 +30,7 @@ import shutil
 import subprocess
 import sys
 import time
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from datetime import date
@@ -2905,6 +2907,104 @@ def extract_claims(
     return str(disposition)
 
 
+def _case_fold(name: str) -> str:
+    return unicodedata.normalize("NFC", name).casefold()
+
+
+def _folds_case(root: Path) -> bool:
+    """Whether root's filesystem treats names that differ in case as one (APFS by default)."""
+    try:
+        with os.scandir(root) as entries:
+            name = next((e.name for e in entries if e.name.swapcase() != e.name), None)
+        if name is None:
+            return False
+        return os.path.samestat(os.lstat(root / name), os.lstat(root / name.swapcase()))
+    except OSError:
+        return False
+
+
+class _TreeIndex:
+    """Entries under root from one walk, answering rglob() for a literal pattern as pathlib
+    3.13 does: "**" does not enter symlinked directories but literal segments do, names
+    match by the filesystem's case rules, and a hit is spelled as the pattern. Wildcard and
+    dot patterns go to Path.rglob.
+
+    Directories prune() accepts are listed but not entered; they are kept in .pruned, and
+    an index over them (tops=...) answers for them when it is needed.
+
+    verify_claims ran one rglob walk per reference and re-read every source file per code
+    symbol: 529 s for a 66-reference genomics review of a 494k-entry tree (2026-10-14).
+    """
+
+    def __init__(self, root: Path, tops: list[str] | None = None, prune=None) -> None:
+        self.root = root
+        self.depth = len(str(root).split(os.sep))
+        self.names: dict[str, list[str]] = {}
+        self.links: list[list[str]] = []
+        self.pruned: list[str] = []
+        for top in [str(root)] if tops is None else tops:
+            for dirpath, dirnames, filenames in os.walk(top):
+                kept = []
+                for name in dirnames:
+                    path = os.path.join(dirpath, name)
+                    if os.path.islink(path):
+                        self.links.append(dirpath.split(os.sep) + [name])
+                    elif prune and prune(path):
+                        self.pruned.append(path)
+                        continue
+                    kept.append(name)
+                for name in (*dirnames, *filenames):
+                    self.names.setdefault(name, []).append(dirpath)
+                dirnames[:] = kept
+        self.fold = _case_fold if _folds_case(root) else None
+        self.folded: dict[str, list[str]] = {}
+        if self.fold:
+            for name in self.names:
+                self.folded.setdefault(self.fold(name), []).append(name)
+
+    def _ends_with(self, segs: list[str], dirs: list[str]) -> bool:
+        """segs ends with dirs, and the matched segments lie below the root."""
+        if len(segs) - len(dirs) < self.depth:
+            return False
+        tail = segs[len(segs) - len(dirs) :]
+        if self.fold is None:
+            return tail == dirs
+        return [self.fold(seg) for seg in tail] == [self.fold(d) for d in dirs]
+
+    def rglob(self, pattern: str) -> list[Path]:
+        parts = pattern.split("/")
+        if any(p in ("", ".", "..") or any(c in p for c in "*?[") for p in parts):
+            return list(self.root.rglob(pattern))
+        *dirs, leaf = parts
+        if self.fold:
+            names = self.folded.get(self.fold(leaf), [])
+        else:
+            names = [leaf] if leaf in self.names else []
+        hits: list[Path] = []
+        for name in names:
+            for dirpath in self.names[name]:
+                segs = dirpath.split(os.sep)
+                if self._ends_with(segs, dirs):
+                    hits.append(Path(os.sep.join(segs[: len(segs) - len(dirs)]), *parts))
+        # A literal segment may be a symlinked directory, which the walk did not enter.
+        for link in self.links:
+            for k in range(1, len(dirs) + 1):
+                if self._ends_with(link, dirs[:k]):
+                    candidate = Path(os.sep.join(link[: len(link) - k]), *parts)
+                    if os.path.lexists(candidate):
+                        hits.append(candidate)
+        return hits
+
+    def suffixed(self, suffix_glob: str) -> list[Path]:
+        """rglob(suffix_glob) for one "*.ext" segment, case-sensitive as pathlib matches it."""
+        return [
+            Path(dirpath, name)
+            for name, dirpaths in self.names.items()
+            if fnmatch.fnmatchcase(name, suffix_glob)
+            for dirpath in dirpaths
+        ]
+
+
 def verify_claims(
     review_dir: Path,
     disposition_path: str,
@@ -3086,6 +3186,7 @@ def verify_claims(
         "__pycache__",
         "node_modules",
         ".venv",
+        ".uv-cache",
         "vendors",
         ".pytest_cache",
         ".ruff_cache",
@@ -3096,13 +3197,11 @@ def verify_claims(
         "dist",
     )
 
-    def _cruft_dir(p: Path, root: Path | None = None) -> str | None:
+    def _cruft_dir(p: Path | str, root: Path | None = None) -> str | None:
         """The cruft dir holding p, judged below the search root: a review run from inside a
         worktree searches a live tree, not ".claude/worktrees" cruft."""
-        try:
-            s = "/" + p.relative_to(root or project_dir).as_posix()
-        except ValueError:
-            s = p.as_posix()
+        s, base = str(p), str(root or project_dir)
+        s = s[len(base) :] if s.startswith(base + os.sep) else s
         return next((d for d in _CRUFT_DIRS if f"/{d}/" in s or s.endswith(f"/{d}")), None)
 
     def _is_cruft(p: Path, root: Path | None = None) -> bool:
@@ -3114,18 +3213,54 @@ def verify_claims(
         # absolute path; normalize to relative so basename/suffix matching still runs.
         # (A genuine absolute path that exists is already resolved by the exact-existence
         # check in _resolve_reference before this is reached.)
-        return _split_rglob(pattern, root)[0]
-
-    def _split_rglob(pattern: str, root: Path | None = None) -> tuple[list[Path], list[Path]]:
-        """rglob hits outside the cruft dirs, and the hits inside them (same walk)."""
         pattern = pattern.lstrip("/")
         if not pattern:
-            return [], []
-        live: list[Path] = []
-        cruft: list[Path] = []
-        for p in (root or project_dir).rglob(pattern):
-            (cruft if _is_cruft(p, root) else live).append(p)
-        return live, cruft
+            return []
+        root = root or project_dir
+        return [p for p in _index(root).rglob(pattern) if not _is_cruft(p, root)]
+
+    def _cruft_rglob(pattern: str) -> list[Path]:
+        """rglob hits inside the cruft dirs, walked only when a reference is missing."""
+        pattern = pattern.lstrip("/")
+        if not pattern:
+            return []
+        live = _index(project_dir)
+        if project_dir not in _cruft_indexes:
+            _cruft_indexes[project_dir] = _TreeIndex(project_dir, tops=live.pruned)
+        return [p for p in live.rglob(pattern) if _is_cruft(p)] + _cruft_indexes[project_dir].rglob(
+            pattern
+        )
+
+    _indexes: dict[Path, _TreeIndex] = {}
+    _cruft_indexes: dict[Path, _TreeIndex] = {}
+
+    def _index(root: Path) -> _TreeIndex:
+        if root not in _indexes:
+            _indexes[root] = _TreeIndex(root, prune=lambda path: _cruft_dir(path, root) is not None)
+        return _indexes[root]
+
+    _definitions: dict[Path, dict[str, Path]] = {}
+
+    def _defined_in(root: Path) -> dict[str, Path]:
+        """The first file under root defining each def/class name; each source is read once."""
+        if root not in _definitions:
+            names: dict[str, Path] = {}
+            for ext in ("*.py", "*.ts", "*.tsx", "*.js"):
+                for p in _index(root).suffixed(ext):
+                    if _is_cruft(p, root):
+                        continue
+                    try:
+                        text = p.read_text(encoding="utf-8", errors="ignore")
+                    except OSError:
+                        continue
+                    for name in _DEF_NAME.findall(text):
+                        names.setdefault(name, p)
+            _definitions[root] = names
+        return _definitions[root]
+
+    # A def/class line names its symbol. Before 2026-10-14 the symbol fallback walked the
+    # tree and re-read every source file once per symbol.
+    _DEF_NAME = re.compile(r"^[ \t]*(?:async\s+def|def|class)\s+(\w+)", re.M)
 
     _TEXT_VERIFY_SUFFIXES = {
         ".cfg",
@@ -3206,7 +3341,7 @@ def verify_claims(
             prefixed = project_dir.parent / search.lstrip("/")
             if prefixed.exists():
                 return "exact_sibling", prefixed, filepath
-        candidates, cruft_hits = _split_rglob(search)
+        candidates = _filtered_rglob(search)
         if len(candidates) == 1:
             return "basename", candidates[0], filepath
         if len(candidates) > 1:
@@ -3275,21 +3410,10 @@ def verify_claims(
             r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*", sym
         ):
             leaf = sym.rsplit(".", 1)[-1]
-            def_re = re.compile(
-                r"^[ \t]*(?:async\s+def|def|class)\s+" + re.escape(leaf) + r"\b", re.M
-            )
             sym_hits: list[Path] = []
             for root in (project_dir, *sibling_roots):
-                for ext in ("*.py", "*.ts", "*.tsx", "*.js"):
-                    for p in root.rglob(ext):
-                        if _is_cruft(p, root):
-                            continue
-                        try:
-                            if def_re.search(p.read_text(encoding="utf-8", errors="ignore")):
-                                sym_hits.append(p)
-                        except OSError:
-                            continue
-                if sym_hits:
+                if leaf in _defined_in(root):
+                    sym_hits.append(_defined_in(root)[leaf])
                     break
             if sym_hits:
                 # Any definition hit means the symbol is real (not a hallucinated
@@ -3311,6 +3435,7 @@ def verify_claims(
 
         # A file found only in a worktree, cache or dependency copy exists; it is not the
         # live tree, so it neither confirms nor counts as invented (2026-10-14).
+        cruft_hits = _cruft_rglob(filepath)
         if cruft_hits:
             return "cruft_only", None, ", ".join(sorted({str(_cruft_dir(p)) for p in cruft_hits}))
         if _named_in_context(filepath):

@@ -2651,5 +2651,89 @@ class VerifyStructuredAnchorTest(unittest.TestCase):
         self.assertEqual(rows[3], ("INCONCLUSIVE", "no file references or structured file anchors"))
 
 
+class TreeIndexParityTest(unittest.TestCase):
+    """The one-walk index must answer exactly as Path.rglob for every pattern verify sends:
+    case-folded literal names on APFS, symlinked directories entered only by a literal
+    segment, cruft dirs walked (the caller splits them), wildcard and dot patterns."""
+
+    def setUp(self) -> None:
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        base = Path(td.name).resolve()
+        self.root = base / "proj"
+        for rel in (
+            "scripts/a.py",
+            "scripts/sub/a.py",
+            "scripts/Mixed_Case.py",
+            "docs/notes/a.md",
+            "X.PY",
+            "pkg/mod/__init__.py",
+            "pkg/mod/core.ts",
+            ".claude/cache/run/a.py",
+            ".claude/worktrees/wt/scripts/a.py",
+            "node_modules/dep/index.js",
+            "dir.py/inner.txt",
+            "proj/nested.py",
+        ):
+            (self.root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (self.root / rel).write_text("x\\n")
+        (base / "outside/lib").mkdir(parents=True)
+        (base / "outside/lib/b.py").write_text("y\\n")
+        os.symlink(base / "outside", self.root / "link")
+        os.symlink(base / "outside/lib", self.root / "scripts/linked_lib")
+        os.symlink(base / "missing-target", self.root / "scripts/broken.py")
+
+    def test_rglob_matches_pathlib(self) -> None:
+        index = model_review._TreeIndex(self.root)
+        patterns = [
+            "a.py", "scripts/a.py", "sub/a.py", "Scripts/A.py", "mixed_case.py", "a.md",
+            "notes/a.md", "x.py", "X.PY", "core.ts", "mod/core.ts", "pkg/mod/__init__.py",
+            "run/a.py", "wt/scripts/a.py", "index.js", "dir.py", "inner.txt",
+            "proj/nested.py", "nested.py", "proj/scripts/a.py", "link/lib/b.py", "lib/b.py",
+            "b.py", "linked_lib/b.py", "scripts/linked_lib/b.py", "broken.py", "nope.py",
+            "*.py", "scripts/*.py", "./scripts/a.py", "scripts/", "sub/../a.py",
+        ]
+        for pattern in patterns:
+            with self.subTest(pattern=pattern):
+                self.assertEqual(
+                    sorted(map(str, index.rglob(pattern))), sorted(map(str, self.root.rglob(pattern)))
+                )
+        for suffix in ("*.py", "*.ts", "*.tsx", "*.js"):
+            with self.subTest(suffix=suffix):
+                self.assertEqual(
+                    sorted(map(str, index.suffixed(suffix))), sorted(map(str, self.root.rglob(suffix)))
+                )
+
+    def test_verify_walks_each_tree_once(self) -> None:
+        # 8c012a0 ran one rglob walk per reference and per code symbol: 529 s on one review.
+        project = self.root
+        review_dir = project / ".model-review" / "2026-10-14-run"
+        review_dir.mkdir(parents=True)
+        findings = [
+            {"id": i, "title": f"finding {i}", "description": "It drifts.", "line": 0, "fix": "",
+             "file": name}
+            for i, name in enumerate(
+                ["a.py", "Mixed_Case.py", "core.ts", "missing_one.py", "nope/missing_two.py",
+                 "SomeClass.method()", "other_symbol", "mod.core", "b.py", "index.js"], 1
+            )
+        ]
+        (review_dir / "findings.json").write_text(json.dumps({"findings": findings}))
+        disposition = review_dir / "disposition.md"
+        disposition.write_text("# Review Findings\n\n1. placeholder\n")
+        builds: list[Path] = []
+        real_init = model_review._TreeIndex.__init__
+
+        def counting_init(index, root, *args, **kwargs):
+            builds.append(root)
+            real_init(index, root, *args, **kwargs)
+
+        with (
+            patch.object(model_review._TreeIndex, "__init__", counting_init),
+            patch.object(Path, "rglob", side_effect=AssertionError("per-reference walk")),
+        ):
+            model_review.verify_claims(review_dir, str(disposition), project)
+        self.assertLessEqual(len(builds), 2)  # the live tree, then its cruft dirs once
+
+
 if __name__ == "__main__":
     unittest.main()
