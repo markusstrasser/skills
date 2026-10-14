@@ -2286,5 +2286,370 @@ class VerifyClaimsExistingFileTest(unittest.TestCase):
         self.assertEqual(rows[4], ("INCONCLUSIVE", "no file references or structured file anchors"))
 
 
+class FindingKeyDriftTest(unittest.TestCase):
+    """Regression: CLI extraction cannot enforce FINDING_SCHEMA, and from 2026-07 the models
+    wrote file_path/proposed_fix. Every findings.json reader used file/fix, so dispositions
+    showed "File: N/A"/"Fix: N/A" and verify saw no structured anchors (54 of 57 rows "no
+    file references" in a 2026-10-14 immigration-research review).
+    """
+
+    def test_aliases_map_onto_schema_keys(self) -> None:
+        # shared.finding_keys holds the alias map; FINDING_SCHEMA holds the keys.
+        from shared.finding_keys import FINDING_KEY_ALIASES
+
+        self.assertLessEqual(set(FINDING_KEY_ALIASES.values()), set(model_review._FINDING_KEYS))
+        self.assertFalse(set(FINDING_KEY_ALIASES) & set(model_review._FINDING_KEYS))
+
+    def test_subscription_extraction_names_keys_and_maps_aliases(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            review_dir = Path(td)
+            arch_output = review_dir / "arch-output.md"
+            arch_output.write_text("arch output")
+            captured: list[dict] = []
+            finding = {
+                "category": "bug",
+                "severity": "high",
+                "title": "Stale total",
+                "description": "The total is stale.",
+                "file_path": "lane/RESULT.md:12",
+                "proposed_fix": "Recompute the total",
+                "confidence": 0.9,
+            }
+
+            def mock_call_llmx(**kwargs):
+                captured.append(kwargs)
+                output_path = Path(kwargs["output_path"])
+                output_path.write_text(json.dumps({"findings": [finding]}))
+                return {"exit_code": 0, "size": output_path.stat().st_size, "latency": 0.1, "error": None}
+
+            dispatch_result = {
+                "review_dir": str(review_dir),
+                "axes": ["arch"],
+                "queries": 1,
+                "elapsed_seconds": 1.0,
+                "arch": {
+                    "model": "gemini-3.5-flash",
+                    "exit_code": 0,
+                    "size": arch_output.stat().st_size,
+                    "output": str(arch_output),
+                },
+            }
+            with patch.object(model_review, "_call_llmx", side_effect=mock_call_llmx):
+                disposition = model_review.extract_claims(review_dir, dispatch_result)
+
+            self.assertIn("file, line, fix", captured[0]["prompt"])
+            saved = json.loads((review_dir / "findings.json").read_text())["findings"][0]
+            self.assertEqual(saved["file"], "lane/RESULT.md:12")
+            self.assertEqual(saved["fix"], "Recompute the total")
+            self.assertNotIn("file_path", saved)
+            text = Path(disposition).read_text()
+            self.assertIn("File: lane/RESULT.md:12", text)
+            self.assertIn("Fix: Recompute the total", text)
+
+    def test_verify_reads_file_path_findings(self) -> None:
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        project = Path(td.name) / "project"
+        for rel, text in {
+            "lane/RESULT.md": "# Lane\nThe total uses stale_rate.\n",
+            "other/RESULT.md": "# Other\n",
+            "decisions/2026-09-27-capital-return.md": "# Capital\n",
+        }.items():
+            (project / rel).parent.mkdir(parents=True, exist_ok=True)
+            (project / rel).write_text(text)
+        review_dir = project / ".model-review" / "2026-10-14-run"
+        review_dir.mkdir(parents=True)
+        cited = [
+            ("lane/RESULT.md:2", "The total uses stale_rate."),
+            ("FAQ 2", "FAQ 2 contradicts itself."),
+            (str(project / "lane" / "RESULT.md"), "The lane total is stale."),
+            ("2026-09-27-capital-return.md", "The capital record is stale."),
+            ("lane/GHOST.md", "The ghost file is wrong."),
+        ]
+        findings = [
+            {"id": i, "title": f"finding {i}", "description": d, "file_path": f, "proposed_fix": "x"}
+            for i, (f, d) in enumerate(cited, 1)
+        ]
+        (review_dir / "findings.json").write_text(json.dumps({"findings": findings}))
+        disposition = review_dir / "disposition.md"
+        disposition.write_text("# Review Findings\n\n1. placeholder\n")
+        out = Path(model_review.verify_claims(review_dir, str(disposition), project))
+        rows = {}
+        for line in out.read_text().splitlines():
+            cells = [c.strip() for c in line.split("|")]
+            if len(cells) == 6 and cells[1].isdigit():
+                rows[int(cells[1])] = (cells[2], cells[4])
+        self.assertEqual(rows[1], ("CONFIRMED", "lane/RESULT.md:2 anchors stale_rate"))
+        self.assertEqual(rows[2], ("INCONCLUSIVE", "no file references or structured file anchors"))
+        self.assertEqual(rows[3][0], "INCONCLUSIVE")
+        self.assertIn("lane/RESULT.md exists", rows[3][1])
+        self.assertIn("decisions/2026-09-27-capital-return.md", rows[4][1])
+        self.assertEqual(rows[5], ("HALLUCINATED", "lane/GHOST.md not found"))
+
+    def test_unknown_finding_keys_are_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            review_dir = Path(td)
+            arch_output = review_dir / "arch-output.md"
+            arch_output.write_text("arch output")
+            finding = {
+                "category": "bug",
+                "severity": "high",
+                "title": "Stale total",
+                "description": "The total is stale.",
+                "path": "lane/RESULT.md",
+                "proposed_fix": "Recompute the total",
+                "confidence": 0.9,
+            }
+
+            def mock_call_llmx(**kwargs):
+                output_path = Path(kwargs["output_path"])
+                output_path.write_text(json.dumps({"findings": [finding]}))
+                return {"exit_code": 0, "size": output_path.stat().st_size, "latency": 0.1, "error": None}
+
+            dispatch_result = {
+                "review_dir": str(review_dir),
+                "axes": ["arch"],
+                "queries": 1,
+                "elapsed_seconds": 1.0,
+                "arch": {
+                    "model": "gemini-3.5-flash",
+                    "exit_code": 0,
+                    "size": arch_output.stat().st_size,
+                    "output": str(arch_output),
+                },
+            }
+            with patch.object(model_review, "_call_llmx", side_effect=mock_call_llmx):
+                disposition = model_review.extract_claims(review_dir, dispatch_result)
+
+            coverage = json.loads((review_dir / "coverage.json").read_text())
+            self.assertEqual(
+                coverage["extraction"]["key_drift"],
+                {"arch": {"unknown": ["path"], "missing": ["file", "line"]}},
+            )
+            self.assertIn("Extraction off the finding schema", Path(disposition).read_text())
+
+
+class VerifyStructuredAnchorTest(unittest.TestCase):
+    """Regression: with the structured file field read again (2026-10-14), a probe over 161
+    saved reviews marked 92 rows HALLUCINATED and confirmed 100 on the cited path's own name.
+    Module names, URLs, placeholders, files the reviewed plan proposes and dot-led paths
+    are not invented files, and an anchor taken from the cited path proves nothing.
+    """
+
+    def _verify(
+        self,
+        findings: list[dict],
+        files: dict[str, str],
+        context: str = "",
+        siblings: dict[str, str] | None = None,
+        project_path: str = "project",
+    ) -> dict[int, tuple[str, str]]:
+        """files sit in the project, siblings next to it; "@PROJECT@" in a finding is its path."""
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        root = Path(td.name).resolve()
+        project = root / project_path
+        project.mkdir(parents=True)
+        for base, tree in ((project, files), (root, siblings or {})):
+            for rel, text in tree.items():
+                (base / rel).parent.mkdir(parents=True, exist_ok=True)
+                (base / rel).write_text(text)
+        review_dir = project / ".model-review" / "2026-10-14-run"
+        review_dir.mkdir(parents=True)
+        if context:
+            (review_dir / "shared-context.md").write_text(context)
+        numbered = [
+            {"id": i, "title": f"finding {i}", "line": 0, "fix": "", **finding}
+            for i, finding in enumerate(findings, 1)
+        ]
+        payload = json.dumps({"findings": numbered}).replace("@PROJECT@", str(project))
+        (review_dir / "findings.json").write_text(payload)
+        disposition = review_dir / "disposition.md"
+        disposition.write_text("# Review Findings\n\n1. placeholder\n")
+        out = Path(model_review.verify_claims(review_dir, str(disposition), project))
+        rows = {}
+        for line in out.read_text().splitlines():
+            cells = [c.strip() for c in line.split("|")]
+            if len(cells) == 6 and cells[1].isdigit():
+                rows[int(cells[1])] = (cells[2], cells[4])
+        return rows
+
+    def test_module_names_resolve_to_py_files(self) -> None:
+        rows = self._verify(
+            [
+                {"file": "modal_bam_cache", "description": "The cache never expires."},
+                {"file": "infra_usage_check._count_x()", "description": "Callers are undercounted."},
+                {"file": "no_such_module", "description": "The module is wrong."},
+            ],
+            files={"scripts/modal_bam_cache.py": "x = 1\n", "scripts/infra_usage_check.py": "y = 2\n"},
+        )
+        self.assertIn("scripts/modal_bam_cache.py", rows[1][1])
+        self.assertIn("scripts/infra_usage_check.py", rows[2][1])
+        self.assertEqual(rows[3], ("HALLUCINATED", "no_such_module not found"))
+
+    def test_urls_and_placeholders_are_skipped(self) -> None:
+        none = ("INCONCLUSIVE", "no file references or structured file anchors")
+        rows = self._verify(
+            [
+                {"file": "https://github.com/latchbio/variantbench", "description": "Pin the tag."},
+                {"file": "kernel/v1/paths/<hash>.json", "description": "One file per hash."},
+                {"file": "", "description": "Moving $PIN/raw/gallery-dl-archive.sql orphans it."},
+                {"file": "", "description": "run_fail_...json and https://x.io/a/b.py differ."},
+            ],
+            files={},
+        )
+        self.assertEqual([rows[i] for i in (1, 2, 3, 4)], [none] * 4)
+
+    def test_ref_named_in_reviewed_context_is_unverifiable(self) -> None:
+        context = (
+            "# Model Review Context Packet\n\n## Preamble\n\nSee scripts/preamble_only.py.\n\n"
+            "## Premise Scout (repo-grounded)\n\nscripts/scout_only.py is missing.\n\n"
+            "## Provided Context\n\n### plan.md\n\nCreate `scripts/x_dosage_contract.py` next.\n"
+        )
+        rows = self._verify(
+            [
+                {"file": "scripts/x_dosage_contract.py", "description": "The contract is unspecified."},
+                {"file": "x_dosage_contract.py", "description": "The contract is unspecified."},
+                {"file": "scripts/never_named.py", "description": "It is wrong."},
+                {"file": "scripts/preamble_only.py", "description": "It is wrong."},
+                {"file": "scripts/scout_only.py", "description": "It is wrong."},
+            ],
+            files={},
+            context=context,
+        )
+        named = ("INCONCLUSIVE", "named in the reviewed context, not on disk")
+        self.assertEqual(rows[1], ("INCONCLUSIVE", f"scripts/x_dosage_contract.py {named[1]}"))
+        self.assertEqual(rows[2], ("INCONCLUSIVE", f"x_dosage_contract.py {named[1]}"))
+        self.assertEqual(rows[3], ("HALLUCINATED", "scripts/never_named.py not found"))
+        self.assertEqual(rows[4][0], "HALLUCINATED")
+        self.assertEqual(rows[5][0], "HALLUCINATED")
+
+    def test_anchor_from_the_cited_path_does_not_confirm(self) -> None:
+        rows = self._verify(
+            [
+                {"file": "lane/added_age_mix_2026_10_07/RESULT.md", "description": "The lane drops cohorts."},
+                {"file": "lane/added_age_mix_2026_10_07/RESULT.md", "description": "It ignores stale_rate."},
+            ],
+            files={"lane/added_age_mix_2026_10_07/RESULT.md": "# RESULT\nadded_age_mix_2026_10_07 uses stale_rate\n"},
+        )
+        self.assertEqual(rows[1], ("INCONCLUSIVE", "lane/added_age_mix_2026_10_07/RESULT.md exists"))
+        self.assertEqual(rows[2][0], "CONFIRMED")
+        self.assertIn("anchors stale_rate", rows[2][1])
+
+    def test_dot_led_paths_stay_whole(self) -> None:
+        rows = self._verify(
+            [
+                {"file": ".claude/plans/p.md", "description": "The plan skips a phase."},
+                {"file": "", "description": "Edit ./scripts/a.py and .github/ci.yml."},
+            ],
+            files={
+                ".claude/plans/p.md": "# Plan\n",
+                "scripts/a.py": "a = 1\n",
+                ".github/ci.yml": "on: push\n",
+                "docs/p.md": "# Decoy: a second p.md, so the basename fallback cannot rescue\n",
+                "docs/ci.yml": "on: pull_request\n",
+            },
+        )
+        self.assertNotEqual(rows[1][0], "HALLUCINATED")
+        self.assertIn(".claude/plans/p.md", rows[1][1])
+        self.assertNotEqual(rows[2][0], "HALLUCINATED")
+        self.assertIn(".github/ci.yml", rows[2][1])
+
+    def test_paths_named_only_in_the_fix_are_not_invented(self) -> None:
+        # Second probe: 13 of 29 new HALLUCINATED rows named a file the fix proposes to create.
+        rows = self._verify(
+            [
+                {"file": "", "description": "Readers lack restore.", "fix": "Add tests/test_reader_cov.py."},
+                {"file": "", "description": "scripts/gone.py lacks restore.", "fix": "Add tests/test_reader_cov.py."},
+                {"file": "", "description": "Readers lack restore.", "fix": "Change scripts/reader.py first."},
+            ],
+            files={"scripts/reader.py": "def read_file():\n    pass\n"},
+        )
+        self.assertEqual(rows[1], ("INCONCLUSIVE", "tests/test_reader_cov.py named only in the fix, not on disk"))
+        self.assertEqual(rows[2][0], "HALLUCINATED")
+        self.assertIn("scripts/gone.py not found", rows[2][1])
+        self.assertEqual(rows[3], ("INCONCLUSIVE", "scripts/reader.py exists"))
+
+    def test_repo_prefixed_paths_resolve_next_to_the_project(self) -> None:
+        rows = self._verify(
+            [
+                {"file": "project/src/agent/service.ts:146–151", "description": "validate() reads the stored card."},
+                {"file": "anki/scripts/run_astra.py:54", "description": "done() trusts parsed cards."},
+                {"file": "anki/scripts/missing.py", "description": "It is wrong."},
+            ],
+            files={"src/agent/service.ts": "export function validate() {}\n", "src/gen/service.ts": "x\n"},
+            siblings={"anki/scripts/run_astra.py": "def done():\n    return True\n"},
+        )
+        # The cited lines lie past these short files' ends: CORRECTED, with the right file.
+        self.assertEqual(rows[1], ("CORRECTED", "src/agent/service.ts:146 beyond EOF (1 lines)"))
+        self.assertEqual(rows[2][0], "CORRECTED")
+        self.assertIn("anki/scripts/run_astra.py:54 beyond EOF", rows[2][1])
+        self.assertEqual(rows[3], ("HALLUCINATED", "anki/scripts/missing.py not found"))
+
+    def test_absolute_project_path_is_searched_as_a_project_path(self) -> None:
+        context = "## Provided Context\n\n[SOURCE: scripts/retired_stage.py:24-26]\n"
+        rows = self._verify(
+            [
+                {"file": "@PROJECT@/scripts/retired_stage.py:1", "description": "It cannot answer."},
+                {"file": "@PROJECT@/scripts/never_was.py", "description": "It is wrong."},
+            ],
+            files={},
+            context=context,
+        )
+        self.assertEqual(rows[1][0], "INCONCLUSIVE")
+        self.assertIn("named in the reviewed context", rows[1][1])
+        self.assertEqual(rows[2][0], "HALLUCINATED")
+
+    def test_file_only_in_a_cache_copy_exists(self) -> None:
+        rows = self._verify(
+            [
+                {"file": "remediation-markus.txt", "description": "Line 24 records a sealed SUCCESS."},
+                {"file": "never-written.txt", "description": "It is wrong."},
+            ],
+            files={".claude/cache/postship/probes/remediation-markus.txt": "SUCCESS\n"},
+        )
+        self.assertEqual(rows[1][0], "INCONCLUSIVE")
+        self.assertIn("remediation-markus.txt exists only under .claude/cache (not the live tree)", rows[1][1])
+        self.assertEqual(rows[2], ("HALLUCINATED", "never-written.txt not found"))
+
+    def test_review_run_inside_a_worktree_searches_it_as_live(self) -> None:
+        rows = self._verify(
+            [{"file": "tool.py", "description": "run_tool() drops errors."}],
+            files={"scripts/deep/tool.py": "def run_tool():\n    pass\n"},
+            project_path="repo/.claude/worktrees/wt",
+        )
+        self.assertEqual(rows[1][0], "CONFIRMED")
+        self.assertIn("scripts/deep/tool.py anchors", rows[1][1])
+
+    def test_globs_are_skipped_but_bold_paths_are_kept(self) -> None:
+        rows = self._verify(
+            [
+                {"file": "", "description": "It walks /data/samples/*/results/*/*/receipt.json."},
+                {"file": "", "description": "Access to pharmcat_core_outside/*.report.json stays open."},
+                {"file": "src/*.py", "description": "Every module drifts."},
+                {"file": "", "description": "**scripts/a.py** keeps the lock."},
+            ],
+            files={"scripts/a.py": "a = 1\n"},
+        )
+        none = ("INCONCLUSIVE", "no file references or structured file anchors")
+        self.assertEqual([rows[i] for i in (1, 2, 3)], [none] * 3)
+        self.assertEqual(rows[4], ("INCONCLUSIVE", "scripts/a.py exists"))
+
+    def test_lowercase_dollar_alias_is_a_path(self) -> None:
+        # SvelteKit's $lib alias: the probe lost a confirmed src/lib/images/index.ts ref.
+        rows = self._verify(
+            [
+                {"file": "", "description": "`$lib/images/index.ts` globs only `import.meta.glob` jpg."},
+                {"file": "$lib/images/index.ts", "description": "It globs only `import.meta.glob` jpg."},
+                {"file": "$ROOT/images/index.ts", "description": "It is wrong."},
+            ],
+            files={"src/lib/images/index.ts": "const m = import.meta.glob('*.jpg')\n"},
+        )
+        self.assertEqual(rows[1][0], "CONFIRMED")
+        self.assertIn("src/lib/images/index.ts anchors import.meta.glob", rows[1][1])
+        self.assertEqual(rows[2][0], "CONFIRMED")
+        self.assertEqual(rows[3], ("INCONCLUSIVE", "no file references or structured file anchors"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -471,6 +471,28 @@ class ReviewGateTest(unittest.TestCase):
         top = json.loads((rd / "orchestrator-top.json").read_text())
         self.assertEqual(top["findings"][0]["title"], "cross high")
 
+    def test_rank_reads_saved_file_path_key(self) -> None:
+        # findings.json from CLI extraction (2026-07..10) says file_path, not file; rank
+        # dropped every such low finding as uncited noise.
+        rd = self.repo / ".model-review" / "r2"
+        rd.mkdir(parents=True)
+        findings = {
+            "findings": [
+                {"id": 1, "title": "low with a file", "severity": "low", "confidence": 0.5, "file_path": "real.py"}
+            ]
+        }
+        (rd / "findings.json").write_text(json.dumps(findings))
+
+        class Args:
+            review_dir = rd
+            top = 8
+            json = False
+
+        self.assertEqual(rg.cmd_rank(Args), 0)
+        top = json.loads((rd / "orchestrator-top.json").read_text())
+        self.assertEqual(top["ranked_count"], 1)
+        self.assertEqual(top["findings"][0]["file"], "real.py")
+
 
 if __name__ == "__main__":
     unittest.main()

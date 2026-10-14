@@ -80,6 +80,27 @@ class IntegrationAuditTest(unittest.TestCase):
         r = mod.audit(self.review, self.repo, base="HEAD~1", head="HEAD", plan_path=None)
         self.assertFalse(r.ok)
 
+    def test_saved_proposed_fix_key_is_read(self) -> None:
+        # findings.json from CLI extraction (2026-07..10) says file_path/proposed_fix; the
+        # gate read fix="" and passed any hallucinated fix that landed.
+        self._write_review(
+            "fake bug",
+            "Emit excluded business items to a separate migration file",
+        )
+        path = self.review / "findings.json"
+        data = json.loads(path.read_text())
+        finding = data["findings"][0]
+        finding["proposed_fix"] = finding.pop("fix")
+        finding["file_path"] = finding.pop("file")
+        path.write_text(json.dumps(data))
+        (self.repo / "foo.py").write_text(
+            "# emit excluded business items to a separate migration file\nx = 2\n"
+        )
+        r = mod.audit(self.review, self.repo, base=None, head=None, plan_path=None)
+        self.assertFalse(r.ok)
+        self.assertTrue(any("fix phrasing" in f for f in r.failures))
+        self.assertEqual(mod.merge_records(self.review)[0].file, "foo.py")
+
 
 if __name__ == "__main__":
     unittest.main()

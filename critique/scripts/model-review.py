@@ -79,6 +79,7 @@ from shared.context_packet import (
 from shared.context_preamble import build_review_preamble_blocks, find_governance
 from shared.context_renderers import write_packet_artifact
 from shared.file_specs import parse_file_spec, read_file_excerpt
+from shared.finding_keys import normalize_finding_keys
 
 # --- Structured output schema (both models return this) ---
 
@@ -1901,11 +1902,31 @@ def rerun_gpt_axis_via_subscription(
         }
 
 
+# CLI transports cannot enforce FINDING_SCHEMA, so models named the keys themselves:
+# from 2026-07 most findings said file_path/proposed_fix, which every findings.json
+# reader ignored (disposition "File: N/A"/"Fix: N/A", no verify anchors; 2026-10-14).
+# The prompt now names the keys, shared.finding_keys maps the seen aliases back, and
+# any other drift is reported instead of being read as N/A.
+_FINDING_KEYS = FINDING_SCHEMA["properties"]["findings"]["items"]["required"]
+
+
+def _finding_key_drift(findings: list) -> dict[str, list[str]]:
+    """Keys outside the schema, and schema keys some finding lacks, after alias mapping."""
+    unknown: set[str] = set()
+    missing: set[str] = set()
+    for finding in findings:
+        if isinstance(finding, dict):
+            unknown |= set(finding) - set(_FINDING_KEYS)
+            missing |= set(_FINDING_KEYS) - set(finding)
+    return {name: sorted(keys) for name, keys in (("unknown", unknown), ("missing", missing)) if keys}
+
+
 def _subscription_extraction_prompt(prompt: str) -> str:
     """Replace transport-enforced schema with an explicit CLI-safe JSON contract."""
     return (
         prompt + '\n\nReturn ONLY a JSON object of the form {"findings": [ ... ]} with no '
-        "prose and no markdown fences."
+        f"prose and no markdown fences. Give every finding exactly these keys: "
+        f"{', '.join(_FINDING_KEYS)}."
     )
 
 
@@ -2461,6 +2482,7 @@ def write_coverage_artifact(
     disposition_path: str | None = None,
     verification_summary: dict[str, object] | None = None,
     verified_disposition_path: str | None = None,
+    key_drift: dict[str, dict[str, list[str]]] | None = None,
 ) -> Path:
     coverage_path = review_dir / "coverage.json"
     existing_payload = _load_json(coverage_path)
@@ -2558,6 +2580,7 @@ def write_coverage_artifact(
             "coverage_ratio": round(len(axis_findings or {}) / usable_axis_count, 3)
             if usable_axis_count
             else 0.0,
+            "key_drift": key_drift or {},
         }
 
     if verification_summary is not None:
@@ -2652,6 +2675,8 @@ def extract_claims(
         file=sys.stderr,
     )
 
+    key_drift: dict[str, dict[str, list[str]]] = {}
+
     def _extract_one(task: tuple[str, Path, str]) -> tuple[str, list[dict] | None]:
         axis, output_path, profile = task
         profile_def = dispatch_core.PROFILES[profile]
@@ -2712,7 +2737,19 @@ def extract_claims(
                     raw = re.sub(r"^```(?:json)?\s*\n?", "", raw)
                     raw = re.sub(r"\n?```\s*$", "", raw)
                 data = json.loads(raw)
-                return axis, data.get("findings", [])
+                findings = data.get("findings", [])
+                if isinstance(findings, list):
+                    for finding in findings:
+                        if isinstance(finding, dict):
+                            normalize_finding_keys(finding)
+                    drift = _finding_key_drift(findings)
+                    if drift:
+                        key_drift[axis] = drift
+                        print(
+                            f"warning: extraction for {axis} is off the finding schema: {drift}",
+                            file=sys.stderr,
+                        )
+                return axis, findings
             except (json.JSONDecodeError, KeyError) as e:
                 print(
                     f"warning: extraction for {axis} returned invalid JSON: {e}",
@@ -2737,6 +2774,7 @@ def extract_claims(
             extraction_tasks=extraction_tasks,
             axis_findings={},
             merged_findings=[],
+            key_drift=key_drift,
         )
         return None
 
@@ -2840,10 +2878,18 @@ def extract_claims(
         "<!-- If context file was comprehensive, say so. -->\n\n"
     )
     cross_model_count = sum(1 for f in merged_findings if f.get("cross_model"))
+    drift_note = (
+        "**Extraction off the finding schema** (missing keys read as N/A): "
+        + "; ".join(f"{axis} {drift}" for axis, drift in sorted(key_drift.items()))
+        + "\n"
+        if key_drift
+        else ""
+    )
     header = (
         f"# Review Findings — {date.today().isoformat()}\n\n"
         f"**{len(merged_findings)} findings** from {len(axis_findings)} axes"
         f" ({cross_model_count} cross-model agreements)\n"
+        f"{drift_note}"
         f"Structured data: `findings.json`\n\n"
     )
     disposition.write_text(header + merged + response_template)
@@ -2854,6 +2900,7 @@ def extract_claims(
         axis_findings=axis_findings,
         merged_findings=merged_findings,
         disposition_path=str(disposition),
+        key_drift=key_drift,
     )
     return str(disposition)
 
@@ -2867,9 +2914,12 @@ def verify_claims(
     """Verify extracted claims against the actual codebase.
 
     Checks if cited files and symbols exist. Grades each claim:
-    - CONFIRMED: all cited files/symbols found
-    - HALLUCINATED: cited file does not exist in project
-    - UNVERIFIABLE: no file references to check
+    - CONFIRMED: a cited file/symbol was found and a claim anchor appears in it
+    - CORRECTED: as CONFIRMED, but a cited line lies beyond the file's end
+    - HALLUCINATED: a cited file exists nowhere: not in the project (live tree or a cache
+      copy), the packet, a repo it names next to the project, or the reviewed context
+    - INCONCLUSIVE: no checkable reference, or one that is ambiguous, binary, named only
+      in the context or the fix, or found only in a cache copy
 
     Returns path to verified-disposition.md.
     """
@@ -2931,6 +2981,7 @@ def verify_claims(
         for index, finding in enumerate(findings, 1):
             if not isinstance(finding, dict):
                 continue
+            finding = normalize_finding_keys(dict(finding))  # findings.json saved pre-fix
             title = str(finding.get("title", "") or "").strip()
             description = str(finding.get("description", "") or "").strip()
             file_path = str(finding.get("file", "") or "").strip()
@@ -3045,11 +3096,17 @@ def verify_claims(
         "dist",
     )
 
-    def _is_cruft(p: Path) -> bool:
-        s = p.as_posix()
-        return any(
-            f"/{d}/" in s or s.endswith(f"/{d}") or s.startswith(f"{d}/") for d in _CRUFT_DIRS
-        )
+    def _cruft_dir(p: Path, root: Path | None = None) -> str | None:
+        """The cruft dir holding p, judged below the search root: a review run from inside a
+        worktree searches a live tree, not ".claude/worktrees" cruft."""
+        try:
+            s = "/" + p.relative_to(root or project_dir).as_posix()
+        except ValueError:
+            s = p.as_posix()
+        return next((d for d in _CRUFT_DIRS if f"/{d}/" in s or s.endswith(f"/{d}")), None)
+
+    def _is_cruft(p: Path, root: Path | None = None) -> bool:
+        return _cruft_dir(p, root) is not None
 
     def _filtered_rglob(pattern: str, root: Path | None = None) -> list[Path]:
         # rglob() rejects non-relative patterns — py3.13 raises NotImplementedError.
@@ -3057,10 +3114,18 @@ def verify_claims(
         # absolute path; normalize to relative so basename/suffix matching still runs.
         # (A genuine absolute path that exists is already resolved by the exact-existence
         # check in _resolve_reference before this is reached.)
+        return _split_rglob(pattern, root)[0]
+
+    def _split_rglob(pattern: str, root: Path | None = None) -> tuple[list[Path], list[Path]]:
+        """rglob hits outside the cruft dirs, and the hits inside them (same walk)."""
         pattern = pattern.lstrip("/")
         if not pattern:
-            return []
-        return [p for p in (root or project_dir).rglob(pattern) if not _is_cruft(p)]
+            return [], []
+        live: list[Path] = []
+        cruft: list[Path] = []
+        for p in (root or project_dir).rglob(pattern):
+            (cruft if _is_cruft(p, root) else live).append(p)
+        return live, cruft
 
     _TEXT_VERIFY_SUFFIXES = {
         ".cfg",
@@ -3095,15 +3160,58 @@ def verify_claims(
         if isinstance(p, str) and p
     ]
 
+    # URLs, placeholders ("<hash>.json", "$PIN/raw/x.sql", "run_fail_...json") and globs
+    # ("results/*/receipt.json", "*.report.json") name no checkable file: skip them rather
+    # than report them missing (2026-10-14). Bold markers ("**a.py**") are not globs, and a
+    # lowercase "$lib/x.ts" is an import alias for lib/x.ts, not a shell variable.
+    _NOT_A_PATH = re.compile(r"://|\$\{|\$[A-Z_]|<[^<>\s]*>|\{[^{}\s]*\}|\w\.{3}\w|\*/|/\*|\*\.\w|\w\*[\w.]")
+
+    # A path the reviewed plan or context names but that is not on disk (a file the plan
+    # proposes, a path moved since) was not invented by the reviewer: unverifiable, not
+    # HALLUCINATED. Only the Provided Context / Context Files sections count, not the
+    # preamble or the premise scout (2026-10-14).
+    _packet_text = ""
+    if (review_dir / "shared-context.md").is_file():
+        _packet_text = (review_dir / "shared-context.md").read_text(encoding="utf-8", errors="replace")
+    _context_start = re.search(r"(?m)^## (?:Provided Context|Context Files)[ \t]*$", _packet_text)
+    _context_text = _packet_text[_context_start.start() :] if _context_start else ""
+
+    def _named_in_context(filepath: str) -> bool:
+        name = re.sub(r"^(?:~|\.)?/+", "", filepath)
+        return bool(name) and re.search(
+            r"(?<![\w.-])" + re.escape(name) + r"(?![\w-])", _context_text
+        ) is not None
+
+    _project_prefixes = {f"{project_dir}/", f"{project_dir.resolve()}/"}
+
     def _resolve_reference(filepath: str) -> tuple[str, Path | None, str]:
-        exact_path = project_dir / filepath
-        if exact_path.exists():
-            return "exact", exact_path, filepath
-        candidates = _filtered_rglob(filepath)
+        # A leading "/" may be a repo-relative path, and "~/" is the home directory.
+        exact_paths = [project_dir / filepath, project_dir / filepath.lstrip("/")]
+        if filepath.startswith("~/"):
+            exact_paths.append(Path(filepath).expanduser())
+        for exact_path in exact_paths:
+            if exact_path.exists():
+                return "exact", exact_path, filepath
+        # Search an absolute or ~/ path inside the project by its project-relative part, so
+        # a deleted file can still be named in the context or found in a cache copy.
+        expanded = os.path.expanduser(filepath)
+        search = next(
+            (expanded[len(prefix) :] for prefix in _project_prefixes if expanded.startswith(prefix)),
+            filepath,
+        )
+        # "<repo>/path" names a file in that repo next to the project: "spaced/src/x.ts"
+        # from inside spaced, "anki/scripts/y.py" from a sibling (2026-10-14).
+        head_segment = search.lstrip("/").split("/", 1)[0]
+        if "/" in search.lstrip("/") and (project_dir.parent / head_segment).is_dir():
+            prefixed = project_dir.parent / search.lstrip("/")
+            if prefixed.exists():
+                return "exact_sibling", prefixed, filepath
+        candidates, cruft_hits = _split_rglob(search)
         if len(candidates) == 1:
             return "basename", candidates[0], filepath
         if len(candidates) > 1:
             return "ambiguous", None, filepath
+        filepath = search
         relative = filepath.lstrip("/")
         packet_hits = [
             p
@@ -3142,8 +3250,9 @@ def verify_claims(
         # 5-axis bridge review hit 50.8% "hallucinated", burying 2 real bugs).
         # Roots are passed explicitly via --sibling-roots (no auto-scan cost).
         for root in sibling_roots:
-            if (root / filepath).exists():
-                return "exact_sibling", root / filepath, filepath
+            for sibling_path in (root / filepath, root / relative):
+                if sibling_path.exists():
+                    return "exact_sibling", sibling_path, filepath
         if sibling_roots:
             basename = filepath.rsplit("/", 1)[1] if "/" in filepath else filepath
             sib_hits: list[Path] = []
@@ -3173,7 +3282,7 @@ def verify_claims(
             for root in (project_dir, *sibling_roots):
                 for ext in ("*.py", "*.ts", "*.tsx", "*.js"):
                     for p in root.rglob(ext):
-                        if _is_cruft(p):
+                        if _is_cruft(p, root):
                             continue
                         try:
                             if def_re.search(p.read_text(encoding="utf-8", errors="ignore")):
@@ -3187,7 +3296,25 @@ def verify_claims(
                 # file). Multiple hits → pick the first; the goal is "this citation
                 # is grounded," not pinpointing one of N overloads.
                 return "symbol_def", sym_hits[0], filepath
+            # A module name ("modal_bam_cache", "infra_usage_check._count_x") names a
+            # <module>.py, which the def grep cannot see (2026-10-14).
+            parts = sym.split(".")
+            module_paths = ["/".join(parts) + ".py"]
+            if len(parts) > 1:
+                module_paths.append("/".join(parts[:-1]) + ".py")
+            for module_path in module_paths:
+                module_hits = _filtered_rglob(module_path)
+                if len(module_hits) == 1:
+                    return "module", module_hits[0], filepath
+                if len(module_hits) > 1:
+                    return "ambiguous", None, filepath
 
+        # A file found only in a worktree, cache or dependency copy exists; it is not the
+        # live tree, so it neither confirms nor counts as invented (2026-10-14).
+        if cruft_hits:
+            return "cruft_only", None, ", ".join(sorted({str(_cruft_dir(p)) for p in cruft_hits}))
+        if _named_in_context(filepath):
+            return "context_named", None, filepath
         return "missing", None, filepath
 
     claims: list[dict[str, object]] = _parse_structured_claims() or _parse_disposition_claims()
@@ -3206,17 +3333,36 @@ def verify_claims(
 
         structured_file = str(claim.get("file", "") or "").strip()
         structured_line = int(claim.get("line", 0) or 0)
+        # The structured field is free text ("RESULT.md:595", "a.md; b.md", "FAQ 2"): take a
+        # trailing :line, and leave lists and prose to the regex, which also reads the body's
+        # "File:" line (2026-10-14).
+        located = re.fullmatch(r"(.+?):(\d+)(?:\s*[-–,:]\s*\d+)*", structured_file)
+        if located:
+            structured_file = located.group(1)
+            structured_line = structured_line or int(located.group(2))
+        structured_file = re.sub(r"^\$(?=[a-z]\w*/)", "", structured_file)  # "$lib/x.ts"
+        if re.search(r"[\s;,]", structured_file) or _NOT_A_PATH.search(structured_file):
+            structured_file = ""
         file_refs = []
         if structured_file:
             file_refs.append((structured_file, str(structured_line) if structured_line > 0 else ""))
         # (?!\w): the extension must end the name. Without it "model.json" was captured
         # as "model.js" and read as HALLUCINATED (2026-10-14); tsx/cljs keep those refs whole.
-        file_refs.extend(
-            re.findall(
-                r"`?([a-zA-Z_][\w/.-]*\.(?:py|js|ts|tsx|md|sh|json|yaml|yml|toml|cfg|sql|html|css|clj|cljc|cljs|edn)(?!\w))(?::(\d+))?`?",
-                body_text,
+        # The optional prefix keeps "/abs", "~/", "./", "../" and ".claude/" whole instead of
+        # a relative "Users/..." or "claude/..." miss, and a digit may lead ("2026-09-27-x.md"
+        # was captured as "x.md").
+        def _body_refs(text: str) -> list[tuple[str, str]]:
+            return re.findall(
+                r"`?((?:~/|\.\.?/|/|(?<![\w.])\.(?=\w))?\w[\w/.-]*\.(?:py|js|ts|tsx|md|sh|json|yaml|yml|toml|cfg|sql|html|css|clj|cljc|cljs|edn)(?!\w))(?::(\d+))?`?",
+                re.sub(r"\S*(?:" + _NOT_A_PATH.pattern + r")\S*", " ", text),
             )
-        )
+
+        # The fix closes the body. A path only it names ("Add tests/test_x.py") is usually a
+        # file to create, so a missing one is not evidence of invention (2026-10-14).
+        cited_refs = _body_refs(re.split(r"(?m)^\s*Fix:", body_text, maxsplit=1)[0])
+        fix_refs = _body_refs(body_text)
+        fix_only = {path for path, _ in fix_refs} - {path for path, _ in cited_refs} - {structured_file}
+        file_refs.extend(cited_refs + fix_refs)
         deduped_refs: list[tuple[str, str]] = []
         seen_refs: set[tuple[str, str]] = set()
         for filepath, line_str in file_refs:
@@ -3242,6 +3388,10 @@ def verify_claims(
             str(claim.get("fix", "") or ""),
             body_text,
         )
+        # An anchor read off the cited path itself ("RESULT", a lane name) proves nothing
+        # about the claim; 100 of 384 new CONFIRMED rows in the key-drift probe rested on one.
+        cited = " ".join(path.lower() for path, _ in file_refs)
+        claim_anchors = [anchor for anchor in claim_anchors if anchor.lower() not in cited]
         reference_results: list[tuple[str, Path, str]] = []
         for filepath, line_str in file_refs:
             resolution, found_path, display_path = _resolve_reference(filepath)
@@ -3250,6 +3400,15 @@ def verify_claims(
             if resolution == "ambiguous":
                 notes.append(f"{filepath} matched multiple files")
                 reference_results.append((resolution, Path(filepath), line_str))
+            elif resolution == "context_named":
+                notes.append(f"{filepath} named in the reviewed context, not on disk")
+                reference_results.append((resolution, Path(filepath), line_str))
+            elif resolution == "cruft_only":
+                notes.append(f"{filepath} exists only under {display_path} (not the live tree)")
+                reference_results.append((resolution, Path(filepath), line_str))
+            elif resolution == "missing" and filepath in fix_only:
+                notes.append(f"{filepath} named only in the fix, not on disk")
+                reference_results.append(("fix_named", Path(filepath), line_str))
             elif resolution == "missing" or found_path is None:
                 verdict = "HALLUCINATED"
                 notes.append(f"{filepath} not found")
@@ -3270,7 +3429,7 @@ def verify_claims(
         line_corrected = False
         ambiguous_ref = any(resolution == "ambiguous" for resolution, _, _ in reference_results)
         for resolution, found_path, line_str in reference_results:
-            if resolution in {"ambiguous", "binary"}:
+            if resolution in {"ambiguous", "binary", "context_named", "cruft_only", "fix_named"}:
                 continue
             if resolution == "symbol_def":
                 # The reference was a code symbol, not a file:line. We confirmed its

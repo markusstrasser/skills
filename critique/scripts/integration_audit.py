@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from shared.finding_keys import normalize_finding_keys  # noqa: E402
 from shared.git_context import diff_ref, run_git  # noqa: E402
 
 VERDICT_ROW = re.compile(
@@ -82,12 +83,18 @@ def parse_verified_disposition(path: Path) -> dict[int, dict[str, str]]:
 
 
 def load_findings(path: Path) -> list[dict]:
+    """Findings with schema keys; findings.json saved before 2026-10-14 says file_path/proposed_fix.
+
+    review_gate and outcome_link read findings through this loader too.
+    """
     if not path.is_file():
         return []
     data = json.loads(path.read_text())
     if isinstance(data, dict):
-        return data.get("findings", []) or []
-    return data if isinstance(data, list) else []
+        findings = data.get("findings", []) or []
+    else:
+        findings = data if isinstance(data, list) else []
+    return [normalize_finding_keys(f) if isinstance(f, dict) else f for f in findings]
 
 
 def merge_records(review_dir: Path) -> list[FindingRecord]:
