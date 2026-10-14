@@ -12,8 +12,8 @@ from pathlib import Path
 
 SKILL = Path(__file__).resolve().parents[1]
 PROJECT_MODE = re.compile(r"uv run (?!--no-project)[^\n]*\$\{CLAUDE_SKILL_DIR\}")
-# history.md preserves superseded commands as provenance.
-EXEMPT = {SKILL / "references" / "history.md"}
+# history.md and known-issues.md record past incidents and their commands verbatim.
+EXEMPT = {SKILL / "references" / "history.md", SKILL / "references" / "known-issues.md"}
 
 
 class SkillCommandTest(unittest.TestCase):
