@@ -92,10 +92,12 @@ PROFILES: dict[str, DispatchProfile] = {
         name="deep_review",
         intent="Long-context structural critique and review",
         provider="google",
-        # 2026-09-05: Gemini 3.8 Flash is the current Flash GA (intro $0.75/$3.75
-        # through 2026-12-31). Critique-only policy unchanged.
-        model="gemini-3.8-flash",
-        timeout=300,
+        # 2026-10-14 (operator: "critique should use argon from now on"): Gemini 4
+        # Argon replaces 3.8 Flash on the critique Gemini axes. On its first two
+        # packets (23 KB, 83 KB) at high effort it took about 6-7 min, so the
+        # bound is 1500 s. Critique-only policy unchanged; search_grounded keeps Flash.
+        model="gemini-4-argon",
+        timeout=1500,
         reasoning_effort="high",
         input_token_limit=900000,
     ),
@@ -175,7 +177,7 @@ PROFILES: dict[str, DispatchProfile] = {
         # Pre-2026-05-24 default for deep_review. Kept available for
         # tasks where Pro's specific strengths (ARC-AGI-2, GPQA Diamond,
         # video understanding) actually dominate. For general adversarial
-        # critique/synthesis, prefer deep_review (gemini-3.8-flash).
+        # critique/synthesis, prefer deep_review (gemini-4-argon since 2026-10-14).
         name="legacy_pro_review",
         intent="Pre-2026-05-24 Gemini Pro fallback for cases needing Pro-specific strengths",
         provider="google",
@@ -185,13 +187,14 @@ PROFILES: dict[str, DispatchProfile] = {
         input_token_limit=900000,
     ),
     "claude_review": DispatchProfile(
-        # Opt-in third cosigner: Claude Opus 5.5 via Claude Code subscription
-        # (llmx provider `anthropic` → claude-cli transport). NOT in the default
-        # Gemini+GPT pairing — request explicitly with `--axes claude` (or add to
-        # an axis list). A genuinely third training family for adversarial diversity.
-        # auth=subscription → claude-cli OAuth. NEVER auth=api unless caller opts in.
+        # Third-family cosigner: Claude Opus 5.5 via Claude Code subscription
+        # (llmx provider `anthropic` → claude-cli transport). In every default
+        # critique preset since 2026-10-14 (operator: "opus is fine for critiques";
+        # "high taste ... still opus 5.5 likely best"; earlier it was opt-in to save
+        # subscription limits). auth=subscription → claude-cli OAuth. NEVER auth=api
+        # unless caller opts in.
         name="claude_review",
-        intent="Claude Opus 5.5 adversarial review via subscription (opt-in cosigner)",
+        intent="Claude Opus 5.5 adversarial review via subscription (default cosigner)",
         provider="anthropic",
         model="claude-opus-5-5",
         # Opus max architecture reviews can legitimately run beyond ten minutes.
@@ -288,7 +291,7 @@ RETIRED_PROFILES = {
 
 MODEL_TO_PROFILE = {
     "gemini-3.1-flash-lite-preview": "observe_bulk",
-    "gemini-3.8-flash": "deep_review",
+    "gemini-4-argon": "deep_review",  # 2026-10-14: deep_review runs Argon; a Flash pin must not map here silently
     "gemini-3.1-pro-preview": "legacy_pro_review",  # demoted 2026-05-24
     "gpt-6-astra": "formal_review",
     "gpt-6": "formal_review",

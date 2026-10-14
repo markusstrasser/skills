@@ -577,17 +577,22 @@ RETIRED_AXES = {
 }
 
 PRESETS = {
-    # Legacy default: 2× Gemini + 2× GPT-medium (4 lenses).
-    "standard": ["arch", "gaps", "correctness", "contracts"],
-    # Diagonal cross-lab: Gemini structure + GPT mechanism (folded checklists in arch/correctness).
-    "cross2": ["arch", "correctness"],
-    "lens2": ["arch", "correctness"],
-    # Full 2×2 grid (4 cells).
-    "cross4": ["arch", "gaps", "correctness", "contracts"],
-    "lens4": ["arch", "gaps", "correctness", "contracts"],
+    # Every preset carries the `claude` axis (Opus 5.5 max, subscription) since
+    # 2026-10-14: operator "opus is fine for critiques ... we're not THAT limited";
+    # "high taste ... still opus 5.5 likely best". The Gemini axes run Gemini 4 Argon.
+    # Legacy default: 2× Gemini + 2× GPT-medium (4 lenses) + Opus.
+    "standard": ["arch", "gaps", "correctness", "contracts", "claude"],
+    # Diagonal cross-lab: Gemini structure + GPT mechanism (folded checklists in arch/correctness) + Opus.
+    "cross2": ["arch", "correctness", "claude"],
+    "lens2": ["arch", "correctness", "claude"],
+    # Full 2×2 grid (4 cells) + Opus.
+    "cross4": ["arch", "gaps", "correctness", "contracts", "claude"],
+    "lens4": ["arch", "gaps", "correctness", "contracts", "claude"],
     # Math/formal-dense reviews: add `formal` explicitly, e.g. --axes standard,formal
-    "deep": ["arch", "gaps", "correctness", "contracts", "domain", "mechanical"],
-    "full": ["arch", "gaps", "correctness", "contracts", "domain", "mechanical", "alternatives"],
+    "deep": ["arch", "gaps", "correctness", "contracts", "claude", "domain", "mechanical"],
+    "full": [
+        "arch", "gaps", "correctness", "contracts", "claude", "domain", "mechanical", "alternatives",
+    ],
 }
 
 # Premise scout runs before packet-only axes (VOI-sequenced review ADR).
@@ -905,8 +910,8 @@ def build_effective_policy(args: argparse.Namespace) -> dict:
 
 # Primary Gemini critique axis
 GEMINI_PRIMARY_MODEL = dispatch_core.PROFILES["deep_review"].model
-# Rate-limit fallback target for the Gemini (arch) axis. When gemini-3.8-flash
-# rate-limits, retry the axis on gpt-6-astra — the rule-sanctioned move ("after a
+# Rate-limit fallback target for the Gemini (arch) axis. When the Gemini primary
+# (gemini-4-argon since 2026-10-14; gemini-3.8-flash before) rate-limits, retry the axis on gpt-6-astra — the rule-sanctioned move ("after a
 # Gemini rate-limit, switch to GPT or Flash"; llmx transport-routing) and an
 # adversarial-grade model. Tradeoff: this collapses the arch+formal pair to GPT
 # for that one review (degraded cross-model diversity), accepted because it is

@@ -96,7 +96,7 @@ class ReviewGateTest(unittest.TestCase):
             review_dir = None
             base = head = None
             mode = "model"
-            budget_seconds = 900  # must sit at/above the axis-profile floor (600s for standard)
+            budget_seconds = 3700  # at/above the axis-profile floor (3600s: the claude axis since 10-14)
             dispatch_out = out
             json = False
 
@@ -104,10 +104,10 @@ class ReviewGateTest(unittest.TestCase):
         policy = json.loads(out.read_text())["dispatch_policy"]
         self.assertEqual(policy["context_scope"], "packet")
         self.assertFalse(policy["premise_scout"])
-        self.assertEqual(policy["budget_seconds"], 900)
+        self.assertEqual(policy["budget_seconds"], 3700)
 
     def test_triage_budget_below_floor_is_config_error(self) -> None:
-        # 480 < the 600s standard-axis profile timeout: the ad6ba340 incident shape.
+        # 480 < the standard preset's longest axis timeout: the ad6ba340 incident shape.
         # Triage must refuse (exit 2) and must NOT emit dispatch.json.
         out = self.repo / ".model-review" / "dispatch.json"
 

@@ -112,3 +112,5 @@
   `GeminiPreflightTest` in `scripts/test_model_review.py`.
 
 - **[2026-10-14] 2026-10-14 genomics post-ship plan: packet-only axes (gemini-flash x2, astra x2, opus) plus a low-effort scout missed 15 code-level findings (3 blockers) that a repo-grounded codex exec -s read-only gpt-6.1-sol high review then found, all verified at source (~10 min, 5.3M input tokens mostly cached); for plans whose premises are live callers, add a repo-grounded Sol reviewer before adjudication**
+
+- **[2026-10-14] Pre-existing failure, seen 2026-10-14: critique/scripts/test_build_plan_close_context.py::test_manifest_includes_review_targets fails on HEAD as well (checked in a clean worktree), so it is not caused by the Argon/Opus preset change. Not yet diagnosed.**

@@ -66,7 +66,7 @@ class ModelReviewDispatchTest(unittest.TestCase):
         self.assertGreater(result["formal"]["size"], 0)
         # Both models called
         models_called = {c["model"] for c in call_log}
-        self.assertIn("gemini-3.8-flash", models_called)
+        self.assertIn(model_review.GEMINI_PRIMARY_MODEL, models_called)
         self.assertTrue(any("gpt-6-astra" in m for m in models_called), models_called)
 
     def test_dispatch_preserves_same_model_profiles(self) -> None:
@@ -440,22 +440,22 @@ class CallLlmxTest(unittest.TestCase):
 class AxisResolutionTest(unittest.TestCase):
     def test_standard_preset_is_gpt_inclusive(self) -> None:
         axes = model_review.resolve_axes("standard")
-        self.assertEqual(axes, ["arch", "gaps", "correctness", "contracts"])
+        self.assertEqual(axes, ["arch", "gaps", "correctness", "contracts", "claude"])
         self.assertTrue(any(model_review.axis_uses_gpt(a) for a in axes))
 
     def test_preset_plus_axis_expansion(self) -> None:
         axes = model_review.resolve_axes("standard,formal")
         self.assertEqual(
             axes,
-            ["arch", "gaps", "correctness", "contracts", "formal"],
+            ["arch", "gaps", "correctness", "contracts", "claude", "formal"],
         )
         self.assertEqual(
-            model_review.resolve_axes("cross2,formal"), ["arch", "correctness", "formal"]
+            model_review.resolve_axes("cross2,formal"), ["arch", "correctness", "claude", "formal"]
         )
 
     def test_cross2_preset_diagonal(self) -> None:
         axes = model_review.resolve_axes("cross2")
-        self.assertEqual(axes, ["arch", "correctness"])
+        self.assertEqual(axes, ["arch", "correctness", "claude"])
         self.assertEqual(model_review.AXIS_CELLS["arch"]["cell"], "S_G")
         self.assertEqual(model_review.AXIS_CELLS["correctness"]["cell"], "M_P")
 

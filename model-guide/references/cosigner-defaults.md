@@ -4,7 +4,7 @@
 
 ## llmx Cosigner / Dispatch Defaults (judgment — transport in mirror)
 
-- **Cosigner / critique / synthesis:** `gemini-3.8-flash` (GA 2026-09-02; intro $0.75/$3.75 through 2026-12-31). **Always in the 2G+2GPT mix — never the only reviewer.** Probe flags invention on clean packets; orchestrator dispositions via `--extract --verify`.
+- **Cosigner / critique / synthesis:** `gemini-4-argon` on the critique Gemini axes since 2026-10-14 (operator: "critique should use argon from now on"), with Opus 5.5 max (`claude` axis) in every preset ("high taste ... still opus 5.5 likely best"). `gemini-3.8-flash` stays for search-grounded and vision work. **Always beside the GPT axes — never the only reviewer.** Probe flags invention on clean packets; orchestrator dispositions via `--extract --verify`.
 - **Cheap classification / mechanical audits:** `gpt-6-astra` at `low` via codex-cli subscription ($0). Luna does not beat Astra-low on quality (AA Astra-low 57 vs Luna-max 43); for metered API bulk use `-m gpt-6-luna` (GPT-6 Luna not yet measured on AA). Gemini is critique-only since 2026-07-14.
 - **GPT-6 Astra default effort:** preserve the requested effort; `none`/`minimal` map to `low`. Suite supports `max`. Pass `-e high`/`xhigh`/`max` for depth; reasoning bills as output.
 
