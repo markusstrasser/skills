@@ -96,8 +96,10 @@ Agents propose; he decides.
    a card says is his to take or leave. His words, 2026-10-14: "Science/domain calls are yours", and
    "I do not mean rephreasings or changing semantics". For a taste question (what to learn, wording,
    keep or delete), `POST /api/agent/annotate {agent, card, text}` with one or two sentences that
-   name the options. `GET /api/agent/search?awaiting=agent` finds his replies. Act on the reply,
-   then `POST /api/agent/annotate/resolve {agent, card, id}`.
+   name the options. `GET /api/agent/search?awaiting=agent` finds his replies, his notes from
+   review, and his words on agents' edits (threads opening "On <agent>'s edit (accepted; …)").
+   `spaced status` names those cards. Act on each, reply in the thread, then
+   `POST /api/agent/annotate/resolve {agent, card, id}`.
 
 Work queues: his flags (`spaced browse --flag BAD`; triage order in `docs/cards/flags.md`),
 `DONT_UNDERSTAND` (reword the card in words he knows; unflag once he accepts the fix),
