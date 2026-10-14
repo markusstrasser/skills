@@ -84,11 +84,10 @@ Agents propose; he decides.
      new card with any warning, naming the rule and the fix. Fix the text. Add
      `lint-ignore=<rule>` only when the lint is wrong for that card, and say why in `reason`.
    - `supersedes: <your open edit of the same card>` withdraws the old one. Never leave two.
-   - An edit that changes nothing he judges applies without his review: tags, the src line,
-     spacing, punctuation, a misspelling, a hyphen or join, and case the rule can prove (never a
-     unit's or symbol's: mV/MV). Other case, typography (Ca2+ → Ca²⁺) or small typos go to a
-     same-meaning judge model first; it applies them or leaves them for him. Any changed word,
-     number, math or link goes to him.
+   - Tags, the src line and spacing apply without review. Case, punctuation, hyphens, joins,
+     typography (Ca2+ → Ca²⁺) and small typos go to a same-meaning judge model, which applies them
+     or leaves them for him. Any changed number, sign (− + ~ ↑), unit or symbol case (mV/MV), math,
+     link or real word goes to him.
    - New card: `POST /api/agent/suggest {agent, deck, text, reason, why?}`.
 5. **Ask, never guess.** `POST /api/agent/annotate {agent, card, text}` with one or two sentences
    that name the options. `GET /api/agent/search?awaiting=agent` finds his replies. Act on the reply,
