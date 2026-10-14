@@ -40,10 +40,10 @@ For committed work, specify `--since <first-session-commit>` (inclusive through 
 Run triage for the exact packet:
 
 ```bash
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
+uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
   --repo "$(pwd)" --packet .model-review/packet.md --mode model
 
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
+uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --dispatch-manifest .model-review/dispatch.json \
   --context .model-review/packet.md \
   --topic "$TOPIC" --project "$(pwd)" \

@@ -13,7 +13,7 @@ If the change touches generated docs, count-bearing surfaces, or files covered b
 Build a packet from the actual diff and touched files rather than a prose summary:
 
 ```bash
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
+uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
   --repo "$(pwd)" \
   --output .model-review/plan-close-context.md
 ```
@@ -21,12 +21,12 @@ uv run python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
 For a clean worktree or earlier committed changes, select an explicit range. `--since` includes the named first commit through HEAD:
 
 ```bash
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
+uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
   --repo "$(pwd)" --since <first-session-commit> \
   --output .model-review/plan-close-context.md
 
 # Equivalent explicit range selection when both refs are known:
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
+uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
   --repo "$(pwd)" --base <old-ref> --head <new-ref> \
   --output .model-review/plan-close-context.md
 ```
@@ -48,10 +48,10 @@ Include an execution-grounded instruction to run the changed code paths where th
 **Design layer:** use deterministic triage in `model` mode for the initial review. `close` mode is the final readiness gate and requires an existing verified disposition, so it cannot bootstrap the first review.
 
 ```bash
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
+uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
   --repo "$(pwd)" --packet .model-review/plan-close-context.md --mode model
 
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
+uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --dispatch-manifest .model-review/dispatch.json \
   --context .model-review/plan-close-context.md \
   --topic "$TOPIC" --project "$(pwd)" \
@@ -68,8 +68,8 @@ After extraction/verification:
 
 ```bash
 REVIEW_DIR=.model-review/<topic-hash>  # exact directory from model-review output
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py rank --review-dir "$REVIEW_DIR"
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py inconclusive \
+uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py rank --review-dir "$REVIEW_DIR"
+uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py inconclusive \
   --review-dir "$REVIEW_DIR" --repo "$(pwd)"
 ```
 
@@ -84,7 +84,7 @@ For each confirmed bug, determine why the earlier checks missed it. Repair the t
 Before the closeout commit, run the readiness gate against the verified review directory:
 
 ```bash
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
+uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
   --repo "$(pwd)" --packet .model-review/plan-close-context.md \
   --mode close --review-dir "$REVIEW_DIR"
 ```
@@ -94,7 +94,7 @@ Stop on blockers, including missing verification evidence, dead closeout referen
 Then run the deterministic integration audit to check that the diff did not implement findings marked HALLUCINATED:
 
 ```bash
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/integration_audit.py \
+uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/integration_audit.py \
   --review-dir "$REVIEW_DIR" --repo "$(pwd)" \
   --plan .claude/plans/<plan>.md
 ```
@@ -108,7 +108,7 @@ Commit verified fixes and tests with the project's shared-checkout discipline. U
 After fix commits, link confirmed findings to them:
 
 ```bash
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/outcome_link.py \
+uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/outcome_link.py \
   --repo "$(pwd)" --review-dir "$REVIEW_DIR" --since HEAD~30
 ```
 

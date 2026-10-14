@@ -23,14 +23,14 @@ Read [Context assembly](../references/context-assembly.md) to build the actual p
 For repo-backed subparts, the packet builder can select exact files:
 
 ```bash
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
+uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context.py \
   --repo "$(pwd)" --file path/a.py --file path/b.py \
   --output .model-review/subpart-1-context.md
 
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
+uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
   --repo "$(pwd)" --packet .model-review/subpart-1-context.md --mode model
 
-uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
+uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
   --dispatch-manifest .model-review/dispatch.json \
   --context .model-review/subpart-1-context.md \
   --topic "$TOPIC — subpart 1" --project "$(pwd)" \

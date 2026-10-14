@@ -663,7 +663,7 @@ def cmd_triage(args: argparse.Namespace) -> int:
                 _format_blocker(
                     "review-gate",
                     "missing verified-disposition.md — run model-review --extract --verify before closeout",
-                    "uv run python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py --extract --verify --context .model-review/plan-close-context.md",
+                    "uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py --extract --verify --context .model-review/plan-close-context.md",
                 )
             )
 
