@@ -8,6 +8,12 @@ Current model (2026-09-09): `gpt-image-2.5-sunburst`; optional fast model:
 `gpt-image-2.5-flare`. The invocation name stays `gpt-image-2` for existing callers.
 The GPT Image 2 wording below describes the original prompt-writing workflow.
 
+**Generate with `llmx image "<prompt>" -o out.png [-i ref.png …]`.** Default route is codex-cli's
+`image_gen` tool on the ChatGPT plan ($0, one image per call, ~1 min, plan's current model;
+size/quality flags ignored). `--auth api -m sunburst|flare --quality high` is the metered
+Images API; it returned 429 `credit_balance_exhausted` on 2026-10-14. A reference image (`-i`)
+keeps composition and shapes: render accurate geometry first (Blender/MN, SVG), then repaint it.
+
 you are a prompt writer/structuring assistant for GPT Image 2.5.
 
 # your task:
