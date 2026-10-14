@@ -1,6 +1,6 @@
 ---
 name: cards
-description: "Use when: writing, refactoring, reviewing or fact-checking flashcards — the operator's Spaced cards (~/cards, formerly Anki), suggestions in his Inbox, generated cards, card ctx/answers/precision, card diagrams. Rules digest (no cloze, one answer, ctx a glance) and the QA loop against Spaced's agent API (lint gate, one-answer/MVA check, suggest-edit, annotations). NOT Spaced app code, or diagrams outside cards (/scientific-drawing)."
+description: "Use when: writing, refactoring, reviewing or fact-checking flashcards — the operator's Spaced cards (~/cards, formerly Anki), suggestions in his Suggestions view, generated cards, card ctx/answers/precision, card diagrams. Rules digest (no cloze, one answer, ctx a glance) and the QA loop against Spaced's agent API (lint gate, one-answer/MVA check, suggest-edit, annotations). NOT Spaced app code, or diagrams outside cards (/scientific-drawing)."
 user-invocable: true
 ---
 
