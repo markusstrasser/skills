@@ -37,6 +37,7 @@ Choose a model and effort from the principles below, then read the model's refer
 | [gpt-6-luna](references/models/gpt-6.1-sol-luna.md) | Metered bulk extraction and mechanical work | Cheapest GPT ("6 luna wins") | Codex subscription + API |
 | [grok-4.7](references/models/grok-4-7.md) | Opt-in read-only repo critique axis; Grok Build headless | Separate lab with workspace access; cost and speed edge | cursor-agent `grok-4.7-<effort>[-fast]`; `grok` CLI; xAI API unverified |
 | [gemini-3.8-flash](references/models/gemini.md) | Critique cosigner only, never the sole reviewer | Cheap diverse reviewer in the 2G+2GPT mix | Metered API, `LLMX_GEMINI_OK=1` |
+| [gemini-4-argon](references/models/gemini.md) | Registered 2026-10-14; candidate cosigner for long or fact-heavy critique (operator's call) | Third-party knowledge-work lead (Vals Index #1) at about half Opus 5.5's cost; weak agentic coder; Google's own long-context numbers unreplicated | Metered API, `LLMX_GEMINI_OK=1` |
 | [gemini-3.1-pro-preview](references/models/gemini.md) | Explicit `-m` one-offs (ARC-AGI-2, GPQA, video) | Registered, not a default anywhere | Metered API |
 | [gemini-3.5/3.1-flash-lite](references/models/gemini.md) | Registered for pricing, not routed | Lets the spend guard price them | Metered API |
 | [GLM-5.2](references/models/glm-5-2.md) | Opt-in review cosigner and epistemic guardrail; not an extractor | Separate training lab; best measured calibration among routed models | OpenRouter/zai metered, `--axes …,glm` |

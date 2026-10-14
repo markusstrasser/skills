@@ -1,7 +1,26 @@
 # Frontier Model Benchmarks
 
-**Last updated:** 2026-09-22
+**Last updated:** 2026-10-14
 **Active scope:** Claude Opus 5.5 (primary since 2026-09-22), Fable 5.1, Claude Opus 5 (exact-ID lanes), GPT-6 Astra, Grok 4.7 (vendor launch table in [grok-4-7.md](models/grok-4-7.md)). Retired models' tables were removed 2026-09-25; git history keeps them. Comparisons to retired models remain only where a vendor used them as a baseline for a current model.
+
+## Gemini 4 Argon launch (2026-10-13) — Google table, sources split
+
+Who ran the evaluation decides how much each row is worth. "3P" means a third party ran it. "G" means Google ran Argon, and sometimes the rivals too. Read 2026-10-14; the per-row source attribution comes from emergent.sh, and the Vals rows were checked at vals.ai.
+
+| Evaluation | Argon | GPT-6 Astra | Fable 5.1 | Opus 5.5 | Source | Routing read |
+|---|---:|---:|---:|---:|---|---|
+| Vals Index | **68.9** | 63.1 | 65.8 | 67.0 | 3P Vals | Knowledge work → Argon competitive at ½ cost |
+| Vals Finance Agent v2 | **65.4** | 53.5 | 58.9 | 58.6 | 3P Vals | |
+| AutomationBench | **51.3** | 41.4 | 31.4 | 42.5 | 3P Zapier (AA run reports 77.5: settings differ) | |
+| FrontierSWE v2 | 55.0 | **65.5** | 56.3 | 62.3 | 3P Proximal | Coding → not Argon |
+| Terminal-Bench 4.0 | 57.4 | 58.2 | 57.9 | **66.4** | G (Vals 57.6 agrees) | |
+| Terminal-Bench Science 0.1 | 57.6 | **68.1** | 52.6 | 63.3 | G, 6× verifier timeout; Vals measured 44.3 | Inflated |
+| DeepSWE v1.1 | **77.9** | 74.1 | 67.4 | 74.2 | G harness | Unreplicated headline |
+| GraphWalks 256K–1M | **84.2** | 71.8 | 65.0 | 66.8 | G ran all | Long-context edge, unreplicated |
+| LVBench | **91.7** | 87.5 | 79.7 | 83.7 | G, unequal frame budgets | Not comparable |
+| AA Intelligence Index | 53 | – | – | **58** | 3P AA (Argon at High, rivals at max) | |
+
+Price $2/$10 intro, $4/$20 standard. Full read: [models/gemini.md](models/gemini.md).
 
 ## Claude Opus 5.5 launch (2026-09-22) — system card Table 8.1.A
 

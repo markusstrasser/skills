@@ -1,5 +1,9 @@
 # Model Guide Changelog
 
+## 2026-10-14 - Gemini 4 Argon registered; routing unchanged
+
+Google released `gemini-4-argon` as a stable model on 2026-10-13. Live-probed the same day: the API works, and the effort ladder is low/medium/high. llmx `7aba790` registers it at intro pricing ($2/$10, then $4/$20). Added the roster row, a `models/gemini.md` section and a BENCHMARKS table split by who ran each evaluation. The operator suspected benchmaxxing. That holds for the rows Google ran itself (Terminal-Bench Science 57.6 under a 6× verifier timeout against 44.3 from Vals; unequal LVBench frame budgets), but the third-party Vals knowledge-work lead holds. Cosigner swap and `gemini-3.1-pro-preview` pruning are proposed, not done (critique policy is the operator's).
+
 ## 2026-10-09 - GPT-6.1 Sol replaces GPT-6 Sol
 
 Operator ruling (2026-10-09): "why wouldn't they move to the newer model". Every live `gpt-6-sol`
