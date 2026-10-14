@@ -75,7 +75,8 @@ Agents propose; he decides.
    - `why` (required): one sentence, at most 200 characters, on what changed and why the new text
      is better. He reads it above the diff, so name every change he would otherwise guess at,
      numbers included (2026-10-14: "bigger card refactors should ... have a one sentence explanation
-     of why that's better than before"). An open suggestion without one:
+     of why that's better than before"). The server refuses an edit that changes a number when its
+     why names none. An open suggestion without one:
      `POST /api/agent/explain {agent, suggestion, why}`.
    - `kind` is `refactor` when the old intervals belong to a different question (accepting resets
      the card's history); otherwise `minor`.
