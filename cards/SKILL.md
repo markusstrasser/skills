@@ -104,6 +104,9 @@ Agents propose; he decides.
    refuses them, since what is written there counts as his words. To carry out a decision he gave in
    chat: `POST /api/agent/decide {agent, suggestion, decision: "accept"|"reject", relayed, note?}`,
    with `relayed` naming where and when he decided, and his words: `"chat 2026-10-14: 'ok do those'"`.
+   Only for a decision he gave on that very suggestion: his answer about one card never decides
+   another, even with the same fact. File those for him (5 of 13 relayed accepts were the agent's
+   own calls, 2026-10-14).
 
 Work queues: his flags (`spaced browse --flag BAD`; triage order in `docs/cards/flags.md`),
 `DONT_UNDERSTAND` (reword the card in words he knows; unflag once he accepts the fix),
