@@ -85,9 +85,10 @@ Agents propose; he decides.
      `lint-ignore=<rule>` only when the lint is wrong for that card, and say why in `reason`.
    - `supersedes: <your open edit of the same card>` withdraws the old one. Never leave two.
    - Tags, the src line and spacing apply without review. Case, punctuation, hyphens, joins,
-     typography (Ca2+ → Ca²⁺) and small typos go to a same-meaning judge model, which applies them
-     or leaves them for him. Any changed number, sign (− + ~ ↑), unit or symbol case (mV/MV), math,
-     link or real word goes to him.
+     typography (Ca2+ → Ca²⁺), small typos and up to three grammar fixes (an article added or
+     dropped, is → are, RGCs → RGC) go to a same-meaning judge model, which applies them or leaves
+     them for him. Any changed number, sign (− + ~ ↑), unit or symbol case (mV/MV), math or link,
+     and any other word added, dropped or replaced, goes to him.
    - New card: `POST /api/agent/suggest {agent, deck, text, reason, why?}`.
 5. **Ask him about taste, never about science.** Whether a fact or number is right, whether
    notation is standard, which reading a card means: decide these yourself from sources; don't ask.
