@@ -44,7 +44,7 @@ uv run python3 "$SCHEDULE" --dry-run
 ```
 
 Valid projects: `intel`, `genomics`, `agent-infra`, `phenome`, `skills`, `hutter`
-Valid focuses: `refactoring`, `dead-code`, `optimization`, `patterns`, `security`
+Valid focuses: `refactoring`, `dead-code`, `optimization`, `patterns`, `silent-failure`, `security`
 
 ## Step 2: Run Scout
 
