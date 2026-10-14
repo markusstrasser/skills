@@ -89,6 +89,8 @@ uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/review_gate.py triage \
   --mode close --review-dir "$REVIEW_DIR"
 ```
 
+For a cross-repo packet, add `--sibling-roots <repo> ...` so files cited in the sibling repos resolve.
+
 Stop on blockers, including missing verification evidence, dead closeout references, oversize packets, or the retired `composer` axis. The matching packet's existing model review satisfies the design pass; passing the readiness gate does not require dispatching it again.
 
 Then run the deterministic integration audit to check that the diff did not implement findings marked HALLUCINATED:

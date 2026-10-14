@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -230,6 +231,23 @@ class ReviewGateTest(unittest.TestCase):
             rg._scan_dead_refs(packet, self.repo),
             ["missing.py", "configs/missing.json"],
         )
+
+    def test_scan_dead_refs_resolves_sibling_roots(self) -> None:
+        # A cross-repo closeout packet cites files in a sibling repo (pitchplease v3 citing
+        # pitchtest research, 2026-10-14). Without the sibling they are dead; with it, live.
+        sibling = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, sibling)
+        (sibling / "research").mkdir()
+        (sibling / "research" / "voice-hold.md").write_text("# doc\n")
+        (sibling / ".claude" / "pipelines").mkdir(parents=True)
+        (sibling / ".claude" / "pipelines" / "pp3-result.md").write_text("# result\n")
+        (sibling / "data").mkdir()
+        packet = "See `research/voice-hold.md`, `pp3-result.md` and `research/gone.md` here."
+        self.assertEqual(
+            rg._scan_dead_refs(packet, self.repo),
+            ["research/voice-hold.md", "pp3-result.md", "research/gone.md"],
+        )
+        self.assertEqual(rg._scan_dead_refs(packet, self.repo, (sibling,)), ["research/gone.md"])
 
     def test_scan_dead_refs_preserves_absolute_and_parent_paths(self) -> None:
         parent_file = self.repo.parent / (self.repo.name + "-evidence.json")

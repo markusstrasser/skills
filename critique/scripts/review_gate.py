@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -201,7 +202,25 @@ def _diff_files(repo: Path, base: str | None, head: str | None) -> set[str]:
     return files
 
 
-def _scan_dead_refs(packet_text: str, repo: Path) -> list[str]:
+# Heavy or generated trees skipped when a basename is looked up in a sibling repo.
+SIBLING_PRUNE = {".git", "node_modules", ".venv", "data", "target", "results", "logs", ".model-review"}
+
+
+def _sibling_has(root: Path, rel: str) -> bool:
+    """A cross-repo packet's reference is live if a sibling root holds it, as a relative path or, for a bare
+    basename, anywhere outside the pruned heavy trees (cross-repo closeouts, 2026-10-14)."""
+    if (root / rel).is_file():
+        return True
+    if "/" in rel:
+        return False
+    for _dir, dirs, files in os.walk(root):
+        dirs[:] = [d for d in dirs if d not in SIBLING_PRUNE]
+        if rel in files:
+            return True
+    return False
+
+
+def _scan_dead_refs(packet_text: str, repo: Path, sibling_roots: tuple[Path, ...] = ()) -> list[str]:
     dead: list[str] = []
     seen: set[str] = set()
     fence_char = ""
@@ -244,6 +263,8 @@ def _scan_dead_refs(packet_text: str, repo: Path) -> list[str]:
                 candidate.is_file() and ".git" not in candidate.parts
                 for candidate in repo.rglob(rel)
             ):
+                continue
+            if any(_sibling_has(root, rel) for root in sibling_roots):
                 continue
             dead.append(rel)
     return dead
@@ -623,7 +644,8 @@ def cmd_triage(args: argparse.Namespace) -> int:
     elif packet_tokens > PACKET_WARN_TOKENS:
         warnings.append(f"packet {packet_tokens} tokens > {PACKET_WARN_TOKENS} — prefer subparts")
 
-    dead = _scan_dead_refs(packet_text, repo) if packet_text else []
+    siblings = tuple(Path(r).expanduser().resolve() for r in (getattr(args, "sibling_roots", None) or ()))
+    dead = _scan_dead_refs(packet_text, repo, siblings) if packet_text else []
     if dead:
         # Dead refs are a diff-COHERENCE signal, gated on the explicit review intent
         # (--mode), NOT on ambient repo state. In `close` mode the packet is built
@@ -903,6 +925,12 @@ def main() -> int:
     t.add_argument("--base", default=None)
     t.add_argument("--head", default=None)
     t.add_argument("--mode", choices=("close", "model", "auto"), default="auto")
+    t.add_argument(
+        "--sibling-roots",
+        nargs="*",
+        default=None,
+        help="Other repos a cross-repo packet cites; their files count as live refs",
+    )
     t.add_argument(
         "--budget-seconds",
         type=int,
