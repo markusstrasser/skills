@@ -10,8 +10,8 @@ Use this reference when the source route is unclear or retrieval fails. Discover
 | Factual source discovery | Exa, then Brave if available and the first source is missing or contested |
 | A claim to verify | Primary source or official database; `verify_claim` can locate supporting evidence |
 | Academic literature | `search_papers`, verify metadata, then primary full text; [paper evidence checks](paper-evidence.md) |
-| Recent publications | Date-aware search, then check publication/submission dates in the primary record; Exa `category:"publication"` only when accepted by the current schema |
-| Recent biomedical preprints | `search_preprints` if available, or the server's own dated records |
+| Recent publications | `search_papers` with `published_after`/`published_before` (S2, OpenAlex and alphaXiv honour them; EuropePMC does not), then check dates in the primary record; Exa `category:"publication"` only when accepted by the current schema |
+| Recent biomedical preprints | `search_preprints` if available, or the server's own dated records; read its `complete` and `scanned`/`total_in_window` fields before treating no hits as none |
 | UniProt / gnomAD / ClinVar / PDB facts | Query the relevant database; paper search returns papers about the database |
 | Citation stance | scite `search_literature` if available; inspect the supporting/contrasting source papers |
 | Patents / grants / trial or device records | The authoritative register; configured scite tools can assist discovery |
@@ -33,7 +33,9 @@ The retained Perplexity precise-number niche came from a small biomedical benchm
 A failed or hanging backend says nothing about whether the paper exists or what its results mean. Switch early after repeated transport failure; do not perform multiple rounds of the same unsuccessful route. Keep the evidence-access limit visible.
 
 - If S2 is failing, try an available alternate academic backend such as OpenAlex, or a primary PubMed/publisher/arXiv record. Verify the accepted argument with the current schema.
-- If `fetch_paper` returns metadata only, check whether full text was actually saved before proceeding. An immediate tool response is not proof of a successful download.
+- Read `fetch_paper`'s `text_source`, `metadata_warning` and `quality_status` fields. Full text came from a parse when `text_source` starts with `parsed.`; `pymupdf_raw:` is the degraded last resort. A `quality_status` of `failed` or `degraded`, or a `retraction_check` other than `complete`, means the retraction status is unknown, not clean.
+- A download error lists every source tried and why it failed. If every source fails the same way, or the error names a missing module or parser, the tool is broken: report it as a tool defect and do not record the paper as paywalled. From 2026-09-23 to 2026-10-14 a missing dependency made every fetch fail as "Could not download PDF", and no agent noticed (see [known issues](known-issues.md)).
+- Check that fetched text is the paper you asked for (title, authors) before using it. Since 2026-10-14 the downloader rejects PDFs that show neither the DOI nor the registered title; scans and DOIs without a Crossref title still pass unchecked.
 - For a PMCID, EuropePMC's public full-text endpoint is `https://www.ebi.ac.uk/europepmc/webservices/rest/<PMCID>/fullTextXML`. PubMed's full-text links and EuropePMC's `fullTextUrlList` can reveal institutional or green-OA copies absent from the downloader's first result.
 - To discover those links from a PMID, inspect `https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=EXT_ID:<PMID>%20AND%20SRC:MED&resultType=core&format=json`.
 - Prefer an accessible official repository or publisher copy. A configured crawler may retrieve public text when the ordinary downloader fails. Save the accessed text and its source URL when it becomes evidence.
