@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # lane — dispatch and supervise headless workers in isolated git worktrees.
 set -euo pipefail
+# A caller that stops reading early (`lane resume … | head -2`) must not abort a launch half-done: on 2026-10-14
+# SIGPIPE killed a resume after it had claimed the note and archived the log, before the worker started. echo only
+# ever writes to the terminal or a pipe here (files are written with printf or python), so a failed write is safe to drop.
+trap '' PIPE
+echo() { builtin echo "$@" 2>/dev/null || true; }
 
 LANE_HOME="${LANE_HOME:-${HOME:?lane: HOME is not set}/.cache/lanes}"
 DEFAULT_STALL_MIN=20
