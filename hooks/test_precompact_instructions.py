@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for precompact-skill-arcs.py — run: uv run python3 test_precompact_skill_arcs.py"""
+"""Tests for precompact-instructions.py — run: uv run python3 test_precompact_instructions.py"""
 import json
 import subprocess
 import sys
@@ -8,7 +8,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Sequence
 
-HOOK = Path(__file__).parent / "precompact-skill-arcs.py"
+HOOK = Path(__file__).parent / "precompact-instructions.py"
+CONTRACT = "Re-read before relying on details"
+
+
+def contract_only(out: str) -> bool:
+    return CONTRACT in out and "Active skill arcs" not in out
 
 
 def run_hook(payload: dict, log_lines: Sequence[dict | str], goal_run: bool = False) -> str:
@@ -55,21 +60,21 @@ def main() -> int:
     out = run_hook({"session_id": "s1"}, [row("decide", "s1", args="schema fork")])
     assert "/decide" in out and "re-invoke" in out, out
     ok += 1
-    # 2. other session's invocations -> silent
+    # 2. other session's invocations -> contract only
     out = run_hook({"session_id": "s1"}, [row("decide", "s2")])
-    assert out == "", out
+    assert contract_only(out), out
     ok += 1
-    # 3. no log rows -> silent
+    # 3. no log rows -> contract only
     out = run_hook({"session_id": "s1"}, [])
-    assert out == "", out
+    assert contract_only(out), out
     ok += 1
-    # 4. goal-run marker -> defers (silent) even with active arc
+    # 4. goal-run marker -> still emits contract + arc (binary joins hook outputs)
     out = run_hook({"session_id": "s1"}, [row("decide", "s1")], goal_run=True)
-    assert out == "", out
+    assert "/decide" in out and "Re-read before relying on details" in out, out
     ok += 1
-    # 5. stale invocation (>12h) -> silent
+    # 5. stale invocation (>12h) -> contract only
     out = run_hook({"session_id": "s1"}, [row("decide", "s1", hours_ago=20)])
-    assert out == "", out
+    assert contract_only(out), out
     ok += 1
     # 6. dedup + cap: 5 skills -> newest 3, one mention each
     rows = [row(s, "s1", hours_ago=h) for h, s in enumerate(["a", "b", "c", "d", "e"])]
