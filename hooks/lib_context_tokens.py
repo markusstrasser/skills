@@ -29,3 +29,23 @@ def context_tokens(transcript: str) -> int:
     except Exception:
         pass
     return 0
+
+
+def context_model(transcript: str) -> str:
+    """Model id of the last assistant usage entry ("" on any error) — the key
+    for settings modelSettings.<model>.autoCompactWindow."""
+    try:
+        with open(transcript, "rb") as f:
+            tail = f.read()[-200_000:].decode("utf-8", "replace").splitlines()
+        for line in reversed(tail):
+            if '"usage"' not in line:
+                continue
+            try:
+                model = (json.loads(line).get("message") or {}).get("model")
+            except Exception:
+                continue
+            if isinstance(model, str) and model:
+                return model
+    except Exception:
+        pass
+    return ""

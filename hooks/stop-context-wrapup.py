@@ -18,7 +18,9 @@ priority order — every source capped by the model window when known:
 1. CLAUDE_CODE_AUTO_COMPACT_WINDOW env (explicit lever; goal-night/goal-loop
    set it — it MOVES the native trigger, so it wins when present).
 2. autoCompactWindow settings key (project settings.local > project > global)
-   — the same binary lever in settings form.
+   — the same binary lever in settings form. Within one file,
+   modelSettings.<model>.autoCompactWindow (what /autocompact writes since CC
+   2.1.288) replaces the top-level key for that model; "auto" means unset.
 3. The binary's own default, derived from the model window teed by
    statusline.sh to /tmp/claude-ctxpct-<sid> ("pct|tokens|window", the same
    source posttool-context-checkpoint-advisory.sh reads): on a 1M window the
@@ -55,7 +57,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from lib_context_tokens import context_tokens  # noqa: E402
+from lib_context_tokens import context_model, context_tokens  # noqa: E402
 
 TRIGGER_OFFSET = 32_000  # native auto-compact fires this far below the window
 LEAD = 65_000  # nudge this far before the trigger...
@@ -75,22 +77,40 @@ Then end your turn normally; native auto-compact proceeds on a subsequent turn."
 UNCONFIGURED_1M_EFFECTIVE = 500_000  # measured binary default, CC 2.1.201
 
 
-def _settings_auto_compact_window(cwd: Path) -> int:
+def _model_key_matches(key: str, model: str) -> bool:
+    """Canonical name also matches its dated and [1m] spellings (CC settings schema)."""
+    key, model = key.removesuffix("[1m]"), model.removesuffix("[1m]")
+    return bool(model) and (model == key or model.startswith(key + "-"))
+
+
+def _settings_auto_compact_window(cwd: Path, model: str = "") -> int:
     for settings in (
         cwd / ".claude" / "settings.local.json",
         cwd / ".claude" / "settings.json",
         Path.home() / ".claude" / "settings.json",
     ):
         try:
-            value = int(json.loads(settings.read_text())["autoCompactWindow"])
-            if value > 0:
-                return value
+            data = json.loads(settings.read_text())
         except Exception:
             continue
+        value = data.get("autoCompactWindow")
+        for key, per_model in (data.get("modelSettings") or {}).items():
+            if (
+                isinstance(per_model, dict)
+                and "autoCompactWindow" in per_model
+                and _model_key_matches(key, model)
+            ):
+                value = per_model["autoCompactWindow"]
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            continue  # absent or "auto": fall through to the next file / default
+        if value > 0:
+            return value
     return 0
 
 
-def resolve_window(sid: str, cwd: Path) -> int:
+def resolve_window(sid: str, cwd: Path, model: str = "") -> int:
     """The value the binary's auto-compact actually triggers against:
     env lever > settings lever > binary default for the model window > 200K.
     Levers are capped by the model window when the statusline teed it."""
@@ -106,7 +126,7 @@ def resolve_window(sid: str, cwd: Path) -> int:
     except Exception:
         pass
     if lever <= 0:
-        lever = _settings_auto_compact_window(cwd)
+        lever = _settings_auto_compact_window(cwd, model)
     if lever > 0:
         return min(lever, model_window) if model_window > 0 else lever
 
@@ -145,10 +165,11 @@ def main() -> int:
         if not owner or owner == sid:
             return 0
 
-    ctx = context_tokens(payload.get("transcript_path", ""))
+    transcript = payload.get("transcript_path", "")
+    ctx = context_tokens(transcript)
     if ctx <= 0:
         return 0
-    trigger, threshold = thresholds(resolve_window(sid, cwd))
+    trigger, threshold = thresholds(resolve_window(sid, cwd, context_model(transcript)))
 
     state_dir = Path.home() / ".claude" / "ctx-wrapup"
     state = state_dir / sid

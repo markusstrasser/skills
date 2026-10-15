@@ -51,7 +51,7 @@ class Base(unittest.TestCase):
     def transcript(self, ctx):
         path = os.path.join(self.tmp.name, "transcript.jsonl")
         with open(path, "w") as f:
-            f.write(json.dumps({"message": {"usage": {
+            f.write(json.dumps({"message": {"model": "claude-opus-5-5", "usage": {
                 "input_tokens": 10,
                 "cache_read_input_tokens": ctx - 10,
                 "cache_creation_input_tokens": 0,
@@ -135,6 +135,24 @@ class TestContextWrapup(Base):
         self.write_ctxpct(30, 290_000, 1_000_000)
         self.assertIsNone(self.fire(190_000))          # trigger 268K -> 203K
         self.assertEqual(self.fire(210_000), "block")
+
+    def test_per_model_window_replaces_top_level(self):
+        # /autocompact (CC >= 2.1.288) writes modelSettings.<model>.autoCompactWindow,
+        # which replaces the top-level key for that model within the same file.
+        with open(os.path.join(self.claude, "settings.json"), "w") as f:
+            json.dump({"autoCompactWindow": 500_000, "modelSettings": {
+                "claude-opus-5-5[1m]": {"autoCompactWindow": 300_000},
+                "claude-fable-5-1": {"autoCompactWindow": 900_000}}}, f)
+        self.write_ctxpct(30, 290_000, 1_000_000)
+        self.assertIsNone(self.fire(190_000))          # 300K window -> 203K threshold
+        self.assertEqual(self.fire(210_000), "block")
+
+    def test_per_model_auto_falls_through(self):
+        with open(os.path.join(self.claude, "settings.json"), "w") as f:
+            json.dump({"autoCompactWindow": 300_000, "modelSettings": {
+                "claude-opus-5-5": {"autoCompactWindow": "auto"}}}, f)
+        self.write_ctxpct(30, 290_000, 1_000_000)
+        self.assertIsNone(self.fire(210_000))          # binary default 500K, not 300K
 
     def test_garbage_ctxpct_falls_back_to_default(self):
         with open(f"/tmp/claude-ctxpct-{SID}", "w") as f:
