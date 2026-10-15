@@ -21,7 +21,7 @@ Concrete examples from improvement-log ground the judge -- see `references/groun
 These 5 modes represent 32% of multi-agent system failures:
 
 10. **Information withholding** [W:4, mandatory] -- Had contradictory/qualifying evidence in context but didn't surface it
-11. **Conversation reset** [W:2] -- Lost prior context, re-asked questions or re-did work. Common post-compaction.
+11. **Conversation reset** [W:2] -- Lost prior context, re-asked questions or re-did work. Common post-compaction. Check the boundary's row in `scripts/compaction_boundaries.py --json` first.
 12. **Reasoning-action mismatch** [W:4, mandatory] -- Stated a plan then took different actions ("I'll check tests first" then edits without testing)
 13. **Loss of conversation history** [W:2] -- References information no longer in context, wrong file paths, misremembered names
 14. **Premature task termination** [W:5, mandatory] -- Declared complete without verifying success or while steps remained

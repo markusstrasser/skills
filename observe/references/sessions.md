@@ -11,7 +11,10 @@ prompt in [gemini-dispatch-prompt.md](gemini-dispatch-prompt.md) · staging proc
    If the same session set already exists in the manifest and `--force` was not passed, **stop**;
    do not append another narrative-only run.
 2. **Extract + pre-filter** ([transcript preparation](transcript-extraction.md)). Operational context per [transcript-extraction.md](transcript-extraction.md)
-   Step 1.3.
+   Step 1.3. When the session set compacted, also run `scripts/compaction_boundaries.py --days N`
+   (deterministic, no model): per boundary it reports summary-contract compliance, carry-over from
+   the previous summary and the share of referenced files re-opened. Ground any Conversation reset
+   (#11) finding in its row; the contract vs no_contract split is the PreCompact hook's before/after.
 3. **Classify** ([analysis dispatch](analysis-dispatch.md)), then **precision-pass**: in Cursor the subagent analysis *is* the
    precision pass; headless, run a `fast_extract` (gpt-6-astra low) screen on HIGH-severity candidates only (max 3
    clusters, ~20 lines of evidence each) demanding `VERDICT promote|drop|needs_more_evidence` plus a

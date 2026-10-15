@@ -24,4 +24,4 @@ just questions                              # human-gated pending decisions
 Scripts under `${CLAUDE_SKILL_DIR}/scripts/`: `observe_gates.py` · `scan_tool_failures.py` ·
 `extract_transcript.py` · `extract_codex_transcript.py` · `session-shape.py` · `mine_steers.py` ·
 `rank_agent_miss.py` · `smart_judge_stats.py` · `validate_session_ids.py` · `observe_artifacts.py` ·
-`extract_user_tags.py` · `rotation_due.py` · `maintain_live_state.sh` · `dump_codebase.py`.
+`extract_user_tags.py` · `compaction_boundaries.py` · `rotation_due.py` · `maintain_live_state.sh` · `dump_codebase.py`.
