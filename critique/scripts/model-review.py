@@ -491,6 +491,15 @@ CROSS_TALK_INJECTION = """
 Test each assumption against the code. Flag false or unverified assumptions as findings."""
 
 
+def stderr_excerpt(text: str | None, limit: int = 400) -> str:
+    """Keep both ends of stderr: a CLI usage error leads, a Python traceback's cause trails."""
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text
+    head = limit // 4
+    return f"{text[:head]} … {text[-(limit - head):]}"
+
+
 def axis_lens(axis: str) -> str:
     return str(AXIS_CELLS.get(axis, {}).get("lens") or "")
 
@@ -1108,7 +1117,7 @@ def run_grok_preflight(project_dir: Path) -> tuple[int, dict]:
         "ok": registry.returncode == 0 and model in live_models,
         "exit_code": registry.returncode,
         "exact_slug_present": model in live_models,
-        "stderr": (registry.stderr or "").strip()[:400],
+        "stderr": stderr_excerpt(registry.stderr),
     }
     if not checks["registry"]["ok"]:
         checks["ok"] = False
@@ -1142,7 +1151,7 @@ def run_grok_preflight(project_dir: Path) -> tuple[int, dict]:
         "exit_code": head.returncode,
         "full_hash_length": len(full_head),
         "challenge_length": len(expected_head),
-        "stderr": (head.stderr or "").strip()[:400],
+        "stderr": stderr_excerpt(head.stderr),
     }
     if not checks["repo_head"]["ok"]:
         checks["ok"] = False
@@ -1171,7 +1180,7 @@ def run_grok_preflight(project_dir: Path) -> tuple[int, dict]:
         "ok": repo.returncode == 0 and repo_output == repo_expected,
         "exit_code": repo.returncode,
         "response_exact_ok": repo_output == repo_expected,
-        "stderr": (repo.stderr or "").strip()[:400],
+        "stderr": stderr_excerpt(repo.stderr),
     }
     checks["ok"] = bool(checks["repo_canary"]["ok"])
     return (0 if checks["ok"] else 1), checks
@@ -1504,7 +1513,7 @@ def _call_cursor_repo_agent(
             "exit_code": 1,
             "size": 0,
             "latency": latency,
-            "error": (stderr[:500] or f"exit {completed.returncode}"),
+            "error": (stderr_excerpt(stderr, 500) or f"exit {completed.returncode}"),
         }
 
     output_path.write_text(stdout + "\n")
@@ -1893,7 +1902,9 @@ def rerun_gpt_axis_via_subscription(
             "exit_code": 0 if ok else 1,
             "size": size,
             "latency": 0,
-            "error": None if ok else (r.stderr or "subscription retry produced no output")[:500],
+            "error": None
+            if ok
+            else (stderr_excerpt(r.stderr, 500) or "subscription retry produced no output"),
         }
     except Exception as e:  # noqa: BLE001 — fallback must never raise into the axis loop
         return {
@@ -1982,7 +1993,7 @@ def rerun_extraction_via_subscription(
             "latency": 0,
             "error": None
             if ok
-            else (r.stderr or "subscription extraction produced no output")[:500],
+            else (stderr_excerpt(r.stderr, 500) or "subscription extraction produced no output"),
         }
     except Exception as e:  # noqa: BLE001 — fallback must never raise into the extraction loop
         return {
@@ -3716,7 +3727,7 @@ def run_preflight(
         except json.JSONDecodeError:
             checks["routing_parse"] = {"ok": False}
     else:
-        checks["llmx_info_stderr"] = (info.stderr or "")[:500]
+        checks["llmx_info_stderr"] = stderr_excerpt(info.stderr, 500)
 
     dry = subprocess.run(
         [
@@ -3736,7 +3747,7 @@ def run_preflight(
     checks["dry_run_subscription"] = {
         "ok": dry.returncode == 0,
         "exit_code": dry.returncode,
-        "stderr": (dry.stderr or "").strip()[:400],
+        "stderr": stderr_excerpt(dry.stderr),
     }
     if dry.returncode == 0:
         try:
@@ -3778,7 +3789,7 @@ def run_preflight(
         "expires_at": live_payload.get("expires_at"),
         "error_type": live_payload.get("error_type"),
         "status_code": live_payload.get("status_code"),
-        "stderr": (live.stderr or "").strip()[:400],
+        "stderr": stderr_excerpt(live.stderr),
     }
 
     project_dir = (project_dir or Path.cwd()).expanduser().resolve()

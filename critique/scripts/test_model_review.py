@@ -1819,12 +1819,14 @@ class DispatchBudgetTest(unittest.TestCase):
 
 class PreflightTest(unittest.TestCase):
     @staticmethod
-    def _completed(args: list[str], *, exit_code: int, stdout: str) -> object:
+    def _completed(args: list[str], *, exit_code: int, stdout: str, stderr: str = "") -> object:
         import subprocess
 
-        return subprocess.CompletedProcess(args, exit_code, stdout=stdout, stderr="")
+        return subprocess.CompletedProcess(args, exit_code, stdout=stdout, stderr=stderr)
 
-    def _run_preflight(self, probe_payload: dict, *, probe_exit: int) -> tuple[int, dict]:
+    def _run_preflight(
+        self, probe_payload: dict | None, *, probe_exit: int, probe_stderr: str = ""
+    ) -> tuple[int, dict]:
         import subprocess
 
         def fake_run(args, **_kwargs):
@@ -1840,7 +1842,8 @@ class PreflightTest(unittest.TestCase):
                 return self._completed(
                     args,
                     exit_code=probe_exit,
-                    stdout=json.dumps(probe_payload),
+                    stdout="" if probe_payload is None else json.dumps(probe_payload),
+                    stderr=probe_stderr,
                 )
             raise AssertionError(f"unexpected preflight subprocess: {args}")
 
@@ -1874,6 +1877,22 @@ class PreflightTest(unittest.TestCase):
         self.assertTrue(payload["dry_run_subscription"]["ok"])
         self.assertFalse(payload["live_subscription_entitlement"]["ok"])
         self.assertEqual(payload["live_subscription_entitlement"]["exit_code"], 6)
+
+    def test_live_probe_crash_keeps_the_traceback_cause(self) -> None:
+        frames = "".join(
+            f'  File "/llmx/probe.py", line {line}, in _write_cached_result\n    descriptor = ...\n'
+            for line in range(40)
+        )
+        cause = "PermissionError: [Errno 1] Operation not permitted: '/cache/llmx/probes/.x.tmp'"
+        return_code, payload = self._run_preflight(
+            None, probe_exit=1, probe_stderr=f"Traceback (most recent call last):\n{frames}{cause}\n"
+        )
+        live = payload["live_subscription_entitlement"]
+        self.assertEqual(return_code, 1)
+        self.assertEqual(live["verdict"], "unparseable")
+        self.assertIn(cause, live["stderr"])
+        self.assertTrue(live["stderr"].startswith("Traceback"))
+        self.assertLessEqual(len(live["stderr"]), 403)
 
     def test_live_available_is_required_for_green_preflight(self) -> None:
         return_code, payload = self._run_preflight(
