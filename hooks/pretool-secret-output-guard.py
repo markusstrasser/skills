@@ -61,6 +61,9 @@ _PGREP_VALUE_OPTIONS = frozenset("FGMNOPUdgstu")
 _PS_VALUE_OPTIONS = frozenset("GgMNOoptUu")
 # Output fields that print the argument vector (procps, BSD, and AIX `%a`).
 _PS_ARGUMENT_FIELDS = frozenset({"args", "cmd", "command", "%a"})
+# A listing whose stdout is discarded prints nothing (stderr-only redirects do not count).
+_STDOUT_TO_NULL = frozenset({">/dev/null", "1>/dev/null", ">>/dev/null", ">|/dev/null"})
+_STDOUT_REDIRECTS = frozenset({">", "1>", ">>", ">|"})
 
 
 def _basename(token: str) -> str:
@@ -370,11 +373,24 @@ def _lists_process_arguments(command: list[str]) -> bool:
     return executable == "pstree"
 
 
+def _discards_stdout(command: list[str]) -> bool:
+    """True when the command's stdout goes to /dev/null (`ps -p PID >/dev/null`)."""
+    for index, token in enumerate(command):
+        if token in _STDOUT_TO_NULL:
+            return True
+        if token in _STDOUT_REDIRECTS and command[index + 1:index + 2] == ["/dev/null"]:
+            return True
+    return False
+
+
 def contains_process_argument_listing(command: str) -> bool:
-    commands = _simple_commands(command)
+    # `&>` would otherwise lex as a background `&` followed by a separate redirect.
+    commands = _simple_commands(command.replace("&>", " >"))
     if any(_basename(simple[0]) == "redact-env" for simple in commands):
         return False
-    return any(_lists_process_arguments(simple) for simple in commands)
+    return any(
+        _lists_process_arguments(simple) and not _discards_stdout(simple) for simple in commands
+    )
 
 
 def main() -> int:
