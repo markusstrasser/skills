@@ -82,7 +82,7 @@ cat <<EOF
 ${warn}▶ Before executing any queue: run the detection recipe (arc-agi memory
   harness_restart_daemon_duplicate.md) — marker-test identity (echo WHOAMI-\$RANDOM, grep both
   jsonls), lsof-verify the bg-spare host's cwd BEFORE killing, kill -TERM the host, then sweep
-  'ps aux | grep -- "--resume.*<jsonl-prefix>"' for the leftover resume child (step 5).
+  'ps aux | redact-env | grep -- "--resume.*<jsonl-prefix>"' for the leftover resume child (step 5).
   A growing twin transcript = a live duplicate EXECUTING your queue. Adopt its valid detached
   work; do not re-run it.
 EOF

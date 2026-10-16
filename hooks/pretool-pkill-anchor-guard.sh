@@ -117,7 +117,7 @@ pat_list = ", ".join(f"'{p}'" for p in hits)
 msg = (
     f"ADVISORY: pkill -f pattern(s) [{pat_list}] look unanchored (no `/` path segment, "
     "no leading `^`, no paired `-x`) — `-f` matches by SUBSTRING against the full command "
-    "line. Run `pgrep -fl '<pattern>'` FIRST and read every match before killing anything; "
+    "line. Run `pgrep -fl '<pattern>' | redact-env` FIRST and read every match before killing anything; "
     "anchor to a unique token (full path, `^`, or `-x`) once you've confirmed the match set. "
     "(wakeup-cadence.md pkill discipline — 2 same-day incidents 2026-07-12, one killed a "
     "healthy training client via `*forkDC*` matching the unrelated `forkDCH`.)"

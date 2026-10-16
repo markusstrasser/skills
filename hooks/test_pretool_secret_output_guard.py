@@ -79,6 +79,87 @@ def test_standalone_allows_safe_shapes(command: str) -> None:
     assert result.stderr == ""
 
 
+# 2026-10-16: this liveness check printed a pytest worker's environment (API keys).
+PROCESS_INCIDENT_COMMAND = (
+    "pgrep -fl 'fixture-repair-after-route|v30-(checkout|declaration|science)|land_lane"
+    "|write_intent|modal_test_suite' | cut -c1-200 || echo \"no matching processes\""
+)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        PROCESS_INCIDENT_COMMAND,
+        "pgrep -fl python",
+        "pgrep -lf python",
+        "pgrep -f -l python",
+        "pgrep --list-full python",
+        "ps aux",
+        "ps aux | grep python",
+        "ps -ef",
+        "ps -p 123",
+        "ps axE",
+        "ps eww",
+        "ps -E -o pid,comm",
+        "ps -o pid,command -p 123",
+        "ps -o pid= -o args= -p 123",
+        "ps -O etime -p 123",
+        "ps axo pid,args",
+        "pstree -p 123",
+        "pgrep -f x | xargs ps -o pid,command -p",
+        "GIT_OPTIONAL_LOCKS=0 ps -ef",
+        "sh -c 'ps aux'",
+        "zsh -lc 'ps -ef'",
+        'echo "$(ps aux)"',
+        "cat > notes.md <<EOF\n`ps aux`\nEOF",
+    ],
+)
+def test_standalone_blocks_process_argument_listings(command: str) -> None:
+    result = _run(HOOK, command)
+    assert result.returncode == 2
+    assert "full argument vectors" in result.stderr
+    assert result.stdout == ""
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "pgrep -f python",
+        "pgrep -f python | wc -l",
+        "pgrep -l python",
+        "pgrep -P 123",
+        "ps -o pid=,etime=,comm= -p 123",
+        "ps -axo pid,ppid,comm",
+        "ps -p 123 -o pid=,stat=",
+        "ps -ocomm= -p 123",
+        "ps aux | redact-env",
+        "pgrep -fl python | redact-env | head -5",
+        "echo 'ps aux is prose'",
+        'grep -n "ps aux" notes.md',
+        "cat > notes.md <<'EOF'\nuse `ps aux` or `pgrep -fl x` here\nEOF",
+        "cat > notes.md <<'EOF'\nb2 account get\nEOF",
+    ],
+)
+def test_standalone_allows_safe_process_shapes(command: str) -> None:
+    result = _run(HOOK, command)
+    assert result.returncode == 0
+    assert result.stderr == ""
+
+
+def test_redact_env_masks_environment_and_key_shapes() -> None:
+    helper = HOOKS_DIR.parent / "bin" / "redact-env"
+    line = (
+        "123 python3 -m pytest AGENT_SHELL=1 DEMO_API_KEY=abc123 --flag=1 AIza"
+        + "X" * 35 + " sk-ant-api03-" + "Y" * 20 + "\n"
+    )
+    result = subprocess.run([str(helper)], input=line, capture_output=True, text=True, timeout=20)
+    assert result.returncode == 0
+    assert "abc123" not in result.stdout
+    assert "XXXX" not in result.stdout and "YYYY" not in result.stdout
+    assert "DEMO_API_KEY=<redacted>" in result.stdout
+    assert "--flag=1" in result.stdout
+
+
 def test_non_bash_tool_is_ignored() -> None:
     assert _run(HOOK, INCIDENT_COMMAND, tool_name="Write").returncode == 0
 

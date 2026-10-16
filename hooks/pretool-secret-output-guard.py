@@ -1,19 +1,30 @@
 #!/usr/bin/env python3
 # Gov-ID: hook:secret-output-guard
-# goal: prevent credential-dump CLIs from placing live secrets in agent tool output
+# goal: prevent credential-dump CLIs and environment-exposing process listings from placing live secrets in agent tool output
 # verifier: skills/hooks/test_pretool_secret_output_guard.py
 # blast_radius: shared
-"""Block B2 account-dump commands before they can emit credentials.
+"""Block commands whose output can carry live credentials, before they run.
 
-`b2 account get` (and the legacy `b2 get-account-info`) prints live key and
-authorization-token material.  A post-tool redactor is too late: the raw
-stdout may already have entered the transcript.  This hook therefore matches
-only executable shell invocations and denies them before process creation.
+Two shapes are denied:
 
-The matcher is deliberately shell-aware enough to distinguish a command from
+* ``b2 account get`` (and the legacy ``b2 get-account-info``) prints live key
+  and authorization-token material.
+* Process listings that print full argument vectors (``pgrep -fl``,
+  ``ps aux``, ``ps -ef``, ``ps -p PID``, ``ps -o args``, ``ps -E``,
+  ``pstree``).  On 2026-10-16 a ``pgrep -fl`` liveness check printed a pytest
+  worker's environment, API keys included, into an agent transcript.  Probes
+  with short and long setproctitle titles did not reproduce the trigger, so
+  every full-argument listing is treated as able to expose environment.
+  PID-only and ``comm`` forms stay allowed, and so does any command that pipes
+  through ``redact-env`` (``~/Projects/skills/bin/redact-env``).
+
+A post-tool redactor is too late: the raw stdout may already have entered the
+transcript.  The matcher is shell-aware enough to distinguish a command from
 quoted prose while covering compound commands, pipelines, environment/command
-prefixes, command substitutions, and ``python -m b2``.  Hook-input and shell
-parse errors fail open, consistent with the shared PreToolUse hook contract.
+prefixes, command substitutions, shell ``-c`` bodies, heredocs (a quoted body
+is literal text; an unquoted body is scanned only for its substitutions) and
+``python -m b2``.  Hook-input and shell parse errors fail open, consistent
+with the shared PreToolUse hook contract.
 """
 from __future__ import annotations
 
@@ -28,12 +39,28 @@ BLOCK_MESSAGE = (
     "--json`, `b2 ls --json b2://`, or an allowlist-only account-info helper. Raw "
     "account dumps are forbidden in agent shell output."
 )
+PROCESS_LISTING_MESSAGE = (
+    "BLOCKED: this process listing prints full argument vectors, which exposed another "
+    "process's environment (API keys) in agent output on 2026-10-16. Use `pgrep -f PATTERN` "
+    "for PIDs, `pgrep -f PATTERN | wc -l` for a count (macOS pgrep has no -c), or "
+    "`ps -o pid=,etime=,comm= -p PID`; when you need the arguments, pipe the listing "
+    "through `redact-env`, e.g. `pgrep -fl PATTERN | redact-env`."
+)
 
 _ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=.*$", re.DOTALL)
 _SHELL_SEPARATORS = {";", "&", "&&", "|", "||", "(", ")", "\n"}
 _LEADING_KEYWORDS = {"!", "do", "elif", "else", "then", "time"}
-_PREFIXES = {"command", "exec", "nohup"}
+_PREFIXES = {"command", "exec", "nohup", "xargs"}
 _PYTHON = re.compile(r"^(?:python|python\d+(?:\.\d+)*)$")
+_SHELLS = {"bash", "dash", "sh", "zsh"}
+_HEREDOC = re.compile(r"(?<!<)<<(?!<)(-?)[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\2")
+_MAX_DEPTH = 8
+
+# Options that consume a value, for macOS and procps; the value never holds flags.
+_PGREP_VALUE_OPTIONS = frozenset("FGMNOPUdgstu")
+_PS_VALUE_OPTIONS = frozenset("GgMNOoptUu")
+# Output fields that print the argument vector (procps, BSD, and AIX `%a`).
+_PS_ARGUMENT_FIELDS = frozenset({"args", "cmd", "command", "%a"})
 
 
 def _basename(token: str) -> str:
@@ -115,27 +142,6 @@ def _python_b2_arguments(command: list[str]) -> list[str] | None:
     return None
 
 
-def _segment_has_secret_invocation(segment: list[str]) -> bool:
-    command = _strip_command_prefixes(segment)
-    if not command:
-        return False
-
-    executable = _basename(command[0])
-    if executable == "b2":
-        return _has_dump_verb(command[1:])
-
-    python_arguments = _python_b2_arguments(command)
-    if python_arguments is not None and _has_dump_verb(python_arguments):
-        return True
-
-    # Shell wrappers can hide the same executable command in one quoted token.
-    if executable in {"bash", "dash", "sh", "zsh"}:
-        for index, token in enumerate(command[1:], start=1):
-            if token == "-c" and index + 1 < len(command):
-                return contains_secret_b2_dump(command[index + 1])
-    return False
-
-
 def _command_substitutions(command: str) -> list[str]:
     """Extract unquoted/double-quoted ``$(...)`` and backtick bodies.
 
@@ -210,23 +216,165 @@ def _command_substitutions(command: str) -> list[str]:
     return bodies
 
 
-def contains_secret_b2_dump(command: str) -> bool:
-    if not command or not command.strip():
-        return False
+def _strip_heredoc_bodies(command: str) -> tuple[str, list[str]]:
+    """Return the command without heredoc bodies, plus the unquoted bodies.
 
-    for body in _command_substitutions(command):
-        if contains_secret_b2_dump(body):
-            return True
+    A quoted delimiter makes its body literal text.  An unquoted body still
+    expands ``$(...)`` and backticks, so callers scan it for substitutions only.
+    """
+    lines = command.split("\n")
+    kept: list[str] = []
+    live_bodies: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        kept.append(line)
+        index += 1
+        for match in _HEREDOC.finditer(line):
+            strip_tabs, quote, delimiter = match.group(1) == "-", match.group(2), match.group(3)
+            body: list[str] = []
+            while index < len(lines):
+                candidate = lines[index].lstrip("\t") if strip_tabs else lines[index]
+                index += 1
+                if candidate == delimiter:
+                    break
+                body.append(lines[index - 1])
+            if not quote:
+                live_bodies.append("\n".join(body))
+    return "\n".join(kept), live_bodies
 
+
+def _tokens(command: str) -> list[str] | None:
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()\n")
         lexer.whitespace_split = True
         lexer.whitespace = " \t\r"
         lexer.commenters = ""
-        tokens = list(lexer)
+        return list(lexer)
     except (TypeError, ValueError):
+        return None
+
+
+def _is_shell_command_flag(token: str) -> bool:
+    return token.startswith("-") and not token.startswith("--") and "c" in token[1:]
+
+
+def _simple_commands(command: str, depth: int = 0) -> list[list[str]]:
+    """Return every simple command the shell would run, prefixes removed."""
+    if depth > _MAX_DEPTH or not command or not command.strip():
+        return []
+    text, live_bodies = _strip_heredoc_bodies(command)
+    commands: list[list[str]] = []
+    for source in (text, *live_bodies):
+        for body in _command_substitutions(source):
+            commands.extend(_simple_commands(body, depth + 1))
+    tokens = _tokens(text)
+    if tokens is None:
+        return commands
+    for segment in _segments(tokens):
+        simple = _strip_command_prefixes(segment)
+        if not simple:
+            continue
+        commands.append(simple)
+        # Shell wrappers can hide a command in one quoted token.
+        if _basename(simple[0]) in _SHELLS:
+            for index, token in enumerate(simple[1:], start=1):
+                if _is_shell_command_flag(token) and index + 1 < len(simple):
+                    commands.extend(_simple_commands(simple[index + 1], depth + 1))
+                    break
+    return commands
+
+
+def _is_b2_dump(command: list[str]) -> bool:
+    if _basename(command[0]) == "b2":
+        return _has_dump_verb(command[1:])
+    python_arguments = _python_b2_arguments(command)
+    return python_arguments is not None and _has_dump_verb(python_arguments)
+
+
+def contains_secret_b2_dump(command: str) -> bool:
+    return any(_is_b2_dump(simple) for simple in _simple_commands(command))
+
+
+def _short_options(
+    arguments: list[str], value_options: frozenset[str], *, bsd_first: bool = False
+) -> tuple[set[str], dict[str, list[str]], list[str]]:
+    """Parse getopt-style clusters into flags, option values and long options."""
+    flags: set[str] = set()
+    values: dict[str, list[str]] = {}
+    long_options: list[str] = []
+    index = 0
+    while index < len(arguments):
+        token = arguments[index]
+        index += 1
+        if token.startswith("--"):
+            long_options.append(token)
+            continue
+        if token.startswith("-") and len(token) > 1:
+            cluster = token[1:]
+        elif bsd_first and index == 1 and token.isalpha():
+            cluster = token
+        else:
+            continue
+        for position, letter in enumerate(cluster):
+            if letter in value_options:
+                value = cluster[position + 1:]
+                if not value and index < len(arguments):
+                    value = arguments[index]
+                    index += 1
+                values.setdefault(letter, []).append(value)
+                break
+            flags.add(letter)
+    return flags, values, long_options
+
+
+def _pgrep_lists_arguments(arguments: list[str]) -> bool:
+    flags, _values, long_options = _short_options(arguments, _PGREP_VALUE_OPTIONS)
+    if "--list-full" in long_options:
+        return True
+    lists = "l" in flags or "--list-name" in long_options
+    full = "f" in flags or "--full" in long_options
+    return lists and full
+
+
+def _ps_lists_arguments(arguments: list[str]) -> bool:
+    # A dash-less first word is a BSD cluster (`ps aux`, `ps eww`); `e` there prints
+    # the environment on procps.
+    if arguments and not arguments[0].startswith("-") and arguments[0].isalpha():
+        if "e" in arguments[0] or "E" in arguments[0]:
+            return True
+    flags, values, long_options = _short_options(arguments, _PS_VALUE_OPTIONS, bsd_first=True)
+    if "E" in flags or "O" in values:
+        # -E prints the environment; -O extends a default display that ends in the command.
+        return True
+    formats = list(values.get("o", []))
+    formats += [option.split("=", 1)[1] for option in long_options if option.startswith("--format=")]
+    if not formats:
+        # Every default ps display ends in the full command column.
+        return True
+    fields = [
+        field.split("=", 1)[0].strip().lower()
+        for value in formats
+        for field in re.split(r"[,\s]+", value)
+        if field.strip()
+    ]
+    return any(field in _PS_ARGUMENT_FIELDS for field in fields)
+
+
+def _lists_process_arguments(command: list[str]) -> bool:
+    executable = _basename(command[0])
+    if executable == "pgrep":
+        return _pgrep_lists_arguments(command[1:])
+    if executable == "ps":
+        return _ps_lists_arguments(command[1:])
+    return executable == "pstree"
+
+
+def contains_process_argument_listing(command: str) -> bool:
+    commands = _simple_commands(command)
+    if any(_basename(simple[0]) == "redact-env" for simple in commands):
         return False
-    return any(_segment_has_secret_invocation(segment) for segment in _segments(tokens))
+    return any(_lists_process_arguments(simple) for simple in commands)
 
 
 def main() -> int:
@@ -240,6 +388,9 @@ def main() -> int:
     command = tool_input.get("command", "") if isinstance(tool_input, dict) else ""
     if contains_secret_b2_dump(command):
         print(BLOCK_MESSAGE, file=sys.stderr)
+        return 2
+    if contains_process_argument_listing(command):
+        print(PROCESS_LISTING_MESSAGE, file=sys.stderr)
         return 2
     return 0
 

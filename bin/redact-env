@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# redact-env: copy stdin to stdout with credential-shaped values masked.
+#
+# Pipe any listing that prints full process arguments through it, e.g.
+#   pgrep -fl '<pattern>' | redact-env
+#   ps -o pid=,etime=,args= -p "$PID" | redact-env
+# On 2026-10-16 a `pgrep -fl` liveness check printed a pytest worker's environment,
+# API keys included, into an agent transcript. hooks/pretool-secret-output-guard.py
+# blocks full-argument listings unless they pass through this filter.
+#
+# Rule 1 masks every NAME=value token that starts a word (environment shape);
+# `--flag=value` arguments keep their values. Rule 2 masks bare key shapes.
+set -euo pipefail
+exec sed -E \
+  -e 's/(^|[[:space:]])([A-Za-z_][A-Za-z0-9_]*)=[^[:space:]]*/\1\2=<redacted>/g' \
+  -e 's/(sk-ant-|sk-|AIza|ghp_|gho_|github_pat_|xox[abprs]-|AKIA|ASIA|hf_)[A-Za-z0-9_-]{8,}/<redacted-key>/g'
