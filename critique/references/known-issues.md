@@ -130,3 +130,11 @@
 - **[2026-10-15] 2026-10-15 recurrence (immigration-research, session 75b08f57): same shell predating the secret-env policy; Argon axes of two packets failed at launch while Opus ran on. The 2026-10-14 workaround held (export GEMINI_API_KEY_METERED from GEMINI_API_KEY_CRITIQUE_ONLY on the dispatch); the permanent store rename is still open.**
 
 - **[2026-10-15] 2026-10-15: Claude CLI stream cut → CLI injects a resume turn → llmx refuses ('forced to continue after answering'); the complete answer sits in ~/.cache/llmx/refused-claude-streams/<id>.json 'result'. If it holds every section from the start, salvage it verbatim with a note instead of re-running (r6 WB, U1).**
+
+- **[2026-10-16] FIXED — preflight blocked a Gemini/Astra panel on unused Claude quota.**
+  The subscription probe was hardcoded to Claude even when no Claude axis was requested.
+  `--preflight-subscription-model gpt-6-astra` now probes the actual GPT route; Gemini's
+  live check remains active. The default remains Claude for existing callers. A failed
+  selected-model probe still blocks. Regression: `PreflightTest` and
+  `ModelReviewMainTest` in `scripts/test_model_review.py`. Evidence: SIPP work-response
+  review, Claude quota exhausted while the requested Astra and Gemini routes were available.

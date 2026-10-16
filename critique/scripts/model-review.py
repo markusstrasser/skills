@@ -3683,13 +3683,17 @@ def verify_claims(
 
 
 def run_preflight(
-    project_dir: Path | None = None, *, include_grok: bool = False, include_gemini: bool = False
+    project_dir: Path | None = None, *, include_grok: bool = False, include_gemini: bool = False,
+    subscription_model: str = "claude-opus-5-5",
 ) -> int:
     """Probe llmx readiness; optionally prove the Grok transport and the Gemini API key."""
     import shutil
     import subprocess
 
-    checks: dict = {}
+    providers = {"claude-opus-5-5": "anthropic", "gpt-6-astra": "openai"}
+    if subscription_model not in providers:
+        raise ValueError(f"unsupported preflight subscription model: {subscription_model}")
+    checks: dict = {"subscription_model": subscription_model}
     llmx_bin = shutil.which("llmx")
     checks["llmx_cli"] = {"ok": bool(llmx_bin), "path": llmx_bin}
     if not llmx_bin:
@@ -3736,7 +3740,7 @@ def run_preflight(
             "--dry-run",
             "--subscription",
             "-m",
-            "claude-opus-5-5",
+            subscription_model,
             "-e",
             "max",
         ],
@@ -3760,9 +3764,9 @@ def run_preflight(
             llmx_bin,
             "probe",
             "--provider",
-            "anthropic",
+            providers[subscription_model],
             "--model",
-            "claude-opus-5-5",
+            subscription_model,
             "--timeout",
             "120",
             "--cache-ttl",
@@ -3910,6 +3914,11 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--preflight-subscription-model",
+        choices=["claude-opus-5-5", "gpt-6-astra"],
+        help="Subscription route to probe; select Astra for a Gemini/GPT-only panel.",
+    )
+    parser.add_argument(
         "--scout",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -3966,10 +3975,14 @@ def main() -> int:
         requested_preflight_axes = {
             token.strip() for token in (args.axes or "").split(",") if token.strip()
         }
+        preflight_kwargs = {}
+        if args.preflight_subscription_model:
+            preflight_kwargs["subscription_model"] = args.preflight_subscription_model
         return run_preflight(
             preflight_project,
             include_grok="grok" in requested_preflight_axes,
             include_gemini=preflight_needs_gemini(requested_preflight_axes),
+            **preflight_kwargs,
         )
 
     project_dir = (args.project or Path.cwd()).expanduser().resolve()

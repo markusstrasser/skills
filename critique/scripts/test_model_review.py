@@ -1011,6 +1011,20 @@ class ModelReviewMainTest(unittest.TestCase):
             model_review.main()
         self.assertEqual(raised.exception.code, 2)
 
+    def test_cli_preflight_can_select_the_actual_gpt_subscription(self) -> None:
+        with (
+            patch.object(model_review, "run_preflight", return_value=1) as preflight,
+            patch.object(model_review.sys, "argv", [
+                "model-review.py", "--preflight", "--axes", "arch,correctness",
+                "--preflight-subscription-model", "gpt-6-astra",
+            ]),
+        ):
+            self.assertEqual(model_review.main(), 1)
+        preflight.assert_called_once_with(
+            Path.cwd().resolve(), include_grok=False, include_gemini=True,
+            subscription_model="gpt-6-astra",
+        )
+
     def test_grok_preflight_failure_blocks_before_review_dispatch(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project_dir = Path(temp_dir)
@@ -1818,6 +1832,33 @@ class DispatchBudgetTest(unittest.TestCase):
 
 
 class PreflightTest(unittest.TestCase):
+    def test_selected_gpt_route_is_probed_and_quota_failure_still_blocks(self) -> None:
+        import subprocess
+
+        for verdict, exit_code in [("available", 0), ("unavailable", 6)]:
+            calls = []
+
+            def fake_run(args, **_kwargs):
+                calls.append(args)
+                if args[1] == "probe":
+                    return self._completed(args, exit_code=exit_code,
+                                           stdout=json.dumps({"verdict": verdict}))
+                return self._completed(args, exit_code=0, stdout="{}")
+
+            with (
+                tempfile.TemporaryDirectory() as temp_dir,
+                patch("shutil.which", return_value="/usr/bin/llmx"),
+                patch.object(subprocess, "run", side_effect=fake_run),
+            ):
+                rc = model_review.run_preflight(Path(temp_dir), subscription_model="gpt-6-astra")
+            self.assertEqual(rc, 0 if exit_code == 0 else 1)
+            dry = next(args for args in calls if args[1] == "chat")
+            live = next(args for args in calls if args[1] == "probe")
+            self.assertEqual(dry[dry.index("-m") + 1], "gpt-6-astra")
+            self.assertEqual(live[live.index("--model") + 1], "gpt-6-astra")
+            self.assertEqual(live[live.index("--provider") + 1], "openai")
+            self.assertNotIn("claude-opus-5-5", [item for args in calls for item in args])
+
     @staticmethod
     def _completed(args: list[str], *, exit_code: int, stdout: str, stderr: str = "") -> object:
         import subprocess
