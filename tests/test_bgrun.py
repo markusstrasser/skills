@@ -87,6 +87,40 @@ def test_completion_preserves_status_and_log(job, exit_code: int) -> None:
     assert not (directory / "case.log.tmp").exists()
 
 
+@pytest.mark.parametrize("job", ["exec", "native"], indirect=True)
+def test_launch_names_live_output_before_completion(job) -> None:
+    directory, _, run = job
+    release = directory / "release"
+    launched = run(
+        "case", "--", sys.executable, "-c",
+        "from pathlib import Path; import sys,time; print('LIVE_OUTPUT',flush=True)\n"
+        "while not Path(sys.argv[1]).exists(): time.sleep(0.02)\n"
+        "print('FINAL_OUTPUT',flush=True)",
+        str(release),
+    )
+    try:
+        assert launched.returncode == 0, launched.stderr
+        lines = [line for line in launched.stdout.splitlines() if line.startswith("  live-log: ")]
+        assert len(lines) == 1, launched.stdout
+        live = Path(lines[0].removeprefix("  live-log: "))
+        assert live == directory / "case.log.tmp"
+        deadline = time.monotonic() + 5
+        while (
+            not live.exists() or "LIVE_OUTPUT" not in live.read_text()
+        ) and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert "LIVE_OUTPUT" in live.read_text()
+        assert not (directory / "case.done").exists()
+        assert "LIVE_OUTPUT" not in (directory / "case.log").read_text()
+    finally:
+        release.touch()
+        waited = run("--wait", "case")
+    assert waited.returncode == 0, waited.stderr
+    assert "LIVE_OUTPUT" in (directory / "case.log").read_text()
+    assert "FINAL_OUTPUT" in (directory / "case.log").read_text()
+    assert not live.exists()
+
+
 def test_child_stdin_is_closed(job) -> None:
     directory, _, run = job
     result = run(

@@ -4,8 +4,10 @@
 #   bgrun <name> -- <command ...>
 #
 # Runs the command under nohup+disown with PYTHONUNBUFFERED=1, redirecting all
-# output to <dir>/<name>.log (never pipe background output through tail/grep —
-# buffering swallows it on kill). Writes <dir>/<name>.pid at launch and
+# output to <dir>/<name>.log.tmp while running, then appending it to .log.
+# Both paths are printed; read the live log for progress before completion.
+# Never pipe background output through tail/grep — buffering swallows it on kill.
+# Writes <dir>/<name>.pid at launch and
 # <dir>/<name>.done containing the exit code at completion. Prints the paths
 # and a liveness-aware `bgrun --wait <name>` command.
 # A terminated child or supervisor TERM cancellation writes a nonzero .done
@@ -183,5 +185,6 @@ release_lock
 
 echo "bgrun: $name pid=$launch_pid cwd=$PWD"
 echo "  log:  $log"
+echo "  live-log: $log.tmp"
 echo "  done: $done_marker (contains exit code)"
 printf '  watch: BGRUN_DIR=%q %q --wait %q\n' "$dir" "${BASH_SOURCE[0]}" "$name"
