@@ -20,7 +20,7 @@ import pytest
 HOOKS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(HOOKS_DIR))
 
-import lib_hook_identity  # noqa: E402
+import lib_hook_identity
 
 SESSION = "adae2b38-fa63-4fd0-b727-08c73975b287"
 ENVELOPES = [
@@ -82,7 +82,7 @@ def run_hook(name, envelope, tmp_path, extra_env=None):
     env.update(extra_env or {})
     cmd = [sys.executable if name.endswith(".py") else "bash", str(HOOKS_DIR / name)]
     return subprocess.run(cmd, input=json.dumps(envelope), capture_output=True, text=True,
-                          env=env, cwd=str(tmp_path))
+                          env=env, cwd=str(tmp_path), check=False)
 
 
 def as_agent(envelope, agent_id):
@@ -147,6 +147,94 @@ def test_parent_only_nudges_skip_subagents(hook, envelope, marker, tmp_path):
     assert marker in parent.stdout + parent.stderr
     child = run_hook(hook, as_agent(envelope, "a12bfef463b73db2f"), tmp_path)
     assert (child.returncode, child.stdout, child.stderr) == (0, "", "")
+
+
+@pytest.mark.parametrize("response_kind", ["object", "string"])
+def test_bgrun_nudge_preserves_the_native_watch_command(tmp_path, response_kind):
+    watch = f"BGRUN_DIR={tmp_path}/custom\\ jobs /Users/alien/Projects/skills/bin/bgrun --wait case"
+    stdout = f"bgrun: case pid=12345 cwd={tmp_path}\n  watch: {watch}\n"
+    envelope = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "BGRUN_DIR='/custom jobs' bgrun case -- true"},
+        "tool_response": {"stdout": stdout} if response_kind == "object" else stdout,
+    }
+    result = run_hook("posttool-bgrun-watcher-nudge.sh", envelope, tmp_path)
+    assert result.returncode == 0, result.stderr
+    context = json.loads(result.stdout)["additionalContext"]
+    assert watch in context
+    assert "until [ -f" not in context
+    assert "$TMPDIR/bgrun" not in context
+
+
+@pytest.mark.parametrize("watcher", [
+    "bgrun --wait case",
+    "/Users/alien/Projects/skills/bin/bgrun --wait 'case'",
+    '"/Users/alien/Projects/skills/bin/bgrun" --wait "case"',
+])
+def test_bgrun_nudge_recognizes_a_paired_native_wait(tmp_path, watcher):
+    envelope = {
+        "tool_name": "Bash",
+        "tool_input": {"command": f"bgrun case -- true; {watcher}"},
+    }
+    result = run_hook("posttool-bgrun-watcher-nudge.sh", envelope, tmp_path)
+    assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
+
+
+@pytest.mark.parametrize("command", [
+    "BGRUN_DIR=/tmp/launch bgrun case -- true; bgrun --wait case",
+    "BGRUN_DIR=/tmp/launch bgrun case -- true; BGRUN_DIR=/tmp/other bgrun --wait case",
+    "TMPDIR=/tmp/launch bgrun case -- true; bgrun --wait case",
+    "bgrun case -- true; BGRUN_DIR=/tmp/other; bgrun --wait case",
+    "bgrun case -- true; export TMPDIR=/tmp/other; bgrun --wait case",
+    "bgrun case -- true; unset BGRUN_DIR; bgrun --wait case",
+])
+def test_bgrun_nudge_keeps_unproven_wait_directory_visible(tmp_path, command):
+    watch = "BGRUN_DIR=/tmp/launch /Users/alien/Projects/skills/bin/bgrun --wait case"
+    envelope = {
+        "tool_name": "Bash",
+        "tool_input": {"command": command},
+        "tool_response": {"stdout": f"bgrun: case pid=12345 cwd={tmp_path}\n  watch: {watch}\n"},
+    }
+    result = run_hook("posttool-bgrun-watcher-nudge.sh", envelope, tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout, "same-name waiter has unproven directory scope; keep the nudge"
+    context = json.loads(result.stdout)["additionalContext"]
+    assert watch in context
+    assert "[DEGRADED]" in context
+
+
+@pytest.mark.parametrize("binary", [
+    "/Users/alien/Projects/skills/bin/bgrun",
+    '"/Users/alien/Projects/skills/bin/bgrun"',
+])
+def test_bgrun_nudge_accepts_the_exact_printed_directory_wait(tmp_path, binary):
+    watch = f"BGRUN_DIR=/tmp/custom\\ jobs {binary} --wait case"
+    envelope = {
+        "tool_name": "Bash",
+        "tool_input": {"command": f"BGRUN_DIR='/tmp/custom jobs' bgrun case -- true; {watch}"},
+        "tool_response": {"stdout": f"bgrun: case pid=12345 cwd={tmp_path}\n  watch: {watch}\n"},
+    }
+    result = run_hook("posttool-bgrun-watcher-nudge.sh", envelope, tmp_path)
+    assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
+
+
+@pytest.mark.parametrize("fragment", ["bgrun --wait other-case", "cat /tmp/case.done"])
+def test_bgrun_nudge_does_not_confuse_other_waits_or_marker_reads(tmp_path, fragment):
+    envelope = {
+        "tool_name": "Bash",
+        "tool_input": {"command": f"bgrun case -- true; {fragment}"},
+    }
+    result = run_hook("posttool-bgrun-watcher-nudge.sh", envelope, tmp_path)
+    assert result.returncode == 0, result.stderr
+    context = json.loads(result.stdout)["additionalContext"]
+    assert "bgrun --wait case" in context
+    assert "[DEGRADED]" in context
+
+
+def test_bgrun_nudge_ignores_a_wait_without_a_launch(tmp_path):
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "bgrun --wait case"}}
+    result = run_hook("posttool-bgrun-watcher-nudge.sh", envelope, tmp_path)
+    assert (result.returncode, result.stdout, result.stderr) == (0, "", "")
 
 
 def test_no_wired_hook_reads_the_variables_claude_code_never_sets():

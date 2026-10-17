@@ -8,9 +8,10 @@
 # buffering swallows it on kill). Writes <dir>/<name>.pid at launch and
 # <dir>/<name>.done containing the exit code at completion. Prints the paths
 # and a liveness-aware `bgrun --wait <name>` command.
-# A killed job also writes .done (rc 143 for SIGTERM), so a dependent that
-# waits on the file's existence starts early: test its content (`= 0`), or
-# have the job touch its own marker after the step that matters.
+# A terminated child or supervisor TERM cancellation writes a nonzero .done
+# only after the supervised child is reaped. Test its content (`= 0`), or have
+# the job touch its own marker after the step that matters. SIGKILL cannot be
+# trapped: use --wait so a missing terminal marker fails loudly.
 #
 # Dir: $BGRUN_DIR if set, else ${TMPDIR:-/tmp}/bgrun. Existing markers for the
 # same name are cleared at launch only after a prior live job is ruled out.
@@ -135,12 +136,32 @@ printf 'bgrun: cwd=%s\n' "$PWD" > "$log"
 # `kill -- -$launch_pid` exact. macOS ships no setsid(1).
 nohup /usr/bin/perl -MPOSIX -e 'POSIX::setsid() or die "bgrun: setsid: $!\n"; exec { $ARGV[0] } @ARGV or die "bgrun: exec: $!\n"' \
   env PYTHONUNBUFFERED=1 bash -c '
-  caffeinate -i "$@" > "$0.log.tmp" 2>&1  # caffeinate: idle-sleep killed an unattended 14-min audit overnight (genomics 2026-09-01)
-  rc=$?
-  cat "$0.log.tmp" >> "$0.log" 2>/dev/null || true
-  rm -f "$0.log.tmp"
-  printf "%s\n" "$rc" > "$0.done.tmp.$$"
-  mv "$0.done.tmp.$$" "$0.done"
+  finish_job() {
+    local child_rc="$1"
+    trap "" TERM
+    cat "$0.log.tmp" >> "$0.log" 2>/dev/null || true
+    rm -f "$0.log.tmp"
+    printf "%s\n" "$child_rc" > "$0.done.tmp.$$"
+    mv "$0.done.tmp.$$" "$0.done"
+  }
+  cancel_job() {
+    trap "" TERM
+    # This shell leads the existing isolated job group. Ignore our forwarded
+    # TERM, reap the child, then publish cancellation even if it exits zero.
+    kill -TERM -- "-$$" 2>/dev/null || true
+    wait || true
+    finish_job 143
+    exit 143
+  }
+  trap cancel_job TERM
+  # Keep caffeinate and the existing route; an asynchronous child makes wait
+  # interruptible so supervisor-only TERM reaches cancel_job immediately.
+  caffeinate -i "$@" > "$0.log.tmp" 2>&1 &
+  worker_pid=$!
+  rc=0
+  wait "$worker_pid" || rc=$?
+  finish_job "$rc"
+  exit "$rc"
 ' "$dir/$name" "$@" 9>&- </dev/null >/dev/null 2>&1 &
 launch_pid=$!
 disown "$launch_pid" 2>/dev/null || true

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import signal
 import subprocess
@@ -24,12 +25,16 @@ def wait_file(path: Path) -> str:
 
 
 @pytest.fixture
-def job(tmp_path: Path):
+def job(tmp_path: Path, request):
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     caffeinate = fake_bin / "caffeinate"
-    caffeinate.write_text('#!/bin/sh\n[ "$1" = -i ] && shift\nexec "$@"\n')
-    caffeinate.chmod(0o755)
+    if getattr(request, "param", "exec") == "exec":
+        caffeinate.write_text('#!/bin/sh\n[ "$1" = -i ] && shift\nexec "$@"\n')
+        caffeinate.chmod(0o755)
+    else:
+        assert Path("/usr/bin/caffeinate").is_file()
+        caffeinate.symlink_to("/usr/bin/caffeinate")
     env = {
         **os.environ,
         "BGRUN_DIR": str(tmp_path),
@@ -43,6 +48,7 @@ def job(tmp_path: Path):
             env=env,
             capture_output=True,
             text=True,
+            check=False,
             timeout=8,
             **kwargs,
         )
@@ -62,6 +68,7 @@ def job(tmp_path: Path):
             pass
 
 
+@pytest.mark.parametrize("job", ["exec", "native"], indirect=True)
 @pytest.mark.parametrize("exit_code", [0, 7])
 def test_completion_preserves_status_and_log(job, exit_code: int) -> None:
     directory, _, run = job
@@ -364,3 +371,100 @@ def test_invalid_completion_is_not_success(job, marker: str) -> None:
     result = run("--wait", "case")
     assert result.returncode == 125
     assert "invalid completion" in result.stderr
+
+
+@pytest.mark.parametrize("job", ["exec", "native"], indirect=True)
+@pytest.mark.parametrize("term_scope", ["supervisor", "group"])
+def test_term_reaps_child_before_publishing_nonzero(job, term_scope: str) -> None:
+    directory, env, run = job
+    child_script = directory / "term-child.py"
+    child_script.write_text(
+        "from pathlib import Path\n"
+        "import json, os, signal, time\n"
+        "def stop(signum, frame):\n"
+        "    signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "    Path('child-term').touch()\n"
+        "    deadline = time.monotonic() + 12\n"
+        "    while not Path('release-child').exists():\n"
+        "        if time.monotonic() > deadline: raise SystemExit(91)\n"
+        "        time.sleep(0.02)\n"
+        "    Path('child-finished').touch()\n"
+        "    print('CHILD_FINISHED', flush=True)\n"
+        "    raise SystemExit(0)\n"
+        "signal.signal(signal.SIGTERM, stop)\n"
+        "Path('child-ready').write_text(json.dumps(dict(pid=os.getpid(), ppid=os.getppid(), "
+        "pgid=os.getpgrp(), sid=os.getsid(0))))\n"
+        "deadline = time.monotonic() + 12\n"
+        "while time.monotonic() < deadline: time.sleep(0.02)\n"
+        "raise SystemExit(92)\n"
+    )
+    supervisor = 0
+    owned_identities: dict[int, str] = {}
+
+    def started_identity(process_pid: int) -> str:
+        return subprocess.run(
+            ["ps", "-p", str(process_pid), "-o", "lstart="],
+            env={**env, "TZ": "UTC", "LC_ALL": "C"},
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout
+
+    try:
+        launched = run("case", "--", sys.executable, str(child_script), cwd=directory)
+        assert launched.returncode == 0, launched.stderr
+        supervisor = int(wait_file(directory / "case.pid"))
+        recorded_started = (directory / "case.started").read_text()
+        owned_identities[supervisor] = recorded_started
+        child = json.loads(wait_file(directory / "child-ready"))
+        child_pid = child["pid"]
+        owned_identities[child_pid] = started_identity(child_pid)
+        assert supervisor > 1 and supervisor != os.getpgrp()
+        assert os.getpgid(supervisor) == os.getsid(supervisor) == supervisor
+        assert child["pgid"] == child["sid"] == supervisor
+        assert child["ppid"] == supervisor
+        assert started_identity(supervisor) == recorded_started
+        assert owned_identities[child_pid]
+        if term_scope == "supervisor":
+            os.kill(supervisor, signal.SIGTERM)
+        else:
+            os.killpg(supervisor, signal.SIGTERM)
+        wait_file(directory / "child-term")
+        # Keep the child alive after TERM: any terminal marker now is premature.
+        assert not (directory / "case.done").exists()
+        assert os.getpgid(child_pid) == supervisor
+        original = {
+            path.name: path.read_bytes()
+            for path in directory.glob("case.*")
+            if path.is_file()
+        }
+        refused = run("case", "--", "false", cwd=directory)
+        assert refused.returncode == 125
+        assert "already running" in refused.stderr
+        assert original == {
+            path.name: path.read_bytes()
+            for path in directory.glob("case.*")
+            if path.is_file()
+        }
+        assert not (directory / "case.done").exists()
+        (directory / "release-child").touch()
+        waited = run("--wait", "case", cwd=directory)
+        assert waited.returncode == 143, waited.stderr
+        assert (directory / "case.done").read_text() == "143\n"
+        assert (directory / "child-finished").exists()
+        assert "CHILD_FINISHED" in (directory / "case.log").read_text()
+        assert not (directory / "case.log.tmp").exists()
+        assert (directory / "case.pid").read_text() == f"{supervisor}\n"
+        assert (directory / "case.started").read_text() == recorded_started
+        assert not started_identity(child_pid), "receipt published before child was reaped"
+    finally:
+        (directory / "release-child").touch()
+        # Cleanup can signal only this fixture group with a surviving PID/start match.
+        for process_pid, expected_started in owned_identities.items():
+            if expected_started and started_identity(process_pid) == expected_started:
+                try:
+                    if os.getpgid(process_pid) == supervisor:
+                        os.killpg(supervisor, signal.SIGKILL)
+                        break
+                except ProcessLookupError:
+                    pass
