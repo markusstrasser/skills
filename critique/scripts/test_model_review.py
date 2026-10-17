@@ -81,7 +81,8 @@ class ModelReviewDispatchTest(unittest.TestCase):
         calls = []
         def fake_dispatch(**kwargs):
             calls.append(kwargs)
-            return MagicMock(status='quota', error_message='monthly limit', latency=0)
+            return MagicMock(status='quota', error_message='monthly limit', latency=0,
+                             error_type='quota', retryable=False, error_path=None)
         with patch.object(model_review.dispatch_core, 'dispatch', side_effect=fake_dispatch):
             result = model_review.dispatch(self.review_dir, self.ctx_files, ['claude', 'formal'],
                                            'review', False, claude_api=True)
@@ -95,7 +96,9 @@ class ModelReviewDispatchTest(unittest.TestCase):
 
     def test_claude_default_keeps_subscription_profile(self):
         self.ctx_files['claude'] = self.ctx_files['formal']
-        with patch.object(model_review.dispatch_core, 'dispatch', return_value=MagicMock(status='quota', error_message='limit', latency=0)) as call:
+        result_stub = MagicMock(status='quota', error_message='limit', latency=0,
+                               error_type='quota', retryable=False, error_path=None)
+        with patch.object(model_review.dispatch_core, 'dispatch', return_value=result_stub) as call:
             model_review.dispatch(self.review_dir, self.ctx_files, ['claude'], 'review', False)
         self.assertIsNone(call.call_args.kwargs.get('auth'))
         self.assertEqual(model_review.dispatch_core.PROFILES['claude_review'].auth, 'subscription')
@@ -328,6 +331,203 @@ class SchemaTransformTest(unittest.TestCase):
         self.assertNotIn("additionalProperties", google)
 
 
+class StructuredDispatchFailureTest(unittest.TestCase):
+    """Preserve helper failure evidence through the real axis/report boundaries."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.review_dir = Path(self.temporary.name)
+        self.context = self.review_dir / "context.md"
+        self.context.write_text("bounded offline review fixture")
+
+    def reply(self, *, status, message=None, content="", retryable=False):
+        def dispatch(**kwargs):
+            profile = model_review.dispatch_core.PROFILES[kwargs["profile"]]
+            output = Path(kwargs["output_path"])
+            meta = output.with_suffix(".meta.json")
+            error = output.with_suffix(".error.json") if message else None
+            meta.write_text(json.dumps({"auth":profile.auth}))
+            if error:
+                error.write_text(json.dumps({"error_type":status,"error_message":message}))
+            if content:
+                output.write_text(content)
+            return model_review.dispatch_core.DispatchResult(
+                status=status,retryable=retryable,requested_profile=profile.name,
+                profile_version=profile.version,profile_fingerprint=profile.fingerprint(),
+                provider=profile.provider,model=profile.model,output_path=str(output),
+                meta_path=str(meta),error_path=None if error is None else str(error),
+                parsed_path=None,latency=0.01,llmx_version="offline-fixture",helper_version="fixture",
+                error_type=status if message else None,error_message=message,
+            )
+        return dispatch
+
+    def run_axis(self, **reply):
+        with patch.object(model_review.dispatch_core,"dispatch",side_effect=self.reply(**reply)) as call:
+            result = model_review.dispatch(self.review_dir,{"claude":self.context},["claude"],
+                                           "Check the reporting boundary",False,claude_api=True)
+        self.assertEqual(call.call_count,1)
+        return result
+
+    def test_transport_failure_survives_axis_collection_and_receipt(self):
+        result = self.run_axis(status="rate_limit",message="Native Claude transport unavailable",retryable=True)
+        entry = result["claude"]
+        self.assertEqual(entry["dispatch_status"],"rate_limit")
+        self.assertEqual(entry["error_type"],"rate_limit")
+        self.assertTrue(entry["retryable"])
+        self.assertEqual(entry["failure_reason"],"rate_limit")
+        self.assertTrue(Path(entry["dispatch_error_path"]).is_file())
+        failures = model_review.collect_dispatch_failures(result,{"claude":self.context})
+        self.assertEqual(failures[0]["failure_reason"],"rate_limit")
+        receipt = model_review.write_execution_receipt(self.review_dir,axis_names=["claude"],
+                    dispatch_result=result,effective_policy={})
+        axis = json.loads(receipt.read_text())["axes"]["claude"]
+        self.assertEqual(axis["status"],"rate_limit")
+        self.assertEqual(axis["dispatch_status"],"rate_limit")
+        self.assertEqual(axis["error_message"],"Native Claude transport unavailable")
+        self.assertTrue(axis["retryable"])
+        self.assertNotIn("http_status",axis)
+        self.assertNotIn("served_auth",axis)
+
+    def test_nonempty_failed_artifact_keeps_structured_failure(self):
+        result = self.run_axis(status="dependency_error",message="transport bootstrap unavailable",
+                               content="partial diagnostic",retryable=False)
+        self.assertGreater(result["claude"]["size"],0)
+        self.assertEqual(result["claude"]["failure_reason"],"dependency_error")
+
+    def test_zero_exit_empty_artifact_remains_empty_output(self):
+        result = self.run_axis(status="ok")
+        self.assertEqual(result["claude"]["exit_code"],0)
+        self.assertEqual(result["claude"]["failure_reason"],"empty_output")
+        self.assertEqual(model_review.collect_dispatch_failures(result,{"claude":self.context})[0]
+                         ["failure_reason"],"empty_output")
+
+    def test_unstructured_nonzero_empty_artifact_is_not_empty_output(self):
+        with patch.object(model_review,"_call_llmx",return_value={
+            "exit_code":1,"size":0,"latency":0,"error":"local adapter failure",
+        }) as call:
+            result = model_review.dispatch(self.review_dir,{"claude":self.context},["claude"],
+                                           "Check unclassified failure",False)
+        self.assertEqual(call.call_count,1)
+        entry = result["claude"]
+        self.assertEqual(entry["failure_reason"],"nonzero_exit")
+        self.assertIsNone(entry["dispatch_status"])
+        self.assertIsNone(entry["retryable"])
+
+    def test_parse_error_with_content_keeps_existing_usable_output_behavior(self):
+        result = self.run_axis(status="parse_error",message="schema parse failed",content="raw review")
+        self.assertEqual(result["claude"]["dispatch_status"],"parse_error")
+        self.assertEqual(result["claude"]["exit_code"],0)
+        self.assertFalse(model_review.collect_dispatch_failures(result,{"claude":self.context}))
+        self.assertEqual(model_review._axis_execution_status(result["claude"]),"completed")
+
+    def test_budget_and_thread_reasons_survive_failure_collection(self):
+        for reason in ("budget_exhausted","budget_insufficient_for_profile","thread_timeout"):
+            with self.subTest(reason=reason):
+                result = {"claude":{"exit_code":1,"size":0,"failure_reason":reason}}
+                failure = model_review.collect_dispatch_failures(result,{"claude":self.context})[0]
+                self.assertEqual(failure["failure_reason"],reason)
+                expected = "thread_timeout" if reason=="thread_timeout" else "skipped_budget"
+                self.assertEqual(model_review._axis_execution_status(failure),expected)
+
+    def test_existing_fallback_retains_initial_and_final_structured_evidence(self):
+        replies = [self.reply(status="rate_limit",message="rate limit",retryable=True),
+                   self.reply(status="model_error",message="fallback transport failed")]
+        def fake_dispatch(**kwargs):
+            return replies.pop(0)(**kwargs)
+        with patch.object(model_review.dispatch_core,"dispatch",side_effect=fake_dispatch) as call:
+            result = model_review.dispatch(self.review_dir,{"arch":self.context},["arch"],
+                                           "Check existing fallback evidence",False)
+        self.assertEqual(call.call_count,2)
+        self.assertEqual(result["arch"]["initial_dispatch"]["dispatch_status"],"rate_limit")
+        self.assertTrue(result["arch"]["initial_dispatch"]["retryable"])
+        self.assertEqual(result["arch"]["dispatch_status"],"model_error")
+        self.assertEqual(result["arch"]["failure_reason"],"model_error")
+        receipt = model_review.write_execution_receipt(self.review_dir,axis_names=["arch"],
+                    dispatch_result=result,effective_policy={})
+        axis = json.loads(receipt.read_text())["axes"]["arch"]
+        self.assertEqual(axis["initial_dispatch"]["dispatch_status"],"rate_limit")
+        self.assertEqual(axis["dispatch_status"],"model_error")
+        self.assertFalse(axis["retryable"])
+
+    def test_subscription_fallback_does_not_reuse_primary_helper_metadata(self):
+        with (
+            patch.object(model_review.dispatch_core,"dispatch",side_effect=self.reply(
+                status="quota",message="insufficient_quota",retryable=False,
+            )) as primary,
+            patch.object(model_review,"rerun_gpt_axis_via_subscription",return_value={
+                "exit_code":1,"size":0,"latency":0,"error":"subscription unavailable",
+            }) as fallback,
+        ):
+            result = model_review.dispatch(self.review_dir,{"formal":self.context},["formal"],
+                                           "Check existing subscription evidence",False)
+        self.assertEqual(primary.call_count,1)
+        self.assertEqual(fallback.call_count,1)
+        entry = result["formal"]
+        self.assertEqual(entry["initial_dispatch"]["dispatch_status"],"quota")
+        self.assertEqual(entry["initial_dispatch"]["dispatch_config_auth"],"api")
+        self.assertEqual(entry["failure_reason"],"nonzero_exit")
+        self.assertEqual(entry["stderr"],"subscription unavailable")
+        for field in ("dispatch_status","retryable","dispatch_config_auth","dispatch_meta"):
+            self.assertIsNone(entry[field])
+
+    def test_existing_fallback_retains_distinct_initial_artifact_bytes(self):
+        for final_success in (True,False):
+            with self.subTest(final_success=final_success):
+                case_dir = self.review_dir / str(final_success)
+                case_dir.mkdir()
+                calls = []
+                def fake_chat(**kwargs):
+                    calls.append(kwargs["model"])
+                    if kwargs["model"] == model_review.GEMINI_PRIMARY_MODEL:
+                        raise RuntimeError("503 resource_exhausted")
+                    if not final_success:
+                        raise RuntimeError("fallback transport failed")
+                    return type("Reply",(),{"content":"complete fallback review","latency":0.01})()
+                with patched_llmx_chat(fake_chat):
+                    result = model_review.dispatch(case_dir,{"arch":self.context},["arch"],
+                                                   "Retain actual helper artifacts",False)
+                self.assertEqual(calls,[model_review.GEMINI_PRIMARY_MODEL,model_review.GEMINI_FALLBACK_MODEL])
+                final = result["arch"]
+                initial = final["initial_dispatch"]
+                self.assertNotEqual(initial["dispatch_meta"],final["dispatch_meta"])
+                initial_meta = json.loads(Path(initial["dispatch_meta"]).read_bytes())
+                final_meta = json.loads(Path(final["dispatch_meta"]).read_bytes())
+                self.assertEqual(initial_meta["status"],initial["dispatch_status"])
+                self.assertEqual(final_meta["status"],final["dispatch_status"])
+                initial_error_path = Path(initial["dispatch_error_path"])
+                initial_error = json.loads(initial_error_path.read_bytes())
+                self.assertEqual(initial_error["error_type"],initial["error_type"])
+                self.assertEqual(initial_error["error_message"],initial["stderr"])
+                if final_success:
+                    self.assertEqual(final["exit_code"],0)
+                    self.assertIsNone(final["dispatch_error_path"])
+                    self.assertFalse((case_dir / "arch-output.error.json").exists())
+                else:
+                    final_error_path = Path(final["dispatch_error_path"])
+                    self.assertNotEqual(initial_error_path,final_error_path)
+                    final_error = json.loads(final_error_path.read_bytes())
+                    self.assertEqual(final_error["error_type"],final["error_type"])
+                    self.assertEqual(final_error["error_message"],final["stderr"])
+                    self.assertNotEqual(initial_error_path.read_bytes(),final_error_path.read_bytes())
+
+    def test_existing_initial_artifact_refuses_overwrite_before_fallback(self):
+        retained = self.review_dir / "arch-output.meta.initial.json"
+        retained.write_bytes(b"previous initial evidence")
+        with (
+            patch.object(model_review.dispatch_core,"dispatch",side_effect=self.reply(
+                status="rate_limit",message="rate limit",retryable=True,
+            )) as primary,
+            patch.object(model_review,"rerun_axis_with_fallback") as fallback,
+        ):
+            with self.assertRaises(FileExistsError):
+                model_review.dispatch(self.review_dir,{"arch":self.context},["arch"],
+                                      "Refuse evidence overwrite",False)
+        self.assertEqual(primary.call_count,1)
+        fallback.assert_not_called()
+        self.assertEqual(retained.read_bytes(),b"previous initial evidence")
+
+
 class CallLlmxTest(unittest.TestCase):
     def test_bootstrap_failure_auth_is_configuration_not_observation(self):
         with tempfile.TemporaryDirectory() as td:
@@ -357,7 +557,8 @@ class CallLlmxTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             context = Path(td) / "context.md"
             context.write_text("context")
-            result_stub = MagicMock(status="dependency_error", latency=0, error_message="missing dependency")
+            result_stub = MagicMock(status="dependency_error", latency=0, error_message="missing dependency",
+                                    error_type="dependency_error",retryable=False,error_path=None)
             with patch.object(model_review.dispatch_core, "dispatch", return_value=result_stub):
                 result = model_review._call_llmx(
                     profile=model_review.dispatch_core.PROFILES["claude_direct_review"],

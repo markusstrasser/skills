@@ -155,3 +155,26 @@ Review correction: `dispatch_config_auth` describes helper configuration only, e
 dependency/bootstrap failure before any transport. Missing metadata remains null; no
 observed-auth claim is made. Offline regressions retain failure status and exercise both
 bootstrap metadata and absent metadata through the review result/receipt boundary.
+
+## 2026-10-18: empty artifacts hid structured dispatch failures
+
+The first genomics P3.5 two-axis review retained helper status/error_type `rate_limit`
+and `Native Claude transport unavailable`, but its execution receipt said `empty_output`
+and its failure collection said `nonzero_exit`. The review adapter had dropped the
+helper cause/retryability, and later reporting replaced the reason based on output size.
+The adapter, axis result, failure collection and execution receipt now preserve structured
+status, error type/message, retryability and error/metadata locators. Existing fallback
+paths retain the initial result snapshot as well as the final result; their triggers and
+call limits are unchanged. Zero-exit empty output remains `empty_output`; budget/thread
+skip reasons and usable parse-error output retain their distinct behavior. Missing helper
+evidence stays unknown. Neither error text nor configured auth proves HTTP 429, served
+authentication, or transport capability. Regression: `StructuredDispatchFailureTest`;
+original partial/native2 evidence remains under genomics `.model-review/` and the repair's
+offline RED/GREEN custody is in `.claude/cache/handoff-1015/p35-review-failure-reason-repair-r1/`.
+
+Parent source correction: the helper overwrites its metadata/error paths on fallback and
+removes the final error file after success, so initial locators cannot point to those mutable
+files. Before either existing fallback, exact initial output (when present), metadata and error
+bytes are now copied to distinct `.initial` locators with exclusive creation and fsync. An
+existing retained destination refuses before the fallback; no historical bytes are overwritten.
+Controls use the real shared helper artifact lifecycle for both fallback success and failure.

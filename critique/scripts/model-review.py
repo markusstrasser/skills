@@ -827,7 +827,7 @@ def _manifest_matches_packet(manifest_path: Path, context_path: Path | None) -> 
 
 
 def _axis_execution_status(entry: dict) -> str:
-    reason = entry.get("failure_reason")
+    reason = dispatch_failure_reason(entry)
     if reason in ("budget_exhausted", "budget_insufficient_for_profile"):
         return "skipped_budget"
     if reason == "thread_timeout":
@@ -866,13 +866,22 @@ def write_execution_receipt(
         axes_out[axis] = {
             "status": _axis_execution_status(entry),
             "model": entry.get("model"),
-            "failure_reason": entry.get("failure_reason"),
+            "failure_reason": dispatch_failure_reason(entry),
             "budget_remaining_seconds": entry.get("budget_remaining_seconds"),
             "profile_timeout": entry.get("profile_timeout"),
             "requested_auth": entry.get("requested_auth"),
             "dispatch_config_auth": entry.get("dispatch_config_auth"),
             "requested_provider": entry.get("requested_provider"),
             "dispatch_meta": entry.get("dispatch_meta"),
+            "dispatch_status": entry.get("dispatch_status"),
+            "error_type": entry.get("error_type"),
+            "error_message": entry.get("stderr", entry.get("error")),
+            "retryable": entry.get("retryable"),
+            "dispatch_error_path": entry.get("dispatch_error_path"),
+            "initial_dispatch": entry.get("initial_dispatch"),
+            "fallback_from": entry.get("fallback_from"),
+            "fallback_reason": entry.get("fallback_reason"),
+            "initial_exit_code": entry.get("initial_exit_code"),
         }
     receipt = {
         "schema_version": EXECUTION_RECEIPT_SCHEMA_VERSION,
@@ -1743,6 +1752,12 @@ def _strip_additional_properties(schema: dict) -> dict:
     return transformed
 
 
+_DISPATCH_PROVENANCE_FIELDS = (
+    "dispatch_status", "error_type", "retryable", "dispatch_error_path",
+    "dispatch_config_auth", "dispatch_meta",
+)
+
+
 def _call_llmx(
     *,
     profile: dispatch_core.DispatchProfile,
@@ -1784,6 +1799,11 @@ def _call_llmx(
             "latency": result.latency,
             "error": result.error_message,
             "dispatch_config_auth": dispatch_config_auth,
+            "dispatch_status": result.status,
+            "error_type": result.error_type,
+            "retryable": result.retryable,
+            "dispatch_error_path": result.error_path,
+            "dispatch_meta": str(meta_path) if meta_path.is_file() else None,
         }
     except Exception as e:
         error_msg = str(e)[:500]
@@ -1803,6 +1823,40 @@ def axis_output_failed(info: object) -> bool:
     return int(info.get("exit_code", 0)) != 0 or int(info.get("size", 0)) == 0
 
 
+def dispatch_failure_reason(info: dict) -> str | None:
+    """Keep explicit/helper causes distinct from a successful empty response."""
+    if info.get("failure_reason"):
+        return str(info["failure_reason"])
+    if int(info.get("exit_code", 0)) != 0:
+        status = info.get("dispatch_status")
+        if status and status not in {"ok", "parse_error"}:
+            return str(status)
+        return str(info.get("error_type") or "nonzero_exit")
+    if int(info.get("size", 0)) == 0:
+        return "empty_output"
+    return None
+
+
+def _retain_initial_dispatch(entry: dict) -> dict:
+    """Copy evidence before the existing fallback replaces its axis artifacts."""
+    initial = {**entry, "failure_reason": dispatch_failure_reason(entry)}
+    for key in ("output", "dispatch_meta", "dispatch_error_path"):
+        if initial.get(key) is None:
+            continue
+        source = Path(initial[key])
+        if key == "output" and not source.exists() and int(initial["size"]) == 0:
+            initial[key] = None
+            continue
+        raw = source.read_bytes()
+        destination = source.with_name(f"{source.stem}.initial{source.suffix}")
+        with destination.open("xb") as retained:
+            retained.write(raw)
+            retained.flush()
+            os.fsync(retained.fileno())
+        initial[key] = str(destination)
+    return initial
+
+
 def collect_dispatch_failures(
     dispatch_result: dict,
     ctx_files: dict[str, Path | ContextArtifact],
@@ -1816,9 +1870,7 @@ def collect_dispatch_failures(
         entry = dict(info)
         entry["axis"] = axis
         entry["context"] = str(context_content_path(ctx_files[axis])) if axis in ctx_files else ""
-        entry["failure_reason"] = (
-            "nonzero_exit" if int(entry.get("exit_code", 0)) != 0 else "empty_output"
-        )
+        entry["failure_reason"] = dispatch_failure_reason(entry)
         failures.append(entry)
     return failures
 
@@ -2242,8 +2294,7 @@ def dispatch(
             "size": result["size"],
             "requested_auth": "api" if claude_api and axis == "claude" else profile_def.auth,
             "requested_provider": profile_def.provider,
-            "dispatch_meta": str(out_path.with_name(f"{out_path.stem}.meta.json")),
-            "dispatch_config_auth": result.get("dispatch_config_auth"),
+            **{key: result.get(key) for key in _DISPATCH_PROVENANCE_FIELDS},
         }
         if result.get("latency"):
             entry["latency"] = result["latency"]
@@ -2259,6 +2310,7 @@ def dispatch(
             and result.get("error")
             and any(m in result["error"].lower() for m in GEMINI_RATE_LIMIT_MARKERS)
         ):
+            entry["initial_dispatch"] = _retain_initial_dispatch(entry)
             entry["fallback_from"] = profile_def.model
             entry["fallback_reason"] = "gemini_rate_limit"
             entry["initial_exit_code"] = result["exit_code"]
@@ -2272,6 +2324,8 @@ def dispatch(
             entry["model"] = GEMINI_FALLBACK_MODEL
             entry["exit_code"] = fallback_result["exit_code"]
             entry["size"] = fallback_result["size"]
+            entry.update({key: fallback_result.get(key) for key in _DISPATCH_PROVENANCE_FIELDS})
+            entry.pop("latency", None)
             if fallback_result.get("latency"):
                 entry["latency"] = fallback_result["latency"]
             entry.pop("stderr", None)
@@ -2289,6 +2343,7 @@ def dispatch(
             and result.get("error")
             and any(m in result["error"].lower() for m in GPT_QUOTA_MARKERS)
         ):
+            entry["initial_dispatch"] = _retain_initial_dispatch(entry)
             entry["fallback_from"] = profile_def.model
             entry["fallback_reason"] = "gpt_api_quota"
             entry["initial_exit_code"] = result["exit_code"]
@@ -2303,12 +2358,17 @@ def dispatch(
             entry["model"] = f"{profile_def.model} (subscription)"
             entry["exit_code"] = sub_result["exit_code"]
             entry["size"] = sub_result["size"]
+            entry.update({key: sub_result.get(key) for key in _DISPATCH_PROVENANCE_FIELDS})
+            entry.pop("latency", None)
+            if sub_result.get("latency"):
+                entry["latency"] = sub_result["latency"]
             entry.pop("stderr", None)
             if sub_result.get("error"):
                 entry["stderr"] = sub_result["error"]
 
-        if entry["size"] == 0:
-            entry["failure_reason"] = "empty_output"
+        reason = dispatch_failure_reason(entry)
+        if reason is not None:
+            entry["failure_reason"] = reason
 
         return axis, entry
 
