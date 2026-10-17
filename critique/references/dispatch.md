@@ -30,6 +30,29 @@ User-facing review normally requires a GPT-backed axis. Pair a lone opt-in cosig
 
 ## Packet and manifest contract
 
+### Explicit direct Claude API authorization
+
+Only after explicit user authorization for metered Claude API billing, add `--claude-api`
+to the existing `model-review.py` command. Only the `claude` axis selects the registered
+immutable `claude_direct_review` profile (`anthropic-direct`, current Opus, API chat).
+Omitting the flag retains `claude_review` subscription behavior. A quota/limit failure
+never switches billing lanes automatically. The logical provider `anthropic` with API
+auth would use OpenRouter; this option intentionally selects the direct Anthropic route.
+
+Use `--preflight --axes correctness,claude --claude-api` for route preparation. Claude is
+checked only with llmx's dry-run planner: exact direct provider, API auth, transport and
+model must match. No Claude entitlement probe or paid Claude completion is made. The
+existing GPT scout subscription probe remains; API key validity/entitlement is explicitly
+NOT_PROBED. An explicit Claude subscription probe conflicts with this flag. Actual review
+receipts record requested provider/auth and `dispatch_config_auth` from helper metadata
+(null when absent). This is helper configuration, including on bootstrap failure before
+transport, not observed native transport. Neither it nor a route plan or requested model
+proves a served response.
+
+Direct API effort follows llmx's capability resolver; unsupported effort is reported as
+unapplied, not promised merely because the review profile requests it. Existing context
+budget, timeout and error handling remain in force.
+
 Use one context file per independently reviewed subpart. The packet builder emits a markdown file plus a sidecar `<packet>.manifest.json`, including `payload_hash` and `review_targets`:
 
 - `diff_target`: code-review owns the git ref/range and files.

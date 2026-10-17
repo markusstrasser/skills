@@ -869,6 +869,10 @@ def write_execution_receipt(
             "failure_reason": entry.get("failure_reason"),
             "budget_remaining_seconds": entry.get("budget_remaining_seconds"),
             "profile_timeout": entry.get("profile_timeout"),
+            "requested_auth": entry.get("requested_auth"),
+            "dispatch_config_auth": entry.get("dispatch_config_auth"),
+            "requested_provider": entry.get("requested_provider"),
+            "dispatch_meta": entry.get("dispatch_meta"),
         }
     receipt = {
         "schema_version": EXECUTION_RECEIPT_SCHEMA_VERSION,
@@ -909,6 +913,7 @@ def apply_dispatch_manifest(args: argparse.Namespace, manifest_path: Path) -> di
 
 def build_effective_policy(args: argparse.Namespace) -> dict:
     return {
+        "claude_api": bool(getattr(args, "claude_api", False)),
         "scout": bool(args.scout),
         "context_scope": args.context_scope,
         "budget_seconds": args.budget_seconds,
@@ -1769,12 +1774,16 @@ def _call_llmx(
             # different auth/effort. Remapping Astra selected API/high for subscription/medium.
         )
         output_size = output_path.stat().st_size if output_path.exists() else 0
+        meta_path = output_path.with_name(f"{output_path.stem}.meta.json")
+        # Helper configuration exists even when bootstrap fails before transport.
+        dispatch_config_auth = json.loads(meta_path.read_text()).get("auth") if meta_path.exists() else None
         exit_code = 0 if result.status in {"ok", "parse_error"} else 1
         return {
             "exit_code": exit_code,
             "size": output_size,
             "latency": result.latency,
             "error": result.error_message,
+            "dispatch_config_auth": dispatch_config_auth,
         }
     except Exception as e:
         error_msg = str(e)[:500]
@@ -2152,6 +2161,7 @@ def dispatch(
     question_overrides: dict[str, str] | None = None,
     budget: DispatchBudget | None = None,
     project_dir: Path | None = None,
+    claude_api: bool = False,
 ) -> dict:
     """Fire N review calls in parallel (one per axis), wait, return results.
 
@@ -2187,7 +2197,7 @@ def dispatch(
 
     def _run_axis(axis: str) -> tuple[str, dict]:
         axis_def = AXES[axis]
-        profile_name = str(axis_def["profile"])
+        profile_name = "claude_direct_review" if claude_api and axis == "claude" else str(axis_def["profile"])
         profile_def = dispatch_core.PROFILES[profile_name]
         profile_timeout = _resolved_axis_timeout(axis)
         out_path = review_dir / f"{axis}-output.md"
@@ -2230,6 +2240,10 @@ def dispatch(
             "exit_code": result["exit_code"],
             "output": str(out_path),
             "size": result["size"],
+            "requested_auth": "api" if claude_api and axis == "claude" else profile_def.auth,
+            "requested_provider": profile_def.provider,
+            "dispatch_meta": str(out_path.with_name(f"{out_path.stem}.meta.json")),
+            "dispatch_config_auth": result.get("dispatch_config_auth"),
         }
         if result.get("latency"):
             entry["latency"] = result["latency"]
@@ -2341,6 +2355,7 @@ def dispatch_cross_talk(
     question_overrides: dict[str, str] | None = None,
     budget: DispatchBudget | None = None,
     project_dir: Path | None = None,
+    claude_api: bool = False,
 ) -> dict:
     """Sequential cross-talk: structure lenses first, then mechanism with injected assumptions."""
     structure_axes, mechanism_axes, other_axes = split_axes_by_lens(axis_names)
@@ -2354,6 +2369,7 @@ def dispatch_cross_talk(
             question_overrides,
             budget=budget,
             project_dir=project_dir,
+            claude_api=claude_api,
         )
 
     t0 = time.time()
@@ -2374,6 +2390,7 @@ def dispatch_cross_talk(
         question_overrides,
         budget=budget,
         project_dir=project_dir,
+        claude_api=claude_api,
     )
     for key, val in struct_result.items():
         if key not in skip_keys:
@@ -2427,6 +2444,7 @@ def dispatch_cross_talk(
                 mech_overrides,
                 budget=budget,
                 project_dir=project_dir,
+                claude_api=claude_api,
             )
             for key, val in mech_result.items():
                 if key not in skip_keys:
@@ -2442,6 +2460,7 @@ def dispatch_cross_talk(
             question_overrides,
             budget=budget,
             project_dir=project_dir,
+            claude_api=claude_api,
         )
         for key, val in other_result.items():
             if key not in skip_keys:
@@ -3685,6 +3704,7 @@ def verify_claims(
 def run_preflight(
     project_dir: Path | None = None, *, include_grok: bool = False, include_gemini: bool = False,
     subscription_model: str = "claude-opus-5-5",
+    claude_api: bool = False,
 ) -> int:
     """Probe llmx readiness; optionally prove the Grok transport and the Gemini API key."""
     import shutil
@@ -3693,12 +3713,41 @@ def run_preflight(
     providers = {"claude-opus-5-5": "anthropic", "gpt-6-astra": "openai"}
     if subscription_model not in providers:
         raise ValueError(f"unsupported preflight subscription model: {subscription_model}")
+    if claude_api:
+        subscription_model = "gpt-6-astra"
     checks: dict = {"subscription_model": subscription_model}
     llmx_bin = shutil.which("llmx")
     checks["llmx_cli"] = {"ok": bool(llmx_bin), "path": llmx_bin}
     if not llmx_bin:
         print(json.dumps(checks, indent=2))
         return 1
+
+    if claude_api:
+        profile = dispatch_core.PROFILES["claude_direct_review"]
+        dry_api = subprocess.run(
+            [llmx_bin, "chat", "--dry-run", "-p", profile.provider, "--auth", "api",
+             "-m", profile.model, "-e", profile.reasoning_effort, "--timeout", str(profile.timeout)],
+            capture_output=True, text=True, timeout=30,
+        )
+        try:
+            api_plan = json.loads(dry_api.stdout)
+        except json.JSONDecodeError:
+            api_plan = {}
+        api_ok = (dry_api.returncode == 0 and isinstance(api_plan, dict)
+                  and api_plan.get("auth") == "api"
+                  and api_plan.get("provider") == "anthropic-direct"
+                  and api_plan.get("transport") == "anthropic-direct-api"
+                  and api_plan.get("model") == profile.model)
+        checks["claude_api_route"] = {
+            "ok": api_ok, "exit_code": dry_api.returncode, "plan": api_plan,
+            "live_entitlement": "NOT_PROBED", "billing_authorization": "explicit --claude-api",
+        }
+        if not api_ok:
+            out = (project_dir or Path.cwd()).resolve() / ".model-review/preflight-latest.json"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(json.dumps(checks, indent=2) + "\n")
+            print(json.dumps(checks, indent=2))
+            return 1
 
     try:
         import llmx  # type: ignore
@@ -3882,6 +3931,10 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--claude-api", action="store_true",
+        help="Explicit metered direct-Anthropic authorization for the Claude axis only; never fallback.",
+    )
+    parser.add_argument(
         "--extract",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -3971,13 +4024,19 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.preflight:
+        if args.claude_api and args.preflight_subscription_model == "claude-opus-5-5":
+            parser.error("--claude-api conflicts with a Claude subscription entitlement probe")
         preflight_project = (args.project or Path.cwd()).expanduser().resolve()
         requested_preflight_axes = {
             token.strip() for token in (args.axes or "").split(",") if token.strip()
         }
+        if args.claude_api and args.axes and "claude" not in resolve_axes(args.axes, allow_non_gpt=True):
+            parser.error("--claude-api requires the claude axis")
         preflight_kwargs = {}
         if args.preflight_subscription_model:
             preflight_kwargs["subscription_model"] = args.preflight_subscription_model
+        if args.claude_api:
+            preflight_kwargs["claude_api"] = True
         return run_preflight(
             preflight_project,
             include_grok="grok" in requested_preflight_axes,
@@ -4066,6 +4125,8 @@ def main() -> int:
     # Resolve axes
     try:
         axis_names = resolve_axes(args.axes, allow_non_gpt=bool(args.allow_non_gpt))
+        if args.claude_api and "claude" not in axis_names:
+            raise ValueError("--claude-api requires the claude axis")
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -4214,6 +4275,7 @@ def main() -> int:
         question_overrides,
         budget=budget,
         project_dir=project_dir,
+        claude_api=args.claude_api,
     )
     if budget.active:
         rem = budget.remaining()

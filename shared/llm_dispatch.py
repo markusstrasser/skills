@@ -210,6 +210,18 @@ PROFILES: dict[str, DispatchProfile] = {
         # claude-cli headless has no max_tokens — setting it forces API fallback (billing).
         allowed_overrides=("timeout",),
     ),
+    "claude_direct_review": DispatchProfile(
+        name="claude_direct_review",
+        intent="Explicitly authorized Claude review via direct Anthropic API",
+        provider="anthropic-direct",
+        model="claude-opus-5-5",
+        timeout=3600,
+        reasoning_effort="max",
+        input_token_limit=200000,
+        auth="api",
+        mode="chat",
+        allowed_overrides=("timeout",),
+    ),
     "glm_review": DispatchProfile(
         # Opt-in fourth-lineage cosigner: Z.ai GLM-5.2 via the llmx `zai` provider
         # (routed through OpenRouter today, OPENROUTER_API_KEY). A genuinely NEW

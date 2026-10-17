@@ -138,3 +138,20 @@
   selected-model probe still blocks. Regression: `PreflightTest` and
   `ModelReviewMainTest` in `scripts/test_model_review.py`. Evidence: SIPP work-response
   review, Claude quota exhausted while the requested Astra and Gemini routes were available.
+
+## 2026-10-18: explicit Claude API authorization was unreachable
+
+The Claude review axis fixed the subscription profile and exposed no billing-route
+opt-in, so exhausted monthly CLI allowance blocked an explicitly authorized API review.
+`--claude-api` now selects one registered direct-Anthropic API profile for that axis only;
+the original subscription profile is unchanged and failures never trigger billing fallback.
+Offline controls cover absent flag, mixed axes, quota failure, direct dry-run validation,
+wrong-route refusal and incompatible entitlement-probe selection. Preflight keeps the GPT
+subscription probe but does not make a paid Claude call. Evidence: genomics
+`.claude/cache/handoff-1015/p35-review-transport-repair-r1/` retains authentic old-source
+RED, exact patch and native focused controls. A dry route is not API entitlement proof.
+
+Review correction: `dispatch_config_auth` describes helper configuration only, even on
+dependency/bootstrap failure before any transport. Missing metadata remains null; no
+observed-auth claim is made. Offline regressions retain failure status and exercise both
+bootstrap metadata and absent metadata through the review result/receipt boundary.

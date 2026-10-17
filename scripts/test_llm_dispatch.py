@@ -10,6 +10,23 @@ from shared import llm_dispatch
 
 
 class DispatchCoreTest(unittest.TestCase):
+    def test_claude_direct_profile_is_explicit_and_preserves_subscription(self):
+        direct = llm_dispatch.PROFILES['claude_direct_review']
+        subscription = llm_dispatch.PROFILES['claude_review']
+        self.assertEqual((direct.provider, direct.auth, direct.model), ('anthropic-direct', 'api', subscription.model))
+        self.assertEqual((subscription.provider, subscription.auth), ('anthropic', 'subscription'))
+        calls = []
+        def fake_chat(**kwargs):
+            calls.append(kwargs)
+            return MagicMock(content='review', latency=0.01, usage={})
+        with tempfile.TemporaryDirectory() as temporary, patch.object(llm_dispatch, '_LLMX_CHAT', fake_chat), patch.object(llm_dispatch, '_LLMX_VERSION', 'test'):
+            output = Path(temporary)/'out.md'
+            result = llm_dispatch.dispatch(profile='claude_direct_review', prompt='review', output_path=output)
+            meta = json.loads(output.with_name('out.meta.json').read_text())
+        self.assertEqual(result.status, 'ok')
+        self.assertEqual((calls[0]['provider'], calls[0]['auth']), ('anthropic-direct', 'api'))
+        self.assertEqual(meta['auth'], 'api')
+
     def test_subscription_profile_defaults_are_cli_capable(self) -> None:
         for name, profile in llm_dispatch.PROFILES.items():
             if profile.auth != "subscription":

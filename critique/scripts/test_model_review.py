@@ -29,6 +29,77 @@ def patched_llmx_chat(mock_chat):
 
 
 class ModelReviewDispatchTest(unittest.TestCase):
+    def test_cross_talk_forwards_explicit_claude_api(self):
+        with patch.object(model_review, 'dispatch', return_value={}) as call:
+            model_review.dispatch_cross_talk(self.review_dir, self.ctx_files, ['claude'], 'review', False, claude_api=True)
+        self.assertTrue(call.call_args.kwargs['claude_api'])
+
+    def test_claude_api_preflight_rejects_axis_without_claude(self):
+        with patch('sys.argv', ['model-review.py', '--preflight', '--claude-api', '--axes', 'correctness']), patch.object(model_review, 'run_preflight') as probe:
+            with self.assertRaises(SystemExit) as error:
+                model_review.main()
+        self.assertEqual(error.exception.code, 2)
+        probe.assert_not_called()
+
+    def test_claude_api_preflight_is_dry_and_keeps_gpt_probe(self):
+        calls = []
+        def fake_run(args, **kwargs):
+            calls.append(args)
+            if args[1] == 'info':
+                payload = {}
+            elif args[1] == 'probe':
+                self.assertIn('gpt-6-astra', args)
+                payload = {'verdict': 'available'}
+            elif '--auth' in args:
+                self.assertIn('--dry-run', args)
+                self.assertIn('anthropic-direct', args)
+                payload = {'auth': 'api', 'provider': 'anthropic-direct', 'transport': 'anthropic-direct-api', 'model': 'claude-opus-5-5'}
+            else:
+                self.assertIn('gpt-6-astra', args)
+                payload = {'auth': 'subscription', 'transport': 'codex-cli'}
+            return subprocess.CompletedProcess(args, 0, json.dumps(payload), '')
+        with patch('shutil.which', return_value='/fake/llmx'), patch.object(subprocess, 'run', side_effect=fake_run):
+            self.assertEqual(model_review.run_preflight(self.review_dir, claude_api=True), 0)
+        receipt = json.loads((self.review_dir/'.model-review/preflight-latest.json').read_text())
+        self.assertEqual(receipt['claude_api_route']['live_entitlement'], 'NOT_PROBED')
+        self.assertEqual(sum(args[1] == 'probe' for args in calls), 1)
+
+    def test_claude_api_preflight_refuses_wrong_route_before_probe(self):
+        with patch('shutil.which', return_value='/fake/llmx'), patch.object(subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, '{"auth":"api","provider":"anthropic","transport":"anthropic-api"}', '')) as call:
+            self.assertEqual(model_review.run_preflight(self.review_dir, claude_api=True), 1)
+        self.assertEqual(call.call_count, 1)
+
+    def test_claude_api_rejects_explicit_claude_entitlement_probe(self):
+        with patch('sys.argv', ['model-review.py', '--preflight', '--claude-api', '--preflight-subscription-model', 'claude-opus-5-5']), patch.object(model_review, 'run_preflight') as probe:
+            with self.assertRaises(SystemExit) as error:
+                model_review.main()
+        self.assertEqual(error.exception.code, 2)
+        probe.assert_not_called()
+
+    def test_explicit_claude_api_only_and_no_limit_fallback(self):
+        self.ctx_files['claude'] = self.ctx_files['formal']
+        calls = []
+        def fake_dispatch(**kwargs):
+            calls.append(kwargs)
+            return MagicMock(status='quota', error_message='monthly limit', latency=0)
+        with patch.object(model_review.dispatch_core, 'dispatch', side_effect=fake_dispatch):
+            result = model_review.dispatch(self.review_dir, self.ctx_files, ['claude', 'formal'],
+                                           'review', False, claude_api=True)
+        self.assertEqual(len(calls), 2)
+        by_profile = {call['profile']: call for call in calls}
+        self.assertIn('claude_direct_review', by_profile)
+        self.assertEqual(model_review.dispatch_core.PROFILES['claude_direct_review'].auth, 'api')
+        self.assertIsNone(by_profile['formal_review'].get('auth'))
+        self.assertEqual(result['claude']['exit_code'], 1)
+        self.assertEqual(result['claude']['requested_auth'], 'api')
+
+    def test_claude_default_keeps_subscription_profile(self):
+        self.ctx_files['claude'] = self.ctx_files['formal']
+        with patch.object(model_review.dispatch_core, 'dispatch', return_value=MagicMock(status='quota', error_message='limit', latency=0)) as call:
+            model_review.dispatch(self.review_dir, self.ctx_files, ['claude'], 'review', False)
+        self.assertIsNone(call.call_args.kwargs.get('auth'))
+        self.assertEqual(model_review.dispatch_core.PROFILES['claude_review'].auth, 'subscription')
+
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.review_dir = Path(self.temp_dir.name)
@@ -258,6 +329,44 @@ class SchemaTransformTest(unittest.TestCase):
 
 
 class CallLlmxTest(unittest.TestCase):
+    def test_bootstrap_failure_auth_is_configuration_not_observation(self):
+        with tempfile.TemporaryDirectory() as td:
+            context = Path(td) / "context.md"
+            context.write_text("context")
+            output = Path(td) / "output.md"
+            with patch.object(model_review.dispatch_core, "_bootstrap_llmx", side_effect=ImportError("missing dependency")):
+                result = model_review._call_llmx(
+                    profile=model_review.dispatch_core.PROFILES["claude_direct_review"],
+                    context_path=context, prompt="test", output_path=output,
+                )
+            metadata = json.loads(output.with_suffix(".meta.json").read_text())
+            self.assertEqual(metadata["status"], "dependency_error")
+            self.assertEqual(metadata["llmx_version"], "unknown")
+            self.assertEqual(result["exit_code"], 1)
+            self.assertEqual(result["dispatch_config_auth"], "api")
+            self.assertNotIn("resolved_auth", result)
+            receipt = model_review.write_execution_receipt(
+                Path(td), axis_names=["claude"], effective_policy={},
+                dispatch_result={"claude": {**result, "status": "dependency_error"}},
+            )
+            axis = json.loads(receipt.read_text())["axes"]["claude"]
+            self.assertEqual(axis["dispatch_config_auth"], "api")
+            self.assertNotIn("resolved_auth", axis)
+
+    def test_absent_dispatch_metadata_does_not_infer_auth(self):
+        with tempfile.TemporaryDirectory() as td:
+            context = Path(td) / "context.md"
+            context.write_text("context")
+            result_stub = MagicMock(status="dependency_error", latency=0, error_message="missing dependency")
+            with patch.object(model_review.dispatch_core, "dispatch", return_value=result_stub):
+                result = model_review._call_llmx(
+                    profile=model_review.dispatch_core.PROFILES["claude_direct_review"],
+                    context_path=context, prompt="test", output_path=Path(td) / "out.md",
+                )
+            self.assertEqual(result["exit_code"], 1)
+            self.assertIsNone(result["dispatch_config_auth"])
+            self.assertNotIn("resolved_auth", result)
+
     def test_call_llmx_rejects_profile_drift_before_transport(self) -> None:
         from dataclasses import replace
 
