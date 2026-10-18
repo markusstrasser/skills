@@ -34,6 +34,29 @@ Sandbox runs ~10x faster cold and ~6x warm. It does nothing for a v1 volume.
 returned 1 on 2026-10-14), so genomics receipt/manifest crawls see no change. Weigh it
 only if a v2 migration is ever proposed for small-file-heavy reads.
 
+## Debugging DX update (verified 2026-10-18)
+
+- **Dashboard log search:** [October 16 update](https://modal.com/changelog/logs-search-v2)
+  supports exclusions (`-function:my_func`) and grouped call IDs
+  (`function_call_id:(fc-123 OR fc-456)`). Use actual recorded identities. These
+  are dashboard queries; verify installed CLI help before assuming flag parity.
+- **Expose the right channel:** app logs capture stdout/stderr, while a project's
+  structured logger may write only Volume files. In genomics, read that narrative
+  with `just stage-log <stage>`; `just stage-progress` already identifies calls.
+  Prefer extending existing status output with app links, queries and log commands.
+  Logs/profiling diagnose execution; terminal receipts still decide completion.
+- **Live hangs:** Modal offers [live container profiling and debug shells](https://modal.com/docs/guide/developing-debugging#live-container-profiling).
+  Distinguish attaching to a running container from launching a fresh image shell.
+- **Feedback before new infrastructure:** use an existing authenticated collector
+  to expose published attempt results while a run is active, retaining explicit
+  partial coverage, immutable artifact versions and final completion validation.
+  Genomics' pending implementation is P3.9 in its post-ship plan; it is not shipped.
+- **Volume v2 scope:** the advertised grep gains concern mounted small-file reads.
+  They do not establish faster SDK downloads or whole-suite execution. The
+  [current docs](https://modal.com/docs/guide/volumes#volumes-v2-overview) still label
+  v2 Beta and advise against mission-critical data; traversal can also be slower.
+  Consider a measured rebuildable-workspace experiment separately from production.
+
 ## Platform changelog 2026-08-14 → 09-17 (reviewed 2026-09-29)
 
 Dashboard/product changes only; no SDK release. PyPI stable is still 1.5.5
