@@ -249,6 +249,24 @@ class ReviewGateTest(unittest.TestCase):
         )
         self.assertEqual(rg._scan_dead_refs(packet, self.repo, (sibling,)), ["research/gone.md"])
 
+    def test_dead_refs_accept_paths_the_reviewed_range_deletes(self) -> None:
+        # A close packet that cites a file its committed range deleted is coherent; the same missing
+        # file with no recorded deletion stays dead (P3.5 close, 2026-10-18).
+        (self.repo / "generated.json").write_text("{}\n")
+        git(self.repo, "add", "generated.json")
+        git(self.repo, "commit", "-m", "track generated")
+        base = subprocess.run(
+            ["git", "-C", str(self.repo), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+        ).stdout.strip()
+        git(self.repo, "rm", "-q", "generated.json")
+        git(self.repo, "commit", "-m", "untrack generated")
+        packet = "Removed `generated.json`; `never-existed.json` is a typo."
+        deleted = frozenset(rg._deleted_files(self.repo, base, "HEAD"))
+        self.assertEqual(deleted, {"generated.json"})
+        self.assertEqual(rg._scan_dead_refs(packet, self.repo, (), deleted), ["never-existed.json"])
+        self.assertEqual(rg._scan_dead_refs(packet, self.repo), ["generated.json", "never-existed.json"])
+        self.assertEqual(rg._deleted_files(self.repo, None, None), set())
+
     def test_scan_dead_refs_preserves_absolute_and_parent_paths(self) -> None:
         parent_file = self.repo.parent / (self.repo.name + "-evidence.json")
         parent_file.write_text("{}")

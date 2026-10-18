@@ -202,6 +202,20 @@ def _diff_files(repo: Path, base: str | None, head: str | None) -> set[str]:
     return files
 
 
+def _deleted_files(repo: Path, base: str | None, head: str | None) -> set[str]:
+    """Paths the reviewed range deletes. Only an explicit range qualifies: a packet that cites a file its own
+    committed diff removed is coherent, while a missing file with no recorded deletion stays dead (P3.5 close,
+    2026-10-18: the two untracked generated maps blocked the close)."""
+    ref = ia.diff_ref(base, head)
+    if not ref:
+        return set()
+    try:
+        names = ia.run_git(repo, ["diff", "--name-only", "--diff-filter=D", ref]).splitlines()
+    except RuntimeError:
+        return set()
+    return {name.strip() for name in names if name.strip()}
+
+
 # Heavy or generated trees skipped when a basename is looked up in a sibling repo.
 SIBLING_PRUNE = {".git", "node_modules", ".venv", "data", "target", "results", "logs", ".model-review"}
 
@@ -220,7 +234,12 @@ def _sibling_has(root: Path, rel: str) -> bool:
     return False
 
 
-def _scan_dead_refs(packet_text: str, repo: Path, sibling_roots: tuple[Path, ...] = ()) -> list[str]:
+def _scan_dead_refs(
+    packet_text: str,
+    repo: Path,
+    sibling_roots: tuple[Path, ...] = (),
+    deleted_paths: frozenset[str] = frozenset(),
+) -> list[str]:
     dead: list[str] = []
     seen: set[str] = set()
     fence_char = ""
@@ -254,7 +273,7 @@ def _scan_dead_refs(packet_text: str, repo: Path, sibling_roots: tuple[Path, ...
             ):
                 continue
             path = repo / rel
-            if path.is_file():
+            if path.is_file() or rel in deleted_paths:
                 continue
             # Review prose often uses a short basename for a nested source
             # file. Treat a repository match as live; keep a genuinely
@@ -645,7 +664,8 @@ def cmd_triage(args: argparse.Namespace) -> int:
         warnings.append(f"packet {packet_tokens} tokens > {PACKET_WARN_TOKENS} — prefer subparts")
 
     siblings = tuple(Path(r).expanduser().resolve() for r in (getattr(args, "sibling_roots", None) or ()))
-    dead = _scan_dead_refs(packet_text, repo, siblings) if packet_text else []
+    deleted = frozenset(_deleted_files(repo, args.base, args.head))
+    dead = _scan_dead_refs(packet_text, repo, siblings, deleted) if packet_text else []
     if dead:
         # Dead refs are a diff-COHERENCE signal, gated on the explicit review intent
         # (--mode), NOT on ambient repo state. In `close` mode the packet is built
