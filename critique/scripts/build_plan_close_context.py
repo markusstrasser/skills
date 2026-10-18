@@ -206,6 +206,21 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _parent_ref(repo: Path, commit: str) -> str:
+    """Return `<commit>~1`, or the empty tree when `commit` is a root commit
+    (`<root>~1` is a bad revision, so the range would fail in git diff)."""
+    probe = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", f"{commit}~1"],
+        capture_output=True, text=True, timeout=5,
+    )
+    if probe.returncode == 0:
+        return f"{commit}~1"
+    return subprocess.check_output(
+        ["git", "-C", str(repo), "hash-object", "-t", "tree", "/dev/null"],
+        text=True, timeout=5,
+    ).strip()
+
+
 def _session_commit_range(repo: Path, session_id: str) -> tuple[str, str] | None:
     """When a session-id is known, find commits tagged with `Session-ID: <id>`
     in the commit body and return (base, head) = (oldest~1, HEAD).
@@ -228,7 +243,7 @@ def _session_commit_range(repo: Path, session_id: str) -> tuple[str, str] | None
         return None
     shas = out.splitlines()
     oldest = shas[-1]
-    return f"{oldest}~1", "HEAD"
+    return _parent_ref(repo, oldest), "HEAD"
 
 
 def _recent_commits_range(repo: Path, *, hours: int = 6) -> tuple[str, str] | None:
@@ -253,7 +268,7 @@ def _recent_commits_range(repo: Path, *, hours: int = 6) -> tuple[str, str] | No
         return None
     shas = out.splitlines()
     oldest = shas[-1]
-    return f"{oldest}~1", "HEAD"
+    return _parent_ref(repo, oldest), "HEAD"
 
 
 def _head_trailer_session_range(repo: Path) -> tuple[str, str, str] | None:
@@ -305,7 +320,7 @@ def main() -> int:
     base = args.base
     head = args.head
     if args.since and not base:
-        base = f"{args.since}~1"
+        base = _parent_ref(repo, args.since)
         head = head or "HEAD"
 
     # Session-aware auto-detection: when nothing explicit was given AND the
