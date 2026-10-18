@@ -43,7 +43,7 @@ SCHEDULE="$HOME/Projects/agent-infra/scripts/code-review-schedule.py"
 uv run python3 "$SCHEDULE" --dry-run
 ```
 
-Valid projects: `intel`, `genomics`, `agent-infra`, `phenome`, `skills`, `hutter`
+Valid projects: `intel`, `genomics`, `agent-infra`, `personal`, `skills`, `hutter`
 Valid focuses: `refactoring`, `dead-code`, `optimization`, `patterns`, `silent-failure`, `security`
 
 ## Step 2: Run Scout
