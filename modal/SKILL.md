@@ -44,12 +44,15 @@ only if a v2 migration is ever proposed for small-file-heavy reads.
   structured logger may write only Volume files. In genomics, read that narrative
   with `just stage-log <stage>`; `just stage-progress` already identifies calls.
   Prefer extending existing status output with app links, queries and log commands.
+  Label app links as stdout/stderr; call-ID filters are copyable dashboard queries.
   Logs/profiling diagnose execution; terminal receipts still decide completion.
 - **Live hangs:** Modal offers [live container profiling and debug shells](https://modal.com/docs/guide/developing-debugging#live-container-profiling).
   Distinguish attaching to a running container from launching a fresh image shell.
 - **Feedback before new infrastructure:** use an existing authenticated collector
   to expose published attempt results while a run is active, retaining explicit
   partial coverage, immutable artifact versions and final completion validation.
+  Trace the producer's publication checkpoint first: prefetch cannot expose unpublished
+  results, and ordered waits may delay publication independently of host collection.
   Genomics' pending implementation is P3.9 in its post-ship plan; it is not shipped.
 - **Volume v2 scope:** the advertised grep gains concern mounted small-file reads.
   They do not establish faster SDK downloads or whole-suite execution. The
