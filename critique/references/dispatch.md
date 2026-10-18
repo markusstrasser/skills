@@ -55,7 +55,7 @@ budget, timeout and error handling remain in force.
 
 Use one context file per independently reviewed subpart. The packet builder emits a markdown file plus a sidecar `<packet>.manifest.json`, including `payload_hash` and `review_targets`:
 
-- `diff_target`: code-review owns the git ref/range and files.
+- `diff_target`: diff-review owns the git ref/range and files.
 - `design_target`: critique owns the packet and design review axes.
 
 For committed work, specify `--since <first-session-commit>` (inclusive through HEAD), `--base <old-ref> --head <new-ref>`, or repeated `--file` selections. A clean worktree is not evidence that the review scope is empty. See [Plan close](../lenses/plan-close-review.md) for range examples and [Context assembly](context-assembly.md) for scope content.
@@ -79,7 +79,7 @@ uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/model-review.py \
 
 Pass `--dispatch-manifest` explicitly and keep it paired with the packet just triaged. Explicit CLI flags win over manifest settings. Auto-discovery only loads a manifest matching the packet hash or recorded path; an explicitly passed manifest is honored, so the caller remains responsible for its freshness. Re-triage after changing packet content.
 
-The diff layer belongs to `/code-review`. Neither a broader preset nor another lineage licenses a second critique of the same diff.
+The diff layer belongs to `/diff-review`. Neither a broader preset nor another lineage licenses a second critique of the same diff.
 
 ## Repo scope and premise scout
 

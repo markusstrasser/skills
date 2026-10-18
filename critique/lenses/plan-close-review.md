@@ -31,7 +31,7 @@ uv run --no-project python3 ${CLAUDE_SKILL_DIR}/scripts/build_plan_close_context
   --output .model-review/plan-close-context.md
 ```
 
-Repeated `--file` may select concrete review files. Inspect the packet and its sidecar before dispatch: non-empty content, correct commit/file scope, and `review_targets.diff_target` for code-review versus `design_target` for critique. Use one packet per independently reviewed subpart; the parent merges all subparts. Do not let ambient peer changes define the scope.
+Repeated `--file` may select concrete review files. Inspect the packet and its sidecar before dispatch: non-empty content, correct commit/file scope, and `review_targets.diff_target` for diff-review versus `design_target` for critique. Use one packet per independently reviewed subpart; the parent merges all subparts. Do not let ambient peer changes define the scope.
 
 ## Phase 1: Check the new logic
 
@@ -41,7 +41,7 @@ For a concrete bug found later, prove that its regression test fails on the pre-
 
 ## Phase 2: Review each layer once
 
-**Diff layer:** run `/code-review high` over the plan's commits. GPT-6 Astra via codex is that skill's default provider. Do not also run a critique axis on the diff; `--both` recall mode belongs only to the diff scope. Verify scout findings against the code before applying them, and finish disposition before the closeout commit.
+**Diff layer:** run `/diff-review high` over the plan's commits. GPT-6 Astra via codex is that skill's default provider. Do not also run a critique axis on the diff; `--both` recall mode belongs only to the diff scope. Verify scout findings against the code before applying them, and finish disposition before the closeout commit.
 
 Include an execution-grounded instruction to run the changed code paths where the reviewer has tools, or run them locally and provide the evidence. Record what actually ran; packet-only judgment is not execution.
 

@@ -152,7 +152,7 @@ For each phase in the slice, in order:
 4. **Commit.** Granular semantic commits, one logical change each. **Never `git add -A`/`.`** — stage
    specific paths. Foreground commits only (a hook-blocked commit returns exit 0 from a backgrounded call).
 5. **Gate.** Do not advance to the next phase until this phase's end-state holds and is committed.
-   Then run **`/code-review low`** (Skill tool — local scout, GPT-6 Astra via codex) on the phase's commits:
+   Then run **`/diff-review low`** (Skill tool — local scout, GPT-6 Astra via codex) on the phase's commits:
    a precision-only pass (≤4 findings) that catches the dropped-guard / inverted-condition class while
    the phase is hot and cheap to fix. Bugs compound across phases — this is the same logic as the
    multi-phase checkpoint rule. Pass the path-scoped `.claude/rules/` files covering the diff as review
@@ -178,10 +178,10 @@ that contradicts what you see, and don't silently abandon it either. Research / 
 ## Done
 1. **Completeness check** (`../decide/references/checklists.md`): every phase in the slice landed AND its
    end-state was verified AND committed. Mechanically verify; don't assert.
-2. **Two-layer slice review:** **`/code-review high`** (local skill — GPT-6 Astra scout + optional
+2. **Two-layer slice review:** **`/diff-review high`** (local skill — GPT-6 Astra scout + optional
    `--both`) over the WHOLE slice — recall mode ("a missed bug ships"), where cross-cutting
    issues invisible to the per-phase low passes surface — then **`/critique close`** for the
-   design/architecture layer (diff layer is the local `/code-review` pass — don't run it twice). Dispatch WITHOUT auto-fix; this session owns commits.
+   design/architecture layer (diff layer is the local `/diff-review` pass — don't run it twice). Dispatch WITHOUT auto-fix; this session owns commits.
 3. Report: what shipped (verified), what diverged (and why), what tooling you built inline, what's next
    (the next slice / deferred items).
 

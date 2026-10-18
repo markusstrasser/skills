@@ -1,6 +1,6 @@
 ---
 name: debug
-description: "Use when: parallel adversarial bug-hunt fan-out or pre-commit audit; scouts write files, orchestrator model triages. NOT a code-review scout (/code-review) or plan critique (/critique)."
+description: "Use when: parallel adversarial bug-hunt fan-out or pre-commit audit; scouts write files, orchestrator model triages. NOT a diff-review scout (/diff-review) or plan critique (/critique)."
 user-invocable: true
 argument-hint: <repo> [scope] [extra prompt]
 allowed-tools: [Read, Glob, Grep, Bash, Write]
@@ -49,7 +49,7 @@ $J debug-until-dry ~/Projects/genomics &     # or: wave loop until no new confir
 | Skill | Role |
 |-------|------|
 | `/debug` (this) | Adversarial scout fan-out only |
-| `/code-review` | Structural line-format scout on source batches |
+| `/diff-review` | Structural line-format scout on source batches |
 | `/critique` | Cross-model design/plan review |
 
 Critique before large changes: `/critique model` on the handoff or plan packet.

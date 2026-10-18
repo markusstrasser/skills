@@ -1,6 +1,6 @@
 ---
 name: review-animations
-description: "Use when: reviewing animation/motion/transition code, 'does this feel right', easing/duration choices, hover/press states, motion polish pass. Motion craft only — NOT general code review (/code-review) or interaction architecture (/interface-thinking)."
+description: "Use when: reviewing animation/motion/transition code, 'does this feel right', easing/duration choices, hover/press states, motion polish pass. Motion craft only — NOT general code review (/diff-review) or interaction architecture (/interface-thinking)."
 argument-hint: '[file, component, diff range, or paste CSS/Svelte]'
 user-invocable: true
 effort: high
@@ -8,7 +8,7 @@ effort: high
 
 # Reviewing Animations
 
-Adapted from emilkowalski/skills (MIT; animations.dev). One job: review animation and motion code against a high craft bar. Not for writing features, fixing unrelated bugs, or reviewing non-motion code — decline and point to /code-review for those.
+Adapted from emilkowalski/skills (MIT; animations.dev). One job: review animation and motion code against a high craft bar. Not for writing features, fixing unrelated bugs, or reviewing non-motion code — decline and point to /diff-review for those.
 
 ## Operating Posture
 

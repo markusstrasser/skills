@@ -2,7 +2,7 @@
 
 # Adversarial Review
 
-Use this for convergent critique of a plan or design. Actual diffs belong to `/code-review`; adding a model axis is not an alternate diff-review route.
+Use this for convergent critique of a plan or design. Actual diffs belong to `/diff-review`; adding a model axis is not an alternate diff-review route.
 
 ## Select scope and cost
 

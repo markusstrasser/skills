@@ -1,6 +1,6 @@
 ---
 name: doe
-description: "Use when: /doe, designing a NEW experiment/probe/prereg from a hypothesis+budget — generates arms/shams/controls/bands/power/stopping-rule as a fill-in doc. Complements /eval (grades/scaffolds benchmarks) and dispatch_lint (mechanically enforces a prereg exists). NOT for grading an existing design (/eval review) or a code diff (/code-review)."
+description: "Use when: /doe, designing a NEW experiment/probe/prereg from a hypothesis+budget — generates arms/shams/controls/bands/power/stopping-rule as a fill-in doc. Complements /eval (grades/scaffolds benchmarks) and dispatch_lint (mechanically enforces a prereg exists). NOT for grading an existing design (/eval review) or a code diff (/diff-review)."
 user-invocable: true
 argument-hint: "[hypothesis] [budget]"
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit]

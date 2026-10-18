@@ -1,8 +1,8 @@
 ---
-name: code-review
-description: "Use when: /code-review, review diff/PR/change, scout loop. GPT-6 Astra (codex) default scout; validates against code. NOT plan/findings review (/critique)."
+name: diff-review
+description: "Use when: /diff-review, review our diff/commit range/changed files, plan/phase closeout diff layer. GPT-6 Astra (codex) scout; parent validates against code. NOT plan/findings review (/critique); NOT Anthropic's built-in /code-review."
 user-invocable: true
-argument-hint: '[project focus] — e.g., "intel optimization", "genomics dead-code", or blank for auto-rotation'
+argument-hint: '<ref range | files> [low|high] — e.g., "HEAD~3..HEAD", "abc123..def456 high"'
 allowed-tools:
   - Bash
   - Read
@@ -14,46 +14,40 @@ allowed-tools:
 effort: medium
 ---
 
-# Continuous Code Review
+# Diff Review
 
-Run the code-review scout (local CLI — **GPT-6 Astra** via codex-cli subscription by default),
-validate findings against actual source code, implement safe fixes. Cursor Composer 2.5, the
-previous default, was retired 2026-10-07 as outdated; llmx now refuses it.
+Run the code-review scout (local CLI — **GPT-6 Astra** via codex-cli subscription by default)
+over a diff's changed files, validate findings against actual source code, implement safe fixes.
 
-**Not the Claude Code vendor `/code-review` plugin** — this is our local skill + scout scripts
-in `agent-infra/scripts/`. Critique/execute closeouts call this skill.
+**Not Anthropic's built-in `/code-review`** (bundled in Claude Code; `/code-review ultra` is the
+paid multi-agent cloud review). This skill was named `code-review` until 2026-10-18 and shadowed
+the built-in. Critique/execute closeouts call this skill for the diff layer.
 
-**Designed for `/loop`**: each invocation auto-picks the next (project, focus) pair from a 25-day
-rotation. Or pass arguments to target specific work.
+The 25-day project/focus rotation (`code-review-schedule.py`, `/loop /code-review`) was cut
+2026-10-18 (operator: "no cronjobs"); per-project rotation runs had gone quiet while diff
+closeouts ran near daily. A whole-project pass is still `"$SCOUT" <project> --focus <focus>`.
 
 ## Step 1: Determine Target
 
 ```bash
 SCOUT="$HOME/Projects/agent-infra/scripts/code-review-scout.py"
-SCHEDULE="$HOME/Projects/agent-infra/scripts/code-review-schedule.py"
 ```
 
-**If `$ARGUMENTS` is provided**, parse it:
-- `"intel optimization"` → project=intel, focus=optimization
-- `"genomics"` → project=genomics, focus=auto (next in rotation)
-- `"dead-code"` → project=auto, focus=dead-code (apply to today's project)
+Parse `$ARGUMENTS` as a git ref range or explicit files, plus an optional depth preset
+(`low` / `high`, below). **Fail fast:** confirm each ref resolves (`git rev-parse`) and the diff
+is non-empty before spawning scouts. List the changed files with `git diff --name-only <range>`.
 
-**If no arguments**, get today's rotation assignment:
-```bash
-uv run python3 "$SCHEDULE" --dry-run
-```
-
-Valid projects: `intel`, `genomics`, `agent-infra`, `personal`, `skills`, `hutter`
-Valid focuses: `refactoring`, `dead-code`, `optimization`, `patterns`, `silent-failure`, `security`
+Focuses: `refactoring`, `dead-code`, `optimization`, `patterns`, `silent-failure`, `security`.
 
 ## Step 2: Run Scout
 
-For a requested diff/PR review, first verify the refs and nonempty diff, then restrict the scout to
-the changed files. Select the depth preset below from the requested coverage and concrete risk.
+Restrict the scout to the changed files — one `--file` call per file, or `--module` when the
+changed files fill one directory. Select the depth preset below from the requested coverage and
+concrete risk.
 
 ```bash
-cd ~/Projects/agent-infra && uv run python3 "$SCOUT" ~/Projects/$PROJECT \
-  --focus $FOCUS --provider openai --workers 2
+cd ~/Projects/agent-infra && uv run python3 "$SCOUT" <repo path> \
+  --file <repo-relative file> --focus $FOCUS --provider openai --workers 2
 ```
 
 **Provider order (local-first):**
@@ -69,7 +63,7 @@ For an explicitly selected high-recall review or a concrete unresolved risk that
 model, use `--both` (google + openai; `--all-providers` is the same set). Module size alone does
 not require a broader panel.
 
-**Timeout:** Set Bash timeout to 600000 (10 min) — large projects have 40+ batches.
+**Timeout:** Set Bash timeout to 600000 (10 min) — a large diff can span many batches.
 
 If the scout finds zero new findings, report that and stop. Don't fabricate work.
 
@@ -128,7 +122,7 @@ review for what tools can't see. A finding a `ruff`/`pyright` run would flag is 
 ## Step 5: Report
 
 ```
-## Code Review: $PROJECT ($FOCUS)
+## Diff Review: $PROJECT <range> ($FOCUS)
 - Findings: N total (H HIGH, M MEDIUM, L LOW)
 - Validated: X of Y HIGH findings
 - Confirmed: A, False positive: B, Partial: C
@@ -173,22 +167,20 @@ evaluation hacked it in 30.5% of open-ended tasks (arXiv:2609.28614).
 | `low` | patterns | openai | Per-phase gate; ≤4 findings target |
 | `high` | security + patterns | openai + `--both` on diff scope | Slice closeout; recall mode |
 
-For **diff-scoped** review (plan closeout), pass only changed files via `--module` or a hand-built
-context packet — don't scan the whole repo. **Fail fast: confirm the ref resolves (`git rev-parse`)
-and the diff is non-empty BEFORE spawning scouts** — a bad ref or empty diff should fail here, not
-inside N parallel workers.
+Pass only changed files (`--file`, `--module`, or a hand-built context packet) — don't scan the
+whole repo.
 
 ## Usage Examples
 
 ```
-/code-review intel optimization    # one-shot
-/code-review                       # auto-rotation
-/loop 30m /code-review             # continuous rotation
+/diff-review HEAD~3..HEAD          # default preset (low)
+/diff-review abc123..def456 high   # slice closeout, recall mode
 ```
 
 ## What This Skill Does NOT Do
 
-- **Does not use the Claude Code vendor code-review plugin** — local scouts only.
+- **Does not call Anthropic's built-in `/code-review`** — local scouts only.
+- **Does not rotate through projects on a timer** — cut 2026-10-18.
 - **Does not skip validation** — every HIGH requires reading actual code.
 - **Does not fix everything** — only CONFIRMED straightforward fixes get committed.
 

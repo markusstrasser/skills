@@ -1,6 +1,6 @@
 ---
 name: eval
-description: "Use when: /eval, new benchmark/grader/judge, model bakeoff, auditing eval design. Pre-reg decision rule + power preflight. Modes: design, review. NOT spot-checks (/verify-before) or code diffs (/code-review)."
+description: "Use when: /eval, new benchmark/grader/judge, model bakeoff, auditing eval design. Pre-reg decision rule + power preflight. Modes: design, review. NOT spot-checks (/verify-before) or code diffs (/diff-review)."
 user-invocable: true
 argument-hint: "[design|review] [question or eval path]"
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit]

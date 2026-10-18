@@ -577,7 +577,7 @@ def cmd_triage(args: argparse.Namespace) -> int:
     blockers: list[str] = []
     warnings: list[str] = []
     contrad = 0
-    layers: dict = {"diff": {"owner": "code-review", "run": False}, "design": {"owner": "critique", "run": False}}
+    layers: dict = {"diff": {"owner": "diff-review", "run": False}, "design": {"owner": "critique", "run": False}}
     review_targets = {}
     if manifest and manifest.is_file():
         review_targets = _load_json(manifest).get("review_targets") or {}

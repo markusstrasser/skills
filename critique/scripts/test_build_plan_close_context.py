@@ -166,7 +166,7 @@ class BuildPlanCloseContextTest(unittest.TestCase):
         )
         manifest = json.loads(out.with_suffix(".manifest.json").read_text())
         self.assertIn("review_targets", manifest)
-        self.assertEqual(manifest["review_targets"]["diff_target"]["owner"], "code-review")
+        self.assertEqual(manifest["review_targets"]["diff_target"]["owner"], "diff-review")
         self.assertEqual(manifest["review_targets"]["design_target"]["owner"], "critique")
         self.assertEqual(manifest["review_targets"]["design_target"]["axes"], "standard")
 

@@ -396,7 +396,7 @@ def main() -> int:
     manifest = json.loads(manifest_path.read_text())
     manifest["review_targets"] = {
         "diff_target": {
-            "owner": "code-review",
+            "owner": "diff-review",
             "git_ref": ref,
             "base": base,
             "head": head,

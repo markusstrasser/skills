@@ -36,7 +36,7 @@ class ReviewGateTest(unittest.TestCase):
         self.packet.write_text("# Packet\nSee `real.py` for logic.\n")
         manifest = {
             "review_targets": {
-                "diff_target": {"owner": "code-review"},
+                "diff_target": {"owner": "diff-review"},
                 "design_target": {"owner": "critique", "axes": "standard"},
             },
             "payload_hash": "abc",
@@ -277,7 +277,7 @@ class ReviewGateTest(unittest.TestCase):
     def test_triage_recommends_cross2_preset(self) -> None:
         manifest = {
             "review_targets": {
-                "diff_target": {"owner": "code-review"},
+                "diff_target": {"owner": "diff-review"},
                 "design_target": {"owner": "critique"},
             },
             "payload_hash": "abc2",

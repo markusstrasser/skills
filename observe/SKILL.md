@@ -11,7 +11,7 @@ effort: medium
 
 Use the mode that answers the requested system-level question. A small fix or local retrospective
 does not require a codebase audit, frontier scan, or broad review. Diff/PR review belongs to
-`/code-review`, plans/findings to `/critique`, one bug to `/analyze`, ideation to `/brainstorm`,
+`/diff-review`, plans/findings to `/critique`, one bug to `/analyze`, ideation to `/brainstorm`,
 literature work to `/research`, and the session-end digest to `/rsi close`.
 
 ## Select and load a workflow

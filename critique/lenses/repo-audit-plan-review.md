@@ -9,7 +9,7 @@ from a plan packet alone.
 **Trigger:** `/critique audit-plan [topic]` OR auto-route when context includes an audit
 backlog (≥15 items) + a remediation plan.
 
-**Do NOT use for:** diff review (`/code-review`), single-file bugs, or plans with no
+**Do NOT use for:** diff review (`/diff-review`), single-file bugs, or plans with no
 repo inventory pass first.
 
 **Core invariant:** No packet-only critic may judge a repo-scale plan whose premises have
