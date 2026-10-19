@@ -13,6 +13,9 @@ Pins:
   2. A recent task output under ANOTHER session dir for the same checkout: no auto-commit.
   3. Positive control: neither condition, a settled own file IS auto-committed, so the
      two guards above are not passing merely because the hook never commits.
+  4. A staged path in both this session's and a peer's ledger is not named in the
+     contested advisory (genomics 2026-10-19: a batch landing's staged commit paths were
+     listed at every turn end); the same path unstaged still is (control).
 
 Run: python3 <thisfile>
 """
@@ -40,8 +43,9 @@ def git(repo, *args):
 
 
 def run_hook(repo, sid):
-    subprocess.run([str(HOOK)], input=json.dumps({"cwd": str(repo), "session_id": sid}),
-                   capture_output=True, text=True)
+    result = subprocess.run([str(HOOK)], input=json.dumps({"cwd": str(repo), "session_id": sid}),
+                            capture_output=True, text=True)
+    return result.stdout + result.stderr
 
 
 def make_repo(tmp, name):
@@ -72,6 +76,7 @@ def slug_dir(repo):
 def main():
     sid = f"test-staged-{os.getpid()}"
     ledger = Path(f"/tmp/session-touched-{sid}.txt")
+    peer_ledger = Path(f"/tmp/session-touched-{sid}-peer.txt")
     seen = [Path.home() / ".claude" / f"stop-{kind}-seen-{sid}.txt"
             for kind in ("own", "contested", "unattrib")]
     made_slugs = []
@@ -109,8 +114,27 @@ def main():
             before = head(repo3)
             run_hook(repo3, sid)
             check("control: settled own file auto-committed", head(repo3) != before)
+
+            # 4. a staged contested path stays out of the advisory; unstaged, it is named
+            for staged_case in (True, False):
+                repo4 = make_repo(tmp, f"contested_{staged_case}")
+                (repo4 / "c.py").write_text("both = 1\n")
+                if staged_case:
+                    git(repo4, "add", "c.py")
+                settle(repo4 / "c.py")
+                ledger.write_text("c.py\n")
+                peer_ledger.write_text("c.py\n")
+                for path in seen:
+                    path.unlink(missing_ok=True)
+                output = run_hook(repo4, sid)
+                if staged_case:
+                    check("staged contested path: not named", "c.py" not in output)
+                else:
+                    check("control: unstaged contested path named", "contested" in output
+                          and "c.py" in output)
     finally:
         ledger.unlink(missing_ok=True)
+        peer_ledger.unlink(missing_ok=True)
         for path in seen:
             path.unlink(missing_ok=True)
         for slug in made_slugs:

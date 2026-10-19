@@ -321,6 +321,10 @@ if _IN_FLIGHT_S == 900:
 # to checkpoint one of its files).
 _staged_set = set(f for f in staged.split("\n") if f.strip())
 new_changes = [f for f in new_changes if f not in _staged_set]
+# The same writer owns a staged CONTESTED path, so the advisory does not name it either
+# (genomics 2026-10-19: a 7-commit batch landing staged the paths of each commit, and
+# every turn end during it listed them as contested files to commit by hand).
+contested = [f for f in contested if f not in _staged_set]
 
 # Automation-write ledger — the third writer class beyond own/peer sessions.
 # launchd jobs + generators (fm.py, digest/sensor writers) write tracked files
