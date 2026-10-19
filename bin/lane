@@ -410,6 +410,26 @@ add_uv_cache_writable_root() {
   export LANE_CODEX_ADD_DIRS
 }
 
+# Genomics gates heavy commands through scripts/cpu_slot.py, whose flock directory lives outside
+# the worktree (~/.cache/genomics/cpu-slots, or GENOMICS_CPU_SLOT_DIR). Without it as a writable
+# root the slot cannot lock, admission degrades, and every `cpu_slot.py run --strict` pytest
+# exits 75, so the parent had to run all of a lane's tests (genomics P4.7 lane, 2026-10-19).
+add_cpu_slot_writable_root() {
+  local worktree="$1"
+  local directory
+  [ -f "$worktree/scripts/cpu_slot.py" ] || return 0
+  directory="${GENOMICS_CPU_SLOT_DIR:-$HOME/.cache/genomics/cpu-slots}"
+  if ! mkdir -p "$directory" || ! directory=$(cd "$directory" && pwd -P); then
+    echo "lane: cannot prepare cpu-slot directory $directory — gated tests will exit 75 in the sandbox" >&2
+    return 0
+  fi
+  case ":$LANE_CODEX_ADD_DIRS:" in
+    *":$directory:"*) return 0 ;;
+  esac
+  LANE_CODEX_ADD_DIRS="${LANE_CODEX_ADD_DIRS:+$LANE_CODEX_ADD_DIRS:}$directory"
+  export LANE_CODEX_ADD_DIRS
+}
+
 # Per-worktree bootstrap: run the repo's `.agents/prepare` (Delta/agent-skills
 # convention; `.claude/prepare` as a local override) inside a freshly created
 # worktree. Must be fast, idempotent and non-interactive — a lane never blocks on it.
@@ -530,6 +550,7 @@ launch_worker() {
   fi
   if [ "$worker" = codex ]; then
     add_uv_cache_writable_root "$worktree"
+    add_cpu_slot_writable_root "$worktree"
   fi
   print_worker_settings "$worker"
 

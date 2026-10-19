@@ -217,6 +217,28 @@ expected_uvcache=$(printf '%s\n' \
 assert_eq "$expected_uvcache" "$(<"$LANE_CAPTURE/codex.args")" "codex uv-cache writable root"
 grep -Fq "add_dirs=$SHARED_UV_REAL network=" <<<"$uvcache_output" || fail "settings line omitted the uv-cache root"
 
+echo "test: codex adds the genomics cpu-slot directory as a writable root"
+mkdir -p "$REPO/scripts"
+: > "$REPO/scripts/cpu_slot.py"
+slot_output=$(GENOMICS_CPU_SLOT_DIR="$TEST_TMP/cpu-slots" "$LANE" run codexcpuslot --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree)
+wait_for_file "$LANE_HOME/codexcpuslot.done"
+rm "$REPO/scripts/cpu_slot.py"
+SLOT_REAL=$(cd "$TEST_TMP/cpu-slots" && pwd -P)
+expected_slot=$(printf '%s\n' \
+  exec \
+  -m \
+  gpt-6-astra \
+  --add-dir \
+  "$SLOT_REAL" \
+  -s \
+  workspace-write \
+  --add-dir \
+  "$HOME/.cache/uv" \
+  --skip-git-repo-check \
+  "$CODEX_PROMPT")
+assert_eq "$expected_slot" "$(<"$LANE_CAPTURE/codex.args")" "codex cpu-slot writable root"
+grep -Fq "add_dirs=$SLOT_REAL network=" <<<"$slot_output" || fail "settings line omitted the cpu-slot root"
+
 echo "test: codex resume retains settings without caller exports"
 resume_output=$("$LANE" resume codexoverride --no-note)
 wait_for_file "$LANE_HOME/codexoverride.done"
