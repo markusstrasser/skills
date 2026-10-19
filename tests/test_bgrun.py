@@ -408,6 +408,34 @@ def test_invalid_completion_is_not_success(job, marker: str) -> None:
 
 
 @pytest.mark.parametrize("job", ["exec", "native"], indirect=True)
+def test_sigint_interrupts_the_command_and_publishes_its_status(job) -> None:
+    directory, _env, run = job
+    child_script = directory / "int-child.py"
+    child_script.write_text(
+        "from pathlib import Path\n"
+        "import json, os, signal, time\n"
+        "Path('child-ready').write_text(json.dumps(dict(pid=os.getpid(), "
+        "default=signal.getsignal(signal.SIGINT) is signal.default_int_handler)))\n"
+        "try:\n"
+        "    deadline = time.monotonic() + 12\n"
+        "    while time.monotonic() < deadline: time.sleep(0.02)\n"
+        "except KeyboardInterrupt:\n"
+        "    print('CHILD_INTERRUPTED', flush=True)\n"
+        "    raise SystemExit(3)\n"
+        "raise SystemExit(92)\n"
+    )
+    launched = run("case", "--", sys.executable, str(child_script), cwd=directory)
+    assert launched.returncode == 0, launched.stderr
+    supervisor = int(wait_file(directory / "case.pid"))
+    child = json.loads(wait_file(directory / "child-ready"))
+    # An asynchronous child of a noninteractive shell starts with SIGINT ignored.
+    assert child["default"] is True
+    os.killpg(supervisor, signal.SIGINT)
+    assert wait_file(directory / "case.done").strip() == "3"
+    assert "CHILD_INTERRUPTED" in (directory / "case.log").read_text()
+
+
+@pytest.mark.parametrize("job", ["exec", "native"], indirect=True)
 @pytest.mark.parametrize("term_scope", ["supervisor", "group"])
 def test_term_reaps_child_before_publishing_nonzero(job, term_scope: str) -> None:
     directory, env, run = job

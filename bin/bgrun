@@ -158,7 +158,10 @@ nohup /usr/bin/perl -MPOSIX -e 'POSIX::setsid() or die "bgrun: setsid: $!\n"; ex
   trap cancel_job TERM
   # Keep caffeinate and the existing route; an asynchronous child makes wait
   # interruptible so supervisor-only TERM reaches cancel_job immediately.
-  caffeinate -i "$@" > "$0.log.tmp" 2>&1 &
+  # A noninteractive shell starts that child with SIGINT and SIGQUIT ignored, and an ignored
+  # signal survives exec: pytest and Modal clients could not be interrupted (genomics,
+  # 2026-10-20). caffeinate keeps the ignore and waits out its utility; the command gets defaults.
+  caffeinate -i /usr/bin/perl -e "\$SIG{INT} = \$SIG{QUIT} = q(DEFAULT); exec { \$ARGV[0] } @ARGV or die qq(bgrun: exec: \$!\n)" "$@" > "$0.log.tmp" 2>&1 &
   worker_pid=$!
   rc=0
   wait "$worker_pid" || rc=$?
