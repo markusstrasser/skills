@@ -974,6 +974,9 @@ GEMINI_RATE_LIMIT_MARKERS = (
 # subscription (codex-cli, $0) works fine (see ~/.claude/rules/llmx-routing.md).
 # On these, fall back to the subscription transport so a paid-API outage never
 # silently degrades a review to single-model. Fires ONLY on failure.
+# 2026-10-20: Gemini's monthly spending cap surfaces as 429 RESOURCE_EXHAUSTED; still
+# fall back, but label it a billing stop and print [DEGRADED], not a rate-limit warning.
+GEMINI_SPEND_CAP_MARKERS = ("spending cap", "spend cap", "ai.studio/spend", "spend limit")
 GPT_QUOTA_MARKERS = (
     "insufficient_quota",
     "quota",
@@ -1881,16 +1884,24 @@ def rerun_axis_with_fallback(
     ctx_file: Path | ContextArtifact,
     prompt: str,
     budget: DispatchBudget | None = None,
+    reason: str = "gemini_rate_limit",
 ) -> dict:
     """Retry the rate-limited primary Gemini (arch) axis on the cross-provider
     adversarial fallback (gpt-6-astra since 2026-09-05; 3.1-pro retired from
     automation). Collapses the pair to GPT for this review, but rare + reliable."""
     out_path = review_dir / f"{axis}-output.md"
-    print(
-        f"warning: {axis} hit Gemini rate limits; retrying once on the "
-        f"cross-provider fallback ({GEMINI_FALLBACK_MODEL})",
-        file=sys.stderr,
-    )
+    if reason == "gemini_spend_cap":
+        print(
+            f"[DEGRADED] {axis}: Gemini monthly spending cap reached (https://ai.studio/spend); "
+            f"axis served by {GEMINI_FALLBACK_MODEL}, not {GEMINI_PRIMARY_MODEL}",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            f"warning: {axis} hit Gemini rate limits; retrying once on the "
+            f"cross-provider fallback ({GEMINI_FALLBACK_MODEL})",
+            file=sys.stderr,
+        )
     profile = dispatch_core.PROFILES["gpt_general"]
     profile_timeout = _profile_resolved_timeout(profile.name)
     if budget is not None and not budget.can_start(profile_timeout):
@@ -2308,11 +2319,15 @@ def dispatch(
             and profile_def.model == GEMINI_PRIMARY_MODEL
             and result["exit_code"] != 0
             and result.get("error")
-            and any(m in result["error"].lower() for m in GEMINI_RATE_LIMIT_MARKERS)
+            and any(
+                m in result["error"].lower()
+                for m in GEMINI_RATE_LIMIT_MARKERS + GEMINI_SPEND_CAP_MARKERS
+            )
         ):
             entry["initial_dispatch"] = _retain_initial_dispatch(entry)
             entry["fallback_from"] = profile_def.model
-            entry["fallback_reason"] = "gemini_rate_limit"
+            spend_cap = any(m in result["error"].lower() for m in GEMINI_SPEND_CAP_MARKERS)
+            entry["fallback_reason"] = "gemini_spend_cap" if spend_cap else "gemini_rate_limit"
             entry["initial_exit_code"] = result["exit_code"]
             fallback_result = rerun_axis_with_fallback(
                 axis,
@@ -2320,6 +2335,7 @@ def dispatch(
                 ctx_files[axis],
                 prompts[axis],
                 budget=budget,
+                reason=entry["fallback_reason"],
             )
             entry["model"] = GEMINI_FALLBACK_MODEL
             entry["exit_code"] = fallback_result["exit_code"]

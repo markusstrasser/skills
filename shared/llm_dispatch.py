@@ -659,6 +659,10 @@ def classify_error(exc: Exception) -> tuple[str, str]:
         return "timeout", message
     if any(marker in lowered for marker in ("timed out", "timeout", "deadline exceeded")):
         return "timeout", message
+    # 2026-10-20: a Gemini monthly spending cap arrives as 429 RESOURCE_EXHAUSTED; it is a
+    # billing stop, so spend-cap markers must win over the rate-limit markers below.
+    if any(marker in lowered for marker in ("spending cap", "spend cap", "ai.studio/spend", "spend limit")):
+        return "quota", message
     if any(
         marker in lowered
         for marker in (

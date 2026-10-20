@@ -215,5 +215,14 @@ class DispatchCoreTest(unittest.TestCase):
         self.assertEqual(budget["input_token_estimator"], "heuristic:chars_div_4")
 
 
+
+class ClassifyErrorSpendCapTest(unittest.TestCase):
+    def test_gemini_spend_cap_is_quota_not_rate_limit(self) -> None:
+        # 2026-10-20 incident: Gemini monthly spending cap arrives as 429 RESOURCE_EXHAUSTED.
+        msg = "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'Your project has exceeded its monthly spending cap. Please go to AI Studio at https://ai.studio/spend to manage your project spend cap.', 'status': 'RESOURCE_EXHAUSTED'}}"
+        self.assertEqual(llm_dispatch.classify_error(RuntimeError(msg))[0], "quota")
+        self.assertEqual(llm_dispatch.classify_error(RuntimeError("429 Too Many Requests"))[0], "rate_limit")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import contextlib
+import io
 import json
 import os
 import subprocess
@@ -204,6 +205,87 @@ class ModelReviewDispatchTest(unittest.TestCase):
         # arch should have fallen back to the declared cross-provider profile.
         self.assertEqual(result["arch"]["model"], model_review.GEMINI_FALLBACK_MODEL)
         self.assertEqual(result["arch"]["fallback_reason"], "gemini_rate_limit")
+        self.assertGreater(result["arch"]["size"], 0)
+        # formal should succeed normally
+        self.assertEqual(result["formal"]["exit_code"], 0)
+        fallback_meta = json.loads((self.review_dir / "arch-output.meta.json").read_text())
+        self.assertEqual(fallback_meta["requested_profile"], "gpt_general")
+        self.assertEqual(fallback_meta["auth"], "subscription")
+        self.assertEqual(fallback_meta["resolved_kwargs"]["reasoning_effort"], "medium")
+
+    def test_dispatch_plain_429_stays_gemini_rate_limit_not_spend_cap(self) -> None:
+        call_count = {"arch": 0}
+
+        def mock_chat(**kwargs):
+            model = kwargs.get("model", "")
+            if model == model_review.GEMINI_PRIMARY_MODEL and call_count["arch"] == 0:
+                call_count["arch"] += 1
+                raise Exception("429 Too Many Requests")
+            if model == model_review.GEMINI_FALLBACK_MODEL:
+                resp = MagicMock()
+                resp.content = "fallback output"
+                resp.latency = 0.5
+                return resp
+            resp = MagicMock()
+            resp.content = "ok"
+            resp.latency = 1.0
+            return resp
+
+        # 2026-10-20 negative control: an ordinary 429 is not a spending-cap stop.
+        stderr = io.StringIO()
+        with patched_llmx_chat(mock_chat), contextlib.redirect_stderr(stderr):
+            result = model_review.dispatch(
+                self.review_dir,
+                self.ctx_files,
+                ["arch", "formal"],
+                "Review this",
+                has_governance=False,
+            )
+
+        # arch should have fallen back to the declared cross-provider profile.
+        self.assertEqual(result["arch"]["model"], model_review.GEMINI_FALLBACK_MODEL)
+        self.assertEqual(result["arch"]["fallback_reason"], "gemini_rate_limit")
+        self.assertNotIn("[DEGRADED]", stderr.getvalue())
+        self.assertIn("hit Gemini rate limits", stderr.getvalue())
+        self.assertGreater(result["arch"]["size"], 0)
+        # formal should succeed normally
+        self.assertEqual(result["formal"]["exit_code"], 0)
+        fallback_meta = json.loads((self.review_dir / "arch-output.meta.json").read_text())
+        self.assertEqual(fallback_meta["requested_profile"], "gpt_general")
+        self.assertEqual(fallback_meta["auth"], "subscription")
+        self.assertEqual(fallback_meta["resolved_kwargs"]["reasoning_effort"], "medium")
+
+    def test_dispatch_falls_back_after_gemini_spend_cap_degraded(self) -> None:
+        # 2026-10-20 incident: Gemini monthly spending cap must be labelled, not rate_limit.
+        call_count = {"arch": 0}
+
+        def mock_chat(**kwargs):
+            model = kwargs.get("model", "")
+            if model == model_review.GEMINI_PRIMARY_MODEL and call_count["arch"] == 0:
+                call_count["arch"] += 1
+                raise Exception("429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'Your project has exceeded its monthly spending cap. Please go to AI Studio at https://ai.studio/spend to manage your project spend cap.', 'status': 'RESOURCE_EXHAUSTED'}}")
+            if model == model_review.GEMINI_FALLBACK_MODEL:
+                resp = MagicMock()
+                resp.content = "fallback output"
+                resp.latency = 0.5
+                return resp
+            resp = MagicMock()
+            resp.content = "ok"
+            resp.latency = 1.0
+            return resp
+
+        with patched_llmx_chat(mock_chat):
+            result = model_review.dispatch(
+                self.review_dir,
+                self.ctx_files,
+                ["arch", "formal"],
+                "Review this",
+                has_governance=False,
+            )
+
+        # arch should have fallen back to the declared cross-provider profile.
+        self.assertEqual(result["arch"]["model"], model_review.GEMINI_FALLBACK_MODEL)
+        self.assertEqual(result["arch"]["fallback_reason"], "gemini_spend_cap")
         self.assertGreater(result["arch"]["size"], 0)
         # formal should succeed normally
         self.assertEqual(result["formal"]["exit_code"], 0)
