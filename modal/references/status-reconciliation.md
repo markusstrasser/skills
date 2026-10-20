@@ -82,3 +82,57 @@ class ControllerReconciler:
 Tests pass a `FakeVolume` with `listdir`/`read_file`/`remove_file` —
 no Modal auth required. The reconciler stays testable offline and
 every INTERRUPTED-state-machine branch gets direct coverage.
+
+> Sections below relocated verbatim from modal/SKILL.md (2026-10-21).
+
+## Common Failure Modes
+
+### Live State Disagrees With Worker State
+
+- `running_live`: live app exists now; worker state may simply be lagging
+- `stale_receipt`: latest receipt still says running, but live runtime is gone
+- `duplicate_live_app`: multiple live apps claim the same stage/run
+- `incomplete_attempt`: control plane or launcher says work should be active, but no matching live/runtime signal exists
+- `local_driver_invisible`: Modal app list is empty, but a LOCAL orchestrator/driver subprocess is mid-run (planning / volume crawl / repin, *before* any Modal dispatch). An empty Modal does NOT mean idle — check `ps` for the driver + its progress log before concluding "nothing is running". The inverse of `stale_receipt`: there the receipt lies alive; here Modal lies dead.
+
+Usual checks:
+
+- `modal app list --json`
+- `ps` for the local driver/orchestrator subprocess (the plane Modal can't see)
+- app tags
+- `modal app logs --follow`
+- receipt timestamp vs latest heartbeat/progress
+- driver progress log (distinguishes rate-limit backoff from a true hang)
+- If the live app is stopped but a stage receipt still says `RUNNING`, call it `stale_receipt`.
+- If the app has high wall-clock age but no fresh logs/heartbeats, do not treat app age as proof of useful compute.
+
+### Output Exists But Meaning Is Ambiguous
+
+- volume file exists but no receipt: manual artifact or partial write
+- receipt says success but validation fails: output is present, not trustworthy
+- local mirror exists while a newer run is active: `local_stale`
+- worker completed but local bridge is missing: `bridge_failed`
+
+Usual checks:
+
+- immutable receipt
+- completion marker or validation function
+- local bridge state
+- run-scoped output path or manifest hash
+
+### Spend Is Detached From Execution State
+
+- `unattributed_spend`: billing row has no usable tag join
+- running work with no tags: expect future attribution gap
+- spend after failure can be real; do not call it `running`
+- stage-local progress `run_id` can differ from the pipeline run id in billing
+  tags; join strictly first, then fall back only when
+  `sample+stage+attempt_id` maps to a unique billing pipeline run
+
+Usual checks:
+
+- `modal billing report --json --tag-names ...`
+- app tags: `question_id`, `run_id`, `stage`
+- per-stage billing aggregation
+
+See `references/attribution.md` for the reporting template.

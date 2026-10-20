@@ -11,145 +11,13 @@ Start from the question, choose the truth surface, then reason about failure mod
 Shared status contract:
 `references/status-reconciliation.md`
 
-## Current genomics baseline: Modal 1.5.5, parity required
+## Version baseline (genomics, as of 2026-10)
 
-**2026-09-08 correction:** genomics requires `modal[api-proxy-support]>=1.5.5,<1.6`
-and locks 1.5.5. Align the shell-global CLI with
-`uv tool install 'modal[api-proxy-support]==1.5.5' --force`, then run the parity
-checks below. Preserve the proxy extra. This supersedes the 1.5.2 genomics pin
-and installation example in the historical baseline below.
-
-The supported update repairs `ModalChannel._connected`: a closing Connection is
-unusable even before its handler receives connection-lost notification. Real
-library controls fail on 1.5.2 and pass on 1.5.5. Prefer that fix to custom client
-renewal; `_Client._close` can still clear another cached client. This host SDK
-change leaves the declared genomics toolchain identities unchanged. It does not
-establish a fix for Volume block-HTTP 404s or replace live rehearsal evidence.
-
-## Platform note 2026-10-12: faster grep on Volumes v2
-
-Modal prefetches metadata and content for small files on **Volumes v2**: grep from a
-Sandbox runs ~10x faster cold and ~6x warm. It does nothing for a v1 volume.
-`genomics-data` is v1 (`modal.Volume.from_name("genomics-data").hydrate()._get_metadata().version`
-returned 1 on 2026-10-14), so genomics receipt/manifest crawls see no change. Weigh it
-only if a v2 migration is ever proposed for small-file-heavy reads.
-
-## Debugging DX update (verified 2026-10-18)
-
-- **Dashboard log search:** [October 16 update](https://modal.com/changelog/logs-search-v2)
-  supports exclusions (`-function:my_func`) and grouped call IDs
-  (`function_call_id:(fc-123 OR fc-456)`). Use actual recorded identities. These
-  are dashboard queries; verify installed CLI help before assuming flag parity.
-- **Expose the right channel:** app logs capture stdout/stderr, while a project's
-  structured logger may write only Volume files. In genomics, read that narrative
-  with `just stage-log <stage>`; `just stage-progress` already identifies calls.
-  Prefer extending existing status output with app links, queries and log commands.
-  Label app links as stdout/stderr; call-ID filters are copyable dashboard queries.
-  Logs/profiling diagnose execution; terminal receipts still decide completion.
-- **Live hangs:** Modal offers [live container profiling and debug shells](https://modal.com/docs/guide/developing-debugging#live-container-profiling).
-  Distinguish attaching to a running container from launching a fresh image shell.
-- **Feedback before new infrastructure:** use an existing authenticated collector
-  to expose published attempt results while a run is active, retaining explicit
-  partial coverage, immutable artifact versions and final completion validation.
-  Trace the producer's publication checkpoint first: prefetch cannot expose unpublished
-  results, and ordered waits may delay publication independently of host collection.
-  Genomics' pending implementation is P3.9 in its post-ship plan; it is not shipped.
-- **Volume v2 scope:** the advertised grep gains concern mounted small-file reads.
-  They do not establish faster SDK downloads or whole-suite execution. The
-  [current docs](https://modal.com/docs/guide/volumes#volumes-v2-overview) still label
-  v2 Beta and advise against mission-critical data; traversal can also be slower.
-  Consider a measured rebuildable-workspace experiment separately from production.
-
-## Platform changelog 2026-08-14 → 09-17 (reviewed 2026-09-29)
-
-Dashboard/product changes only; no SDK release. PyPI stable is still 1.5.5
-(1.5.6 exists only as `.dev` builds), and `modal changelog --newer` is empty.
-The genomics pin stays unchanged.
-
-| Change | Relevance here |
-|---|---|
-| Usage page: network egress **per app** (09-17) | Use it to attribute egress cost (B2 publish, `volume get` relays) to a specific app before guessing. It is a dashboard view; no SDK/billing-report field has been verified. |
-| Container Metrics: custom-range zoom (09-11), synced time cursor (09-10) | Makes it easier to line up memory/CPU charts across stages when a worker dies. It still does not show worker progress; see the worker-written-surface rule. |
-| Container inputs view: filter by date/status, shareable URLs (09-02) | Quick way to find failed/preempted inputs for one app. Receipts remain the authority. |
-| Sandboxes: Exit Reasons chart separating memory-limit OOM from memory-manager OOM (08-26); per-Sandbox CPU/mem/pressure charts (09-02); Sidecars public alpha (08-28); `MODAL_SANDBOX_V2=1` opt-in to V2 (08-14) | Genomics uses `modal.Sandbox` only in the image-proof scripts (`genome_kernel_*_proof.py`, `modal_probe.py`), so V2 has not been tested there. Before flipping V2 globally, run one image proof with the variable set. Stages are Functions, so none of these charts cover them. |
-| Unauthenticated web endpoint controls (filter, audit, per-env block) (09-15) | Genomics has no web endpoints. This matters only if an `@app.server` status endpoint ships later. |
-| RBAC user groups/SCIM (09-15), SSO XML metadata (09-14), configurable default roles in Restricted Envs (08-19), per-app/env Slack notification routing (09-02), Proxy region choice (08-31), "Last deployed by" filter (08-19), usage-limit/threshold-billing UI redesign (08-27) | Workspace admin/UI only; no pipeline action. |
-
-## Historical 1.5.2 baseline (genomics pin superseded above)
-
-**Shell-global CLI** is a `uv tool` install (`~/.local/bin/modal` →
-`uv tool install 'modal==1.5.2'`). That is what **arc-agi** uses: it does
-**not** pin Modal in `pyproject.toml`; scripts are launched with `modal run`
-(the tool env), and local `import modal` is guarded so project-venv
-`--help` / tests still work.
-
-**Genomics** pins the project venv: `pyproject.toml` has
-`modal>=1.5.1,<1.6`, `uv.lock` resolves `modal==1.5.2`, and
-`uv run python3 scripts/modal_version_parity.py` must pass. Bumping the
-global tool without refreshing genomics (or vice versa) reopens C4.
-
-Verify both planes:
-
-```bash
-modal --version
-# genomics only:
-uv run python3 -m modal --version
-uv run python3 scripts/modal_version_parity.py
-```
-
-Modal 1.5.x normalizes CLI JSON keys differently from the old 1.4.x output.
-Consumers should use the repo's normalizer where one exists and should still
-avoid raw `.get("App ID")` / `.get("app_id")` parsing.
-
-## Modal 1.5.2 Features (2026-07-10)
-
-Ops/DX patch — not an architecture power-up. Prefer unfinished **1.5.1**
-adoption (billing → named images) over chasing these.
-
-| Feature | Use when | Do not use for |
-|---|---|---|
-| `modal.Workspace.settings.list()` / `.set()` · `modal workspace settings …` | Read/set workspace-level knobs. As of 1.5.2 the live keys are `default-environment` and `image-builder-version` only (manager/owner). | Budget/spend caps, admission control, or stage readiness — **budget is not exposed here**. |
-| `modal.types` | Type-annotate wrappers around Modal return dataclasses. | Constructing these types in user code (they are API return shapes). |
-| `Function.with_options(..., routing_region=…)` | Invoke-time regional routing. Best fit for **arc-agi** GPU train/farm/serve paths that already use `with_options`. | Substituting for capacity/budget diagnosis; still check spend vs cap first. |
-| `modal container stop --graceful` | Drain: stop fetching new inputs, finish in-flight Function inputs (not cancel+reschedule). Useful for long train steps or served endpoints. | App-wide halt (`modal app stop`); budget kill; Sandbox stop. Graceful is Function/Server containers only. |
-| `modal container logs` includes startup | Debug cold-start / import crash-loops (vLLM serve, detached import failures). | Liveness or completion — still join receipts / `task_count`. |
-| `Workspace.members.list()` role `user` → `member` | Match UI/docs for lowest-privilege role when auditing membership. | Pipeline readiness. Update any code that compared role == `"user"`. |
-| `Sandbox.reload_volumes(timeout=…)` (default 55s) | Blocking reload until volumes are current; raises `modal.exception.TimeoutError` on stall. Narrow win for probe/canary sandboxes. | Stage hot path — that remains `vol.reload()` (still C2/C9; no per-call timeout on Volume.reload). |
-
-**Arc-agi lean-in (optional):** `--graceful` drain, startup logs, `routing_region` on existing `with_options` call sites.
-**Genomics lean-in (optional):** settings only if you need image-builder/default-env automation; Sandbox reload timeout on probe paths. Do not treat settings as budget API.
-
-## Modal 1.5.1 Features: How Genomics Should Use Them
-
-Verified against `modal changelog --since 1.4.9` on 2026-06-30. Still the
-adoption priority over 1.5.2.
-
-| Feature | Use in genomics | Do not use for |
-|---|---|---|
-| `modal.Workspace.billing.report()` / `modal.Environment.billing.report()` and `modal billing report --show-resources` | Stage telemetry and budget admission. Join rows by `run_id`, `stage`, `attempt_id`; keep CPU, memory, and GPU resource breakdown separate from planning projections. Environment-scoped reports are useful if genomics gets its own Modal environment. | Completion, liveness, or substituting missing billing with `$0`. |
-| Named Images: `Image.publish()`, `Image.from_name()` | Canonical stage images (`genomics/base`, `genomics/deepvariant`, etc.) so many one-stage Apps stop rebuilding divergent images. Pin names/tags in stage metadata and fail loud on missing image. | Implicit build fallback. `Image.from_name()` is a lookup, not a builder. |
-| `Image.from_id(...).publish()` | Promote a known-good build ID after a probe/canary without rebuilding. Useful for overnight stage-image rollouts. | Re-publishing unverified images or hiding changed dependencies behind the same tag. |
-| Version-pinned `Function.from_name(..., version=...)` / `Cls.from_name(..., version=...)` | Deployed helper functions or a future long-lived controller can call a consistent deployed version during one run. Store the version in the run manifest. | Ephemeral one-stage `just dispatch` apps unless they are first deployed and versioned. |
-| `@app.server()` / `modal.Server` | Low-latency HTTP diagnostics or a future status/control endpoint with proxy-token auth. Could serve read-only progress/status without cold-starting a CLI. | Batch WGS stages. Stages remain `@app.function`/`@app.cls` jobs with receipts. |
-| `modal endpoint` | Production LLM inference endpoints, if a future interpretation model needs a served endpoint. | The pipeline controller itself; do not add an endpoint just to avoid receipts. |
-| Proxy tokens + `modal curl` | Authenticated checks against future Modal Servers/Endpoints without manually handling headers. Keep tokens out of logs. | Stage identity or sample authorization inside batch jobs. |
-| Sandbox `outbound_domain_allowlist=[...]` | Network-restricted probes, external-tool canaries, and testsample/fake-DAG sandboxes where only declared domains should be reachable. | Normal WGS stages that need broad DB/reference access unless the allowlist is complete. |
-| `sandbox.filesystem.watch()` | Fast feedback from sandbox-based experiments: watch log/result files without polling whole directories. | Volume receipt completion; still write terminal receipts and payload summaries. |
-| Sandbox connect tokens scoped by `port=` | Safer interactive debugging of a known service port in a Sandbox. | Long-running production control-plane auth. |
-| `modal app rollback --strategy rolling|recreate` | Deployed diagnostic/status services. Prefer `recreate` only when stale containers are unsafe. | Ephemeral per-stage apps; stop/reconcile via run identity instead. |
-| `modal workspace members` | Operator/audit check for who can see or mutate the workspace. | Pipeline readiness or sample completion. |
-
-Adoption order for this repo:
-
-1. **Billing first:** migrate `stage-telemetry` internals to the 1.5.1
-   Workspace/Environment billing APIs or `modal billing report --show-resources`,
-   then keep projections visibly separate.
-2. **Named images second:** publish canonical, tagged images for high-churn stage
-   families and make stage specs reference tags explicitly.
-3. **Version-pinned functions third:** only for deployed helper/controller
-   surfaces where a run needs one stable function version.
-4. **Servers/endpoints only if needed:** useful for a read-only status plane, not
-   for replacing batch-stage receipts.
+- Genomics requires `modal[api-proxy-support]>=1.5.5,<1.6` and locks 1.5.5. Align the shell CLI with `uv tool install 'modal[api-proxy-support]==1.5.5' --force` (keep the proxy extra).
+- Parity check: `modal --version` must equal `uv run python3 -m modal --version`, and `uv run python3 scripts/modal_version_parity.py` must pass. A split reopens C4.
+- 1.5.x CLI JSON keys differ from 1.4.x: use the repo normalizer, never raw `.get("App ID")` / `.get("app_id")`.
+- `genomics-data` is a v1 volume, so the Volumes v2 grep speedups do not apply.
+- Dated platform notes, the historical 1.5.2 baseline and the 1.5.1/1.5.2 feature-adoption tables: `references/changelog.md`.
 
 ## Workflow
 
@@ -205,91 +73,7 @@ If you cannot name the source artifact, the question is still open.
 
 ## Common Failure Modes
 
-### Live State Disagrees With Worker State
-
-- `running_live`: live app exists now; worker state may simply be lagging
-- `stale_receipt`: latest receipt still says running, but live runtime is gone
-- `duplicate_live_app`: multiple live apps claim the same stage/run
-- `incomplete_attempt`: control plane or launcher says work should be active, but no matching live/runtime signal exists
-- `local_driver_invisible`: Modal app list is empty, but a LOCAL orchestrator/driver subprocess is mid-run (planning / volume crawl / repin, *before* any Modal dispatch). An empty Modal does NOT mean idle — check `ps` for the driver + its progress log before concluding "nothing is running". The inverse of `stale_receipt`: there the receipt lies alive; here Modal lies dead.
-
-Usual checks:
-
-- `modal app list --json`
-- `ps` for the local driver/orchestrator subprocess (the plane Modal can't see)
-- app tags
-- `modal app logs --follow`
-- receipt timestamp vs latest heartbeat/progress
-- driver progress log (distinguishes rate-limit backoff from a true hang)
-- If the live app is stopped but a stage receipt still says `RUNNING`, call it `stale_receipt`.
-- If the app has high wall-clock age but no fresh logs/heartbeats, do not treat app age as proof of useful compute.
-
-### Output Exists But Meaning Is Ambiguous
-
-- volume file exists but no receipt: manual artifact or partial write
-- receipt says success but validation fails: output is present, not trustworthy
-- local mirror exists while a newer run is active: `local_stale`
-- worker completed but local bridge is missing: `bridge_failed`
-
-Usual checks:
-
-- immutable receipt
-- completion marker or validation function
-- local bridge state
-- run-scoped output path or manifest hash
-
-### Spend Is Detached From Execution State
-
-- `unattributed_spend`: billing row has no usable tag join
-- running work with no tags: expect future attribution gap
-- spend after failure can be real; do not call it `running`
-- stage-local progress `run_id` can differ from the pipeline run id in billing
-  tags; join strictly first, then fall back only when
-  `sample+stage+attempt_id` maps to a unique billing pipeline run
-
-Usual checks:
-
-- `modal billing report --json --tag-names ...`
-- app tags: `question_id`, `run_id`, `stage`
-- per-stage billing aggregation
-
-See `references/attribution.md` for the reporting template.
-
-## Field-tested failure patterns (multi-stage DAG, Modal 1.4/1.5)
-
-Fundamental, recurring Modal-platform failure modes distilled from an 8-week
-many-stage DAG (IDs kept for cross-reference; full operational catalog incl. the
-non-Modal orchestration classes lives in the consuming repo). These are platform
-truths, not one project's bug list — they reappear on any large stage graph.
-
-- **C1 — VolumeListFiles quota is WORKSPACE-wide.** A full-DAG or recursive volume
-  crawl fans out per-stage list RPCs that compete with live stage *writers* for one
-  shared list quota and **throttle-hang with no backoff line** — the crawl just stops
-  advancing (looks like a deadlock). Never fan out recursive volume lists while stage
-  apps are writing; scope to a single directory, or wait for writers to drain.
-- **C2 — one volume RPC can block a control loop forever.** `VolumeListFiles` /
-  `vol.reload()` has no built-in per-call timeout; a single stalled RPC freezes a
-  reconcile/poll tick at 0% CPU with zero output. Wrap control-loop RPCs in a tick
-  watchdog that aborts a stalled call. A frozen log ≠ a hung process (rate-limit
-  backoff mimics a deadlock for tens of seconds).
-- **C4 — a CLI version split silently breaks pollers.** `--json` key shape differs
-  across Modal versions and CLI planes. If the shell-global `modal` and the project
-  venv resolve to **different** versions, a poller written against one reads keys
-  ABSENT against the other — for minutes, while the app really runs. Pin ONE version
-  across both planes; in genomics assert `modal --version` ==
-  `uv run python3 -m modal --version` and run `scripts/modal_version_parity.py`.
-- **C6 — an in-app retry crash-loop is invisible to an external control plane.**
-  `@app.function(retries=N)` retries *inside* one app; an external DB/poller that keys
-  on "app exists" sees a flat `running` for the entire crash-loop (observed: 69 min
-  before manual triage). Liveness = app logs / fresh `task_count` / retry count — never
-  app existence alone.
-- **C9 — `vol.reload()` races under concurrency.** Reload in a tight loop can swallow a
-  `ConflictError` and never complete, or hand a worker a stale file handle (FASTA/index)
-  → mid-stage crash. Use a best-effort single reload; don't reload-loop under parallel
-  workers.
-- **C11 — concurrent launches race on shared local staging paths.** Two app launches
-  staging into the same host path collide with `[Errno 17] File exists`. Give each
-  concurrent launch an isolated staging dir (or flock the path).
+Mismatch classes (`running_live`, `stale_receipt`, `duplicate_live_app`, `incomplete_attempt`, `local_driver_invisible`, ambiguous-output and detached-spend classes) with their usual checks: `references/status-reconciliation.md`. Field-tested platform patterns C1–C11: `references/gotchas.md`.
 
 ## Launch Discipline
 
@@ -344,47 +128,16 @@ Also remember:
 
 See `references/migration.md` for the full migration table.
 
-## Preemption & Retry Resilience
+## Preemption, Retries & Budget (rules; detail in references)
 
-Modal can preempt containers at any time to reclaim capacity. Default detached behavior: auto-retry once. Not enough for long stages.
-
-### `modal.Retries` (free, no cost multiplier)
-```python
-@app.function(
-    retries=modal.Retries(initial_delay=0.0, max_retries=5),
-    single_use_containers=True,  # fresh container per retry, avoids stale state
-)
-```
-Add to: any stage >30min, any stage that has been preempted before. Cost: zero — just re-queues. `single_use_containers=True` prevents state leaks between retries.
-
-### Chunk size IS your preemption-loss budget
-For any `.map()`/`.starmap()` fanout, chunk size bounds what a single preemption / budget-kill / timeout destroys — lose a chunk, redo a chunk. Aim ~30 min runtime per chunk (60×30min beats 6×5h: a Modal infra event costs you <$1 instead of ~$10). **Never put a per-step `timeout=` on a monolithic all-or-nothing step** — a single subprocess that buffers internally (`samtools sort`, a `bwa-mem2 mem | view` pipe) whose `.SUCCESS` only writes at the very end is worthless under interruption; split it into sub-checkpoints or fan it out over data partitions instead. For memory-floored algorithms (fixed 25-30GB index), shrink chunks AND cap `.map(max_concurrent=N)` rather than leaning on chunk size alone to ease scheduling. Full sizing + scale-extrapolation guidance: `references/scaling.md`.
-
-### `nonpreemptible=True` (3x CPU+Memory cost, CPU-only)
-```python
-@app.function(nonpreemptible=True, memory=196608)
-```
-Stops Modal from *voluntarily* preempting the container for capacity reclaim. **3x multiplier on CPU and Memory billing.** Not available for GPU functions. Use for: stages that repeatedly fail from preemption AND lack mid-step checkpointing. Calculate cost impact first.
-
-**It is not death-proof.** `nonpreemptible=True` still gets SIGKILLed by: Modal infrastructure events (worker-node decommission), budget kill, OOM, and `modal app stop`. Symptom in logs when an infra event hits a nonpreemptible container: `Received a cancellation signal while processing input` → `Runner has been shutting down for too long (grace period: 30 seconds)`. So don't pay 3× expecting bulletproof execution — the resilient combo is still small chunks (bounded loss) + `Retries(max_retries=5)` + frequent `vol.commit()` + `.SUCCESS` sentinels. Reserve `nonpreemptible` for short (<30min) critical-path stages where 3× is bounded AND mid-step checkpointing is impossible. (Evidence: 2026-05-27 — a Modal infra event killed all 6 nonpreemptible 5h×48GB workers mid-run; paid 3× for protection that didn't apply.)
-
-### High-memory scheduling constraints
-Containers requesting >64GB RAM compete for fewer workers. Symptoms: `"waiting to be scheduled on a CPU worker. Relaxing requirements (memory=X) may lead to faster scheduling"`.
-
-**⚠ The SAME message also fires when the ACCOUNT BUDGET CAP is hit** — Modal halts scheduling, so queued/preempted work reads "waiting to be scheduled... acquiring more capacity" *identically* to real capacity scarcity. **Before concluding capacity, check spend vs the cap (`modal billing report --for today`).** Tells it's budget-cap not capacity: (a) MANY stages mass-stall at once; (b) zero reschedule for hours even off-peak (real capacity frees off-peak; an exhausted cap never does); (c) spend at/near the limit. Budget-cap is operator-fixable (raise it → scheduling resumes instantly); capacity is wait-only — mis-reading it wastes the whole window on a stall only the operator can clear (2026-06-23: a 4 h stall on 3×32GiB stages was the budget cap, surfaced only when the operator said "budget is back"). A driver/orchestrator that waits on a stage's terminal receipt also DEADLOCKS if you `modal app stop` the stage (no FAILED receipt is written) → recovery = stop the stuck apps + kill & relaunch the driver.
-
-Mitigations (real capacity):
-- Reduce parallelism (don't request 200×80GB simultaneously)
-- Add `retries` so preempted containers re-queue automatically
-- Reduce memory if workload permits
-- Schedule large-memory jobs when cluster is less busy (off-peak)
-
-### Budget kills
-When account spend hits the limit, ALL running containers die instantly — no graceful shutdown, no checkpoint write, no `@modal.exit()` handler. The only defense is frequent `vol.commit()` between steps AND committing partial work during long steps.
-
-Evidence: SBayesRC 80GB×200 parallel containers couldn't schedule. Pangenie 192GB preempted 3+ times across 3 days. Budget limit killed all 3 active apps simultaneously mid-run — 6h of SBayesRC compute, 4h of sven_sv annotation (21.8GB artifact on ephemeral disk), 5h of pangenie genotyping — all lost because ephemeral disk is wiped and the commit-at-step-boundary model saves nothing mid-step (2026-04-13).
-
-**The frozen-workspace TELL (spend-cap disable):** every endpoint returns 404 with a "workspace disabled" body, `modal app list` renders an EMPTY table, and deploys/API calls fail — indistinguishable from a slow cold boot to a naive HTTP poll, so poll loops burn their full timeout on it (2026-07-11 arc-agi: 2700s poll against a capped workspace read as "boot never ready"). Poll loops must check the 404 body for "disabled" and fail fast + distinctly (reference: arc-agi `modal_serve_lib.sh::msl_poll_ready` exit 2). Same-day `billing report` lag (gotcha 23) means the freeze usually arrives BEFORE the dashboard shows the spend that caused it.
+- Default detached behavior auto-retries once, which is not enough for long stages. Any stage >30 min or ever preempted gets `retries=modal.Retries(initial_delay=0.0, max_retries=5)` + `single_use_containers=True` (free).
+- Chunk size is the preemption-loss budget: aim ~30 min per `.map()` chunk; never put a per-step `timeout=` on a monolithic all-or-nothing step.
+- `nonpreemptible=True` costs 3x CPU+memory, is CPU-only, and is not death-proof (infra events, budget kill, OOM, `app stop` still kill it). Reserve it for short critical stages that cannot checkpoint mid-step.
+- "Waiting to be scheduled ... relaxing requirements" also fires when the account budget cap is hit. Check `modal billing report --for today` before concluding capacity. `modal app stop` on a stage a driver awaits deadlocks the driver.
+- Budget kill SIGKILLs every container: no grace, no `@modal.exit()`, no retry. Only committed volume state survives.
+- Spend-cap freeze: endpoints 404 "workspace disabled", `app list` is empty, new containers never schedule. Poll loops must fail fast on the "disabled" body.
+- Check Live Usage before launching (>85% = no long jobs). Billing lags; pair polling with launch admission (a `modal.Dict` halt flag).
+- Full detail: `references/preemption.md` (Retries, chunking, nonpreemptible, high-memory scheduling, testing `@modal.exit`), `references/budget-and-spend.md` (budget kills, spend-query CLI/API, watchdog daemon). `modal.Dict` control plane and the identity API: `references/debugging.md`.
 
 ## Progress Survivability
 
@@ -404,74 +157,6 @@ dirty-flag emergency save, `.SUCCESS` sentinels, mid-step checkpoint loop, tee-t
 - **Timeout = max expected + 50%** — a timeout equal to the actual runtime kills at the finish line (sven: 4h job, 4h timeout, artifact lost, retry from scratch).
 - **`.map()` containers are invisible without per-step stdout prints** — volume commits land at unit completion; `print()` at step boundaries so `modal app logs` shows transitions.
 
-### Live control plane: `modal.Dict` for per-worker state
-`modal.Dict.from_name(name, create_if_missing=True)` gives a durable key-value store: writes persist across app restarts with a 7-day TTL (TTL resets on any read or write).  `modal.Queue` does NOT persist — cleaned up at app completion; don't use it for checkpointing.
-
-Use for: live per-worker progress state, orchestrator control flags (budget_halt), cross-app counters. Don't use for: large artifacts (KB-scale), append-only provenance (use JSONL on volume).
-
-**Namespace mandatory.** With a 7-day TTL, a key like `f"sbayesrc.{trait_id}"` collides with stale state from a prior failed run — the reconciler would see "already completed" when nothing has run this session. Prefix every live key with a run_id: `f"{run_id}.{stage}.{unit_id}"`. Set `WORKER_RUN_ID` env var once per launch so every container inherits the same scope.
-
-```python
-d = modal.Dict.from_name("worker_state", create_if_missing=True)
-key = f"{run_id}.{stage}.{unit_id}"
-d[key] = {"step": "mcmc_start", "last_heartbeat": time.time(), ...}
-```
-
-Wrap reads in `try/except (modal.exception.AuthError, ConnectionError, KeyError)` — Dict is the live control plane, NOT the source of truth. JSONL on volume is the audit plane. One truth per axis; never write the same fact to both.
-
-### Identity API
-Do not trust memory for Modal runtime identity helpers; verify against the
-current client before adopting a new name. Historical probe on 1.4.1: top-level
-`modal.current_container_id` and `modal.current_app_id` did NOT exist and were
-not on `modal.functions` either. Known-safe fallbacks from that probe:
-
-- `modal.current_input_id()` — unique per `.map()` input (returns Optional[str], None locally)
-- `modal.current_function_call_id()` — app invocation identity
-- `os.environ.get("MODAL_TASK_ID", "local")` — Modal-runtime-set container identity env var
-
-### Rule: budget monitoring before launch
-Check Modal Live Usage before launching anything significant. >85% = don't launch long jobs. There's no graceful budget-aware degradation; you hit the limit and everything dies.
-
-### Programmatic spend queries
-For current 1.5.1 work, prefer the new Workspace/Environment billing API or its
-CLI frontend. The CLI check is:
-
-```bash
-modal billing report --for today --json --show-resources --tag-names run_id,stage,attempt_id
-modal environment billing report <environment> --for today --json --show-resources --tag-names run_id,stage,attempt_id
-```
-
-The Python-side replacement for the old workspace API is:
-`modal.Workspace().billing.report(...)` or
-`modal.Environment.from_name(...).billing.report(...)` after probing the active
-SDK shape. These reports include resource-level cost breakdowns (CPU, memory,
-specific GPU types), which stage telemetry should preserve.
-
-Deprecated historical surface: `modal.billing.workspace_billing_report(...)`.
-Do not build new code on it.
-
-Cloud billing APIs typically lag 5-15 min. A 60s watchdog poll + 90% threshold can still miss bursts that cross the cap before the poll. Pair polling (belt) with admission control at launch (suspenders).
-
-### Budget defense: sidecar watchdog + halt flag
-The most reliable defense against budget kill is prevention: a separate daemon
-that polls a live-probed billing surface (CLI JSON or a verified Python API)
-and sets a halt flag in `modal.Dict` which every launch path reads before
-dispatching.
-
-```python
-# Daemon (local process, not on Modal — it'd be killed by the event it detects):
-dict_ = modal.Dict.from_name("orchestrator_state", create_if_missing=True)
-if mtd >= threshold_usd:
-    dict_["budget_halt"] = {"set_at": time.time(), "reason": "...", "remaining_budget": cap - mtd}
-
-# Launcher (orchestrator):
-halt = dict_.get("budget_halt")
-if halt:
-    raise BudgetHaltError(halt["reason"])  # refuse launch cleanly
-```
-
-On launch failure, also inspect the subprocess stderr for `ResourceExhausted` / `quota exceeded` / `workspace budget` / `spend limit`. Do NOT include `auth error` / `unauthenticated` in that signature set — `MODAL_TOKEN_ID` rotation gets misclassified and poisons `orchestrator_state` globally until a human clears it.
-
 ## Failure-Mode Cheatsheet
 
 - **Import error or crash loop after detach** -> inspect live app state first; `retries=0` does not stop container crash retries
@@ -483,50 +168,15 @@ On launch failure, also inspect the subprocess stderr for `ResourceExhausted` / 
 - **Download or write looks complete but is wrong** -> validate integrity, not just size; use atomic completion markers
 - **Unexpected GPU bill** -> check `max_containers`, tags, and `.starmap()` fanout before anything else
 
-## Durable Gotchas
+## Durable Gotchas (most-hit; full list in `references/gotchas.md`)
 
-1. **`volume.commit()` required** -- forgetting it still causes silent loss.
-2. **No relative paths** -- container cwd is `/root`.
-3. **No SQLite on volumes** -- NFS locking is the wrong substrate.
-4. **`--detach` + `.spawn()`** -- only the last triggered function survives disconnect.
-5. **Detached import failures can crash-loop** -- live app stays up retrying failed imports.
-6. **Container crashes retry differently from code exceptions** -- `retries=N` is not the whole story.
-7. **Dedup before launching** -- check `modal app list --json` before restarting orchestrated work.
-8. **Use JSON output for tooling** -- table output truncates and lies by omission.
-9. **Use SDK for volume probes/reads** -- repeated CLI subprocesses are slow and memory-heavy.
-10. **`modal run --detach` should not be wrapped in local timeouts** -- build can continue server-side after your client dies.
-11. **`modal volume get` is silent with captured output** -- monitor file growth yourself for large transfers.
-12. **Validate downloads by integrity, not size**.
-13. **`.starmap()` is the easiest way to create runaway cost** -- always cap `max_containers`.
-14. **`cpu` means physical cores, not vCPUs**.
-15. **`uv_pip_install` on CUDA base images can break ABI/toolchain expectations** -- prefer `pip_install` for compiled CUDA stacks.
-16. **App wall-clock age lies by omission** -- a detached app can remain listed long after a worker was preempted or disappeared; always join app state with fresh receipt/progress.
-17. **Budget kill ≠ preemption** -- preemption triggers `retries`; budget kill SIGKILLs everything with no grace period, no exit handler, no retry. Only committed volume state survives.
-18. **`.map()` containers are invisible until they commit** -- PipelineLogger JSONL writes go to volume but commits happen at trait end. 10 containers running for 6h with 0 commits = 0 visibility into what they're doing. Add explicit `print()` at step transitions for stdout trace.
-19. **Artifact file watchdogs are fooled by retry leftovers** -- if a subprocess times out with a 21GB file on ephemeral disk, the retry's new container starts fresh. If the watchdog runs before the retry subprocess touches the dir, it sees `annotation_mb=21793.4` but that's the OLD file from a DIFFERENT container (Modal cleans `/tmp` between retries... usually). Verify via timestamps, not presence.
-20. **Mutating CLI verbs prompt `[y/N]` and ABORT in non-tty** -- `container stop`, `app stop`, `volume delete`... under nohup/scripts print "no interactive terminal detected" and exit non-zero; an unchecked exit reads as success while NOTHING happened. Scripts: always `-y`/`--yes` AND check the exit code. (2026-07-11 arc-agi: "1s snapshot restores" were the never-stopped container still answering -- the measurement, not just the teardown, was silently wrong.)
-21. **`container stop` is asynchronous** -- returning 0 ≠ container dead. Anything keyed on "stopped" (restore timing, port reuse) must poll `container list` until the ID is gone, and assert the answering container ID CHANGED afterward. Reference implementation: arc-agi `scripts/modal_serve_lib.sh::msl_container_stop_verified`.
-22. **`@app.server` (flash) endpoints live on `*.modal.direct`, not `*.modal.run`** -- and `modal deploy` stdout wraps at terminal width (80 in non-tty), truncating URLs mid-domain. Parse deploy output only with `COLUMNS=300` set, match BOTH domains, or skip parsing: `@modal.web_server` URLs are deterministic (`https://<workspace>--<app>-<fn>.modal.run`).
-23. **A non-detached `modal run` dies WITH your laptop** -- system sleep / network blip drops the client's gRPC heartbeat and the server CANCELS the remote function ("Stopping app - local client disconnected"), killing an otherwise-healthy GPU run. ANY `modal run` whose remote wall exceeds minutes-you'd-bet-on-no-sleep MUST use `--detach` (client death then can't kill it; monitor via `modal app logs` + volume checkpoints, and read a dead local log tail as CLIENT state, not job state). Nohup/bgrun does NOT protect against this -- the client process survives but its network doesn't. (2026-08-19 arc-agi: 47-min training run killed at step 350/1330, ~$3.5, by a morning laptop sleep; the error message itself names the fix.)
-24. **Workspace-disabled (spend cap) is a SILENT scheduling starvation, not an error** -- reads (`app list`, `volume ls`) keep working, deploys "succeed", but new containers never schedule: web endpoints 503 forever with ZERO bootlogs, and running containers die later at retry boundaries with `ConflictError: workspace ... is disabled`. A long 503 streak with no new bootlog on a boot-instrumented serve = check the workspace FIRST, before any boot-failure theory. (2026-08-19 arc-agi: two probe reruns + one training run mis-diagnosed twice before the ConflictError named it.)
-25. **An AWAITED `.remote()` is coupled to the local client even under `modal run --detach` -- use `.spawn()` + `--detach` + a volume completion-marker for anything long.** Measured 2026-08-19 (arc-agi): a training task was server-cancelled in the SAME MINUTE its local client died of a DNS blip, at step 1290/1330 (~97%, --detach was set). Causal arrow undetermined at available resolution (client-death-cancels-call vs infra-preemption-then-reconnect-DNS-fail both fit) -- but the defensive form is identical either way, and its two halves are each independently required: `.spawn()` WITHOUT `--detach` dies the moment the entrypoint returns ("Stopping app - local entrypoint completed", measured same day), and `--detach` without spawn leaves the call awaited by a mortal client. Completion signal = an artifact the FUNCTION writes at its end (manifest/marker json + vol.commit), polled by the launcher's watcher; per-block/step partial commits bound the loss of any mid-run kill. Reference implementations: arc-agi scripts/modal_merge_requant.py + modal_g1_gate.py (spawn modes, death-capture, partials).
-
-23. **Same-day `modal billing report` lags** -- identical totals hours apart while serves burned in between. Never book same-day $ actuals as final; pull at next-day close (arc-agi `just modal-cost` reads this source).
-24. **GPU-memory-snapshot restore: vendor "5-12s" is the internal `/wake_up` only** -- full trigger→ready for a 27B (sleep level 1, ~51 GiB CPU-side snapshot) measured ~93s (still 5-10x over a compile-cache cold boot). And the vLLM compile cache (volume-mounted `~/.cache/vllm`) is keyed per engine-config hash: changing `max_inputs`/quant/spec = new hash = full recompile (~660-1100s); same-config redeploys ~200-330s.
-
-25. **flashinfer sampler JIT-compiles (ninja) during vLLM warmup -- >18min on a cold container, silently eating any readiness poll.** vLLM 0.24 defaults to the flashinfer top-k/top-p sampler; when the wheel lacks AOT kernels for the GPU arch it ninja-builds them at first sample, so `/health` never comes up inside a 1200s window and teardown SIGINTs mid-compile (arc-agi student-regret probe 2026-07-11 -- looked like a hung serve, was a compiler). Fix: bake `VLLM_USE_FLASHINFER_SAMPLER=0` into the image `.env()` (torch fallback is negligible at small batch). If flashinfer perf ever matters, bake the JIT cache at image-build time on a GPU builder -- never pay a kernel compile inside a readiness window.
-
-26. **Prefix caching crashes the EngineCore on Mamba/GDN-hybrid models (Qwen3-Next / Qwen3.6) under repeated-shared-prefix workloads.** Any driver that scores/samples many candidates against the SAME long context (batch-scoring, pass@k over one prompt, `prompt_logprobs` scoring loops) hits this: the FIRST long-prompt request returns HTTP 500 `"EngineCore encountered an issue"`, and every request after it returns empty HTTP 204s for the rest of the container's life (the engine is dead, not just that one call -- redeploying is the only recovery, retries within the same container do nothing). vLLM's hybrid attention block size (528 tokens, aligned to the Mamba page size) plus documented Mamba-Attention-hybrid prefix-cache defects (vLLM issues #40696 "prefix caching completely ineffective for Mamba-hybrid when prompt < block_size", #43587 "prefix caching fails for incremental multimodal requests on Mamba-Attention hybrid (Qwen3.5)", #39809 "Mamba prefix caching + MTP crashes on startup") are the documented root-cause class; arc-agi hit the crash empirically (not from those exact issue numbers -- inferred from the vendor-documented defect CLASS, then confirmed the fix worked) via `experiments/passk_support/likelihood_scorer.py`'s prompt_logprobs scoring grid, 2026-07-17. **Fix: `--no-enable-prefix-caching`** on the `vllm serve` command for any Qwen3-Next/Qwen3.6/other GDN-Mamba-hybrid model whose workload repeats a shared long prefix across many requests -- pass it via `modal_serve_adapter.py`'s existing `SERVE_EXTRA_ARGS` passthrough, never a hand-edit of the adapter. Symptom signature to grep for when diagnosing a "serve went dark mid-grid": first request in a batch returns 500 with `EngineCore`, all subsequent requests return 204 with an empty body.
-
-(Four former items — ephemeral-disk wipe, PYTHONUNBUFFERED, timeout+50%, commit-doesn't-copy — moved up into the Progress Survivability rules; one fact, one home.)
-
-### Testing preemption handling
-Do not assume `modal.experimental.simulate_preemption` exists; probe the active
-SDK before building around it. Historical 1.4.1 probe: importing it from
-`modal.experimental` failed. To force-test `@modal.exit()` handling, use
-`modal app stop <app-id>` mid-work — imperfect proxy because it fires the
-graceful-shutdown path but does NOT validate budget-kill behavior (which
-SIGKILLs with no handler run).
+- `volume.commit()` is required; no relative paths (cwd is `/root`); no SQLite on volumes.
+- Long runs: `modal run --detach` + `.spawn()` + a function-written completion marker. A non-detached run or an awaited `.remote()` dies with the laptop or agent.
+- Always cap `max_containers` (`.starmap()` is the easiest runaway cost); `cpu` means physical cores.
+- Mutating CLI verbs need `-y` and an exit-code check (non-tty aborts silently); `container stop` is asynchronous.
+- Warm zombie containers serve old code after a redeploy: `modal app stop -y NAME`, then deploy.
+- Never fan out recursive volume lists while stages write (workspace-wide VolumeListFiles quota, C1); volume RPCs have no per-call timeout (C2).
+- Use JSON output for tooling and the SDK, not CLI subprocesses, for volume probes.
 
 ## MANDATORY: Test Before Deploying
 
@@ -554,24 +204,13 @@ Detailed docs in `references/`:
 - `attribution.md` -- question/source/status/spend reporting pattern
 - `sandboxes.md` -- creation, exec, snapshots, named sandboxes
 - `examples.md` -- end-to-end code examples
-
-## Deploy gotchas (2026-06-10, imagegen)
-
-- **Zombie containers serve old code after redeploy.** A warm container from the
-  previous version can keep receiving `Cls.from_name` calls (3 identical stale
-  tracebacks across 2 redeploys). Force cutover: `modal app stop -y NAME` then
-  `modal deploy`. Diagnose: traceback line numbers ≠ local file's.
-- **`modal run` dies with the local process.** A Bash-timeout/SIGKILL on the local
-  `modal run` tears down the ephemeral app mid-cold-start. For heavy cold starts
-  (model downloads), `modal deploy` once + call via `Cls.from_name` from a separate
-  client process — the deployed container survives local timeouts and a retry hits
-  it warm. **Subagent corollary (2026-07-15, elwr double-death):** an AGENT going
-  idle/yielding kills its backgrounded `modal run` children the same way — any
-  agent-launched run expected >10 min MUST use `modal run --detach` (server-side,
-  survives client death) plus per-unit `vol.commit()` checkpoints, so a dead client
-  loses at most one unit and the parent can grade from volume artifacts. Two
-  launches died to this in one day before the detach; brief templates should cite
-  this bullet, not restate it.
+- `checkpointing.md` -- read when writing `@modal.exit`, `.SUCCESS` sentinels, mid-step checkpoints
+- `preemption.md` -- read when sizing retries/chunks, considering `nonpreemptible`, or a stage won't schedule
+- `budget-and-spend.md` -- read when querying spend, writing a budget watchdog, or after a budget kill
+- `gotchas.md` -- read when debugging any odd platform behavior (durable gotchas, C1–C11, deploy zombies)
+- `changelog.md` -- read when bumping Modal, checking a dated platform note, or adopting a 1.5.x feature
+- `known-issues.md` -- read when a failure matches a dated incident (memento helper appends here)
+- `marker-pdf-extraction.md` -- read when running Marker PDF→Markdown on Modal
 
 **Hit a fresh Modal gotcha or a defect in THIS skill?** Log it so the next deploy inherits the fix:
 `~/Projects/skills/hooks/append-skill-memento.sh modal '<one-line issue>'`.

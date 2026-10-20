@@ -374,3 +374,30 @@ in `modal.exception`, but whether it fires on workspace-budget kill is
 SDK-dependent and historically UNVERIFIED. Don't build in-container
 emergency-save paths without an empirical probe first ($1 test workspace,
 observe actual signal).
+
+## Relocated from SKILL.md (2026-10-21, verbatim)
+
+### Live control plane: `modal.Dict` for per-worker state
+`modal.Dict.from_name(name, create_if_missing=True)` gives a durable key-value store: writes persist across app restarts with a 7-day TTL (TTL resets on any read or write).  `modal.Queue` does NOT persist — cleaned up at app completion; don't use it for checkpointing.
+
+Use for: live per-worker progress state, orchestrator control flags (budget_halt), cross-app counters. Don't use for: large artifacts (KB-scale), append-only provenance (use JSONL on volume).
+
+**Namespace mandatory.** With a 7-day TTL, a key like `f"sbayesrc.{trait_id}"` collides with stale state from a prior failed run — the reconciler would see "already completed" when nothing has run this session. Prefix every live key with a run_id: `f"{run_id}.{stage}.{unit_id}"`. Set `WORKER_RUN_ID` env var once per launch so every container inherits the same scope.
+
+```python
+d = modal.Dict.from_name("worker_state", create_if_missing=True)
+key = f"{run_id}.{stage}.{unit_id}"
+d[key] = {"step": "mcmc_start", "last_heartbeat": time.time(), ...}
+```
+
+Wrap reads in `try/except (modal.exception.AuthError, ConnectionError, KeyError)` — Dict is the live control plane, NOT the source of truth. JSONL on volume is the audit plane. One truth per axis; never write the same fact to both.
+
+### Identity API
+Do not trust memory for Modal runtime identity helpers; verify against the
+current client before adopting a new name. Historical probe on 1.4.1: top-level
+`modal.current_container_id` and `modal.current_app_id` did NOT exist and were
+not on `modal.functions` either. Known-safe fallbacks from that probe:
+
+- `modal.current_input_id()` — unique per `.map()` input (returns Optional[str], None locally)
+- `modal.current_function_call_id()` — app invocation identity
+- `os.environ.get("MODAL_TASK_ID", "local")` — Modal-runtime-set container identity env var
