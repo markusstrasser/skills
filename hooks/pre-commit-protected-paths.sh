@@ -111,9 +111,11 @@ if [ -n "$APPENDONLY" ]; then
             violations+=("APPEND-ONLY HEAD blob unreadable, cannot prove nothing was lost: $path")
             continue
         fi
+        # --filters runs smudge (git-crypt, LFS) so both sides compare as working-tree
+        # text; raw blobs of an encrypted path are ciphertext and never match.
         if ! awk 'BEGIN { i = 0; n = 0 } NR==FNR { old[n++] = $0; next } { if (i < n && $0 == old[i]) i++ } END { exit (i == n) ? 0 : 1 }' \
-                <(git cat-file blob "HEAD:$path" 2>/dev/null) \
-                <(git cat-file blob ":$path" 2>/dev/null); then
+                <(git cat-file --filters "HEAD:$path" 2>/dev/null) \
+                <(git cat-file --filters ":$path" 2>/dev/null); then
             violations+=("APPEND-ONLY existing content removed, rewritten, or reordered (insertions are fine): $path")
         fi
     done < <(git diff --cached --name-only --no-renames --diff-filter=M -- 2>/dev/null)
