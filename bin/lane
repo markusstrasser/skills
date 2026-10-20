@@ -189,6 +189,7 @@ import sys
     branch,
     no_worktree,
     worker_settings,
+    last_note,
 ) = sys.argv[1:]
 payload = {
     "name": name,
@@ -203,6 +204,7 @@ payload = {
     "branch": branch,
     "no_worktree": no_worktree == "true",
     "worker_settings": json.loads(worker_settings),
+    "last_note": last_note,
 }
 with open(output, "w", encoding="utf-8") as handle:
     json.dump(payload, handle, indent=2, sort_keys=True)
@@ -614,7 +616,9 @@ launch_worker() {
         echo hi
         ;;
       fake-hang)
-        sleep 30
+        # Long enough to outlast the stall checks on a loaded host (at load ~20 a 30 s hang
+        # finished first and the test read DONE:0); every test stops it with `lane stop`.
+        sleep 600
         ;;
       *)
         echo "lane: unsupported worker: $worker" >&2
@@ -651,7 +655,7 @@ launch_worker() {
   if [ -z "$started_epoch" ]; then
     echo "lane: warning: could not record started_epoch for process group $launch_pid" >&2
   fi
-  if ! json_write "$metadata" "$name" "$repo" "$worktree" "$brief" "$launch_pid" "$started_at" "$started_epoch" "$worker" "$base" "$branch" "$no_worktree" "$WORKER_SETTINGS"; then
+  if ! json_write "$metadata" "$name" "$repo" "$worktree" "$brief" "$launch_pid" "$started_at" "$started_epoch" "$worker" "$base" "$branch" "$no_worktree" "$WORKER_SETTINGS" "$resume_note"; then
     kill -TERM -- "-$launch_pid" 2>/dev/null || true
     die "could not write metadata: $metadata"
   fi
@@ -1224,6 +1228,20 @@ cmd_resume() {
     fi
     note_path="$consumed"
     echo "lane: claimed resume note: $consumed"
+  else
+    # A note-carrying run that was stopped or failed never finished its revision: re-send it, or
+    # the worker silently redoes its first task from the brief alone (2026-10-20, three lanes).
+    local last_note
+    local last_exit=""
+    last_note=$(json_get "$metadata" last_note 2>/dev/null || true)
+    if [ -f "$(done_path "$name")" ]; then
+      last_exit=$(sed -n '1s/^EXIT=//p' "$(done_path "$name")")
+    fi
+    if [ -n "$last_note" ] && [ "$last_exit" != "0" ]; then
+      [ -f "$last_note" ] || die "interrupted run's note is missing: $last_note"
+      note_path="$last_note"
+      echo "lane: re-sending the interrupted run's note: $last_note"
+    fi
   fi
   stop_lane "$name"
   launch_worker "$name" "$repo" "$worktree" "$brief" "$worker" "$base" "$branch" "$no_worktree" true "$note_path"

@@ -511,6 +511,33 @@ wait_for_file "$LANE_HOME/first.done"
 assert_eq "Do the task in $BRIEF_REAL." "$(head -1 "$LANE_HOME/first.log")" "no-note prompt"
 grep -q '^hi$' "$LANE_HOME/first.log" || fail "no-note resumed fake worker did not finish"
 
+echo "test: --no-note re-sends the note of a stopped run"
+printf '%s\n' 'Revision note for the stopped run.' >"$TEST_TMP/stopnote.txt"
+LANE_FAKE_HOLD="$TEST_TMP/never-released" "$LANE" resume first --note "$TEST_TMP/stopnote.txt" >/dev/null
+"$LANE" stop first >/dev/null
+assert_no_file "$LANE_HOME/first.done"
+stopped_resume=$("$LANE" resume first --no-note)
+grep -Fq "lane: re-sending the interrupted run's note: $LANE_HOME/first.resume-note.consumed-3.md" <<<"$stopped_resume" || fail "stopped-run resume did not announce the re-sent note"
+wait_for_file "$LANE_HOME/first.done"
+assert_eq "Revision note for the stopped run." "$(head -1 "$LANE_HOME/first.log")" "stopped-run note re-sent"
+
+echo "test: --no-note re-sends the note of a failed run, then drops it after success"
+"$LANE" run notefail --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/notefail.done"
+printf '%s\n' 'Revision note for the failed run.' >"$TEST_TMP/failnote.txt"
+CODEX_FAKE_RC=1 "$LANE" resume notefail --note "$TEST_TMP/failnote.txt" >/dev/null
+wait_for_file "$LANE_HOME/notefail.done"
+assert_eq "EXIT=1" "$(<"$LANE_HOME/notefail.done")" "failed note run marker"
+failed_resume=$("$LANE" resume notefail --no-note)
+grep -Fq "lane: re-sending the interrupted run's note:" <<<"$failed_resume" || fail "failed-run resume did not announce the re-sent note"
+wait_for_file "$LANE_HOME/notefail.done"
+grep -Fxq 'Revision note for the failed run.' "$LANE_CAPTURE/codex.args" || fail "failed-run note was not re-sent"
+assert_eq "EXIT=0" "$(<"$LANE_HOME/notefail.done")" "re-sent note run marker"
+ok_resume=$("$LANE" resume notefail --no-note)
+if grep -Fq "re-sending" <<<"$ok_resume"; then fail "successful run's note was re-sent"; fi
+wait_for_file "$LANE_HOME/notefail.done"
+if grep -Fq 'Revision note for the failed run.' "$LANE_CAPTURE/codex.args"; then fail "brief-only resume carried the old note"; fi
+
 echo "test: global resume note path is absent"
 if grep -Fq 'LANE_HOME/resume-note.md' "$LANE"; then
   fail "lane still references the global resume note"
