@@ -35,6 +35,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from checkpoint_resume import prompt_names  # noqa: E402
 from lib_context_tokens import context_tokens  # noqa: E402
 
 MAX_CONTINUES = 100
@@ -76,7 +77,7 @@ WRAPUP_PROMPT = """CONTEXT THRESHOLD REACHED ({ctx:,} >= {thr:,} tokens) — run
 2. Session sweep: anything to improve, eradicate, or rethink with smart tooling, hooks, skills, MCPs, or goal rethinking? Wasted effort? Bad infrastructure? What could a future agent leverage? Only long-term, deep, STRICTLY better changes — no noise, no iatrogenic harm, no backward-compat cruft. "Nothing strictly better" is a fine answer.
 3. Run /rsi.
 4. Spend remaining full-context leverage: loose ends only this context can tie off; update docs/indexes for files this session touched; record path-dependent decisions in decisions/.
-5. Rewrite .claude/checkpoint.md as the post-compact re-entry brief:
+5. Write .claude/{brief} as this session's post-compact re-entry brief (header line `<!-- session: {sid} -->`; the PreCompact hook writes its extract to .claude/{auto} and never touches this file):
    GOAL — the /goal verbatim.
    FRONTS — per-front status (done / in-flight / blocked) with evidence (commit SHAs, paths).
    NEXT — the 2-3 highest-value next actions, with exact commands.
@@ -85,7 +86,7 @@ WRAPUP_PROMPT = """CONTEXT THRESHOLD REACHED ({ctx:,} >= {thr:,} tokens) — run
 6. End your turn normally. Native auto-compact fires on a subsequent turn (the PreCompact guard passes once this ritual has been prompted); the goal continues after."""
 
 CONTINUE_PROMPT = """GOAL-RUN ACTIVE (continuation {n}/{cap}) — the goal is not marked done; keep going.
-- If you just compacted: re-orient from .claude/checkpoint.md and VERIFY claimed work against git log / the checkpoint's VERIFY commands before building on it — compaction summaries hallucinate completions.
+- If you just compacted: re-orient from this session's checkpoints (.claude/{brief}, then .claude/{auto}) and VERIFY claimed work against git log / the brief's VERIFY commands before building on it — compaction summaries hallucinate completions.
 - Advance the highest-value front. Run the portfolio (grind subagents / heretic on what just landed / scout / meta) rather than a single serial thread; don't idle, don't re-derive settled state.
 - Goal fully done AND verified → touch .claude/goal-done, write the final summary, stop.
 - Genuinely blocked on the human with no other front progressable → append the ask to HUMAN.md, touch .claude/goal-blocked, stop.
@@ -213,7 +214,16 @@ def main() -> int:
             fired.write_text(f"ctx={ctx}\n")
         except Exception:
             pass
-        return _block(WRAPUP_PROMPT.format(ctx=ctx, thr=threshold))
+        auto, brief = prompt_names(payload.get("session_id"))
+        return _block(
+            WRAPUP_PROMPT.format(
+                ctx=ctx,
+                thr=threshold,
+                auto=auto,
+                brief=brief,
+                sid=payload.get("session_id") or "<session id>",
+            )
+        )
 
     # QUIET-STATE (2026-07-12, O5 consumed with operator present): an event-wait is a
     # LEGAL resting state when the agent DECLARES it and the funded-front gauge is not
@@ -297,7 +307,11 @@ def main() -> int:
                 f"explicitly and touch .claude/goal-blocked with the reason in HUMAN.md. Do NOT keep "
                 f"monitoring done work.\n\n"
             )
-    return _block(unstarted_prefix + CONTINUE_PROMPT.format(n=n + 1, cap=MAX_CONTINUES))
+    auto, brief = prompt_names(payload.get("session_id"))
+    return _block(
+        unstarted_prefix
+        + CONTINUE_PROMPT.format(n=n + 1, cap=MAX_CONTINUES, auto=auto, brief=brief)
+    )
 
 
 if __name__ == "__main__":

@@ -49,13 +49,11 @@ fi
 
 CKPT=""
 if [ -n "$ROOT" ] && [ -d "$ROOT/.claude" ]; then
-  # Point the resume at the CURRENT session's checkpoint — NOT a stale sibling.
-  # The PreCompact writer may divert a fresh checkpoint to checkpoint-autogen.md
-  # (anti-clobber for a tracked/curated or LIVE-peer checkpoint.md). This hook used
-  # to hardcode "a fresh checkpoint.md was written — read it first", which was FALSE
-  # after a divert and re-oriented a resume off a dead 2-day-old different-session
-  # checkpoint (genomics 2026-07-06). checkpoint_resume single-sources the selection
-  # (session-stamp match, else newest) and returns an honest, provenance-aware message.
+  # Point the resume at THIS session's checkpoint-auto-<sid8>.md (full-id stamp match)
+  # and name the hand-curated checkpoint.md / checkpoint-<sid8>.md beside it.
+  # checkpoint_resume single-sources the selection and its honest provenance: a
+  # hardcoded name once re-oriented a resume off a dead session's file (genomics
+  # 2026-07-06).
   CKPT=$(python3 "$HOOK_DIR/checkpoint_resume.py" resume-message "$ROOT/.claude" "$SID" 2>/dev/null || echo "")
 fi
 

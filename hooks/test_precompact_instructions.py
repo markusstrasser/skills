@@ -16,7 +16,12 @@ def contract_only(out: str) -> bool:
     return CONTRACT in out and "Active skill arcs" not in out
 
 
-def run_hook(payload: dict, log_lines: Sequence[dict | str], goal_run: bool = False) -> str:
+def run_hook(
+    payload: dict,
+    log_lines: Sequence[dict | str],
+    goal_run: bool = False,
+    brief_name: str = "",
+) -> str:
     with tempfile.TemporaryDirectory() as td:
         home = Path(td)
         (home / ".claude").mkdir()
@@ -28,6 +33,8 @@ def run_hook(payload: dict, log_lines: Sequence[dict | str], goal_run: bool = Fa
         (cwd / ".claude").mkdir(parents=True)
         if goal_run:
             (cwd / ".claude" / "goal-run").write_text("1")
+        if brief_name:
+            (cwd / ".claude" / brief_name).write_text("# hand-written brief\n")
         payload = {**payload, "cwd": str(cwd)}
         out = subprocess.run(
             [sys.executable, str(HOOK)],
@@ -96,7 +103,21 @@ def main() -> int:
     )
     assert "/decide" in out, out
     ok += 1
-    print(f"OK — {ok}/8 cases pass")
+    # 9. the re-read list names THIS session's checkpoint, never the shared checkpoint.md
+    sid = "aaaaaaaa-1111-4111-8111-111111111111"
+    out = run_hook({"session_id": sid}, [])
+    assert "/.claude/checkpoint-auto-aaaaaaaa.md" in out, out
+    assert "checkpoint.md" not in out and "hand-written brief" not in out, out
+    ok += 1
+    # 10. the session's own hand-written brief is named only when it exists
+    out = run_hook({"session_id": sid}, [], brief_name="checkpoint-aaaaaaaa.md")
+    assert "hand-written brief" in out and "/.claude/checkpoint-aaaaaaaa.md" in out, out
+    ok += 1
+    # 11. no usable session id -> the writer writes no checkpoint, so none is named
+    out = run_hook({"session_id": ""}, [])
+    assert contract_only(out) and "checkpoint" not in out, out
+    ok += 1
+    print(f"OK — {ok}/11 cases pass")
     return 0
 
 

@@ -2,7 +2,7 @@
 # SessionStart (global): warn when a peer `claude` session shares this checkout.
 #
 # Concurrent interactive sessions on ONE working copy clobber shared .claude/
-# state (checkpoint.md, current-session-id, trackers) — the #1 cross-session
+# state (hand-written checkpoint.md, current-session-id, trackers) — the #1 cross-session
 # failure found by the 2026-06-13 drift pass. The field-standard fix is
 # isolate-per-agent + merge via git (CAID arXiv:2603.21489; worktree>soft 7.8pp).
 # This hook nudges toward `claude --worktree` when it detects the risk.
@@ -54,7 +54,7 @@ if [ "$peers" -ge 1 ]; then
   # so acting is a single paste, not a recall-from-memory task. No silent magic.
   echo "⚠  PEER SESSION — ${peers} other claude session(s) share this checkout:"
   echo "       ${cwd}"
-  echo "   Shared .claude/ state (current-session-id, trackers, checkpoint) WILL clobber across them"
+  echo "   Shared .claude/ state (current-session-id, trackers, hand-written checkpoint.md) WILL clobber across them"
   echo "   → mis-stamped commits + cross-session confusion (auto-checkpoint now fails closed, but state still thrashes)."
   echo "   ▶ Isolate THIS session — exit, then relaunch in its own worktree (one paste):"
   echo "         claude --worktree ${base}-wt${sfx}"

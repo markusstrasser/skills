@@ -18,6 +18,9 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from checkpoint_resume import prompt_names  # noqa: E402
+
 MAX_BLOCKS = 5
 
 # Goal-specific lines only: the general summary contract (Fable 5.1 guide's six
@@ -25,8 +28,9 @@ MAX_BLOCKS = 5
 # precompact-instructions.py, whose output the binary joins with this one.
 CUSTOM_INSTRUCTIONS = (
     "Preserve verbatim in the summary: the original goal statement (/goal text), "
-    "the path .claude/checkpoint.md and instruction to re-read it, the current "
-    "state of each work front (done / in-flight / blocked), any pending "
+    "this session's checkpoint paths (.claude/{brief}, the ritual's re-entry brief, "
+    "and .claude/{auto}, the PreCompact extract) and the instruction to re-read "
+    "them, the current state of each work front (done / in-flight / blocked), any pending "
     "verification commands, and any hard constraints the operator stated."
 )
 
@@ -82,7 +86,8 @@ def main() -> int:
         blocks.unlink(missing_ok=True)
     except Exception:
         pass
-    print(CUSTOM_INSTRUCTIONS)
+    auto, brief = prompt_names(payload.get("session_id"))
+    print(CUSTOM_INSTRUCTIONS.format(auto=auto, brief=brief))
     return 0
 
 

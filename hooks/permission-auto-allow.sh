@@ -27,12 +27,19 @@ case "$TOOL" in
         allow_tool "$TOOL"
         ;;
     Write|Edit)
-        # Auto-allow writes to .claude/checkpoint.md (context-save before compaction)
+        # Auto-allow writes to .claude/checkpoint.md and the per-session
+        # .claude/checkpoint-<sid8>.md brief (context-save before compaction)
+        # A glob `*` matches `/`, so `*/.claude/checkpoint-*.md` also matched
+        # `.claude/checkpoint-x/../../CLAUDE.md`: refuse `..` and require the file to sit
+        # directly in .claude/ with a brief's name (another session's auto file is not ours).
         FPATH=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // ""' 2>/dev/null) || true
-        case "$FPATH" in
-            */.claude/checkpoint.md) allow_tool "$TOOL:checkpoint" ;;
-            */.claude/plans/*) allow_tool "$TOOL:plans" ;;
-        esac
+        BASE=${FPATH##*/}
+        if [[ $FPATH != *..* && ${FPATH%/*} == */.claude ]] \
+            && [[ $BASE == checkpoint.md || $BASE =~ ^checkpoint-[A-Za-z0-9_-]{8}\.md$ ]]; then
+            allow_tool "$TOOL:checkpoint"
+        elif [[ $FPATH != *..* && $FPATH == */.claude/plans/* ]]; then
+            allow_tool "$TOOL:plans"
+        fi
         ;;
     mcp__context7__*|mcp__research__search_papers|mcp__research__list_*|mcp__research__get_*)
         allow_tool "$TOOL"

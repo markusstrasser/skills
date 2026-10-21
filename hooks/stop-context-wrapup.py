@@ -57,6 +57,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from checkpoint_resume import prompt_names  # noqa: E402
 from lib_context_tokens import context_model, context_tokens  # noqa: E402
 
 TRIGGER_OFFSET = 32_000  # native auto-compact fires this far below the window
@@ -69,7 +70,7 @@ STATE_TTL_S = 7 * 86_400
 PROMPT = """CONTEXT NEAR AUTO-COMPACT ({ctx:,} tokens; trigger fires ≈{trigger:,}) — tie off loose ends NOW, while full context exists (this fires once per fill cycle):
 1. COMMIT everything finished (granular, semantic). Post-compaction verification trusts git, not memory — uncommitted work risks being hallucinated-as-done after the summary.
 2. Loose ends only this context can tie off: in-flight edits, promised follow-ups, doc/index updates for files this session touched.
-3. Rewrite .claude/checkpoint.md as the re-entry brief: STATE (what's done, with commit SHAs/paths), NEXT (2-3 actions with exact commands), VERIFY (commands that re-derive claimed state — never bare numbers across the boundary).
+3. Write .claude/{brief} as this session's re-entry brief (header line `<!-- session: {sid} -->`; the PreCompact hook writes its extract to .claude/{auto} and never touches this file): STATE (what's done, with commit SHAs/paths), NEXT (2-3 actions with exact commands), VERIFY (commands that re-derive claimed state — never bare numbers across the boundary).
 4. Every LIVE local PID in the checkpoint gets a HARNESS-TRACKED watcher armed (run_in_background exit-watch — its completion auto-wakes the session) or an explicit "no-watcher: <reason>" line. Untracked nohup pollers write status files but wake nobody; a session that goes quiet with only those can sleep through its own job's completion until a human checks (measured: addon-2 exited overnight 2026-07-20, consumed only at the operator's morning "ok check").
 Then end your turn normally; native auto-compact proceeds on a subsequent turn."""
 
@@ -204,7 +205,13 @@ def main() -> int:
         json.dumps(
             {
                 "decision": "block",
-                "reason": PROMPT.format(ctx=ctx, trigger=trigger),
+                "reason": PROMPT.format(
+                    ctx=ctx,
+                    trigger=trigger,
+                    auto=prompt_names(sid)[0],
+                    brief=prompt_names(sid)[1],
+                    sid=sid,
+                ),
             }
         )
     )

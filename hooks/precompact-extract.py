@@ -3,8 +3,9 @@
 Reads hook JSON from stdin (session_id, transcript_path, cwd, trigger).
 Outputs:
   1. ~/.claude/compact-log.jsonl — append-only compaction metrics
-  2. <project root>/.claude/checkpoint.md — resume checkpoint with epistemic content
-     (root = git toplevel of cwd, else cwd; checkpoint_resume.project_root)
+  2. <project root>/.claude/checkpoint-auto-<sid8>.md — this session's resume checkpoint
+     with epistemic content (root = git toplevel of cwd, else cwd;
+     checkpoint_resume.project_root; name from checkpoint_resume.auto_checkpoint_name)
 
 Single pass through transcript extracts both metrics (backward-compatible)
 and actual content (new). Content categories:
@@ -25,7 +26,32 @@ from collections import deque
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from checkpoint_resume import git_toplevel, is_curated, is_stale_remnant  # noqa: E402
+from checkpoint_resume import (  # noqa: E402
+    auto_checkpoint_name,
+    expire_auto_checkpoints,
+    git_toplevel,
+    handwritten_checkpoint_name,
+    read_session_stamp,
+)
+
+COMPACT_LOG = os.path.expanduser("~/.claude/compact-log.jsonl")
+
+
+def append_compact_log(entry):
+    # The log is a side record; failing to write it must not fail the compaction hook.
+    try:
+        with open(COMPACT_LOG, "a") as f:
+            f.write(json.dumps(entry, separators=(",", ":")) + "\n")
+    except OSError as error:
+        sys.stderr.write("precompact-extract: compact log not written (%s)\n" % error)
+
+
+def write_atomic(path, text):
+    # Readers and other sessions' expiry passes never see a truncated file.
+    temporary = "%s.tmp.%d" % (path, os.getpid())
+    with open(temporary, "w") as f:
+        f.write(text)
+    os.replace(temporary, path)
 
 # ─── Sentence splitter ───────────────────────────────────────────────
 
@@ -125,13 +151,28 @@ def main():
     except Exception:
         sys.exit(0)
 
-    session = data.get("session_id", "")
-    if not session:
-        sys.exit(0)
-
+    session = str(data.get("session_id") or "")
     trigger = data.get("trigger", "unknown")
     cwd = data.get("cwd", "")
     transcript = data.get("transcript_path", "")
+
+    checkpoint_name = auto_checkpoint_name(session)
+    if not checkpoint_name:
+        # No usable session id means no per-session file to own, and a shared fallback
+        # name is the clobber this hook exists to prevent: log and write nothing.
+        reason = "missing or unusable session_id"
+        append_compact_log(
+            {
+                "ts": datetime.now().isoformat(timespec="seconds"),
+                "session": session,
+                "trigger": trigger,
+                "cwd": cwd,
+                "checkpoint": None,
+                "checkpoint_skipped": reason,
+            }
+        )
+        sys.stderr.write("precompact-extract: wrote no checkpoint (%s)\n" % reason)
+        sys.exit(0)
 
     # ─── Extraction state ─────────────────────────────────────────────
 
@@ -297,9 +338,24 @@ def main():
         except Exception:
             pass
 
+    # ─── Checkpoint target ────────────────────────────────────────────
+    # Per-session invariant: the hook writes ONLY .claude/checkpoint-auto-<sid8>.md and
+    # never a shared name; every other checkpoint*.md is hand-curated and never touched.
+    # A shared divert slot let two sessions in one checkout overwrite each other's
+    # checkpoint in turn (genomics 2026-10-22: 339ca089 ~23:15, then 1cce6699 00:21).
+
+    checkpoint_dir = os.path.join(root, ".claude")
+    checkpoint_path = os.path.join(checkpoint_dir, checkpoint_name)
+    skipped = None
+    if not cwd:
+        skipped = "missing cwd"
+    else:
+        owner = read_session_stamp(checkpoint_path)
+        if owner and owner != session:
+            skipped = "8-character prefix collision with session " + owner
+
     # ─── 1. Append to compaction log ──────────────────────────────────
 
-    log_path = os.path.expanduser("~/.claude/compact-log.jsonl")
     log_entry = {
         "ts": datetime.now().isoformat(timespec="seconds"),
         "session": session,
@@ -317,83 +373,32 @@ def main():
         "provenance_tag_count": provenance_tag_count,
         "assistant_word_count": assistant_word_count,
         "epistemic_items": sum(len(b) for b in buckets.values()),
+        "checkpoint": None if skipped else checkpoint_path,
+        "checkpoint_skipped": skipped,
     }
-    with open(log_path, "a") as f:
-        f.write(json.dumps(log_entry, separators=(",", ":")) + "\n")
 
     # ─── 2. Write resume checkpoint ───────────────────────────────────
+    # The log row is appended once the outcome is known, so it never names a file that
+    # was not written.
 
-    if not cwd:
+    if skipped:
+        append_compact_log(log_entry)
+        sys.stderr.write("precompact-extract: wrote no checkpoint (%s)\n" % skipped)
         sys.exit(0)
-
-    checkpoint_dir = os.path.join(root, ".claude")
-    os.makedirs(checkpoint_dir, exist_ok=True)
-    checkpoint_path = os.path.join(checkpoint_dir, "checkpoint.md")
-    # CLOBBER GUARD (hutter 2026-06-11: autogen overwrote a CURATED checkpoint twice in one
-    # day — both times a session had to git-restore it). If checkpoint.md is git-TRACKED,
-    # it is a curated handoff doc owned by the project: write the autogen NEXT TO it instead
-    # of over it. Untracked checkpoint.md keeps the original overwrite behavior.
-    try:
-        tracked = (
-            subprocess.run(
-                ["git", "-C", root, "ls-files", "--error-unmatch", ".claude/checkpoint.md"],
-                capture_output=True,
-                timeout=5,
-            ).returncode
-            == 0
-        )
-    except Exception:
-        tracked = False
-    if tracked:
-        checkpoint_path = os.path.join(checkpoint_dir, "checkpoint-autogen.md")
-    else:
-        # PEER-CLOBBER GUARD (2026-06-17): untracked checkpoint.md is shared mutable
-        # state across concurrent sessions on ONE checkout. If the existing checkpoint
-        # was stamped by a DIFFERENT session, don't overwrite it — divert to autogen.
-        # The git-tracked guard above only protected CURATED (tracked) checkpoints;
-        # 17 recurring shared-checkpoint clobbers were peer UNTRACKED ones slipping it.
-        # research/2026-06-17-embed-once-validated-recurring-mistakes.md
-        #
-        # BUT only protect a LIVE peer. A different-session checkpoint old enough to be
-        # a dead remnant is RECLAIMED (overwritten) — otherwise a stale 2-day-old file
-        # persists as `checkpoint.md` and misleads the resume path + non-hook readers
-        # (the CLAUDE.md "read .claude/checkpoint.md" convention). This closes the
-        # reader/writer split that re-oriented a resume off a dead session
-        # (genomics 2026-07-06). Age discriminator single-sourced in checkpoint_resume:
-        # a live peer re-writes on every compaction, far inside the age floor.
-        try:
-            with open(checkpoint_path) as _f:
-                _m = re.search(r"<!-- session: (\S+) -->", _f.read(400))
-            if _m and session and _m.group(1) != session:
-                if not is_stale_remnant(checkpoint_path, session):
-                    checkpoint_path = os.path.join(checkpoint_dir, "checkpoint-autogen.md")
-            # UNSTAMPED-CURATED (immigration-research 2026-09-27 22:43): this guard used to
-            # require a session stamp, so a hand-written checkpoint.md without one was
-            # overwritten, taking a curated brief and a peer session's section with it.
-            # An unstamped file has no known owner: like a peer's, it is protected while
-            # fresh and reclaimed once it is a stale remnant.
-            elif is_curated(checkpoint_path) and (
-                _m or not is_stale_remnant(checkpoint_path, session)
-            ):
-                # CURATED-CLOBBER GUARD (genomics 2026-09-07 02:31): the session's OWN
-                # checkpoint.md was hand-written (no hook signature, or edited after the
-                # stamped write) and carried a Pending Tasks list the transcript extract
-                # cannot reconstruct; the extract went over it and the resume lost the
-                # list. Divert beside it, exactly as for a curated tracked file; the
-                # reader (select_for_read) prefers the curated file and names the extract.
-                checkpoint_path = os.path.join(checkpoint_dir, "checkpoint-autogen.md")
-        except (OSError, FileNotFoundError):
-            pass
 
     ts = datetime.now().strftime("%Y-%m-%d %H:%M")
     has_epistemic = any(buckets.values()) or user_corrections or last_substantial_block
 
     out = []
     out.append("# Resume Checkpoint")
-    out.append("<!-- session: " + (session or "unknown") + " -->")
+    out.append("<!-- session: " + session + " -->")
     out.append("")
     out.append("Written by PreCompact hook at " + ts + ".")
     out.append("This is a handoff document. Prioritize what remains over what happened.")
+    out.append(
+        "Hook-owned: this session's next compaction rewrites it. Keep hand-written notes in"
+        " `.claude/" + handwritten_checkpoint_name(session) + "`."
+    )
     out.append("")
 
     # ── Forward-looking content (FIRST — what to do next) ──
@@ -514,8 +519,17 @@ def main():
         out.append("```")
         out.append("")
 
-    with open(checkpoint_path, "w") as f:
-        f.write("\n".join(out) + "\n")
+    try:
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        write_atomic(checkpoint_path, "\n".join(out) + "\n")
+    except OSError as error:
+        log_entry["checkpoint"] = None
+        log_entry["checkpoint_skipped"] = "write failed: %s" % error
+        append_compact_log(log_entry)
+        sys.stderr.write("precompact-extract: wrote no checkpoint (%s)\n" % log_entry["checkpoint_skipped"])
+        sys.exit(0)
+    append_compact_log(log_entry)
+    expire_auto_checkpoints(checkpoint_dir)
 
 
 if __name__ == "__main__":

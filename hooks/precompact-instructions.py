@@ -22,9 +22,17 @@ lines. Idle compaction (CC 2.1.299) reaches hooks as trigger "auto".
 Fail open on any error; no output means default summarizer behavior.
 """
 import json
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from checkpoint_resume import (  # noqa: E402
+    auto_checkpoint_name,
+    handwritten_checkpoint_name,
+    project_root,
+)
 
 TRIGGER_LOG = Path.home() / ".claude" / "skill-triggers.jsonl"
 TAIL_BYTES = 512_000  # generous tail; the log is append-only JSONL
@@ -35,8 +43,8 @@ SUMMARY_CONTRACT = (
     "Open the summary with one line saying it is a lossy compaction summary and "
     "that the files it lists are the source of truth. Then include a section "
     "'Re-read before relying on details' that lists, by exact path or URL, every "
-    "file, document and source whose contents the next steps depend on, plus "
-    ".claude/checkpoint.md; name them instead of paraphrasing their contents, and "
+    "file, document and source whose contents the next steps depend on{checkpoints}; "
+    "name them instead of paraphrasing their contents, and "
     "do not reproduce long tool output. Keep exactly: the user's requests and "
     "corrections close to verbatim; decisions and what was ruled out, with the "
     "reason; problems hit and how they were resolved; names, numbers, dates, "
@@ -47,6 +55,22 @@ SUMMARY_CONTRACT = (
     "its still-valid open items, decisions and re-read list forward word for word "
     "and drop what is finished; do not re-paraphrase it."
 )
+
+
+def checkpoint_clause(payload: dict) -> str:
+    """', plus <this session's checkpoint paths>' for the re-read list, or '' without a
+    usable session id (the PreCompact writer then writes no checkpoint)."""
+    session = str(payload.get("session_id") or "")
+    auto = auto_checkpoint_name(session)
+    if not auto:
+        return ""
+    cwd = str(payload.get("cwd") or "")
+    claude_dir = os.path.join(project_root(cwd), ".claude") if cwd else ".claude"
+    clause = ", plus this session's resume checkpoint " + os.path.join(claude_dir, auto)
+    brief = os.path.join(claude_dir, handwritten_checkpoint_name(session))
+    if os.path.isfile(brief):
+        clause += " and its hand-written brief " + brief
+    return clause
 
 
 def active_skills(session_id: str) -> list[dict]:
@@ -88,7 +112,7 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except Exception:
         return 0
-    print(SUMMARY_CONTRACT)
+    print(SUMMARY_CONTRACT.format(checkpoints=checkpoint_clause(payload)))
     rows = active_skills(str(payload.get("session_id") or ""))
     if not rows:
         return 0

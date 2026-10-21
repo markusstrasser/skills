@@ -3,7 +3,7 @@
 # PreCompact hook. Side-effect only (no decision control). Fails open.
 # Outputs:
 #   1. ~/.claude/compact-log.jsonl — append-only compaction metrics
-#   2. <project>/.claude/checkpoint.md — resume checkpoint with epistemic content
+#   2. <project>/.claude/checkpoint-auto-<sid8>.md — this session's resume checkpoint
 #
 # The key insight: compaction destroys hedged claims, negative results, open
 # questions, and decision rationale — flattening them into confident assertions.

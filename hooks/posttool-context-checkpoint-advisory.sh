@@ -21,6 +21,10 @@ fi
 INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
 SID=$(printf '%s' "$INPUT" | jq -r '.session_id // ""' 2>/dev/null || echo "")
 [ -z "$SID" ] && exit 0
+# Subagent tool calls carry agent_id and the PARENT's session_id: the context% below is the
+# main thread's (statusline), and the per-session checkpoint paths name the parent's files.
+AGENT=$(printf '%s' "$INPUT" | jq -r '.agent_id // ""' 2>/dev/null || echo "")
+[ -n "$AGENT" ] && exit 0
 
 PCT_FILE="/tmp/claude-ctxpct-${SID}"
 [ -f "$PCT_FILE" ] || exit 0
@@ -56,9 +60,9 @@ emit() {  # threshold message — json.dumps the body so a future quote can't br
 }
 
 if (( PCT >= 80 && PREV < 80 )); then
-  emit 80 "Context at ${PCT}%${ABS}. Wrap up and commit in-flight work — if you're near the window limit an auto-compact will stop the turn. The PreCompact hook snapshots checkpoint.md, but a clean committed stopping point loses less. BOUNDARY-SURVIVAL MANIFEST (F14, 2026-07-12): before the boundary, mechanically enumerate live infrastructure into the checkpoint — TaskList output, CronList output, in-flight subagent names, armed Monitors (TaskList does NOT list Monitors; enumerate from your arm history), one re-arm/harvest command per item. Compaction kills monitors and agents silently; narrative memory is what boundaries destroy."
+  emit 80 "Context at ${PCT}%${ABS}. Wrap up and commit in-flight work — if you're near the window limit an auto-compact will stop the turn. The PreCompact hook snapshots .claude/checkpoint-auto-${SID:0:8}.md, but a clean committed stopping point loses less. BOUNDARY-SURVIVAL MANIFEST (F14, 2026-07-12): before the boundary, mechanically enumerate live infrastructure into this session's hand-written .claude/checkpoint-${SID:0:8}.md — TaskList output, CronList output, in-flight subagent names, armed Monitors (TaskList does NOT list Monitors; enumerate from your arm history), one re-arm/harvest command per item. Compaction kills monitors and agents silently; narrative memory is what boundaries destroy."
 elif (( PCT >= 40 && PREV < 40 )); then
-  emit 40 "Context at ${PCT}%${ABS}. Good point to reach a committable stopping point and consider /compact — keeping context lean now beats a mid-task compaction later. The PreCompact hook will snapshot checkpoint.md regardless. If you hold live infrastructure (monitors, crons, background agents), start the checkpoint's boundary manifest now: TaskList + CronList + in-flight agents, one re-arm/harvest command each (F14)."
+  emit 40 "Context at ${PCT}%${ABS}. Good point to reach a committable stopping point and consider /compact — keeping context lean now beats a mid-task compaction later. The PreCompact hook will snapshot .claude/checkpoint-auto-${SID:0:8}.md regardless. If you hold live infrastructure (monitors, crons, background agents), start the boundary manifest in .claude/checkpoint-${SID:0:8}.md now: TaskList + CronList + in-flight agents, one re-arm/harvest command each (F14)."
 fi
 
 exit 0

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""Tests for checkpoint_resume — the single-source resume-checkpoint selection.
+"""Tests for checkpoint_resume — the single-source resume-checkpoint naming + selection.
 
-Regression target (genomics 2026-07-06): a resuming session read a stale 2-day-old
-DIFFERENT-session checkpoint.md because the writer had diverted the fresh content to
-checkpoint-autogen.md and the reader hardcoded checkpoint.md. These pin the selection
-+ stale-remnant contract both consumers rely on.
+Regression targets: genomics 2026-07-06 (a resume read a stale DIFFERENT-session file
+as its own) and genomics 2026-10-22 (two sessions in one checkout overwrote each other's
+checkpoint through one shared divert slot). These pin the per-session writer and the
+reader contract both hooks rely on.
 
 Run: cd ~/Projects/skills/hooks && python3 -m pytest test_checkpoint_resume.py -q
+Positive control: CHECKPOINT_WRITER_UNDER_TEST=<pre-fix precompact-extract.py copy,
+beside its own checkpoint_resume.py> must make the two-session test fail.
 """
 
 import hashlib
@@ -23,6 +25,9 @@ import pytest
 import checkpoint_resume as cr
 
 HOOK_DIR = Path(__file__).resolve().parent
+WRITER = Path(
+    os.environ.get("CHECKPOINT_WRITER_UNDER_TEST") or HOOK_DIR / "precompact-extract.py"
+)
 
 
 def _write(path, session, body="body"):
@@ -53,56 +58,126 @@ def test_read_session_stamp_no_stamp(tmp_path):
     assert cr.read_session_stamp(str(p)) is None
 
 
+# ─── naming ──────────────────────────────────────────────────────────
+
+ME = "aaaaaaaa-1111-4111-8111-111111111111"
+PEER = "bbbbbbbb-2222-4222-8222-222222222222"
+TWIN = "aaaaaaaa-9999-4999-8999-999999999999"  # shares ME's 8-character prefix
+
+
+def _auto(claude_dir, session):
+    return claude_dir / cr.auto_checkpoint_name(session)
+
+
+def test_names_are_per_session_and_refuse_unusable_ids():
+    sid = "339ca089-21ae-455e-84d6-4981fd3479cf"
+    assert cr.auto_checkpoint_name(sid) == "checkpoint-auto-339ca089.md"
+    assert cr.handwritten_checkpoint_name(sid) == "checkpoint-339ca089.md"
+    for bad in ("", None, "../escape", "has space", "-leading"):
+        assert cr.auto_checkpoint_name(bad) is None
+        assert cr.handwritten_checkpoint_name(bad) is None
+
+
 # ─── select_for_read ─────────────────────────────────────────────────
 
 
 def test_select_none_when_empty(tmp_path):
-    assert cr.select_for_read(str(tmp_path), "sess-A") is None
+    assert cr.select_for_read(str(tmp_path), ME) is None
 
 
-def test_select_prefers_current_session_over_newer_sibling(tmp_path):
-    """THE regression: autogen (mine) is OLDER than a peer's checkpoint.md, but I
-    must still resume off MY checkpoint, not the newer peer file."""
+def test_select_prefers_own_extract_over_newer_peer_files(tmp_path):
+    """Mine is OLDER than a peer's extract and the curated file, but I must still
+    resume off MY checkpoint, not the newer peer file."""
     now = 1_000_000.0
-    mine = tmp_path / "checkpoint-autogen.md"
-    peer = tmp_path / "checkpoint.md"
-    _write(str(mine), "sess-ME")
-    _write(str(peer), "sess-PEER")
-    _touch_mtime(str(mine), now - 3600)  # 1h old (mine)
-    _touch_mtime(str(peer), now - 60)  # newer, but a different session
-    sel = cr.select_for_read(str(tmp_path), "sess-ME", now=now)
+    mine, peer = _auto(tmp_path, ME), _auto(tmp_path, PEER)
+    curated = tmp_path / "checkpoint.md"
+    _write(str(mine), ME)
+    _write(str(peer), PEER)
+    _write(str(curated), PEER)
+    _touch_mtime(str(mine), now - 3600)
+    _touch_mtime(str(peer), now - 60)
+    _touch_mtime(str(curated), now - 30)
+    sel = cr.select_for_read(str(tmp_path), ME, now=now)
     assert sel is not None
-    assert sel["basename"] == "checkpoint-autogen.md"
-    assert sel["session"] == "sess-ME"
-    assert sel["is_current"] is True
+    assert sel["basename"] == mine.name
+    assert sel["session"] == ME
+    assert sel["is_current"] is True and sel["curated"] is False
+    assert [s["basename"] for s in sel["siblings"]] == ["checkpoint.md"]
+    assert sel["siblings"][0]["is_current"] is False
     assert sel["sibling_count"] == 1
+
+
+def test_select_never_calls_a_prefix_twin_this_sessions(tmp_path):
+    """Same file name, different full id: never 'this session's' checkpoint."""
+    twin = _auto(tmp_path, TWIN)
+    assert twin == _auto(tmp_path, ME)
+    _write(str(twin), TWIN)
+    sel = cr.select_for_read(str(tmp_path), ME)
+    assert sel is not None
+    assert sel["basename"] == twin.name and sel["is_current"] is False
+    msg = cr.resume_message(str(tmp_path), ME)
+    assert "No checkpoint stamped with this session exists" in msg
+    assert TWIN in msg
+    assert "this session's fresh" not in msg
 
 
 def test_select_newest_when_no_session_match(tmp_path):
     now = 1_000_000.0
-    a = tmp_path / "checkpoint.md"
-    b = tmp_path / "checkpoint-autogen.md"
-    _write(str(a), "sess-OLD")
-    _write(str(b), "sess-OLDER")
-    _touch_mtime(str(a), now - 4000)
-    _touch_mtime(str(b), now - 8000)
-    sel = cr.select_for_read(str(tmp_path), "sess-ME", now=now)
+    curated = tmp_path / "checkpoint.md"
+    peer = _auto(tmp_path, PEER)
+    _write(str(curated), "sess-OLD")
+    _write(str(peer), PEER)
+    _touch_mtime(str(curated), now - 4000)
+    _touch_mtime(str(peer), now - 8000)
+    sel = cr.select_for_read(str(tmp_path), ME, now=now)
     assert sel is not None
     assert sel["basename"] == "checkpoint.md"  # newest of the two
     assert sel["is_current"] is False
     assert sel["age_hours"] > 1.0
+    assert sel["siblings"] == []
 
 
 def test_select_single_current_file(tmp_path):
     now = 1_000_000.0
-    p = tmp_path / "checkpoint.md"
-    _write(str(p), "sess-ME")
+    p = _auto(tmp_path, ME)
+    _write(str(p), ME)
     _touch_mtime(str(p), now - 1800)
-    sel = cr.select_for_read(str(tmp_path), "sess-ME", now=now)
+    sel = cr.select_for_read(str(tmp_path), ME, now=now)
     assert sel is not None
     assert sel["is_current"] is True
     assert sel["sibling_count"] == 0
     assert sel["age_hours"] == 0.5
+
+
+def test_select_falls_back_to_a_hand_written_file_stamped_this_session(tmp_path):
+    now = 1_000_000.0
+    brief = tmp_path / cr.handwritten_checkpoint_name(ME)
+    peer = _auto(tmp_path, PEER)
+    _write(str(brief), ME, "## Pending Tasks\n- finish")
+    _write(str(peer), PEER)
+    _touch_mtime(str(brief), now - 3600)
+    _touch_mtime(str(peer), now - 60)
+    sel = cr.select_for_read(str(tmp_path), ME, now=now)
+    assert sel is not None
+    assert sel["basename"] == brief.name
+    assert sel["is_current"] is True and sel["curated"] is True
+
+
+def test_select_read_cli_keeps_the_parsed_keys(tmp_path, capsys):
+    _write(str(_auto(tmp_path, ME)), ME)
+    assert cr._main(["checkpoint_resume.py", "select-read", str(tmp_path), ME]) == 0
+    sel = json.loads(capsys.readouterr().out)
+    assert {
+        "path",
+        "basename",
+        "session",
+        "age_hours",
+        "is_current",
+        "curated",
+        "siblings",
+        "sibling_count",
+    } <= set(sel)
+    assert sel["is_current"] is True
 
 
 # ─── resume_message ──────────────────────────────────────────────────
@@ -110,12 +185,25 @@ def test_select_single_current_file(tmp_path):
 
 def test_resume_message_current_is_positive(tmp_path):
     now = 1_000_000.0
-    p = tmp_path / "checkpoint.md"
-    _write(str(p), "sess-ME")
+    p = _auto(tmp_path, ME)
+    _write(str(p), ME)
     _touch_mtime(str(p), now - 600)
-    msg = cr.resume_message(str(tmp_path), "sess-ME", now=now)
-    assert "this session's fresh resume checkpoint" in msg
-    assert "checkpoint.md" in msg
+    msg = cr.resume_message(str(tmp_path), ME, now=now)
+    assert "Read `%s` first (this session's fresh resume checkpoint" % p in msg
+    # Subagents share the session id and their PreCompact reads the main transcript
+    # (2026-10-22 01:02 JST), so the extract's pointer must tell a subagent it is the
+    # parent's state.
+    assert "resume from its own compaction summary" in msg
+
+
+def test_resume_message_hand_written_omits_subagent_clause(tmp_path):
+    now = 1_000_000.0
+    brief = tmp_path / cr.handwritten_checkpoint_name(ME)
+    _write(str(brief), ME)
+    _touch_mtime(str(brief), now - 600)
+    msg = cr.resume_message(str(tmp_path), ME, now=now)
+    assert "Read `%s` first (this session's fresh resume checkpoint, hand-written)" % brief in msg
+    assert "compaction summary" not in msg
 
 
 def test_resume_message_cross_session_warns(tmp_path):
@@ -126,6 +214,7 @@ def test_resume_message_cross_session_warns(tmp_path):
     _write(str(p), "1cf836e3")
     _touch_mtime(str(p), now - 48 * 3600)  # 2 days old, like the incident
     msg = cr.resume_message(str(tmp_path), "be0657a9", now=now)
+    assert "No checkpoint stamped with this session exists" in msg
     assert "NOT this resuming session" in msg
     assert "may be stale" in msg
     assert "git log" in msg
@@ -133,136 +222,58 @@ def test_resume_message_cross_session_warns(tmp_path):
 
 
 def test_resume_message_empty_when_none(tmp_path):
-    assert cr.resume_message(str(tmp_path), "sess-ME") == ""
+    assert cr.resume_message(str(tmp_path), ME) == ""
 
 
 def test_resume_message_current_but_old_adds_verify(tmp_path):
     now = 1_000_000.0
-    p = tmp_path / "checkpoint.md"
-    _write(str(p), "sess-ME")
+    p = _auto(tmp_path, ME)
+    _write(str(p), ME)
     _touch_mtime(str(p), now - 20 * 3600)  # 20h — current session but old
-    msg = cr.resume_message(str(tmp_path), "sess-ME", now=now)
+    msg = cr.resume_message(str(tmp_path), ME, now=now)
     assert "verify" in msg.lower()
     assert "git log" in msg
 
 
-# ─── is_stale_remnant ────────────────────────────────────────────────
-
-
-def test_remnant_true_for_old_different_session(tmp_path):
+def test_resume_message_names_hand_curated_siblings_with_provenance(tmp_path):
+    """The extract is read first; the session's own brief and the shared curated file
+    are both named, each with whose it is."""
     now = 1_000_000.0
-    p = tmp_path / "checkpoint.md"
-    _write(str(p), "1cf836e3")
-    _touch_mtime(str(p), now - 48 * 3600)  # 2 days -> dead remnant
-    assert cr.is_stale_remnant(str(p), "be0657a9", now=now) is True
-
-
-def test_remnant_false_for_own_session(tmp_path):
-    now = 1_000_000.0
-    p = tmp_path / "checkpoint.md"
-    _write(str(p), "be0657a9")
-    _touch_mtime(str(p), now - 48 * 3600)  # old, but MINE -> not a "reclaim"
-    assert cr.is_stale_remnant(str(p), "be0657a9", now=now) is False
-
-
-def test_remnant_false_for_fresh_peer(tmp_path):
-    """A live concurrent peer (recent write) must be protected, not reclaimed."""
-    now = 1_000_000.0
-    p = tmp_path / "checkpoint.md"
-    _write(str(p), "peer-live")
-    _touch_mtime(str(p), now - 2 * 3600)  # 2h < 12h floor
-    assert cr.is_stale_remnant(str(p), "be0657a9", now=now) is False
-
-
-def test_remnant_false_for_missing(tmp_path):
-    assert (
-        cr.is_stale_remnant(str(tmp_path / "nope.md"), "sess", now=1_000_000.0) is False
-    )
-
-
-def test_remnant_respects_custom_floor(tmp_path):
-    now = 1_000_000.0
-    p = tmp_path / "checkpoint.md"
-    _write(str(p), "peer")
-    _touch_mtime(str(p), now - 5 * 3600)
-    assert cr.is_stale_remnant(str(p), "me", now=now, max_age_h=12.0) is False
-    assert cr.is_stale_remnant(str(p), "me", now=now, max_age_h=4.0) is True
-
-
-# ─── is_curated + the curated-clobber guard ──────────────────────────
-
-
-def _write_signed(path, session, stamp, body="body"):
-    with open(path, "w") as fh:
-        fh.write(
-            "# Resume Checkpoint\n<!-- session: %s -->\n\nWritten by PreCompact hook at %s.\n\n%s\n"
-            % (session, stamp, body)
-        )
-
-
-def _stamp_for(epoch):
-    return time.strftime("%Y-%m-%d %H:%M", time.localtime(epoch))
-
-
-def test_curated_when_no_hook_signature(tmp_path):
-    path = tmp_path / "checkpoint.md"
-    _write(str(path), "sess-ME", "## Pending Tasks\n- finish")
-    assert cr.is_curated(str(path)) is True
-
-
-def test_not_curated_for_the_hooks_own_fresh_write(tmp_path):
-    path = tmp_path / "checkpoint.md"
-    written = 1_000_000_000
-    _write_signed(str(path), "sess-ME", _stamp_for(written))
-    _touch_mtime(str(path), written + 59)  # minute-resolution stamp: the same write
-    assert cr.is_curated(str(path)) is False
-
-
-def test_curated_when_edited_after_the_hook_wrote_it(tmp_path):
-    path = tmp_path / "checkpoint.md"
-    written = 1_000_000_000
-    _write_signed(str(path), "sess-ME", _stamp_for(written))
-    _touch_mtime(str(path), written + 600)
-    assert cr.is_curated(str(path)) is True
-
-
-def test_curated_false_for_missing(tmp_path):
-    assert cr.is_curated(str(tmp_path / "nope.md")) is False
-
-
-def test_select_prefers_curated_own_file_over_fresher_extract(tmp_path):
-    """The writer diverted its extract beside a curated file; the reader must send the
-    resuming agent to the curated file and name the extract."""
-    now = 1_000_000.0
+    auto = _auto(tmp_path, ME)
+    brief = tmp_path / cr.handwritten_checkpoint_name(ME)
     curated = tmp_path / "checkpoint.md"
-    extract = tmp_path / "checkpoint-autogen.md"
-    _write(str(curated), "sess-ME", "## Pending Tasks\n- finish")
-    _write_signed(str(extract), "sess-ME", _stamp_for(now - 60))
-    _touch_mtime(str(curated), now - 3600)
-    _touch_mtime(str(extract), now - 60)
-    sel = cr.select_for_read(str(tmp_path), "sess-ME", now=now)
+    _write(str(auto), ME)
+    _write(str(brief), ME, "## Pending Tasks\n- finish")
+    _write(str(curated), PEER, "project handoff")
+    for path in (auto, brief, curated):
+        _touch_mtime(str(path), now - 600)
+    sel = cr.select_for_read(str(tmp_path), ME, now=now)
     assert sel is not None
-    assert sel["basename"] == "checkpoint.md"
-    assert sel["curated"] is True
-    assert sel["extract_sibling"] == "checkpoint-autogen.md"
-    msg = cr.resume_message(str(tmp_path), "sess-ME", now=now)
-    assert "`%s` first" % curated in msg
-    assert "`%s`" % extract in msg
+    assert sel["basename"] == auto.name
+    roles = {s["basename"]: (s["role"], s["is_current"]) for s in sel["siblings"]}
+    assert roles == {
+        "checkpoint.md": ("curated", False),
+        brief.name: ("session-brief", True),
+    }
+    msg = cr.resume_message(str(tmp_path), ME, now=now)
+    assert "Read `%s` first (this session's fresh" % auto in msg
+    assert "This session's hand-written `%s`" % brief in msg
+    assert "The shared hand-curated `%s` (stamped session %s" % (curated, PEER) in msg
 
 
-def test_select_newest_own_file_when_none_is_curated(tmp_path):
-    now = 1_000_000.0
-    older = tmp_path / "checkpoint.md"
-    newer = tmp_path / "checkpoint-autogen.md"
-    _write_signed(str(older), "sess-ME", _stamp_for(now - 7200))
-    _write_signed(str(newer), "sess-ME", _stamp_for(now - 60))
-    _touch_mtime(str(older), now - 7200)
-    _touch_mtime(str(newer), now - 60)
-    sel = cr.select_for_read(str(tmp_path), "sess-ME", now=now)
-    assert sel is not None
-    assert sel["basename"] == "checkpoint-autogen.md"
-    assert sel["curated"] is False
-    assert sel["extract_sibling"] is None
+def test_resume_message_flags_briefs_it_cannot_attribute(tmp_path):
+    _write(str(_auto(tmp_path, ME)), ME)
+    brief = tmp_path / cr.handwritten_checkpoint_name(ME)
+    _write(str(brief), TWIN)
+    msg = cr.resume_message(str(tmp_path), ME)
+    assert "shares this session's 8-character prefix but is stamped session %s" % TWIN in msg
+    assert "This session's hand-written" not in msg
+    brief.write_text("# brief without a stamp\n")
+    msg = cr.resume_message(str(tmp_path), ME)
+    assert "is named for this session but has no session stamp" in msg
+
+
+# ─── the PreCompact writer ───────────────────────────────────────────
 
 
 def _run_writer(tmp_path, session, cwd=None):
@@ -279,7 +290,7 @@ def _run_writer(tmp_path, session, cwd=None):
         }
     )
     proc = subprocess.run(
-        [sys.executable, str(HOOK_DIR / "precompact-extract.py")],
+        [sys.executable, str(WRITER)],
         input=payload,
         text=True,
         capture_output=True,
@@ -290,90 +301,133 @@ def _run_writer(tmp_path, session, cwd=None):
     return proc
 
 
-def test_writer_diverts_beside_a_curated_own_checkpoint(tmp_path):
-    """End to end: the PreCompact writer must not clobber the session's hand-written file."""
+def test_two_sessions_compacting_in_turn_keep_their_own_checkpoints(tmp_path):
+    """Regression (genomics 2026-10-22): beside a hand-curated checkpoint.md, both
+    sessions' extracts went to the one shared divert slot, so each compaction erased
+    the other's checkpoint. Positive control: fails against the pre-fix writer."""
     claude_dir = tmp_path / "proj" / ".claude"
     claude_dir.mkdir(parents=True)
     curated = claude_dir / "checkpoint.md"
-    _write(str(curated), "sess-ME", "## Pending Tasks\n- finish the thing")
+    _write(str(curated), "cc1925f3-d4e2-4445-859c-97903394462a", "## project handoff")
     before = curated.read_text()
 
-    _run_writer(tmp_path, "sess-ME")
+    for session in (ME, PEER, ME, PEER):
+        _run_writer(tmp_path, session)
 
+    stamps = {
+        path.name: cr.read_session_stamp(str(path))
+        for path in claude_dir.glob("checkpoint*.md")
+    }
+    assert {ME, PEER} <= set(stamps.values()), stamps
     assert curated.read_text() == before
-    extract = claude_dir / "checkpoint-autogen.md"
-    assert extract.is_file()
-    assert "Written by PreCompact hook at" in extract.read_text()
-    assert cr.is_curated(str(extract)) is False
-    sel = cr.select_for_read(str(claude_dir), "sess-ME")
-    assert sel is not None
-    assert sel["basename"] == "checkpoint.md"
-    assert sel["extract_sibling"] == "checkpoint-autogen.md"
+    for session in (ME, PEER):
+        own = claude_dir / cr.auto_checkpoint_name(session)
+        assert cr.read_session_stamp(str(own)) == session
+        sel = cr.select_for_read(str(claude_dir), session)
+        assert sel is not None
+        assert sel["path"] == str(own) and sel["is_current"] is True
+        msg = cr.resume_message(str(claude_dir), session)
+        assert "Read `%s` first (this session's fresh" % own in msg
 
 
-def test_writer_diverts_beside_an_unstamped_hand_written_checkpoint(tmp_path):
-    """Regression (immigration-research 2026-09-27 22:43): no session stamp and no hook
-    signature must still count as curated; the extract goes beside it, never over it."""
+def test_writer_leaves_hand_written_and_curated_checkpoints_untouched(tmp_path):
     claude_dir = tmp_path / "proj" / ".claude"
     claude_dir.mkdir(parents=True)
     curated = claude_dir / "checkpoint.md"
-    curated.write_text(
-        "# Resume Checkpoint — hand-written brief\n\n## NEXT\n- integrate the lanes\n\n---\n\n"
-        "## PEER SESSION section\n- keep me\n"
-    )
-    before = curated.read_text()
+    curated.write_text("# Hand-written brief, no stamp\n\n## NEXT\n- integrate the lanes\n")
+    brief = claude_dir / cr.handwritten_checkpoint_name(ME)
+    _write(str(brief), ME, "## Pending Tasks\n- finish the thing")
+    topical = claude_dir / "checkpoint-markus-currency.md"
+    topical.write_text("topical handoff\n")
+    before = {path: path.read_text() for path in (curated, brief, topical)}
 
-    _run_writer(tmp_path, "sess-ME")
+    _run_writer(tmp_path, ME)
 
-    assert curated.read_text() == before
-    extract = claude_dir / "checkpoint-autogen.md"
-    assert extract.is_file()
-    assert "Written by PreCompact hook at" in extract.read_text()
-    # The reader still points the resume at the stamped extract, but names the brief.
-    sel = cr.select_for_read(str(claude_dir), "sess-ME")
-    assert sel is not None
-    assert sel["basename"] == "checkpoint-autogen.md"
-    assert sel["unstamped_curated"] == "checkpoint.md"
-    assert str(curated) in cr.resume_message(str(claude_dir), "sess-ME")
-
-
-def test_writer_reclaims_a_stale_unstamped_hand_written_checkpoint(tmp_path):
-    """Negative control: an unstamped file past the remnant age is a dead remnant, not a
-    brief to protect; the writer reclaims it, and the reader no longer names it."""
-    claude_dir = tmp_path / "proj" / ".claude"
-    claude_dir.mkdir(parents=True)
-    stale = claude_dir / "checkpoint.md"
-    stale.write_text(
-        "# Resume Checkpoint — a dead session's brief\n\n## NEXT\n- old work\n"
-    )
-    _touch_mtime(str(stale), time.time() - (cr.DEFAULT_REMNANT_AGE_H + 1) * 3600)
-
-    _run_writer(tmp_path, "sess-ME")
-
-    assert not (claude_dir / "checkpoint-autogen.md").exists()
-    text = stale.read_text()
+    assert {path: path.read_text() for path in before} == before
+    extract = claude_dir / cr.auto_checkpoint_name(ME)
+    text = extract.read_text()
+    assert "<!-- session: %s -->" % ME in text
     assert "Written by PreCompact hook at" in text
-    assert "old work" not in text
-    selected = cr.select_for_read(str(claude_dir), "sess-ME")
-    assert selected is not None
-    assert selected["unstamped_curated"] is None
+    assert "`.claude/%s`" % brief.name in text  # where hand-written notes belong
+    assert sorted(p.name for p in claude_dir.iterdir()) == sorted(
+        [curated.name, brief.name, topical.name, extract.name]
+    )
 
 
-def test_writer_still_overwrites_its_own_signed_checkpoint(tmp_path):
-    """Negative control: the hook's own fresh, unedited file keeps the overwrite path."""
+def test_writer_rewrites_its_own_checkpoint_on_the_next_compaction(tmp_path):
+    """Negative control: the session's own extract is the hook's to overwrite."""
     claude_dir = tmp_path / "proj" / ".claude"
     claude_dir.mkdir(parents=True)
-    own = claude_dir / "checkpoint.md"
-    written = time.time() - 30
-    _write_signed(str(own), "sess-ME", _stamp_for(written), body="old extract")
-    _touch_mtime(str(own), written)
+    own = claude_dir / cr.auto_checkpoint_name(ME)
+    _write(str(own), ME, "old extract")
 
-    _run_writer(tmp_path, "sess-ME")
+    _run_writer(tmp_path, ME)
 
-    assert not (claude_dir / "checkpoint-autogen.md").exists()
     text = own.read_text()
     assert "Written by PreCompact hook at" in text
     assert "old extract" not in text
+
+
+def test_writer_refuses_a_prefix_collision(tmp_path):
+    claude_dir = tmp_path / "proj" / ".claude"
+    claude_dir.mkdir(parents=True)
+    twin = claude_dir / cr.auto_checkpoint_name(TWIN)
+    _write(str(twin), TWIN, "the twin's extract")
+    before = twin.read_text()
+
+    proc = _run_writer(tmp_path, ME)
+
+    assert twin.read_text() == before
+    assert "collision" in proc.stderr
+    assert [p.name for p in claude_dir.iterdir()] == [twin.name]
+
+
+@pytest.mark.parametrize("session", ["", "../escape", "has space"])
+def test_writer_without_a_usable_session_id_writes_nothing(tmp_path, session):
+    proj = tmp_path / "proj"
+    proj.mkdir()
+
+    proc = _run_writer(tmp_path, session)
+
+    assert not (proj / ".claude").exists()
+    assert "wrote no checkpoint" in proc.stderr
+    log = tmp_path / "home" / ".claude" / "compact-log.jsonl"
+    entry = json.loads(log.read_text().splitlines()[-1])
+    assert entry["checkpoint"] is None
+    assert entry["checkpoint_skipped"] == "missing or unusable session_id"
+
+
+def test_expiry_removes_only_old_auto_checkpoints(tmp_path):
+    claude_dir = tmp_path / "proj" / ".claude"
+    claude_dir.mkdir(parents=True)
+    old = time.time() - (cr.AUTO_EXPIRY_DAYS + 1) * 86400
+    expired = claude_dir / cr.auto_checkpoint_name(PEER)
+    _write(str(expired), PEER)
+    fresh = claude_dir / "checkpoint-auto-cccccccc.md"
+    _write(str(fresh), "cccccccc-3333-4333-8333-333333333333")
+    hand_written = [
+        claude_dir / "checkpoint.md",
+        claude_dir / "checkpoint-dddddddd.md",
+        claude_dir / "checkpoint-markus-currency.md",
+        claude_dir / "checkpoint-auto-notes.txt",
+    ]
+    for path in hand_written:
+        path.write_text("hand-written\n")
+    target = tmp_path / "outside.md"
+    target.write_text("linked\n")
+    link = claude_dir / "checkpoint-auto-linked.md"
+    link.symlink_to(target)
+    for path in [expired, *hand_written, target]:
+        _touch_mtime(str(path), old)
+    _touch_mtime(str(fresh), time.time() - (cr.AUTO_EXPIRY_DAYS - 1) * 86400)
+
+    _run_writer(tmp_path, ME)
+
+    assert sorted(p.name for p in claude_dir.iterdir()) == sorted(
+        [fresh.name, link.name, cr.auto_checkpoint_name(ME)]
+        + [path.name for path in hand_written]
+    )
+    assert target.read_text() == "linked\n"
 
 
 # ─── project root: hook cwd drifts into subdirectories ───────────────
@@ -439,37 +493,38 @@ def test_writer_reads_git_state_in_a_linked_worktree(tmp_path):
     _git(proj, "worktree", "add", "-q", "-b", "wtb", str(wt))
     assert (wt / ".git").is_file()
 
-    _run_writer(tmp_path, "sess-ME", cwd=wt)
+    _run_writer(tmp_path, ME, cwd=wt)
 
-    assert "- **Branch:** `wtb`" in (wt / ".claude" / "checkpoint.md").read_text()
+    assert "- **Branch:** `wtb`" in _auto(wt / ".claude", ME).read_text()
 
 
 def test_writer_files_a_subdir_checkpoint_at_the_toplevel(tmp_path):
     proj, sub = _repo_with_subdir(tmp_path)
 
-    _run_writer(tmp_path, "sess-ME", cwd=sub)
+    _run_writer(tmp_path, ME, cwd=sub)
 
     assert not (sub / ".claude").exists()
-    text = (proj / ".claude" / "checkpoint.md").read_text()
-    assert "<!-- session: sess-ME -->" in text
+    text = _auto(proj / ".claude", ME).read_text()
+    assert "<!-- session: %s -->" % ME in text
     assert "- **Branch:** `main`" in text
 
 
-def test_writer_diverts_beside_a_tracked_toplevel_checkpoint_from_a_subdir(tmp_path):
+def test_writer_leaves_a_tracked_toplevel_checkpoint_alone_from_a_subdir(tmp_path):
     """The incident shape: tracked root checkpoint.md, compaction fired in analysis/."""
     curated = "# Handoff\n<!-- session: old-sess -->\nhand-written\n"
     proj, sub = _repo_with_subdir(tmp_path, tracked_checkpoint=curated)
 
-    _run_writer(tmp_path, "sess-ME", cwd=sub)
+    _run_writer(tmp_path, ME, cwd=sub)
 
     assert not (sub / ".claude").exists()
     assert (proj / ".claude" / "checkpoint.md").read_text() == curated
-    extract = proj / ".claude" / "checkpoint-autogen.md"
+    extract = _auto(proj / ".claude", ME)
     assert "Written by PreCompact hook at" in extract.read_text()
-    sel = cr.select_for_read(str(proj / ".claude"), "sess-ME")
+    sel = cr.select_for_read(str(proj / ".claude"), ME)
     assert sel is not None
-    assert sel["basename"] == "checkpoint-autogen.md"
+    assert sel["basename"] == extract.name
     assert sel["is_current"] is True
+    assert [s["basename"] for s in sel["siblings"]] == ["checkpoint.md"]
 
 
 @pytest.mark.skipif(
@@ -480,7 +535,7 @@ def test_sessionstart_reader_resolves_the_toplevel_from_a_subdir(tmp_path):
     sid = "ckpt-root-test-%d" % os.getpid()
     claude_dir = proj / ".claude"
     claude_dir.mkdir()
-    _write(str(claude_dir / "checkpoint.md"), sid)
+    _write(str(_auto(claude_dir, sid)), sid)
     (proj / "docs" / "decisions").mkdir(parents=True)
     (proj / "docs" / "decisions" / "REFRAMINGS.md").write_text("## scope — settled\n")
     env = {
@@ -503,10 +558,7 @@ def test_sessionstart_reader_resolves_the_toplevel_from_a_subdir(tmp_path):
 
     assert proc.returncode == 0, proc.stderr
     context = json.loads(proc.stdout)["hookSpecificOutput"]["additionalContext"]
-    assert (
-        "Read `%s` first (this session's fresh" % (claude_dir / "checkpoint.md")
-        in context
-    )
+    assert "Read `%s` first (this session's fresh" % _auto(claude_dir, sid) in context
     assert "scope — settled" in context
 
 

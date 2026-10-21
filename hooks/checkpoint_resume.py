@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Single-source resume-checkpoint file selection + stale-remnant detection.
+"""Single-source resume-checkpoint naming, selection and expiry.
 
 Two hooks must AGREE on which file is "the current session's resume checkpoint":
   - the PreCompact WRITER  (precompact-extract.py) — decides where to WRITE
@@ -11,54 +11,35 @@ CURRENT directory, which drifts into subdirectories. A PreCompact from analysis/
 (iq-sex-differences 2026-09-23) wrote analysis/.claude/checkpoint.md with an empty
 Branch and left the root checkpoint stale, so the resume read a 3-week-old file.
 
-The autogen resume pair is exactly two files in <project root>/.claude/:
-  - checkpoint.md          — default write target AND historical read target
-  - checkpoint-autogen.md  — divert target when checkpoint.md must not be
-                             clobbered (git-tracked/curated, or a LIVE peer
-                             session's file). Anti-clobber history:
-                             hutter 2026-06-11 (curated overwrite),
-                             2026-06-17 (peer clobber).
+Files in <project root>/.claude/:
+  - checkpoint-auto-<sid8>.md — the ONLY file the hook writes: one per session,
+                                stamped `<!-- session: <full id> -->`, expired
+                                after AUTO_EXPIRY_DAYS.
+  - checkpoint-<sid8>.md      — a session's hand-written brief (agent convention).
+  - checkpoint.md and every other checkpoint*.md — hand-curated; the hook never
+                                writes or expires them.
 
-THE BUG this closes (genomics 2026-07-06): the writer diverted a fresh checkpoint
-to checkpoint-autogen.md (existing checkpoint.md was a different, stale session),
-but the reader hardcoded "a fresh checkpoint.md was written — read it first". The
-resuming agent re-oriented off a 2-day-old DEAD session's checkpoint. Root cause =
-a reader/writer contract split: the reader never checked the session stamp or the
-sibling file.
-
-select_for_read() fixes the reader: pick the CURRENT session's checkpoint (else
-the newest), with honest provenance so the reader can warn on a cross-session or
-old file. is_stale_remnant() lets the writer RECLAIM a dead different-session
-checkpoint.md (a genuinely live peer re-writes far more often than the age floor),
-so the divert only protects a live peer, not a corpse — keeping non-hook readers
-(the CLAUDE.md "read .claude/checkpoint.md" convention) on fresh content too.
+Per-session invariant (genomics 2026-10-22): the old writer diverted to ONE shared
+slot, checkpoint-autogen.md, so two sessions compacting in one checkout overwrote
+each other's checkpoint in turn (339ca089 at ~23:15, 1cce6699 at 00:21).
 """
 
 import hashlib
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import time
 from typing import NoReturn
 
-# The autogen resume pair — NOT the many manual topical checkpoints
-# (checkpoint-markus-currency.md, checkpoint-clinical-waves.md, ...), which are
-# human-authored and must never be auto-selected or reclaimed.
-PAIR = ("checkpoint.md", "checkpoint-autogen.md")
+AUTO_PREFIX = "checkpoint-auto-"
+CURATED_NAME = "checkpoint.md"
+# The transcript horizon: an extract older than this outlives the session it resumes.
+AUTO_EXPIRY_DAYS = 14
+_SESSION_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 _SESSION_RE = re.compile(rb"<!-- session: (\S+) -->")
-# The writer signs every file it writes; the signature is the ownership marker.
-_HOOK_SIGNATURE_RE = re.compile(
-    rb"Written by PreCompact hook at (\d{4}-\d{2}-\d{2} \d{2}:\d{2})\."
-)
-# The stamp has minute resolution, so the hook's own write lands < 60 s after it; an
-# mtime further past the stamp than this is a hand edit after the hook wrote the file.
-CURATED_EDIT_GRACE_S = 180.0
-
-# A live concurrent peer re-writes its checkpoint on every compaction; only a
-# dead session leaves one older than this. Reclaim past the floor, protect within.
-DEFAULT_REMNANT_AGE_H = 12.0
 
 
 def git_toplevel(cwd, timeout=5):
@@ -83,8 +64,36 @@ def git_toplevel(cwd, timeout=5):
 
 
 def project_root(cwd):
-    """The directory whose .claude/ holds the resume pair: git toplevel, else `cwd`."""
+    """The directory whose .claude/ holds the checkpoints: git toplevel, else `cwd`."""
     return git_toplevel(cwd) or cwd
+
+
+def session_prefix(session):
+    """The 8-character file-name prefix of a session id, or None for an unusable id."""
+    if not session or not _SESSION_ID_RE.fullmatch(session):
+        return None
+    return session[:8]
+
+
+def auto_checkpoint_name(session):
+    """`checkpoint-auto-<sid8>.md`: the one file the PreCompact hook writes for `session`."""
+    prefix = session_prefix(session)
+    return AUTO_PREFIX + prefix + ".md" if prefix else None
+
+
+def handwritten_checkpoint_name(session):
+    """`checkpoint-<sid8>.md`: the agent convention for a session's hand-written brief."""
+    prefix = session_prefix(session)
+    return "checkpoint-" + prefix + ".md" if prefix else None
+
+
+def prompt_names(session):
+    """(extract, brief) basenames for hook prompt text; `<sid8>` placeholders when the
+    session id is unusable."""
+    return (
+        auto_checkpoint_name(session) or AUTO_PREFIX + "<sid8>.md",
+        handwritten_checkpoint_name(session) or "checkpoint-<sid8>.md",
+    )
 
 
 def read_session_stamp(path):
@@ -98,53 +107,34 @@ def read_session_stamp(path):
     return match.group(1).decode("utf-8", "replace") if match else None
 
 
-def is_curated(path):
-    """True iff `path` is a hand-curated resume checkpoint the writer must not clobber.
-
-    A checkpoint without the writer's signature line was written by hand; one whose
-    mtime sits more than CURATED_EDIT_GRACE_S past the stamped write time was edited by
-    hand after the hook wrote it (an agent updating Pending Tasks in place). Either way
-    the transcript extract cannot reconstruct it: genomics 2026-09-07 02:31 lost a
-    hand-written Pending Tasks list to the extract, whose "Working Summary" was an
-    older block. Missing or unreadable files are not curated.
-    """
+def _entry(claude_dir, name, role):
+    path = os.path.join(claude_dir, name)
     try:
-        with open(path, "rb") as fh:
-            head = fh.read(400)
-        mtime = os.path.getmtime(path)
+        info = os.stat(path)
     except OSError:
-        return False
-    match = _HOOK_SIGNATURE_RE.search(head)
-    if not match:
-        return True
+        return None
+    if not stat.S_ISREG(info.st_mode):
+        return None
+    return {
+        "path": path,
+        "basename": name,
+        "session": read_session_stamp(path),
+        "mtime": info.st_mtime,
+        "role": role,
+    }
+
+
+def _auto_entries(claude_dir):
     try:
-        stamped = time.mktime(
-            time.strptime(match.group(1).decode("ascii"), "%Y-%m-%d %H:%M")
-        )
-    except (ValueError, OverflowError):
-        return True
-    return (mtime - stamped) > CURATED_EDIT_GRACE_S
-
-
-def _candidates(claude_dir):
+        names = sorted(os.listdir(claude_dir))
+    except OSError:
+        return []
     found = []
-    for name in PAIR:
-        path = os.path.join(claude_dir, name)
-        if not os.path.isfile(path):
-            continue
-        try:
-            mtime = os.path.getmtime(path)
-        except OSError:
-            continue
-        found.append(
-            {
-                "path": path,
-                "basename": name,
-                "session": read_session_stamp(path),
-                "mtime": mtime,
-                "curated": is_curated(path),
-            }
-        )
+    for name in names:
+        if name.startswith(AUTO_PREFIX) and name.endswith(".md"):
+            entry = _entry(claude_dir, name, "auto")
+            if entry:
+                found.append(entry)
     return found
 
 
@@ -152,54 +142,80 @@ def select_for_read(claude_dir, current_session, now=None):
     """The checkpoint a resuming session should read, or None if none exist.
 
     Preference order:
-      1. a file stamped with `current_session` (this session's own fresh write),
-         a hand-curated one first — the writer diverts its transcript extract
-         beside a curated file precisely so the curated Pending Tasks survive,
-      2. the newest file by mtime.
-    Returned dict carries provenance so the reader can warn when the chosen file
-    is NOT the resuming session's (a handoff/possibly-stale doc).
+      1. this session's checkpoint-auto-<sid8>.md, whose stamp must equal the FULL
+         session id (a shared 8-character prefix never makes a file this session's),
+      2. a hand-curated file stamped with this session (checkpoint.md or
+         checkpoint-<sid8>.md), newest first,
+      3. the newest checkpoint of any session, with is_current false.
+    `siblings` names the hand-curated files beside the choice (the shared
+    checkpoint.md and this session's checkpoint-<sid8>.md) with their provenance, so
+    the reader never passes them by and never calls another session's file this
+    session's (genomics 2026-07-06: a resume re-oriented off a dead session's file).
     """
     now = time.time() if now is None else now
-    cands = _candidates(claude_dir)
-    if not cands:
-        return None
-    own = [c for c in cands if current_session and c["session"] == current_session]
-    pool = own if own else cands
-    curated = [c for c in pool if c["curated"]] if own else []
-    chosen = max(curated or pool, key=lambda c: c["mtime"])
-    extract_siblings = (
-        [c for c in own if c is not chosen and not c["curated"]]
-        if chosen["curated"]
-        else []
-    )
-    # The writer diverts beside a fresh hand-written file with no session stamp, but
-    # that file never joins `own`; name it so the resume does not silently pass it by.
-    unstamped_curated = [
-        c
-        for c in cands
-        if c is not chosen
-        and c["curated"]
-        and not c["session"]
-        and (now - c["mtime"]) / 3600.0 < DEFAULT_REMNANT_AGE_H
+    auto_name = auto_checkpoint_name(current_session)
+    brief_name = handwritten_checkpoint_name(current_session)
+    curated = [
+        entry
+        for entry in (
+            _entry(claude_dir, brief_name, "session-brief") if brief_name else None,
+            _entry(claude_dir, CURATED_NAME, "curated"),
+        )
+        if entry
     ]
-    age_hours = max(0.0, (now - chosen["mtime"]) / 3600.0)
-    is_current = bool(current_session and chosen["session"] == current_session)
+    autos = _auto_entries(claude_dir)
+
+    def is_own(entry):
+        return bool(current_session) and entry["session"] == current_session
+
+    def age_hours(entry):
+        return round(max(0.0, (now - entry["mtime"]) / 3600.0), 1)
+
+    chosen = next(
+        (e for e in autos if e["basename"] == auto_name and is_own(e)), None
+    )
+    if chosen is None:
+        own_curated = [e for e in curated if is_own(e)]
+        if own_curated:
+            chosen = max(own_curated, key=lambda e: e["mtime"])
+    if chosen is None:
+        pool = autos + curated
+        if not pool:
+            return None
+        chosen = max(pool, key=lambda e: e["mtime"])
+    siblings = [
+        {
+            "path": e["path"],
+            "basename": e["basename"],
+            "session": e["session"],
+            "role": e["role"],
+            "age_hours": age_hours(e),
+            "is_current": is_own(e),
+        }
+        for e in curated
+        if e is not chosen
+    ]
     return {
         "path": chosen["path"],
         "basename": chosen["basename"],
         "session": chosen["session"],
         "mtime": chosen["mtime"],
-        "age_hours": round(age_hours, 1),
-        "is_current": is_current,
-        "curated": bool(chosen["curated"]),
-        "extract_sibling": extract_siblings[0]["basename"]
-        if extract_siblings
-        else None,
-        "sibling_count": len(cands) - 1,
-        "unstamped_curated": unstamped_curated[0]["basename"]
-        if unstamped_curated
-        else None,
+        "age_hours": age_hours(chosen),
+        "is_current": is_own(chosen),
+        "curated": chosen["role"] != "auto",
+        "role": chosen["role"],
+        "siblings": siblings,
+        "sibling_count": len(siblings),
     }
+
+
+def _provenance(entry, current_session):
+    # The full id: a prefix twin's first 8 characters are this session's own.
+    if not entry["session"]:
+        return "no session stamp"
+    if current_session and entry["session"] == current_session:
+        return "stamped this session"
+    return "stamped session " + entry["session"]
 
 
 def resume_message(claude_dir, current_session, now=None):
@@ -216,11 +232,24 @@ def resume_message(claude_dir, current_session, now=None):
     path = os.path.abspath(sel["path"])
     age = sel["age_hours"]
     if sel["is_current"]:
-        msg = " Read `%s` first (this session's fresh resume checkpoint)." % path
-        if sel["curated"] and sel["extract_sibling"]:
+        kind = (
+            "the PreCompact extract of the session's main conversation"
+            if sel["role"] == "auto"
+            else "hand-written"
+        )
+        msg = " Read `%s` first (this session's fresh resume checkpoint, %s)." % (
+            path,
+            kind,
+        )
+        if sel["role"] == "auto":
+            # Subagents share the parent's session id, and Claude Code (2.1.306) hands
+            # every PreCompact hook the main transcript with no agent_id, so a subagent's
+            # compaction re-extracts the parent's conversation into this file. Observed
+            # 2026-10-22 01:02 JST: a subagent's resume was pointed at its parent's tasks.
             msg += (
-                " It is hand-curated; the hook's transcript extract sits beside it in"
-                " `%s`." % os.path.join(os.path.dirname(path), sel["extract_sibling"])
+                " A subagent shares its parent's session id and its PreCompact hook reads"
+                " the main transcript, so a resuming subagent must treat this file as its"
+                " parent's work and resume from its own compaction summary."
             )
         if age > 18:
             msg += (
@@ -228,41 +257,58 @@ def resume_message(claude_dir, current_session, now=None):
                 " before trusting them." % age
             )
     else:
-        sess = (sel["session"] or "unknown")[:8]
         msg = (
-            " Read `%s` first, but treat it with care: it is stamped session %s"
-            " (%.1fh old), NOT this resuming session — a handoff from another/earlier session"
-            " that may be stale. Verify every 'done' claim against `git log --oneline -15`"
-            " before acting on it." % (path, sess, age)
+            " No checkpoint stamped with this session exists. The newest is `%s` (%s,"
+            " %.1fh old), NOT this resuming session — another session's work that may be"
+            " stale: do not adopt its Pending Tasks, and verify every 'done' claim against"
+            " `git log --oneline -15` before acting on it."
+            % (path, _provenance(sel, current_session), age)
         )
-    if sel["unstamped_curated"]:
-        msg += (
-            " A hand-written `%s` with no session stamp sits beside it; if it is this"
-            " session's brief, read it too and add a `<!-- session: <id> -->` line to"
-            " its header."
-            % os.path.join(os.path.dirname(path), sel["unstamped_curated"])
-        )
+    for sib in sel["siblings"]:
+        sib_path = os.path.abspath(sib["path"])
+        if sib["is_current"]:
+            msg += (
+                " This session's hand-written `%s` (%.1fh old) sits beside it: read it"
+                " too; it carries what the transcript extract cannot."
+                % (sib_path, sib["age_hours"])
+            )
+        elif sib["role"] == "session-brief" and sib["session"]:
+            msg += (
+                " `%s` shares this session's 8-character prefix but is %s: it is NOT"
+                " this session's brief." % (sib_path, _provenance(sib, current_session))
+            )
+        elif sib["role"] == "session-brief":
+            msg += (
+                " `%s` is named for this session but has no session stamp; if it is this"
+                " session's brief, read it too and add a `<!-- session: <id> -->` line to"
+                " its header." % sib_path
+            )
+        else:
+            msg += (
+                " The shared hand-curated `%s` (%s, %.1fh old) is project-level, not this"
+                " session's checkpoint: verify it before acting on it."
+                % (sib_path, _provenance(sib, current_session), sib["age_hours"])
+            )
     return msg
 
 
-def is_stale_remnant(path, current_session, now=None, max_age_h=DEFAULT_REMNANT_AGE_H):
-    """True iff `path` is a DIFFERENT-session checkpoint old enough to be a dead
-    remnant the writer may safely reclaim (overwrite).
+def expire_auto_checkpoints(claude_dir, now=None, max_age_days=AUTO_EXPIRY_DAYS):
+    """Delete hook-written checkpoint-auto-*.md files older than `max_age_days`.
 
-    False for: a missing file, the current session's own file, or a fresh
-    (< max_age_h) different-session file (a plausibly-live peer — do not clobber).
+    Touches nothing else: hand-curated checkpoint*.md files, symlinks and directories
+    are never removed. Returns the removed basenames.
     """
     now = time.time() if now is None else now
-    if not os.path.isfile(path):
-        return False
-    stamp = read_session_stamp(path)
-    if stamp and current_session and stamp == current_session:
-        return False  # our own checkpoint — normal overwrite, not a "reclaim"
-    try:
-        age_hours = (now - os.path.getmtime(path)) / 3600.0
-    except OSError:
-        return False
-    return age_hours >= max_age_h
+    removed = []
+    for entry in _auto_entries(claude_dir):
+        if now - entry["mtime"] < max_age_days * 86400 or os.path.islink(entry["path"]):
+            continue
+        try:
+            os.unlink(entry["path"])
+        except OSError:
+            continue
+        removed.append(entry["basename"])
+    return removed
 
 
 _NATIVE_INJECTED_USER_KINDS = frozenset(
