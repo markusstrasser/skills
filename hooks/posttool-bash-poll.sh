@@ -89,24 +89,19 @@ echo "$PATH_TARGET" >> "$TRACKER"
 
 COUNT=$(grep -cF "$PATH_TARGET" "$TRACKER" 2>/dev/null || echo 0)
 
-# TaskOutput is a deferred tool — must be loaded via ToolSearch before
-# the agent can call it. Including the exact ToolSearch query in the
-# block / advisory message saves the agent a guess-and-fail cycle.
-# SUBAGENT sessions have no TaskOutput/ToolSearch at all (measured: routing-ab-rerun
-# lane, arc-agi 2026-07-29) — name their working fallback explicitly so the remedy
-# is never a tool the reader cannot load.
-LOAD_HINT='Parent sessions: ToolSearch(query="select:TaskOutput,TaskList,TaskGet") then TaskOutput with block=true. Subagent sessions (no ToolSearch/TaskOutput): arm ONE run_in_background watcher that exits on the awaited condition, or Read the file once when ready — do not Bash-poll.'
+# TaskOutput was removed in Claude Code 2.1.277 (CHANGELOG: "Claude reads a background
+# task's output file with Read instead"); the old hint named a tool nobody can load.
+LOAD_HINT='Wait with ONE run_in_background watcher that exits on the awaited condition (you are notified when it exits), or Read the output file once when ready — do not Bash-poll.'
 
 if [ "$COUNT" -ge 15 ]; then
   echo "BLOCKED: Polled ${PATH_TARGET} ${COUNT}x via Bash this session." >&2
-  echo "Use TaskOutput (deferred tool) to wait for background tasks, or Read the file once when ready." >&2
-  echo "${LOAD_HINT}" >&2
+    echo "${LOAD_HINT}" >&2
   exit 2
 elif [ "$COUNT" -ge 10 ]; then
   # Emit through jq: the hint carries double quotes, so the printf-built object was
   # invalid JSON on every firing (19 of 20 logged runs, 2026-09-15..22) and the advisory
   # never reached the model. hookSpecificOutput is the PostToolUse context field.
-  jq -cn --arg msg "Polled ${PATH_TARGET} ${COUNT}x via Bash. If waiting for a background task, prefer TaskOutput over polling. ${LOAD_HINT} Next poll will be blocked." \
+  jq -cn --arg msg "Polled ${PATH_TARGET} ${COUNT}x via Bash. ${LOAD_HINT} Next poll will be blocked." \
     '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $msg}}'
 fi
 exit 0
