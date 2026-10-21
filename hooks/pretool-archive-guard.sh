@@ -13,6 +13,11 @@ trap 'echo "archive-guard: internal error at line $LINENO — blocking (fail clo
 
 INPUT=$(cat)
 
+# grep -E exits 2 on an invalid pattern; inside `if`/`||` that would read as "no match".
+matches() { local rc=0; printf '%s\n' "$1" | grep -qE "$2" || rc=$?
+  [ "$rc" -gt 1 ] && { echo "archive-guard: invalid pattern '$2' — blocking (fail closed)" >&2; exit 2; }
+  return "$rc"; }
+
 ARCHIVE_PROTECTED="${ARCHIVE_PROTECTED:-}"
 [ -z "$ARCHIVE_PROTECTED" ] && exit 0
 
@@ -20,7 +25,9 @@ ARCHIVE_TARGET="${ARCHIVE_TARGET:-archive}"
 ARCHIVE_OVERRIDE="${ARCHIVE_OVERRIDE:-ARCHIVAL-REVIEWED}"
 ARCHIVE_MSG="${ARCHIVE_MSG:-Iterative analysis docs cannot be archived — each version contains unique analytical content. Override with $ARCHIVE_OVERRIDE comment.}"
 
-COMMAND=$(printf '%s' "$INPUT" | jq -r '(if has("tool_input") then (.tool_input // {}) else . end) | .command // ""' 2>/dev/null || echo "")
+# Cheap raw pre-check, so a missing jq or bad input blocks only `git mv` calls.
+printf '%s' "$INPUT" | grep -q 'git mv' || exit 0
+COMMAND=$(printf '%s' "$INPUT" | jq -r '(if has("tool_input") then (.tool_input // {}) else . end) | .command // ""')
 
 # Only check git mv commands
 echo "$COMMAND" | grep -q 'git mv' || exit 0
@@ -29,7 +36,7 @@ echo "$COMMAND" | grep -q 'git mv' || exit 0
 echo "$COMMAND" | grep -q "$ARCHIVE_OVERRIDE" && exit 0
 
 # Block if moving from protected dirs to archive target
-if echo "$COMMAND" | grep -qE "($ARCHIVE_PROTECTED).*$ARCHIVE_TARGET"; then
+if matches "$COMMAND" "($ARCHIVE_PROTECTED).*$ARCHIVE_TARGET"; then
     ~/Projects/skills/hooks/hook-trigger-log.sh "archive-guard" "block" "$COMMAND" 2>/dev/null || true
     echo "{\"decision\":\"block\",\"reason\":\"$ARCHIVE_MSG\"}" >&2
     exit 2

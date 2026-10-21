@@ -91,3 +91,30 @@ def test_append_only_unparseable_input_blocks(log: Path):
 )
 def test_archive_guard(cmd, want):
     assert run("pretool-archive-guard.sh", bash(cmd), {"ARCHIVE_PROTECTED": "research/"}) == want
+
+
+# 2026-10-21 review: internal errors that still failed open.
+def test_invalid_pattern_blocks():
+    bad = "datasets/|("
+    assert run("pretool-data-guard.sh", write("/r/src/app.py", "x"), {"PROTECTED_PATHS": bad}) == 2
+    assert run("pretool-append-only-guard.sh", write("/r/x.md", "x"), {"APPENDONLY_PATHS": bad}) == 2
+    assert run("pretool-archive-guard.sh", bash("git mv a b"), {"ARCHIVE_PROTECTED": bad}) == 2
+
+
+def test_archive_guard_without_jq(tmp_path: Path):
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    for tool in ("bash", "cat", "grep", "printf", "sed", "head"):
+        src = subprocess.run(["/usr/bin/which", tool], capture_output=True, text=True).stdout.strip()
+        (bindir / tool).symlink_to(src)
+    env = {"ARCHIVE_PROTECTED": "research/", "PATH": str(bindir)}
+    assert run("pretool-archive-guard.sh", bash("git mv research/m.md archive/m.md"), env) == 2
+    assert run("pretool-archive-guard.sh", bash("ls archive/"), env) == 0  # only git mv calls are at risk
+
+
+def test_append_only_unreadable_file_blocks(log: Path):
+    log.chmod(0)
+    try:
+        assert run("pretool-append-only-guard.sh", write(str(log), ""), {"APPENDONLY_PATHS": r"improvement-log\.md"}) == 2
+    finally:
+        log.chmod(0o644)

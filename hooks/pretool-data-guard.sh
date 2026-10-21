@@ -9,6 +9,11 @@ trap 'echo "data-guard: internal error at line $LINENO — blocking (fail closed
 
 INPUT=$(cat)
 
+# grep -E exits 2 on an invalid pattern; inside `if`/`||` that would read as "no match".
+matches() { local rc=0; printf '%s\n' "$1" | grep -qE "$2" || rc=$?
+  [ "$rc" -gt 1 ] && { echo "data-guard: invalid pattern '$2' — blocking (fail closed)" >&2; exit 2; }
+  return "$rc"; }
+
 # Protected path patterns (configurable via arg or env)
 PROTECTED="${1:-${PROTECTED_PATHS:-datasets/|\.parquet|\.duckdb}}"
 
@@ -20,7 +25,7 @@ FPATH=$(echo "$INPUT" | grep -oE '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' |
 
 [ -z "$FPATH" ] && exit 0
 
-if echo "$FPATH" | grep -qE "$PROTECTED"; then
+if matches "$FPATH" "$PROTECTED"; then
     ~/Projects/skills/hooks/hook-trigger-log.sh "data-guard" "block" "$FPATH" 2>/dev/null || true
     echo "$BLOCK_MSG" >&2
     exit 2

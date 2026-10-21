@@ -16,6 +16,11 @@ trap 'echo "append-only-guard: internal error at line $LINENO — blocking (fail
 
 INPUT=$(cat)
 
+# grep -E exits 2 on an invalid pattern; inside `if`/`||` that would read as "no match".
+matches() { local rc=0; printf '%s\n' "$1" | grep -qE "$2" || rc=$?
+  [ "$rc" -gt 1 ] && { echo "append-only-guard: invalid pattern '$2' — blocking (fail closed)" >&2; exit 2; }
+  return "$rc"; }
+
 APPENDONLY_PATHS="${APPENDONLY_PATHS:-}"
 [ -z "$APPENDONLY_PATHS" ] && exit 0
 
@@ -26,7 +31,7 @@ FPATH=$(echo "$INPUT" | grep -oE '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' |
 [ -z "$FPATH" ] && exit 0
 
 # Check if path matches any protected pattern
-echo "$FPATH" | grep -qE "$APPENDONLY_PATHS" || exit 0
+matches "$FPATH" "$APPENDONLY_PATHS" || exit 0
 
 TOOL_NAME=$(echo "$INPUT" | grep -oE '"tool_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"tool_name"[[:space:]]*:[[:space:]]*"//;s/"//')
 
@@ -34,7 +39,7 @@ if [ "$TOOL_NAME" = "Write" ]; then
     # New file — allow
     [ ! -f "$FPATH" ] && exit 0
 
-    EXISTING_LINES=$(wc -l < "$FPATH" 2>/dev/null || echo 0)
+    EXISTING_LINES=$(wc -l < "$FPATH")  # unreadable: ERR trap blocks
     # Disable trap so Python exit code propagates
     trap - ERR
     NEW_LINES=$(echo "$INPUT" | python3 -c "
