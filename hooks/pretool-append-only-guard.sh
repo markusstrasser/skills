@@ -10,9 +10,9 @@
 #   Edit: block if new_string is shorter than old_string AND old content not preserved
 #   New files: always allowed
 #
-# Exit 2 = block. Exit 0 = pass. Fails open on error.
+# Exit 2 = block. Exit 0 = pass. Fails CLOSED on error (constitution P10).
 
-trap 'exit 0' ERR
+trap 'echo "append-only-guard: internal error at line $LINENO — blocking (fail closed)" >&2; exit 2' ERR
 
 INPUT=$(cat)
 
@@ -45,7 +45,8 @@ try:
 except:
     print(0)
 " 2>/dev/null)
-    trap 'exit 0' ERR
+    trap 'echo "append-only-guard: internal error at line $LINENO — blocking (fail closed)" >&2; exit 2' ERR
+    NEW_LINES=${NEW_LINES:-0}  # unparseable content counts as empty: a shrink, so it blocks
 
     if [ "$NEW_LINES" -lt "$EXISTING_LINES" ]; then
         ~/Projects/skills/hooks/hook-trigger-log.sh "append-only-guard" "block" "$FPATH" 2>/dev/null || true
@@ -67,9 +68,9 @@ if len(new.strip()) < len(old.strip()) and old.strip() not in new:
 else:
     print('allow')
 " 2>/dev/null)
-    trap 'exit 0' ERR
+    trap 'echo "append-only-guard: internal error at line $LINENO — blocking (fail closed)" >&2; exit 2' ERR
 
-    if [ "$RESULT" = "block" ]; then
+    if [ "$RESULT" != "allow" ]; then
         ~/Projects/skills/hooks/hook-trigger-log.sh "append-only-guard" "block" "$FPATH" 2>/dev/null || true
         echo "{\"decision\":\"block\",\"reason\":\"$APPENDONLY_MSG\"}" >&2
         exit 2

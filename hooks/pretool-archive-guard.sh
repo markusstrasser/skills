@@ -7,9 +7,9 @@
 #      ARCHIVE_OVERRIDE  (override keyword, default: "ARCHIVAL-REVIEWED")
 #      ARCHIVE_MSG       (custom block reason, optional)
 #
-# Exit 2 = block. Exit 0 = pass. Fails open on error.
+# Exit 2 = block. Exit 0 = pass. Fails CLOSED on error (constitution P10).
 
-trap 'exit 0' ERR
+trap 'echo "archive-guard: internal error at line $LINENO — blocking (fail closed)" >&2; exit 2' ERR
 
 INPUT=$(cat)
 

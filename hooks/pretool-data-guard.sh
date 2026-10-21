@@ -2,10 +2,10 @@
 # pretool-data-guard.sh — Generalized data file protection hook.
 # Deploy as PreToolUse hook on Write|Edit (and optionally Bash).
 # Takes protected path patterns as arg or env var.
-# Exit 2 = block. Exit 0 = pass. Fails open on error.
+# Exit 2 = block. Exit 0 = pass. Fails CLOSED on error (constitution P10: protected-data writes);
+# wire with "onFailure": "block" so a hook that cannot start blocks too.
 
-# Trap errors — fail open
-trap 'exit 0' ERR
+trap 'echo "data-guard: internal error at line $LINENO — blocking (fail closed)" >&2; exit 2' ERR
 
 INPUT=$(cat)
 
