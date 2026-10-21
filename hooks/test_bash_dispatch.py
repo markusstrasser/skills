@@ -1031,6 +1031,14 @@ def test_worktree_paths_without_persistent_cd_pass(sandbox, command):
         'echo "(" && cd $WT',
         "W=/repo/.claude/worktrees/codex-x; cd $W && ls",
         'S=/tmp/ok; S="$(mktemp -d)"; cd "$S"',
+        # 2026-10-21 review: shapes where the last textual NAME= is not the value the
+        # shell uses; each passed under the first literal-vars version.
+        "W=/repo/.claude/worktrees/a; (W=/tmp/x; ls); cd $W",
+        "W=/repo/.claude/worktrees/a; W=/tmp/x true; cd $W",
+        "W=/repo/.claude/worktrees/a; [ -d q ] || W=/tmp/x; cd $W",
+        "W=/tmp/x; for W in /repo/.claude/worktrees/a; do :; done; cd $W",
+        "W=/tmp/x; printf -v W %s /repo/.claude/worktrees/a; cd $W",
+        "git commit -m 'set W=/tmp/x'; cd $W",
     ],
 )
 def test_persistent_cd_to_an_unreadable_target_blocks(sandbox, command):
