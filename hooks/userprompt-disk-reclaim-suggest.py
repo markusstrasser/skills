@@ -7,6 +7,12 @@ UserPromptSubmit and SessionStart hook. The low-disk guard
 `~/.cache/reclaim/worktree-suggestions.json` from `worktree_gc.py suggest --json` while free
 space is under 20 GB; this hook only reads that file, so it stays fast.
 
+Scope and dedupe (2026-10-21): only candidates inside the repo holding the payload `cwd` are
+listed; elsewhere the hook emits the one-line DISK LOW summary. Per session (state under
+~/.claude/cache/disk-reclaim-hook/), the full list repeats only when the candidate set or the
+5 GB free-space band changed; the summary shows at most once per band. Harness-injected
+prompts (task notifications, peer relays) are skipped via harness_frame.py.
+
 Gov-ID: hook:disk-reclaim-suggest | verifier: test_userprompt_disk_reclaim_suggest.py
 goal: operator ruling 2026-10-12 — no automatic cleanup may archive or delete a worktree that
 still holds unlanded work, in any project; automation only suggests. On 2026-10-12 the disk
@@ -24,9 +30,6 @@ import time
 from pathlib import Path
 
 LOW_DISK_GB = float(os.environ.get("RECLAIM_LOW_DISK_GB", "20"))
-CRITICAL_GB = 5.0
-REPEAT_SECONDS = 30 * 60
-CRITICAL_REPEAT_SECONDS = 10 * 60
 STALE_SECONDS = 60 * 60
 TOP_N = 5
 CACHE = Path(os.environ.get("RECLAIM_CACHE_DIR", str(Path.home() / ".cache/reclaim")))
@@ -45,19 +48,49 @@ def _free_gb() -> float:
     return shutil.disk_usage(Path.home()).free / 1e9
 
 
-def _due(session: str, free: float, now: float) -> bool:
-    """Rate limit per session: once per 30 min, every 10 min below 5 GB."""
-    state = CACHE / "suggest-hook-state" / f"{session or 'unknown'}.json"
+BAND_GB = 5.0
+STATE_DIR = Path(
+    os.environ.get("RECLAIM_HOOK_STATE_DIR", str(Path.home() / ".claude/cache/disk-reclaim-hook"))
+)
+
+
+def _band(free: float) -> int:
+    return int(free // BAND_GB)
+
+
+def _state_path(session: str) -> Path:
+    safe = "".join(c for c in (session or "unknown") if c.isalnum() or c in "-_")[:80]
+    return STATE_DIR / f"{safe or 'unknown'}.json"
+
+
+def _load_state(session: str) -> dict:
     try:
-        last = json.loads(state.read_text())
+        return json.loads(_state_path(session).read_text())
     except (OSError, ValueError):
-        last = {}
-    wait = CRITICAL_REPEAT_SECONDS if free < CRITICAL_GB else REPEAT_SECONDS
-    if now - float(last.get("at", 0)) < wait and free >= float(last.get("free_gb", 0)) - 5:
-        return False
-    state.parent.mkdir(parents=True, exist_ok=True)
-    state.write_text(json.dumps({"at": now, "free_gb": free}))
-    return True
+        return {}
+
+
+def _save_state(session: str, state: dict) -> None:
+    try:
+        path = _state_path(session)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(state))
+    except OSError:
+        pass  # fail open: worst case the hook repeats itself
+
+
+def _repo_root(cwd: str) -> str | None:
+    """The main repo holding cwd; a lane worktree maps back to its parent repo."""
+    if not cwd:
+        return None
+    path = Path(cwd).expanduser()
+    text = str(path)
+    if "/.claude/worktrees/" in text:
+        return text.split("/.claude/worktrees/", 1)[0]
+    for cand in (path, *path.parents):
+        if (cand / ".git").exists():
+            return str(cand)
+    return None
 
 
 def _short(path: str) -> str:
@@ -82,27 +115,33 @@ def _line(row: dict) -> str:
     return "- " + ", ".join(parts) + f"\n  archive: `{row.get('archive_command', '?')}`"
 
 
-def build(free: float, now: float) -> tuple[str, str]:
+def build(free: float, now: float, cwd: str = "") -> tuple[str, str, list[str]]:
+    """(summary, context, candidate signature). An empty signature means summary only."""
     head = f"DISK LOW: {free:.1f} GB free on the data volume (guard threshold {LOW_DISK_GB:.0f} GB)."
     try:
         age = now - SUGGESTIONS.stat().st_mtime
         data = json.loads(SUGGESTIONS.read_text())
     except FileNotFoundError:
-        return head, (
-            f"{head} No reclaim suggestion file at {_short(str(SUGGESTIONS))}; the disk guard "
+        return head, head + (
+            f" No reclaim suggestion file at {_short(str(SUGGESTIONS))}; the disk guard "
             f"writes it every 5 min below the threshold. Run `{SUGGEST_CMD}` to list candidates."
-        )
+        ), []
     except (OSError, ValueError) as exc:
-        return head, f"{head} The suggestion file is unreadable ({exc}); run `{SUGGEST_CMD}`."
+        return head, f"{head} The suggestion file is unreadable ({exc}); run `{SUGGEST_CMD}`.", []
     if age > STALE_SECONDS:
         return head, (
             f"{head} The suggestion file is {age / 3600:.1f} h old, so the disk guard is not "
             f"refreshing it; check ~/.cache/reclaim/disk-guard.log and run `{SUGGEST_CMD}`."
-        )
+        ), []
     listed = [row for row in data.get("candidates", []) if row.get("candidate", True)]
     # The file can be up to 5 min old, and a landing may remove a listed tree in between.
     rows = [row for row in listed if Path(str(row.get("path", ""))).exists()]
     removed = len(listed) - len(rows)
+    # Agents in a repo need that repo's worktrees, not every project's (operator 2026-10-21).
+    root = _repo_root(cwd)
+    rows = [row for row in rows if root and str(row.get("path", "")).startswith(root.rstrip("/") + "/")]
+    if not rows and not removed:
+        return head, head, []
     removed_note = (
         f" Left out {removed} listed {'tree' if removed == 1 else 'trees'} already removed from disk."
         if removed
@@ -114,7 +153,7 @@ def build(free: float, now: float) -> tuple[str, str]:
             f"({len(data.get('not_candidates', []))} trees excluded as live or protected); "
             "the space is elsewhere (`du -sh ~/Projects/*/.claude ~/Library/Caches`)."
             + removed_note
-        )
+        ), []
     rows.sort(key=lambda row: row.get("size_bytes") or 0, reverse=True)
     total = sum(row.get("size_bytes") or 0 for row in rows) / 1e9
     unlanded = sum(1 for row in rows if row.get("unmatched_commits") or row.get("dirty_count"))
@@ -129,20 +168,45 @@ def build(free: float, now: float) -> tuple[str, str]:
         f"{head} {len(rows)} worktree reclaim candidates hold {total:.1f} GB; "
         f"{unlanded} carry dirty edits or unlanded commits.{removed_note}"
     )
-    return summary, f"{summary} Largest {min(TOP_N, len(rows))}:\n{body}\n{note}"
+    sig = sorted(str(row.get("path", "")) for row in rows)
+    return summary, f"{summary} Largest {min(TOP_N, len(rows))}:\n{body}\n{note}", sig
+
+
+def _is_harness_frame(prompt: str) -> bool:
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from harness_frame import is_harness_frame
+
+        return is_harness_frame(prompt)
+    except Exception:
+        return prompt.lstrip().startswith("<task-notification>")
 
 
 def main() -> None:
     raw = sys.stdin.read()
     payload = json.loads(raw) if raw.strip() else {}
     event = payload.get("hook_event_name") or "UserPromptSubmit"
+    if event == "UserPromptSubmit" and _is_harness_frame(str(payload.get("prompt") or "")):
+        return  # task notifications, peer relays, system frames: not the operator's prompt
     free = _free_gb()
     if free >= LOW_DISK_GB:
         return
     now = time.time()
-    if not _due(str(payload.get("session_id") or ""), free, now):
-        return
-    summary, context = build(free, now)
+    session = str(payload.get("session_id") or "")
+    summary, context, sig = build(free, now, str(payload.get("cwd") or ""))
+    state = _load_state(session)
+    band = _band(free)
+    if sig:
+        # Full list only when the candidate set or the 5 GB band moved since the last one.
+        if state.get("sig") == sig and state.get("band") == band:
+            return
+        state.update(sig=sig, band=band, summary_band=band)
+    else:
+        if state.get("summary_band") == band:
+            return
+        state.update(summary_band=band)
+    state["at"] = now
+    _save_state(session, state)
     print(
         json.dumps(
             {

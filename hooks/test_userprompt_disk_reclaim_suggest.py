@@ -13,13 +13,26 @@ from pathlib import Path
 HOOK = Path(__file__).resolve().parent / "userprompt-disk-reclaim-suggest.py"
 
 
-def run(tmp_path: Path, free_gb: float, session: str = "s1", event: str = "UserPromptSubmit"):
+def run(
+    tmp_path: Path,
+    free_gb: float,
+    session: str = "s1",
+    event: str = "UserPromptSubmit",
+    cwd: str | None = None,
+    prompt: str = "hi",
+):
     env = {
         **os.environ,
         "RECLAIM_CACHE_DIR": str(tmp_path),
+        "RECLAIM_HOOK_STATE_DIR": str(tmp_path / "hook-state"),
         "RECLAIM_FREE_GB_OVERRIDE": str(free_gb),
     }
-    payload = {"session_id": session, "hook_event_name": event, "prompt": "hi"}
+    payload = {
+        "session_id": session,
+        "hook_event_name": event,
+        "prompt": prompt,
+        "cwd": cwd if cwd is not None else str(tmp_path / "genomics"),
+    }
     return subprocess.run(
         ["python3", str(HOOK)],
         input=json.dumps(payload),
@@ -31,6 +44,7 @@ def run(tmp_path: Path, free_gb: float, session: str = "s1", event: str = "UserP
 
 
 def write_suggestions(tmp_path: Path, marker: Path, age_seconds: float = 0) -> None:
+    (tmp_path / "genomics/.git").mkdir(parents=True, exist_ok=True)
     trees = tmp_path / "genomics/.claude/worktrees"
     for name in ("small", "big"):
         (trees / name).mkdir(parents=True)
@@ -158,3 +172,43 @@ def test_malformed_stdin_fails_open(tmp_path):
     )
     assert proc.returncode == 0
     assert proc.stdout == ""
+
+
+def test_other_repo_gets_summary_only(tmp_path):
+    write_suggestions(tmp_path, tmp_path / "ran")
+    (tmp_path / "skills/.git").mkdir(parents=True)
+    proc = run(tmp_path, free_gb=12, cwd=str(tmp_path / "skills"))
+    ctx = context(proc)
+    assert ctx.startswith("DISK LOW: 12.0 GB free")
+    assert "worktrees/" not in ctx and "\n" not in ctx
+
+
+def test_lane_worktree_cwd_maps_to_parent_repo(tmp_path):
+    write_suggestions(tmp_path, tmp_path / "ran")
+    ctx = context(run(tmp_path, free_gb=12, cwd=str(tmp_path / "genomics/.claude/worktrees/small")))
+    assert "worktrees/big" in ctx
+
+
+def test_no_repo_cwd_summary_once_per_band(tmp_path):
+    write_suggestions(tmp_path, tmp_path / "ran")
+    outside = str(tmp_path / "nowhere")
+    assert run(tmp_path, free_gb=12, cwd=outside).stdout
+    assert run(tmp_path, free_gb=11, cwd=outside).stdout == ""  # same 10-15 band
+    assert run(tmp_path, free_gb=9, cwd=outside).stdout  # new band
+
+
+def test_full_list_repeats_only_when_candidate_set_changes(tmp_path):
+    write_suggestions(tmp_path, tmp_path / "ran")
+    assert "worktrees/big" in context(run(tmp_path, free_gb=12))
+    assert run(tmp_path, free_gb=12).stdout == ""
+    (tmp_path / "genomics/.claude/worktrees/small").rmdir()
+    assert "worktrees/big" in context(run(tmp_path, free_gb=12))
+
+
+def test_harness_frames_are_skipped(tmp_path):
+    write_suggestions(tmp_path, tmp_path / "ran")
+    note = "<task-notification><task-id>x</task-id>done</task-notification>"
+    assert run(tmp_path, free_gb=12, prompt=note).stdout == ""
+    relay = "Another Claude session sent a message: status?"
+    assert run(tmp_path, free_gb=12, prompt=relay).stdout == ""
+    assert run(tmp_path, free_gb=12, prompt="what now?").stdout
