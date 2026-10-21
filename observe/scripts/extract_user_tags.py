@@ -58,6 +58,23 @@ def _message_texts(msg: dict) -> list[str]:
     if msg.get("isCompactSummary") or msg.get("isMeta"):
         return []
 
+    # Prompts typed while a turn runs are queued_command attachments (mirrors
+    # agent-infra scripts/common/transcript_text.user_texts; drift-pinned).
+    if msg.get("type") == "attachment":
+        att = msg.get("attachment")
+        if not isinstance(att, dict) or att.get("type") != "queued_command":
+            return []
+        origin = att.get("origin")
+        kind = origin.get("kind") if isinstance(origin, dict) else None
+        if kind not in (None, "human") or att.get("commandMode", "prompt") != "prompt":
+            return []
+        prompt = att.get("prompt")
+        if isinstance(prompt, str):
+            return [prompt]
+        if isinstance(prompt, list):
+            return [b.get("text", "") for b in prompt if isinstance(b, dict) and b.get("type") == "text"]
+        return []
+
     inner = msg.get("message")
     if isinstance(inner, dict):
         role = inner.get("role", msg.get("type"))
