@@ -212,3 +212,13 @@ def test_harness_frames_are_skipped(tmp_path):
     relay = "Another Claude session sent a message: status?"
     assert run(tmp_path, free_gb=12, prompt=relay).stdout == ""
     assert run(tmp_path, free_gb=12, prompt="what now?").stdout
+
+
+def test_other_repo_with_a_removed_tree_elsewhere_stays_summary_only(tmp_path):
+    """2026-10-21 review: a removed tree in another repo used to trigger a misleading
+    'no candidates … the space is elsewhere' context in this repo."""
+    write_suggestions(tmp_path, tmp_path / "ran")
+    (tmp_path / "genomics/.claude/worktrees/big").rmdir()
+    (tmp_path / "skills/.git").mkdir(parents=True)
+    ctx = context(run(tmp_path, free_gb=12, cwd=str(tmp_path / "skills")))
+    assert "no existing worktree candidates" not in ctx and "\n" not in ctx

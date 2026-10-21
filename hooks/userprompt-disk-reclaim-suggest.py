@@ -134,12 +134,13 @@ def build(free: float, now: float, cwd: str = "") -> tuple[str, str, list[str]]:
             f"refreshing it; check ~/.cache/reclaim/disk-guard.log and run `{SUGGEST_CMD}`."
         ), []
     listed = [row for row in data.get("candidates", []) if row.get("candidate", True)]
-    # The file can be up to 5 min old, and a landing may remove a listed tree in between.
-    rows = [row for row in listed if Path(str(row.get("path", ""))).exists()]
-    removed = len(listed) - len(rows)
     # Agents in a repo need that repo's worktrees, not every project's (operator 2026-10-21).
     root = _repo_root(cwd)
-    rows = [row for row in rows if root and str(row.get("path", "")).startswith(root.rstrip("/") + "/")]
+    in_repo = [row for row in listed if root and str(row.get("path", "")).startswith(root.rstrip("/") + "/")]
+    elsewhere = len(listed) - len(in_repo)
+    # The file can be up to 5 min old, and a landing may remove a listed tree in between.
+    rows = [row for row in in_repo if Path(str(row.get("path", ""))).exists()]
+    removed = len(in_repo) - len(rows)
     if not rows and not removed:
         return head, head, []
     removed_note = (
@@ -149,9 +150,9 @@ def build(free: float, now: float, cwd: str = "") -> tuple[str, str, list[str]]:
     )
     if not rows:
         return head, (
-            f"{head} worktree_gc suggest lists no existing worktree candidates "
-            f"({len(data.get('not_candidates', []))} trees excluded as live or protected); "
-            "the space is elsewhere (`du -sh ~/Projects/*/.claude ~/Library/Caches`)."
+            f"{head} worktree_gc suggest lists no existing worktree candidates in this repo"
+            + (f" ({elsewhere} in other repos: `{SUGGEST_CMD}`)" if elsewhere else "")
+            + "; for other space see `du -sh ~/Projects/*/.claude ~/Library/Caches`."
             + removed_note
         ), []
     rows.sort(key=lambda row: row.get("size_bytes") or 0, reverse=True)
