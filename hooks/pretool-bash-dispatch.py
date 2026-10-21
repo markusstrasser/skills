@@ -1771,7 +1771,7 @@ def gate_modal_run_guard(raw_payload: str) -> GateResult:
 
 _TIMEOUT_HEREDOC_RE = re.compile(r"<<-?\s*'?([A-Za-z_]\w*)'?.*?\n\1\s*$", re.S | re.M)
 _TIMEOUT_WRAP_RE = re.compile(
-    r"(?:^|[;&|(]\s*|\$\(\s*|`\s*)"
+    r"(?:^|[;&|(]\s*|\$\(\s*|`\s*|\s-[a-z]*c\s+['\"]\s*)"  # last: sh -c STR (cheap prefilter)
     r"(?:nohup\s+|sudo\s+|[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*"
     r"timeout\s+(?:-[ksv]\S*\s+)*\d+(?:\.\d+)?[smhd]?\s",
     re.M,
@@ -1845,6 +1845,23 @@ def _timeout_crawl(argv: list[str]) -> bool:
     return bool(_TIMEOUT_CRAWL_RE.search(" ".join(argv)))
 
 
+_SHELLS = {"bash", "sh", "zsh"}
+
+
+def _timeout_blocks(text: str, depth: int = 0) -> bool:
+    """True if any segment is `timeout … <crawl>`; recurses into `bash|sh|zsh -c STR`
+    (depth cap 3) so a nested-shell wrapper cannot hide a crawl."""
+    for seg in _timeout_segments(text):
+        argv = _timeout_wrapped_argv(seg)
+        if argv is not None and _timeout_crawl(argv):
+            return True
+        if depth < 3 and seg and seg[0].rsplit("/", 1)[-1] in _SHELLS:
+            for k, tok in enumerate(seg[1:-1], start=1):
+                if re.fullmatch(r"-[a-z]*c[a-z]*", tok) and _timeout_blocks(seg[k + 1], depth + 1):
+                    return True
+    return False
+
+
 def gate_timeout_modal_guard(raw_payload: str) -> GateResult:
     try:
         data = json.loads(raw_payload)
@@ -1860,10 +1877,7 @@ def gate_timeout_modal_guard(raw_payload: str) -> GateResult:
         return GateResult(0, "", "")
     # One owner: block only parsed argv `timeout … <crawl>` — never text inside quotes
     # or grep/rg patterns (2026-10-14..21: 2 blocks on `rg 'timeout='` alone).
-    if not any(
-        (argv := _timeout_wrapped_argv(seg)) is not None and _timeout_crawl(argv)
-        for seg in _timeout_segments(scan)
-    ):
+    if not _timeout_blocks(scan):
         return GateResult(0, "", "")
     msg = (
         "BLOCKED: `timeout N` wraps a Modal/volume-crawl command. At the deadline it\n"

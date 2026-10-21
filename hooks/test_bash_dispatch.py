@@ -1618,3 +1618,13 @@ def test_timeout_modal_bounded_reads_pass(sandbox, command):
 def test_timeout_modal_crawls_still_block(sandbox, command):
     disp = run_dispatcher({"tool_name": "Bash", "tool_input": {"command": command}}, dict(sandbox["env"]), sandbox["cwd"])
     assert disp["exit_code"] == 2 and "volume-crawl" in disp["block_msg"], disp
+
+
+def test_timeout_modal_nested_shell_crawl_blocks(sandbox):
+    disp = run_dispatcher({"tool_name": "Bash", "tool_input": {"command": "bash -lc 'timeout 60 modal run x.py'"}}, dict(sandbox["env"]), sandbox["cwd"])
+    assert disp["exit_code"] == 2 and "volume-crawl" in disp["block_msg"], disp
+
+
+def test_timeout_modal_nested_shell_listing_passes(sandbox):
+    disp = run_dispatcher({"tool_name": "Bash", "tool_input": {"command": "bash -lc 'timeout 30 modal app list'"}}, dict(sandbox["env"]), sandbox["cwd"])
+    assert "volume-crawl" not in disp["block_msg"], disp
