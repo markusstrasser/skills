@@ -39,7 +39,7 @@ doc, once. `hooks/test_provenance_tags.py` fails if any enforcer drifts from it.
 
 ## Consumers (the enforcers that load this, not re-state it)
 - `hooks/pretool-source-remind.sh`, `hooks/postwrite-source-check-semantic.sh`,
-  `hooks/subagent-source-check-stop.sh`, `hooks/subagent-epistemic-gate.sh` — bash gates
+  `hooks/subagent-source-check-stop.sh` — bash gates
 - `~/Projects/agent-infra/scripts/epistemic-lint.py` — cross-repo static lint (reads this regex)
 - (`hooks/source-check-validator.py` is NOT a consumer — it parses `[SOURCE:]` payloads, a
   different job than tag-presence; it stays independent.)

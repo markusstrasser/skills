@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
-# subagent-epistemic-gate.sh — Check subagent outputs for provenance on factual claims.
-# SubagentStop command hook. Advisory only (exit 0 + additionalContext).
-#
-# Skips code-focused subagents (Explore, Plan) where provenance tags don't apply.
-# Checks last_assistant_message for factual claims (numbers, dates, proper nouns)
-# without nearby provenance tags.
+# subagent-epistemic-gate.sh — Log subagent completions to ~/.claude/subagent-log.jsonl.
+# SubagentStop command hook. Always exit 0, no output.
 
 trap 'exit 0' ERR
 
@@ -53,56 +49,9 @@ except Exception:
     print("MSG_LEN=0")
 ' 2>/dev/null)"
 
-# Skip subagents where the last_assistant_message check doesn't apply:
-#   - Explore/Plan/etc: code-focused, provenance tags irrelevant.
-#   - workflow-subagent: Workflow agent() results return through the runtime /
-#     StructuredOutput channel, NOT the final text message, so this gate saw
-#     ~90% "zero output" (137/day) on agents that SUCCEEDED. The parent reviews
-#     the workflow's return value; a per-internal-agent recovery nudge is wrong.
-#     (2026-06-01: verified false-positive via ~/.claude/subagent-log.jsonl.)
-case "$AGENT_TYPE" in
-    Explore|Plan|statusline-setup|claude-code-guide|observe|workflow-subagent)
-        exit 0
-        ;;
-esac
-
-# Short/empty output warning — subagent may have exhausted turns without synthesizing
-if [ "$MSG_LEN" -lt 200 ] && [ "$MSG_LEN" -gt 0 ]; then
-    ~/Projects/skills/hooks/hook-trigger-log.sh "epistemic-gate" "warn" "$AGENT_TYPE: short output (${MSG_LEN} chars)" 2>/dev/null || true
-    echo "{\"additionalContext\": \"SUBAGENT EMPTY: ${AGENT_TYPE} returned only ${MSG_LEN} chars. This agent likely exhausted turns without synthesizing. Check if it wrote to a file (the data may still be useful). If not, dispatch a recovery agent to read the transcript and extract findings. Do NOT ignore this — empty agents waste tokens AND lose discovered information.\"}"
-    exit 0
-fi
-if [ "$MSG_LEN" -eq 0 ]; then
-    ~/Projects/skills/hooks/hook-trigger-log.sh "epistemic-gate" "warn" "$AGENT_TYPE: zero output" 2>/dev/null || true
-    echo "{\"additionalContext\": \"SUBAGENT ZERO OUTPUT: ${AGENT_TYPE} returned nothing. The agent may have crashed or exhausted all turns on tool calls. Check the transcript for recoverable findings.\"}"
-    exit 0
-fi
-
-# Check for factual claim indicators: dollar amounts, percentages, dates, specific numbers
-HAS_CLAIMS=false
-if echo "$MSG" | grep -qE '\$[0-9]|[0-9]+%|[0-9]{4}-[0-9]{2}|billion|million|trillion|according to|study|paper|found that|reported|measured'; then
-    HAS_CLAIMS=true
-fi
-
-[ "$HAS_CLAIMS" = "false" ] && exit 0
-
-# Check for provenance tags
-HAS_TAGS=false
-PROVENANCE_TAG_RE="$(cat "$HOME/Projects/skills/hooks/provenance_tags.re" 2>/dev/null)"  # taxonomy SSOT — references/provenance-tags.md
-[ -n "$PROVENANCE_TAG_RE" ] || echo "WARN: provenance_tags.re missing/empty — subagent tag check degraded (fail-open)" >&2  # empty RE matches-everything below; warn, don't silently disable
-if echo "$MSG" | grep -qE "$PROVENANCE_TAG_RE"; then
-    HAS_TAGS=true
-fi
-
-if [ "$HAS_TAGS" = "false" ]; then
-    ~/Projects/skills/hooks/hook-trigger-log.sh "epistemic-gate" "warn" "$AGENT_TYPE: claims without tags" 2>/dev/null || true
-    echo "{\"additionalContext\": \"SUBAGENT PROVENANCE: The $AGENT_TYPE subagent returned factual claims without provenance tags. Before incorporating these claims into your output, verify them or add appropriate tags ([SOURCE:], [SPEC], [TRAINING-DATA], etc.). Unsourced subagent claims compound error across steps.\"}"
-fi
-
-# Result-size check — uses MSG_LEN (full length, computed before truncation)
-if [ "${MSG_LEN:-0}" -gt 2000 ]; then
-    KB=$(( MSG_LEN / 1024 ))
-    echo "{\"additionalContext\": \"SUBAGENT SIZE: ${AGENT_TYPE} returned ${KB}KB. Large results defeat context isolation — ask subagents to return conclusions, not raw data.\"}"
-fi
-
+# No advisories. SubagentStop output lands in the finished subagent's own sidechain as a
+# hook_success attachment and never reaches the parent model: 42,605 fires in 60 days
+# (gov-report 2026-10-21) changed nothing. Most fires were Claude Code's internal helper
+# agents (empty agent_type, ~40-char outputs) raising "SUBAGENT EMPTY". The parent reads
+# the Agent tool result itself; the completion log above feeds researcher-postmortem.py.
 exit 0

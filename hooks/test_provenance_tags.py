@@ -9,7 +9,7 @@ import importlib.util
 import re
 from pathlib import Path
 
-# precommit-trigger: provenance_tags.re provenance_tags.json gen_provenance_re.py provenance-tags.md pretool-source-remind.sh postwrite-source-check-semantic.sh subagent-source-check-stop.sh subagent-epistemic-gate.sh pretool-research-provenance-warn.sh stop-research-gate.sh postwrite-knowledge-index.py test_provenance_tags.py
+# precommit-trigger: provenance_tags.re provenance_tags.json gen_provenance_re.py provenance-tags.md pretool-source-remind.sh postwrite-source-check-semantic.sh subagent-source-check-stop.sh pretool-research-provenance-warn.sh stop-research-gate.sh postwrite-knowledge-index.py test_provenance_tags.py
 # ^ validate-changed-hooks.sh runs this test when any of these is staged (so re-inlining the
 #   taxonomy can't land). Opt-in: a test with no trigger line is never run by the pre-commit gate.
 
@@ -27,7 +27,6 @@ ENFORCERS = [
     HOOKS / "pretool-source-remind.sh",
     HOOKS / "postwrite-source-check-semantic.sh",
     HOOKS / "subagent-source-check-stop.sh",
-    HOOKS / "subagent-epistemic-gate.sh",
     HOOKS / "pretool-research-provenance-warn.sh",
     HOOKS / "stop-research-gate.sh",
     Path.home() / "Projects" / "agent-infra" / "scripts" / "epistemic-lint.py",

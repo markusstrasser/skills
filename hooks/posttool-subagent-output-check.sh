@@ -4,8 +4,7 @@
 # Shebang note: MUST be env bash (5.x), NOT /bin/bash (macOS 3.2). The eval $(python3…)
 # parse below silently returns an empty OUT_PATH under bash 3.2's ANSI-C quoting, so the
 # hook exited 0 with no advisory — it had never fired once (hook-trigger log count 0)
-# despite its target failure recurring 3+ times. subagent-epistemic-gate.sh (which works
-# in prod) uses env bash for the same reason.
+# despite its target failure recurring 3+ times. subagent-epistemic-gate.sh uses env bash for the same reason.
 # Advisory only (measure false-positive rate before escalating).
 #
 # Problem it addresses (3rd recurrence by 2026-04-07):
