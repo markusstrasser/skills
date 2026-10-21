@@ -320,7 +320,7 @@ def main() -> None:
     check("two topical hits still fire", bool(c14) and "PRIOR-CONTEXT" in c14)
     check("two-hit fire keeps the output format",
           "duckdb" in c14 and "duckdb-invocation-discipline" in c14
-          and "TRIAGE-VERDICT" in c14 and "TRIAGE-DISPATCH" in c14)
+          and "TRIAGE-VERDICT" not in c14 and "TRIAGE-DISPATCH" not in c14)
 
     td.cleanup()
     print(f"\n{passed} passed, {failed} failed")

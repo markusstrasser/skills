@@ -213,9 +213,21 @@ POINTER_LEDGER = (
 )
 
 
+# Tokens with no topic signal that matched memos by accident (2026-10 audit): UUIDs and
+# UUID fragments, absolute or ~ paths, Claude project slugs, and private/tmp.
+JUNK_RE = re.compile(
+    r"(?<![\w-])(?=[0-9a-f-]*\d)[0-9a-f]*(?:-?[0-9a-f]){6,}(?:-[0-9a-f]+)*(?![\w-])"  # hex runs >=6 with a digit, dashes ok
+    r"|(?<!\S)(?:~|/)[^\s]*"  # absolute / home paths
+    r"|-?users-alien-projects-[\w-]*"  # project slugs
+    r"|\b(?:private|tmp)\b",
+    re.I,
+)
+
+
 def _kw(text: str) -> list[str]:
     """Distinctive topic keywords (>=5 chars, not generic), longest first."""
     text = TAG_RE.sub(" ", text)
+    text = JUNK_RE.sub(" ", text)
     seen: set[str] = set()
     out: list[str] = []
     for t in re.findall(r"[a-z][a-z0-9_-]{4,}", text.lower()):
@@ -728,6 +740,15 @@ def _shadow_turn_retrieval(
     return  # no-op: prior-context-shadow.jsonl had no reader (2026-09-01 hooks audit)
 
 
+def _is_harness_frame(prompt: str) -> bool:
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from harness_frame import is_harness_frame
+        return is_harness_frame(prompt)
+    except Exception:
+        return prompt.lstrip().startswith("<task-notification>")
+
+
 def main() -> None:
     raw = sys.stdin.read()
     if not raw.strip():
@@ -745,6 +766,8 @@ def main() -> None:
     session_id = env.get("session_id") or ""
     if not prompt or len(prompt) < 8:
         return
+    if _is_harness_frame(prompt):
+        return  # task notifications, peer relays, system frames: not the operator's prompt
 
     # External URLs: fire even without INTENT (bare paste + "relevant?").
     pointer_lines = _pointer_disposition_lines(prompt)
@@ -862,18 +885,6 @@ def main() -> None:
         f"[{', '.join(matched_kw) if matched_kw else 'rediscovery-retry'}], which already has history. "
         "READ the relevant ones before proposing/diagnosing — build on, narrow to the real gap, or "
         "supersede them; don't re-derive.",
-        # Reply-protocol half of the answer-reflex (arc-agi row answer-reflex-surface;
-        # operator target: every suggestion bounces off the ledger, 2026-07-10):
-        "TRIAGE-VERDICT: if the prompt carries operator ideas/corrections/asks, OPEN the reply "
-        "with one verdict per item — already-done (cite artifact) · known (cite) · in-queue "
-        "(cite row) · tried-and-killed (cite verdict memo) · genuinely-new (file it, say where) — "
-        "BEFORE analysis. A suggestion absorbed without a verdict line is a silent rescue.",
-        # Same-turn dispatch reflex (re-filed arc-agi row triage-dispatch-reflex; the 07-11
-        # graded fix was lost and its class recurred 14x in 47h — supervision audit 2026-07-12):
-        "TRIAGE-DISPATCH: a verdict of in-queue/chartered/already-authorized on an actionable "
-        "item OBLIGATES dispatching that work in the SAME turn (subagent, background run, or "
-        "inline) — never end the turn holding authorized-but-undispatched work awaiting a 'go'. "
-        "'Do all/parallelize/go on' from the operator means this reflex failed on the prior turn.",
     ]
     if pointer_lines:
         parts.extend(pointer_lines)
