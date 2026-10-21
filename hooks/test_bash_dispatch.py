@@ -1010,6 +1010,8 @@ def test_worktree_cd_persistent_blocks(sandbox):
         "(cd /repo/.claude/worktrees/codex-x && git status --short)",
         "cd /repo && ls .claude/worktrees/",
         "W=/repo/.claude/worktrees/codex-x; ls $W/scripts | head -3",
+        'S=/private/tmp/claude-501/scratch; mkdir -p "$S" && cd "$S" && ls',
+        "export SP='/tmp/x y'; cd \"${SP}\"",
     ],
 )
 def test_worktree_paths_without_persistent_cd_pass(sandbox, command):
@@ -1027,6 +1029,8 @@ def test_worktree_paths_without_persistent_cd_pass(sandbox, command):
         'cd "$HOME/$SUB" && ls',
         'cd "$(git rev-parse --show-toplevel)" && ls',
         'echo "(" && cd $WT',
+        "W=/repo/.claude/worktrees/codex-x; cd $W && ls",
+        'S=/tmp/ok; S="$(mktemp -d)"; cd "$S"',
     ],
 )
 def test_persistent_cd_to_an_unreadable_target_blocks(sandbox, command):

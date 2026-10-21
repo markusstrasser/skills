@@ -2274,6 +2274,8 @@ def gate_worktree_cd_guard(raw_payload: str) -> GateResult:
     # paren cannot unbalance the subshell strip. A cd inside ( ... ) or $( ... ) cannot
     # change the persistent cwd: strip parenthesised groups innermost-first before matching.
     stripped = _HEREDOC_RE.sub(" ", cmd)
+    vars_mod = _load_module(HOOKS_DIR / "shell_literal_vars.py", "shell_literal_vars")
+    stripped = vars_mod.expand_literal_vars(stripped)
     stripped = _QUOTED_ARG_RE.sub(lambda m: m.group(0) if m.group(1) else " ", stripped)
     for _ in range(8):
         reduced = re.sub(r"\([^()]*\)", "", stripped)

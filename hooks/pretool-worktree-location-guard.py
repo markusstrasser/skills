@@ -39,6 +39,18 @@ _WORKTREE_ADD = re.compile(r"\bgit\b[^\n;|&]*?\bworktree\s+add\b")
 _VALUE_FLAGS = {"-b", "-B", "--reason", "--orphan"}
 
 
+def _expand_literal_vars(cmd: str) -> str:
+    import importlib.util
+
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shell_literal_vars.py")
+    spec = importlib.util.spec_from_file_location("shell_literal_vars", path)
+    if spec is None or spec.loader is None:
+        return cmd
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.expand_literal_vars(cmd)
+
+
 def _extract_path(cmd: str) -> str | None:
     """Return the target path of a `git worktree add`, or None if unparseable."""
     try:
@@ -90,7 +102,7 @@ def verdict(cmd: str, cwd: str = "") -> tuple[str, str]:
     if not _WORKTREE_ADD.search(cmd):
         return "pass", ""
 
-    path = _extract_path(cmd)
+    path = _extract_path(_expand_literal_vars(cmd))
     if path is None:
         # Unparseable shape — fail open rather than block a legitimate call.
         return "pass", ""
@@ -129,6 +141,9 @@ def _selftest() -> int:
         (f"git worktree add {gx}/.claude/worktrees/lane-a", gx, "pass"),
         (f"git worktree add -b k/x {gx}/.claude/worktrees/kx", gx, "pass"),
         (".claude/worktrees/rel && git worktree add .claude/worktrees/rel", gx, "pass"),
+        (f"W={gx}/.claude/worktrees/lane-v; git worktree add $W HEAD", gx, "pass"),
+        ("W=/tmp/lane-v; git worktree add \"$W\" HEAD", gx, "block"),
+        ("git worktree add $W HEAD", gx, "block"),
         # non-add worktree verbs must never fire
         ("git worktree list", gx, "pass"),
         ("git worktree remove /tmp/lane-a", gx, "pass"),
