@@ -1586,3 +1586,35 @@ def test_cat_guard_plain_missing_still_blocks_dispatcher(sandbox):
     env = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": sandbox["cwd"]}
     disp = run_dispatcher(env, dict(sandbox["env"]), sandbox["cwd"])
     assert disp["exit_code"] == 2
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "timeout 60 modal volume ls genomics-data /results | head",
+        "timeout 30 modal app list --json",
+        "timeout 30 modal container list",
+        "timeout 30 modal app stop ap-123",
+        "timeout 60 modal app logs ap-123",
+        "rg 'timeout 60 modal run x.py' notes.md",
+        "rg -n 'timeout=' hooks/ ; echo 'timeout 5 modal volume get v /'",
+    ],
+)
+def test_timeout_modal_bounded_reads_pass(sandbox, command):
+    disp = run_dispatcher({"tool_name": "Bash", "tool_input": {"command": command}}, dict(sandbox["env"]), sandbox["cwd"])
+    assert "volume-crawl" not in disp["block_msg"], command
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "timeout 600 modal run pipeline.py",
+        "timeout 60 modal volume get genomics-data /results .",
+        "cd x && timeout 300 uv run python3 -m modal run a.py",
+        "echo hi; timeout 120 just dispatch S1",
+        "timeout 60 modal volume ls genomics-data / --recursive",
+    ],
+)
+def test_timeout_modal_crawls_still_block(sandbox, command):
+    disp = run_dispatcher({"tool_name": "Bash", "tool_input": {"command": command}}, dict(sandbox["env"]), sandbox["cwd"])
+    assert disp["exit_code"] == 2 and "volume-crawl" in disp["block_msg"], disp

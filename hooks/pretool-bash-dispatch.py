@@ -1787,6 +1787,64 @@ _TIMEOUT_CRAWL_RE = re.compile(
 )
 
 
+_TIMEOUT_SEPS = {";", "&&", "||", "|", "&", "(", ")", "$", "`", "|&", ";;"}
+# Bounded read-only listings and streams: a timeout on these is harmless (and the
+# streaming guard REQUIRES one on logs/exec). 2026-10-14..21: 24 false blocks in 6
+# sessions on `volume ls`, `app list`, `container list`, `app stop`.
+_TIMEOUT_MODAL_OK = {
+    ("volume", "ls"), ("app", "list"), ("container", "list"), ("app", "stop"),
+    ("app", "logs"), ("container", "logs"), ("container", "exec"),
+}
+
+
+def _timeout_segments(cmd: str):
+    """Parsed argv per pipeline/list segment; quoted text stays one opaque token."""
+    lex = shlex.shlex(cmd.replace("\n", " ; "), posix=True, punctuation_chars=";&|()`$")
+    lex.whitespace_split = True
+    seg: list[str] = []
+    try:
+        for tok in lex:
+            if tok in _TIMEOUT_SEPS or set(tok) <= set(";&|()`$"):
+                if seg:
+                    yield seg
+                seg = []
+            else:
+                seg.append(tok)
+    except ValueError:
+        return  # unbalanced quoting — fail open
+    if seg:
+        yield seg
+
+
+def _timeout_wrapped_argv(seg: list[str]) -> list[str] | None:
+    """argv after `timeout [opts] DURATION`, or None if the segment is not timeout-wrapped."""
+    i = 0
+    while i < len(seg) and (seg[i] in {"nohup", "sudo", "env"} or re.fullmatch(r"[A-Za-z_]\w*=.*", seg[i])):
+        i += 1
+    if i >= len(seg) or seg[i] != "timeout":
+        return None
+    i += 1
+    while i < len(seg) and seg[i].startswith("-"):
+        i += 2 if seg[i] in {"-k", "-s", "--kill-after", "--signal"} else 1
+    if i >= len(seg) or not re.fullmatch(r"\d+(?:\.\d+)?[smhd]?", seg[i]):
+        return None
+    return seg[i + 1 :]
+
+
+def _timeout_crawl(argv: list[str]) -> bool:
+    for k, tok in enumerate(argv):
+        if tok == "modal" or tok.endswith("/modal"):
+            sub = tuple(argv[k + 1 : k + 3])
+            if sub[:1] and sub[0] in {"volume", "run", "app", "container"}:
+                if sub in _TIMEOUT_MODAL_OK and not (
+                    sub == ("volume", "ls") and {"-r", "--recursive"} & set(argv[k + 3 :])
+                ):
+                    return False
+                return True
+            return False
+    return bool(_TIMEOUT_CRAWL_RE.search(" ".join(argv)))
+
+
 def gate_timeout_modal_guard(raw_payload: str) -> GateResult:
     try:
         data = json.loads(raw_payload)
@@ -1800,14 +1858,12 @@ def gate_timeout_modal_guard(raw_payload: str) -> GateResult:
     scan = _TIMEOUT_HEREDOC_RE.sub(" ", cmd)
     if not _TIMEOUT_WRAP_RE.search(scan):
         return GateResult(0, "", "")
-    cmd2 = scan
-    # `app logs`, `container logs` and `container exec` are bounded streams, not crawls:
-    # the streaming guard REQUIRES a timeout on them, so blocking it here made the two
-    # gates unsatisfiable together (genomics 2026-09-02, a read-only `container exec`
-    # to inspect a silent materializer was refused both ways).
-    if re.search(r"\bmodal\s+(?:app|container)\s+(?:logs|exec)\b", cmd2):
-        return GateResult(0, "", "")
-    if not _TIMEOUT_CRAWL_RE.search(cmd2):
+    # One owner: block only parsed argv `timeout … <crawl>` — never text inside quotes
+    # or grep/rg patterns (2026-10-14..21: 2 blocks on `rg 'timeout='` alone).
+    if not any(
+        (argv := _timeout_wrapped_argv(seg)) is not None and _timeout_crawl(argv)
+        for seg in _timeout_segments(scan)
+    ):
         return GateResult(0, "", "")
     msg = (
         "BLOCKED: `timeout N` wraps a Modal/volume-crawl command. At the deadline it\n"
@@ -1816,8 +1872,9 @@ def gate_timeout_modal_guard(raw_payload: str) -> GateResult:
         "fired 4x in one session.)\n"
         "Fix: DROP `timeout N` and either\n"
         "  - run_in_background=true  (tracked; you get a completion notification), or\n"
-        "  - use the commands OWN bound (`just dispatch ... --detach`, llmx `--timeout`),\n"
-        "    or `modal volume ls` (already fast) without the wrapper.\n"
+        "  - use the commands OWN bound (`just dispatch ... --detach`, llmx `--timeout`).\n"
+        "A timeout IS fine on bounded reads: modal volume ls, app list/stop/logs,\n"
+        "container list/logs/exec (the streaming guard requires it on logs).\n"
         "Never SIGTERM a Modal crawl to bound it.\n"
     )
     return GateResult(2, msg, "")

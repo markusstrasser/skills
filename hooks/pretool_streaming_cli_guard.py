@@ -285,6 +285,11 @@ def main() -> int:
         file=sys.stderr,
     )
     print(
+        "  (bounded streams/listings only: modal app/container logs, container exec;"
+        " never wrap a crawl like `modal run` — background it instead)",
+        file=sys.stderr,
+    )
+    print(
         "  (a trailing '| head -N' does not bound a quiet stream — only timeout does)",
         file=sys.stderr,
     )
