@@ -1606,6 +1606,8 @@ def test_cat_guard_plain_missing_still_blocks_dispatcher(sandbox):
         "timeout 60 modal app logs ap-123",
         "rg 'timeout 60 modal run x.py' notes.md",
         "rg -n 'timeout=' hooks/ ; echo 'timeout 5 modal volume get v /'",
+        "timeout 60 grep -rn 'modal run' .",
+        "timeout 60 rg 'just dispatch' docs/",
     ],
 )
 def test_timeout_modal_bounded_reads_pass(sandbox, command):
@@ -1621,6 +1623,13 @@ def test_timeout_modal_bounded_reads_pass(sandbox, command):
         "cd x && timeout 300 uv run python3 -m modal run a.py",
         "echo hi; timeout 120 just dispatch S1",
         "timeout 60 modal volume ls genomics-data / --recursive",
+        # 2026-10-21 review: shapes the first argv parser let through.
+        "timeout 600 \\\n  modal run script.py",
+        "timeout 60 modal volume ls $VOL --recursive",
+        "nohup bash -c 'timeout 600 modal run x.py' &",
+        "env timeout 600 modal run x.py",
+        "timeout -s INT 600 modal run x.py",
+        "for i in 1 2; do timeout 600 modal run x.py; done",
     ],
 )
 def test_timeout_modal_crawls_still_block(sandbox, command):

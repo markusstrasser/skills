@@ -1770,12 +1770,6 @@ def gate_modal_run_guard(raw_payload: str) -> GateResult:
 # --- 24. pretool-timeout-modal-guard.sh (BLOCKER, no if) -------------------
 
 _TIMEOUT_HEREDOC_RE = re.compile(r"<<-?\s*'?([A-Za-z_]\w*)'?.*?\n\1\s*$", re.S | re.M)
-_TIMEOUT_WRAP_RE = re.compile(
-    r"(?:^|[;&|(]\s*|\$\(\s*|`\s*|\s-[a-z]*c\s+['\"]\s*)"  # last: sh -c STR (cheap prefilter)
-    r"(?:nohup\s+|sudo\s+|[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*"
-    r"timeout\s+(?:-[ksv]\S*\s+)*\d+(?:\.\d+)?[smhd]?\s",
-    re.M,
-)
 _TIMEOUT_CRAWL_RE = re.compile(
     r"\bmodal\s+(?:volume|run|app|container)\b"
     r"|\bjust\s+(?:dispatch|sample-remediation|sample-state|sample-readiness"
@@ -1787,6 +1781,9 @@ _TIMEOUT_CRAWL_RE = re.compile(
 )
 
 
+_TIMEOUT_PREFIX = {"nohup", "sudo", "env", "exec", "command", "time", "do", "then", "else"}
+# Search/print tools: a crawl name in their argv is a pattern or text, never a run.
+_TIMEOUT_TEXT_TOOLS = {"grep", "egrep", "fgrep", "rg", "ag", "echo", "printf", "cat", "head", "tail", "sed", "awk", "jq"}
 _TIMEOUT_SEPS = {";", "&&", "||", "|", "&", "(", ")", "$", "`", "|&", ";;"}
 # Bounded read-only listings and streams: a timeout on these is harmless (and the
 # streaming guard REQUIRES one on logs/exec). 2026-10-14..21: 24 false blocks in 6
@@ -1799,7 +1796,10 @@ _TIMEOUT_MODAL_OK = {
 
 def _timeout_segments(cmd: str):
     """Parsed argv per pipeline/list segment; quoted text stays one opaque token."""
-    lex = shlex.shlex(cmd.replace("\n", " ; "), posix=True, punctuation_chars=";&|()`$")
+    # `\⏎` is a continuation, not a separator; `$` stays in words so `$VOL -r` is one segment
+    # (a bare `$` token before `(` still splits `$(…)`).
+    text = cmd.replace("\\\n", " ").replace("\n", " ; ")
+    lex = shlex.shlex(text, posix=True, punctuation_chars=";&|()`")
     lex.whitespace_split = True
     seg: list[str] = []
     try:
@@ -1816,11 +1816,17 @@ def _timeout_segments(cmd: str):
         yield seg
 
 
+def _timeout_skip_prefix(seg: list[str]) -> int:
+    i = 0
+    while i < len(seg) and (seg[i] in _TIMEOUT_PREFIX or re.fullmatch(r"[A-Za-z_]\w*=.*", seg[i])):
+        i += 1
+    return i
+
+
 def _timeout_wrapped_argv(seg: list[str]) -> list[str] | None:
     """argv after `timeout [opts] DURATION`, or None if the segment is not timeout-wrapped."""
     i = 0
-    while i < len(seg) and (seg[i] in {"nohup", "sudo", "env"} or re.fullmatch(r"[A-Za-z_]\w*=.*", seg[i])):
-        i += 1
+    i = _timeout_skip_prefix(seg)
     if i >= len(seg) or seg[i] != "timeout":
         return None
     i += 1
@@ -1842,6 +1848,8 @@ def _timeout_crawl(argv: list[str]) -> bool:
                     return False
                 return True
             return False
+    if argv and argv[0].rsplit("/", 1)[-1] in _TIMEOUT_TEXT_TOOLS:
+        return False
     return bool(_TIMEOUT_CRAWL_RE.search(" ".join(argv)))
 
 
@@ -1855,8 +1863,9 @@ def _timeout_blocks(text: str, depth: int = 0) -> bool:
         argv = _timeout_wrapped_argv(seg)
         if argv is not None and _timeout_crawl(argv):
             return True
-        if depth < 3 and seg and seg[0].rsplit("/", 1)[-1] in _SHELLS:
-            for k, tok in enumerate(seg[1:-1], start=1):
+        head = _timeout_skip_prefix(seg)
+        if depth < 3 and head < len(seg) and seg[head].rsplit("/", 1)[-1] in _SHELLS:
+            for k, tok in enumerate(seg[head + 1 : -1], start=head + 1):
                 if re.fullmatch(r"-[a-z]*c[a-z]*", tok) and _timeout_blocks(seg[k + 1], depth + 1):
                     return True
     return False
@@ -1873,7 +1882,7 @@ def gate_timeout_modal_guard(raw_payload: str) -> GateResult:
     if not cmd:
         return GateResult(0, "", "")
     scan = _TIMEOUT_HEREDOC_RE.sub(" ", cmd)
-    if not _TIMEOUT_WRAP_RE.search(scan):
+    if not re.search(r"\btimeout\s", scan):  # cheap prefilter; the parser decides
         return GateResult(0, "", "")
     # One owner: block only parsed argv `timeout … <crawl>` — never text inside quotes
     # or grep/rg patterns (2026-10-14..21: 2 blocks on `rg 'timeout='` alone).
