@@ -2301,8 +2301,11 @@ def gate_opus_concurrency_advisory(raw_payload: str) -> GateResult:
 # always run), run(raw_payload)->GateResult.
 # ─────────────────────────────────────────────────────────────────────────
 
+# Scratch trees: lane worktrees, the repo's cache directory (lane briefs, batch candidates,
+# gate logs) and DeepSeek lane clones under ~/.cache/oc-lanes.
 _WORKTREE_CD_RE = re.compile(
-    r"(?:^|[\s;&|])cd\s+[\"']?([^\s\"';&|()]*\.claude/worktrees/[^\s\"';&|()]*)"
+    r"(?:^|[\s;&|])cd\s+[\"']?([^\s\"';&|()]*(?:\.claude/(?:worktrees|cache)|\.cache/oc-lanes)"
+    r"(?:/[^\s\"';&|()]*)?)(?=$|[\s\"';&|()])"
 )
 # Any persistent cd target, quoted or bare, for the dynamic check below.
 _CD_TARGET_RE = re.compile(r"(?:^|[\s;&|])cd\s+(\"[^\"]*\"|'[^']*'|[^\s\"';&|()]+)")
@@ -2342,6 +2345,9 @@ def gate_worktree_cd_guard(raw_payload: str) -> GateResult:
     ``(cd <wt> && ...)`` cannot persist and passes; ``git -C <wt>`` and absolute
     paths are the intended spellings. A persistent ``cd`` to a target the guard
     cannot read (``cd $WT``, ``cd "$(...)"``) blocks too, since it may be a worktree.
+    The same holds for ``.claude/cache/...`` and ``~/.cache/oc-lanes/...``: one genomics
+    session (1cce6699, 2026-10-22) made five persistent cds into those trees, past
+    this guard, each caught only by the harness's working-directory notice.
     """
     try:
         data = json.loads(raw_payload)
@@ -2379,8 +2385,9 @@ def gate_worktree_cd_guard(raw_payload: str) -> GateResult:
     target = match.group(1)
     msg = (
         f"BLOCK: `cd {target}` would leave this session's persistent cwd inside a lane "
-        "worktree; every later Bash call (git log ranges, uv run, edits) would then run "
-        "against the worktree, not main (genomics catalog M122, recurred 2026-09-02).\n"
+        "worktree, lane clone or cache directory; every later Bash call (git log ranges, "
+        "uv run, edits) would then run there, not in main (genomics catalog M122, recurred "
+        "2026-09-02 and 2026-10-22).\n"
         f"Use `git -C {target} ...`, absolute `{target}/...` paths, or a subshell "
         f"`(cd {target} && ...)`, which cannot persist.\n"
     )

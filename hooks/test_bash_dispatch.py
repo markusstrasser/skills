@@ -1006,8 +1006,33 @@ def test_worktree_cd_persistent_blocks(sandbox):
 @pytest.mark.parametrize(
     "command",
     [
+        "cd /repo/.claude/cache/handoff/lanes-oc && ls",
+        "cd /repo/.claude/cache && ls",
+        'cd "/repo/.claude/cache/gates/qa-1" && cat kernel-rehearsal.log',
+        "mkdir -p /repo/.claude/cache/x && cd /repo/.claude/cache/x && date; cd /repo",
+        "cd ~/.cache/oc-lanes/a1-r3/genomics && git log --oneline -1",
+        "cd /Users/a/.cache/oc-lanes/a1-r3/genomics && git status",
+    ],
+)
+def test_cache_and_lane_clone_cd_persistent_blocks(sandbox, command):
+    """2026-10-22: five persistent cds into .claude/cache and ~/.cache/oc-lanes passed."""
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
+    assert disp["exit_code"] == 2
+    assert "persistent cwd" in disp["block_msg"]
+    assert "git -C" in disp["block_msg"]
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
         "git -C /repo/.claude/worktrees/codex-x status --short",
         "(cd /repo/.claude/worktrees/codex-x && git status --short)",
+        "(cd /repo/.claude/cache/handoff && ls)",
+        "git -C ~/.cache/oc-lanes/a1-r3/genomics log --oneline -1",
+        "cd /repo && ls .claude/cache/",
+        "cd /repo/.claude/cachex && ls",
+        "cd /repo/.cache/oc-lanesx && ls",
         "cd /repo && ls .claude/worktrees/",
         "W=/repo/.claude/worktrees/codex-x; ls $W/scripts | head -3",
         'S=/private/tmp/claude-501/scratch; mkdir -p "$S" && cd "$S" && ls',
