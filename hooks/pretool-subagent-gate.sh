@@ -183,7 +183,8 @@ if [ "$STYPE" = "general-purpose" ]; then
     fi
 fi
 
-# Check 5: File-edit intent via subagent
+# Check 5 (retired 2026-10-21): "use Edit/Write directly" contradicted the global rule that
+# workers get file ownership and write result files; 118 fires in 30 days, all advisory.
 PROMPT=$(printf '%s' "$INPUT" | jq -r '.tool_input.prompt // ""' 2>/dev/null || true)
 
 # Text the discipline checks (7, 10, 12, self-report) scan: the prompt plus any brief it
@@ -202,14 +203,6 @@ if [ -n "$PROMPT" ]; then
         [ -f "$_brief" ] && CHECK_TEXT="$CHECK_TEXT
 $(head -c 20000 "$_brief" 2>/dev/null || true)"
     done
-fi
-
-if echo "$DESC $PROMPT" | grep -qiE 'edit (the |a |this )?file|write (to |the )?file|modify (the |a )?file|update (the |a )?file|fix (the |a |this )?(code|file|bug|issue)|implement (the |a |this )?|create (a |the )?file|add (to|code|a function|the)'; then
-    # Exception: worktree isolation is fine for code changes
-    if ! echo "$INPUT" | grep -q '"worktree"'; then
-        CHECK_IDS="${CHECK_IDS}5,"
-        WARNINGS="${WARNINGS}SUBAGENT FILE EDIT: Description/prompt suggests file modification. Agent() creates isolated context — use Edit/Write directly for file changes. If you need isolated code changes, use isolation: worktree. "
-    fi
 fi
 
 # Check 6: Delegation cascade tracking
