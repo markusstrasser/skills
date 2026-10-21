@@ -132,3 +132,39 @@ def test_quoted_argument_is_one_path(tmp_path):
 
 def test_redirect_target_created_earlier_is_skipped(tmp_path):
     assert missing_for("echo x > made.md && y=$(cat made.md)", str(tmp_path)) == []
+
+
+# --- 2026-10-14..21: 72 false blocks on guarded / waited-for paths ---------
+
+import pytest
+
+
+@pytest.mark.parametrize(
+    "cmd",
+    [
+        "until [ -f out.txt ]; do sleep 5; done; echo $(cat out.txt)",
+        "while ! [ -s out.txt ]; do sleep 5; done; echo $(cat out.txt)",
+        "until grep -q DONE out.txt; do sleep 5; done; echo $(cat out.txt)",
+        "until [[ -e out.txt ]]; do sleep 1; done; x=$(cat out.txt)",
+        "test -f out.txt && echo $(cat out.txt)",
+        "[ -f out.txt ] && echo $(cat out.txt)",
+        "bgrun --wait job1; echo rc=$(cat /tmp/bgrun/job1.done)",
+        "echo $(cat $(git rev-parse --show-toplevel)/f.md)",
+        "echo $(cat `pwd`/f.md)",
+    ],
+)
+def test_guarded_or_opaque_paths_pass(tmp_path, cmd):
+    assert missing_for(cmd, str(tmp_path)) == []
+
+
+def test_relative_path_resolves_against_leading_cd(tmp_path):
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "f.md").write_text("x")
+    assert missing_for("cd sub && echo $(cat f.md)", str(tmp_path)) == []
+    assert missing_for("cd sub; echo $(cat f.md)", str(tmp_path)) == []
+
+
+def test_plain_missing_still_blocks(tmp_path):
+    assert missing_for("echo $(cat /nonexistent-xyz)", str(tmp_path)) == ["/nonexistent-xyz"]
+    assert missing_for("[ -f other ] && echo $(cat gone.txt)", str(tmp_path)) == ["gone.txt"]
+    assert missing_for("cd /tmp && echo $(cat gone-xyz.txt)", str(tmp_path)) == ["gone-xyz.txt"]

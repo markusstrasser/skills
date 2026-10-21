@@ -56,18 +56,56 @@ def find_cat_spans(cmd: str):
         yield cmd[m.end() : cut.start() if cut else end]
 
 
+_TEST_RE = re.compile(r"(?:\[\[?|\btest)\s+(?:!\s+)?-[fser]\s+(\S+)")
+_LOOP_RE = re.compile(r"\b(?:until|while)\b(.*?)(?:;|\n)\s*do\b", re.S)
+_GREPQ_RE = re.compile(r"\bgrep\s+[^|;&\n]*?-[A-Za-z]*q[^|;&\n]*")
+_BGWAIT_RE = re.compile(r"\bbgrun\s+--wait\s+(\S+)")
+_LEADING_CD_RE = re.compile(r"^\s*cd\s+(\S+)\s*(?:&&|;)")
+
+
+def _clean(tok: str) -> str:
+    return tok.rstrip(";&|)]").strip("\"'")
+
+
+def guarded_paths(cmd: str) -> tuple[set[str], set[str]]:
+    """Paths the command itself waits for or tests before reading (2026-10-14..21: 72
+    false blocks — until/while watchers, `[ -f X ] &&`, `grep -q … X`, bgrun --wait).
+    Returns (literal tokens, bgrun done-file basenames)."""
+    toks: set[str] = set()
+    for m in _TEST_RE.finditer(cmd):
+        toks.add(_clean(m.group(1)))
+    for chunk in [m.group(1) for m in _LOOP_RE.finditer(cmd)] + _GREPQ_RE.findall(cmd):
+        try:
+            parts = shlex.split(chunk.replace("[", " ").replace("]", " "))
+        except ValueError:
+            parts = chunk.split()
+        toks.update(_clean(t) for t in parts)
+    done = {_clean(m.group(1)) + ".done" for m in _BGWAIT_RE.finditer(cmd)}
+    return toks, done
+
+
 def missing_paths(cmd: str, cwd: str) -> list[str]:
     """Literal paths read by a live $(cat ...) that do not exist, deduplicated in order."""
     redirected = {t.rstrip(";&|").strip("\"'") for t in re.findall(r">>?\s*(\S+)", cmd)}
+    guarded, done_names = guarded_paths(cmd)
+    cd = _LEADING_CD_RE.match(cmd)
+    if cd:
+        target = os.path.expanduser(_clean(cd.group(1)))
+        if not any(c in target for c in "$`*?"):
+            cwd = os.path.join(cwd, target)
     missing = []
     for span in find_cat_spans(cmd):
+        if "$(" in span or "`" in span:
+            continue  # nested substitution — the path is computed at runtime, opaque
         try:
             tokens = shlex.split(span)
         except ValueError:
             continue  # unbalanced quoting inside the span — never guess
         for tok in tokens:
-            if not tok or tok.startswith("-") or tok in redirected:
+            if not tok or tok.startswith("-") or tok in redirected or tok in guarded:
                 continue
+            if os.path.basename(tok) in done_names:
+                continue  # bgrun --wait <name> blocks until <dir>/<name>.done exists
             if any(c in tok for c in "<>$`*?[]{}~"):
                 continue  # redirection or not a literal path — never guess
             path = tok if os.path.isabs(tok) else os.path.join(cwd, tok)

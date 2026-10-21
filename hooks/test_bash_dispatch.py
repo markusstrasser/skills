@@ -1562,3 +1562,27 @@ def test_rg_glued_replace_logs_a_warn_row(sandbox):
     rows = [r for r in _read_trigger_log(sandbox) if r.get("hook") == "rg-replace-flag-guard"]
     assert [(r["action"], r["detail"]) for r in rows] == [("warn", "-rln")]
     assert rows[0].get("cmd_tok") == "rg" and "cmd" not in rows[0]
+
+
+# --- 2026-10-14..21 false-positive classes (cat guard A, timeout-modal B) ---
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "until [ -f out.txt ]; do sleep 5; done; echo $(cat out.txt)",
+        "bgrun --wait j1; echo $(cat /tmp/bgrun/j1.done)",
+        "echo $(cat $(git rev-parse --show-toplevel)/f.md)",
+    ],
+)
+def test_cat_guard_waited_paths_pass_dispatcher(sandbox, command):
+    env = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": sandbox["cwd"]}
+    disp = run_dispatcher(env, dict(sandbox["env"]), sandbox["cwd"])
+    assert disp["exit_code"] == 0, disp["block_msg"]
+
+
+def test_cat_guard_plain_missing_still_blocks_dispatcher(sandbox):
+    command = "echo $(cat /nonexistent-xyz-dispatch)"
+    env = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": sandbox["cwd"]}
+    disp = run_dispatcher(env, dict(sandbox["env"]), sandbox["cwd"])
+    assert disp["exit_code"] == 2
