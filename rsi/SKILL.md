@@ -85,10 +85,10 @@ Convert the top matching row into a maintain draft or detector proposal (steward
 `maintain-candidates.json`), then leave the row queued for `/observe maintain`.
 Do **not** expand REDISCOVERY regexes while the over_caution ablation window is open.
 
-**arc-agi MEMORY discipline (AP10):** never paste session blocks into `MEMORY.md`. Write the
-fact to `project_*.md` Revisions (or `research/` / `decisions/`), then add/update **one**
-MEMORY.md pointer line. Soft cap 8KB — see `.claude/rules/memory-write-discipline.md`.
-Run `just memory-lint` if you touched memory.
+**MEMORY discipline:** never paste session blocks into `MEMORY.md`. Write the fact to a topic
+file (`project_*.md` Revisions, `research/`, `decisions/`), then add or update **one**
+MEMORY.md pointer line. The memory hook reports the index size after each edit; compact when
+it says so (warns above ~17 KB of a ~24 KB read limit).
 
 **If digest has `operator_dx_reflex` (non-empty) or `operator_dx` in `real_issue_kinds`:**
 fill the four fields for the top intervention (max one action):
