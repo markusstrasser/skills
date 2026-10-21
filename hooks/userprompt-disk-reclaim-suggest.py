@@ -99,12 +99,21 @@ def build(free: float, now: float) -> tuple[str, str]:
             f"{head} The suggestion file is {age / 3600:.1f} h old, so the disk guard is not "
             f"refreshing it; check ~/.cache/reclaim/disk-guard.log and run `{SUGGEST_CMD}`."
         )
-    rows = [row for row in data.get("candidates", []) if row.get("candidate", True)]
+    listed = [row for row in data.get("candidates", []) if row.get("candidate", True)]
+    # The file can be up to 5 min old, and a landing may remove a listed tree in between.
+    rows = [row for row in listed if Path(str(row.get("path", ""))).exists()]
+    removed = len(listed) - len(rows)
+    removed_note = (
+        f" Left out {removed} listed {'tree' if removed == 1 else 'trees'} already removed from disk."
+        if removed
+        else ""
+    )
     if not rows:
         return head, (
-            f"{head} worktree_gc suggest found no worktree candidates "
+            f"{head} worktree_gc suggest lists no existing worktree candidates "
             f"({len(data.get('not_candidates', []))} trees excluded as live or protected); "
             "the space is elsewhere (`du -sh ~/Projects/*/.claude ~/Library/Caches`)."
+            + removed_note
         )
     rows.sort(key=lambda row: row.get("size_bytes") or 0, reverse=True)
     total = sum(row.get("size_bytes") or 0 for row in rows) / 1e9
@@ -118,7 +127,7 @@ def build(free: float, now: float) -> tuple[str, str]:
     )
     summary = (
         f"{head} {len(rows)} worktree reclaim candidates hold {total:.1f} GB; "
-        f"{unlanded} carry dirty edits or unlanded commits."
+        f"{unlanded} carry dirty edits or unlanded commits.{removed_note}"
     )
     return summary, f"{summary} Largest {min(TOP_N, len(rows))}:\n{body}\n{note}"
 

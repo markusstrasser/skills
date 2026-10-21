@@ -31,9 +31,12 @@ def run(tmp_path: Path, free_gb: float, session: str = "s1", event: str = "UserP
 
 
 def write_suggestions(tmp_path: Path, marker: Path, age_seconds: float = 0) -> None:
+    trees = tmp_path / "genomics/.claude/worktrees"
+    for name in ("small", "big"):
+        (trees / name).mkdir(parents=True)
     rows = [
         {
-            "path": "/x/genomics/.claude/worktrees/small",
+            "path": str(trees / "small"),
             "class": "stale-dirty",
             "size_bytes": 100_000_000,
             "idle_hours": 3,
@@ -44,7 +47,7 @@ def write_suggestions(tmp_path: Path, marker: Path, age_seconds: float = 0) -> N
             "candidate": True,
         },
         {
-            "path": "/x/genomics/.claude/worktrees/big",
+            "path": str(trees / "big"),
             "class": "unmerged",
             "size_bytes": 2_000_000_000,
             "idle_hours": 30,
@@ -88,6 +91,26 @@ def test_lists_largest_first_with_archive_command_and_runs_nothing(tmp_path):
     assert "Nothing is removed automatically" in ctx
     assert "2 worktree reclaim candidates hold 2.1 GB" in json.loads(proc.stdout)["systemMessage"]
     assert not marker.exists()
+
+
+def test_leaves_out_trees_already_removed(tmp_path):
+    write_suggestions(tmp_path, tmp_path / "ran")
+    (tmp_path / "genomics/.claude/worktrees/big").rmdir()
+    proc = run(tmp_path, free_gb=12)
+    ctx = context(proc)
+    assert "worktrees/big" not in ctx
+    assert "worktrees/small" in ctx
+    assert "Left out 1 listed tree already removed from disk." in ctx
+    assert "1 worktree reclaim candidates hold 0.1 GB" in json.loads(proc.stdout)["systemMessage"]
+
+
+def test_all_listed_trees_removed_says_so(tmp_path):
+    write_suggestions(tmp_path, tmp_path / "ran")
+    for name in ("small", "big"):
+        (tmp_path / "genomics/.claude/worktrees" / name).rmdir()
+    ctx = context(run(tmp_path, free_gb=12))
+    assert "lists no existing worktree candidates" in ctx
+    assert "Left out 2 listed trees already removed from disk." in ctx
 
 
 def test_session_start_echoes_event_name(tmp_path):
