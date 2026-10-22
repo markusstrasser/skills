@@ -436,6 +436,28 @@ def test_sigint_interrupts_the_command_and_publishes_its_status(job) -> None:
 
 
 @pytest.mark.parametrize("job", ["exec", "native"], indirect=True)
+def test_sighup_reaches_the_command_with_its_default_action(job) -> None:
+    directory, _env, run = job
+    child_script = directory / "hup-child.py"
+    child_script.write_text(
+        "from pathlib import Path\n"
+        "import json, os, signal, time\n"
+        "Path('child-ready').write_text(json.dumps(dict(pid=os.getpid(), "
+        "default=signal.getsignal(signal.SIGHUP) == signal.SIG_DFL)))\n"
+        "deadline = time.monotonic() + 12\n"
+        "while time.monotonic() < deadline: time.sleep(0.02)\n"
+        "raise SystemExit(92)\n"
+    )
+    launched = run("case", "--", sys.executable, str(child_script), cwd=directory)
+    assert launched.returncode == 0, launched.stderr
+    child = json.loads(wait_file(directory / "child-ready"))
+    # nohup starts the supervisor with SIGHUP ignored, and an ignored signal survives exec.
+    assert child["default"] is True
+    os.kill(child["pid"], signal.SIGHUP)
+    assert wait_file(directory / "case.done").strip() == str(128 + signal.SIGHUP)
+
+
+@pytest.mark.parametrize("job", ["exec", "native"], indirect=True)
 @pytest.mark.parametrize("term_scope", ["supervisor", "group"])
 def test_term_reaps_child_before_publishing_nonzero(job, term_scope: str) -> None:
     directory, env, run = job

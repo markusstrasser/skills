@@ -160,8 +160,11 @@ nohup /usr/bin/perl -MPOSIX -e 'POSIX::setsid() or die "bgrun: setsid: $!\n"; ex
   # interruptible so supervisor-only TERM reaches cancel_job immediately.
   # A noninteractive shell starts that child with SIGINT and SIGQUIT ignored, and an ignored
   # signal survives exec: pytest and Modal clients could not be interrupted (genomics,
-  # 2026-10-20). caffeinate keeps the ignore and waits out its utility; the command gets defaults.
-  caffeinate -i /usr/bin/perl -e "\$SIG{INT} = \$SIG{QUIT} = q(DEFAULT); exec { \$ARGV[0] } @ARGV or die qq(bgrun: exec: \$!\n)" "$@" > "$0.log.tmp" 2>&1 &
+  # 2026-10-20). The nohup above leaves SIGHUP ignored the same way. The job leads its own
+  # session, so no terminal hangup can reach it, but a SIGHUP-cancellation test failed every
+  # time under bgrun (genomics, 2026-10-23). caffeinate keeps the ignores and waits out its
+  # utility; the command gets defaults.
+  caffeinate -i /usr/bin/perl -e "\$SIG{INT} = \$SIG{QUIT} = \$SIG{HUP} = q(DEFAULT); exec { \$ARGV[0] } @ARGV or die qq(bgrun: exec: \$!\n)" "$@" > "$0.log.tmp" 2>&1 &
   worker_pid=$!
   rc=0
   wait "$worker_pid" || rc=$?
