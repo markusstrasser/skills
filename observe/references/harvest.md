@@ -27,7 +27,7 @@ deterministic miners). Read a source's entry in [harvest-sources.md](harvest-sou
 | 2d | session-retro / design-review / session-analyst / suggest-skill dirs | mtime guard FIRST — skip any dir with nothing in-window |
 | 2g | `artifacts/observe/*/failures/shell-env-candidate.jsonl` | auto-staged; high-priority infra, never `[obs]` |
 | 2h | `just memory-harvest` | dedup against the suggested target FIRST; only generalizable ≥2-project lessons; cross-skill factoring is propose-only |
-| 3a | `scripts/extract_user_tags.py --days N --tag f` | user `#f` feedback — highest signal, ground-truth corrections |
+| 3a | `uv run python3 ~/Projects/skills/observe/scripts/extract_user_tags.py --days N --tag f` | user `#f` feedback — highest signal, ground-truth corrections |
 | 3b | git corrections | `log --since=CUTOFF --grep='Evidence:'`; `--oneline -- .claude/rules/ improvement-log.md`; skills `-- '*/SKILL.md' hooks/`. Three commits fixing hook edge cases signals weak hook testing |
 
 Then dedup + classify (`hook`·`skill`·`script`·`architecture`·`rule`·`config`), apply `--focus`,
