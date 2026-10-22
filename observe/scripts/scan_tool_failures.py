@@ -36,6 +36,14 @@ _PRETOOL_HOOK_BLOCK = re.compile(r"PreToolUse:(?:Bash|Shell) hook error", re.I)
 _ZSH_NOMATCH = re.compile(r"(?:\(eval\):\d+: )?no matches found:")
 _ZSH_ALIAS_COLLISION = re.compile(r"defining function based on alias")
 _ZSH_PARSE = re.compile(r"(?:\(eval\):\d+: )?parse error near")
+# Literals each positive classify() branch requires (hook blocks only ever return None).
+_CLASSIFY_MARKERS = (
+    "defining function based on alias",
+    "no matches found:",
+    "parse error near",
+    _TRACEBACK,
+    "command not found",
+)
 
 
 def _hook_block(text: str) -> bool:
@@ -115,9 +123,13 @@ def scan(days: int = 21) -> list[dict]:
             "JOIN events e ON e.tool_call_id = t.tool_call_id "
             "JOIN runs r ON r.run_id = t.run_id "
             "JOIN sessions s ON s.session_pk = r.session_pk "
-            "WHERE t.status='error' AND e.text IS NOT NULL AND t.ts_start > ?"
+            "WHERE t.status='error' AND e.text IS NOT NULL AND t.ts_start > ? "
+            # Every classify() branch needs one of these literals; LIKE is a
+            # case-insensitive superset, so the filter only skips rows classify() rejects.
+            "AND (" + " OR ".join("e.text LIKE ?" for _ in _CLASSIFY_MARKERS) + ")"
         )
-        for r in con.execute(q, (cutoff,)):
+        params = (cutoff, *(f"%{m}%" for m in _CLASSIFY_MARKERS))
+        for r in con.execute(q, params):
             verdict = classify(r["text"] or "")
             if verdict is None:
                 continue
