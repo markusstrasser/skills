@@ -189,3 +189,4 @@ $ARGUMENTS
 ## Known Issues
 <!-- Append-only. Session-analyst may suggest additions. -->
 - **[2026-07-14] Diff-scoped module dry-run silently omitted oversized changed files direct_table_online.py and test_direct_table_online.py while reporting success; scout must list/fail-loud on skipped files or chunk them.**
+- **[2026-10-24] Module mode silently skipped every `.swift` file and extensionless script (suffix allowlist) and printed "No new findings" (arena tools/wow-run, 2,087 Swift lines). Fixed agent-infra ab4d70bd: more suffixes, shebang scripts, and a `Not reviewed (not source by suffix): …` stderr line. Read that line before reporting coverage.**
