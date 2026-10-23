@@ -1,0 +1,8 @@
+# gitleaks.toml — rules for pre-commit-secrets-scan.sh: gitleaks defaults minus rules that
+# fire on ordinary research data. linkedin-client-id matched profile-URL slugs in candidate
+# lists 4 times in personal history and never a credential (2026-10-24 full-history scan).
+title = "skills pre-commit secrets scan"
+
+[extend]
+useDefault = true
+disabledRules = ["linkedin-client-id"]

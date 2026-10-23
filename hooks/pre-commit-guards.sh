@@ -7,13 +7,14 @@
 #
 # Chains (abort on first failure unless noted):
 #   1. pre-commit-no-large-binaries.sh   — reject PDFs / large binaries
-#   2. validate-changed-hooks.sh         — staged hook scripts must parse
-#   3. pre-commit-protected-paths.sh     — append-only + immutable-data enforcement
-#   4. pre-commit-deid-guard.sh          — block subject name/sample-ID in research memos (opt-in)
-#   5. pre-commit-codebase-map.sh        — refresh agent codebase maps (fail-open)
+#   2. pre-commit-secrets-scan.sh        — gitleaks over staged changes ([DEGRADED] if absent)
+#   3. validate-changed-hooks.sh         — staged hook scripts must parse
+#   4. pre-commit-protected-paths.sh     — append-only + immutable-data enforcement
+#   5. pre-commit-deid-guard.sh          — block subject name/sample-ID in research memos (opt-in)
+#   6. pre-commit-codebase-map.sh        — refresh agent codebase maps (fail-open)
 #
-# All are repo-agnostic. Steps 1/2 self-skip when nothing applies; step 3 reads
-# <repo-root>/.precommit-guards.env; step 4 self-skips unless <repo-root>/.deid-guard.env
+# All are repo-agnostic. Steps 1-3 self-skip when nothing applies; step 4 reads
+# <repo-root>/.precommit-guards.env; step 5 self-skips unless <repo-root>/.deid-guard.env
 # exists (so only opt-in repos like substrate enforce it). See pre-commit-protected-paths.sh
 # for why commit-time enforcement matters (Codex hook firing is unreliable). The de-id step
 # specifically covers the auto-`[wip]` checkpoint, which commits via a bare `git commit`
@@ -37,7 +38,7 @@ while [ -L "$_src" ]; do
 done
 HOOKS_DIR="$(cd -P "$(dirname "$_src")" && pwd)"
 
-for step in pre-commit-no-large-binaries.sh validate-changed-hooks.sh pre-commit-protected-paths.sh pre-commit-deid-guard.sh pre-commit-codebase-map.sh; do
+for step in pre-commit-no-large-binaries.sh pre-commit-secrets-scan.sh validate-changed-hooks.sh pre-commit-protected-paths.sh pre-commit-deid-guard.sh pre-commit-codebase-map.sh; do
     if [ -x "$HOOKS_DIR/$step" ]; then
         if [ "$step" = "pre-commit-codebase-map.sh" ]; then
             "$HOOKS_DIR/$step" || true
