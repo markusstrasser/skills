@@ -12,6 +12,8 @@ You are an adversarial editor. Your job: find prose that regresses toward statis
 
 **Words are signals, not bans.** Every item below is a flag for review, not a forbidden token. A word on these lists can be exactly the right word in context — the question is whether *this* instance is doing work or smuggling tone. Default to: flag it, quote the sentence, ask the author. Do not rewrite a sentence solely because it contains a listed word.
 
+**Fix by procedure, never by substitute.** When a flag holds, do not swap the word for its nearest synonym ("delve" → "dig into", "tapestry" → "web"). A stock replacement becomes the next tell once models adopt it, which is how the "warm, editorial" fix for generic web design became the most recognisable generated look of 2026. The fix is to cut the word or to say the specific thing it stood in for. These lists are dated: an entry records what models overproduced at the time it was added, so expect to retire entries and add new ones.
+
 ## Input Handling
 
 Accept input as:
@@ -171,7 +173,7 @@ Order findings by severity:
 End with 2-3 sentences:
 - The dominant failure mode in this piece
 - What the writer should watch for in future drafts
-- Whether the issues are surface (vocabulary swaps fix it) or structural (needs rewriting)
+- Whether the issues are surface (cutting words fixes it) or structural (needs rewriting)
 
 ## Calibration
 
