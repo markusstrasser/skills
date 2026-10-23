@@ -464,6 +464,12 @@ grep -Fq 'falling back to pid liveness' "$TEST_TMP/legacy-liveness.warn" || fail
 set_started_epoch "$hang_metadata" "$hang_started_epoch"
 sleep 2
 assert_eq "STALLED" "$(state_for hang --stall-min 0)" "stalled state"
+printf '%s\n' '{"type":"system","subtype":"api_retry","attempt":1,"max_retries":10,"retry_delay_ms":3600000,"error_status":429}' >>"$LANE_HOME/hang.log"
+sleep 2
+assert_eq "WAITING" "$(state_for hang --stall-min 0)" "usage-limit wait is not a stall"
+printf '%s\n' '{"type":"system","subtype":"api_retry","attempt":2,"max_retries":10,"retry_delay_ms":0,"error_status":529}' >>"$LANE_HOME/hang.log"
+python3 -c 'import os, sys, time; t = time.time() - 900; os.utime(sys.argv[1], (t, t))' "$LANE_HOME/hang.log"
+assert_eq "STALLED" "$(state_for hang --stall-min 0)" "elapsed retry wait"
 sleep 30 &
 UNRELATED_PID=$!
 "$LANE" stop hang >/dev/null

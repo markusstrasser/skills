@@ -20,6 +20,7 @@ usage:
       (codex worker: LANE_CODEX_ADD_DIRS=<a:b> adds writable roots; LANE_CODEX_NETWORK=1 enables network; git metadata stays read-only, so the parent merges and commits)
   lane review <name> [--model <m>] [--effort <e>] [--focus <file>] [--report <file>] [--out <file>] [--bg]
   lane ls [--stall-min <minutes>]
+      (WAITING: a claude worker sleeping out the api_retry delay it logged, e.g. a usage-limit reset)
   lane stop <name>
   lane resume <name> [--note <file>|--no-note]
       (exported worker settings override recorded settings; all others are retained)
@@ -352,6 +353,29 @@ format_age() {
   fi
 }
 
+# A claude worker waiting out a usage limit logs one stream-json api_retry event, then
+# stays quiet for up to the watchdog cap; the event's retry_delay_ms says how long.
+retry_wait_covers() {
+  local log="$1"
+  local age="$2"
+  [ -s "$log" ] || return 1
+  python3 - "$log" "$age" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "rb") as handle:
+    handle.seek(0, 2)
+    handle.seek(max(0, handle.tell() - 65536))
+    lines = [line for line in handle.read().splitlines() if line.strip()]
+try:
+    event = json.loads(lines[-1])
+    delay_ms = int(event["retry_delay_ms"]) if event.get("subtype") == "api_retry" else 0
+except (IndexError, ValueError, KeyError, TypeError, AttributeError):
+    delay_ms = 0
+sys.exit(0 if int(sys.argv[2]) * 1000 < delay_ms + 300000 else 1)
+PY
+}
+
 lane_state() {
   local name="$1"
   local pid="$2"
@@ -371,7 +395,9 @@ lane_state() {
   fi
   if lane_group_is_alive "$pid" "$started_epoch"; then
     age=$(log_age_seconds "$(log_path "$name")")
-    if [ "$age" -gt $((stall_min * 60)) ]; then
+    if [ "$age" -gt $((stall_min * 60)) ] && retry_wait_covers "$(log_path "$name")" "$age"; then
+      echo "WAITING"
+    elif [ "$age" -gt $((stall_min * 60)) ]; then
       echo "STALLED"
     else
       echo "RUNNING"
