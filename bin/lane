@@ -601,7 +601,10 @@ launch_worker() {
       # A lane launched from inside a Claude session inherits the parent identity env; without
       # stripping it the worker reports the PARENT session_id to hooks (touched-file trackers,
       # commit ownership guards) and could message peers as the parent (2026-09-28, cost lanes).
-        caffeinate -i env -u ANTHROPIC_API_KEY -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDECODE -u CLAUDE_PID -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_BRIDGE_SESSION_ID -u CLAUDE_CODE_SESSION_ATTENDED -u CLAUDE_EFFORT claude -p --model "$LANE_CLAUDE_MODEL" ${LANE_CLAUDE_EFFORT:+--effort "$LANE_CLAUDE_EFFORT"} --output-format stream-json --verbose "$prompt" < /dev/null
+      # Retry watchdog (CC 2.1.199+): wait out 429/529 and usage-limit resets in place instead of
+      # dying. Both caps default to unlimited in CC 2.1.309, so cap them: 6 h covers a 5 h session
+      # reset, a weekly limit fails out; 2 h for capacity; recheck every 15 min for a lifted limit.
+        caffeinate -i env -u ANTHROPIC_API_KEY -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDECODE -u CLAUDE_PID -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_BRIDGE_SESSION_ID -u CLAUDE_CODE_SESSION_ATTENDED -u CLAUDE_EFFORT CLAUDE_CODE_RETRY_WATCHDOG=1 CLAUDE_CODE_RETRY_WATCHDOG_MAX_USAGE_LIMIT_WAIT_MS=21600000 CLAUDE_CODE_RETRY_WATCHDOG_MAX_WAIT_MS=7200000 CLAUDE_CODE_RETRY_WATCHDOG_USAGE_LIMIT_RECHECK_MS=900000 claude -p --model "$LANE_CLAUDE_MODEL" ${LANE_CLAUDE_EFFORT:+--effort "$LANE_CLAUDE_EFFORT"} --output-format stream-json --verbose "$prompt" < /dev/null
         ;;
       fake)
         if [ "$resume_mode" = true ]; then printf "%s\n" "$prompt"; fi
