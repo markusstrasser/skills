@@ -17,7 +17,9 @@ SESSION_LIMIT_RE = re.compile(
     r"you'?ve hit your session limit.*?resets?\s+([0-9]{1,2}:[0-9]{2}\s*[ap]m(?:\s*\([^)]*\))?)",
     re.I | re.S,
 )
-SPEND_LIMIT_RE = re.compile(r"monthly spend limit", re.I)
+# The kill string is "hit your monthly spend limit"; a bare "monthly spend limit"
+# fired on a pasted CC changelog (2026-10-23) that only mentions the feature.
+SPEND_LIMIT_RE = re.compile(r"hit your (?:org(?:anization)?'?s? )?monthly spend limit", re.I)
 
 
 def main() -> None:

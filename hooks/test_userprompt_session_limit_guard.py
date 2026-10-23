@@ -43,6 +43,13 @@ def test_monthly_spend_limit_fires_different_message():
     assert "SESSION-LIMIT KILL" not in ctx
 
 
+def test_spend_limit_feature_mention_silent():
+    """A changelog line naming the feature is not a kill string."""
+    p = run({"prompt": "The usage-limit message shown when your monthly spend limit is already used up"})
+    assert p.returncode == 0
+    assert p.stdout.strip() == ""
+
+
 def test_benign_prompt_silent():
     p = run({"prompt": "please review this PR for bugs"})
     assert p.returncode == 0
