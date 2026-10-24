@@ -28,6 +28,7 @@ usage:
       (claude worker: LANE_CLAUDE_MODEL=<m> LANE_CLAUDE_EFFORT=<e> env override the default opus/default effort)
       (opencode worker: bin/lane-opencode's default model, DeepSeek V4.1 Flash with thinking on; LANE_OPENCODE_MODEL=<provider/model> overrides it)
       (opencode worker: no sandbox; a scrubbed env and a deny-list guard it, see bin/lane-opencode; exit 86 = balance exhausted)
+      (opencode worker: a provider at capacity (429) is retried in the lane's session for ~20 min, then exit 85; lane resume continues it)
       (codex worker: LANE_CODEX_MODEL=<m> LANE_CODEX_EFFORT=<e> env override the default gpt-6-astra/config effort)
       (codex worker: LANE_CODEX_ADD_DIRS=<a:b> adds writable roots; LANE_CODEX_NETWORK=1 enables network; git metadata stays read-only, so the parent merges and commits)
   lane review <name> [--model <m>] [--effort <e>] [--focus <file>] [--report <file>] [--out <file>] [--bg]
@@ -830,8 +831,8 @@ launch_worker() {
         caffeinate -i env -u ANTHROPIC_API_KEY -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDECODE -u CLAUDE_PID -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_BRIDGE_SESSION_ID -u CLAUDE_CODE_SESSION_ATTENDED -u CLAUDE_EFFORT CLAUDE_CODE_RETRY_WATCHDOG=1 CLAUDE_CODE_RETRY_WATCHDOG_MAX_USAGE_LIMIT_WAIT_MS=21600000 CLAUDE_CODE_RETRY_WATCHDOG_MAX_WAIT_MS=7200000 CLAUDE_CODE_RETRY_WATCHDOG_USAGE_LIMIT_RECHECK_MS=900000 claude -p --model "$LANE_CLAUDE_MODEL" ${LANE_CLAUDE_EFFORT:+--effort "$LANE_CLAUDE_EFFORT"} --output-format stream-json --verbose "$prompt" < /dev/null
         ;;
       opencode)
-        # bin/lane-opencode writes the guard, scrubs the environment, resumes transport errors and logs usage. On a
-        # resume it continues the last session of the lane.
+        # bin/lane-opencode writes the guard, scrubs the environment, resumes transport errors, waits out a provider at
+        # capacity and logs usage. On a resume it continues the last session of the lane.
         LANE_RESUME="$resume_mode" caffeinate -i "$LANE_OPENCODE_HELPER" "$prompt" < /dev/null
         ;;
       fake)

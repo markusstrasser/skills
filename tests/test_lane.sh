@@ -53,8 +53,9 @@ assert_no_file() {
 
 wait_for_file() {
   local path="$1"
+  local limit="${2:-100}"
   local attempts=0
-  while [ ! -f "$path" ] && [ "$attempts" -lt 100 ]; do
+  while [ ! -f "$path" ] && [ "$attempts" -lt "$limit" ]; do
     sleep 0.1
     attempts=$((attempts + 1))
   done
@@ -164,7 +165,7 @@ printf '%s\n' \
   'exit "${LLMX_FAKE_RC:-0}"' >"$FAKE_BIN/llmx"
 # The opencode worker runs under `env -i`, so the fake finds the capture dir beside its own bin dir, and flag files
 # there pick its behaviour: a transport error once, a step cut off without an error event once, a provider failure
-# once, or an exhausted balance.
+# once, an exhausted balance, or a provider at capacity for the number of runs opencode-ratelimit holds (or forever).
 printf '%s\n' \
   '#!/usr/bin/env bash' \
   'capture="$(cd "$(dirname "$0")/.." && pwd -P)/capture"' \
@@ -191,9 +192,21 @@ printf '%s\n' \
   '  printf "%s\n" "{\"type\":\"error\",\"sessionID\":\"ses_fake\",\"error\":{\"type\":\"provider.http\",\"message\":\"402 Insufficient Balance\"}}"' \
   '  exit 0' \
   'fi' \
+  'if [ -s "$capture/opencode-ratelimit" ] && [ "$(cat "$capture/opencode-ratelimit")" != 0 ]; then' \
+  '  left=$(cat "$capture/opencode-ratelimit")' \
+  '  [ "$left" = forever ] || echo "$((left - 1))" > "$capture/opencode-ratelimit"' \
+  '  [ ! -f "$capture/opencode-ratelimit-progress" ] || printf "%s\n" "{\"type\":\"step_finish\",\"sessionID\":\"ses_fake\",\"part\":{}}"' \
+  '  printf "%s\n" "{\"type\":\"step_start\",\"sessionID\":\"ses_fake\"}" "{\"type\":\"error\",\"sessionID\":\"ses_fake\",\"error\":{\"type\":\"provider.rate-limit\",\"message\":\"the model is at capacity, retry shortly\",\"retryAfterMs\":1500,\"status\":429}}"' \
+  '  exit 1' \
+  'fi' \
   'printf "%s\n" "{\"type\":\"step_finish\",\"sessionID\":\"ses_fake\",\"part\":{\"cost\":0.01,\"tokens\":{\"input\":100,\"output\":20,\"reasoning\":7,\"cache\":{\"read\":50,\"write\":0}}}}"' \
   >"$FAKE_BIN/opencode"
-chmod +x "$FAKE_BIN/codex" "$FAKE_BIN/claude" "$FAKE_BIN/ps" "$FAKE_BIN/llmx" "$FAKE_BIN/opencode"
+# lane-opencode's transport resume probes the provider host with curl; the fake records the URL and answers at once.
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'capture="$(cd "$(dirname "$0")/.." && pwd -P)/capture"' \
+  'printf "%s\n" "${@: -1}" >> "$capture/curl.urls"' >"$FAKE_BIN/curl"
+chmod +x "$FAKE_BIN/codex" "$FAKE_BIN/claude" "$FAKE_BIN/ps" "$FAKE_BIN/llmx" "$FAKE_BIN/opencode" "$FAKE_BIN/curl"
 export PATH="$FAKE_BIN:$PATH"
 
 echo "test: codex and claude worker commands match the dispatch contract"
@@ -373,7 +386,7 @@ grep -Fxq "lane-opencode: model $oc_default" "$LANE_HOME/ocargs.log" || fail "op
 sed -n 11p "$LANE_CAPTURE/opencode.args.0" | grep -Fxq "Do the fake task." || fail "opencode prompt lacks the brief"
 grep -Fq "do not stage, commit, merge, stash or switch branches" "$LANE_CAPTURE/opencode.args.0" || fail "opencode prompt lacks the git contract"
 assert_eq "ses_fake" "$(arg_after --session "$LANE_CAPTURE/opencode.args.1")" "transport resume continues the session"
-grep -Fq "ended on a transport error or a dropped connection" "$LANE_CAPTURE/opencode.args.1" ||
+grep -Fq "ended on a transport error, a dropped connection or a provider at capacity" "$LANE_CAPTURE/opencode.args.1" ||
   fail "transport resume lacks the resume prompt"
 if grep -Fq "must-not-leak" "$LANE_CAPTURE/opencode.env"; then fail "opencode saw a caller secret"; fi
 grep -Fxq "TMPDIR=/tmp/lane-opencode/ocargs/" "$LANE_CAPTURE/opencode.env" || fail "opencode TMPDIR is not per lane"
@@ -430,6 +443,55 @@ assert_eq "EXIT=0" "$(<"$LANE_HOME/ocres.done")" "resumed opencode lane"
 assert_eq "ses_fake" "$(arg_after --session "$LANE_CAPTURE/opencode.args.3")" "lane resume continues the session"
 grep -Fq "This continues your session" "$LANE_CAPTURE/opencode.args.3" || fail "lane resume lacks the continuation prompt"
 grep -Fq "Do the fake task." "$LANE_CAPTURE/opencode.args.3" || fail "lane resume lacks the brief"
+
+echo "test: a LithosAI transport resume waits for the provider's host"
+export LANE_OPENCODE_RETRY_SLEEP=0
+rm -f "$LANE_CAPTURE/curl.urls"
+touch "$LANE_CAPTURE/opencode-transport-once"
+LANE_OPENCODE_MODEL=lithosai/deepseek-ai/DeepSeek-V4.1-Flash \
+  "$LANE" run ocdns --repo "$REPO" --brief "$BRIEF" --worker opencode --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/ocdns.done"
+unset LANE_OPENCODE_RETRY_SLEEP
+assert_eq "EXIT=0" "$(<"$LANE_HOME/ocdns.done")" "LithosAI lane after one transport resume"
+assert_eq "https://api.lithosai.cloud/" "$(<"$LANE_CAPTURE/curl.urls")" "LithosAI resume probes its host"
+
+echo "test: a provider at capacity is retried in its session, a LithosAI tier steps down, and the wait cap exits 85"
+export LANE_OPENCODE_RETRY_SLEEP=0 LANE_OPENCODE_PROVIDER_HOST="" LANE_OPENCODE_OVERLOAD_FLOOR=1 LANE_OPENCODE_OVERLOAD_CAP=3
+rm -f "$LANE_CAPTURE"/opencode.args.*
+echo 2 >"$LANE_CAPTURE/opencode-ratelimit"
+LANE_OPENCODE_MODEL=lithosai/deepseek-ai/DeepSeek-V4.1-Flash-ultra \
+  "$LANE" run ocbusy --repo "$REPO" --brief "$BRIEF" --worker opencode --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/ocbusy.done" 600
+assert_eq "EXIT=0" "$(<"$LANE_HOME/ocbusy.done")" "opencode marker after two capacity refusals"
+assert_eq "lithosai/deepseek-ai/DeepSeek-V4.1-Flash-ultra" "$(worker_setting "$LANE_HOME/ocbusy.json" opencode_model)" \
+  "recorded opencode model override"
+assert_eq "ses_fake" "$(arg_after --session "$LANE_CAPTURE/opencode.args.1")" "a capacity retry continues the session"
+grep -Fq "or a provider at capacity" "$LANE_CAPTURE/opencode.args.1" || fail "a capacity retry lacks the resume prompt"
+grep -Fq "retry 1 in 2s" "$LANE_HOME/ocbusy.log" || fail "a capacity retry did not wait out retryAfterMs"
+assert_eq "lithosai/deepseek-ai/DeepSeek-V4.1-Flash-ultra" "$(arg_after -m "$LANE_CAPTURE/opencode.args.1")" \
+  "one refusal keeps the tier"
+grep -Fq "[DEGRADED] tier ultra→fast" "$LANE_HOME/ocbusy.log" || fail "the tier step-down is not loud"
+assert_eq "lithosai/deepseek-ai/DeepSeek-V4.1-Flash-fast" "$(arg_after -m "$LANE_CAPTURE/opencode.args.2")" \
+  "two refusals in a row step the tier down"
+[ ! -e "$LANE_CAPTURE/opencode.args.3" ] || fail "the capacity run went on after its success"
+echo 2 >"$LANE_CAPTURE/opencode-ratelimit"
+touch "$LANE_CAPTURE/opencode-ratelimit-progress"
+LANE_OPENCODE_OVERLOAD_CAP=2 LANE_OPENCODE_MODEL=lithosai/deepseek-ai/DeepSeek-V4.1-Flash \
+  "$LANE" run ocspell --repo "$REPO" --brief "$BRIEF" --worker opencode --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/ocspell.done" 600
+rm "$LANE_CAPTURE/opencode-ratelimit-progress"
+assert_eq "EXIT=0" "$(<"$LANE_HOME/ocspell.done")" "refusals with finished steps between them each get the whole cap"
+rm -f "$LANE_CAPTURE"/opencode.args.*
+echo forever >"$LANE_CAPTURE/opencode-ratelimit"
+LANE_OPENCODE_MODEL=lithosai/deepseek-ai/DeepSeek-V4.1-Flash \
+  "$LANE" run ocfull --repo "$REPO" --brief "$BRIEF" --worker opencode --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/ocfull.done" 600
+rm "$LANE_CAPTURE/opencode-ratelimit"
+unset LANE_OPENCODE_RETRY_SLEEP LANE_OPENCODE_PROVIDER_HOST LANE_OPENCODE_OVERLOAD_FLOOR LANE_OPENCODE_OVERLOAD_CAP
+assert_eq "EXIT=85" "$(<"$LANE_HOME/ocfull.done")" "capacity marker once the wait cap is reached"
+grep -Fq "STOPPED: the provider is still at capacity" "$LANE_HOME/ocfull.log" || fail "capacity stop message missing"
+assert_eq "ses_fake" "$(arg_after --session "$LANE_CAPTURE/opencode.args.1")" "the capped run retried in its session"
+[ ! -e "$LANE_CAPTURE/opencode.args.2" ] || fail "capacity retries ran past the cap"
 
 echo "test: worker failures still produce an exit marker"
 CODEX_FAKE_RC=7 "$LANE" run failure --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null

@@ -115,10 +115,12 @@ PY
 }
 
 # How the run ended, from the JSON event log and the exit code: "<verdict> <session>", where the verdict is ok,
-# quota, transport, interrupted or error:<type>, and the session is the last one the log names (may be empty).
+# quota, transport, interrupted, rate_limit:<seconds the provider asked to wait, or -> or error:<type>, and the session
+# is the last one the log names (may be empty).
 last_event() {
   python3 - "$log" "$1" <<'PY'
 import json
+import math
 import sys
 
 rc = int(sys.argv[2])
@@ -144,9 +146,17 @@ if last.get("type") != "error":
 error = last.get("error") or {}
 kind = str(error.get("type", "unknown"))
 message = str(error.get("message", ""))
-# An empty balance (402) never recovers on retry; the socket closing or DNS failing after a laptop sleep does.
+# An empty balance (402) never recovers on retry; the socket closing or DNS failing after a laptop sleep does, and so
+# does a provider at capacity: LithosAI's Flash-ultra tier answered 429 provider_overloaded ("the model is at
+# capacity, retry shortly", retryAfterMs about 4000), and three lanes died on their first attempt (2026-10-24).
 if "quota" in kind or "402" in message or "Insufficient" in message or "balance" in message.lower():
     print(f"quota {session}")
+elif kind == "provider.rate-limit" or str(error.get("status")) == "429" or "at capacity" in message:
+    try:
+        asked = max(0, math.ceil(float(error["retryAfterMs"]) / 1000))
+    except (KeyError, TypeError, ValueError, OverflowError):
+        asked = "-"
+    print(f"rate_limit:{asked} {session}")
 elif kind == "provider.transport" or any(token in message for token in (
         "Transport", "socket connection", "ECONNRESET", "fetch failed", "ENOTFOUND", "EAI_AGAIN")):
     print(f"transport {session}")
@@ -187,10 +197,25 @@ PY
 case $model in
   deepinfra/*) host=api.deepinfra.com ;;
   deepseek/*) host=api.deepseek.com ;;
+  lithosai/*) host=api.lithosai.cloud ;;
   *) host="" ;;
 esac
 # Set and empty: resume without waiting for the provider (tests).
 host=${LANE_OPENCODE_PROVIDER_HOST-$host}
+if [ -z "$host" ] && [ -z "${LANE_OPENCODE_PROVIDER_HOST+set}" ]; then
+  # A provider missing above skips the wait unnoticed, as LithosAI lanes did until 2026-10-24.
+  echo "lane-opencode: [DEGRADED] no provider host known for $model: a transport resume will not wait out a DNS outage"
+fi
+# A provider at capacity or rate-limiting: wait at least the retryAfterMs it sent, backing off 30, 60, 120, then 240 s
+# over refusals in a row, and stop with exit 85 once one spell of refusals would pass about 20 min of waiting
+# (2026-10-24). After two refusals in a row a LithosAI -ultra or -fast model steps down one tier: the same weights,
+# served slower. Tests shrink the floor and the cap.
+overload_floor=${LANE_OPENCODE_OVERLOAD_FLOOR:-30}
+overload_cap=${LANE_OPENCODE_OVERLOAD_CAP:-1200}
+if ! [[ $overload_floor =~ ^[1-9][0-9]*$ && $overload_cap =~ ^[0-9]+$ ]]; then
+  echo "lane-opencode: LANE_OPENCODE_OVERLOAD_FLOOR must be a positive integer and LANE_OPENCODE_OVERLOAD_CAP a whole number" >&2
+  exit 2
+fi
 # Each lane gets its own TMPDIR, removed at the end: OpenCode leaves throwaway tree copies in $TMPDIR/opencode
 # (4.7 GB from three genomics lanes, 2026-10-21).
 tmp="/tmp/lane-opencode/$name"
@@ -198,9 +223,9 @@ mkdir -p "$tmp" || exit 98
 write_guard || exit 96
 echo "lane-opencode: model $model"
 
-resume_prompt="The previous attempt of this session ended on a transport error or a dropped connection, not by your \
-choice. Continue the task from where you stopped: check git status and your result file first, then finish every \
-deliverable the task names."
+resume_prompt="The previous attempt of this session ended on a transport error, a dropped connection or a provider at \
+capacity, not by your choice. Continue the task from where you stopped: check git status and your result file first, \
+then finish every deliverable the task names."
 session=""
 # `lane resume` continues the lane's session, so the worker keeps what it learned; the prompt restates the task.
 if [ "${LANE_RESUME:-false}" = true ] && [ -s "$session_file" ]; then
@@ -217,9 +242,14 @@ for key in ${LANE_CHECKOUT_ENV:-}; do
   checkout_env+=("$key=${!key-}")
 done
 attempt=0
+resumes=0
+refusals=0
+overload_waited=0
 rc=0
 verdict=ok
 while :; do
+  # Where this attempt's events start: a refusal after finished steps begins a new capacity spell.
+  log_bytes=$( { wc -c <"$log"; } 2>/dev/null || echo 0)
   session_args=()
   [ -n "$session" ] && session_args=(--session "$session")
   # Without </dev/null a run blocks forever on a non-TTY stdin. --standalone starts a private server, so tools inherit
@@ -230,6 +260,8 @@ while :; do
     ${session_args[@]+"${session_args[@]}"} "$prompt" </dev/null
   rc=$?
   read -r verdict last_session <<<"$(last_event "$rc")"
+  progressed=false
+  tail -c "+$((log_bytes + 1))" "$log" 2>/dev/null | grep -Fq '"type":"step_finish"' && progressed=true
   if [ -n "${last_session:-}" ]; then
     printf '%s\n' "$last_session" >"$session_file"
   fi
@@ -238,11 +270,13 @@ while :; do
   if [ "$rc" -ge 129 ] && [ "$rc" -le 159 ]; then
     break
   fi
-  case $verdict in
+  case ${verdict%%:*} in
     transport | interrupted)
-      [ "$attempt" -lt 2 ] && [ -n "${last_session:-}" ] || break
+      refusals=0
+      [ "$resumes" -lt 2 ] && [ -n "${last_session:-}" ] || break
       session=$last_session
       prompt=$resume_prompt
+      resumes=$((resumes + 1))
       attempt=$((attempt + 1))
       # After a laptop sleep DNS stays down for a while: wait up to an hour for the provider instead of spending a
       # resume on the same ENOTFOUND (2026-10-22: four genomics lanes died on it).
@@ -253,6 +287,46 @@ while :; do
       done
       sleep "${LANE_OPENCODE_RETRY_SLEEP:-20}"
       ;;
+    rate_limit)
+      if [ "$progressed" = true ]; then
+        # Steps finished since the last refusal, so a long lane's sporadic refusals never add up to the cap.
+        refusals=0
+        overload_waited=0
+      fi
+      refusals=$((refusals + 1))
+      lower=""
+      if [ "$refusals" -ge 2 ]; then
+        case $model in
+          lithosai/*-ultra) lower=${model%-ultra}-fast tiers="ultra→fast" ;;
+          lithosai/*-fast) lower=${model%-fast} tiers="fast→base" ;;
+        esac
+      fi
+      if [ -n "$lower" ]; then
+        # The lower tier has its own capacity, so the backoff starts over.
+        delay=$overload_floor
+      else
+        delay=$((overload_floor << (refusals < 4 ? refusals - 1 : 3)))
+        asked=${verdict#rate_limit:}
+        if [ "$asked" != - ] && [ "$asked" -gt "$delay" ]; then
+          delay=$asked
+        fi
+      fi
+      [ $((overload_waited + delay)) -le "$overload_cap" ] || break
+      if [ -n "$lower" ]; then
+        echo "lane-opencode: [DEGRADED] tier $tiers after $refusals capacity refusals in a row: $model -> $lower (same weights, served slower)"
+        model=$lower
+        refusals=0
+      fi
+      # Without a session yet the same prompt starts over; otherwise the session continues.
+      if [ -n "${last_session:-}" ]; then
+        session=$last_session
+        prompt=$resume_prompt
+      fi
+      attempt=$((attempt + 1))
+      echo "lane-opencode: provider at capacity or rate-limiting; retry $attempt in ${delay}s (${overload_waited}s of ${overload_cap}s waited)"
+      sleep "$delay"
+      overload_waited=$((overload_waited + delay))
+      ;;
     *) break ;;
   esac
 done
@@ -262,6 +336,11 @@ usage_line
 if [ "$verdict" = quota ]; then
   echo "lane-opencode: STOPPED: the provider's balance or quota is exhausted; do not retry. Top up, then lane resume."
   exit 86
+fi
+if [ "${verdict%%:*}" = rate_limit ] && { [ "$rc" -lt 129 ] || [ "$rc" -gt 159 ]; }; then
+  echo "lane-opencode: STOPPED: the provider is still at capacity or rate-limiting after ${overload_waited}s of waiting, and" \
+    "the next wait (${delay}s) would pass the ${overload_cap}s cap. lane resume continues the session."
+  exit 85
 fi
 if [ "$rc" = 0 ] && [ "${verdict%%:*}" = error ]; then
   rc=1
