@@ -398,6 +398,15 @@ def harvest(args, checkout):
         raise Keep("no recorded checkout base, so the lane's own commits cannot be told apart")
     if args.base and git(checkout, "merge-base", "--is-ancestor", args.base, "HEAD", check=False).returncode != 0:
         raise Keep(f"HEAD {head} does not descend from the lane base {args.base}")
+    # format-patch leaves merge commits out, so a lane that merged keeps its checkout.
+    if args.base and git(checkout, "rev-list", "--merges", f"{args.base}..HEAD").stdout.strip():
+        raise Keep(f"merge commits since the lane base {args.base}: commits.patch cannot carry them; harvest by hand")
+    # The branch decision below judges the branch by HEAD: a detached or switched HEAD would let
+    # `branch -D` drop commits only the branch holds.
+    if args.mode == "worktree":
+        symbolic = git(checkout, "symbolic-ref", "--quiet", "HEAD", check=False).stdout.decode().strip()
+        if symbolic != f"refs/heads/{args.branch}":
+            raise Keep(f"HEAD is {symbolic or 'detached'}, not refs/heads/{args.branch}")
 
     lane_dir = Path(args.harvest_root) / f"{args.name}.harvest"
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")

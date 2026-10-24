@@ -192,6 +192,11 @@ printf '%s\n' \
   '  printf "%s\n" "{\"type\":\"error\",\"sessionID\":\"ses_fake\",\"error\":{\"type\":\"provider.http\",\"message\":\"402 Insufficient Balance\"}}"' \
   '  exit 0' \
   'fi' \
+  'if [ -f "$capture/opencode-crash-once" ] && [ -s "$capture/opencode-ratelimit" ] && [ "$(cat "$capture/opencode-ratelimit")" = 0 ]; then' \
+  '  rm "$capture/opencode-crash-once"' \
+  '  echo "opencode: unknown model" >&2' \
+  '  exit 1' \
+  'fi' \
   'if [ -s "$capture/opencode-ratelimit" ] && [ "$(cat "$capture/opencode-ratelimit")" != 0 ]; then' \
   '  left=$(cat "$capture/opencode-ratelimit")' \
   '  [ "$left" = forever ] || echo "$((left - 1))" > "$capture/opencode-ratelimit"' \
@@ -467,6 +472,7 @@ assert_eq "lithosai/deepseek-ai/DeepSeek-V4.1-Flash-ultra" "$(worker_setting "$L
   "recorded opencode model override"
 assert_eq "ses_fake" "$(arg_after --session "$LANE_CAPTURE/opencode.args.1")" "a capacity retry continues the session"
 grep -Fq "or a provider at capacity" "$LANE_CAPTURE/opencode.args.1" || fail "a capacity retry lacks the resume prompt"
+grep -Fq "Do the fake task." "$LANE_CAPTURE/opencode.args.1" || fail "a retry before any finished step lost the task"
 grep -Fq "retry 1 in 2s" "$LANE_HOME/ocbusy.log" || fail "a capacity retry did not wait out retryAfterMs"
 assert_eq "lithosai/deepseek-ai/DeepSeek-V4.1-Flash-ultra" "$(arg_after -m "$LANE_CAPTURE/opencode.args.1")" \
   "one refusal keeps the tier"
@@ -492,6 +498,16 @@ assert_eq "EXIT=85" "$(<"$LANE_HOME/ocfull.done")" "capacity marker once the wai
 grep -Fq "STOPPED: the provider is still at capacity" "$LANE_HOME/ocfull.log" || fail "capacity stop message missing"
 assert_eq "ses_fake" "$(arg_after --session "$LANE_CAPTURE/opencode.args.1")" "the capped run retried in its session"
 [ ! -e "$LANE_CAPTURE/opencode.args.2" ] || fail "capacity retries ran past the cap"
+export LANE_OPENCODE_RETRY_SLEEP=0 LANE_OPENCODE_PROVIDER_HOST="" LANE_OPENCODE_OVERLOAD_FLOOR=1 LANE_OPENCODE_OVERLOAD_CAP=3
+rm -f "$LANE_CAPTURE"/opencode.args.*
+echo 1 >"$LANE_CAPTURE/opencode-ratelimit"
+touch "$LANE_CAPTURE/opencode-crash-once"
+"$LANE" run occrash --repo "$REPO" --brief "$BRIEF" --worker opencode --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/occrash.done" 600
+rm -f "$LANE_CAPTURE/opencode-ratelimit" "$LANE_CAPTURE/opencode-crash-once"
+unset LANE_OPENCODE_RETRY_SLEEP LANE_OPENCODE_PROVIDER_HOST LANE_OPENCODE_OVERLOAD_FLOOR LANE_OPENCODE_OVERLOAD_CAP
+assert_eq "EXIT=1" "$(<"$LANE_HOME/occrash.done")" "a retry that dies before any event is not a refusal"
+grep -Fq "attempt 1 rc=1 last=error:empty" "$LANE_HOME/occrash.log" || fail "the crash took the previous refusal's verdict"
 
 echo "test: worker failures still produce an exit marker"
 CODEX_FAKE_RC=7 "$LANE" run failure --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null
@@ -860,6 +876,7 @@ PY
 reap_output=$("$LANE" reap retirefail --force)
 grep -q '^CHECKOUT=retired ' <<<"$reap_output" || fail "reap of a stopped lane did not harvest it"
 grep -Fq '+unfinished' "$(latest_harvest_of retirefail)/lane.patch" || fail "stopped lane's harvest lacks its edit"
+assert_file "$(latest_harvest_of retirefail)/run.log.gz"
 [ ! -e "$REPO_REAL/.claude/worktrees/codex-retirefail" ] || fail "reap left the stopped lane's worktree"
 
 echo "test: a process inside the checkout keeps it"
@@ -875,6 +892,28 @@ kill "$BUSY_PID"
 wait "$BUSY_PID" 2>/dev/null || true
 "$LANE" reap retirebusy --force >/dev/null
 
+echo "test: a detached HEAD or a merge commit keeps the worktree and its branch"
+LANE_FAKE_HOLD="$TEST_TMP/release-retiredet" "$LANE" run retiredet --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+DET_WT="$REPO_REAL/.claude/worktrees/codex-retiredet"
+git -C "$DET_WT" commit -q --allow-empty -m "on the branch"
+git -C "$DET_WT" -c advice.detachedHead=false checkout -q --detach HEAD~1
+touch "$TEST_TMP/release-retiredet"
+wait_for_file "$LANE_HOME/retiredet.done"
+grep -Fq "CHECKOUT=kept HEAD is detached, not refs/heads/codex/retiredet" "$LANE_HOME/retiredet.checkout-state" ||
+  fail "a detached HEAD was retired: $(<"$LANE_HOME/retiredet.checkout-state")"
+[ -d "$DET_WT" ] || fail "a detached checkout was removed"
+git -C "$REPO" show-ref --verify --quiet refs/heads/codex/retiredet || fail "a detached checkout lost its branch"
+git -C "$DET_WT" switch -q codex/retiredet
+side=$(git -C "$DET_WT" commit-tree "HEAD^{tree}" -p HEAD -m side)
+merge=$(git -C "$DET_WT" commit-tree "HEAD^{tree}" -p HEAD -p "$side" -m merge)
+git -C "$DET_WT" update-ref refs/heads/codex/retiredet "$merge"
+if reap_output=$("$LANE" reap retiredet --force 2>&1); then fail "reap retired a lane with a merge commit"; fi
+grep -Fq "merge commits since the lane base" <<<"$reap_output" || fail "merge keep reason missing: $reap_output"
+[ -d "$DET_WT" ] || fail "a merged checkout was removed"
+git -C "$DET_WT" update-ref refs/heads/codex/retiredet HEAD~2
+"$LANE" reap retiredet --force >/dev/null
+[ ! -e "$DET_WT" ] || fail "reap left the restored checkout"
+
 echo "test: a repo checkout hook builds, seeds, rechecks and retires its lanes' checkouts"
 HOOK="$TEST_TMP/lane-checkout-hook"
 cat >"$HOOK" <<'EOF'
@@ -883,6 +922,7 @@ cat >"$HOOK" <<'EOF'
 # .git/lane-checkout.json.
 set -eu
 if [ "$1" = --verify ]; then
+  printf '%s\n' "${LANE_NOTE:-}" >"$LANE_CAPTURE/hook.verify-note"
   [ "$(cat "$2/.git/lane-main-base")" = "$3" ] || { echo "hook: cut from another base, not $3" >&2; exit 87; }
   exit 0
 fi
@@ -972,7 +1012,19 @@ required = [
 ]
 sys.exit(0 if all(rule in rules for rule in required) else 1)
 PY
+printf '%s\n' "Revise the fake task." >"$LANE_HOME/ochook.resume-note.md"
+rm -f "$LANE_CAPTURE/hook.verify-note"
+LANE_OPENCODE_RETRY_SLEEP=0 "$LANE" resume ochook >/dev/null
+wait_for_file "$LANE_HOME/ochook.done"
+assert_eq "$LANE_HOME/ochook.resume-note.md" "$(<"$LANE_CAPTURE/hook.verify-note")" "the hook checks the lane's own resume note"
 "$LANE" reap ochook --force >/dev/null
 git -C "$REPO" config --unset lane.checkout
+"$LANE" run legacywt --repo "$REPO" --brief "$BRIEF" --worker codex --keep-checkout >/dev/null
+wait_for_file "$LANE_HOME/legacywt.done"
+git -C "$REPO" config lane.checkout "$HOOK"
+if resume_error=$("$LANE" resume legacywt --no-note 2>&1); then fail "a pre-hook codex lane resumed unfiltered"; fi
+grep -Fq "declares a checkout hook" <<<"$resume_error" || fail "pre-hook resume refusal unnamed: $resume_error"
+git -C "$REPO" config --unset lane.checkout
+"$LANE" reap legacywt --force >/dev/null
 
 echo "PASS: lane lifecycle"

@@ -1568,17 +1568,18 @@ cmd_resume() {
   [ -f "$brief" ] || die "brief no longer exists: $brief"
   if [ ! -d "$worktree" ]; then
     if harvest=$(latest_harvest "$name"); then
-      die "$name was retired (harvest: $harvest); start a new lane from it: lane run <new-name> ... --seed-patch $harvest/lane.patch [--seed-file $harvest/cache/<file>]"
+      die "$name was retired (harvest: $harvest); start a new lane from it: lane run <new-name> ... --seed-patch $harvest/lane.patch [--seed-file $harvest/cache/<file>]$( [ ! -s "$harvest/commits.patch" ] || printf '; its commits are in %s (git am them in the new checkout)' "$harvest/commits.patch")"
     fi
     die "worktree no longer exists: $worktree"
   fi
-  if [ "$checkout_mode" = hook ]; then
-    hook=$(checkout_hook "$repo")
-    [ -n "$hook" ] || die "$repo no longer declares the checkout hook $name was built by"
-    run_checkout_hook "$hook" "$name" "$repo" "$brief" "$note_source" "" "" --verify "$worktree" "$base" ||
-      die "checkout hook $hook refused to resume in $worktree (rc=$?)"
+  hook=$(checkout_hook "$repo")
+  # A lane cut before its repo declared a hook sits in an unfiltered checkout: cmd_run's rule holds on resume too.
+  if [ "$checkout_mode" != hook ] && [ -n "$hook" ] && [ "$worker" != claude ]; then
+    die "$repo declares a checkout hook ($hook): a $worker lane resumes only in a checkout the hook built, and $name has a $checkout_mode checkout; start a new lane"
   fi
+  [ "$checkout_mode" != hook ] || [ -n "$hook" ] || die "$repo no longer declares the checkout hook $name was built by"
   resolve_worker_settings "$metadata"
+  # The note is settled before the hook runs, so the hook checks the text the worker will read.
   if [ "$no_note" = "false" ]; then
     note_path="$LANE_HOME/$name.resume-note.md"
     if [ -n "$note_source" ]; then
@@ -1586,15 +1587,6 @@ cmd_resume() {
     elif [ ! -f "$note_path" ]; then
       die "no resume note for $name (pass --note <file> or --no-note)"
     fi
-    while [ -e "$LANE_HOME/$name.resume-note.consumed-$consumed_number.md" ]; do
-      consumed_number=$((consumed_number + 1))
-    done
-    consumed="$LANE_HOME/$name.resume-note.consumed-$consumed_number.md"
-    if ! mv "$note_path" "$consumed"; then
-      die "resume note for $name was already claimed"
-    fi
-    note_path="$consumed"
-    echo "lane: claimed resume note: $consumed"
   else
     # A note-carrying run that was stopped or failed never finished its revision: re-send it, or
     # the worker silently redoes its first task from the brief alone (2026-10-20, three lanes).
@@ -1609,6 +1601,21 @@ cmd_resume() {
       note_path="$last_note"
       echo "lane: re-sending the interrupted run's note: $last_note"
     fi
+  fi
+  if [ "$checkout_mode" = hook ]; then
+    run_checkout_hook "$hook" "$name" "$repo" "$brief" "$note_path" "" "" --verify "$worktree" "$base" ||
+      die "checkout hook $hook refused to resume in $worktree (rc=$?)"
+  fi
+  if [ "$no_note" = "false" ]; then
+    while [ -e "$LANE_HOME/$name.resume-note.consumed-$consumed_number.md" ]; do
+      consumed_number=$((consumed_number + 1))
+    done
+    consumed="$LANE_HOME/$name.resume-note.consumed-$consumed_number.md"
+    if ! mv "$note_path" "$consumed"; then
+      die "resume note for $name was already claimed"
+    fi
+    note_path="$consumed"
+    echo "lane: claimed resume note: $consumed"
   fi
   stop_lane "$name"
   launch_worker "$name" "$repo" "$worktree" "$brief" "$worker" "$base" "$branch" "$no_worktree" true "$note_path" \
@@ -1676,9 +1683,15 @@ cmd_reap() {
     if lane_group_is_alive "$pid" "$started_epoch"; then
       wait_for_group_exit "$pid" "$started_epoch" 10 || die "refusing to reap while process group $pid is still exiting"
     fi
+    # lane stop archives the log as <name>.stalled-<n>.log, so a stopped lane's newest archive is its run log.
+    local reap_log
+    reap_log=$(log_path "$name")
+    if [ ! -f "$reap_log" ]; then
+      reap_log=$(ls -t "$LANE_HOME/$name".stalled-*.log 2>/dev/null | head -n 1)
+    fi
     retire_out=$("$LANE_BIN_DIR/lane-retire" --reap --name "$name" --mode "$checkout_mode" --checkout "$worktree" \
       --repo "$repo" --base "$checkout_base" --branch "$branch" --harvest-root "$LANE_HOME" \
-      --log "$(log_path "$name")" --brief "$brief") || die "lane-retire refused $name: $retire_out"
+      --log "$reap_log" --brief "$brief") || die "lane-retire refused $name: $retire_out"
     printf '%s\n' "$retire_out"
     last=$(printf '%s\n' "$retire_out" | tail -n 1)
     case "$last" in CHECKOUT=retired\ *) ;; *) die "kept $name: ${last#CHECKOUT=}" ;; esac

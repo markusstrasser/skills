@@ -118,26 +118,31 @@ PY
 # quota, transport, interrupted, rate_limit:<seconds the provider asked to wait, or -> or error:<type>, and the session
 # is the last one the log names (may be empty).
 last_event() {
-  python3 - "$log" "$1" <<'PY'
+  python3 - "$log" "$1" "$2" <<'PY'
 import json
 import math
 import sys
 
 rc = int(sys.argv[2])
+# The verdict comes from this attempt's events only (they start at byte argv[3]): an attempt that dies before its
+# first event must not inherit the previous attempt's refusal. The session may come from any attempt.
+start = int(sys.argv[3])
 events = []
-with open(sys.argv[1], encoding="utf-8", errors="replace") as stream:
-    for line in stream:
+with open(sys.argv[1], "rb") as stream:
+    for offset_line in stream.read().splitlines(keepends=True):
+        here, start = start <= 0, start - len(offset_line)
         try:
-            event = json.loads(line)
+            event = json.loads(offset_line.decode("utf-8", errors="replace"))
         except ValueError:
             continue
         if isinstance(event, dict) and "type" in event:
-            events.append(event)
+            events.append((here, event))
+session = next((event["sessionID"] for _, event in reversed(events) if event.get("sessionID")), "")
+events = [event for here, event in events if here]
 if not events:
-    print("error:empty")
+    print(f"error:empty {session}")
     raise SystemExit(0)
 last = events[-1]
-session = next((event["sessionID"] for event in reversed(events) if event.get("sessionID")), "")
 if last.get("type") != "error":
     # A failed exit without an error event is a run cut off mid-step: when the network dropped, OpenCode exited 1
     # right after a step_start and two arena lanes ended as finished (2026-10-24).
@@ -241,6 +246,8 @@ checkout_env=()
 for key in ${LANE_CHECKOUT_ENV:-}; do
   checkout_env+=("$key=${!key-}")
 done
+task_prompt=$prompt
+stepped=false
 attempt=0
 resumes=0
 refusals=0
@@ -259,9 +266,19 @@ while :; do
     opencode run --standalone --auto --format json --thinking -m "$model" --title "$name" \
     ${session_args[@]+"${session_args[@]}"} "$prompt" </dev/null
   rc=$?
-  read -r verdict last_session <<<"$(last_event "$rc")"
+  read -r verdict last_session <<<"$(last_event "$rc" "$log_bytes")"
   progressed=false
   tail -c "+$((log_bytes + 1))" "$log" 2>/dev/null | grep -Fq '"type":"step_finish"' && progressed=true
+  [ "$progressed" = false ] || stepped=true
+  # Until a step of this run finishes, the session may never have taken the task (a refusal on the first call), so
+  # a retry restates it.
+  if [ "$stepped" = true ]; then
+    retry_prompt=$resume_prompt
+  else
+    retry_prompt="$resume_prompt The task, as given:
+
+$task_prompt"
+  fi
   if [ -n "${last_session:-}" ]; then
     printf '%s\n' "$last_session" >"$session_file"
   fi
@@ -275,7 +292,7 @@ while :; do
       refusals=0
       [ "$resumes" -lt 2 ] && [ -n "${last_session:-}" ] || break
       session=$last_session
-      prompt=$resume_prompt
+      prompt=$retry_prompt
       resumes=$((resumes + 1))
       attempt=$((attempt + 1))
       # After a laptop sleep DNS stays down for a while: wait up to an hour for the provider instead of spending a
@@ -320,7 +337,7 @@ while :; do
       # Without a session yet the same prompt starts over; otherwise the session continues.
       if [ -n "${last_session:-}" ]; then
         session=$last_session
-        prompt=$resume_prompt
+        prompt=$retry_prompt
       fi
       attempt=$((attempt + 1))
       echo "lane-opencode: provider at capacity or rate-limiting; retry $attempt in ${delay}s (${overload_waited}s of ${overload_cap}s waited)"
