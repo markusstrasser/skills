@@ -102,6 +102,7 @@ if not found_models:
 
 # Deduplicate
 unique_models = sorted(set(found_models))
+names = ", ".join(unique_models)  # no nested quotes in f-strings: python3 may be 3.9
 
 # Log to hook telemetry
 try:
@@ -109,15 +110,15 @@ try:
     subprocess.run(
         [os.path.expanduser("~/Projects/skills/hooks/hook-trigger-log.sh"),
          "frontier-timeliness", "warn",
-         f"{os.path.basename(fpath)}: {", ".join(unique_models)}"],
+         f"{os.path.basename(fpath)}: {names}"],
         capture_output=True, timeout=5
     )
 except Exception:
     pass
 
 print(f"TIMELINESS WARNING: {os.path.basename(fpath)} cites pre-frontier models "
-      f"without staleness disclaimer: {", ".join(unique_models)}", file=sys.stderr)
-print("These models findings may not transfer to current frontier (Opus 4.8, GPT-5.5, Gemini 3.5).", file=sys.stderr)
+      f"without staleness disclaimer: {names}", file=sys.stderr)
+print("These models findings may not transfer to current frontier models.", file=sys.stderr)
 print("Add disclaimer: \"pre-frontier evidence, validity uncertain\" or note \"scale-independent\" if the finding transfers.", file=sys.stderr)
 sys.exit(0)
 ' "$FPATH" 2>&1 >&2

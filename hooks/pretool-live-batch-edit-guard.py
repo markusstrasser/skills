@@ -26,6 +26,8 @@ Write|Edit guard, like pretool-subagent-settings-guard.py.
 Fail-open on any internal error.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import subprocess
