@@ -2353,6 +2353,10 @@ def gate_worktree_cd_guard(raw_payload: str) -> GateResult:
         data = json.loads(raw_payload)
     except Exception:
         return GateResult(0, "", "")
+    # A subagent's cwd resets between Bash calls, so its cd cannot persist; 554 of 1,054
+    # blocks landed there, each a wasted turn that prevented nothing (hook audit 2026-10-24).
+    if data.get("agent_id"):
+        return GateResult(0, "", "")
     cmd = (data.get("tool_input") or {}).get("command", "") or ""
     if "cd" not in cmd:
         return GateResult(0, "", "")

@@ -1003,6 +1003,17 @@ def test_worktree_cd_persistent_blocks(sandbox):
     assert "git -C /repo/.claude/worktrees/codex-x" in disp["block_msg"]
 
 
+def test_worktree_cd_in_subagent_passes(sandbox):
+    """A subagent's cwd resets between Bash calls; blocking its cd prevents nothing."""
+    envelope = {
+        "tool_name": "Bash",
+        "agent_id": "a1b2c3",
+        "tool_input": {"command": "cd /repo/.claude/worktrees/codex-x && git log --oneline -3"},
+    }
+    disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
+    assert disp["exit_code"] == 0
+
+
 @pytest.mark.parametrize(
     "command",
     [
