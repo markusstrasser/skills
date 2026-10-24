@@ -649,8 +649,9 @@ launch_worker() {
         caffeinate -i env -u ANTHROPIC_API_KEY -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDECODE -u CLAUDE_PID -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_BRIDGE_SESSION_ID -u CLAUDE_CODE_SESSION_ATTENDED -u CLAUDE_EFFORT CLAUDE_CODE_RETRY_WATCHDOG=1 CLAUDE_CODE_RETRY_WATCHDOG_MAX_USAGE_LIMIT_WAIT_MS=21600000 CLAUDE_CODE_RETRY_WATCHDOG_MAX_WAIT_MS=7200000 CLAUDE_CODE_RETRY_WATCHDOG_USAGE_LIMIT_RECHECK_MS=900000 claude -p --model "$LANE_CLAUDE_MODEL" ${LANE_CLAUDE_EFFORT:+--effort "$LANE_CLAUDE_EFFORT"} --output-format stream-json --verbose "$prompt" < /dev/null
         ;;
       opencode)
-        # bin/lane-opencode writes the guard, scrubs the environment, resumes transport errors and logs usage.
-        caffeinate -i "$LANE_OPENCODE_HELPER" "$prompt" < /dev/null
+        # bin/lane-opencode writes the guard, scrubs the environment, resumes transport errors and logs usage. On a
+        # resume it continues the last session of the lane.
+        LANE_RESUME="$resume_mode" caffeinate -i "$LANE_OPENCODE_HELPER" "$prompt" < /dev/null
         ;;
       fake)
         if [ "$resume_mode" = true ]; then printf "%s\n" "$prompt"; fi
@@ -1354,7 +1355,7 @@ cmd_reap() {
   if git -C "$repo" show-ref --verify --quiet "refs/heads/$branch"; then
     git -C "$repo" branch -D -- "$branch"
   fi
-  rm -f "$metadata" "$(done_path "$name")" "$(log_path "$name")"
+  rm -f "$metadata" "$(done_path "$name")" "$(log_path "$name")" "$LANE_HOME/$name.opencode-session"
   echo "lane: reaped $name"
 }
 

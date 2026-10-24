@@ -23,6 +23,8 @@ log=${LANE_LOG:?lane-opencode: LANE_LOG is not set}
 model=${LANE_OPENCODE_MODEL:-deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017}
 prompt=${1:?lane-opencode: no prompt}
 worktree=$(pwd -P)
+# The lane's last OpenCode session, kept beside its log so `lane resume` continues it with its context.
+session_file="${log%.log}.opencode-session"
 
 write_guard() {
   python3 - "$repo" "$worktree" <<'PY'
@@ -102,12 +104,14 @@ print(f"lane-opencode: guard {out}: {len(rules)} rules")
 PY
 }
 
-# How the run ended, from the JSON event log: transport:<session>, quota, error:<type> or ok.
+# How the run ended, from the JSON event log and the exit code: "<verdict> <session>", where the verdict is ok,
+# quota, transport, interrupted or error:<type>, and the session is the last one the log names (may be empty).
 last_event() {
-  python3 - "$log" <<'PY'
+  python3 - "$log" "$1" <<'PY'
 import json
 import sys
 
+rc = int(sys.argv[2])
 events = []
 with open(sys.argv[1], encoding="utf-8", errors="replace") as stream:
     for line in stream:
@@ -123,19 +127,21 @@ if not events:
 last = events[-1]
 session = next((event["sessionID"] for event in reversed(events) if event.get("sessionID")), "")
 if last.get("type") != "error":
-    print("ok")
+    # A failed exit without an error event is a run cut off mid-step: when the network dropped, OpenCode exited 1
+    # right after a step_start and two arena lanes ended as finished (2026-10-24).
+    print(f"interrupted {session}" if rc != 0 else f"ok {session}")
     raise SystemExit(0)
 error = last.get("error") or {}
 kind = str(error.get("type", "unknown"))
 message = str(error.get("message", ""))
 # An empty balance (402) never recovers on retry; the socket closing or DNS failing after a laptop sleep does.
 if "quota" in kind or "402" in message or "Insufficient" in message or "balance" in message.lower():
-    print("quota")
+    print(f"quota {session}")
 elif kind == "provider.transport" or any(token in message for token in (
         "Transport", "socket connection", "ECONNRESET", "fetch failed", "ENOTFOUND", "EAI_AGAIN")):
-    print(f"transport:{session}" if session else f"error:{kind}")
+    print(f"transport {session}")
 else:
-    print(f"error:{kind}")
+    print(f"error:{kind} {session}")
 PY
 }
 
@@ -181,9 +187,19 @@ tmp="/tmp/lane-opencode/$name"
 mkdir -p "$tmp" || exit 98
 write_guard || exit 96
 
-resume_prompt="The previous attempt of this session ended on a transport error, not by your choice. Continue the task \
-from where you stopped: check git status and your result file first, then finish every deliverable the task names."
+resume_prompt="The previous attempt of this session ended on a transport error or a dropped connection, not by your \
+choice. Continue the task from where you stopped: check git status and your result file first, then finish every \
+deliverable the task names."
 session=""
+# `lane resume` continues the lane's session, so the worker keeps what it learned; the prompt restates the task.
+if [ "${LANE_RESUME:-false}" = true ] && [ -s "$session_file" ]; then
+  session=$(<"$session_file")
+  prompt="This continues your session: the lane was stopped or cut off, not by your choice. Check git status and your \
+result file first, then finish every deliverable the task names. The task, as given:
+
+$prompt"
+  echo "lane-opencode: continuing session $session"
+fi
 attempt=0
 rc=0
 verdict=ok
@@ -197,16 +213,19 @@ while :; do
     opencode run --standalone --auto --format json --thinking -m "$model" --title "$name" \
     ${session_args[@]+"${session_args[@]}"} "$prompt" </dev/null
   rc=$?
-  verdict=$(last_event)
-  echo "lane-opencode: attempt $attempt rc=$rc last=$verdict"
+  read -r verdict last_session <<<"$(last_event "$rc")"
+  if [ -n "${last_session:-}" ]; then
+    printf '%s\n' "$last_session" >"$session_file"
+  fi
+  echo "lane-opencode: attempt $attempt rc=$rc last=$verdict session=${last_session:-}"
   # A signal exit is the parent stopping the lane, never a transport fault (genomics chip-admission-v2, 2026-10-23).
   if [ "$rc" -ge 129 ] && [ "$rc" -le 159 ]; then
     break
   fi
   case $verdict in
-    transport:*)
-      [ "$attempt" -lt 2 ] || break
-      session=${verdict#transport:}
+    transport | interrupted)
+      [ "$attempt" -lt 2 ] && [ -n "${last_session:-}" ] || break
+      session=$last_session
       prompt=$resume_prompt
       attempt=$((attempt + 1))
       # After a laptop sleep DNS stays down for a while: wait up to an hour for the provider instead of spending a

@@ -154,7 +154,8 @@ printf '%s\n' \
   'printf "%s\n" "fake llmx stdout"' \
   'exit "${LLMX_FAKE_RC:-0}"' >"$FAKE_BIN/llmx"
 # The opencode worker runs under `env -i`, so the fake finds the capture dir beside its own bin dir, and flag files
-# there pick its behaviour: a transport error once, or an exhausted balance.
+# there pick its behaviour: a transport error once, a step cut off without an error event once, a provider failure
+# once, or an exhausted balance.
 printf '%s\n' \
   '#!/usr/bin/env bash' \
   'capture="$(cd "$(dirname "$0")/.." && pwd -P)/capture"' \
@@ -165,6 +166,16 @@ printf '%s\n' \
   'if [ -f "$capture/opencode-transport-once" ]; then' \
   '  rm "$capture/opencode-transport-once"' \
   '  printf "%s\n" "{\"type\":\"step_start\",\"sessionID\":\"ses_fake\"}" "{\"type\":\"error\",\"sessionID\":\"ses_fake\",\"error\":{\"type\":\"provider.transport\",\"message\":\"The socket connection was closed\"}}"' \
+  '  exit 1' \
+  'fi' \
+  'if [ -f "$capture/opencode-interrupt-once" ]; then' \
+  '  rm "$capture/opencode-interrupt-once"' \
+  '  printf "%s\n" "{\"type\":\"step_start\",\"sessionID\":\"ses_fake\"}"' \
+  '  exit 1' \
+  'fi' \
+  'if [ -f "$capture/opencode-fail-once" ]; then' \
+  '  rm "$capture/opencode-fail-once"' \
+  '  printf "%s\n" "{\"type\":\"error\",\"sessionID\":\"ses_fake\",\"error\":{\"type\":\"provider.http\",\"message\":\"500 Internal Server Error\"}}"' \
   '  exit 1' \
   'fi' \
   'if [ -f "$capture/opencode-quota" ]; then' \
@@ -349,7 +360,8 @@ assert_eq "$expected_oc" "$(head -10 "$LANE_CAPTURE/opencode.args.0")" "opencode
 sed -n 11p "$LANE_CAPTURE/opencode.args.0" | grep -Fxq "Do the fake task." || fail "opencode prompt lacks the brief"
 grep -Fq "do not stage, commit, merge, stash or switch branches" "$LANE_CAPTURE/opencode.args.0" || fail "opencode prompt lacks the git contract"
 assert_eq "ses_fake" "$(arg_after --session "$LANE_CAPTURE/opencode.args.1")" "transport resume continues the session"
-grep -Fq "ended on a transport error" "$LANE_CAPTURE/opencode.args.1" || fail "transport resume lacks the resume prompt"
+grep -Fq "ended on a transport error or a dropped connection" "$LANE_CAPTURE/opencode.args.1" ||
+  fail "transport resume lacks the resume prompt"
 if grep -Fq "must-not-leak" "$LANE_CAPTURE/opencode.env"; then fail "opencode saw a caller secret"; fi
 grep -Fxq "TMPDIR=/tmp/lane-opencode/ocargs/" "$LANE_CAPTURE/opencode.env" || fail "opencode TMPDIR is not per lane"
 [ ! -e /tmp/lane-opencode/ocargs ] || fail "opencode TMPDIR survived the run"
@@ -383,6 +395,28 @@ unset LANE_OPENCODE_RETRY_SLEEP LANE_OPENCODE_PROVIDER_HOST
 assert_eq "EXIT=86" "$(<"$LANE_HOME/ocquota.done")" "quota marker"
 grep -Fq "do not retry" "$LANE_HOME/ocquota.log" || fail "quota stop message missing"
 [ "$(find "$LANE_CAPTURE" -name 'opencode.args.*' | wc -l | tr -d ' ')" = 3 ] || fail "quota run retried"
+
+echo "test: an opencode step cut off without an error event resumes its session, and lane resume continues it"
+export LANE_OPENCODE_RETRY_SLEEP=0 LANE_OPENCODE_PROVIDER_HOST=""
+rm -f "$LANE_CAPTURE"/opencode.args.*
+touch "$LANE_CAPTURE/opencode-interrupt-once"
+"$LANE" run ocint --repo "$REPO" --brief "$BRIEF" --worker opencode --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/ocint.done"
+assert_eq "EXIT=0" "$(<"$LANE_HOME/ocint.done")" "opencode marker after a cut-off step"
+assert_eq "ses_fake" "$(arg_after --session "$LANE_CAPTURE/opencode.args.1")" "cut-off step continues the session"
+touch "$LANE_CAPTURE/opencode-fail-once"
+"$LANE" run ocres --repo "$REPO" --brief "$BRIEF" --worker opencode --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/ocres.done"
+assert_eq "EXIT=1" "$(<"$LANE_HOME/ocres.done")" "provider failure is not retried"
+assert_eq "ses_fake" "$(<"$LANE_HOME/ocres.opencode-session")" "recorded opencode session"
+[ ! -e "$LANE_CAPTURE/opencode.args.3" ] || fail "provider failure was retried"
+"$LANE" resume ocres --no-note >/dev/null
+wait_for_file "$LANE_HOME/ocres.done"
+unset LANE_OPENCODE_RETRY_SLEEP LANE_OPENCODE_PROVIDER_HOST
+assert_eq "EXIT=0" "$(<"$LANE_HOME/ocres.done")" "resumed opencode lane"
+assert_eq "ses_fake" "$(arg_after --session "$LANE_CAPTURE/opencode.args.3")" "lane resume continues the session"
+grep -Fq "This continues your session" "$LANE_CAPTURE/opencode.args.3" || fail "lane resume lacks the continuation prompt"
+grep -Fq "Do the fake task." "$LANE_CAPTURE/opencode.args.3" || fail "lane resume lacks the brief"
 
 echo "test: worker failures still produce an exit marker"
 CODEX_FAKE_RC=7 "$LANE" run failure --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null
