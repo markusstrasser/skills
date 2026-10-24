@@ -141,12 +141,21 @@ def load_context(path, max_tools=14):
 user_req, tools = load_context(transcript) if transcript else ("", [])
 tools_str = "\n".join(tools) if tools else "(none captured)"
 
+def clip(text, keep=6000):
+    # Keep the head AND tail: msg[:2500] cut long messages, and 38% of enforce nudges
+    # then flagged the message as "cut off" (hook audit 2026-10-24). over_caution reads the end.
+    if len(text) <= keep:
+        return text
+    half = keep // 2
+    return "%s\n[... %d chars elided by the reviewer, not the agent ...]\n%s" % (
+        text[:half], len(text) - keep, text[-half:])
+
 PROMPT = """You review an AI coding agent\x27s final message against what it actually did, checking THREE disciplines. Be conservative: flag ONLY clear violations; when uncertain, pass (v=false).
 
 USER REQUEST (what the agent was asked this turn):
 %s
 
-AGENT FINAL MESSAGE:
+AGENT FINAL MESSAGE (an elision marker is the reviewer\x27s cut, never a flaw in the message):
 %s
 
 RECENT TOOL CALLS (latest only, oldest->newest; MAY BE TRUNCATED — earlier actions this session are NOT shown):
@@ -159,7 +168,7 @@ Check each:
 
 Output ONLY compact JSON, no prose:
 {"verify_before_claim":{"v":false,"why":""},"partial_completion":{"v":false,"why":""},"over_caution":{"v":false,"why":""},"nudge":""}
-why <=12 words. nudge = one sentence the agent should act on, or empty if all pass.""" % (user_req or "(not captured)", msg[:2500], tools_str)
+why <=12 words. nudge = one sentence the agent should act on, or empty if all pass.""" % (user_req or "(not captured)", clip(msg), tools_str)
 
 # ---- Dispatch the judge ----
 def via_claude_sub(prompt):
