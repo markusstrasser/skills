@@ -925,9 +925,10 @@ launch_worker() {
   ' lane-worker "$log" "$marker" "$worker" "$prompt" "$brief" "$worktree" "$resume_mode" "$checkout_state" </dev/null >/dev/null 2>&1 &
   launch_pid=$!
   disown "$launch_pid" 2>/dev/null || true
-  # The worker leads its group only after perl's setsid(); wait for that before the check.
+  # The worker leads its group only after perl's setsid(); wait for that before the check. The builtin kill sees the
+  # group without a ps per poll: ps and tr spun up to 250 polls (~15 s a launch) under the suite's fake ps (2026-10-25).
   for _ in $(seq 1 250); do
-    [ "$(ps -o pgid= -p "$launch_pid" 2>/dev/null | tr -d ' ')" = "$launch_pid" ] && break
+    process_group_exists "$launch_pid" && break
     kill -0 "$launch_pid" 2>/dev/null || break
     sleep 0.02
   done
