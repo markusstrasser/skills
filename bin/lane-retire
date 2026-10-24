@@ -1,0 +1,463 @@
+#!/usr/bin/env python3
+"""lane-retire — harvest a finished lane's checkout, then remove it.
+
+lane runs this when a worker exits, and `lane reap --force` runs it by hand. The harvest goes to
+<harvest-root>/<name>.harvest/<UTC stamp>/ and is never overwritten:
+  lane.patch     every change against HEAD: tracked edits, then each untracked file as an add (--binary --full-index)
+  commits.patch  format-patch <base>..HEAD, written only when the lane committed
+  cache/         .claude/cache/ (results, messages, exported patches), minus derived trees
+  ignored/       other ignored files, minus derived caches (.venv, .uv-cache, __pycache__, ...) and the inputs a
+                 checkout hook copied in and declared in .git/lane-checkout.json ("provided": {path: sha256}) while
+                 their bytes are unchanged; MANIFEST.json names those instead
+  run.log.gz, brief.md, head.txt, status.txt, MANIFEST.json (sha256 and size of every file above)
+The checkout is removed only when the harvest is proven lossless:
+  1. lane.patch holds one diff per path `git status` reports, and each diff's post-image blob id equals the working
+     file's hash, so the patch applied to HEAD reproduces the tree; it also applies to HEAD (`git apply --check`);
+  2. every copied file reads back with the hash it was copied with;
+  3. the checkout did not change while it was harvested;
+  4. no process has its cwd or an open file inside it (lsof; no answer from lsof keeps it, [DEGRADED]).
+At a worker's exit it also needs exit code 0 and no --keep reason (lane run --keep-checkout); --reap skips those two.
+A worktree lane's branch is deleted only when another branch, remote branch or tag holds its HEAD; otherwise it
+stays, and commits.patch has the commits too.
+
+The removal is lossless, not unreviewed: the deliverables wait in the harvest for the parent's intake. The operator's
+2026-10-12 rule (no automatic cleanup may drop unlanded work) is why every check above must pass before removal.
+Last stdout line: `CHECKOUT=retired <harvest>`, `CHECKOUT=kept <reason>` or `CHECKOUT=gone`. Exit 0 unless the
+arguments or the checkout's identity are wrong.
+"""
+
+import argparse
+import datetime
+import gzip
+import hashlib
+import json
+import os
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+# Rederivable trees and caches: never harvested, never a reason to keep a checkout.
+DERIVED_NAMES = {".venv", ".uv-cache", "node_modules", "__pycache__", ".pytest_cache", ".ruff_cache", ".mypy_cache",
+                 ".hypothesis", ".opencode"}
+# genomics: the pre-commit's index trees and the runtime's source epochs (214-986 MB a checkout, 2026-10-24).
+DERIVED_CACHE_DIRS = {"source-epochs", "index-trees"}
+CACHE_DIR = ".claude/cache"
+HARVEST_CAP_BYTES = 1024 * 1024 * 1024
+
+
+class Keep(Exception):
+    """The checkout stays; the message says why."""
+
+
+def git(checkout, *args, check=True):
+    """Run git in the checkout with every config that changes diff output pinned off."""
+    command = ["git", "-C", str(checkout), "-c", "core.quotepath=off", "-c", "diff.noprefix=false",
+               "-c", "diff.mnemonicPrefix=false", *args]
+    result = subprocess.run(command, capture_output=True, check=False)
+    if check and result.returncode != 0:
+        raise Keep(f"git {' '.join(args[:3])} failed rc={result.returncode}: "
+                   f"{result.stderr.decode(errors='replace').strip()[:200]}")
+    return result
+
+
+def null_split(raw):
+    return [os.fsdecode(entry) for entry in raw.split(b"\0") if entry]
+
+
+def status_paths(checkout):
+    """Paths `git status` reports (tracked changes and untracked, non-ignored files), with their codes."""
+    raw = git(checkout, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames").stdout
+    entries = {}
+    for entry in null_split(raw):
+        entries[entry[3:]] = entry[:2]
+    return entries
+
+
+def is_derived(relative):
+    parts = Path(relative).parts
+    if any(part in DERIVED_NAMES for part in parts):
+        return True
+    cache_parts = Path(CACHE_DIR).parts
+    return parts[:len(cache_parts)] == cache_parts and len(parts) > len(cache_parts) \
+        and parts[len(cache_parts)] in DERIVED_CACHE_DIRS
+
+
+def in_cache(relative):
+    return relative == CACHE_DIR or relative.startswith(CACHE_DIR + "/")
+
+
+def blob_id(path):
+    """The git blob id of a working file as `git diff` computes it (symlinks hash their target text)."""
+    if os.path.islink(path):
+        data = os.fsencode(os.readlink(path))
+        return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+    return None
+
+
+def post_image(diff_text):
+    """The last post-image blob id a single-path diff names, or None (mode-only change)."""
+    blob = None
+    for line in diff_text.splitlines():
+        if line.startswith(b"index "):
+            ids = line.split()[1].split(b"..")
+            blob = ids[1].decode()
+    return blob
+
+
+def is_content(path):
+    """A regular file or a symlink: a fifo, socket or device carries no content and cannot be diffed or copied."""
+    mode = os.lstat(path).st_mode
+    return stat.S_ISREG(mode) or stat.S_ISLNK(mode)
+
+
+def build_patch(checkout, statuses, skipped):
+    """lane.patch, one diff per status path, each proven to reproduce the working file."""
+    chunks = []
+    tracked = set(null_split(git(checkout, "diff", "--name-only", "-z", "--no-renames", "HEAD", "--").stdout))
+    hash_paths = []
+    for relative, code in sorted(statuses.items()):
+        if code == "??":
+            if os.path.isdir(checkout / relative) and not os.path.islink(checkout / relative):
+                raise Keep(f"untracked nested repository {relative} cannot be represented in a patch")
+            if not is_content(checkout / relative):
+                skipped.append(relative)
+                continue
+            diff = git(checkout, "diff", "--no-index", "--binary", "--full-index", "--no-ext-diff", "--no-textconv",
+                       "--no-color", "--src-prefix=a/", "--dst-prefix=b/", "--", "/dev/null", relative, check=False)
+            if diff.returncode not in (0, 1):
+                raise Keep(f"could not diff untracked {relative}: {diff.stderr.decode(errors='replace')[:200]}")
+        else:
+            if relative not in tracked:
+                raise Keep(f"status names {relative} but git diff HEAD does not")
+            diff = git(checkout, "diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", "--no-color",
+                       "--no-renames", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--", f":(literal){relative}")
+        if b"Subproject commit" in diff.stdout:
+            raise Keep(f"{relative} is a submodule change; a patch cannot carry it")
+        chunks.append(diff.stdout)
+        expected = post_image(diff.stdout)
+        full = checkout / relative
+        if expected is None:
+            if not os.path.lexists(full):
+                raise Keep(f"{relative}: diff names no post-image and the file is gone")
+        elif set(expected) == {"0"}:
+            if os.path.lexists(full):
+                raise Keep(f"{relative}: the diff deletes it but the file exists")
+        else:
+            link_blob = blob_id(full)
+            if link_blob is not None:
+                if link_blob != expected:
+                    raise Keep(f"{relative}: symlink blob {link_blob} != patch {expected}")
+            else:
+                hash_paths.append((relative, expected))
+    if hash_paths:
+        listing = "".join(f"{relative}\n" for relative, _ in hash_paths).encode()
+        hashed = subprocess.run(["git", "-C", str(checkout), "hash-object", "--stdin-paths"], input=listing,
+                                capture_output=True, check=False)
+        actual = hashed.stdout.decode().split()
+        if hashed.returncode != 0 or len(actual) != len(hash_paths):
+            raise Keep("git hash-object could not hash the changed files")
+        for (relative, expected), blob in zip(hash_paths, actual):
+            if blob != expected:
+                raise Keep(f"{relative}: working file blob {blob} != patch post-image {expected}")
+    return b"".join(chunks)
+
+
+def check_applies(checkout, patch_path):
+    """lane.patch applies to HEAD: git apply --check against a scratch index (writes no object)."""
+    with tempfile.TemporaryDirectory(prefix="lane-retire-") as scratch:
+        env = dict(os.environ, GIT_INDEX_FILE=str(Path(scratch) / "index"))
+        for args in (["read-tree", "HEAD"],
+                     ["apply", "--cached", "--check", "--binary", "--whitespace=nowarn", str(patch_path)]):
+            result = subprocess.run(["git", "-C", str(checkout), *args], env=env, capture_output=True, check=False)
+            if result.returncode != 0:
+                raise Keep(f"lane.patch does not apply to HEAD ({' '.join(args[:2])}): "
+                           f"{result.stderr.decode(errors='replace').strip()[:200]}")
+
+
+def ignored_entries(checkout):
+    """Ignored files and directories outside .claude/cache, minus derived ones (relative paths)."""
+    raw = git(checkout, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z").stdout
+    return [entry.rstrip("/") for entry in null_split(raw)
+            if not is_derived(entry.rstrip("/")) and not in_cache(entry.rstrip("/"))]
+
+
+def walk_files(checkout, relative):
+    """Regular files and symlinks under checkout/relative (relative paths), skipping derived ones."""
+    top = checkout / relative
+    if os.path.islink(top) or top.is_file():
+        return [relative] if is_content(top) else []
+    found = []
+    for directory, subdirs, files in os.walk(top, followlinks=False):
+        base = Path(directory).relative_to(checkout)
+        subdirs[:] = [sub for sub in subdirs if not is_derived(str(base / sub))
+                      and not os.path.islink(Path(directory) / sub)]
+        links = [sub for sub in os.listdir(directory) if os.path.islink(Path(directory) / sub)
+                 and os.path.isdir(Path(directory) / sub)]
+        for name in files + links:
+            candidate = str(base / name)
+            if not is_derived(candidate) and is_content(checkout / candidate):
+                found.append(candidate)
+    return found
+
+
+def stat_key(path):
+    info = os.lstat(path)
+    return [info.st_size, info.st_mtime_ns, stat.S_IFMT(info.st_mode)]
+
+
+def fingerprint(checkout, statuses, copied):
+    head = git(checkout, "rev-parse", "HEAD").stdout.strip().decode()
+    keys = {}
+    for relative in list(statuses) + copied:
+        full = checkout / relative
+        keys[relative] = stat_key(full) if os.path.lexists(full) else None
+    return head, sorted(statuses.items()), keys
+
+
+def copy_verified(source, destination, manifest, label):
+    """Copy one file (or symlink) and prove the copy by reading it back."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if os.path.islink(source):
+        target = os.readlink(source)
+        os.symlink(target, destination)
+        if os.readlink(destination) != target:
+            raise Keep(f"symlink copy of {label} differs")
+        manifest[label] = {"symlink": target}
+        return
+    digest = hashlib.sha256()
+    with open(source, "rb") as reader, open(destination, "wb") as writer:
+        for block in iter(lambda: reader.read(1 << 20), b""):
+            digest.update(block)
+            writer.write(block)
+    shutil.copystat(source, destination, follow_symlinks=False)
+    record(destination, manifest, label, expected=digest.hexdigest())
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as reader:
+        for block in iter(lambda: reader.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def record(path, manifest, label, expected=None):
+    digest = sha256_file(path)
+    if expected is not None and digest != expected:
+        raise Keep(f"harvest copy of {label} does not read back with its hash")
+    manifest[label] = {"sha256": digest, "size": os.path.getsize(path)}
+
+
+def provided_inputs(args, checkout):
+    """The hook's declared inputs, {relative path: sha256} from .git/lane-checkout.json "provided"."""
+    meta_path = checkout / ".git" / "lane-checkout.json"
+    if args.mode != "hook" or not meta_path.is_file():
+        return {}
+    try:
+        provided = json.loads(meta_path.read_text()).get("provided", {})
+    except ValueError as error:
+        raise Keep(f"{meta_path} is not JSON: {error}")
+    if not isinstance(provided, dict) or not all(isinstance(path, str) and isinstance(digest, str)
+                                                 and len(digest) == 64 for path, digest in provided.items()):
+        raise Keep(f"{meta_path} \"provided\" must map relative paths to sha256 digests")
+    return provided
+
+
+def busy_pids(checkout):
+    """Processes with a cwd or open file inside the checkout, from one lsof pass. None when lsof gives no answer."""
+    try:
+        result = subprocess.run(["lsof", "-w", "-n", "-P", "-F", "pcn"], capture_output=True, check=False, timeout=120)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if not result.stdout:
+        return None
+    own = {os.getpid(), os.getppid()}
+    prefix = str(checkout) + "/"
+    busy = {}
+    pid, command = None, ""
+    for line in result.stdout.decode(errors="replace").splitlines():
+        if line.startswith("p"):
+            pid, command = int(line[1:]), ""
+        elif line.startswith("c"):
+            command = line[1:]
+        elif line.startswith("n") and pid not in own and (line[1:] == str(checkout) or line[1:].startswith(prefix)):
+            busy[pid] = command
+    return busy
+
+
+def validate_identity(args, checkout):
+    """The checkout is exactly the one lane made for this name, in the mode it was made in."""
+    if not checkout.is_absolute() or os.path.realpath(checkout) != str(checkout):
+        sys.exit(f"lane-retire: checkout must be an absolute real path: {checkout}")
+    if args.mode == "hook":
+        roots = [os.path.realpath(Path(args.harvest_root) / "checkouts")] + [os.path.realpath(root)
+                                                                              for root in args.allow_root]
+        if str(checkout.parent) not in roots or checkout.name != args.name:
+            sys.exit(f"lane-retire: refusing unexpected checkout path {checkout} (want <root>/{args.name})")
+        if checkout.exists() and not (checkout / ".git").is_dir():
+            sys.exit(f"lane-retire: {checkout} is not a standalone lane checkout (.git is not a directory)")
+    else:
+        if checkout != Path(args.repo) / ".claude" / "worktrees" / f"codex-{args.name}" \
+                or args.branch != f"codex/{args.name}":
+            sys.exit(f"lane-retire: refusing unexpected worktree {checkout} on branch {args.branch}")
+        if checkout.exists() and not (checkout / ".git").is_file():
+            sys.exit(f"lane-retire: {checkout} is not a linked worktree")
+    if checkout.exists():
+        top = git(checkout, "rev-parse", "--show-toplevel", check=False).stdout.strip().decode()
+        if os.path.realpath(top) != str(checkout):
+            sys.exit(f"lane-retire: {checkout} is not the top of its own git checkout ({top})")
+
+
+def make_writable(checkout):
+    """Lanes leave read-only trees (genomics index trees, sealed test trees); removal needs write on each dir."""
+    for directory, subdirs, files in os.walk(checkout, followlinks=False):
+        for name in subdirs + files:
+            path = os.path.join(directory, name)
+            if not os.path.islink(path):
+                mode = os.lstat(path).st_mode
+                os.chmod(path, mode | stat.S_IWUSR | (stat.S_IXUSR if stat.S_ISDIR(mode) else 0))
+    os.chmod(checkout, os.lstat(checkout).st_mode | stat.S_IWUSR | stat.S_IXUSR)
+
+
+def harvest(args, checkout):
+    statuses = status_paths(checkout)
+    copy_list = []
+    if (checkout / CACHE_DIR).is_dir():
+        copy_list += [("cache", relative) for relative in walk_files(checkout, CACHE_DIR)]
+    for entry in ignored_entries(checkout):
+        copy_list += [("ignored", relative) for relative in walk_files(checkout, entry) if not in_cache(relative)]
+    watched = [relative for _, relative in copy_list]
+    before = fingerprint(checkout, statuses, watched)
+    head = before[0]
+    # An input the hook copied in and the lane left as it was is not the lane's work (genomics: 5.3 MB of test
+    # durations a lane, 2026-10-24). Hashed after the fingerprint, so an edit made meanwhile fails the harvest.
+    provided = provided_inputs(args, checkout)
+    unchanged = {relative: provided[relative] for kind, relative in copy_list
+                 if kind == "ignored" and relative in provided and not os.path.islink(checkout / relative)
+                 and sha256_file(checkout / relative) == provided[relative]}
+    copy_list = [(kind, relative) for kind, relative in copy_list if relative not in unchanged]
+    total = sum(os.lstat(checkout / relative).st_size for _, relative in copy_list)
+    if total > HARVEST_CAP_BYTES:
+        raise Keep(f"harvest would copy {total >> 20} MiB of cache and ignored files (cap "
+                   f"{HARVEST_CAP_BYTES >> 20} MiB); harvest by hand")
+    if args.mode == "hook" and not args.base:
+        raise Keep("no recorded checkout base, so the lane's own commits cannot be told apart")
+    if args.base and git(checkout, "merge-base", "--is-ancestor", args.base, "HEAD", check=False).returncode != 0:
+        raise Keep(f"HEAD {head} does not descend from the lane base {args.base}")
+
+    lane_dir = Path(args.harvest_root) / f"{args.name}.harvest"
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    final = lane_dir / stamp
+    partial = lane_dir / f"{stamp}.partial"
+    partial.mkdir(parents=True)
+    try:
+        write_harvest(args, checkout, statuses, copy_list, watched, unchanged, before, partial)
+    except BaseException:
+        shutil.rmtree(partial, ignore_errors=True)
+        raise
+    partial.rename(final)
+    return final, head
+
+
+def write_harvest(args, checkout, statuses, copy_list, watched, unchanged, before, partial):
+    head = before[0]
+    manifest = {}
+    skipped = []
+    patch_path = partial / "lane.patch"
+    patch_path.write_bytes(build_patch(checkout, statuses, skipped))
+    record(patch_path, manifest, "lane.patch")
+    if statuses:
+        check_applies(checkout, patch_path)
+    if args.base and head != args.base:
+        commits = git(checkout, "format-patch", "--binary", "--full-index", "--stdout", f"{args.base}..HEAD").stdout
+        (partial / "commits.patch").write_bytes(commits)
+        record(partial / "commits.patch", manifest, "commits.patch")
+    for kind, relative in copy_list:
+        # Deliverables land at <harvest>/cache/<name>-result.md; other ignored files keep their checkout path.
+        label = f"cache/{Path(relative).relative_to(CACHE_DIR)}" if kind == "cache" else f"ignored/{relative}"
+        copy_verified(checkout / relative, partial / label, manifest, label)
+    (partial / "head.txt").write_text(f"HEAD {head}\nbase {args.base}\nbranch {args.branch}\ncheckout {checkout}\n")
+    (partial / "status.txt").write_text("".join(f"{code} {path}\n" for path, code in sorted(statuses.items())))
+    for name in ("head.txt", "status.txt"):
+        record(partial / name, manifest, name)
+    if args.log and os.path.isfile(args.log):
+        with open(args.log, "rb") as reader, gzip.open(partial / "run.log.gz", "wb") as writer:
+            shutil.copyfileobj(reader, writer)
+        record(partial / "run.log.gz", manifest, "run.log.gz")
+    if args.brief and os.path.isfile(args.brief):
+        copy_verified(Path(args.brief), partial / "brief.md", manifest, "brief.md")
+    if fingerprint(checkout, status_paths(checkout), watched) != before:
+        raise Keep("the checkout changed while it was harvested")
+    (partial / "MANIFEST.json").write_text(json.dumps(
+        {"name": args.name, "mode": args.mode, "checkout": str(checkout), "head": head, "base": args.base,
+         "status_paths": len(statuses), "skipped_special_files": skipped, "provided_unchanged": unchanged,
+         "files": manifest}, indent=1, sort_keys=True) + "\n")
+
+
+def branch_is_held_elsewhere(repo, branch, head):
+    """Another branch, remote branch or tag contains the lane's HEAD, so deleting its branch drops no commit."""
+    refs = git(repo, "for-each-ref", "--format=%(refname)", "--contains", head, "refs/heads", "refs/remotes",
+               "refs/tags").stdout.decode().split()
+    return any(ref != f"refs/heads/{branch}" for ref in refs)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("--name", required=True)
+    parser.add_argument("--mode", required=True, choices=["worktree", "hook"])
+    parser.add_argument("--checkout", required=True)
+    parser.add_argument("--repo", required=True)
+    parser.add_argument("--base", default="")
+    parser.add_argument("--branch", default="")
+    parser.add_argument("--harvest-root", required=True)
+    parser.add_argument("--allow-root", action="append", default=[])
+    parser.add_argument("--log", default="")
+    parser.add_argument("--brief", default="")
+    parser.add_argument("--exit-code", type=int, default=0)
+    parser.add_argument("--keep", default="", help="a reason to keep the checkout (lane run --keep-checkout)")
+    parser.add_argument("--reap", action="store_true", help="explicit removal: ignore the exit code and --keep")
+    args = parser.parse_args()
+    checkout = Path(args.checkout)
+    validate_identity(args, checkout)
+    if not checkout.exists():
+        print("CHECKOUT=gone")
+        return
+    if not args.reap and args.exit_code != 0:
+        print(f"CHECKOUT=kept exit {args.exit_code}: lane resume continues it; lane reap {args.name} --force harvests "
+              "and removes it")
+        return
+    if not args.reap and args.keep:
+        print(f"CHECKOUT=kept {args.keep}")
+        return
+    try:
+        busy = busy_pids(checkout)
+        if busy is None:
+            raise Keep("[DEGRADED] lsof gave no answer, so open files inside the checkout are unknown")
+        if busy:
+            raise Keep("busy: " + ", ".join(f"pid {pid} ({command})" for pid, command in sorted(busy.items())))
+        final, head = harvest(args, checkout)
+        # The identity is checked again right before the removal, so a path swapped meanwhile is never deleted.
+        validate_identity(args, checkout)
+        make_writable(checkout)
+        note = ""
+        if args.mode == "hook":
+            shutil.rmtree(checkout)
+        else:
+            held = branch_is_held_elsewhere(Path(args.repo), args.branch, head)
+            git(Path(args.repo), "worktree", "remove", "--force", str(checkout))
+            if held:
+                git(Path(args.repo), "branch", "-D", "--", args.branch)
+            else:
+                note = f"; branch {args.branch} kept: no other ref holds its commits"
+    except (Keep, OSError, subprocess.SubprocessError) as reason:
+        print(f"CHECKOUT=kept {reason}")
+        return
+    print(f"lane-retire: harvested {args.name} into {final}{note}")
+    print(f"CHECKOUT=retired {final}")
+
+
+if __name__ == "__main__":
+    main()

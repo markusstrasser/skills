@@ -122,6 +122,31 @@ process start time. Resume notes are lane-specific and atomically renamed to
 `*.resume-note.consumed-<n>.md` before launch. Pass `--no-note` to resume
 explicitly without a note.
 
+A lane whose worker exits 0 is harvested to `$LANE_HOME/<name>.harvest/<UTC
+stamp>/`, then its checkout is removed (`bin/lane-retire`). Read a finished
+lane's work there, not in its worktree: `lane.patch` holds every change against
+HEAD and is checked to reproduce the tree; `commits.patch` holds the lane's
+commits, if any; `cache/` holds its `.claude/cache/` results and messages. The
+harvest also keeps the other ignored files, `run.log.gz`, the brief and
+`MANIFEST.json`. `lane review` reads the harvest. A checkout stays when the
+worker failed, when the lane was launched with `--keep-checkout` (a lane you
+will resume) or when a check fails, such as a process still inside it;
+`$LANE_HOME/<name>.checkout-state` says which. `lane reap <name> --force`
+harvests and removes it later. A worktree lane's branch is deleted only when
+another ref holds its commits.
+
+A repo that must not give a worker its full tree declares a checkout hook
+(`git config lane.checkout <exe>`, or an executable `.claude/lane-checkout`).
+Its lanes run in `$LANE_HOME/checkouts/<name>`, which the hook builds and
+rechecks on reuse. There, `--seed-patch` and `--seed-file` start a new lane
+from an earlier harvest. Genomics uses a hook for its donor-filtered checkouts:
+
+```bash
+bin/lane run fix-r2 --repo ~/Projects/genomics --brief /tmp/fix-r2.md --worker opencode \
+  --seed-patch ~/.cache/lanes/fix.harvest/<stamp>/lane.patch \
+  --seed-file ~/.cache/lanes/fix.harvest/<stamp>/cache/fix-result.md
+```
+
 ## Operator deck CLI
 
 `bin/operator-deck` lets an agent prompt itself with the operator's usual thought

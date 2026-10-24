@@ -12,6 +12,9 @@
 #   - shell commands are gated by command patterns alone.
 # So the deny-list stops mistakes, not an adversary; the parent still reviews every diff. A repo adds its own rules in
 # .claude/lane-opencode.json: {"allow_dirs": [absolute dirs re-allowed after the denies], "shell_deny": [patterns]}.
+# A repo checkout hook (lane's --help) adds rules for the checkout it built in <worktree>/.git/lane-checkout.json:
+# {"opencode_permissions": [rules]}, appended after allow_dirs, so they override it; its "env" settings reach the
+# model's shell through LANE_CHECKOUT_ENV.
 #
 # usage (lane runs it in the worktree): lane-opencode <prompt>
 # env from lane: LANE_NAME LANE_REPO LANE_LOG LANE_OPENCODE_MODEL
@@ -53,7 +56,14 @@ for secret in (".ssh", ".gnupg", ".aws", ".docker", ".config", ".netrc", ".modal
     directory(home / secret, "deny")
 for allowed in local.get("allow_dirs", []):
     directory(Path(allowed), "allow")
-for resource in (".opencode", ".opencode/*", ".opencode/**"):
+checkout_path = worktree / ".git" / "lane-checkout.json"
+if checkout_path.is_file():
+    checkout_rules = json.loads(checkout_path.read_text()).get("opencode_permissions", [])
+    if not isinstance(checkout_rules, list) or not all(
+            isinstance(rule, dict) and set(rule) == {"action", "resource", "effect"} for rule in checkout_rules):
+        sys.exit(f"lane-opencode: {checkout_path} opencode_permissions must be a list of action/resource/effect rules")
+    rules += checkout_rules
+for resource in (".opencode", ".opencode/*", ".opencode/**", ".git/lane-checkout.json"):
     rules.append({"action": "edit", "resource": resource, "effect": "deny"})
 
 # Git state belongs to the parent: the lane edits files, the parent stages, commits and merges.
@@ -200,6 +210,11 @@ result file first, then finish every deliverable the task names. The task, as gi
 $prompt"
   echo "lane-opencode: continuing session $session"
 fi
+# The checkout hook's settings (genomics: UV_PROJECT_ENVIRONMENT at the shared venv, UV_NO_SYNC=1), named by lane.
+checkout_env=()
+for key in ${LANE_CHECKOUT_ENV:-}; do
+  checkout_env+=("$key=${!key-}")
+done
 attempt=0
 rc=0
 verdict=ok
@@ -209,7 +224,7 @@ while :; do
   # Without </dev/null a run blocks forever on a non-TTY stdin. --standalone starts a private server, so tools inherit
   # this scrubbed environment instead of a background service's.
   env -i HOME="$HOME" PATH="$PATH" USER="${USER:-}" LANG=en_US.UTF-8 TERM=dumb SHELL=/bin/zsh TMPDIR="$tmp/" \
-    PYTHONUNBUFFERED=1 LANE_WORKER=1 UV_CACHE_DIR="$HOME/.cache/uv" \
+    PYTHONUNBUFFERED=1 LANE_WORKER=1 UV_CACHE_DIR="$HOME/.cache/uv" ${checkout_env[@]+"${checkout_env[@]}"} \
     opencode run --standalone --auto --format json --thinking -m "$model" --title "$name" \
     ${session_args[@]+"${session_args[@]}"} "$prompt" </dev/null
   rc=$?

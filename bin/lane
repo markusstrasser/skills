@@ -17,6 +17,14 @@ usage() {
   cat >&2 <<'EOF'
 usage:
   lane run <name> --repo <path> --brief <file> [--worker codex|claude|opencode] [--no-worktree] [--base <ref>]
+           [--keep-checkout] [--seed-patch <patch>] [--seed-file <file>]...
+      (a finished lane's checkout is harvested to $LANE_HOME/<name>.harvest/<stamp>/ and removed when the worker
+       exits 0, see bin/lane-retire; --keep-checkout keeps it, for a lane you will resume; a failed lane keeps it)
+      (a repo that declares a checkout hook, `git config lane.checkout <exe>` or an executable .claude/lane-checkout,
+       gets its lanes in $LANE_HOME/checkouts/<name>, built by `<hook> <dest> <base-oid>` and rechecked on reuse by
+       `<hook> --verify <dest> <base-oid>`, env LANE_NAME LANE_REPO LANE_BRIEF LANE_SEED_PATCH LANE_SEED_FILES; the
+       seeds go only to a new checkout; <dest>/.git/lane-checkout.json may name {"env": {...}} for the worker and
+       {"provided": {<path>: <sha256>}} for inputs the hook copied in, which a harvest skips while unchanged)
       (claude worker: LANE_CLAUDE_MODEL=<m> LANE_CLAUDE_EFFORT=<e> env override the default opus/default effort)
       (opencode worker: DeepSeek V4.1 Flash on DeepInfra, thinking on; LANE_OPENCODE_MODEL=<provider/model> overrides it)
       (opencode worker: no sandbox; a scrubbed env and a deny-list guard it, see bin/lane-opencode; exit 86 = balance exhausted)
@@ -29,6 +37,8 @@ usage:
   lane resume <name> [--note <file>|--no-note]
       (exported worker settings override recorded settings; all others are retained)
   lane reap <name> [--force]
+      (without --force it shows the diff; --force harvests, then removes the checkout; a retired lane loses only its
+       metadata and log, never its harvest)
 EOF
 }
 
@@ -200,6 +210,9 @@ import sys
     no_worktree,
     worker_settings,
     last_note,
+    checkout,
+    checkout_base,
+    keep_checkout,
 ) = sys.argv[1:]
 payload = {
     "name": name,
@@ -215,6 +228,9 @@ payload = {
     "no_worktree": no_worktree == "true",
     "worker_settings": json.loads(worker_settings),
     "last_note": last_note,
+    "checkout": checkout,
+    "checkout_base": checkout_base,
+    "keep_checkout": keep_checkout == "true",
 }
 with open(output, "w", encoding="utf-8") as handle:
     json.dump(payload, handle, indent=2, sort_keys=True)
@@ -238,6 +254,144 @@ if isinstance(value, bool):
     print("true" if value else "false")
 else:
     print(value)
+PY
+}
+
+# A metadata key, or a default for a lane recorded before the key existed.
+json_get_or() {
+  local input="$1"
+  local key="$2"
+  local default="$3"
+  require_python
+  python3 - "$input" "$key" "$default" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    value = json.load(handle).get(sys.argv[2], sys.argv[3])
+if isinstance(value, bool):
+    print("true" if value else "false")
+else:
+    print(value)
+PY
+}
+
+checkout_state_path() {
+  printf '%s/%s.checkout-state\n' "$LANE_HOME" "$1"
+}
+
+hook_checkout_path() {
+  printf '%s/checkouts/%s\n' "$LANE_HOME" "$1"
+}
+
+# worktree, hook or none; a lane recorded before checkout modes existed is worktree or none.
+lane_checkout_mode() {
+  local metadata="$1"
+  local fallback="worktree"
+  [ "$(json_get "$metadata" no_worktree)" = "true" ] && fallback="none"
+  json_get_or "$metadata" checkout "$fallback"
+}
+
+# The newest harvest lane-retire wrote for a lane (stamps sort by time).
+latest_harvest() {
+  local dir="$LANE_HOME/$1.harvest"
+  local latest=""
+  local entry
+  for entry in "$dir"/*Z; do
+    [ -d "$entry" ] && latest="$entry"
+  done
+  [ -n "$latest" ] || return 1
+  printf '%s\n' "$latest"
+}
+
+# A repo whose lanes must not see its full tree (genomics withholds donor data from third-party models) declares a
+# hook that builds each lane's checkout: `git config lane.checkout <absolute executable>`, else .claude/lane-checkout.
+checkout_hook() {
+  local repo="$1"
+  local hook
+  hook=$(git -C "$repo" config --get lane.checkout 2>/dev/null || true)
+  if [ -n "$hook" ]; then
+    case "$hook" in /*) ;; *) die "lane.checkout in $repo must be an absolute path: $hook" ;; esac
+    [ -f "$hook" ] && [ -x "$hook" ] || die "lane.checkout in $repo names $hook, which is not an executable file"
+    printf '%s\n' "$hook"
+  elif [ -f "$repo/.claude/lane-checkout" ] && [ -x "$repo/.claude/lane-checkout" ]; then
+    printf '%s\n' "$repo/.claude/lane-checkout"
+  fi
+}
+
+run_checkout_hook() {
+  local hook="$1"
+  local name="$2"
+  local repo="$3"
+  local brief="$4"
+  local note="$5"
+  local seed_patch="$6"
+  local seed_list="$7"
+  shift 7
+  env LANE_NAME="$name" LANE_REPO="$repo" LANE_BRIEF="$brief" LANE_NOTE="$note" LANE_SEED_PATCH="$seed_patch" \
+    LANE_SEED_FILES="$seed_list" "$hook" "$@" >&2
+}
+
+# The hook builds a new checkout (seeded, when seeds are given) or rechecks an existing one with --verify. The
+# checkout path comes from the validated lane name, never from the hook, so a partial build is removed by that path.
+ensure_hook_checkout() {
+  local name="$1"
+  local repo="$2"
+  local base="$3"
+  local hook="$4"
+  local brief="$5"
+  local seed_patch="$6"
+  local seed_list="$7"
+  local dest
+  local rc
+  dest=$(hook_checkout_path "$name")
+  if [ -e "$dest" ]; then
+    [ -z "$seed_patch" ] && [ -z "$seed_list" ] || die "seeds go only to a new checkout and $dest exists: use a new lane name"
+    [ -d "$dest/.git" ] && [ -s "$dest/.git/lane-checkout-base" ] || die "existing path is not a lane checkout: $dest"
+    run_checkout_hook "$hook" "$name" "$repo" "$brief" "" "" "" --verify "$dest" "$base" ||
+      die "checkout hook $hook refused to reuse $dest (rc=$?)"
+  else
+    "$LANE_BIN_DIR/disk-floor" --path "$LANE_HOME" --what "lane checkout $dest" \
+      --hint "lane ls, then lane reap <finished-lane> --force" || die "disk below the floor; reclaim first"
+    mkdir -p "$LANE_HOME/checkouts"
+    if run_checkout_hook "$hook" "$name" "$repo" "$brief" "" "$seed_patch" "$seed_list" "$dest" "$base"; then
+      rc=0
+    else
+      rc=$?
+    fi
+    if [ "$rc" -ne 0 ] || [ ! -d "$dest/.git" ] || ! git -C "$dest" rev-parse --verify --quiet HEAD >/dev/null; then
+      if [ -e "$dest" ]; then
+        chmod -R u+rwX "$dest" 2>/dev/null || true
+        rm -rf -- "$dest"
+      fi
+      die "checkout hook $hook failed (rc=$rc) or built no git checkout at $dest"
+    fi
+    # lane-retire tells the lane's own commits from the checkout's by this base; lane owns it, not the hook.
+    git -C "$dest" rev-parse HEAD >"$dest/.git/lane-checkout-base"
+  fi
+  printf '%s\n' "$dest"
+}
+
+# K=V lines from <checkout>/.git/lane-checkout.json "env": settings the hook gives every worker (genomics points uv
+# at the shared venv and turns sync off, so a lane never rewrites it).
+checkout_env_lines() {
+  local checkout="$1"
+  [ -f "$checkout/.git/lane-checkout.json" ] || return 0
+  require_python
+  python3 - "$checkout/.git/lane-checkout.json" <<'PY'
+import json
+import re
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    env = json.load(handle).get("env", {})
+if not isinstance(env, dict):
+    sys.exit("lane: lane-checkout.json env must be an object")
+for key, value in sorted(env.items()):
+    if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", key) or key.startswith("LANE_") or not isinstance(value, str) \
+            or any(char in value for char in "\0\n\r"):
+        sys.exit(f"lane: invalid lane-checkout.json env entry {key!r}")
+    print(f"{key}={value}")
 PY
 }
 
@@ -571,9 +725,17 @@ launch_worker() {
   local no_worktree="$8"
   local resume_mode="$9"
   local resume_note="${10}"
+  local checkout_mode="${11}"
+  local checkout_base="${12}"
+  local keep_checkout="${13}"
   local metadata
   local log
   local marker
+  local checkout_state
+  local env_lines
+  local entry
+  local checkout_env_names=""
+  local -a checkout_env=()
   local prompt
   local started_at
   local started_epoch
@@ -582,6 +744,7 @@ launch_worker() {
   metadata=$(metadata_path "$name")
   log=$(log_path "$name")
   marker=$(done_path "$name")
+  checkout_state=$(checkout_state_path "$name")
   if [ -f "$metadata" ]; then
     local old_pid
     local old_started_epoch
@@ -600,9 +763,17 @@ launch_worker() {
     add_cpu_slot_writable_root "$worktree"
   fi
   print_worker_settings "$worker"
+  if [ "$checkout_mode" = hook ]; then
+    env_lines=$(checkout_env_lines "$worktree") || die "invalid checkout env in $worktree/.git/lane-checkout.json"
+    while IFS= read -r entry; do
+      [ -n "$entry" ] || continue
+      checkout_env+=("$entry")
+      checkout_env_names="${checkout_env_names:+$checkout_env_names }${entry%%=*}"
+    done <<<"$env_lines"
+  fi
 
   mkdir -p "$LANE_HOME"
-  rm -f "$marker"
+  rm -f "$marker" "$checkout_state"
   : >"$log"
   prompt=$(build_prompt "$worker" "$brief" "$resume_note")
   started_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
@@ -614,9 +785,13 @@ launch_worker() {
   # UV_CACHE_DIR + --add-dir: the codex sandbox cannot write ~/.cache/uv by default, so uv
   # silently fell back to a per-worktree .uv-cache and re-downloaded the world per lane
   # (13G + 9.7G in two lanes; .claude hit 60G, 2026-09-01). One shared, writable cache.
+  # LANE_CHECKOUT_ENV names the hook's settings, which lane-opencode passes through its scrubbed environment.
   nohup /usr/bin/perl -MPOSIX -e 'POSIX::setsid() or die "lane: setsid: $!\n"; exec { $ARGV[0] } @ARGV or die "lane: exec: $!\n"' \
     env PYTHONUNBUFFERED=1 LANE_WORKER=1 UV_CACHE_DIR="$HOME/.cache/uv" LANE_NAME="$name" LANE_REPO="$repo" LANE_LOG="$log" \
-    LANE_OPENCODE_HELPER="$LANE_BIN_DIR/lane-opencode" bash -c '
+    LANE_OPENCODE_HELPER="$LANE_BIN_DIR/lane-opencode" LANE_RETIRE="$LANE_BIN_DIR/lane-retire" LANE_HOME="$LANE_HOME" \
+    LANE_CHECKOUT_MODE="$checkout_mode" LANE_CHECKOUT_BASE="$checkout_base" LANE_BRANCH="$branch" \
+    LANE_KEEP_CHECKOUT="$keep_checkout" LANE_CHECKOUT_ENV="$checkout_env_names" \
+    ${checkout_env[@]+"${checkout_env[@]}"} bash -c '
     log=$1
     marker=$2
     worker=$3
@@ -624,6 +799,7 @@ launch_worker() {
     brief=$5
     worktree=$6
     resume_mode=$7
+    checkout_state=$8
     cd "$worktree" || exit 125
     case "$worker" in
       codex)
@@ -685,11 +861,29 @@ launch_worker() {
     case "$worktree" in
       */.claude/worktrees/codex-*) rm -rf "$worktree/.uv-cache" "$worktree/.venv" 2>/dev/null || true ;;
     esac
+    # Exit 0 harvests the checkout and removes it (bin/lane-retire); a failed or kept lane keeps it for resume. No
+    # finished checkout piles up: genomics held 13 GB of finished worktrees and 11 GB of clones on 2026-10-24.
+    # The state file is written before the marker, so a watcher that sees the marker reads the final state.
+    state="CHECKOUT=none"
+    if [ "$LANE_CHECKOUT_MODE" = worktree ] || [ "$LANE_CHECKOUT_MODE" = hook ]; then
+      cd / || exit 125
+      keep_reason=""
+      if [ "$LANE_KEEP_CHECKOUT" = true ]; then keep_reason="launched with --keep-checkout"; fi
+      retire_out=$("$LANE_RETIRE" --name "$LANE_NAME" --mode "$LANE_CHECKOUT_MODE" --checkout "$worktree" \
+        --repo "$LANE_REPO" --base "$LANE_CHECKOUT_BASE" --branch "$LANE_BRANCH" --harvest-root "$LANE_HOME" \
+        --log "$log" --brief "$brief" --exit-code "$rc" --keep "$keep_reason" 2>&1)
+      printf "%s\n" "$retire_out" >> "$log"
+      state=$(printf "%s\n" "$retire_out" | tail -n 1)
+      case "$state" in CHECKOUT=*) ;; *) state="CHECKOUT=kept lane-retire failed; its output is in the log" ;; esac
+    fi
+    state_tmp="${checkout_state}.tmp.$$"
+    printf "%s\n" "$state" > "$state_tmp"
+    mv "$state_tmp" "$checkout_state"
     marker_tmp="${marker}.tmp.$$"
     printf "EXIT=%s\n" "$rc" > "$marker_tmp"
     mv "$marker_tmp" "$marker"
     exit "$rc"
-  ' lane-worker "$log" "$marker" "$worker" "$prompt" "$brief" "$worktree" "$resume_mode" </dev/null >/dev/null 2>&1 &
+  ' lane-worker "$log" "$marker" "$worker" "$prompt" "$brief" "$worktree" "$resume_mode" "$checkout_state" </dev/null >/dev/null 2>&1 &
   launch_pid=$!
   disown "$launch_pid" 2>/dev/null || true
   # The worker leads its group only after perl's setsid(); wait for that before the check.
@@ -709,7 +903,7 @@ launch_worker() {
   if [ -z "$started_epoch" ]; then
     echo "lane: warning: could not record started_epoch for process group $launch_pid" >&2
   fi
-  if ! json_write "$metadata" "$name" "$repo" "$worktree" "$brief" "$launch_pid" "$started_at" "$started_epoch" "$worker" "$base" "$branch" "$no_worktree" "$WORKER_SETTINGS" "$resume_note"; then
+  if ! json_write "$metadata" "$name" "$repo" "$worktree" "$brief" "$launch_pid" "$started_at" "$started_epoch" "$worker" "$base" "$branch" "$no_worktree" "$WORKER_SETTINGS" "$resume_note" "$checkout_mode" "$checkout_base" "$keep_checkout"; then
     kill -TERM -- "-$launch_pid" 2>/dev/null || true
     die "could not write metadata: $metadata"
   fi
@@ -718,6 +912,13 @@ launch_worker() {
   echo "  worktree: $worktree"
   echo "  log:      $log"
   echo "  done:     $marker (contains EXIT=<rc>)"
+  if [ "$checkout_mode" != none ]; then
+    if [ "$keep_checkout" = true ]; then
+      echo "  checkout: $checkout_mode, kept after exit (--keep-checkout)"
+    else
+      echo "  checkout: $checkout_mode, harvested to $LANE_HOME/$name.harvest/ and removed on exit 0 (state: $checkout_state)"
+    fi
+  fi
   print_watch "$name" "$log" "$marker"
 }
 
@@ -738,6 +939,16 @@ cmd_run() {
   local existing_no_worktree
   local existing_pid
   local existing_started_epoch
+  local existing_mode
+  local base_given="false"
+  local base_oid
+  local hook
+  local checkout_mode
+  local checkout_base=""
+  local keep_checkout="false"
+  local seed_patch=""
+  local seed_list=""
+  local seed
 
   validate_name "$name"
   while [ "$#" -gt 0 ]; do
@@ -760,11 +971,30 @@ cmd_run() {
       --base)
         [ "$#" -ge 2 ] || die "--base requires a ref"
         base="$2"
+        base_given="true"
         shift 2
         ;;
       --no-worktree)
         no_worktree="true"
         shift
+        ;;
+      --keep-checkout)
+        keep_checkout="true"
+        shift
+        ;;
+      --seed-patch)
+        [ "$#" -ge 2 ] || die "--seed-patch requires a file"
+        validate_plain_value "seed patch" "$2"
+        seed_patch=$(absolute_file "$2" "seed patch")
+        shift 2
+        ;;
+      --seed-file)
+        [ "$#" -ge 2 ] || die "--seed-file requires a file"
+        validate_plain_value "seed file" "$2"
+        seed=$(absolute_file "$2" "seed file")
+        seed_list="${seed_list:+$seed_list
+}$seed"
+        shift 2
         ;;
       *) die "unknown run option: $1" ;;
     esac
@@ -779,6 +1009,21 @@ cmd_run() {
   repo_root=$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null) || die "not a git repository: $repo"
   repo_root=$(cd "$repo_root" && pwd -P)
   git -C "$repo_root" check-ref-format --branch "codex/$name" >/dev/null 2>&1 || die "name does not form a valid git branch: codex/$name"
+  hook=$(checkout_hook "$repo_root")
+  if [ "$no_worktree" = "true" ]; then
+    checkout_mode="none"
+    # A third-party worker in the main checkout would read everything the hook withholds.
+    if [ -n "$hook" ] && [ "$worker" != claude ]; then
+      die "$repo_root declares a checkout hook ($hook): a $worker lane runs only in the checkout it builds, not with --no-worktree"
+    fi
+  elif [ -n "$hook" ]; then
+    checkout_mode="hook"
+  else
+    checkout_mode="worktree"
+  fi
+  if [ "$checkout_mode" != hook ] && { [ -n "$seed_patch" ] || [ -n "$seed_list" ]; }; then
+    die "--seed-patch and --seed-file need a repo checkout hook (git config lane.checkout)"
+  fi
   if [ -f "$(metadata_path "$name")" ]; then
     existing_repo=$(json_get "$(metadata_path "$name")" repo) || die "invalid metadata for $name"
     existing_no_worktree=$(json_get "$(metadata_path "$name")" no_worktree) || die "invalid metadata for $name"
@@ -789,11 +1034,36 @@ cmd_run() {
     fi
     [ "$existing_repo" = "$repo_root" ] || die "$name already belongs to repository $existing_repo"
     [ "$existing_no_worktree" = "$no_worktree" ] || die "$name cannot change its --no-worktree mode"
+    existing_mode=$(lane_checkout_mode "$(metadata_path "$name")") || die "invalid metadata for $name"
+    [ "$existing_mode" = "$checkout_mode" ] || die "$name was recorded with a $existing_mode checkout, not $checkout_mode"
+    # A reused hook checkout keeps the base it was cut at unless --base names one (the hook refuses a different one).
+    if [ "$checkout_mode" = hook ] && [ "$base_given" = false ] && [ -d "$(hook_checkout_path "$name")" ]; then
+      base=$(json_get "$(metadata_path "$name")" base) || die "invalid metadata for $name"
+    fi
   fi
-  worktree_and_branch=$(ensure_worktree "$name" "$repo_root" "$base" "$no_worktree")
-  worktree=${worktree_and_branch%%$'\t'*}
-  branch=${worktree_and_branch#*$'\t'}
-  launch_worker "$name" "$repo_root" "$worktree" "$brief" "$worker" "$base" "$branch" "$no_worktree" false ""
+  base_oid=$(git -C "$repo_root" rev-parse --verify --quiet "$base^{commit}") || die "base is not a commit in $repo_root: $base"
+  case "$checkout_mode" in
+    hook)
+      worktree=$(ensure_hook_checkout "$name" "$repo_root" "$base_oid" "$hook" "$brief" "$seed_patch" "$seed_list")
+      branch=""
+      checkout_base=$(<"$worktree/.git/lane-checkout-base")
+      ;;
+    *)
+      local existed="false"
+      [ -e "$repo_root/.claude/worktrees/codex-$name" ] && existed="true"
+      worktree_and_branch=$(ensure_worktree "$name" "$repo_root" "$base_oid" "$no_worktree")
+      worktree=${worktree_and_branch%%$'\t'*}
+      branch=${worktree_and_branch#*$'\t'}
+      if [ "$checkout_mode" = worktree ]; then
+        if [ "$existed" = true ] && [ -f "$(metadata_path "$name")" ]; then
+          checkout_base=$(json_get_or "$(metadata_path "$name")" checkout_base "")
+        fi
+        [ -n "$checkout_base" ] || checkout_base=$(git -C "$worktree" rev-parse HEAD)
+      fi
+      ;;
+  esac
+  launch_worker "$name" "$repo_root" "$worktree" "$brief" "$worker" "$base_oid" "$branch" "$no_worktree" false "" \
+    "$checkout_mode" "$checkout_base" "$keep_checkout"
 }
 
 lane_report() {
@@ -958,6 +1228,7 @@ cmd_review() {
   local review_pid
   local review_started_epoch
   local rc
+  local harvest=""
   local -a llmx_args
 
   validate_name "$name"
@@ -1001,8 +1272,12 @@ cmd_review() {
   metadata=$(metadata_path "$name")
   [ -f "$metadata" ] || die "unknown lane: $name"
   worktree=$(json_get "$metadata" worktree) || die "invalid metadata: $metadata"
-  [ -d "$worktree" ] || die "worktree no longer exists: $worktree"
-  git -C "$worktree" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "recorded worktree is not a git repository: $worktree"
+  if [ ! -d "$worktree" ]; then
+    # A retired lane is reviewed from its harvest: the same diff, plus any commits it made.
+    harvest=$(latest_harvest "$name") || die "worktree no longer exists and $name has no harvest: $worktree"
+  else
+    git -C "$worktree" rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "recorded worktree is not a git repository: $worktree"
+  fi
   marker=$(review_done_path "$name")
   pid_file=$(review_pid_path "$name")
   lock=$(review_lock_path "$name")
@@ -1024,14 +1299,28 @@ cmd_review() {
       *) ;;
     esac
   fi
-  if [ -z "$report" ]; then
+  if [ -z "$report" ] && [ -n "$harvest" ]; then
+    if [ -f "$harvest/cache/$name-result.md" ]; then report="$harvest/cache/$name-result.md"; fi
+  elif [ -z "$report" ]; then
     report=$(lane_report "$name" "$worktree")
   fi
   brief=$(json_get "$metadata" brief 2>/dev/null || true)
   if [ -n "$brief" ] && [ ! -f "$brief" ]; then
     brief=""
   fi
-  patch=$(build_review_patch "$name" "$worktree" "$report")
+  if [ -n "$harvest" ]; then
+    patch="$LANE_HOME/$name.patch"
+    {
+      printf '# lane review patch: %s\n# harvest: %s\n' "$name" "$harvest"
+      if [ -z "$report" ]; then printf '# no lane report found\n'; fi
+      printf '\n'
+      cat "$harvest/lane.patch"
+      if [ -f "$harvest/commits.patch" ]; then cat "$harvest/commits.patch"; fi
+    } >"$patch.tmp.$$"
+    mv "$patch.tmp.$$" "$patch"
+  else
+    patch=$(build_review_patch "$name" "$worktree" "$report")
+  fi
   echo "lane: report: ${report:-none}"
   echo "lane: brief: ${brief:-none}"
   patch_lines=$(wc -l <"$patch" | tr -d '[:space:]')
@@ -1169,6 +1458,9 @@ cmd_ls() {
     state=$(lane_state "$name" "$pid" "$started_epoch" "$stall_min")
     age=$(format_age "$(log_age_seconds "$(log_path "$name")")")
     dirty=$(dirty_count "$worktree")
+    if [ "$dirty" = "?" ] && grep -q '^CHECKOUT=retired ' "$(checkout_state_path "$name")" 2>/dev/null; then
+      dirty="ret"
+    fi
     review=$(review_state "$name")
     printf '%-20s %-10s %-8s %-21s %-5s %s\n' "$name" "$state" "$age" "$started_at" "$dirty" "$review"
   done
@@ -1237,6 +1529,11 @@ cmd_resume() {
   local no_note="false"
   local consumed
   local consumed_number=1
+  local checkout_mode
+  local checkout_base
+  local keep_checkout
+  local hook
+  local harvest
   validate_name "$name"
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -1263,8 +1560,22 @@ cmd_resume() {
   base=$(json_get "$metadata" base) || die "invalid metadata: $metadata"
   branch=$(json_get "$metadata" branch) || die "invalid metadata: $metadata"
   no_worktree=$(json_get "$metadata" no_worktree) || die "invalid metadata: $metadata"
+  checkout_mode=$(lane_checkout_mode "$metadata") || die "invalid metadata: $metadata"
+  checkout_base=$(json_get_or "$metadata" checkout_base "") || die "invalid metadata: $metadata"
+  keep_checkout=$(json_get_or "$metadata" keep_checkout "false") || die "invalid metadata: $metadata"
   [ -f "$brief" ] || die "brief no longer exists: $brief"
-  [ -d "$worktree" ] || die "worktree no longer exists: $worktree"
+  if [ ! -d "$worktree" ]; then
+    if harvest=$(latest_harvest "$name"); then
+      die "$name was retired (harvest: $harvest); start a new lane from it: lane run <new-name> ... --seed-patch $harvest/lane.patch [--seed-file $harvest/cache/<file>]"
+    fi
+    die "worktree no longer exists: $worktree"
+  fi
+  if [ "$checkout_mode" = hook ]; then
+    hook=$(checkout_hook "$repo")
+    [ -n "$hook" ] || die "$repo no longer declares the checkout hook $name was built by"
+    run_checkout_hook "$hook" "$name" "$repo" "$brief" "$note_source" "" "" --verify "$worktree" "$base" ||
+      die "checkout hook $hook refused to resume in $worktree (rc=$?)"
+  fi
   resolve_worker_settings "$metadata"
   if [ "$no_note" = "false" ]; then
     note_path="$LANE_HOME/$name.resume-note.md"
@@ -1298,7 +1609,8 @@ cmd_resume() {
     fi
   fi
   stop_lane "$name"
-  launch_worker "$name" "$repo" "$worktree" "$brief" "$worker" "$base" "$branch" "$no_worktree" true "$note_path"
+  launch_worker "$name" "$repo" "$worktree" "$brief" "$worker" "$base" "$branch" "$no_worktree" true "$note_path" \
+    "$checkout_mode" "$checkout_base" "$keep_checkout"
 }
 
 cmd_reap() {
@@ -1313,7 +1625,11 @@ cmd_reap() {
   local repo
   local worktree
   local branch
-  local no_worktree
+  local brief
+  local checkout_mode
+  local checkout_base
+  local retire_out
+  local last
   validate_name "$name"
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -1329,38 +1645,55 @@ cmd_reap() {
   pid=$(json_get "$metadata" pid) || die "invalid metadata: $metadata"
   started_epoch=$(json_get "$metadata" started_epoch 2>/dev/null || true)
   state=$(lane_state "$name" "$pid" "$started_epoch" "$DEFAULT_STALL_MIN")
-  case "$state" in DONE:\?) die "refusing to reap $name with an invalid completion marker" ;; DONE:*) ;; *) die "refusing to reap $name in state $state" ;; esac
+  # DEAD is a stopped or crashed lane: no process, no marker. Its checkout is harvested like a finished one.
+  case "$state" in DONE:\?) die "refusing to reap $name with an invalid completion marker" ;; DONE:* | DEAD) ;; *) die "refusing to reap $name in state $state" ;; esac
   repo=$(json_get "$metadata" repo) || die "invalid metadata: $metadata"
   worktree=$(json_get "$metadata" worktree) || die "invalid metadata: $metadata"
   branch=$(json_get "$metadata" branch) || die "invalid metadata: $metadata"
-  no_worktree=$(json_get "$metadata" no_worktree) || die "invalid metadata: $metadata"
-  [ "$no_worktree" = "false" ] || die "refusing to reap a --no-worktree lane"
-  [ "$worktree" = "$repo/.claude/worktrees/codex-$name" ] || die "refusing unexpected worktree path: $worktree"
-  [ "$branch" = "codex/$name" ] || die "refusing unexpected branch: $branch"
-  [ -d "$worktree" ] || die "worktree no longer exists: $worktree"
+  brief=$(json_get "$metadata" brief) || die "invalid metadata: $metadata"
+  checkout_mode=$(lane_checkout_mode "$metadata") || die "invalid metadata: $metadata"
+  checkout_base=$(json_get_or "$metadata" checkout_base "") || die "invalid metadata: $metadata"
+  case "$checkout_mode" in
+    none) die "refusing to reap a --no-worktree lane" ;;
+    hook) [ "$worktree" = "$(hook_checkout_path "$name")" ] || die "refusing unexpected checkout path: $worktree" ;;
+    *)
+      [ "$worktree" = "$repo/.claude/worktrees/codex-$name" ] || die "refusing unexpected worktree path: $worktree"
+      [ "$branch" = "codex/$name" ] || die "refusing unexpected branch: $branch"
+      ;;
+  esac
 
-  echo "lane: git diff --stat for $worktree"
-  git -C "$worktree" diff HEAD --stat --
-  echo "lane: untracked files"
-  git -C "$worktree" ls-files --others --exclude-standard
-  if [ "$force" != "true" ]; then
-    echo "lane: retained $name; pass --force to remove its worktree and branch"
-    return
+  if [ -d "$worktree" ]; then
+    echo "lane: git diff --stat for $worktree"
+    git -C "$worktree" diff --no-ext-diff HEAD --stat --
+    echo "lane: untracked files"
+    git -C "$worktree" ls-files --others --exclude-standard
+    if [ "$force" != "true" ]; then
+      echo "lane: retained $name; pass --force to harvest it into $LANE_HOME/$name.harvest/ and remove its checkout"
+      return
+    fi
+    if lane_group_is_alive "$pid" "$started_epoch"; then
+      wait_for_group_exit "$pid" "$started_epoch" 10 || die "refusing to reap while process group $pid is still exiting"
+    fi
+    retire_out=$("$LANE_BIN_DIR/lane-retire" --reap --name "$name" --mode "$checkout_mode" --checkout "$worktree" \
+      --repo "$repo" --base "$checkout_base" --branch "$branch" --harvest-root "$LANE_HOME" \
+      --log "$(log_path "$name")" --brief "$brief") || die "lane-retire refused $name: $retire_out"
+    printf '%s\n' "$retire_out"
+    last=$(printf '%s\n' "$retire_out" | tail -n 1)
+    case "$last" in CHECKOUT=retired\ *) ;; *) die "kept $name: ${last#CHECKOUT=}" ;; esac
+  else
+    echo "lane: $name has no checkout left: $(cat "$(checkout_state_path "$name")" 2>/dev/null || echo "no retire record")"
+    if [ "$force" != "true" ]; then
+      echo "lane: retained $name's metadata and log; pass --force to drop them (its harvest stays)"
+      return
+    fi
+    if git -C "$repo" show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null &&
+      [ "$checkout_mode" = worktree ]; then
+      echo "lane: branch $branch stays: lane-retire kept it because no other ref holds its commits"
+    fi
   fi
-  if lane_group_is_alive "$pid" "$started_epoch"; then
-    wait_for_group_exit "$pid" "$started_epoch" 10 || die "refusing to reap while process group $pid is still exiting"
-  fi
-  # Lanes carry read-only trees (the genomics pre-commit's .claude/cache/index-trees, source
-  # epochs). Deleting inside them needs write on each directory, and `git worktree remove`
-  # unregisters the tree before it deletes, so a permission error strands the files where no
-  # worktree listing sees them. chmod -R never follows a symlink out of the tree.
-  chmod -R u+rwX "$worktree"
-  git -C "$repo" worktree remove --force "$worktree"
-  if git -C "$repo" show-ref --verify --quiet "refs/heads/$branch"; then
-    git -C "$repo" branch -D -- "$branch"
-  fi
-  rm -f "$metadata" "$(done_path "$name")" "$(log_path "$name")" "$LANE_HOME/$name.opencode-session"
-  echo "lane: reaped $name"
+  rm -f "$metadata" "$(done_path "$name")" "$(log_path "$name")" "$LANE_HOME/$name.opencode-session" \
+    "$(checkout_state_path "$name")"
+  echo "lane: reaped $name; harvests stay in $LANE_HOME/$name.harvest/"
 }
 
 main() {

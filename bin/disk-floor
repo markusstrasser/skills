@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# disk-floor — refuse a new checkout when the disk is low. Checkout creators (lane, genomics' oc_lane.sh,
-# filtered_clone.sh and build_chain.py) call it before `git worktree add` or a clone. Below the floor it prints the
+# disk-floor — refuse a new checkout when the disk is low. Checkout creators (lane, and in genomics
+# review_filtered.sh and build_chain.py) call it before `git worktree add` or a clone. Below the floor it prints the
 # free space and the reclaim commands and exits 75, so the launch fails loud instead of the lane dying on ENOSPC.
 # Why: lane clones and worktrees took the laptop to 9.8 GiB free on 2026-10-24, under genomics' 12 GiB landing floor;
 # OpenCode lanes had already died on ENOSPC.

@@ -18,7 +18,7 @@ UNRELATED_PID=""
 
 cleanup() {
   local name
-  for name in first hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride ocargs ocquota failure rvcache rvown rvnone; do
+  for name in first hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride ocargs ocquota failure rvcache rvown rvnone retire1 retirefail retirebusy hook1 hook2 ochook; do
     if [ -f "$LANE_HOME/$name.json" ]; then
       "$LANE" stop "$name" >/dev/null 2>&1 || true
     fi
@@ -101,6 +101,15 @@ dirty_for() {
 review_for() {
   local name="$1"
   "$LANE" ls | awk -v wanted="$name" '$1 == wanted { print $6 }'
+}
+
+latest_harvest_of() {
+  local entry
+  local latest=""
+  for entry in "$LANE_HOME/$1.harvest"/*Z; do
+    [ -d "$entry" ] && latest="$entry"
+  done
+  printf '%s\n' "$latest"
 }
 
 arg_after() {
@@ -349,7 +358,7 @@ assert_eq "$expected_claude" "$(<"$LANE_CAPTURE/claude.args")" "empty exports re
 echo "test: opencode worker scrubs the env, writes its guard, resumes a transport error and logs usage"
 export DEEPSEEK_API_KEY_METERED="must-not-leak" LANE_OPENCODE_RETRY_SLEEP=0 LANE_OPENCODE_PROVIDER_HOST=""
 touch "$LANE_CAPTURE/opencode-transport-once"
-"$LANE" run ocargs --repo "$REPO" --brief "$BRIEF" --worker opencode >/dev/null
+"$LANE" run ocargs --repo "$REPO" --brief "$BRIEF" --worker opencode --keep-checkout >/dev/null
 wait_for_file "$LANE_HOME/ocargs.done"
 unset DEEPSEEK_API_KEY_METERED
 OC_WORKTREE="$REPO_REAL/.claude/worktrees/codex-ocargs"
@@ -431,7 +440,7 @@ wait_for_file "$LANE_HOME/failure.done"
 assert_eq "EXIT=0" "$(<"$LANE_HOME/failure.done")" "resume relaunched despite a closed reader"
 
 echo "test: run reports RUNNING and creates its isolated worktree"
-run_output=$(LANE_FAKE_HOLD="$TEST_TMP/release-first" "$LANE" run first --repo "$REPO" --brief "$BRIEF" --worker fake)
+run_output=$(LANE_FAKE_HOLD="$TEST_TMP/release-first" "$LANE" run first --repo "$REPO" --brief "$BRIEF" --worker fake --keep-checkout)
 grep -q '^watch: while ' <<<"$run_output" || fail "run did not print a watch loop"
 assert_eq "RUNNING" "$(state_for first)" "initial state"
 [ -d "$REPO/.claude/worktrees/codex-first" ] || fail "worktree was not created"
@@ -683,7 +692,7 @@ if "$LANE" ls --stall-min nope >/dev/null 2>&1; then
 fi
 
 echo "test: review attaches the lane's cache result, not an unchanged tracked report made newest by mtime"
-"$LANE" run rvcache --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+"$LANE" run rvcache --repo "$REPO" --brief "$BRIEF" --worker fake --keep-checkout >/dev/null
 wait_for_file "$LANE_HOME/rvcache.done"
 RVCACHE_WT="$REPO_REAL/.claude/worktrees/codex-rvcache"
 mkdir -p "$RVCACHE_WT/docs/audit/x" "$RVCACHE_WT/.claude/cache"
@@ -703,7 +712,7 @@ grep -Fxq "$BRIEF_REAL" "$LANE_CAPTURE/rvcache.args" || fail "review omitted the
 grep -Fxq "lane: brief: $BRIEF_REAL" <<<"$rv_stdout" || fail "review did not print the attached brief"
 
 echo "test: review attaches a report the lane added in its own diff"
-"$LANE" run rvown --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+"$LANE" run rvown --repo "$REPO" --brief "$BRIEF" --worker fake --keep-checkout >/dev/null
 wait_for_file "$LANE_HOME/rvown.done"
 RVOWN_WT="$REPO_REAL/.claude/worktrees/codex-rvown"
 mkdir -p "$RVOWN_WT/docs/audit/topic"
@@ -712,12 +721,177 @@ LLMX_CAPTURE_NAME=rvown "$LANE" review rvown --out "$TEST_TMP/rvown.md" >/dev/nu
 grep -Fxq "$RVOWN_WT/docs/audit/topic/new-report.md" "$LANE_CAPTURE/rvown.args" || fail "review omitted the lane's own report"
 
 echo "test: review with no report fails loud in header and prompt"
-"$LANE" run rvnone --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+"$LANE" run rvnone --repo "$REPO" --brief "$BRIEF" --worker fake --keep-checkout >/dev/null
 wait_for_file "$LANE_HOME/rvnone.done"
 rv_stdout=$(LLMX_CAPTURE_NAME=rvnone "$LANE" review rvnone --out "$TEST_TMP/rvnone.md")
 grep -Fxq '# no lane report found' "$LANE_HOME/rvnone.patch" || fail "patch header omitted no-report note"
 grep -Fq 'No lane report was found' "$LANE_CAPTURE/rvnone.args" || fail "prompt omitted no-report sentence"
 assert_eq "2" "$(grep -c '^-f$' "$LANE_CAPTURE/rvnone.args")" "no-report file arguments (patch + brief)"
 grep -Fxq "lane: report: none" <<<"$rv_stdout" || fail "review did not print report: none"
+
+echo "test: a finished worktree lane is harvested, then its worktree and branch are removed"
+LANE_FAKE_HOLD="$TEST_TMP/release-retire1" "$LANE" run retire1 --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+RETIRE_WT="$REPO_REAL/.claude/worktrees/codex-retire1"
+printf '%s\n' "lane edit" >>"$RETIRE_WT/tracked.txt"
+mkdir -p "$RETIRE_WT/.claude/cache"
+printf '%s\n' "**Verdict:** DONE" >"$RETIRE_WT/.claude/cache/retire1-result.md"
+touch "$TEST_TMP/release-retire1"
+wait_for_file "$LANE_HOME/retire1.done"
+assert_eq "EXIT=0" "$(<"$LANE_HOME/retire1.done")" "retired lane marker"
+grep -q '^CHECKOUT=retired ' "$LANE_HOME/retire1.checkout-state" || fail "retire1 was not retired: $(<"$LANE_HOME/retire1.checkout-state")"
+[ ! -e "$RETIRE_WT" ] || fail "retired worktree still exists"
+git -C "$REPO" show-ref --verify --quiet refs/heads/codex/retire1 && fail "retired lane left its branch"
+RETIRE_HARVEST=$(sed -n '1s/^CHECKOUT=retired //p' "$LANE_HOME/retire1.checkout-state")
+grep -Fq '+lane edit' "$RETIRE_HARVEST/lane.patch" || fail "harvest patch lacks the lane's edit"
+assert_eq "**Verdict:** DONE" "$(<"$RETIRE_HARVEST/cache/retire1-result.md")" "harvested result"
+gzip -dc "$RETIRE_HARVEST/run.log.gz" | grep -Fxq hi || fail "harvest lacks the lane log"
+assert_file "$RETIRE_HARVEST/brief.md"
+assert_eq "ret" "$(dirty_for retire1)" "ls marks a retired lane"
+# The patch reproduces the lane's tree on the base it was cut from.
+git -C "$REPO" worktree add -q --detach "$TEST_TMP/replay" HEAD
+git -C "$TEST_TMP/replay" apply --binary "$RETIRE_HARVEST/lane.patch"
+grep -Fxq "lane edit" "$TEST_TMP/replay/tracked.txt" || fail "harvest patch does not replay the edit"
+git -C "$REPO" worktree remove --force "$TEST_TMP/replay"
+
+echo "test: a retired lane reviews from its harvest and refuses resume"
+LLMX_CAPTURE_NAME=retire1 "$LANE" review retire1 --out "$TEST_TMP/retire1.md" >/dev/null
+grep -Fq '# harvest: ' "$LANE_HOME/retire1.patch" || fail "harvest review patch lacks its header"
+grep -Fq '+lane edit' "$LANE_HOME/retire1.patch" || fail "harvest review patch lacks the edit"
+grep -Fxq "$RETIRE_HARVEST/cache/retire1-result.md" "$LANE_CAPTURE/retire1.args" || fail "harvest review omitted the result"
+if resume_error=$("$LANE" resume retire1 --no-note 2>&1); then fail "resume accepted a retired lane"; fi
+grep -Fq "was retired" <<<"$resume_error" || fail "resume did not name the retirement: $resume_error"
+reap_output=$("$LANE" reap retire1 --force)
+grep -Fq "harvests stay in" <<<"$reap_output" || fail "reap of a retired lane did not finish"
+assert_no_file "$LANE_HOME/retire1.json"
+[ -d "$RETIRE_HARVEST" ] || fail "reap removed the harvest"
+
+echo "test: a failed lane keeps its worktree"
+LANE_FAKE_HOLD="$TEST_TMP/release-retirefail" "$LANE" run retirefail --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+printf '%s\n' "unfinished" >>"$REPO_REAL/.claude/worktrees/codex-retirefail/tracked.txt"
+python3 - "$LANE_HOME/retirefail.json" <<'PY'
+import json
+import sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+assert data["checkout"] == "worktree" and data["keep_checkout"] is False and len(data["checkout_base"]) == 40, data
+PY
+"$LANE" stop retirefail >/dev/null
+[ -d "$REPO_REAL/.claude/worktrees/codex-retirefail" ] || fail "a stopped lane lost its worktree"
+reap_output=$("$LANE" reap retirefail --force)
+grep -q '^CHECKOUT=retired ' <<<"$reap_output" || fail "reap of a stopped lane did not harvest it"
+grep -Fq '+unfinished' "$(latest_harvest_of retirefail)/lane.patch" || fail "stopped lane's harvest lacks its edit"
+[ ! -e "$REPO_REAL/.claude/worktrees/codex-retirefail" ] || fail "reap left the stopped lane's worktree"
+
+echo "test: a process inside the checkout keeps it"
+LANE_FAKE_HOLD="$TEST_TMP/release-retirebusy" "$LANE" run retirebusy --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+(cd "$REPO_REAL/.claude/worktrees/codex-retirebusy" && exec sleep 60) &
+BUSY_PID=$!
+touch "$TEST_TMP/release-retirebusy"
+wait_for_file "$LANE_HOME/retirebusy.done"
+grep -q "^CHECKOUT=kept busy: pid $BUSY_PID " "$LANE_HOME/retirebusy.checkout-state" ||
+  fail "busy checkout was not kept: $(<"$LANE_HOME/retirebusy.checkout-state")"
+[ -d "$REPO_REAL/.claude/worktrees/codex-retirebusy" ] || fail "busy checkout was removed"
+kill "$BUSY_PID"
+wait "$BUSY_PID" 2>/dev/null || true
+"$LANE" reap retirebusy --force >/dev/null
+
+echo "test: a repo checkout hook builds, seeds, rechecks and retires its lanes' checkouts"
+HOOK="$TEST_TMP/lane-checkout-hook"
+cat >"$HOOK" <<'EOF'
+#!/usr/bin/env bash
+# Test hook: a plain clone at the base, the seeds applied, two ignored inputs provided, settings in
+# .git/lane-checkout.json.
+set -eu
+if [ "$1" = --verify ]; then
+  [ "$(cat "$2/.git/lane-main-base")" = "$3" ] || { echo "hook: cut from another base, not $3" >&2; exit 87; }
+  exit 0
+fi
+git clone -q --no-local --no-checkout "$LANE_REPO" "$1"
+git -C "$1" -c advice.detachedHead=false checkout -q --detach "$2"
+printf '%s\n' "$2" >"$1/.git/lane-main-base"
+mkdir -p "$1/.claude/cache" "$1/.git/info" "$1/inputs"
+if [ -n "$LANE_SEED_PATCH" ]; then git -C "$1" apply --binary "$LANE_SEED_PATCH"; fi
+while IFS= read -r seed; do
+  if [ -n "$seed" ]; then cp "$seed" "$1/.claude/cache/"; fi
+done <<<"$LANE_SEED_FILES"
+printf '%s\n' "/inputs/" >>"$1/.git/info/exclude"
+printf '%s\n' "input the lane leaves alone" >"$1/inputs/same.txt"
+printf '%s\n' "input the lane edits" >"$1/inputs/edited.txt"
+same=$(shasum -a 256 "$1/inputs/same.txt" | cut -d' ' -f1)
+edited=$(shasum -a 256 "$1/inputs/edited.txt" | cut -d' ' -f1)
+printf '{"env": {"HOOK_TEST_VAR": "from-hook"}, "provided": {"inputs/same.txt": "%s", "inputs/edited.txt": "%s"}, "opencode_permissions": [{"action": "shell", "resource": "*hook-denied*", "effect": "deny"}]}\n' \
+  "$same" "$edited" >"$1/.git/lane-checkout.json"
+EOF
+chmod +x "$HOOK"
+git -C "$REPO" config lane.checkout "$HOOK"
+if "$LANE" run hookinline --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null 2>&1; then
+  fail "a codex lane ran --no-worktree in a repo with a checkout hook"
+fi
+LANE_FAKE_HOLD="$TEST_TMP/release-hook1" "$LANE" run hook1 --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+HOOK1="$LANE_HOME/checkouts/hook1"
+assert_eq "hook" "$(json_value "$LANE_HOME/hook1.json" checkout)" "recorded checkout mode"
+assert_eq "$(git -C "$HOOK1" rev-parse HEAD)" "$(<"$HOOK1/.git/lane-checkout-base")" "lane-owned checkout base"
+printf '%s\n' "hook edit" >>"$HOOK1/tracked.txt"
+printf '%s\n' "hook notes" >"$HOOK1/.claude/cache/hook1-notes.md"
+printf '%s\n' "lane change" >>"$HOOK1/inputs/edited.txt"
+touch "$TEST_TMP/release-hook1"
+wait_for_file "$LANE_HOME/hook1.done"
+grep -q '^CHECKOUT=retired ' "$LANE_HOME/hook1.checkout-state" || fail "hook checkout was not retired: $(<"$LANE_HOME/hook1.checkout-state")"
+[ ! -e "$HOOK1" ] || fail "retired hook checkout still exists"
+HOOK1_HARVEST=$(latest_harvest_of hook1)
+grep -Fq '+hook edit' "$HOOK1_HARVEST/lane.patch" || fail "hook harvest lacks the edit"
+# A provided input the lane left alone is named in MANIFEST.json, not copied; one it edited is its work.
+assert_no_file "$HOOK1_HARVEST/ignored/inputs/same.txt"
+grep -Fxq "lane change" "$HOOK1_HARVEST/ignored/inputs/edited.txt" || fail "harvest lost the lane's edit of an input"
+python3 - "$HOOK1_HARVEST/MANIFEST.json" <<'PY' || fail "MANIFEST does not name the unchanged input"
+import json
+import sys
+unchanged = json.load(open(sys.argv[1], encoding="utf-8"))["provided_unchanged"]
+sys.exit(0 if list(unchanged) == ["inputs/same.txt"] and len(unchanged["inputs/same.txt"]) == 64 else 1)
+PY
+
+echo "test: seeds start a new hook lane from a harvest, and a kept checkout survives its exit"
+LANE_FAKE_HOLD="$TEST_TMP/release-hook2" "$LANE" run hook2 --repo "$REPO" --brief "$BRIEF" --worker fake --keep-checkout \
+  --seed-patch "$HOOK1_HARVEST/lane.patch" --seed-file "$HOOK1_HARVEST/cache/hook1-notes.md" >/dev/null
+HOOK2="$LANE_HOME/checkouts/hook2"
+grep -Fxq "hook edit" "$HOOK2/tracked.txt" || fail "seed patch was not applied"
+assert_eq "hook notes" "$(<"$HOOK2/.claude/cache/hook1-notes.md")" "seed file"
+touch "$TEST_TMP/release-hook2"
+wait_for_file "$LANE_HOME/hook2.done"
+grep -q '^CHECKOUT=kept launched with --keep-checkout' "$LANE_HOME/hook2.checkout-state" || fail "kept checkout state"
+[ -d "$HOOK2" ] || fail "--keep-checkout lost the checkout"
+if "$LANE" run hook2 --repo "$REPO" --brief "$BRIEF" --worker fake --seed-patch "$HOOK1_HARVEST/lane.patch" >/dev/null 2>&1; then
+  fail "seeds were applied to an existing checkout"
+fi
+if "$LANE" run hook2 --repo "$REPO" --brief "$BRIEF" --worker fake --base HEAD~0 --keep-checkout >/dev/null 2>&1; then
+  : # same base: the hook accepts the reuse
+else
+  fail "the hook refused a reuse at the same base"
+fi
+wait_for_file "$LANE_HOME/hook2.done"
+git -C "$REPO" commit -q --allow-empty -m "moved main"
+if "$LANE" run hook2 --repo "$REPO" --brief "$BRIEF" --worker fake --base HEAD >/dev/null 2>&1; then
+  fail "the hook accepted a reuse at a different base"
+fi
+"$LANE" reap hook2 --force >/dev/null
+[ ! -e "$HOOK2" ] || fail "reap left the hook checkout"
+
+echo "test: an opencode lane in a hook checkout gets the hook's env and guard rules"
+"$LANE" run ochook --repo "$REPO" --brief "$BRIEF" --worker opencode --keep-checkout >/dev/null
+wait_for_file "$LANE_HOME/ochook.done"
+grep -Fxq "HOOK_TEST_VAR=from-hook" "$LANE_CAPTURE/opencode.env" || fail "opencode did not get the hook's env"
+python3 - "$LANE_HOME/checkouts/ochook/.opencode/opencode.json" "$REPO_REAL" <<'PY' || fail "hook guard rules missing"
+import json
+import sys
+
+rules = json.load(open(sys.argv[1]))["permissions"]
+required = [
+    {"action": "shell", "resource": "*hook-denied*", "effect": "deny"},
+    {"action": "edit", "resource": ".git/lane-checkout.json", "effect": "deny"},
+    {"action": "external_directory", "resource": sys.argv[2] + "/**", "effect": "deny"},
+]
+sys.exit(0 if all(rule in rules for rule in required) else 1)
+PY
+"$LANE" reap ochook --force >/dev/null
+git -C "$REPO" config --unset lane.checkout
 
 echo "PASS: lane lifecycle"
