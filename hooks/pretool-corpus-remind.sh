@@ -19,6 +19,13 @@ fi
 
 INPUT="${CLAUDE_TOOL_INPUT:-$(cat)}"
 
+# Fast path: a Bash call naming no paper host or DOI-like token cannot trigger this.
+# The full path cost 282 ms on every Bash call for ~0.2% relevance (hook audit 2026-10-24).
+if [[ "$INPUT" =~ \"tool_name\"[[:space:]]*:[[:space:]]*\"Bash\" ]] \
+   && ! [[ "$INPUT" =~ 10\.[0-9]{4,9}/|[Aa]r[Xx]iv|pubmed|pmid|[bm]ed[Rr]xiv|biorxiv|doi\.org ]]; then
+  exit 0
+fi
+
 # Session-scoped state — one reminder per identifier-prefix. The session id comes from the
 # envelope: CLAUDE_SESSION_ID is never set for hook processes, so this was "default" for every
 # session on the machine and "once per session" meant once per reboot.

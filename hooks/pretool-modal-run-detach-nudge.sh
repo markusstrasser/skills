@@ -12,6 +12,8 @@
 # e.g. dry-runs, smokes). Suppressed for subagents (parents own launch discipline).
 
 INPUT=$(cat)
+# Fast path: 137 ms per Bash call for a nudge that fires on <0.1% (hook audit 2026-10-24).
+case "$INPUT" in *"modal run"*) ;; *) exit 0;; esac
 
 . "$(dirname "$0")/lib_hook_identity.sh" 2>/dev/null || exit 0
 hook_identity "$INPUT"
