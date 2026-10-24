@@ -196,6 +196,7 @@ host=${LANE_OPENCODE_PROVIDER_HOST-$host}
 tmp="/tmp/lane-opencode/$name"
 mkdir -p "$tmp" || exit 98
 write_guard || exit 96
+echo "lane-opencode: model $model"
 
 resume_prompt="The previous attempt of this session ended on a transport error or a dropped connection, not by your \
 choice. Continue the task from where you stopped: check git status and your result file first, then finish every \

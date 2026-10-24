@@ -8,7 +8,7 @@ mkdir -p "$TEST_TMP/lanes"
 LANE_HOME=$(cd "$TEST_TMP/lanes" && pwd -P)
 export LANE_HOME
 unset LANE_CODEX_MODEL LANE_CODEX_EFFORT LANE_CODEX_ADD_DIRS LANE_CODEX_NETWORK
-unset LANE_CLAUDE_MODEL LANE_CLAUDE_EFFORT
+unset LANE_CLAUDE_MODEL LANE_CLAUDE_EFFORT LANE_OPENCODE_MODEL
 REPO="$TEST_TMP/repo"
 BRIEF="$TEST_TMP/brief.md"
 FAKE_BIN="$TEST_TMP/bin"
@@ -364,8 +364,12 @@ unset DEEPSEEK_API_KEY_METERED
 OC_WORKTREE="$REPO_REAL/.claude/worktrees/codex-ocargs"
 assert_eq "EXIT=0" "$(<"$LANE_HOME/ocargs.done")" "opencode marker after one transport resume"
 assert_eq "$OC_WORKTREE" "$(<"$LANE_CAPTURE/opencode.cwd")" "opencode cwd"
-expected_oc=$(printf '%s\n' run --standalone --auto --format json --thinking -m deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017 --title ocargs)
+# LANE_OPENCODE_MODEL is unset, so the model is lane-opencode's own default: bin/lane passes and records none.
+oc_default=$(sed -n 's/^model=\${LANE_OPENCODE_MODEL:-\(.*\)}$/\1/p' "$ROOT/bin/lane-opencode")
+[ -n "$oc_default" ] || fail "lane-opencode names no default model"
+expected_oc=$(printf '%s\n' run --standalone --auto --format json --thinking -m "$oc_default" --title ocargs)
 assert_eq "$expected_oc" "$(head -10 "$LANE_CAPTURE/opencode.args.0")" "opencode arguments"
+grep -Fxq "lane-opencode: model $oc_default" "$LANE_HOME/ocargs.log" || fail "opencode log does not name its model"
 sed -n 11p "$LANE_CAPTURE/opencode.args.0" | grep -Fxq "Do the fake task." || fail "opencode prompt lacks the brief"
 grep -Fq "do not stage, commit, merge, stash or switch branches" "$LANE_CAPTURE/opencode.args.0" || fail "opencode prompt lacks the git contract"
 assert_eq "ses_fake" "$(arg_after --session "$LANE_CAPTURE/opencode.args.1")" "transport resume continues the session"
@@ -393,7 +397,7 @@ PY
 assert_eq "" "$(git -C "$OC_WORKTREE" status --porcelain)" "opencode guard is excluded from git status"
 grep -Fxq "lane-opencode: usage steps=1 input=100 output=20 reasoning=7 cache_read=50 cache_write=0 cost_list=0.0100" \
   "$LANE_HOME/ocargs.log" || fail "opencode usage line missing"
-assert_eq "deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017" "$(worker_setting "$LANE_HOME/ocargs.json" opencode_model)" "recorded opencode model"
+assert_eq "" "$(worker_setting "$LANE_HOME/ocargs.json" opencode_model)" "bin/lane records no opencode model of its own"
 
 echo "test: an exhausted opencode balance exits 86 without a retry"
 touch "$LANE_CAPTURE/opencode-quota"

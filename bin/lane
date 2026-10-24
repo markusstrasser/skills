@@ -26,7 +26,7 @@ usage:
        seeds go only to a new checkout; <dest>/.git/lane-checkout.json may name {"env": {...}} for the worker and
        {"provided": {<path>: <sha256>}} for inputs the hook copied in, which a harvest skips while unchanged)
       (claude worker: LANE_CLAUDE_MODEL=<m> LANE_CLAUDE_EFFORT=<e> env override the default opus/default effort)
-      (opencode worker: DeepSeek V4.1 Flash on DeepInfra, thinking on; LANE_OPENCODE_MODEL=<provider/model> overrides it)
+      (opencode worker: bin/lane-opencode's default model, DeepSeek V4.1 Flash with thinking on; LANE_OPENCODE_MODEL=<provider/model> overrides it)
       (opencode worker: no sandbox; a scrubbed env and a deny-list guard it, see bin/lane-opencode; exit 86 = balance exhausted)
       (codex worker: LANE_CODEX_MODEL=<m> LANE_CODEX_EFFORT=<e> env override the default gpt-6-astra/config effort)
       (codex worker: LANE_CODEX_ADD_DIRS=<a:b> adds writable roots; LANE_CODEX_NETWORK=1 enables network; git metadata stays read-only, so the parent merges and commits)
@@ -129,7 +129,8 @@ defaults = {
     "codex_network": "0",
     "claude_model": "opus",
     "claude_effort": "",
-    "opencode_model": "deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017",
+    # Empty: bin/lane-opencode's own default applies, so the model is defined once (a copy here overrode it).
+    "opencode_model": "",
 }
 recorded = {}
 if sys.argv[1]:
@@ -177,7 +178,7 @@ print_worker_settings() {
       echo "lane: settings claude_model=$LANE_CLAUDE_MODEL claude_effort=${LANE_CLAUDE_EFFORT:-default}"
       ;;
     opencode)
-      echo "lane: settings opencode_model=$LANE_OPENCODE_MODEL"
+      echo "lane: settings opencode_model=${LANE_OPENCODE_MODEL:-default}"
       ;;
     *)
       echo "lane: settings codex_model=$LANE_CODEX_MODEL codex_effort=${LANE_CODEX_EFFORT:-config} add_dirs=$LANE_CODEX_ADD_DIRS network=$LANE_CODEX_NETWORK"
