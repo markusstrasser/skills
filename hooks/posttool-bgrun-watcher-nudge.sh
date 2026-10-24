@@ -29,7 +29,9 @@ STDOUT=$(printf '%s' "$INPUT" | jq -r '
 # Prefer the launch output: it supplies the resolved, shell-quoted BGRUN_DIR.
 NAME=$(printf '%s\n' "$STDOUT" | sed -n 's/^bgrun: \([A-Za-z0-9._-][A-Za-z0-9._-]*\) pid=.*/\1/p' | head -n 1)
 if [ -z "$NAME" ]; then
-  NAME=$(printf '%s' "$CMD" | sed -n 's/.*bgrun  *\([A-Za-z0-9._-][A-Za-z0-9._-]*\)  *-- .*/\1/p')
+  # A launch is `bgrun NAME -- cmd`; a name never starts with "-" (`bgrun --wait x`
+  # was read as a launch of '--wait' 77 times, hook audit 2026-10-24).
+  NAME=$(printf '%s' "$CMD" | sed -nE 's/(^|.*[[:space:];&|/])bgrun[[:space:]]+([A-Za-z0-9_][A-Za-z0-9._-]*)[[:space:]]+--([[:space:]].*|$)/\2/p' | head -n 1)
 fi
 [ -z "$NAME" ] && exit 0
 WATCH=$(printf '%s\n' "$STDOUT" | sed -n 's/^  watch: //p' | head -n 1)
