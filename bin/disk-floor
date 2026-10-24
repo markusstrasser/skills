@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# disk-floor — refuse a new checkout when the disk is low. Checkout creators (lane, genomics' oc_lane.sh,
+# filtered_clone.sh and build_chain.py) call it before `git worktree add` or a clone. Below the floor it prints the
+# free space and the reclaim commands and exits 75, so the launch fails loud instead of the lane dying on ENOSPC.
+# Why: lane clones and worktrees took the laptop to 9.8 GiB free on 2026-10-24, under genomics' 12 GiB landing floor;
+# OpenCode lanes had already died on ENOSPC.
+#
+# usage: disk-floor [--path DIR] [--min-gib N] [--what TEXT] [--hint COMMAND]...
+# DISK_FLOOR_GIB (default 15) is the one floor every creator shares; --min-gib overrides it for one call.
+set -u
+
+path=$HOME
+min=${DISK_FLOOR_GIB:-15}
+what="a new checkout"
+hints=()
+while [ $# -gt 0 ]; do
+  case $1 in
+    --path) path=$2; shift 2 ;;
+    --min-gib) min=$2; shift 2 ;;
+    --what) what=$2; shift 2 ;;
+    --hint) hints+=("$2"); shift 2 ;;
+    -h | --help) sed -n '2,10p' "$0"; exit 0 ;;
+    *) echo "disk-floor: unknown argument $1" >&2; exit 2 ;;
+  esac
+done
+
+free_kib=$(df -Pk "$path" 2>/dev/null | awk 'NR == 2 {print $4}')
+case $free_kib in
+  '' | *[!0-9]*) echo "disk-floor: [DEGRADED] df gave no answer for $path; refusing $what" >&2; exit 75 ;;
+esac
+free_gib=$((free_kib / 1048576))
+[ "$free_gib" -lt "$min" ] || exit 0
+{
+  echo "DISK LOW: $free_gib GiB free on the volume holding $path, under the $min GiB floor; refusing $what."
+  echo "Reclaim first; each command below only lists or archives losslessly until told to apply:"
+  for hint in ${hints[@]+"${hints[@]}"}; do echo "  $hint"; done
+  echo "  uv run --project ~/Projects/agent-infra --no-sync python3 ~/Projects/agent-infra/scripts/worktree_gc.py suggest --all-projects"
+} >&2
+exit 75

@@ -505,6 +505,10 @@ ensure_worktree() {
     actual_branch=$(git -C "$worktree" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
     [ "$actual_branch" = "$branch" ] || die "existing worktree is on $actual_branch, expected $branch"
   else
+    # A new worktree is a full checkout (~600 MB for genomics); below the shared floor refuse it with the reclaim
+    # commands instead of letting the lane die on ENOSPC (2026-10-24: 9.8 GiB free).
+    "$LANE_BIN_DIR/disk-floor" --path "$repo" --what "lane worktree $worktree" \
+      --hint "lane ls, then lane reap <finished-lane> --force" || die "disk below the floor; reclaim first"
     mkdir -p "$(dirname "$worktree")"
     if git -C "$repo" show-ref --verify --quiet "refs/heads/$branch"; then
       git -C "$repo" worktree add "$worktree" "$branch" >&2
