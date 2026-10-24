@@ -18,7 +18,7 @@ UNRELATED_PID=""
 
 cleanup() {
   local name
-  for name in first hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride failure rvcache rvown rvnone; do
+  for name in first hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride ocargs ocquota failure rvcache rvown rvnone; do
     if [ -f "$LANE_HOME/$name.json" ]; then
       "$LANE" stop "$name" >/dev/null 2>&1 || true
     fi
@@ -153,7 +153,27 @@ printf '%s\n' \
   'printf "%s\n" "fake review body" > "$out"' \
   'printf "%s\n" "fake llmx stdout"' \
   'exit "${LLMX_FAKE_RC:-0}"' >"$FAKE_BIN/llmx"
-chmod +x "$FAKE_BIN/codex" "$FAKE_BIN/claude" "$FAKE_BIN/ps" "$FAKE_BIN/llmx"
+# The opencode worker runs under `env -i`, so the fake finds the capture dir beside its own bin dir, and flag files
+# there pick its behaviour: a transport error once, or an exhausted balance.
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'capture="$(cd "$(dirname "$0")/.." && pwd -P)/capture"' \
+  'n=$(find "$capture" -name "opencode.args.*" | wc -l | tr -d " ")' \
+  'printf "%s\n" "$@" > "$capture/opencode.args.$n"' \
+  'pwd -P > "$capture/opencode.cwd"' \
+  'env > "$capture/opencode.env"' \
+  'if [ -f "$capture/opencode-transport-once" ]; then' \
+  '  rm "$capture/opencode-transport-once"' \
+  '  printf "%s\n" "{\"type\":\"step_start\",\"sessionID\":\"ses_fake\"}" "{\"type\":\"error\",\"sessionID\":\"ses_fake\",\"error\":{\"type\":\"provider.transport\",\"message\":\"The socket connection was closed\"}}"' \
+  '  exit 1' \
+  'fi' \
+  'if [ -f "$capture/opencode-quota" ]; then' \
+  '  printf "%s\n" "{\"type\":\"error\",\"sessionID\":\"ses_fake\",\"error\":{\"type\":\"provider.http\",\"message\":\"402 Insufficient Balance\"}}"' \
+  '  exit 0' \
+  'fi' \
+  'printf "%s\n" "{\"type\":\"step_finish\",\"sessionID\":\"ses_fake\",\"part\":{\"cost\":0.01,\"tokens\":{\"input\":100,\"output\":20,\"reasoning\":7,\"cache\":{\"read\":50,\"write\":0}}}}"' \
+  >"$FAKE_BIN/opencode"
+chmod +x "$FAKE_BIN/codex" "$FAKE_BIN/claude" "$FAKE_BIN/ps" "$FAKE_BIN/llmx" "$FAKE_BIN/opencode"
 export PATH="$FAKE_BIN:$PATH"
 
 echo "test: codex and claude worker commands match the dispatch contract"
@@ -314,6 +334,55 @@ assert_eq "low" "$(arg_after --effort "$LANE_CAPTURE/claude.args")" "claude effo
 LANE_CLAUDE_MODEL= LANE_CLAUDE_EFFORT= "$LANE" resume claudeoverride --no-note >/dev/null
 wait_for_file "$LANE_HOME/claudeoverride.done"
 assert_eq "$expected_claude" "$(<"$LANE_CAPTURE/claude.args")" "empty exports restore default claude arguments"
+
+echo "test: opencode worker scrubs the env, writes its guard, resumes a transport error and logs usage"
+export DEEPSEEK_API_KEY_METERED="must-not-leak" LANE_OPENCODE_RETRY_SLEEP=0 LANE_OPENCODE_PROVIDER_HOST=""
+touch "$LANE_CAPTURE/opencode-transport-once"
+"$LANE" run ocargs --repo "$REPO" --brief "$BRIEF" --worker opencode >/dev/null
+wait_for_file "$LANE_HOME/ocargs.done"
+unset DEEPSEEK_API_KEY_METERED
+OC_WORKTREE="$REPO_REAL/.claude/worktrees/codex-ocargs"
+assert_eq "EXIT=0" "$(<"$LANE_HOME/ocargs.done")" "opencode marker after one transport resume"
+assert_eq "$OC_WORKTREE" "$(<"$LANE_CAPTURE/opencode.cwd")" "opencode cwd"
+expected_oc=$(printf '%s\n' run --standalone --auto --format json --thinking -m deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017 --title ocargs)
+assert_eq "$expected_oc" "$(head -10 "$LANE_CAPTURE/opencode.args.0")" "opencode arguments"
+sed -n 11p "$LANE_CAPTURE/opencode.args.0" | grep -Fxq "Do the fake task." || fail "opencode prompt lacks the brief"
+grep -Fq "do not stage, commit, merge, stash or switch branches" "$LANE_CAPTURE/opencode.args.0" || fail "opencode prompt lacks the git contract"
+assert_eq "ses_fake" "$(arg_after --session "$LANE_CAPTURE/opencode.args.1")" "transport resume continues the session"
+grep -Fq "ended on a transport error" "$LANE_CAPTURE/opencode.args.1" || fail "transport resume lacks the resume prompt"
+if grep -Fq "must-not-leak" "$LANE_CAPTURE/opencode.env"; then fail "opencode saw a caller secret"; fi
+grep -Fxq "TMPDIR=/tmp/lane-opencode/ocargs/" "$LANE_CAPTURE/opencode.env" || fail "opencode TMPDIR is not per lane"
+[ ! -e /tmp/lane-opencode/ocargs ] || fail "opencode TMPDIR survived the run"
+oc_guard="$OC_WORKTREE/.opencode/opencode.json"
+assert_file "$oc_guard"
+python3 - "$oc_guard" "$REPO_REAL" <<'PY' || fail "opencode guard lacks a required rule"
+import json
+import sys
+
+rules = json.load(open(sys.argv[1]))["permissions"]
+required = [
+    {"action": "external_directory", "resource": sys.argv[2] + "/**", "effect": "deny"},
+    {"action": "shell", "resource": "*git commit*", "effect": "deny"},
+    {"action": "shell", "resource": f"*{sys.argv[2]}/tracked.txt*", "effect": "deny"},
+    {"action": "edit", "resource": ".opencode/**", "effect": "deny"},
+    {"action": "question", "resource": "*", "effect": "deny"},
+]
+sys.exit(0 if all(rule in rules for rule in required) else 1)
+PY
+assert_eq "" "$(git -C "$OC_WORKTREE" status --porcelain)" "opencode guard is excluded from git status"
+grep -Fxq "lane-opencode: usage steps=1 input=100 output=20 reasoning=7 cache_read=50 cache_write=0 cost_list=0.0100" \
+  "$LANE_HOME/ocargs.log" || fail "opencode usage line missing"
+assert_eq "deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017" "$(worker_setting "$LANE_HOME/ocargs.json" opencode_model)" "recorded opencode model"
+
+echo "test: an exhausted opencode balance exits 86 without a retry"
+touch "$LANE_CAPTURE/opencode-quota"
+"$LANE" run ocquota --repo "$REPO" --brief "$BRIEF" --worker opencode --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/ocquota.done"
+rm "$LANE_CAPTURE/opencode-quota"
+unset LANE_OPENCODE_RETRY_SLEEP LANE_OPENCODE_PROVIDER_HOST
+assert_eq "EXIT=86" "$(<"$LANE_HOME/ocquota.done")" "quota marker"
+grep -Fq "do not retry" "$LANE_HOME/ocquota.log" || fail "quota stop message missing"
+[ "$(find "$LANE_CAPTURE" -name 'opencode.args.*' | wc -l | tr -d ' ')" = 3 ] || fail "quota run retried"
 
 echo "test: worker failures still produce an exit marker"
 CODEX_FAKE_RC=7 "$LANE" run failure --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null

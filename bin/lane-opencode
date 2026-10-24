@@ -1,0 +1,234 @@
+#!/usr/bin/env bash
+# lane-opencode — lane's opencode worker: one headless `opencode run` in the lane's worktree. The default model is
+# DeepSeek V4.1 Flash on DeepInfra with thinking on (about $0.05 a lane: ~/Projects/evals/opencode_deepseek_probe).
+#
+# OpenCode has no sandbox. The guard is a scrubbed environment, so no key reaches the model's shell, and a deny-list
+# in <worktree>/.opencode/opencode.json, the only project config OpenCode v2 reads. Its rules, measured on v2.1.4
+# (2026-10-24, DeepSeek V4.1 Flash writing files under each rule form):
+#   - the last matching rule wins;
+#   - external_directory takes absolute globs and never matches the project itself, so denying the main checkout
+#     leaves a worktree inside it writable;
+#   - file rules (read, edit, ...) inside the project match project-relative paths; an absolute one never matches;
+#   - shell commands are gated by command patterns alone.
+# So the deny-list stops mistakes, not an adversary; the parent still reviews every diff. A repo adds its own rules in
+# .claude/lane-opencode.json: {"allow_dirs": [absolute dirs re-allowed after the denies], "shell_deny": [patterns]}.
+#
+# usage (lane runs it in the worktree): lane-opencode <prompt>
+# env from lane: LANE_NAME LANE_REPO LANE_LOG LANE_OPENCODE_MODEL
+set -u
+
+name=${LANE_NAME:?lane-opencode: LANE_NAME is not set}
+repo=${LANE_REPO:?lane-opencode: LANE_REPO is not set}
+log=${LANE_LOG:?lane-opencode: LANE_LOG is not set}
+model=${LANE_OPENCODE_MODEL:-deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017}
+prompt=${1:?lane-opencode: no prompt}
+worktree=$(pwd -P)
+
+write_guard() {
+  python3 - "$repo" "$worktree" <<'PY'
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+repo, worktree = Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve()
+home = Path.home()
+local_path = repo / ".claude" / "lane-opencode.json"
+local = json.loads(local_path.read_text()) if local_path.is_file() else {}
+rules = []
+
+
+def directory(path, effect):
+    for suffix in ("", "/*", "/**"):
+        rules.append({"action": "external_directory", "resource": f"{path}{suffix}", "effect": effect})
+
+
+# The main checkout and its other worktrees. These rules never match the lane's own worktree, the project.
+if worktree != repo:
+    directory(repo, "deny")
+for secret in (".ssh", ".gnupg", ".aws", ".docker", ".config", ".netrc", ".modal.toml", ".codex", ".claude",
+               ".local/share/opencode", "Library/Keychains", ".cache/lanes"):
+    directory(home / secret, "deny")
+for allowed in local.get("allow_dirs", []):
+    directory(Path(allowed), "allow")
+for resource in (".opencode", ".opencode/*", ".opencode/**"):
+    rules.append({"action": "edit", "resource": resource, "effect": "deny"})
+
+# Git state belongs to the parent: the lane edits files, the parent stages, commits and merges.
+git_verbs = ("add", "commit", "push", "pull", "fetch", "stash", "switch", "checkout", "reset", "restore", "rebase",
+             "merge", "cherry-pick", "revert", "am ", "rm ", "mv ", "branch", "tag", "worktree", "remote",
+             "update-ref", "update-index", "symbolic-ref", "gc", "prune", "reflog", "clean", "config", "notes",
+             "filter-", "replace", "-C", "-c ", "--git-dir", "--work-tree")
+patterns = [f"*git {verb}*" for verb in git_verbs]
+patterns += ["*pkill*", "*killall*", "*sudo *", "*launchctl*", "*security find-*", "*security dump-*",
+             "*security export*", "*security add-*", "*security delete-*", "*Keychains*", "*/.ssh*", "*/.config/*",
+             f"*{home}/.claude/*", "*~/.claude/*", "*/.codex/*", "*/.local/share/opencode*", "*auth.json*",
+             "*opencode.db*", "*API_KEY*", "*/.netrc*", "*.modal.toml*", "*/.aws/*", "*.opencode*"]
+if worktree != repo:
+    # Shell commands that name the main checkout's tracked tree; the entry holding the worktree stays reachable.
+    own = worktree.relative_to(repo).parts[0] if worktree.is_relative_to(repo) else None
+    entries = subprocess.run(["git", "-C", str(repo), "ls-tree", "--name-only", "HEAD"],
+                             capture_output=True, text=True, check=True).stdout.split("\n")
+    patterns += [f"*{repo}/{entry}*" for entry in entries if entry and entry != own]
+    patterns += [f"*cd {repo}", f"*cd {repo} *", f"*cd {repo};*", f"*cd {repo}&*", f"*cd {repo}/ *"]
+for pattern in patterns + local.get("shell_deny", []):
+    # v2 names its shell tool `shell`; `bash` covers v1 configs.
+    for action in ("shell", "bash"):
+        rules.append({"action": action, "resource": pattern, "effect": "deny"})
+# Nobody answers a question in a headless run, and a doom loop only burns tokens.
+rules.append({"action": "doom_loop", "resource": "*", "effect": "deny"})
+rules.append({"action": "question", "resource": "*", "effect": "deny"})
+
+config = {
+    "$schema": "https://opencode.ai/config.json",
+    # DeepInfra thinks only when asked: OpenCode requests no reasoning unless reasoningEffort is set (0 reasoning
+    # tokens in 777 genomics lane messages through 2026-10-22).
+    "providers": {"deepinfra": {"settings": {"reasoningEffort": "high"}}},
+    "permissions": rules,
+}
+out = worktree / ".opencode" / "opencode.json"
+out.parent.mkdir(exist_ok=True)
+out.write_text(json.dumps(config, indent=1) + "\n")
+# Keep the guard out of `git status` and the lane's diff.
+exclude = Path(subprocess.run(
+    ["git", "-C", str(worktree), "rev-parse", "--path-format=absolute", "--git-path", "info/exclude"],
+    capture_output=True, text=True, check=True).stdout.strip())
+lines = exclude.read_text().splitlines() if exclude.is_file() else []
+if "/.opencode/" not in lines:
+    exclude.parent.mkdir(parents=True, exist_ok=True)
+    with exclude.open("a") as handle:
+        handle.write(("\n" if lines and lines[-1] else "") + "/.opencode/\n")
+print(f"lane-opencode: guard {out}: {len(rules)} rules")
+PY
+}
+
+# How the run ended, from the JSON event log: transport:<session>, quota, error:<type> or ok.
+last_event() {
+  python3 - "$log" <<'PY'
+import json
+import sys
+
+events = []
+with open(sys.argv[1], encoding="utf-8", errors="replace") as stream:
+    for line in stream:
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(event, dict) and "type" in event:
+            events.append(event)
+if not events:
+    print("error:empty")
+    raise SystemExit(0)
+last = events[-1]
+session = next((event["sessionID"] for event in reversed(events) if event.get("sessionID")), "")
+if last.get("type") != "error":
+    print("ok")
+    raise SystemExit(0)
+error = last.get("error") or {}
+kind = str(error.get("type", "unknown"))
+message = str(error.get("message", ""))
+# An empty balance (402) never recovers on retry; the socket closing or DNS failing after a laptop sleep does.
+if "quota" in kind or "402" in message or "Insufficient" in message or "balance" in message.lower():
+    print("quota")
+elif kind == "provider.transport" or any(token in message for token in (
+        "Transport", "socket connection", "ECONNRESET", "fetch failed", "ENOTFOUND", "EAI_AGAIN")):
+    print(f"transport:{session}" if session else f"error:{kind}")
+else:
+    print(f"error:{kind}")
+PY
+}
+
+usage_line() {
+  python3 - "$log" <<'PY'
+import json
+import sys
+
+totals = {"steps": 0, "input": 0, "output": 0, "reasoning": 0, "cache_read": 0, "cache_write": 0}
+cost = 0.0
+with open(sys.argv[1], encoding="utf-8", errors="replace") as stream:
+    for line in stream:
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict) or event.get("type") != "step_finish":
+            continue
+        part = event.get("part") or {}
+        tokens = part.get("tokens") or {}
+        cache = tokens.get("cache") or {}
+        totals["steps"] += 1
+        for key in ("input", "output", "reasoning"):
+            totals[key] += int(tokens.get(key) or 0)
+        totals["cache_read"] += int(cache.get("read") or 0)
+        totals["cache_write"] += int(cache.get("write") or 0)
+        cost += float(part.get("cost") or 0)
+# OpenCode's cost is its catalog's list price, about 2x what DeepInfra bills (probe, 2026-10-21).
+print("lane-opencode: usage " + " ".join(f"{key}={value}" for key, value in totals.items()) + f" cost_list={cost:.4f}")
+PY
+}
+
+case $model in
+  deepinfra/*) host=api.deepinfra.com ;;
+  deepseek/*) host=api.deepseek.com ;;
+  *) host="" ;;
+esac
+# Set and empty: resume without waiting for the provider (tests).
+host=${LANE_OPENCODE_PROVIDER_HOST-$host}
+# Each lane gets its own TMPDIR, removed at the end: OpenCode leaves throwaway tree copies in $TMPDIR/opencode
+# (4.7 GB from three genomics lanes, 2026-10-21).
+tmp="/tmp/lane-opencode/$name"
+mkdir -p "$tmp" || exit 98
+write_guard || exit 96
+
+resume_prompt="The previous attempt of this session ended on a transport error, not by your choice. Continue the task \
+from where you stopped: check git status and your result file first, then finish every deliverable the task names."
+session=""
+attempt=0
+rc=0
+verdict=ok
+while :; do
+  session_args=()
+  [ -n "$session" ] && session_args=(--session "$session")
+  # Without </dev/null a run blocks forever on a non-TTY stdin. --standalone starts a private server, so tools inherit
+  # this scrubbed environment instead of a background service's.
+  env -i HOME="$HOME" PATH="$PATH" USER="${USER:-}" LANG=en_US.UTF-8 TERM=dumb SHELL=/bin/zsh TMPDIR="$tmp/" \
+    PYTHONUNBUFFERED=1 LANE_WORKER=1 UV_CACHE_DIR="$HOME/.cache/uv" \
+    opencode run --standalone --auto --format json --thinking -m "$model" --title "$name" \
+    ${session_args[@]+"${session_args[@]}"} "$prompt" </dev/null
+  rc=$?
+  verdict=$(last_event)
+  echo "lane-opencode: attempt $attempt rc=$rc last=$verdict"
+  # A signal exit is the parent stopping the lane, never a transport fault (genomics chip-admission-v2, 2026-10-23).
+  if [ "$rc" -ge 129 ] && [ "$rc" -le 159 ]; then
+    break
+  fi
+  case $verdict in
+    transport:*)
+      [ "$attempt" -lt 2 ] || break
+      session=${verdict#transport:}
+      prompt=$resume_prompt
+      attempt=$((attempt + 1))
+      # After a laptop sleep DNS stays down for a while: wait up to an hour for the provider instead of spending a
+      # resume on the same ENOTFOUND (2026-10-22: four genomics lanes died on it).
+      waited=0
+      while [ -n "$host" ] && [ "$waited" -lt 3600 ] && ! curl -sS -o /dev/null --max-time 10 "https://$host/" 2>/dev/null; do
+        sleep 30
+        waited=$((waited + 30))
+      done
+      sleep "${LANE_OPENCODE_RETRY_SLEEP:-20}"
+      ;;
+    *) break ;;
+  esac
+done
+chmod -R u+w "$tmp" 2>/dev/null
+rm -rf "$tmp"
+usage_line
+if [ "$verdict" = quota ]; then
+  echo "lane-opencode: STOPPED: the provider's balance or quota is exhausted; do not retry. Top up, then lane resume."
+  exit 86
+fi
+if [ "$rc" = 0 ] && [ "${verdict%%:*}" = error ]; then
+  rc=1
+fi
+exit "$rc"

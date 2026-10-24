@@ -8,14 +8,18 @@ trap '' PIPE
 echo() { builtin echo "$@" 2>/dev/null || true; }
 
 LANE_HOME="${LANE_HOME:-${HOME:?lane: HOME is not set}/.cache/lanes}"
+# Worker helpers live beside the real script (~/.local/bin/lane is a symlink to it).
+LANE_BIN_DIR=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd -P)
 DEFAULT_STALL_MIN=20
 WORKER_SETTINGS=""
 
 usage() {
   cat >&2 <<'EOF'
 usage:
-  lane run <name> --repo <path> --brief <file> [--worker codex|claude] [--no-worktree] [--base <ref>]
+  lane run <name> --repo <path> --brief <file> [--worker codex|claude|opencode] [--no-worktree] [--base <ref>]
       (claude worker: LANE_CLAUDE_MODEL=<m> LANE_CLAUDE_EFFORT=<e> env override the default opus/default effort)
+      (opencode worker: DeepSeek V4.1 Flash on DeepInfra, thinking on; LANE_OPENCODE_MODEL=<provider/model> overrides it)
+      (opencode worker: no sandbox; a scrubbed env and a deny-list guard it, see bin/lane-opencode; exit 86 = balance exhausted)
       (codex worker: LANE_CODEX_MODEL=<m> LANE_CODEX_EFFORT=<e> env override the default gpt-6-astra/config effort)
       (codex worker: LANE_CODEX_ADD_DIRS=<a:b> adds writable roots; LANE_CODEX_NETWORK=1 enables network; git metadata stays read-only, so the parent merges and commits)
   lane review <name> [--model <m>] [--effort <e>] [--focus <file>] [--report <file>] [--out <file>] [--bg]
@@ -115,6 +119,7 @@ defaults = {
     "codex_network": "0",
     "claude_model": "opus",
     "claude_effort": "",
+    "opencode_model": "deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017",
 }
 recorded = {}
 if sys.argv[1]:
@@ -124,8 +129,9 @@ if sys.argv[1]:
         print("lane: warning: original worker settings are unknown; using caller environment", file=sys.stderr)
     else:
         recorded = metadata["worker_settings"]
+        # A lane recorded before a setting existed resumes with that setting's default.
         if not isinstance(recorded, dict) or any(
-            not isinstance(recorded.get(key), str) for key in defaults
+            key in recorded and not isinstance(recorded[key], str) for key in defaults
         ):
             sys.exit("lane: invalid recorded worker settings")
 
@@ -159,6 +165,9 @@ print_worker_settings() {
   case "$1" in
     claude)
       echo "lane: settings claude_model=$LANE_CLAUDE_MODEL claude_effort=${LANE_CLAUDE_EFFORT:-default}"
+      ;;
+    opencode)
+      echo "lane: settings opencode_model=$LANE_OPENCODE_MODEL"
       ;;
     *)
       echo "lane: settings codex_model=$LANE_CODEX_MODEL codex_effort=${LANE_CODEX_EFFORT:-config} add_dirs=$LANE_CODEX_ADD_DIRS network=$LANE_CODEX_NETWORK"
@@ -514,6 +523,12 @@ build_prompt() {
   local prompt
   if [ "$worker" = "claude" ]; then
     prompt=$(<"$brief")
+  elif [ "$worker" = "opencode" ]; then
+    # OpenCode has no sandbox to keep git metadata read-only, so the contract is in the prompt (and in
+    # lane-opencode's deny-list).
+    prompt="$(<"$brief")
+
+Git state belongs to the parent: edit files and run checks, but do not stage, commit, merge, stash or switch branches. Do not stop or kill processes you did not start. End by listing every path you changed."
   else
     # The Codex sandbox keeps a worktree's git metadata read-only even under --add-dir
     # (2026-10-11: a Sol lane merge died on ORIG_HEAD.lock in .git/worktrees/<lane>).
@@ -596,7 +611,8 @@ launch_worker() {
   # silently fell back to a per-worktree .uv-cache and re-downloaded the world per lane
   # (13G + 9.7G in two lanes; .claude hit 60G, 2026-09-01). One shared, writable cache.
   nohup /usr/bin/perl -MPOSIX -e 'POSIX::setsid() or die "lane: setsid: $!\n"; exec { $ARGV[0] } @ARGV or die "lane: exec: $!\n"' \
-    env PYTHONUNBUFFERED=1 LANE_WORKER=1 UV_CACHE_DIR="$HOME/.cache/uv" bash -c '
+    env PYTHONUNBUFFERED=1 LANE_WORKER=1 UV_CACHE_DIR="$HOME/.cache/uv" LANE_NAME="$name" LANE_REPO="$repo" LANE_LOG="$log" \
+    LANE_OPENCODE_HELPER="$LANE_BIN_DIR/lane-opencode" bash -c '
     log=$1
     marker=$2
     worker=$3
@@ -631,6 +647,10 @@ launch_worker() {
       # dying. Both caps default to unlimited in CC 2.1.309, so cap them: 6 h covers a 5 h session
       # reset, a weekly limit fails out; 2 h for capacity; recheck every 15 min for a lifted limit.
         caffeinate -i env -u ANTHROPIC_API_KEY -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDECODE -u CLAUDE_PID -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_BRIDGE_SESSION_ID -u CLAUDE_CODE_SESSION_ATTENDED -u CLAUDE_EFFORT CLAUDE_CODE_RETRY_WATCHDOG=1 CLAUDE_CODE_RETRY_WATCHDOG_MAX_USAGE_LIMIT_WAIT_MS=21600000 CLAUDE_CODE_RETRY_WATCHDOG_MAX_WAIT_MS=7200000 CLAUDE_CODE_RETRY_WATCHDOG_USAGE_LIMIT_RECHECK_MS=900000 claude -p --model "$LANE_CLAUDE_MODEL" ${LANE_CLAUDE_EFFORT:+--effort "$LANE_CLAUDE_EFFORT"} --output-format stream-json --verbose "$prompt" < /dev/null
+        ;;
+      opencode)
+        # bin/lane-opencode writes the guard, scrubs the environment, resumes transport errors and logs usage.
+        caffeinate -i "$LANE_OPENCODE_HELPER" "$prompt" < /dev/null
         ;;
       fake)
         if [ "$resume_mode" = true ]; then printf "%s\n" "$prompt"; fi
@@ -746,7 +766,7 @@ cmd_run() {
   done
   [ -n "$repo" ] || die "run requires --repo"
   [ -n "$brief" ] || die "run requires --brief"
-  case "$worker" in codex | claude | fake | fake-hang) ;; *) die "worker must be codex or claude" ;; esac
+  case "$worker" in codex | claude | opencode | fake | fake-hang) ;; *) die "worker must be codex, claude or opencode" ;; esac
   validate_plain_value "repo" "$repo"
   validate_plain_value "brief" "$brief"
   validate_plain_value "base" "$base"
