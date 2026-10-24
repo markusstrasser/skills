@@ -47,3 +47,24 @@ Fable 5.1 (web access) and GPT-6 Astra (no web).
 - Held: the practitioner-additions interview, because its effect was confounded with change 2.
 - Skipped the "rewrite my prompt" step: "In my setup, that costs a turn and hands me homework when I wanted work."
 - "A tip is a hypothesis with good distribution. Run it before you adopt it."
+
+## Elicitation research added 2026-10-24
+
+Prior work: `~/Projects/agent-infra/research/2026-06-18-elicitation-best-practices.md`
+(RE canon, Spec Kit assume-and-mark, Active Task Disambiguation). Its top recommendation,
+choosing questions by how they split the solution set, was missing from v1 of this skill.
+Graded HAD-LEVER and fixed in v2.
+
+Post-June LLM papers (abstracts read via arXiv; full text not read):
+- Zhang et al., "Ask Less, Ask Better" (arXiv:2610.24411, 2026-10-17): "limiting agents to one to three questions reduces user-attention cost by 36-73% while keeping 86-94% of the task reward"; "reviewing each question against the memory of users' earlier answers cuts attention cost by another 13%."
+- Li et al., "Ask, Relax, or Act?" (arXiv:2610.03102, 2026-10-02): "act when an accepted action is shared across all admissible preferences or objectives, clarify when each possibility is feasible but no action is shared, and propose a minimum-cost permitted constraint repair when the request is infeasible." Models "still intervene when a justified action already exists."
+- Tack, Laban, Neville, "LLMs Get Lost in Evolving User Intent" (arXiv:2607.20734): "strong static-setting performance does not transfer to the evolving-intent setting, with substantial drops across model families."
+- Kim et al., "What Did the AI Take On?" (arXiv:2610.06328): "participants viewed about half of all steps (48.6%) as AI-initiated, meaning the AI took on work they had not requested."
+- Holter et al., "Let Me Clarify: Interactive Modeling of Soft Attributes" (arXiv:2610.20227): softness = "the diversity of valid interpretations a description permits"; soft attributes are turned into executable functions.
+
+Psychology classics (cited from memory, not re-fetched; verify before citing them outside this skill):
+- Laddering / means-end chains: Reynolds & Gutman 1988, J. Advertising Research.
+- Prospective hindsight: Mitchell, Russo & Pennington 1989, J. Behavioral Decision Making (imagining that an outcome has already happened raised the number of reasons people generated, about 30% in their study); premortem: Klein 2007, HBR.
+- Critical Decision Method: Klein, Calderwood & MacGregor 1989 (recall tacit expertise through a specific incident and cue probes).
+- Miracle question: de Shazer, solution-focused brief therapy.
+- Learning vs performance goals on complex novel tasks: Winters & Latham 1996; Seijts & Latham 2001. Stretch-goal boundary conditions: Sitkin et al. 2011, AMR "The paradox of stretch goals" (help with recent success and slack resources, hurt without them).
