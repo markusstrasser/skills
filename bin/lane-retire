@@ -6,9 +6,10 @@ lane runs this when a worker exits, and `lane reap --force` runs it by hand. The
   lane.patch     every change against HEAD: tracked edits, then each untracked file as an add (--binary --full-index)
   commits.patch  format-patch <base>..HEAD, written only when the lane committed
   cache/         .claude/cache/ (results, messages, exported patches), minus derived trees
-  ignored/       other ignored files, minus derived caches (.venv, .uv-cache, __pycache__, ...) and the inputs a
-                 checkout hook copied in and declared in .git/lane-checkout.json ("provided": {path: sha256}) while
-                 their bytes are unchanged; MANIFEST.json names those instead
+  ignored/       other ignored files, minus derived caches (.venv, .uv-cache, __pycache__, ..., and every directory a
+                 CACHEDIR.TAG marks, such as cargo's target/) and the inputs a checkout hook copied in and declared in
+                 .git/lane-checkout.json ("provided": {path: sha256}) while their bytes are unchanged; MANIFEST.json
+                 names the skipped tagged directories and those inputs instead
   run.log.gz, brief.md, head.txt, status.txt, MANIFEST.json (sha256 and size of every file above)
 The checkout is removed only when the harvest is proven lossless:
   1. lane.patch holds one diff per path `git status` reports, and each diff's post-image blob id equals the working
@@ -44,6 +45,9 @@ DERIVED_NAMES = {".venv", ".uv-cache", "node_modules", "__pycache__", ".pytest_c
                  ".hypothesis", ".opencode"}
 # genomics: the pre-commit's index trees and the runtime's source epochs (214-986 MB a checkout, 2026-10-24).
 DERIVED_CACHE_DIRS = {"source-epochs", "index-trees"}
+# A directory holding a CACHEDIR.TAG (https://bford.info/cachedir/) declares itself rederivable: cargo's target/,
+# ccache, Bazel. An arena Rust lane's target/ held 20,505 MiB on 2026-10-24, over the cap, so reap refused it.
+CACHEDIR_TAG_SIGNATURE = b"Signature: 8a477f597d28d172789f06886806bc55"
 CACHE_DIR = ".claude/cache"
 HARVEST_CAP_BYTES = 1024 * 1024 * 1024
 
@@ -83,6 +87,32 @@ def is_derived(relative):
     cache_parts = Path(CACHE_DIR).parts
     return parts[:len(cache_parts)] == cache_parts and len(parts) > len(cache_parts) \
         and parts[len(cache_parts)] in DERIVED_CACHE_DIRS
+
+
+def is_tagged_cache(checkout, relative):
+    """A real directory whose CACHEDIR.TAG is a regular file that starts with the spec's signature.
+
+    .claude/cache and the directories above it never count: a tag there would drop the lane's deliverables.
+    """
+    if Path(relative) in (Path(CACHE_DIR), *Path(CACHE_DIR).parents):
+        return False
+    directory = checkout / relative
+    try:
+        if os.path.islink(directory) or not stat.S_ISREG(os.lstat(directory / "CACHEDIR.TAG").st_mode):
+            return False
+        with open(directory / "CACHEDIR.TAG", "rb") as reader:
+            return reader.read(len(CACHEDIR_TAG_SIGNATURE)) == CACHEDIR_TAG_SIGNATURE
+    except OSError:
+        return False
+
+
+def tagged_cache_at_or_above(checkout, relative):
+    """The first tagged cache directory from relative up to the checkout root, or None."""
+    path = Path(relative)
+    for directory in (path, *path.parents):
+        if is_tagged_cache(checkout, str(directory)):
+            return str(directory)
+    return None
 
 
 def in_cache(relative):
@@ -177,23 +207,42 @@ def check_applies(checkout, patch_path):
                            f"{result.stderr.decode(errors='replace').strip()[:200]}")
 
 
-def ignored_entries(checkout):
-    """Ignored files and directories outside .claude/cache, minus derived ones (relative paths)."""
+def ignored_entries(checkout, tagged):
+    """Ignored files and directories outside .claude/cache, minus derived ones (relative paths). A tagged cache
+    directory at or above an entry is added to tagged instead."""
     raw = git(checkout, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z").stdout
-    return [entry.rstrip("/") for entry in null_split(raw)
-            if not is_derived(entry.rstrip("/")) and not in_cache(entry.rstrip("/"))]
+    entries = []
+    for entry in null_split(raw):
+        relative = entry.rstrip("/")
+        if is_derived(relative) or in_cache(relative):
+            continue
+        cache = tagged_cache_at_or_above(checkout, relative)
+        if cache:
+            tagged.add(cache)
+        else:
+            entries.append(relative)
+    return entries
 
 
-def walk_files(checkout, relative):
-    """Regular files and symlinks under checkout/relative (relative paths), skipping derived ones."""
+def walk_files(checkout, relative, tagged):
+    """Regular files and symlinks under checkout/relative (relative paths), skipping derived ones; the tagged cache
+    directories it skips are added to tagged."""
     top = checkout / relative
     if os.path.islink(top) or top.is_file():
         return [relative] if is_content(top) else []
     found = []
     for directory, subdirs, files in os.walk(top, followlinks=False):
         base = Path(directory).relative_to(checkout)
-        subdirs[:] = [sub for sub in subdirs if not is_derived(str(base / sub))
-                      and not os.path.islink(Path(directory) / sub)]
+        kept = []
+        for sub in subdirs:
+            candidate = str(base / sub)
+            if is_derived(candidate) or os.path.islink(Path(directory) / sub):
+                continue
+            if is_tagged_cache(checkout, candidate):
+                tagged.add(candidate)
+            else:
+                kept.append(sub)
+        subdirs[:] = kept
         links = [sub for sub in os.listdir(directory) if os.path.islink(Path(directory) / sub)
                  and os.path.isdir(Path(directory) / sub)]
         for name in files + links:
@@ -325,10 +374,12 @@ def make_writable(checkout):
 def harvest(args, checkout):
     statuses = status_paths(checkout)
     copy_list = []
+    tagged = set()
     if (checkout / CACHE_DIR).is_dir():
-        copy_list += [("cache", relative) for relative in walk_files(checkout, CACHE_DIR)]
-    for entry in ignored_entries(checkout):
-        copy_list += [("ignored", relative) for relative in walk_files(checkout, entry) if not in_cache(relative)]
+        copy_list += [("cache", relative) for relative in walk_files(checkout, CACHE_DIR, tagged)]
+    for entry in ignored_entries(checkout, tagged):
+        copy_list += [("ignored", relative) for relative in walk_files(checkout, entry, tagged)
+                      if not in_cache(relative)]
     watched = [relative for _, relative in copy_list]
     before = fingerprint(checkout, statuses, watched)
     head = before[0]
@@ -354,7 +405,7 @@ def harvest(args, checkout):
     partial = lane_dir / f"{stamp}.partial"
     partial.mkdir(parents=True)
     try:
-        write_harvest(args, checkout, statuses, copy_list, watched, unchanged, before, partial)
+        write_harvest(args, checkout, statuses, copy_list, watched, unchanged, sorted(tagged), before, partial)
     except BaseException:
         shutil.rmtree(partial, ignore_errors=True)
         raise
@@ -362,7 +413,7 @@ def harvest(args, checkout):
     return final, head
 
 
-def write_harvest(args, checkout, statuses, copy_list, watched, unchanged, before, partial):
+def write_harvest(args, checkout, statuses, copy_list, watched, unchanged, tagged, before, partial):
     head = before[0]
     manifest = {}
     skipped = []
@@ -394,7 +445,7 @@ def write_harvest(args, checkout, statuses, copy_list, watched, unchanged, befor
     (partial / "MANIFEST.json").write_text(json.dumps(
         {"name": args.name, "mode": args.mode, "checkout": str(checkout), "head": head, "base": args.base,
          "status_paths": len(statuses), "skipped_special_files": skipped, "provided_unchanged": unchanged,
-         "files": manifest}, indent=1, sort_keys=True) + "\n")
+         "tagged_caches_skipped": tagged, "files": manifest}, indent=1, sort_keys=True) + "\n")
 
 
 def branch_is_held_elsewhere(repo, branch, head):

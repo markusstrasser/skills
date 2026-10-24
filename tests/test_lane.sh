@@ -735,6 +735,13 @@ RETIRE_WT="$REPO_REAL/.claude/worktrees/codex-retire1"
 printf '%s\n' "lane edit" >>"$RETIRE_WT/tracked.txt"
 mkdir -p "$RETIRE_WT/.claude/cache"
 printf '%s\n' "**Verdict:** DONE" >"$RETIRE_WT/.claude/cache/retire1-result.md"
+# A directory a valid CACHEDIR.TAG marks (cargo's target/) is rederivable and skipped; a wrong signature is no tag.
+mkdir -p "$REPO_REAL/.git/info" "$RETIRE_WT/target/debug" "$RETIRE_WT/wrongtag"
+printf '%s\n' "/target/" "/wrongtag/" >>"$REPO_REAL/.git/info/exclude"
+printf '%s\n' "Signature: 8a477f597d28d172789f06886806bc55" "# cargo" >"$RETIRE_WT/target/CACHEDIR.TAG"
+printf '%s\n' "build output" >"$RETIRE_WT/target/debug/app"
+printf '%s\n' "Signature: 00000000000000000000000000000000" >"$RETIRE_WT/wrongtag/CACHEDIR.TAG"
+printf '%s\n' "lane notes" >"$RETIRE_WT/wrongtag/notes.txt"
 touch "$TEST_TMP/release-retire1"
 wait_for_file "$LANE_HOME/retire1.done"
 assert_eq "EXIT=0" "$(<"$LANE_HOME/retire1.done")" "retired lane marker"
@@ -746,6 +753,14 @@ grep -Fq '+lane edit' "$RETIRE_HARVEST/lane.patch" || fail "harvest patch lacks 
 assert_eq "**Verdict:** DONE" "$(<"$RETIRE_HARVEST/cache/retire1-result.md")" "harvested result"
 gzip -dc "$RETIRE_HARVEST/run.log.gz" | grep -Fxq hi || fail "harvest lacks the lane log"
 assert_file "$RETIRE_HARVEST/brief.md"
+[ ! -e "$RETIRE_HARVEST/ignored/target" ] || fail "harvest copied a CACHEDIR.TAG cache"
+assert_eq "lane notes" "$(<"$RETIRE_HARVEST/ignored/wrongtag/notes.txt")" "a wrong-signature tag is harvested"
+python3 - "$RETIRE_HARVEST/MANIFEST.json" <<'PY'
+import json
+import sys
+skipped = json.load(open(sys.argv[1], encoding="utf-8"))["tagged_caches_skipped"]
+assert skipped == ["target"], skipped
+PY
 assert_eq "ret" "$(dirty_for retire1)" "ls marks a retired lane"
 # The patch reproduces the lane's tree on the base it was cut from.
 git -C "$REPO" worktree add -q --detach "$TEST_TMP/replay" HEAD

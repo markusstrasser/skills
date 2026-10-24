@@ -128,7 +128,9 @@ lane's work there, not in its worktree: `lane.patch` holds every change against
 HEAD and is checked to reproduce the tree; `commits.patch` holds the lane's
 commits, if any; `cache/` holds its `.claude/cache/` results and messages. The
 harvest also keeps the other ignored files, `run.log.gz`, the brief and
-`MANIFEST.json`. `lane review` reads the harvest. A checkout stays when the
+`MANIFEST.json`, but skips rederivable caches: `.venv`, `node_modules` and the
+like, and any directory a `CACHEDIR.TAG` marks, such as cargo's `target/`.
+`lane review` reads the harvest. A checkout stays when the
 worker failed, when the lane was launched with `--keep-checkout` (a lane you
 will resume) or when a check fails, such as a process still inside it;
 `$LANE_HOME/<name>.checkout-state` says which. `lane reap <name> --force`
