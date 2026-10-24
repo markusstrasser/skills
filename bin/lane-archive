@@ -1,0 +1,763 @@
+#!/usr/bin/env python3
+"""lane-archive — move finished lanes from $LANE_HOME to the SSD, verified, and bring one back.
+
+`lane archive [--apply]` runs it by hand, a dry run unless --apply. After each successful retire, the worker's exit
+path and `lane reap --force` run a bounded pass (--apply --bounded: at most 20 lanes and 1 GiB, oldest first, no
+single lane over 1 GiB, logged to $LANE_HOME/.archive.log); no timer runs it. Why: lane logs, notes and harvests held
+2.5 GB of ~/.cache/lanes on 2026-10-24, and nothing ever moved a finished lane's files.
+
+A lane is a <name>.json whose "name" is <name>. It owns the top-level entries the lane tools write for it:
+<name>.<suffix> for a suffix OWNED_SUFFIX matches (log, marker, stalled logs, notes, review files, harvest). Any other
+entry, a hand-made <name>.note4.done or what a reaped lane left behind, is listed as NO-LANE and never moved: with
+dotted names, a.b.log can be the log of a reaped lane a.b, and lane a must not take it. Two lanes that could both own
+one entry (a and a.review for a.review.done) are both skipped. A lane is archived when:
+  1. its <name>.done marker reads EXIT=<rc> and is older than 14 days;
+  2. it has no <name>.KEEP file;
+  3. no process group with its recorded pid exists and no review of it is running;
+  4. it has no checkout left: the recorded worktree and $LANE_HOME/checkouts/<name> are gone, so no unharvested work
+     remains (a lane that still has one is listed as "lane reap <name> --force first");
+  5. it holds only files, directories and symlinks, none changed in the last hour, and lsof shows none open (when
+     lsof fails or gives no answer, --apply moves nothing: [DEGRADED]).
+A lane goes to $LANE_ARCHIVE_VOLUME/lane-archive/<YYYY-MM of its marker, UTC>/<name>[~N]/ (default volume
+/Volumes/2TBPNY): its top-level .log files gzipped, everything else byte for byte. Each copy is fsynced and read back
+to its source's sha256 (a gzipped log after decompression); MANIFEST.json records each path's size, sha256, mode and
+mtime with the lane JSON; the drive cache is flushed, the directory is renamed into place and indexed in
+$LANE_HOME/.archived.tsv, and only then are the sources removed: <name>.json first, each file only while it keeps the
+stat it was copied with. A path that stays is reported as PARTIAL (exit 1); its bytes are in the archive.
+`lane resume <name>` then names the archive. `lane unarchive <name>` restores it: it refuses when a path in
+$LANE_HOME differs from the archive, keeps the paths that match, never replaces an entry, checks every sha256,
+restarts the 14-day clock and removes the archive. A restore that stops midway completes when run again.
+
+Fail closed: a volume that is absent, not a mount point (LANE_ARCHIVE_REQUIRE_MOUNT=0 lifts that for tests), not
+writable or under bin/disk-floor's floor plus the payload prints [DEGRADED], moves nothing and exits 75; so does a
+restore that would take $LANE_HOME's disk under the floor. Exit 1 when a lane failed or left paths behind, else 0.
+"""
+
+import argparse
+import datetime
+import fcntl
+import gzip
+import hashlib
+import json
+import os
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+DEFAULT_VOLUME = "/Volumes/2TBPNY"
+MIN_AGE_SECONDS = 14 * 86400
+QUIET_SECONDS = 3600
+BOUND_LANES = 20
+BOUND_BYTES = 1 << 30
+LOCK_WAIT_SECONDS = 120
+EXIT_DEGRADED = 75
+INDEX = ".archived.tsv"
+LOCK = ".archive.lock"
+NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
+# What bin/lane, lane-retire and lane-opencode write after "<name>.", and the .gz of a log (surveyed 2026-10-25).
+OWNED_SUFFIX = re.compile(r"(json|done|KEEP|patch|harvest|checkout-state|opencode-session|log(\.gz)?"
+                          r"|stalled-[0-9]+\.log(\.gz)?|review\.(done|pid|md|log(\.gz)?)"
+                          r"|resume-note(\.consumed-[0-9]+)?\.md)\Z")
+DISK_FLOOR = Path(__file__).resolve().parent / "disk-floor"
+# Skips a dry run lists one per line; the rest are only counted.
+LISTED = ("marker", "keep", "live", "checkout", "busy", "error", "contested")
+SUMMARY = {"running": "without a DONE marker", "recent": "done under 14 days ago", "marker": "with an invalid marker",
+           "keep": "with a KEEP file", "live": "with a live process", "checkout": "with a checkout left",
+           "busy": "busy", "error": "unreadable", "contested": "sharing a file name with another lane",
+           "bound": "over this pass's bound"}
+
+
+class Skip(Exception):
+    """The lane stays in $LANE_HOME; the category sorts the reason for the summary."""
+
+    def __init__(self, category, message):
+        super().__init__(message)
+        self.category = category
+
+
+class Row:
+    def __init__(self, name, meta):
+        self.name, self.meta = name, meta
+        self.category = self.message = None
+        self.items, self.size, self.done_mtime = [], 0, 0.0
+
+
+def mib(size):
+    return f"{size / (1 << 20):.1f} MiB"
+
+
+def utc(seconds):
+    return datetime.datetime.fromtimestamp(seconds, datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def flush(handle, full=False):
+    """fsync; with full, also make the drive empty its write cache (macOS F_FULLFSYNC)."""
+    if not isinstance(handle, int):
+        handle.flush()
+        handle = handle.fileno()
+    os.fsync(handle)
+    if full and hasattr(fcntl, "F_FULLFSYNC"):
+        fcntl.fcntl(handle, fcntl.F_FULLFSYNC)
+
+
+def sync_dir(path, full=False):
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        flush(descriptor, full)
+    finally:
+        os.close(descriptor)
+
+
+def sha256_file(path, packed=False):
+    digest = hashlib.sha256()
+    with (gzip.open(path, "rb") if packed else open(path, "rb")) as reader:
+        for block in iter(lambda: reader.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def key(info):
+    # ctime too: a write that puts the size and mtime back still moves it.
+    return info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+
+
+def unchanged(path, info):
+    try:
+        return key(os.lstat(path)) == key(info)
+    except FileNotFoundError:
+        return False
+
+
+def raise_error(error):
+    raise error
+
+
+def pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def disk_floor(path, payload, what, hint):
+    """bin/disk-floor's first complaint about <path> taking <payload> more bytes, else None."""
+    floor = subprocess.run([str(DISK_FLOOR), "--path", str(path), "--plus-gib", str(-(-payload // (1 << 30))),
+                            "--what", what, "--hint", hint], capture_output=True, text=True, check=False)
+    if floor.returncode != 0:
+        return (floor.stderr.strip().splitlines() or [f"disk-floor exited {floor.returncode}"])[0]
+    return None
+
+
+def read_lanes(home):
+    """{name: metadata} for each <name>.json whose "name" is <name>, and every top-level entry lanes can own."""
+    entries = sorted(entry for entry in os.listdir(home) if not entry.startswith(".") and entry != "checkouts")
+    lanes = {}
+    for entry in entries:
+        stem = entry[:-len(".json")]
+        if not entry.endswith(".json") or not NAME.match(stem):
+            continue
+        try:
+            meta = json.loads((home / entry).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(meta, dict) and meta.get("name") == stem:
+            lanes[stem] = meta
+    return lanes, entries
+
+
+def claimants(entry, lanes):
+    """The lanes whose tools could have written <entry>, <name>.<owned suffix>. Lanes a and a.review both claim
+    a.review.done (a's review marker, a.review's marker); such an entry belongs to neither."""
+    return [entry[:dot] for dot in range(1, len(entry)) if entry[dot] == "." and entry[:dot] in lanes
+            and OWNED_SUFFIX.match(entry, dot + 1)]
+
+
+def walk(home, entry):
+    """[(path relative to home, lstat)] for one top-level entry and everything under it, parents first."""
+    items = [(entry, os.lstat(home / entry))]
+    if stat.S_ISDIR(items[0][1].st_mode):
+        for root, dirs, files in os.walk(home / entry, onerror=raise_error):
+            dirs.sort()
+            for name in dirs + sorted(files):
+                path = os.path.join(root, name)
+                items.append((os.path.relpath(path, home), os.lstat(path)))
+    return items
+
+
+def group_exists(pid):
+    try:
+        os.killpg(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def review_pid(home, name):
+    """The pid of a review of <name> that has no marker yet and whose process exists, else None."""
+    if (home / f"{name}.review.done").exists():
+        return None
+    try:
+        first = (home / f"{name}.review.pid").read_text(encoding="utf-8").split("\n")[0].strip()
+    except FileNotFoundError:
+        return None
+    if not first.isdigit() or int(first) <= 1:
+        return None
+    return int(first) if pid_alive(int(first)) else None
+
+
+def checkout_left(home, name, meta):
+    """Why the lane still has a checkout (unharvested work may be in it), else None."""
+    mode = meta.get("checkout") or ("none" if meta.get("no_worktree") is True else "worktree")
+    if mode == "none":
+        return None
+    if mode not in ("worktree", "hook"):
+        return f"its metadata names an unknown checkout mode {mode!r}"
+    paths = [str(meta.get("worktree", ""))] + ([str(home / "checkouts" / name)] if mode == "hook" else [])
+    for path in paths:
+        if not os.path.isabs(path):
+            return f"its metadata names no absolute checkout path ({path!r})"
+        parts = Path(path).parts
+        if len(parts) > 2 and parts[1] == "Volumes" and not os.path.ismount(os.path.join("/Volumes", parts[2])):
+            return f"its checkout {path} is on /Volumes/{parts[2]}, which is not mounted"
+        if os.path.lexists(path):
+            return f"lane reap {name} --force first: its checkout {path} remains"
+    return None
+
+
+def check(home, row, owned, now):
+    """Fill row.items, size and done_mtime, or raise Skip with the first rule the lane fails."""
+    name, meta = row.name, row.meta
+    if name == "MANIFEST":
+        raise Skip("contested", "its MANIFEST.json would collide with the archive's manifest")
+    marker = home / f"{name}.done"
+    try:
+        info = os.stat(marker)
+    except FileNotFoundError:
+        raise Skip("running", "no DONE marker") from None
+    row.done_mtime = info.st_mtime
+    if now - info.st_mtime < MIN_AGE_SECONDS:
+        raise Skip("recent", f"done {int((now - info.st_mtime) // 86400)} days ago")
+    try:
+        exit_line = marker.read_text(encoding="utf-8").split("\n")[0]
+    except (OSError, UnicodeDecodeError) as error:
+        raise Skip("error", f"cannot read its DONE marker: {error}") from None
+    if not re.fullmatch(r"EXIT=[0-9]+", exit_line):
+        raise Skip("marker", f"its DONE marker reads {exit_line[:40]!r}, not EXIT=<rc>")
+    if (home / f"{name}.KEEP").exists():
+        raise Skip("keep", f"{name}.KEEP keeps it")
+    pid = meta.get("pid")
+    if not isinstance(pid, int) or isinstance(pid, bool) or not 1 < pid < 1 << 31:
+        raise Skip("live", f"its metadata has no valid pid ({pid!r}), so its process is unknown")
+    if group_exists(pid):
+        raise Skip("live", f"process group {pid} exists")
+    reviewer = review_pid(home, name)
+    if reviewer is not None:
+        raise Skip("live", f"its review (pid {reviewer}) is running")
+    reason = checkout_left(home, name, meta)
+    if reason:
+        raise Skip("checkout", reason)
+    try:
+        for entry in owned:
+            row.items.extend(walk(home, entry))
+    except OSError as error:
+        raise Skip("error", f"cannot list its files: {error}") from None
+    for relative, item in row.items:
+        if not (stat.S_ISREG(item.st_mode) or stat.S_ISDIR(item.st_mode) or stat.S_ISLNK(item.st_mode)):
+            raise Skip("busy", f"{relative} is a special file")
+    newest = max(item.st_mtime for _, item in row.items)
+    if now - newest < QUIET_SECONDS:
+        raise Skip("busy", f"a file of it changed {int(now - newest)} s ago")
+    row.size = sum(item.st_size for _, item in row.items if stat.S_ISREG(item.st_mode))
+
+
+def open_paths():
+    """{path: pid} for every open file and cwd, from one lsof pass; None when lsof fails or gives no answer."""
+    try:
+        result = subprocess.run(["lsof", "-w", "-n", "-P", "-F", "pn"], capture_output=True, check=False, timeout=120)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    # A killed or failing lsof can stop halfway; a truncated list would read as "nothing open".
+    if result.returncode != 0 or not result.stdout:
+        return None
+    own = {os.getpid(), os.getppid()}
+    paths = {}
+    pid = None
+    for line in result.stdout.decode(errors="replace").splitlines():
+        if line.startswith("p"):
+            pid = int(line[1:]) if line[1:].isdigit() else None
+        elif line.startswith("n") and pid not in own:
+            paths.setdefault(line[1:], pid)
+    return paths
+
+
+def volume_problem(volume, root, payload, write):
+    """Why the archive volume cannot take <payload> bytes now, else None. Without write it only looks."""
+    if not os.path.isdir(volume):
+        return f"{volume} is absent"
+    if os.environ.get("LANE_ARCHIVE_REQUIRE_MOUNT", "1") != "0" and not os.path.ismount(volume):
+        return f"{volume} is not a mount point, so the SSD is not attached"
+    if not write:
+        return None
+    try:
+        root.mkdir(exist_ok=True)
+        probe = root / f".probe-{os.getpid()}"
+        with open(probe, "wb") as handle:
+            handle.write(b"probe\n")
+            flush(handle)
+        probe.unlink()
+    except OSError as error:
+        return f"{root} cannot be written: {error}"
+    return disk_floor(root, payload, f"archiving {mib(payload)} of lanes", "free space on the SSD")
+
+
+def copy_file(source, target, packed, label):
+    """Copy one file (gzipped when packed), fsync it and read it back; returns the source's sha256."""
+    digest = hashlib.sha256()
+    with open(source, "rb") as reader, open(target, "xb") as raw:
+        writer = gzip.GzipFile(filename="", mode="wb", fileobj=raw, compresslevel=6, mtime=0) if packed else raw
+        for block in iter(lambda: reader.read(1 << 20), b""):
+            digest.update(block)
+            writer.write(block)
+        if packed:
+            writer.close()
+        flush(raw)
+    if sha256_file(target, packed) != digest.hexdigest():
+        raise Skip("error", f"the copy of {label} does not read back with its sha256")
+    return digest.hexdigest()
+
+
+def copy_lane(home, partial, items):
+    """Copy a lane's items into partial; returns (manifest entries, bytes written)."""
+    sources = {relative for relative, _ in items}
+    entries = {}
+    written = 0
+    for relative, info in items:
+        source, target = home / relative, partial / relative
+        item = {"mode": stat.S_IMODE(info.st_mode), "mtime_ns": info.st_mtime_ns}
+        if stat.S_ISDIR(info.st_mode):
+            os.mkdir(target, 0o755)
+            item["type"] = "dir"
+        elif stat.S_ISLNK(info.st_mode):
+            item.update(type="symlink", target=os.readlink(source))
+            os.symlink(item["target"], target)
+        else:
+            packed = "/" not in relative and relative.endswith(".log") and relative + ".gz" not in sources
+            if packed:
+                item["archived_as"] = relative + ".gz"
+                target = partial / item["archived_as"]
+            item.update(type="file", size=info.st_size, sha256=copy_file(source, target, packed, relative))
+            if not unchanged(source, info):
+                raise Skip("busy", f"{relative} changed while it was copied")
+            os.chmod(target, item["mode"])
+            written += os.path.getsize(target)
+        entries[relative] = item
+    # Times last and deepest first, so creating a child never moves its parent's mtime afterwards.
+    for relative in sorted(entries, key=lambda relative: relative.count("/"), reverse=True):
+        target = partial / entries[relative].get("archived_as", relative)
+        os.utime(target, ns=(entries[relative]["mtime_ns"],) * 2, follow_symlinks=False)
+    return entries, written
+
+
+def append_index(home, name, final, done_mtime):
+    """Append one line to the index, durably; on failure take any part of it back out and raise."""
+    descriptor = os.open(home / INDEX, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+    try:
+        size = os.fstat(descriptor).st_size
+        line = f"{name}\t{final}\t{utc(time.time())}\t{utc(done_mtime)}\n".encode()
+        try:
+            if os.write(descriptor, line) != len(line):
+                raise OSError(f"a short write to {home / INDEX}")
+            os.fsync(descriptor)
+        except OSError:
+            os.ftruncate(descriptor, size)
+            raise
+    finally:
+        os.close(descriptor)
+
+
+def where(home, name):
+    """The newest archive directory the index names for <name>, else None."""
+    found = None
+    try:
+        lines = (home / INDEX).read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return None
+    for line in lines:
+        fields = line.split("\t")
+        if len(fields) >= 2 and fields[0] == name:
+            found = fields[1]
+    return found
+
+
+def remove_sources(home, name, items):
+    """Remove an archived lane's sources, <name>.json first, each file only while it keeps its copied stat.
+
+    Returns the paths left in place, each with the reason."""
+    kept = []
+    metadata = f"{name}.json"
+    files = sorted((pair for pair in items if not stat.S_ISDIR(pair[1].st_mode)), key=lambda pair: pair[0] != metadata)
+    for relative, info in files:
+        try:
+            if key(os.lstat(home / relative)) == key(info):
+                os.unlink(home / relative)
+                continue
+            kept.append(f"{relative} (changed after its copy)")
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            kept.append(f"{relative} ({error.strerror})")
+        if relative == metadata:
+            # The lane is in use again, or $LANE_HOME refuses removals: leave all of it.
+            return kept + [f"{other} (kept with {metadata})" for other, _ in files[1:]]
+    dirs = [relative for relative, info in items if stat.S_ISDIR(info.st_mode)]
+    for relative in sorted(dirs, key=lambda relative: relative.count("/"), reverse=True):
+        try:
+            os.rmdir(home / relative)
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            kept.append(f"{relative}/ ({error.strerror})")
+    return kept
+
+
+def archive_lane(home, root, row):
+    """Copy one lane to the SSD, verified, index it, then remove its sources. Returns (final, written, kept)."""
+    month_dir = root / time.strftime("%Y-%m", time.gmtime(row.done_mtime))
+    month_dir.mkdir(exist_ok=True)
+    final = month_dir / row.name
+    number = 2
+    while os.path.lexists(final):
+        final = month_dir / f"{row.name}~{number}"
+        number += 1
+    partial = month_dir / f".{row.name}.partial-{os.getpid()}"
+    os.mkdir(partial, 0o755)
+    renamed = False
+    try:
+        entries, written = copy_lane(home, partial, row.items)
+        changed = [relative for relative, info in row.items
+                   if not stat.S_ISDIR(info.st_mode) and not unchanged(home / relative, info)]
+        if changed:
+            raise Skip("busy", f"{changed[0]} changed while the lane was copied")
+        with open(partial / "MANIFEST.json", "x", encoding="utf-8") as handle:
+            json.dump({"name": row.name, "home": str(home), "archived_at": utc(time.time()),
+                       "done_at": utc(row.done_mtime), "lane": row.meta, "entries": entries},
+                      handle, indent=1, sort_keys=True)
+            handle.write("\n")
+            flush(handle)
+        for relative in [""] + [relative for relative, item in entries.items() if item["type"] == "dir"]:
+            sync_dir(partial / relative)
+        sync_dir(partial, full=True)
+        os.rename(partial, final)
+        renamed = True
+        sync_dir(month_dir, full=True)
+        # Inside the try: an archive the index does not name would be copied again by every later pass.
+        append_index(home, row.name, final, row.done_mtime)
+    except BaseException:
+        shutil.rmtree(final if renamed else partial, ignore_errors=True)
+        raise
+    return final, written, remove_sources(home, row.name, row.items)
+
+
+def abandoned(child, marker):
+    """Whether <child> is a dot-named staging directory, <...><marker><pid>, whose process is gone."""
+    if not (child.name.startswith(".") and marker in child.name) or child.is_symlink() or not child.is_dir():
+        return False
+    pid = child.name.rsplit(marker, 1)[1]
+    return pid.isdigit() and int(pid) > 1 and not pid_alive(int(pid))
+
+
+def sweep_volume(root):
+    """Remove SSD partials a killed pass left. Only a partial whose pass is dead goes: a pass of another $LANE_HOME
+    may share the volume, and the lock covers one home. Each is a copy of a lane that still exists in full."""
+    for month_dir in root.iterdir() if root.is_dir() else []:
+        if month_dir.is_dir() and not month_dir.is_symlink():
+            for child in month_dir.iterdir():
+                if abandoned(child, ".partial-"):
+                    shutil.rmtree(child)
+
+
+def sweep_home(home):
+    """Remove unarchive staging a killed restore left; its files are still in the archive."""
+    for child in home.iterdir():
+        if abandoned(child, ".unarchive-"):
+            shutil.rmtree(child)
+
+
+def take_lock(home, wait):
+    handle = open(home / LOCK, "a")
+    deadline = time.monotonic() + wait
+    while True:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return handle
+        except BlockingIOError:
+            if time.monotonic() >= deadline:
+                handle.close()
+                return None
+            time.sleep(0.5)
+
+
+def run(home, volume, apply, bounded):
+    root = volume / "lane-archive"
+    # The handle holds the lock until the process exits.
+    lock = take_lock(home, 0 if bounded else LOCK_WAIT_SECONDS) if apply else None
+    if apply and lock is None:
+        print(f"lane-archive {utc(time.time())}: another pass holds {home / LOCK}; "
+              + ("skipped" if bounded else f"gave up after {LOCK_WAIT_SECONDS} s"))
+        return 0 if bounded else 1
+    now = time.time()
+    lanes, entries = read_lanes(home)
+    owned = {name: [] for name in lanes}
+    unowned, contested = [], {}
+    for entry in entries:
+        claims = claimants(entry, lanes)
+        if len(claims) == 1:
+            owned[claims[0]].append(entry)
+            continue
+        unowned.append(entry)
+        for name in claims:
+            contested.setdefault(name, entry)
+    rows = [Row(name, lanes[name]) for name in sorted(lanes)]
+    for row in rows:
+        try:
+            if row.name in contested:
+                raise Skip("contested", f"{contested[row.name]} could be another lane's file as well")
+            check(home, row, owned[row.name], now)
+        except Skip as skip:
+            row.category, row.message = skip.category, str(skip)
+    candidates = sorted((row for row in rows if row.category is None), key=lambda row: row.done_mtime)
+    if bounded:
+        # A pass inside a worker's exit path stays short; a bigger lane waits for a pass by hand.
+        for row in candidates:
+            if row.size > BOUND_BYTES:
+                row.category, row.message = "bound", f"holds {mib(row.size)}; lane archive --apply moves it"
+        candidates = [row for row in candidates if row.category is None]
+        if not candidates:
+            return 0
+    # The cheap look first: without the SSD an --apply pass stops here, before lsof.
+    problem = volume_problem(volume, root, 0, write=False) if candidates else None
+    if problem and apply:
+        print(f"[DEGRADED] lane-archive: {problem}; moved nothing ({len(candidates)} lanes, "
+              f"{mib(sum(row.size for row in candidates))} wait)")
+        return EXIT_DEGRADED
+    notes = []
+    if candidates:
+        opened = open_paths()
+        if opened is None and apply:
+            print("[DEGRADED] lane-archive: lsof failed or gave no answer, so open files are unknown; moved nothing")
+            return EXIT_DEGRADED
+        if opened is None:
+            notes.append("lsof failed or gave no answer, so this dry run did not check for open files")
+        for row in candidates:
+            busy = [relative for relative, _ in row.items if str(home / relative) in opened] if opened else []
+            if busy:
+                row.category, row.message = "busy", f"pid {opened[str(home / busy[0])]} has {busy[0]} open"
+    chosen, total = [], 0
+    for row in candidates:
+        if row.category is not None:
+            continue
+        if bounded and (len(chosen) >= BOUND_LANES or total + row.size > BOUND_BYTES):
+            row.category, row.message = "bound", "waits for the next pass"
+            continue
+        chosen.append(row)
+        total += row.size
+    if bounded and not chosen:
+        return 0
+    if not bounded:
+        print(f"lane-archive: {'moving' if apply else 'dry run; lane archive --apply moves'} the ARCHIVE rows from "
+              f"{home} to {root}")
+        for row in rows:
+            if row.category is None:
+                files = sum(1 for _, info in row.items if not stat.S_ISDIR(info.st_mode))
+                print(f"ARCHIVE  {row.name}  done {utc(row.done_mtime)[:10]}  {files} files  {mib(row.size)}")
+            elif row.category in LISTED:
+                print(f"SKIP     {row.name}  {row.message}")
+        for entry in unowned:
+            print(f"NO-LANE  {entry}")
+    for note in notes:
+        print(f"lane-archive: {note}")
+    if chosen and not problem:
+        problem = volume_problem(volume, root, total, write=apply)
+    if problem and chosen:
+        print(f"[DEGRADED] lane-archive: {problem}; moved nothing ({len(chosen)} lanes, {mib(total)} wait)")
+        if apply:
+            return EXIT_DEGRADED
+    failed, partial, moved, moved_bytes = 0, 0, 0, 0
+    if apply and chosen:
+        sweep_volume(root)
+        sweep_home(home)
+        for row in chosen:
+            try:
+                final, written, kept = archive_lane(home, root, row)
+            except (Skip, OSError) as error:
+                failed += 1
+                print(f"FAILED   {row.name}  {error}; its files stay in {home}")
+                continue
+            moved, moved_bytes = moved + 1, moved_bytes + row.size
+            files = sum(1 for _, info in row.items if not stat.S_ISDIR(info.st_mode))
+            print(f"ARCHIVED {row.name} -> {final}  {files} files, {mib(row.size)} -> {mib(written)}")
+            if kept:
+                partial += 1
+                print(f"PARTIAL  {row.name}: {len(kept)} paths stay in {home}, and the archive holds them too: "
+                      + ", ".join(kept[:5]))
+    counts = {}
+    for row in rows:
+        if row.category is not None:
+            counts[row.category] = counts.get(row.category, 0) + 1
+    skipped = ", ".join(f"{counts[category]} {SUMMARY[category]}" for category in SUMMARY if category in counts)
+    if apply:
+        done = (f"archived {moved} lanes ({mib(moved_bytes)}){f', {failed} failed' if failed else ''}"
+                f"{f', {partial} partial' if partial else ''}")
+    else:
+        done = f"would archive {len(chosen)} lanes ({mib(total)})"
+    print(f"lane-archive {utc(time.time())}: {done} to {root}; skipped {skipped or 'none'}; "
+          f"{len(unowned)} entries match no lane")
+    return 1 if failed or partial else 0
+
+
+def same(path, item):
+    """True when <path> holds what a manifest entry records, False when it holds something else, None when absent."""
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
+        return None
+    if item["type"] == "dir":
+        return stat.S_ISDIR(info.st_mode)
+    if item["type"] == "symlink":
+        return stat.S_ISLNK(info.st_mode) and os.readlink(path) == item["target"]
+    return stat.S_ISREG(info.st_mode) and info.st_size == item["size"] and sha256_file(path) == item["sha256"]
+
+
+def stage(archive, entries, missing, staging):
+    """Copy the archived files among <missing> into staging, each read back to its sha256; returns {path: staged}."""
+    staged = {}
+    for number, relative in enumerate(missing):
+        item = entries[relative]
+        if item["type"] != "file":
+            continue
+        target = staged[relative] = staging / str(number)
+        packed = "archived_as" in item
+        digest = hashlib.sha256()
+        with (gzip.open(archive / item["archived_as"], "rb") if packed else open(archive / relative, "rb")) as reader, \
+                open(target, "xb") as writer:
+            for block in iter(lambda: reader.read(1 << 20), b""):
+                digest.update(block)
+                writer.write(block)
+            flush(writer)
+        if digest.hexdigest() != item["sha256"] or sha256_file(target) != item["sha256"]:
+            raise OSError(f"{relative} does not restore with its archived sha256")
+        os.chmod(target, item["mode"])
+    sync_dir(staging, full=True)
+    return staged
+
+
+def unarchive(home, name):
+    lock = take_lock(home, LOCK_WAIT_SECONDS)
+    if lock is None:
+        print(f"lane-archive: another pass holds {home / LOCK}; gave up after {LOCK_WAIT_SECONDS} s", file=sys.stderr)
+        return 1
+    archive = where(home, name)
+    if archive is None:
+        print(f"lane-archive: {home / INDEX} names no archive of {name}", file=sys.stderr)
+        return 1
+    archive = Path(archive)
+    try:
+        entries = json.loads((archive / "MANIFEST.json").read_text(encoding="utf-8"))["entries"]
+    except (OSError, ValueError, KeyError) as error:
+        print(f"[DEGRADED] lane-archive: {archive}/MANIFEST.json is not readable ({error}; is the SSD attached?); "
+              "restored nothing")
+        return EXIT_DEGRADED
+    # Parents first and <name>.json last: lane sees the lane again only once everything else is back.
+    order = sorted(entries, key=lambda relative: (relative == f"{name}.json", relative.count("/"), relative))
+    states = {relative: same(home / relative, entries[relative]) for relative in order}
+    differ = [relative for relative in order if states[relative] is False]
+    if differ:
+        print(f"lane-archive: refusing to unarchive {name}: {', '.join(differ[:5])} in {home} differ from {archive}",
+              file=sys.stderr)
+        return 2
+    missing = [relative for relative in order if states[relative] is None]
+    payload = sum(entries[relative]["size"] for relative in missing if entries[relative]["type"] == "file")
+    problem = disk_floor(home, payload, f"restoring {name} ({mib(payload)})", f"free space for {home}")
+    if problem:
+        print(f"[DEGRADED] lane-archive: {problem}; restored nothing")
+        return EXIT_DEGRADED
+    sweep_home(home)
+    staging = home / f".unarchive-{os.getpid()}"
+    os.mkdir(staging, 0o700)
+    try:
+        staged = stage(archive, entries, missing, staging)
+        # Never replace an entry: mkdir, symlink and link all fail on an existing path.
+        for relative in missing:
+            item, target = entries[relative], home / relative
+            try:
+                if item["type"] == "dir":
+                    os.mkdir(target, 0o700)
+                elif item["type"] == "symlink":
+                    os.symlink(item["target"], target)
+                else:
+                    os.link(staged[relative], target)
+            except FileExistsError:
+                if not same(target, item):
+                    raise OSError(f"{relative} appeared in {home} meanwhile and differs from the archive") from None
+        for relative in sorted(entries, key=lambda relative: relative.count("/"), reverse=True):
+            if entries[relative]["type"] != "symlink":
+                os.chmod(home / relative, entries[relative]["mode"])
+            os.utime(home / relative, ns=(entries[relative]["mtime_ns"],) * 2, follow_symlinks=False)
+        for relative in [""] + [relative for relative, item in entries.items() if item["type"] == "dir"]:
+            sync_dir(home / relative)
+        sync_dir(home, full=True)
+    except OSError as error:
+        print(f"lane-archive: stopped restoring {name}: {error}; {archive} is untouched, and once the cause is "
+              f"fixed, lane unarchive {name} continues", file=sys.stderr)
+        return 1
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    # A restored lane gets 14 more days before a pass moves it again.
+    if os.path.isfile(home / f"{name}.done"):
+        os.utime(home / f"{name}.done")
+    shutil.rmtree(archive)
+    lines = (home / INDEX).read_text(encoding="utf-8").splitlines(keepends=True)
+    tmp = home / f"{INDEX}.tmp.{os.getpid()}"
+    with open(tmp, "w", encoding="utf-8") as handle:
+        handle.write("".join(line for line in lines if line.split("\t")[:2] != [name, str(archive)]))
+        flush(handle)
+    os.replace(tmp, home / INDEX)
+    sync_dir(home)
+    print(f"lane-archive: restored {name} from {archive} ({len(missing)} paths restored, "
+          f"{len(entries) - len(missing)} already in place, sha256 checked); removed the archive")
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("--home", required=True, help="the lane home ($LANE_HOME)")
+    parser.add_argument("--apply", action="store_true", help="move the lanes; without it, a dry run")
+    parser.add_argument("--bounded", action="store_true", help="at most 20 lanes and 1 GiB; silent with nothing to do")
+    parser.add_argument("--unarchive", metavar="NAME", help="restore one lane from its newest archive")
+    parser.add_argument("--where", metavar="NAME", help="print a lane's newest archive; exit 1 when there is none")
+    args = parser.parse_args()
+    home = Path(os.path.realpath(args.home))
+    for name in (args.unarchive, args.where):
+        if name is not None and not NAME.match(name):
+            parser.error(f"invalid lane name: {name!r}")
+    if args.where is not None:
+        found = where(home, args.where)
+        if found:
+            print(found)
+        return 0 if found else 1
+    if args.unarchive is not None:
+        return unarchive(home, args.unarchive)
+    return run(home, Path(os.environ.get("LANE_ARCHIVE_VOLUME") or DEFAULT_VOLUME), args.apply, args.bounded)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

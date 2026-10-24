@@ -7,6 +7,13 @@ TEST_TMP=$(mktemp -d "${TMPDIR:-/tmp}/lane-test.XXXXXX")
 mkdir -p "$TEST_TMP/lanes"
 LANE_HOME=$(cd "$TEST_TMP/lanes" && pwd -P)
 export LANE_HOME
+# Every archive pass, by hand or after a retire, writes here and never to the real SSD. TMPDIR can end in "/",
+# which leaves "//" in TEST_TMP, and lane-archive prints its volume normalized, so the volume path is resolved.
+ARCHIVE_BASE=$(cd "$TEST_TMP" && pwd -P)
+LANE_ARCHIVE_VOLUME="$ARCHIVE_BASE/ssd"
+LANE_ARCHIVE_REQUIRE_MOUNT=0
+export LANE_ARCHIVE_VOLUME LANE_ARCHIVE_REQUIRE_MOUNT
+mkdir -p "$LANE_ARCHIVE_VOLUME"
 unset LANE_CODEX_MODEL LANE_CODEX_EFFORT LANE_CODEX_ADD_DIRS LANE_CODEX_NETWORK
 unset LANE_CLAUDE_MODEL LANE_CLAUDE_EFFORT LANE_OPENCODE_MODEL
 REPO="$TEST_TMP/repo"
@@ -18,7 +25,9 @@ UNRELATED_PID=""
 
 cleanup() {
   local name
-  for name in first hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride ocargs ocquota failure rvcache rvown rvnone retire1 retirefail retirebusy hook1 hook2 ochook; do
+  # The live-lane test gives a running lane a fake marker, and lane stop signals no lane that has one.
+  rm -f "$LANE_HOME/archlive.done"
+  for name in first hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride ocargs ocquota failure rvcache rvown rvnone retire1 retirefail retirebusy hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit; do
     if [ -f "$LANE_HOME/$name.json" ]; then
       "$LANE" stop "$name" >/dev/null 2>&1 || true
     fi
@@ -111,6 +120,36 @@ latest_harvest_of() {
     [ -d "$entry" ] && latest="$entry"
   done
   printf '%s\n' "$latest"
+}
+
+# Back-date files, and everything under a directory, by <days>: a lane is archived only when its marker is 14 days old
+# and no file of it changed in the last hour.
+age_paths() {
+  python3 - "$@" <<'PY'
+import os
+import sys
+import time
+
+stamp = time.time() - float(sys.argv[1]) * 86400
+for top in sys.argv[2:]:
+    paths = [top]
+    for root, dirs, files in os.walk(top):
+        paths.extend(os.path.join(root, name) for name in dirs + files)
+    for path in paths:
+        os.utime(path, (stamp, stamp), follow_symlinks=False)
+PY
+}
+
+# A worker's group outlives its marker while the exit path's archive pass runs.
+wait_group_exit() {
+  local pid
+  local attempts=0
+  pid=$(json_value "$LANE_HOME/$1.json" pid)
+  while kill -0 -- "-$pid" 2>/dev/null && [ "$attempts" -lt 300 ]; do
+    sleep 0.1
+    attempts=$((attempts + 1))
+  done
+  if kill -0 -- "-$pid" 2>/dev/null; then fail "process group $pid of $1 did not exit"; fi
 }
 
 arg_after() {
@@ -1038,5 +1077,124 @@ if resume_error=$("$LANE" resume legacywt --no-note 2>&1); then fail "a pre-hook
 grep -Fq "declares a checkout hook" <<<"$resume_error" || fail "pre-hook resume refusal unnamed: $resume_error"
 git -C "$REPO" config --unset lane.checkout
 "$LANE" reap legacywt --force >/dev/null
+
+echo "test: lane archive lists, then moves an old finished lane to the SSD sha256-checked, and leaves the rest"
+LANE_FAKE_HOLD="$TEST_TMP/release-arch1" "$LANE" run arch1 --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+"$LANE" run arch1.b --repo "$REPO" --brief "$BRIEF" --worker fake --no-worktree >/dev/null
+"$LANE" run archkeep --repo "$REPO" --brief "$BRIEF" --worker fake --no-worktree >/dev/null
+"$LANE" run archco --repo "$REPO" --brief "$BRIEF" --worker fake --keep-checkout >/dev/null
+"$LANE" run archbound --repo "$REPO" --brief "$BRIEF" --worker fake --no-worktree >/dev/null
+"$LANE" run archlive --repo "$REPO" --brief "$BRIEF" --worker fake-hang --no-worktree >/dev/null
+printf '%s\n' "archived edit" >>"$REPO_REAL/.claude/worktrees/codex-arch1/tracked.txt"
+touch "$TEST_TMP/release-arch1"
+for name in arch1 arch1.b archkeep archco archbound; do wait_for_file "$LANE_HOME/$name.done"; done
+wait_group_exit arch1
+grep -q '^CHECKOUT=retired ' "$LANE_HOME/arch1.checkout-state" || fail "arch1 was not retired: $(<"$LANE_HOME/arch1.checkout-state")"
+printf '%s\n' "a stalled run" >"$LANE_HOME/arch1.stalled-1.log"
+printf '%s\n' "a consumed note" >"$LANE_HOME/arch1.resume-note.consumed-1.md"
+touch "$LANE_HOME/archkeep.KEEP"
+printf '%s\n' "EXIT=0" >"$LANE_HOME/archlive.done"
+printf '%s\n' "left by a reaped lane" >"$LANE_HOME/zzgone.stalled-1.log"
+ARCH1_ENTRIES=$(cd "$LANE_HOME" && find . -maxdepth 1 -name 'arch1.*' ! -name 'arch1.b.*' | sed 's|^\./||' | sort)
+assert_eq "arch1.checkout-state arch1.done arch1.harvest arch1.json arch1.log arch1.resume-note.consumed-1.md arch1.stalled-1.log" \
+  "$(printf '%s\n' "$ARCH1_ENTRIES" | tr '\n' ' ' | sed 's/ $//')" "arch1's entries"
+while IFS= read -r entry; do age_paths 20 "$LANE_HOME/$entry"; done <<<"$ARCH1_ENTRIES"
+age_paths 20 "$LANE_HOME"/archkeep.* "$LANE_HOME"/archco.* "$LANE_HOME"/archlive.*
+ARCH1_LOG_SHA=$(shasum -a 256 <"$LANE_HOME/arch1.stalled-1.log" | cut -d' ' -f1)
+dry=$("$LANE" archive)
+grep -Eq '^ARCHIVE  arch1  done [0-9-]{10}  [0-9]+ files  ' <<<"$dry" || fail "the dry run did not list arch1: $dry"
+grep -Fxq "SKIP     archkeep  archkeep.KEEP keeps it" <<<"$dry" || fail "the KEEP lane was not skipped: $dry"
+grep -Fq "SKIP     archco  lane reap archco --force first: its checkout $REPO_REAL/.claude/worktrees/codex-archco remains" \
+  <<<"$dry" || fail "the lane with a checkout was not skipped: $dry"
+grep -Eq '^SKIP     archlive  process group [0-9]+ exists$' <<<"$dry" || fail "the live lane was not skipped: $dry"
+grep -Fxq "NO-LANE  zzgone.stalled-1.log" <<<"$dry" || fail "the dry run did not list the file of no lane: $dry"
+if grep -Eq 'arch1\.b|archbound' <<<"$dry"; then fail "the dry run listed a fresh lane: $dry"; fi
+assert_file "$LANE_HOME/arch1.json"
+[ ! -e "$LANE_ARCHIVE_VOLUME/lane-archive" ] || fail "the dry run wrote to the volume"
+
+echo "test: an absent SSD, one that is not a mount point and one under the disk floor move nothing"
+if out=$(LANE_ARCHIVE_VOLUME="$ARCHIVE_BASE/no-ssd" "$LANE" archive --apply 2>&1); then fail "archived to an absent volume"; else rc=$?; fi
+assert_eq 75 "$rc" "absent volume exit"
+grep -Fq "[DEGRADED] lane-archive: $ARCHIVE_BASE/no-ssd is absent; moved nothing (1 lanes" <<<"$out" || fail "absent volume: $out"
+if out=$(LANE_ARCHIVE_REQUIRE_MOUNT=1 "$LANE" archive --apply 2>&1); then fail "archived to a plain directory"; else rc=$?; fi
+assert_eq 75 "$rc" "unmounted volume exit"
+grep -Fq "[DEGRADED] lane-archive: $LANE_ARCHIVE_VOLUME is not a mount point" <<<"$out" || fail "unmounted volume: $out"
+if out=$(DISK_FLOOR_GIB=100000000 "$LANE" archive --apply 2>&1); then fail "archived under the disk floor"; else rc=$?; fi
+assert_eq 75 "$rc" "disk floor exit"
+grep -Fq "[DEGRADED] lane-archive: DISK LOW: " <<<"$out" || fail "disk floor: $out"
+assert_eq "" "$(ls -A "$LANE_ARCHIVE_VOLUME/lane-archive")" "volume after the refused passes"
+while IFS= read -r entry; do [ -e "$LANE_HOME/$entry" ] || fail "a refused pass moved $entry"; done <<<"$ARCH1_ENTRIES"
+
+applied=$(DISK_FLOOR_GIB=0 "$LANE" archive --apply)
+ARCH1_DIR=$(sed -n 's/^ARCHIVED arch1 -> \(.*\)  [0-9]* files, .*/\1/p' <<<"$applied")
+[ -n "$ARCH1_DIR" ] && [ -f "$ARCH1_DIR/MANIFEST.json" ] || fail "arch1 was not archived: $applied"
+while IFS= read -r entry; do [ ! -e "$LANE_HOME/$entry" ] || fail "an archived source stayed: $entry"; done <<<"$ARCH1_ENTRIES"
+for entry in arch1.b.json arch1.b.log arch1.b.done archkeep.json archco.json archlive.json archbound.json zzgone.stalled-1.log; do
+  assert_file "$LANE_HOME/$entry"
+done
+[ -d "$REPO_REAL/.claude/worktrees/codex-archco" ] || fail "the archive pass touched a checkout"
+python3 - "$ARCH1_DIR" "$ARCH1_LOG_SHA" <<'PY' || fail "the archive does not verify against its manifest"
+import gzip
+import hashlib
+import json
+import os
+import sys
+
+root, log_sha = sys.argv[1:]
+manifest = json.load(open(os.path.join(root, "MANIFEST.json"), encoding="utf-8"))
+entries = manifest["entries"]
+assert manifest["lane"]["name"] == "arch1", manifest["lane"]
+assert not any(path.startswith("arch1.b.") for path in entries), sorted(entries)
+assert entries["arch1.stalled-1.log"]["sha256"] == log_sha, entries["arch1.stalled-1.log"]
+assert entries["arch1.stalled-1.log"]["archived_as"] == "arch1.stalled-1.log.gz"
+assert any(path.startswith("arch1.harvest/") and path.endswith("/lane.patch") for path in entries), sorted(entries)
+checked = 0
+for path, item in entries.items():
+    if item["type"] == "file":
+        packed = "archived_as" in item
+        with (gzip.open if packed else open)(os.path.join(root, item.get("archived_as", path)), "rb") as handle:
+            assert hashlib.sha256(handle.read()).hexdigest() == item["sha256"], path
+        checked += 1
+assert checked >= 8, checked
+PY
+assert_eq "$ARCH1_DIR" "$(awk -F'\t' '$1 == "arch1" { print $2 }' "$LANE_HOME/.archived.tsv")" "index entry"
+
+echo "test: an archived lane names its archive, and lane unarchive restores it"
+if out=$("$LANE" resume arch1 --no-note 2>&1); then fail "resume accepted an archived lane"; fi
+grep -Fq "arch1 was archived to $ARCH1_DIR; lane unarchive arch1 restores it" <<<"$out" || fail "resume did not name the archive: $out"
+if out=$("$LANE" review arch1 2>&1); then fail "review accepted an archived lane"; fi
+grep -Fq "arch1 was archived to $ARCH1_DIR" <<<"$out" || fail "review did not name the archive: $out"
+out=$("$LANE" stop nosuchlane 2>&1) || true
+grep -Fq "unknown lane: nosuchlane" <<<"$out" || fail "a lane never archived is not unknown: $out"
+DISK_FLOOR_GIB=0 "$LANE" unarchive arch1 >/dev/null
+[ ! -e "$ARCH1_DIR" ] || fail "unarchive left the archive"
+assert_eq "a stalled run" "$(<"$LANE_HOME/arch1.stalled-1.log")" "restored stalled log"
+grep -Fq '+archived edit' "$(latest_harvest_of arch1)/lane.patch" || fail "the restored harvest lacks the edit"
+assert_eq "DONE:0" "$(state_for arch1)" "restored lane state"
+assert_eq "" "$(awk -F'\t' '$1 == "arch1"' "$LANE_HOME/.archived.tsv")" "index after unarchive"
+python3 - "$LANE_HOME/arch1.done" "$LANE_HOME/arch1.stalled-1.log" <<'PY' || fail "unarchive did not restart the clock or keep the mtimes"
+import os
+import sys
+import time
+
+now = time.time()
+sys.exit(0 if now - os.stat(sys.argv[1]).st_mtime < 3600 and now - os.stat(sys.argv[2]).st_mtime > 19 * 86400 else 1)
+PY
+
+echo "test: the pass after a retire archives old lanes, from the worker's exit path and from reap"
+age_paths 20 "$LANE_HOME"/archbound.*
+DISK_FLOOR_GIB=0 "$LANE" run archexit --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+wait_for_file "$LANE_HOME/archexit.done"
+wait_group_exit archexit
+grep -q '^ARCHIVED archbound -> ' "$LANE_HOME/.archive.log" || fail "the exit path's pass did not archive archbound"
+assert_no_file "$LANE_HOME/archbound.json"
+age_paths 20 "$LANE_HOME"/arch1.b.*
+reap_output=$(DISK_FLOOR_GIB=0 "$LANE" reap archco --force)
+grep -Fq "lane: archive pass: lane-archive " <<<"$reap_output" || fail "reap ran no archive pass: $reap_output"
+grep -q '^ARCHIVED arch1\.b -> ' "$LANE_HOME/.archive.log" || fail "reap's pass did not archive arch1.b"
+assert_no_file "$LANE_HOME/arch1.b.json"
+assert_file "$LANE_HOME/arch1.json"
+rm -f "$LANE_HOME/archlive.done"
+"$LANE" stop archlive >/dev/null
 
 echo "PASS: lane lifecycle"

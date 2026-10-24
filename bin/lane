@@ -40,6 +40,13 @@ usage:
   lane reap <name> [--force]
       (without --force it shows the diff; --force harvests, then removes the checkout; a retired lane loses only its
        metadata and log, never its harvest)
+  lane archive [--apply]
+      (a dry run unless --apply: a lane whose DONE marker is over 14 days old, with no live process, no
+       $LANE_HOME/<name>.KEEP file and no checkout left moves to $LANE_ARCHIVE_VOLUME/lane-archive/ (default
+       /Volumes/2TBPNY), each file sha256-checked before its source goes; a bounded pass runs after each successful
+       retire; see bin/lane-archive)
+  lane unarchive <name>
+      (copies an archived lane back, checks every sha256, gives it 14 more days and removes the archive)
 EOF
 }
 
@@ -304,6 +311,24 @@ latest_harvest() {
   done
   [ -n "$latest" ] || return 1
   printf '%s\n' "$latest"
+}
+
+# A lane without metadata may sit on the SSD (bin/lane-archive): name its archive rather than "unknown".
+unknown_lane() {
+  local archived
+  archived=$("$LANE_BIN_DIR/lane-archive" --home "$LANE_HOME" --where "$1" 2>/dev/null) || die "unknown lane: $1"
+  die "$1 was archived to $archived; lane unarchive $1 restores it"
+}
+
+# The bounded pass after each successful retire, here and in the worker's exit path: lanes that finished over 14 days
+# ago move to the SSD (bin/lane-archive). No timer runs it.
+archive_pass() {
+  local out
+  out=$("$LANE_BIN_DIR/lane-archive" --home "$LANE_HOME" --apply --bounded 2>&1) || true
+  [ -n "$out" ] || return 0
+  # Under set -e a failed append would turn the reap that just succeeded into a failure.
+  printf '%s\n' "$out" >>"$LANE_HOME/.archive.log" || echo "lane: archive pass: could not append to $LANE_HOME/.archive.log" >&2
+  echo "lane: archive pass: $(printf '%s\n' "$out" | tail -n 1) (log: $LANE_HOME/.archive.log)"
 }
 
 # A repo whose lanes must not see its full tree (genomics withholds donor data from third-party models) declares a
@@ -828,6 +853,7 @@ launch_worker() {
   nohup /usr/bin/perl -MPOSIX -e 'POSIX::setsid() or die "lane: setsid: $!\n"; exec { $ARGV[0] } @ARGV or die "lane: exec: $!\n"' \
     env PYTHONUNBUFFERED=1 LANE_WORKER=1 UV_CACHE_DIR="$HOME/.cache/uv" LANE_NAME="$name" LANE_REPO="$repo" LANE_LOG="$log" \
     LANE_OPENCODE_HELPER="$LANE_BIN_DIR/lane-opencode" LANE_RETIRE="$LANE_BIN_DIR/lane-retire" LANE_HOME="$LANE_HOME" \
+    LANE_ARCHIVE="$LANE_BIN_DIR/lane-archive" \
     LANE_CHECKOUT_MODE="$checkout_mode" LANE_CHECKOUT_BASE="$checkout_base" LANE_BRANCH="$branch" \
     LANE_KEEP_CHECKOUT="$keep_checkout" LANE_CHECKOUT_ENV="$checkout_env_names" \
     ${checkout_env[@]+"${checkout_env[@]}"} bash -c '
@@ -921,6 +947,11 @@ launch_worker() {
     marker_tmp="${marker}.tmp.$$"
     printf "EXIT=%s\n" "$rc" > "$marker_tmp"
     mv "$marker_tmp" "$marker"
+    # After a retire, a bounded pass moves lanes that finished over 14 days ago to the SSD (bin/lane-archive). It runs
+    # after the marker, so no watcher waits for it.
+    case "$state" in
+      "CHECKOUT=retired "*) "$LANE_ARCHIVE" --home "$LANE_HOME" --apply --bounded >> "$LANE_HOME/.archive.log" 2>&1 || true ;;
+    esac
     exit "$rc"
   ' lane-worker "$log" "$marker" "$worker" "$prompt" "$brief" "$worktree" "$resume_mode" "$checkout_state" </dev/null >/dev/null 2>&1 &
   launch_pid=$!
@@ -1310,7 +1341,7 @@ cmd_review() {
   validate_plain_value "effort" "$effort"
   validate_plain_value "out" "$out"
   metadata=$(metadata_path "$name")
-  [ -f "$metadata" ] || die "unknown lane: $name"
+  [ -f "$metadata" ] || unknown_lane "$name"
   worktree=$(json_get "$metadata" worktree) || die "invalid metadata: $metadata"
   if [ ! -d "$worktree" ]; then
     # A retired lane is reviewed from its harvest: the same diff, plus any commits it made.
@@ -1561,7 +1592,7 @@ stop_lane() {
   local started_epoch
   local marker
   metadata=$(metadata_path "$name")
-  [ -f "$metadata" ] || die "unknown lane: $name"
+  [ -f "$metadata" ] || unknown_lane "$name"
   pid=$(json_get "$metadata" pid) || die "invalid metadata: $metadata"
   started_epoch=$(json_get "$metadata" started_epoch 2>/dev/null || true)
   marker=$(done_path "$name")
@@ -1624,7 +1655,7 @@ cmd_resume() {
     esac
   done
   metadata=$(metadata_path "$name")
-  [ -f "$metadata" ] || die "unknown lane: $name"
+  [ -f "$metadata" ] || unknown_lane "$name"
   repo=$(json_get "$metadata" repo) || die "invalid metadata: $metadata"
   worktree=$(json_get "$metadata" worktree) || die "invalid metadata: $metadata"
   brief=$(json_get "$metadata" brief) || die "invalid metadata: $metadata"
@@ -1709,6 +1740,7 @@ cmd_reap() {
   local checkout_base
   local retire_out
   local last
+  local retired="false"
   validate_name "$name"
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -1720,7 +1752,7 @@ cmd_reap() {
     esac
   done
   metadata=$(metadata_path "$name")
-  [ -f "$metadata" ] || die "unknown lane: $name"
+  [ -f "$metadata" ] || unknown_lane "$name"
   pid=$(json_get "$metadata" pid) || die "invalid metadata: $metadata"
   started_epoch=$(json_get "$metadata" started_epoch 2>/dev/null || true)
   state=$(lane_state "$name" "$pid" "$started_epoch" "$DEFAULT_STALL_MIN")
@@ -1765,6 +1797,7 @@ cmd_reap() {
     printf '%s\n' "$retire_out"
     last=$(printf '%s\n' "$retire_out" | tail -n 1)
     case "$last" in CHECKOUT=retired\ *) ;; *) die "kept $name: ${last#CHECKOUT=}" ;; esac
+    retired="true"
   else
     echo "lane: $name has no checkout left: $(cat "$(checkout_state_path "$name")" 2>/dev/null || echo "no retire record")"
     if [ "$force" != "true" ]; then
@@ -1779,6 +1812,18 @@ cmd_reap() {
   rm -f "$metadata" "$(done_path "$name")" "$(log_path "$name")" "$LANE_HOME/$name.opencode-session" \
     "$(checkout_state_path "$name")"
   echo "lane: reaped $name; harvests stay in $LANE_HOME/$name.harvest/"
+  [ "$retired" = false ] || archive_pass
+}
+
+cmd_archive() {
+  case "$*" in "" | --apply) ;; *) die "usage: lane archive [--apply]" ;; esac
+  "$LANE_BIN_DIR/lane-archive" --home "$LANE_HOME" "$@"
+}
+
+cmd_unarchive() {
+  [ "$#" -eq 1 ] || die "unarchive requires exactly one name"
+  validate_name "$1"
+  "$LANE_BIN_DIR/lane-archive" --home "$LANE_HOME" --unarchive "$1"
 }
 
 main() {
@@ -1790,7 +1835,7 @@ main() {
   shift
   case "$command" in
     -h | --help | help) usage ;;
-    run | review | ls | stop | resume | reap)
+    run | review | ls | stop | resume | reap | archive | unarchive)
       init_lane_home
       case "$command" in
         run) cmd_run "$@" ;;
@@ -1799,6 +1844,8 @@ main() {
         stop) cmd_stop "$@" ;;
         resume) cmd_resume "$@" ;;
         reap) cmd_reap "$@" ;;
+        archive) cmd_archive "$@" ;;
+        unarchive) cmd_unarchive "$@" ;;
       esac
       ;;
     *)
