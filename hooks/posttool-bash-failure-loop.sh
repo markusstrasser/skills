@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # posttool-bash-failure-loop.sh — Detect consecutive Bash failures with targeted correction.
-# PostToolUse:Bash hook. Reads JSON tool output from stdin.
-# Tracks consecutive failures in /tmp. After THRESHOLD, extracts the specific error
-# and injects targeted correction advice (not just "stop retrying").
+# Wired on BOTH events (matcher Bash):
+#   PostToolUseFailure — a failed call (non-zero exit); error text in top-level "error".
+#   PostToolUse        — a successful call; resets the counter. Codex has no failure
+#                        event, so a tool_response carrying a non-zero exit code counts too.
+# Before 2026-10-24 this hook sat on PostToolUse only and read top-level exitCode/stderr,
+# fields Claude never sends: it fired once ever (a test), leaving the constitution's
+# ">5 failure loop" rule unenforced. After THRESHOLD failures it injects a diagnosis.
 # Based on AgentDebug finding: targeted correction +24% over blind retry.
 # Fails open: if this script errors, exit 0.
 
@@ -19,54 +23,37 @@ hook_identity "$INPUT"
 COUNTER_FILE="/tmp/claude-bash-failure-count-${HOOK_OWNER}"
 ERROR_FILE="/tmp/claude-bash-last-error-${HOOK_OWNER}"
 
-# Extract failure status and error details from tool output JSON
-RESULT=$(echo "$INPUT" | python3 -c "
+RESULT=$(echo "$INPUT" | python3 -c '
 import sys, json
 try:
-    data = json.load(sys.stdin)
-    output = str(data.get('tool_result', data.get('output', data.get('stdout', ''))))
-    stderr = str(data.get('stderr', ''))
-    exit_code = data.get('exitCode', data.get('exit_code', 0))
-
-    failed = False
-    error_msg = ''
-
-    if exit_code and exit_code != 0:
-        failed = True
-        # Extract the most useful error line
-        for line in (stderr or output).split('\n'):
-            line = line.strip()
-            if line and any(p in line.lower() for p in ['error', 'failed', 'denied', 'not found', 'no such', 'cannot', 'traceback']):
-                error_msg = line[:200]
-                break
-        if not error_msg:
-            error_msg = (stderr or output).strip().split('\n')[-1][:200]
-    elif any(p in stderr.lower() for p in ['error', 'failed', 'permission denied', 'not found', 'connection refused']):
-        failed = True
-        for line in stderr.split('\n'):
-            line = line.strip()
-            if line and any(p in line.lower() for p in ['error', 'failed', 'denied', 'not found']):
-                error_msg = line[:200]
-                break
-    elif any(p in output.lower() for p in ['traceback (most recent call last)', 'errno', 'httperror', 'connectionerror']):
-        failed = True
-        lines = output.strip().split('\n')
-        # For tracebacks, grab the last 2 lines (exception type + message)
-        error_msg = ' | '.join(l.strip() for l in lines[-2:])[:200]
-
-    if failed:
-        print(f'fail|{error_msg}')
+    d = json.load(sys.stdin)
+    event = d.get("hook_event_name", "")
+    if d.get("is_interrupt"):
+        print("skip|")  # the user stopped it; not a failure loop
+    elif event == "PostToolUseFailure":
+        err = str(d.get("error") or "")
+        lines = [l.strip() for l in err.splitlines() if l.strip()]
+        keys = ("error", "failed", "denied", "not found", "no such", "cannot", "traceback")
+        hit = next((l for l in lines if any(k in l.lower() for k in keys)), lines[-1] if lines else "")
+        print("fail|" + hit[:200])
     else:
-        print('ok|')
-except:
-    print('ok|')
-" 2>/dev/null)
+        tr = d.get("tool_response")
+        code = 0
+        if isinstance(tr, dict):
+            code = tr.get("exit_code", tr.get("exitCode", 0)) or 0
+        if code:
+            err = str(tr.get("stderr") or tr.get("stdout") or "").strip().splitlines()
+            print("fail|" + (err[-1][:200] if err else f"exit {code}"))
+        else:
+            print("ok|")
+except Exception:
+    print("skip|")
+' 2>/dev/null)
 
 STATUS="${RESULT%%|*}"
 ERROR_MSG="${RESULT#*|}"
 
 if [ "$STATUS" = "fail" ]; then
-    # Increment counter and save error
     COUNT=0
     [ -f "$COUNTER_FILE" ] && COUNT=$(cat "$COUNTER_FILE" 2>/dev/null || echo 0)
     COUNT=$((COUNT + 1))
@@ -76,7 +63,6 @@ if [ "$STATUS" = "fail" ]; then
     if [ "$COUNT" -ge "$THRESHOLD" ]; then
         echo "1" > "/tmp/claude-tab-error-${PPID:-0}" 2>/dev/null || true
 
-        # Collect recent errors for pattern analysis
         LAST_ERROR=""
         [ -f "$ERROR_FILE" ] && LAST_ERROR=$(cat "$ERROR_FILE" 2>/dev/null || echo "")
 
@@ -95,25 +81,18 @@ if [ "$STATUS" = "fail" ]; then
         else
             DIAGNOSIS="Unclassified repeated failure. Last error: ${LAST_ERROR:0:120}. Try a fundamentally different approach or ask the user."
         fi
+        MSG="BASH FAILURE LOOP: $COUNT consecutive failures. $DIAGNOSIS"
 
-        # Write rejection reason to stderr — paired with continueOnBlock:true in
-        # ~/.claude/settings.json (CC v2.1.139+), this feeds the diagnosis back
-        # into the same turn instead of ending the turn.
-        echo "BASH FAILURE LOOP: $COUNT consecutive failures. $DIAGNOSIS" >&2
-
-        # Log trigger for ROI analysis (now "block" not "warn")
         ~/Projects/skills/hooks/hook-trigger-log.sh "bash-failure-loop" "block" "$COUNT failures: $LAST_ERROR" 2>/dev/null || true
 
-        # Reset so the block fires again after another THRESHOLD failures
+        # Reset so the diagnosis fires again after another THRESHOLD failures
         echo "0" > "$COUNTER_FILE"
 
-        # Disable trap and exit 2 — PostToolUse exit-2 + continueOnBlock=true
-        # delivers stderr to the model in-turn. Probe target 2026-05-27.
-        trap - ERR
-        exit 2
+        # The call already ran: deliver the diagnosis in-turn as additionalContext.
+        EVENT=$(echo "$INPUT" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("hook_event_name") or "PostToolUse")' 2>/dev/null || echo PostToolUse)
+        MSG="$MSG" EVENT="$EVENT" python3 -c 'import json,os; print(json.dumps({"hookSpecificOutput": {"hookEventName": os.environ["EVENT"], "additionalContext": os.environ["MSG"]}}))'
     fi
-else
-    # Success — reset counter and clear error flag
+elif [ "$STATUS" = "ok" ]; then
     [ -f "$COUNTER_FILE" ] && echo "0" > "$COUNTER_FILE"
     echo "0" > "/tmp/claude-tab-error-${PPID:-0}" 2>/dev/null || true
 fi

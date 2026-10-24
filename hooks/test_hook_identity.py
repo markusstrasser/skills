@@ -125,13 +125,31 @@ def test_bash_poll_counts_each_sibling_separately(tmp_path, own_tmp_trackers):
             assert (proc.returncode, proc.stdout) == (0, "")
 
 
+BASH_FAILURE = {"hook_event_name": "PostToolUseFailure", "tool_name": "Bash",
+                "tool_input": {"command": "false"}, "error": "Exit code 1\nerror: boom"}
+
+
 def test_bash_failure_loop_counts_each_sibling_separately(tmp_path, own_tmp_trackers):
-    failure = {"tool_name": "Bash", "tool_input": {"command": "false"},
-               "exit_code": 1, "stderr": "error: boom"}
     for n in range(2):
         for _ in range(4):  # 8 failures in one process: a shared counter trips at 5
-            proc = run_hook("posttool-bash-failure-loop.sh", as_agent(failure, f"sib{n}"), tmp_path)
-            assert proc.returncode == 0, proc.stderr
+            proc = run_hook("posttool-bash-failure-loop.sh", as_agent(BASH_FAILURE, f"sib{n}"), tmp_path)
+            assert (proc.returncode, proc.stdout) == (0, ""), proc.stderr
+
+
+def test_bash_failure_loop_trips_on_fifth_real_failure_and_success_resets(tmp_path, own_tmp_trackers):
+    # Claude delivers a failed Bash call as PostToolUseFailure with top-level "error";
+    # the pre-2026-10-24 hook read exitCode/stderr and never saw one.
+    ok = {"hook_event_name": "PostToolUse", "tool_name": "Bash",
+          "tool_input": {"command": "true"}, "tool_response": {"stdout": "", "stderr": ""}}
+    hook = "posttool-bash-failure-loop.sh"
+    for _ in range(4):
+        assert run_hook(hook, as_agent(BASH_FAILURE, "sib0"), tmp_path).stdout == ""
+    assert run_hook(hook, as_agent(ok, "sib0"), tmp_path).stdout == ""  # resets
+    outs = [run_hook(hook, as_agent(BASH_FAILURE, "sib0"), tmp_path) for _ in range(5)]
+    assert [p.stdout for p in outs[:4]] == [""] * 4
+    ctx = json.loads(outs[4].stdout)["hookSpecificOutput"]
+    assert ctx["hookEventName"] == "PostToolUseFailure"
+    assert "BASH FAILURE LOOP: 5 consecutive failures" in ctx["additionalContext"]
 
 
 @pytest.mark.parametrize("hook,envelope,marker", [
