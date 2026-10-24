@@ -68,3 +68,15 @@ Psychology classics (cited from memory, not re-fetched; verify before citing the
 - Critical Decision Method: Klein, Calderwood & MacGregor 1989 (recall tacit expertise through a specific incident and cue probes).
 - Miracle question: de Shazer, solution-focused brief therapy.
 - Learning vs performance goals on complex novel tasks: Winters & Latham 1996; Seijts & Latham 2001. Stretch-goal boundary conditions: Sitkin et al. 2011, AMR "The paradox of stretch goals" (help with recent success and slack resources, hurt without them).
+
+## A/B 2026-10-24: v1 vs v3 (plan-split triage + psychology probes), not adopted
+
+Four briefs (ferritin chart, flaky test, advisor update email, weekly todo review). Claude Opus 5.5
+at medium effort produced each arm's questions, assumptions and rewritten brief. GPT-6 Astra (high
+effort) judged pairs blind in shuffled order. Result: 2–2 (v3 won the flaky-test and advisor-email
+briefs; v1 won ferritin and todos). Where question counts differed, v3 asked more (4 vs 2, 5 vs 3).
+The judge penalized v3's rote "why does that matter?" ladder and its post-result follow-up question
+each time. Output size was about even (v1 21.3K chars, v3 20.2K); token counts were unavailable
+[DEGRADED]. Decision: keep v1. A future version could test the triage and learning-goal rule
+without the laddering and post-result question, since those caused most of v3's extra questions.
+Artifacts: session scratchpad `ab/` (not kept).
