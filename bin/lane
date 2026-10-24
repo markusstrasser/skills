@@ -572,15 +572,52 @@ lane_state() {
   fi
 }
 
-dirty_count() {
-  local worktree="$1"
-  local count
-  if [ ! -d "$worktree" ] || ! git -C "$worktree" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    echo "?"
-    return
-  fi
-  count=$(git -C "$worktree" status --porcelain | wc -l | tr -d '[:space:]')
-  echo "${count:-0}"
+# One line per lane metadata file, in argument order, fields split by \x1f: name, pid, started_at, started_epoch,
+# worktree, and the checkout's `git status --porcelain` line count ("?" when git status fails there). A file that
+# lacks a field prints "!" and its path. One process with concurrent git status: five python3 starts and a serial
+# git status per lane took `lane ls` to 155 s over 378 lanes (2026-10-25).
+ls_rows() {
+  require_python
+  python3 - "$@" <<'PY'
+import concurrent.futures
+import json
+import os
+import subprocess
+import sys
+
+SEP = "\x1f"
+
+
+def text(value):
+    return ("true" if value else "false") if isinstance(value, bool) else str(value)
+
+
+def dirty(worktree):
+    if not os.path.isdir(worktree):
+        return "?"
+    status = subprocess.run(["git", "-C", worktree, "status", "--porcelain"],
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    return str(status.stdout.count(b"\n")) if status.returncode == 0 else "?"
+
+
+rows = []
+for path in sys.argv[1:]:
+    try:
+        with open(path, encoding="utf-8") as handle:
+            meta = json.load(handle)
+        fields = [text(meta[key]) for key in ("name", "pid", "started_at")]
+        fields.append(text(meta["started_epoch"]) if "started_epoch" in meta else "")
+        fields.append(text(meta["worktree"]))
+    except (OSError, ValueError, KeyError, TypeError):
+        fields = None
+    if fields is None or any(SEP in field or "\n" in field for field in fields):
+        fields = ["!", path]
+    rows.append(fields)
+with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+    counts = pool.map(lambda fields: "" if fields[0] == "!" else dirty(fields[4]), rows)
+    for fields, count in zip(rows, counts):
+        print(SEP.join(fields if fields[0] == "!" else fields + [count]))
+PY
 }
 
 # A repo's prepare script may symlink the worktree's project uv cache outside the worktree
@@ -1425,18 +1462,38 @@ review_state() {
   fi
 }
 
+# One `lane ls` row from ls_rows' fields.
+ls_row() {
+  local name="$1"
+  local pid="$2"
+  local started_at="$3"
+  local started_epoch="$4"
+  local dirty="$5"
+  local stall_min="$6"
+  local state
+  local age
+  local review
+  state=$(lane_state "$name" "$pid" "$started_epoch" "$stall_min")
+  age=$(format_age "$(log_age_seconds "$(log_path "$name")")")
+  if [ "$dirty" = "?" ] && grep -q '^CHECKOUT=retired ' "$(checkout_state_path "$name")" 2>/dev/null; then
+    dirty="ret"
+  fi
+  review=$(review_state "$name")
+  printf '%-20s %-10s %-8s %-21s %-5s %s\n' "$name" "$state" "$age" "$started_at" "$dirty" "$review"
+}
+
 cmd_ls() {
   local stall_min="$DEFAULT_STALL_MIN"
-  local metadata
+  local rows
   local name
   local pid
   local started_at
   local started_epoch
-  local worktree
-  local state
-  local age
   local dirty
-  local review
+  local out_dir
+  local out_file
+  local count=0
+  local names=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --stall-min)
@@ -1450,22 +1507,34 @@ cmd_ls() {
   case "$stall_min" in "" | *[!0-9]*) die "--stall-min must be a non-negative integer" ;; esac
   mkdir -p "$LANE_HOME"
   printf '%-20s %-10s %-8s %-21s %-5s %s\n' "NAME" "STATE" "LOG-AGE" "STARTED" "DIRTY" "REVIEW"
-  for metadata in "$LANE_HOME"/*.json; do
-    [ -e "$metadata" ] || continue
-    name=$(json_get "$metadata" name) || die "invalid metadata: $metadata"
-    pid=$(json_get "$metadata" pid) || die "invalid metadata: $metadata"
-    started_at=$(json_get "$metadata" started_at) || die "invalid metadata: $metadata"
-    started_epoch=$(json_get "$metadata" started_epoch 2>/dev/null || true)
-    worktree=$(json_get "$metadata" worktree) || die "invalid metadata: $metadata"
-    state=$(lane_state "$name" "$pid" "$started_epoch" "$stall_min")
-    age=$(format_age "$(log_age_seconds "$(log_path "$name")")")
-    dirty=$(dirty_count "$worktree")
-    if [ "$dirty" = "?" ] && grep -q '^CHECKOUT=retired ' "$(checkout_state_path "$name")" 2>/dev/null; then
-      dirty="ret"
-    fi
-    review=$(review_state "$name")
-    printf '%-20s %-10s %-8s %-21s %-5s %s\n' "$name" "$state" "$age" "$started_at" "$dirty" "$review"
+  set -- "$LANE_HOME"/*.json
+  [ -e "$1" ] || return 0
+  rows=$(ls_rows "$@") || die "could not read lane metadata in $LANE_HOME"
+  while IFS=$'\x1f' read -r -u 3 name pid _; do
+    [ "$name" != "!" ] || die "invalid metadata: $pid"
+  done 3<<<"$rows"
+  # Rows render eight at a time into numbered files, printed in order: a row runs a dozen short processes, which took
+  # 21 s over 378 lanes one row at a time (2026-10-25).
+  out_dir=$(mktemp -d "${TMPDIR:-/tmp}/lane-ls.XXXXXX") || die "could not make a directory for lane ls rows"
+  while IFS=$'\x1f' read -r -u 3 name pid started_at started_epoch _ dirty; do
+    printf -v out_file '%s/%06d' "$out_dir" "$count"
+    ls_row "$name" "$pid" "$started_at" "$started_epoch" "$dirty" "$stall_min" >"$out_file" 3<&- &
+    names+=("$name")
+    count=$((count + 1))
+    [ $((count % 8)) -ne 0 ] || wait
+  done 3<<<"$rows"
+  wait
+  # A row job that failed left an empty file: say which lane, as the serial loop did by stopping there.
+  count=0
+  for out_file in "$out_dir"/*; do
+    [ -s "$out_file" ] || {
+      rm -rf -- "$out_dir"
+      die "could not render the lane ls row for ${names[$count]}"
+    }
+    count=$((count + 1))
   done
+  cat "$out_dir"/*
+  rm -rf -- "$out_dir"
 }
 
 archive_log() {

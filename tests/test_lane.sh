@@ -773,6 +773,18 @@ if "$LANE" ls --stall-min nope >/dev/null 2>&1; then
   fail "ls accepted a non-numeric stall threshold"
 fi
 
+echo "test: ls lists every lane once in metadata order, across row batches, and fails loud on bad metadata"
+expected_names=""
+for metadata in "$LANE_HOME"/*.json; do
+  expected_names+="$(basename "$metadata" .json)"$'\n'
+done
+[ "$(printf '%s' "$expected_names" | wc -l)" -gt 8 ] || fail "too few lanes to cross an ls row batch"
+assert_eq "$(printf '%s' "$expected_names")" "$("$LANE" ls | tail -n +2 | awk '{ print $1 }')" "ls rows"
+printf '%s\n' '{"name": "broken"}' >"$LANE_HOME/broken.json"
+if ls_error=$("$LANE" ls 2>&1 >/dev/null); then fail "ls accepted metadata without a pid"; fi
+grep -Fq "invalid metadata: $LANE_HOME/broken.json" <<<"$ls_error" || fail "ls did not name the bad metadata: $ls_error"
+rm "$LANE_HOME/broken.json"
+
 echo "test: review attaches the lane's cache result, not an unchanged tracked report made newest by mtime"
 "$LANE" run rvcache --repo "$REPO" --brief "$BRIEF" --worker fake --keep-checkout >/dev/null
 wait_for_file "$LANE_HOME/rvcache.done"
