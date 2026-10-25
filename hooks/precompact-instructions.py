@@ -7,6 +7,9 @@
 #       the previous one (measured 2026-10-15: 4-32% 12-gram carry-over between
 #       consecutive summaries across 6 sessions, one with 50 compactions) — so the
 #       summary must name what to re-read and carry prior open items forward intact.
+#       Without a format and size cap the re-read list became a state log
+#       (genomics 1cce6699, 2026-10-24/25: section 3K -> 15-20K chars, a third of
+#       each summary; compaction 70s -> ~200s, corr(duration, postTokens) 0.69).
 #       (2) compaction drops loaded SKILL.md instructions mid-arc (40-85% of
 #       skill-invoking sessions compact after the invocation; agent-infra
 #       research/2026-07-06-skill-usage-value-audit.md §5).
@@ -43,9 +46,12 @@ SUMMARY_CONTRACT = (
     "Open the summary with one line saying it is a lossy compaction summary and "
     "that the files it lists are the source of truth. Then include a section "
     "'Re-read before relying on details' that lists, by exact path or URL, every "
-    "file, document and source whose contents the next steps depend on{checkpoints}; "
-    "name them instead of paraphrasing their contents, and "
-    "do not reproduce long tool output. Keep exactly: the user's requests and "
+    "file, document and source whose contents the next steps depend on{checkpoints}. "
+    "Give each entry one line: the path and at most a dozen words on why it matters; "
+    "no sub-bullets, findings or status there, and at most 30 entries, dropping "
+    "those for finished work. Name sources instead of paraphrasing their contents, "
+    "and do not reproduce long tool output. Keep the whole summary under about "
+    "4,000 words; the files hold the detail. Keep exactly: the user's requests and "
     "corrections close to verbatim; decisions and what was ruled out, with the "
     "reason; problems hit and how they were resolved; names, numbers, dates, "
     "paths and commit SHAs. Condense your own reasoning to its conclusions. State "
