@@ -3,7 +3,7 @@ name: modal
 description: "Use when: Modal deploy/run/debug, GPU/resource config, `from modal import`. v1 API gotchas. NOT generic cloud (/bash only)."
 ---
 
-# Modal (operate on 1.5.x with CLI/venv parity)
+# Modal (operate on the pinned 1.x with CLI/venv parity)
 
 Use this skill for Modal as an operational system, not just an SDK reference.
 Start from the question, choose the truth surface, then reason about failure mode.
@@ -13,9 +13,9 @@ Shared status contract:
 
 ## Version baseline (genomics, as of 2026-10)
 
-- Genomics requires `modal[api-proxy-support]>=1.5.5,<1.6` and locks 1.5.5. Align the shell CLI with `uv tool install 'modal[api-proxy-support]==1.5.5' --force` (keep the proxy extra).
+- The pin lives in genomics `pyproject.toml` and `uv.lock` (1.6.1 since 2026-10-06, `b209b73be`); read it there, not from this file. Align the shell CLI with `uv tool install 'modal[api-proxy-support]==<pin>' --force` (keep the proxy extra).
 - Parity check: `modal --version` must equal `uv run python3 -m modal --version`, and `uv run python3 scripts/modal_version_parity.py` must pass. A split reopens C4.
-- 1.5.x CLI JSON keys differ from 1.4.x: use the repo normalizer, never raw `.get("App ID")` / `.get("app_id")`.
+- 1.5+ CLI JSON keys differ from 1.4.x: use the repo normalizer, never raw `.get("App ID")` / `.get("app_id")`.
 - `genomics-data` is a v1 volume, so the Volumes v2 grep speedups do not apply.
 - Dated platform notes, the historical 1.5.2 baseline and the 1.5.1/1.5.2 feature-adoption tables: `references/changelog.md`.
 
