@@ -43,6 +43,13 @@ try:
         prompt,
     )
     out_path = m.group(1) if m else ""
+    # A background launch returns before the agent has run; its file cannot exist yet.
+    # 2,868 MISSING fires to 2026-10-26, the bulk at launch, each telling the parent to
+    # re-read or redo work still in flight. The completion arrives as a task-notification,
+    # which no PostToolUse event sees.
+    tr = d.get("tool_response")
+    if isinstance(tr, dict) and (tr.get("isAsync") or tr.get("status") == "async_launched"):
+        out_path = ""
 
     # Shell-safe escaping
     def esc(s): return s.replace("\x27", "\x27\\\x27\x27")
