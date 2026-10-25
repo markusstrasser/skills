@@ -204,7 +204,8 @@ printf '%s\n' \
   'exit "${LLMX_FAKE_RC:-0}"' >"$FAKE_BIN/llmx"
 # The opencode worker runs under `env -i`, so the fake finds the capture dir beside its own bin dir, and flag files
 # there pick its behaviour: a transport error once, a step cut off without an error event once, a provider failure
-# once, an exhausted balance, or a provider at capacity for the number of runs opencode-ratelimit holds (or forever).
+# once, an exhausted balance, or a provider at capacity for the number of runs opencode-ratelimit holds (or forever),
+# or a turn ended on a background shell for the number of runs opencode-background holds (or forever).
 printf '%s\n' \
   '#!/usr/bin/env bash' \
   'capture="$(cd "$(dirname "$0")/.." && pwd -P)/capture"' \
@@ -242,6 +243,12 @@ printf '%s\n' \
   '  [ ! -f "$capture/opencode-ratelimit-progress" ] || printf "%s\n" "{\"type\":\"step_finish\",\"sessionID\":\"ses_fake\",\"part\":{}}"' \
   '  printf "%s\n" "{\"type\":\"step_start\",\"sessionID\":\"ses_fake\"}" "{\"type\":\"error\",\"sessionID\":\"ses_fake\",\"error\":{\"type\":\"provider.rate-limit\",\"message\":\"the model is at capacity, retry shortly\",\"retryAfterMs\":1500,\"status\":429}}"' \
   '  exit 1' \
+  'fi' \
+  'if [ -s "$capture/opencode-background" ] && [ "$(cat "$capture/opencode-background")" != 0 ]; then' \
+  '  left=$(cat "$capture/opencode-background")' \
+  '  [ "$left" = forever ] || echo "$((left - 1))" > "$capture/opencode-background"' \
+  '  printf "%s\n" "{\"type\":\"tool_use\",\"sessionID\":\"ses_fake\",\"part\":{\"tool\":\"shell\",\"state\":{\"status\":\"completed\",\"input\":{\"command\":\"make\",\"background\":true}}}}" "{\"type\":\"text\",\"sessionID\":\"ses_fake\",\"part\":{\"text\":\"Waiting on make.\"}}"' \
+  '  exit 0' \
   'fi' \
   'printf "%s\n" "{\"type\":\"step_finish\",\"sessionID\":\"ses_fake\",\"part\":{\"cost\":0.01,\"tokens\":{\"input\":100,\"output\":20,\"reasoning\":7,\"cache\":{\"read\":50,\"write\":0}}}}"' \
   >"$FAKE_BIN/opencode"
@@ -487,6 +494,28 @@ assert_eq "EXIT=0" "$(<"$LANE_HOME/ocres.done")" "resumed opencode lane"
 assert_eq "ses_fake" "$(arg_after --session "$LANE_CAPTURE/opencode.args.3")" "lane resume continues the session"
 grep -Fq "This continues your session" "$LANE_CAPTURE/opencode.args.3" || fail "lane resume lacks the continuation prompt"
 grep -Fq "Do the fake task." "$LANE_CAPTURE/opencode.args.3" || fail "lane resume lacks the brief"
+
+echo "test: an opencode turn that ends on a background command resumes in the foreground, twice at most"
+export LANE_OPENCODE_RETRY_SLEEP=0 LANE_OPENCODE_PROVIDER_HOST=""
+rm -f "$LANE_CAPTURE"/opencode.args.*
+echo 1 >"$LANE_CAPTURE/opencode-background"
+"$LANE" run ocbg --repo "$REPO" --brief "$BRIEF" --worker opencode --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/ocbg.done"
+assert_eq "EXIT=0" "$(<"$LANE_HOME/ocbg.done")" "opencode marker after a background resume"
+grep -Fq "This run is headless" "$LANE_CAPTURE/opencode.args.0" || fail "opencode prompt lacks the headless note"
+assert_eq "ses_fake" "$(arg_after --session "$LANE_CAPTURE/opencode.args.1")" "a background resume continues the session"
+grep -Fq "Your turn ended after you started a shell command in the background" "$LANE_CAPTURE/opencode.args.1" ||
+  fail "a background resume lacks its prompt"
+rm -f "$LANE_CAPTURE"/opencode.args.*
+echo forever >"$LANE_CAPTURE/opencode-background"
+"$LANE" run ocbg2 --repo "$REPO" --brief "$BRIEF" --worker opencode --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/ocbg2.done"
+rm "$LANE_CAPTURE/opencode-background"
+unset LANE_OPENCODE_RETRY_SLEEP LANE_OPENCODE_PROVIDER_HOST
+assert_eq "EXIT=87" "$(<"$LANE_HOME/ocbg2.done")" "a worker that keeps backgrounding stops with 87"
+[ "$(find "$LANE_CAPTURE" -name 'opencode.args.*' | wc -l | tr -d ' ')" = 3 ] || fail "background resumes passed their cap"
+grep -Fq "[DEGRADED] the worker ended its turn on a background command again" "$LANE_HOME/ocbg2.log" ||
+  fail "the background cap is not loud"
 
 echo "test: a LithosAI transport resume waits for the provider's host"
 export LANE_OPENCODE_RETRY_SLEEP=0

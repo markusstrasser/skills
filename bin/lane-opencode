@@ -25,6 +25,17 @@ repo=${LANE_REPO:?lane-opencode: LANE_REPO is not set}
 log=${LANE_LOG:?lane-opencode: LANE_LOG is not set}
 model=${LANE_OPENCODE_MODEL:-deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017}
 prompt=${1:?lane-opencode: no prompt}
+# OpenCode's shell tool offers a background option whose description says "end your response; you will be resumed
+# automatically when the command finishes". Under `opencode run` nothing resumes the session: the run exits with the
+# turn and its background commands stop. A teleport lane ended so at step 61 of its brief, its build still queued
+# for a cargo slot (arena, 2026-10-26). The default foreground timeout, 120000 ms, kills longer commands.
+headless_note="This run is headless: nothing resumes you after your turn ends, so a background command's result never \
+reaches you, and the lane ends with your turn. Run every command in the foreground, never with the shell tool's \
+background option, and set its timeout above the command's expected time (the default, 120000 ms, kills it; a build \
+queued behind other lanes can take 30 minutes, so give builds and test runs 3600000)."
+prompt="$prompt
+
+$headless_note"
 worktree=$(pwd -P)
 # The lane's last OpenCode session, kept beside its log so `lane resume` continues it with its context.
 session_file="${log%.log}.opencode-session"
@@ -115,8 +126,9 @@ PY
 }
 
 # How the run ended, from the JSON event log and the exit code: "<verdict> <session>", where the verdict is ok,
-# quota, transport, interrupted, rate_limit:<seconds the provider asked to wait, or -> or error:<type>, and the session
-# is the last one the log names (may be empty).
+# backgrounded (ended after starting a background shell, with no foreground shell since), quota, transport,
+# interrupted, rate_limit:<seconds the provider asked to wait, or -> or error:<type>, and the session is the last one
+# the log names (may be empty).
 last_event() {
   python3 - "$log" "$1" "$2" <<'PY'
 import json
@@ -146,7 +158,15 @@ last = events[-1]
 if last.get("type") != "error":
     # A failed exit without an error event is a run cut off mid-step: when the network dropped, OpenCode exited 1
     # right after a step_start and two arena lanes ended as finished (2026-10-24).
-    print(f"interrupted {session}" if rc != 0 else f"ok {session}")
+    if rc != 0:
+        print(f"interrupted {session}")
+        raise SystemExit(0)
+    backgrounded = False
+    for event in events:
+        part = event.get("part") or {}
+        if event.get("type") == "tool_use" and part.get("tool") == "shell":
+            backgrounded = bool(((part.get("state") or {}).get("input") or {}).get("background"))
+    print(f"backgrounded {session}" if backgrounded else f"ok {session}")
     raise SystemExit(0)
 error = last.get("error") or {}
 kind = str(error.get("type", "unknown"))
@@ -231,6 +251,11 @@ echo "lane-opencode: model $model"
 resume_prompt="The previous attempt of this session ended on a transport error, a dropped connection or a provider at \
 capacity, not by your choice. Continue the task from where you stopped: check git status and your result file first, \
 then finish every deliverable the task names."
+background_prompt="Your turn ended after you started a shell command in the background. $headless_note The end of \
+your turn stopped that command. Run it again in the foreground, check git status and your result file, then finish \
+every deliverable the task names."
+# Turns ended on a background command that were resumed; past the cap the lane ends as it is, loudly.
+background_resumes=0
 session=""
 # `lane resume` continues the lane's session, so the worker keeps what it learned; the prompt restates the task.
 if [ "${LANE_RESUME:-false}" = true ] && [ -s "$session_file" ]; then
@@ -288,6 +313,17 @@ $task_prompt"
     break
   fi
   case ${verdict%%:*} in
+    backgrounded)
+      if [ "$background_resumes" -ge 2 ] || [ -z "${last_session:-}" ]; then
+        echo "lane-opencode: [DEGRADED] the worker ended its turn on a background command again; the lane ends unfinished"
+        break
+      fi
+      session=$last_session
+      prompt=$background_prompt
+      background_resumes=$((background_resumes + 1))
+      attempt=$((attempt + 1))
+      echo "lane-opencode: the turn ended on a background command; resuming the session in the foreground ($background_resumes of 2)"
+      ;;
     transport | interrupted)
       refusals=0
       [ "$resumes" -lt 2 ] && [ -n "${last_session:-}" ] || break
@@ -358,6 +394,12 @@ if [ "${verdict%%:*}" = rate_limit ] && { [ "$rc" -lt 129 ] || [ "$rc" -gt 159 ]
   echo "lane-opencode: STOPPED: the provider is still at capacity or rate-limiting after ${overload_waited}s of waiting, and" \
     "the next wait (${delay}s) would pass the ${overload_cap}s cap. lane resume continues the session."
   exit 85
+fi
+if [ "$verdict" = backgrounded ]; then
+  # Not exit 0: lane harvests and removes a checkout whose worker exited 0, and this one is unfinished.
+  echo "lane-opencode: STOPPED: the worker ended its turn on a background command after two resumes; lane resume" \
+    "continues the session."
+  exit 87
 fi
 if [ "$rc" = 0 ] && [ "${verdict%%:*}" = error ]; then
   rc=1
