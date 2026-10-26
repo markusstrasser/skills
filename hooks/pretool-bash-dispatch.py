@@ -2871,13 +2871,15 @@ def _classify(result: GateResult) -> tuple[str, str | dict]:
     return "pass", ""
 
 
-def _log_gate(name: str, kind: str) -> None:
+def _log_gate(name: str, kind: str, noted: bool = False) -> None:
     """ONE instrumentation point for all 35 in-process gates (2026-09-01 audit:
        163/207 wired hook scripts emit no event-log row, so fire counts are
        unmeasurable). Maps dispatcher verdicts onto the existing hook-trigger-log
     action vocabulary under a SEPARATE dispatch: namespace, so it can never
     double-count the 13 gates that already self-log; fail-open throughout."""
-    action = {"block": "block", "mutate": "warn", "advise": "warn"}.get(kind)
+    # A silent rewrite (updatedInput only) never reaches the model, so it logs as
+    # "rewrite", which hook-roi keeps out of nag volume; a rewrite with a note is a warn.
+    action = {"block": "block", "mutate": "warn" if noted else "rewrite", "advise": "warn"}.get(kind)
     if action is None:
         return
     try:
@@ -2916,7 +2918,7 @@ def main() -> None:
         except Exception:
             continue  # fail-open: a dispatcher-level bug in one gate never blocks
         kind, val = _classify(result)
-        _log_gate(gate["name"], kind)
+        _log_gate(gate["name"], kind, kind == "mutate" and bool(_mutate_note(result)))
         if kind == "block":
             msg = val if isinstance(val, str) else json.dumps(val)
             sys.stderr.write(msg + ("\n" if not msg.endswith("\n") else ""))
