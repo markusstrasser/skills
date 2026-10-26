@@ -174,6 +174,9 @@ printf '%s\n' \
   'printf "%s\n" "$@" > "$LANE_CAPTURE/codex.args"' \
   'pwd -P > "$LANE_CAPTURE/codex.cwd"' \
   'sleep 0.5' \
+  'calls=$(( $(cat "$LANE_CAPTURE/codex.calls" 2>/dev/null || echo 0) + 1 ))' \
+  'echo "$calls" > "$LANE_CAPTURE/codex.calls"' \
+  'if [ "$calls" -le "${CODEX_FAKE_CAPACITY:-0}" ]; then echo "ERROR: Selected model is at capacity"; exit 1; fi' \
   'exit "${CODEX_FAKE_RC:-0}"' >"$FAKE_BIN/codex"
 printf '%s\n' \
   '#!/usr/bin/env bash' \
@@ -582,6 +585,21 @@ CODEX_FAKE_RC=7 "$LANE" run failure --repo "$REPO" --brief "$BRIEF" --worker cod
 wait_for_file "$LANE_HOME/failure.done"
 assert_eq "EXIT=7" "$(<"$LANE_HOME/failure.done")" "failure marker"
 assert_eq "DONE:7" "$(state_for failure)" "failed worker state"
+
+echo "test: a codex model at capacity is waited out, then codex continues"
+rm -f "$LANE_CAPTURE/codex.calls"
+CODEX_FAKE_CAPACITY=1 LANE_CODEX_CAPACITY_RETRY_S=0 "$LANE" run capacity --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/capacity.done"
+assert_eq "EXIT=0" "$(<"$LANE_HOME/capacity.done")" "the lane outlasted a capacity error"
+assert_eq "2" "$(<"$LANE_CAPTURE/codex.calls")" "codex started again after the capacity error"
+grep -Fq "A provider capacity error stopped your previous attempt" "$LANE_CAPTURE/codex.args" || fail "the second start lacks the note to continue"
+
+echo "test: a codex model that stays at capacity exits 85"
+rm -f "$LANE_CAPTURE/codex.calls"
+CODEX_FAKE_CAPACITY=99 LANE_CODEX_CAPACITY_RETRY_S=0 LANE_CODEX_CAPACITY_WAIT_S=0 "$LANE" run capacitygone --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/capacitygone.done"
+assert_eq "EXIT=85" "$(<"$LANE_HOME/capacitygone.done")" "capacity that stays exits 85"
+rm -f "$LANE_CAPTURE/codex.calls"
 
 echo "test: a reader that closes early cannot abort a resume half-done"
 # Before the fix, SIGPIPE killed resume after it archived the log and before it removed the old marker or launched.

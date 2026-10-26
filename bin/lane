@@ -38,6 +38,7 @@ usage:
       (opencode worker: a provider at capacity (429) is retried in the lane's session for ~20 min, then exit 85; lane resume continues it)
       (codex worker: LANE_CODEX_MODEL=<m> LANE_CODEX_EFFORT=<e> env override the default gpt-6-astra/config effort)
       (codex worker: LANE_CODEX_ADD_DIRS=<a:b> adds writable roots; LANE_CODEX_NETWORK=1 enables network; git metadata stays read-only, so the parent merges and commits)
+      (codex worker: a model at capacity is waited out and codex started again on the checkout for ~30 min, then exit 85; lane resume continues it)
   lane review <name> [--model <m>] [--effort <e>] [--focus <file>] [--report <file>] [--out <file>] [--bg]
   lane ls [--stall-min <minutes>]
       (WAITING: a claude worker sleeping out the api_retry delay it logged, e.g. a usage-limit reset)
@@ -889,7 +890,34 @@ launch_worker() {
         if [ "$LANE_CODEX_NETWORK" = 1 ]; then
           codex_args+=(-c "sandbox_workspace_write.network_access=true")
         fi
-        caffeinate -i codex exec "${codex_args[@]}" -s workspace-write --add-dir "$HOME/.cache/uv" --skip-git-repo-check "$prompt" < /dev/null
+        # A model at capacity (codex prints "Selected model is at capacity" and exits 1) passes: seven Sol lanes died
+        # on it on 2026-10-26. Wait in place, doubling the wait up to 5 min, and start codex again on the same
+        # checkout with a note to continue, as lane resume does; after LANE_CODEX_CAPACITY_WAIT_S (30 min) of waits,
+        # exit 85, which lane resume continues.
+        attempt_prompt=$prompt
+        capacity_delay=${LANE_CODEX_CAPACITY_RETRY_S:-60}
+        capacity_waited=0
+        while :; do
+          log_offset=$(wc -c < "$log")
+          caffeinate -i codex exec "${codex_args[@]}" -s workspace-write --add-dir "$HOME/.cache/uv" --skip-git-repo-check "$attempt_prompt" < /dev/null
+          codex_rc=$?
+          if [ "$codex_rc" = 0 ] || ! tail -c +"$((log_offset + 1))" "$log" | grep -q "Selected model is at capacity"; then
+            break
+          fi
+          if [ "$capacity_waited" -ge "${LANE_CODEX_CAPACITY_WAIT_S:-1800}" ]; then
+            echo "lane: the model stayed at capacity through ${capacity_waited} s of waits; exit 85, lane resume continues" >&2
+            codex_rc=85
+            break
+          fi
+          echo "lane: the model is at capacity; codex starts again in ${capacity_delay} s" >&2
+          sleep "$capacity_delay"
+          capacity_waited=$((capacity_waited + capacity_delay))
+          capacity_delay=$((capacity_delay * 2 > 300 ? 300 : capacity_delay * 2))
+          attempt_prompt="$prompt
+
+A provider capacity error stopped your previous attempt. The checkout keeps its edits: read your result file and git status first, then continue the brief."
+        done
+        (exit "$codex_rc")
         ;;
       claude)
       # A lane launched from inside a Claude session inherits the parent identity env; without
