@@ -1006,6 +1006,28 @@ def gate_bash_backtick_guard(raw_payload: str) -> GateResult:
         return GateResult(0, "", "")
 
 
+# --- 4c. zsh-flag-guard (BLOCKER, no if) — imports sidecar ------------------
+# Claude Code asks for approval on `${(f)x}`-style flag groups even under bypassPermissions;
+# a background teammate cannot answer and its call hangs (sidecar docstring, 2026-10-27).
+
+
+def gate_zsh_flag_guard(raw_payload: str) -> GateResult:
+    try:
+        mod = _load_module(
+            HOOKS_DIR / "pretool_bash_zsh_flag_guard.py", "pretool_bash_zsh_flag_guard"
+        )
+        data = json.loads(raw_payload)
+        cmd = _jqlike_cmd(data)
+        if not cmd or "${(" not in cmd:
+            return GateResult(0, "", "")
+        hit = mod.offending_expansion(cmd)
+        if hit:
+            return GateResult(2, mod.reason(hit), "")
+        return GateResult(0, "", "")
+    except Exception:
+        return GateResult(0, "", "")
+
+
 # --- 5. pretool-bash-cat-guard.sh (BLOCKER, no if) — imports sidecar -------
 
 
@@ -2846,6 +2868,7 @@ MANIFEST: list[dict] = [
     {"name": "bash-loop-guard", "if": None, "run": gate_bash_loop_guard},
     {"name": "bash-cat-guard", "if": None, "run": gate_bash_cat_guard},
     {"name": "bash-backtick-guard", "if": None, "run": gate_bash_backtick_guard},
+    {"name": "zsh-flag-guard", "if": None, "run": gate_zsh_flag_guard},
     {"name": "noext-nongit-guard", "if": None, "run": gate_noext_nongit_guard},
     {
         "name": "bash-background-ampersand",
