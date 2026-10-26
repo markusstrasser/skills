@@ -10,6 +10,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.4",
+    "pytest-xdist>=3.8.0",
     "ruff>=0.14",
 ]
 
@@ -17,3 +18,9 @@ dev = [
 venvPath = "."
 venv = ".venv"
 typeCheckingMode = "basic"
+
+[tool.pytest.ini_options]
+# Root on sys.path so tests import `shared.*`. Hook tests shell out per case and run in
+# parallel: 189s -> 39s for test_bash_dispatch.py; loadfile keeps a file's tests on one worker.
+pythonpath = ["."]
+addopts = "-n auto --dist loadfile"
