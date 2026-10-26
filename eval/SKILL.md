@@ -242,6 +242,14 @@ Golds are **platinum**: mechanically checkable or human-verified. Never audit go
 asking an LLM to re-check them (auditors re-solve and trust themselves: wrong-reference
 detection 68%→9% at scale).
 
+**Every gate band comes from this eval's own null, at its actual N**, before any arm is scored:
+negative-control ranges from ≥200 label shuffles (or the analytic SE), margins checked against
+the bootstrap SE, and the whole control set's chance false-alarm rate stated (≤5%, adjusted for
+the number of controls). Never copy a band from an earlier, larger run. Genomics SpliceAI2
+follow-up (2026-10-26): a 0.45–0.55 shuffle band inherited from a run with ~400× more pairs
+sat ±1.65 SD from the null mean at 624 pairs, so about a third of runs failed it on chance, and a
++0.053 AUROC win came back INCONCLUSIVE.
+
 ## Phase 3 — Discrimination probe (before budget)
 
 `uv run python3 <slug>/run.py --probe` on ≤10 items. Required: a trivial-pass baseline
@@ -485,6 +493,7 @@ re-litigating or rebuilding anything named here.
 - **Items lifted from public benchmark sets** without per-item justification.
 - **Trusting ABSOLUTE scores on a reused test set** — reuse inflates absolutes while RANKINGS stay robust; trust ranking flips, refresh items, anchor-equate.
 - **N chosen by vibes** — run `just power` and declare SCREENING|CONFIRMATORY.
+- **A gate band inherited from another N** — a fixed control range or margin reused on a smaller set fails real effects on chance; derive it from this set's null (Phase 2).
 - **Eval with no consumer** — a verdict that never reaches DECISIONS.md or production.
 - **LLM re-audit of gold labels; editing a prereg decision rule after results exist.**
 - **Single-gold recall@k on a corpus with co-relevant siblings** — scores label noise as model skill.
