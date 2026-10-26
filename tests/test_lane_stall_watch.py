@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -22,6 +21,12 @@ def stamp(minutes_ago: int) -> str:
     return moment.isoformat().replace("+00:00", "Z")
 
 
+def bash_call(minutes_ago: int, **arguments: object) -> dict:
+    block = {"type": "tool_use", "id": "t1", "name": "Bash", "input": {"command": "x", **arguments}}
+    return {"type": "assistant", "timestamp": stamp(minutes_ago),
+            "message": {"stop_reason": "tool_use", "content": [block]}}
+
+
 def transcript(directory: Path, lane: str, *rows: dict) -> None:
     path = directory / f"agent-a{lane}-0123456789abcdef.jsonl"
     path.write_text("".join(json.dumps(row) + "\n" for row in rows))
@@ -34,16 +39,16 @@ def test_selftest_passes() -> None:
 
 
 def test_once_reports_each_dead_shape_and_skips_busy_lanes(tmp_path: Path) -> None:
-    (tmp_path / "worktrees" / "toolstall").mkdir(parents=True)
-    call = {"type": "assistant", "message": {"stop_reason": "tool_use",
-                                             "content": [{"type": "tool_use", "id": "t1"}]}}
-    transcript(tmp_path, "toolstall", dict(call, timestamp=stamp(9)))
+    transcript(tmp_path, "toolstall", bash_call(9))
     transcript(tmp_path, "overloaded", {"type": "user", "timestamp": stamp(20), "message": {}},
                {"type": "api-request", "timestamp": stamp(19)})
     transcript(tmp_path, "waiting", {"type": "assistant", "timestamp": stamp(30),
                                      "message": {"stop_reason": "end_turn"}})
     transcript(tmp_path, "thinking", {"type": "api-request", "timestamp": stamp(1)})
-    result = run("--once", "--worktrees", str(tmp_path / "worktrees"), str(tmp_path))
+    # A long Bash call inside its own declared timeout is work, not a stall (2026-10-27
+    # negatives-hubs: a 540 s pytest batch run from a scratchpad script).
+    transcript(tmp_path, "longcall", bash_call(7, timeout=540_000))
+    result = run("--once", str(tmp_path))
     assert result.returncode == 0, result.stderr
     lines = sorted(line.split(" ", 1)[1] for line in result.stdout.splitlines())
     assert lines == [
@@ -66,20 +71,3 @@ def test_missing_directory_fails_loud(tmp_path: Path) -> None:
     result = run("--once", str(tmp_path / "absent"))
     assert result.returncode == 2
     assert "no such directory" in result.stderr
-
-
-def test_worktree_with_a_live_process_is_busy(tmp_path: Path) -> None:
-    worktree = tmp_path / "worktrees" / "running"
-    worktree.mkdir(parents=True)
-    call = {"type": "assistant", "timestamp": stamp(9),
-            "message": {"stop_reason": "tool_use", "content": [{"type": "tool_use"}]}}
-    transcript(tmp_path, "running", call)
-    # Two commands keep sh alive with the path in its argv (a lone command is exec'd away).
-    holder = subprocess.Popen(["/bin/sh", "-c", f"sleep 30; : {worktree}"],
-                              env={**os.environ})
-    try:
-        result = run("--once", "--worktrees", str(tmp_path / "worktrees"), str(tmp_path))
-    finally:
-        holder.kill()
-        holder.wait()
-    assert result.stdout == ""

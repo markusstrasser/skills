@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """lane-stall-watch — flag teammate lanes that died without saying so.
 
-  lane-stall-watch [--once] [--poll SECONDS] [--worktrees DIR] <subagents-dir> [lane ...]
+  lane-stall-watch [--once] [--poll SECONDS] <subagents-dir> [lane ...]
   lane-stall-watch --selftest
 
 An in-process teammate that dies keeps reading "running" or "idle" in ListAgents.
@@ -9,9 +9,10 @@ This reads each lane's transcript tail (<subagents-dir>/agent-a<lane>-*.jsonl, o
 every transcript written in the last 6 h when no lane is named) and prints one
 line per state change:
 
-  STALLED_TOOL   the last event is a tool call with no result, and nothing has run:
-                 no process mentions <worktrees>/<lane> after 5 min, or 60 min have
-                 passed for a lane without a worktree (a call that never executed)
+  STALLED_TOOL   the last event is a tool call whose result is overdue: a Bash call
+                 past its declared timeout (default 120 s) plus 3 min, a background
+                 Bash call or another tool past 5 min, an Agent call past 90 min. The
+                 harness returns every call by its timeout, so an overdue one never ran.
   STALLED_MODEL  the last event is a tool result, prompt or in-flight api-request,
                  and nothing followed for 12 min (an API 529/overload death)
   IDLE           the lane ended its turn and waits for a message (an inbox write
@@ -25,14 +26,15 @@ unread for 84, 43 and 12 min before anyone looked.
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-TOOL_GRACE = timedelta(minutes=5)
-TOOL_GRACE_NO_WORKTREE = timedelta(minutes=60)
+BASH_DEFAULT_TIMEOUT = timedelta(seconds=120)
+BASH_GRACE = timedelta(minutes=3)
+QUICK_TOOL_BUDGET = timedelta(minutes=5)
+AGENT_BUDGET = timedelta(minutes=90)
 MODEL_GRACE = timedelta(minutes=12)
 RECENT = timedelta(hours=6)
 TAIL_BYTES = 400_000
@@ -42,8 +44,21 @@ def parse_stamp(stamp: str) -> datetime:
     return datetime.fromisoformat(stamp.replace("Z", "+00:00"))
 
 
-def classify(rows: list[dict], now: datetime, has_process: bool | None) -> str:
-    """has_process None means the lane has no worktree to look for."""
+def tool_budget(call: dict) -> timedelta:
+    """How long the harness may take to return this call's result."""
+    name, arguments = call.get("name"), call.get("input") or {}
+    if name == "Bash":
+        if arguments.get("run_in_background"):
+            return QUICK_TOOL_BUDGET
+        timeout_ms = arguments.get("timeout")
+        timeout = timedelta(milliseconds=timeout_ms) if timeout_ms else BASH_DEFAULT_TIMEOUT
+        return timeout + BASH_GRACE
+    if name in ("Agent", "Task"):
+        return AGENT_BUDGET
+    return QUICK_TOOL_BUDGET
+
+
+def classify(rows: list[dict], now: datetime) -> str:
     if not rows:
         return "BUSY"
     last = rows[-1]
@@ -54,9 +69,8 @@ def classify(rows: list[dict], now: datetime, has_process: bool | None) -> str:
         if message.get("stop_reason") == "end_turn":
             return "IDLE"
         content = message.get("content") or []
-        calls = any(isinstance(block, dict) and block.get("type") == "tool_use" for block in content)
-        grace = TOOL_GRACE_NO_WORKTREE if has_process is None else TOOL_GRACE
-        if calls and age > grace and not has_process:
+        calls = [block for block in content if isinstance(block, dict) and block.get("type") == "tool_use"]
+        if calls and age > max(tool_budget(call) for call in calls):
             return "STALLED_TOOL"
         return "BUSY"
     if kind in ("user", "api-request") and age > MODEL_GRACE:
@@ -80,16 +94,6 @@ def tail_rows(path: Path) -> list[dict]:
     return rows
 
 
-def lane_process(worktrees: Path | None, lane: str) -> bool | None:
-    if worktrees is None or not (worktrees / lane).is_dir():
-        return None
-    # Counts only: never print a matched command line (environment values can ride in it).
-    found = subprocess.run(
-        ["pgrep", "-f", str(worktrees / lane)], capture_output=True, text=True, check=False
-    )
-    return bool(found.stdout.strip())
-
-
 def lane_transcripts(directory: Path, lanes: list[str], now: datetime) -> dict[str, Path]:
     found: dict[str, Path] = {}
     for path in sorted(directory.glob("agent-a*.jsonl"), key=lambda item: item.stat().st_mtime):
@@ -105,18 +109,24 @@ def lane_transcripts(directory: Path, lanes: list[str], now: datetime) -> dict[s
 def selftest() -> None:
     now = datetime(2026, 10, 26, 15, 0, tzinfo=timezone.utc)
     old = "2026-10-26T14:40:00Z"
-    call = {"type": "assistant", "timestamp": old,
-            "message": {"stop_reason": "tool_use", "content": [{"type": "tool_use"}]}}
-    assert classify([call], now, has_process=False) == "STALLED_TOOL"
-    assert classify([call], now, has_process=True) == "BUSY"
-    assert classify([call], now, has_process=None) == "BUSY"
-    assert classify([dict(call, timestamp="2026-10-26T13:50:00Z")], now, None) == "STALLED_TOOL"
-    assert classify([dict(call, timestamp="2026-10-26T14:58:00Z")], now, False) == "BUSY"
-    assert classify([{"type": "user", "timestamp": old, "message": {}}], now, None) == "STALLED_MODEL"
-    assert classify([{"type": "api-request", "timestamp": old}], now, None) == "STALLED_MODEL"
-    assert classify([{"type": "api-request", "timestamp": "2026-10-26T14:55:00Z"}], now, None) == "BUSY"
+    def call(minutes_ago: int, name: str = "Bash", **arguments: object) -> dict:
+        moment = (now - timedelta(minutes=minutes_ago)).isoformat()
+        block = {"type": "tool_use", "name": name, "input": arguments}
+        return {"type": "assistant", "timestamp": moment,
+                "message": {"stop_reason": "tool_use", "content": [block]}}
+
+    assert classify([call(6)], now) == "STALLED_TOOL"  # default 120 s + 3 min grace
+    assert classify([call(4)], now) == "BUSY"
+    assert classify([call(9, timeout=540_000)], now) == "BUSY"  # inside its own timeout
+    assert classify([call(13, timeout=540_000)], now) == "STALLED_TOOL"
+    assert classify([call(6, run_in_background=True)], now) == "STALLED_TOOL"
+    assert classify([call(6, name="Read")], now) == "STALLED_TOOL"
+    assert classify([call(60, name="Agent")], now) == "BUSY"
+    assert classify([{"type": "user", "timestamp": old, "message": {}}], now) == "STALLED_MODEL"
+    assert classify([{"type": "api-request", "timestamp": old}], now) == "STALLED_MODEL"
+    assert classify([{"type": "api-request", "timestamp": "2026-10-26T14:55:00Z"}], now) == "BUSY"
     ended = {"type": "assistant", "timestamp": old, "message": {"stop_reason": "end_turn"}}
-    assert classify([ended], now, False) == "IDLE"
+    assert classify([ended], now) == "IDLE"
     print("PASS selftest")
 
 
@@ -124,15 +134,13 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["--selftest"]:
         selftest()
         return 0
-    once, poll, worktrees, positional = False, 60, None, []
+    once, poll, positional = False, 60, []
     arguments = iter(argv)
     for argument in arguments:
         if argument == "--once":
             once = True
         elif argument == "--poll":
             poll = int(next(arguments))
-        elif argument == "--worktrees":
-            worktrees = Path(next(arguments)).expanduser().resolve()
         else:
             positional.append(argument)
     if not positional:
@@ -146,7 +154,7 @@ def main(argv: list[str]) -> int:
     while True:
         now = datetime.now(timezone.utc)
         for lane, path in lane_transcripts(directory, lanes, now).items():
-            state = classify(tail_rows(path), now, lane_process(worktrees, lane))
+            state = classify(tail_rows(path), now)
             if previous.get(lane, "BUSY") != state:
                 stamp = datetime.now().strftime("%H:%M")
                 print(f"{stamp} {lane}: {previous.get(lane, 'BUSY')} -> {state}", flush=True)
