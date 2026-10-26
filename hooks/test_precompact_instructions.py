@@ -65,7 +65,7 @@ def main() -> int:
     ok = 0
     # 1. session with an invoked skill -> instructions name it
     out = run_hook({"session_id": "s1"}, [row("decide", "s1", args="schema fork")])
-    assert "/decide" in out and "re-invoke" in out, out
+    assert "/decide" in out and "re-attaches" in out, out
     ok += 1
     # 2. other session's invocations -> contract only
     out = run_hook({"session_id": "s1"}, [row("decide", "s2")])

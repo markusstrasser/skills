@@ -10,9 +10,11 @@
 #       Without a format and size cap the re-read list became a state log
 #       (genomics 1cce6699, 2026-10-24/25: section 3K -> 15-20K chars, a third of
 #       each summary; compaction 70s -> ~200s, corr(duration, postTokens) 0.69).
-#       (2) compaction drops loaded SKILL.md instructions mid-arc (40-85% of
+#       (2) the summary must say where an unfinished skill arc stands (40-85% of
 #       skill-invoking sessions compact after the invocation; agent-infra
-#       research/2026-07-06-skill-usage-value-audit.md §5).
+#       research/2026-07-06-skill-usage-value-audit.md §5). CC re-attaches skill
+#       bodies itself (invoked_skills attachment after 326/406 compactions,
+#       2026-10-19..26), so the old "re-invoke Skill" instruction was dropped.
 # verifier: null
 # blast_radius: shared
 
@@ -128,10 +130,9 @@ def main() -> int:
     )
     print(
         f"Active skill arcs this session: {arcs}. For each, the summary MUST state "
-        f"which step of the skill's workflow was reached and what remains. The "
-        f"skill's instructions are NOT carried across compaction — before "
-        f"continuing an unfinished arc, re-invoke Skill(<name>) (or Read "
-        f"~/.claude/skills/<name>/SKILL.md)."
+        f"which step of the skill's workflow was reached and what remains. Claude "
+        f"Code re-attaches the skill's instructions after compaction, so do not "
+        f"repeat them in the summary."
     )
     return 0
 
