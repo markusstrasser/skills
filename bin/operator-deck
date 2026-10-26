@@ -59,10 +59,13 @@ MOVES_END = ("## Domain packs", "## Habits")
 PROCESS_GROUPS = {"Running the research", "Working with agents", "Systems craft"}
 PROCESS_IDS = {"m-report-outcomes-before-activity", "m-end-on-the-next-test",
                "m-explain-it-plainly", "m-make-every-chart-answer-a-question"}
+# Hole-pokes that live in a process group but are thinking prompts, so default draws keep them.
+THINK_IDS = {"f-when-work-stops-converging-question-the-requirem", "f-check-the-graveyard-first",
+             "f-keep-the-target-out-of-the-worker-s-brief"}
 
 
 def is_process(d: dict) -> bool:
-    return d["group"] in PROCESS_GROUPS or d["id"] in PROCESS_IDS
+    return (d["group"] in PROCESS_GROUPS and d["id"] not in THINK_IDS) or d["id"] in PROCESS_IDS
 
 
 def pool(deck: list[dict], name: str = "think") -> list[dict]:
@@ -113,7 +116,7 @@ def load_deck(frames: Path = FRAMES, moves: Path = MOVES) -> list[dict]:
     dup = {i for i in ids if ids.count(i) > 1}
     if dup or not any(d["kind"] == "frame" for d in deck) or not any(d["kind"] == "move" for d in deck):
         raise SystemExit(f"operator-deck: bad deck (duplicate ids {sorted(dup)} or an empty source)")
-    stale = (PROCESS_GROUPS - {d["group"] for d in deck}) | (PROCESS_IDS - set(ids))
+    stale = (PROCESS_GROUPS - {d["group"] for d in deck}) | ((PROCESS_IDS | THINK_IDS) - set(ids))
     if stale:
         raise SystemExit(f"operator-deck: the process filter names steps or groups not in the deck: {sorted(stale)}")
     return deck
