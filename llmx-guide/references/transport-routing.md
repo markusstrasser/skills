@@ -111,7 +111,7 @@ Neither CLI truncates user input (verified from source code). Input goes directl
 | Gemini CLI | 1M tokens (~4MB) | ~200KB before slowdown | No — 400 error if exceeded |
 | Codex CLI | 272K-848K tokens | ~200KB+ | No — auto-compacts history |
 | API (Gemini) | 1M tokens | Full window | No |
-| API (GPT-5.4) | 1M tokens | Full window | No |
+| API (GPT-6.1 Sol / Astra) | 1.05M tokens | Full window | No |
 
 **Tested:** 80KB code batches via both CLIs work reliably. 200KB causes timeouts on thinking models.
 

@@ -1,5 +1,9 @@
 # Model Guide Changelog
 
+## 2026-10-26 - Newest picks; DeepSeek on LithosAI only; Argon is the default Gemini
+
+Operator decisions (2026-10-26): "no more deepinfra ... lithos is the goat" and "newest models always: gpt-6.1, gpt-6 astra, opus, argon 4". Added the newest-picks line (`gpt-6.1-sol`, `gpt-6-astra`, `claude-opus-5-5`, `gemini-4-argon`) and a DeepSeek V4.1 Flash on LithosAI row with its three tier ids and early-access prices from llmx `usage_report.PRICING`. `gemini-3.8-flash`, `gemini-3.1-pro-preview` and the Flash-Lite pair moved to an "older / pinned only" line; `gemini-3.8-flash` stays llmx's `-p google`, vision and batch default, so callers pass `-m gemini-4-argon`. llmx drops the `deepinfra` provider and fails loud on it; its pricing row stays for historical usage rows. Usage at the change (14 days): 776 LithosAI calls, 774 ok, two `-ultra` 429s ("model is at capacity").
+
 ## 2026-10-14 - Gemini 4 Argon registered; routing unchanged
 
 Google released `gemini-4-argon` as a stable model on 2026-10-13. Live-probed the same day: the API works, and the effort ladder is low/medium/high. llmx `7aba790` registers it at intro pricing ($2/$10, then $4/$20). Added the roster row, a `models/gemini.md` section and a BENCHMARKS table split by who ran each evaluation. The operator suspected benchmaxxing. That holds for the rows Google ran itself (Terminal-Bench Science 57.6 under a 6× verifier timeout against 44.3 from Vals; unequal LVBench frame budgets), but the third-party Vals knowledge-work lead holds. Cosigner swap and `gemini-3.1-pro-preview` pruning are proposed, not done (critique policy is the operator's).

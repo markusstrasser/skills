@@ -13,7 +13,7 @@
 
 ## Gemini 4 Argon (`gemini-4-argon`, stable 2026-10-13)
 
-Registered in llmx 2026-10-14 (llmx `7aba790`). Not a default anywhere yet.
+Registered in llmx 2026-10-14 (llmx `7aba790`). The default Gemini pick since 2026-10-26 (operator: "newest models always"); llmx's own `-p google`, vision and batch defaults are still `gemini-3.8-flash`, so pass `-m gemini-4-argon`.
 
 - **Live facts (probed 2026-10-14):** `generateContent` works on the paid key. `thinkingLevel` accepts `low|medium|high`; `minimal` → 400 "not supported", `none`/`xhigh`/`max` → 400 invalid enum. Unified 1M in+out token window. `high` on a one-sentence prompt: 507 reasoning / 40 output tokens, 7.9 s.
 - **Price:** intro $2/$10 per MTok, then $4/$20 (ai.google.dev says from 2026-12-01; the launch blog says 2026-11-30). Output includes thinking. Implicit caching only. Not on the free tier. Vals measured $15.68 per Vals Index test versus $32.14 for Opus 5.5 and $28.71 for Fable 5.1.

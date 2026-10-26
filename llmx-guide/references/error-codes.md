@@ -19,7 +19,7 @@ Branch on these, don't parse stderr:
 ## Structured Diagnostics (stderr, JSON)
 
 ```json
-{"error": "rate_limit", "provider": "google", "model": "gemini-3.5-flash", "exit_code": 3, "action": "wait or use --stream (API transport)"}
+{"error": "rate_limit", "provider": "google", "model": "gemini-4-argon", "exit_code": 3, "action": "wait or use --stream (API transport)"}
 ```
 
 ## Additional stderr Signals
@@ -27,7 +27,7 @@ Branch on these, don't parse stderr:
 - **Auto-retry: `[llmx:RETRY] google/<model> service_unavailable (attempt 2/4) — sleeping 4.5s`** — a transient 429/503/overload was caught and is being retried (backoff+jitter). Informational; the call has NOT failed. Only if all attempts exhaust do you get exit 3.
 - Transport switch: `[llmx:TRANSPORT] codex-cli → openai-api (--search not supported by CLI)` (Gemini has no CLI since 2026-05-31; switches now only affect Codex CLI)
 - Truncation warning: `[llmx:WARN] output may be truncated`
-- Model suggestion: `"gemini-3.5-flsh not found; did you mean gemini-3.5-flash?"`
+- Model suggestion: `"gemini-4-argn not found; did you mean gemini-4-argon?"`
 
 ## `--fallback MODEL`
 
@@ -47,7 +47,7 @@ Exists but **not recommended**. Silent model switching masks failures. If you as
 
 ```python
 result = subprocess.run(
-    ['llmx', '-m', 'gemini-3.5-flash', '--timeout', '300'],
+    ['llmx', '-m', 'gemini-4-argon', '--timeout', '300'],
     input=prompt, capture_output=True, text=True, timeout=360
 )
 if result.returncode == 3:  # rate limit — API transport has separate capacity

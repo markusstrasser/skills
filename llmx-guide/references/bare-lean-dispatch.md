@@ -5,7 +5,7 @@ classification, judging, a quick agentic task. Measured 2026-06-16; contract-tes
 `../tests/test_cli_contracts.py` (run after a CLI update).
 
 ## The cost trap: reasoning tokens BILL AS OUTPUT
-Thinking models (gemini-3-flash, GPT, Opus, Grok) emit reasoning tokens that
+Thinking models (Gemini, GPT, Opus, Grok, DeepSeek) emit reasoning tokens that
 **count as output tokens on the bill** — and gemini-flash "thinks" even at
 `reasoning_effort=null` (~4–5K reasoning/call ≈ 45% of output). **Any cost estimate that
 sums only `completion_tokens` is ~40× low** (a real probe reported $1.16 for a run that
