@@ -20,6 +20,10 @@
 #
 # usage (lane runs it in the worktree): lane-opencode <prompt>
 # env from lane: LANE_NAME LANE_REPO LANE_LOG LANE_OPENCODE_MODEL
+# Bash reads a script while it runs it, so an edit in place moved a running lane onto other bytes when
+# its worker finished (magic-crit, 2026-10-27: "syntax error near unexpected token `same'"). The body is
+# one brace group, which bash parses whole before running any of it.
+{
 set -u
 
 name=${LANE_NAME:?lane-opencode: LANE_NAME is not set}
@@ -412,3 +416,4 @@ if [ "$rc" = 0 ] && [ "${verdict%%:*}" = error ]; then
   rc=1
 fi
 exit "$rc"
+}
