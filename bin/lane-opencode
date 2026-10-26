@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # lane-opencode — lane's opencode worker: one headless `opencode run` in the lane's worktree. The default model is
-# DeepSeek V4.1 Flash on DeepInfra with thinking on (about $0.05 a lane: ~/Projects/evals/opencode_deepseek_probe).
+# DeepSeek V4.1 Flash on LithosAI, base tier, with thinking on (about $0.05 a lane:
+# ~/Projects/evals/opencode_deepseek_probe). LANE_OPENCODE_MODEL overrides it; the -fast and -ultra tiers are
+# faster at a higher per-token price.
 #
 # OpenCode has no sandbox. The guard is a scrubbed environment, so no key reaches the model's shell, and a deny-list
 # in <worktree>/.opencode/opencode.json, the only project config OpenCode v2 reads. Its rules, measured on v2.1.4
@@ -23,7 +25,7 @@ set -u
 name=${LANE_NAME:?lane-opencode: LANE_NAME is not set}
 repo=${LANE_REPO:?lane-opencode: LANE_REPO is not set}
 log=${LANE_LOG:?lane-opencode: LANE_LOG is not set}
-model=${LANE_OPENCODE_MODEL:-deepinfra/deepseek-ai/DeepSeek-V4.1-Flash-1017}
+model=${LANE_OPENCODE_MODEL:-lithosai/deepseek-ai/DeepSeek-V4.1-Flash}
 prompt=${1:?lane-opencode: no prompt}
 # OpenCode's shell tool offers a background option whose description says "end your response; you will be resumed
 # automatically when the command finishes". Under `opencode run` nothing resumes the session: the run exits with the
@@ -104,9 +106,9 @@ rules.append({"action": "question", "resource": "*", "effect": "deny"})
 
 config = {
     "$schema": "https://opencode.ai/config.json",
-    # DeepInfra thinks only when asked: OpenCode requests no reasoning unless reasoningEffort is set (0 reasoning
-    # tokens in 777 genomics lane messages through 2026-10-22).
-    "providers": {"deepinfra": {"settings": {"reasoningEffort": "high"}}},
+    # DeepSeek thinks only when asked: OpenCode requests no reasoning unless reasoningEffort is set (0 reasoning
+    # tokens in 777 genomics lane messages through 2026-10-22). LithosAI behaves the same on every tier.
+    "providers": {"lithosai": {"settings": {"reasoningEffort": "high"}}},
     "permissions": rules,
 }
 out = worktree / ".opencode" / "opencode.json"
@@ -214,13 +216,12 @@ with open(sys.argv[1], encoding="utf-8", errors="replace") as stream:
         totals["cache_read"] += int(cache.get("read") or 0)
         totals["cache_write"] += int(cache.get("write") or 0)
         cost += float(part.get("cost") or 0)
-# OpenCode's cost is its catalog's list price, about 2x what DeepInfra bills (probe, 2026-10-21).
+# OpenCode's cost is its catalog's list price, not the provider's bill (2x DeepInfra's, probe 2026-10-21).
 print("lane-opencode: usage " + " ".join(f"{key}={value}" for key, value in totals.items()) + f" cost_list={cost:.4f}")
 PY
 }
 
 case $model in
-  deepinfra/*) host=api.deepinfra.com ;;
   deepseek/*) host=api.deepseek.com ;;
   lithosai/*) host=api.lithosai.cloud ;;
   *) host="" ;;
