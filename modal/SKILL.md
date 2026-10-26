@@ -152,9 +152,10 @@ A long step that commits only at its end loses everything on interruption; desig
 
 1. **Local syntax check**: `python -c "import ast; ast.parse(open('script.py').read())"`
 2. **Image probe**: `image.build(app)` -- catches all build failures, no GPU cost
-3. **Smoke test**: Small data subset (< 5 min)
+3. **Smoke test**: Small data subset (< 5 min). A failed smoke plus a fix needs a fresh smoke, not a fan-out.
 4. **Interactive debug**: `modal shell script.py` or Sandbox-as-REPL (see `references/debugging.md`)
-5. **Full run**: Only after 1-3 pass
+5. **Canary one unit before fan-out**: run ONE unit (a sample, a shard) at full input scope. Within ~10 min read its rate (`/proc/<pid>/io` rchar against input size, per-item log timestamps), project `unit wall × units × $/hr` and compare it with the remaining cap. A small-subset smoke cannot see scale-dependent cost: a whole-file scanner's read amplification, one heavy item among hundreds.
+6. **Full run**: Only after 1-5 pass
 
 ## Reference Docs (in `references/`; read when the trigger fits)
 
