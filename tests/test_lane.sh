@@ -589,6 +589,12 @@ echo "test: a reader that closes early cannot abort a resume half-done"
 wait_for_file "$LANE_HOME/failure.done"
 assert_eq "EXIT=0" "$(<"$LANE_HOME/failure.done")" "resume relaunched despite a closed reader"
 
+echo "test: a reader that closes early cannot abort a run half-done"
+# Before the fix, git worktree add exited 141 on the closed pipe after it had made the branch, and run died under set -e.
+"$LANE" run closedrun --repo "$REPO" --brief "$BRIEF" --worker fake 2>&1 | head -1 >/dev/null
+wait_for_file "$LANE_HOME/closedrun.done"
+assert_eq "EXIT=0" "$(<"$LANE_HOME/closedrun.done")" "run launched despite a closed reader"
+
 echo "test: run reports RUNNING and creates its isolated worktree"
 run_output=$(LANE_FAKE_HOLD="$TEST_TMP/release-first" "$LANE" run first --repo "$REPO" --brief "$BRIEF" --worker fake --keep-checkout)
 grep -q '^watch: while ' <<<"$run_output" || fail "run did not print a watch loop"

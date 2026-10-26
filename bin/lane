@@ -6,6 +6,13 @@ set -euo pipefail
 # ever writes to the terminal or a pipe here (files are written with printf or python), so a failed write is safe to drop.
 trap '' PIPE
 echo() { builtin echo "$@" 2>/dev/null || true; }
+# Children inherit the ignored SIGPIPE, so a closed reader turns their writes into EPIPE, and git's check_pipe then
+# exits 141: on 2026-10-26 `lane run … 2>&1 | head -1` killed four launches after `git worktree add` had made their
+# branches. A stdout or stderr that is a pipe goes through a relay that keeps draining after its reader goes, so no
+# child (git, a prepare hook) ever writes into a closed pipe.
+relay() { while IFS= read -r line || [ -n "$line" ]; do printf '%s\n' "$line" 2>/dev/null || :; done; }
+if [ -p /dev/stdout ]; then exec 1> >(relay); fi
+if [ -p /dev/stderr ]; then exec 2> >(relay >&2); fi
 
 LANE_HOME="${LANE_HOME:-${HOME:?lane: HOME is not set}/.cache/lanes}"
 # Worker helpers live beside the real script (~/.local/bin/lane is a symlink to it).
