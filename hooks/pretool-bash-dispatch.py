@@ -2875,6 +2875,14 @@ MANIFEST: list[dict] = [
         "if": None,
         "run": make_native_gate("pretool-uv-python-guard.py", "pretool_uv_python_guard"),
     },
+    # After uv-python-guard: its bare-python rewrite produces a `uv run` this gate must see.
+    {
+        "name": "uv-worktree-venv-guard",
+        "if": None,
+        "run": make_native_gate(
+            "pretool-uv-worktree-venv-guard.py", "pretool_uv_worktree_venv_guard"
+        ),
+    },
     {
         "name": "genomics-pythonpath-guard",
         "if": None,
