@@ -72,11 +72,21 @@ def _dispatch(sb: dict, command: str, cwd: Path | None = None) -> subprocess.Com
     )
 
 
+def _dispatch_clears(sb: dict, command: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
+    """Dispatch until the stale lock is gone. Any git whose cwd lsof can't read counts as
+    busy, and parallel tests spawn short-lived gits, so a pass may skip; retry a few."""
+    for _ in range(10):
+        proc = _dispatch(sb, command, cwd)
+        assert proc.returncode == 0, proc.stderr
+        if not sb["lock"].exists():
+            return proc
+        time.sleep(0.3)
+    raise AssertionError(f"stale lock survived 10 passes of {command!r}")
+
+
 def test_git_command_removes_stale_lock_from_envelope_cwd(sb):
     _stale_lock(sb["lock"])
-    proc = _dispatch(sb, f"cd {sb['repo']} && git status")
-    assert proc.returncode == 0, proc.stderr
-    assert not sb["lock"].exists()
+    proc = _dispatch_clears(sb, f"cd {sb['repo']} && git status")
     assert "git-stale-lock" not in proc.stdout  # the guard's note is never model-visible
     rows = [json.loads(line) for line in sb["receipts"].read_text().splitlines()]
     assert len(rows) == 1
@@ -86,9 +96,7 @@ def test_git_command_removes_stale_lock_from_envelope_cwd(sb):
 
 def test_envelope_cwd_in_a_subdirectory_still_finds_the_repo(sb):
     _stale_lock(sb["lock"])
-    proc = _dispatch(sb, "git log --oneline -1", cwd=sb["repo"] / "sub")
-    assert proc.returncode == 0, proc.stderr
-    assert not sb["lock"].exists()
+    _dispatch_clears(sb, "git log --oneline -1", cwd=sb["repo"] / "sub")
 
 
 def test_non_git_command_leaves_the_lock(sb):
@@ -98,8 +106,7 @@ def test_non_git_command_leaves_the_lock(sb):
     assert sb["lock"].exists()
     assert not sb["receipts"].exists()
     # Positive control: the same setup does clear on a git command.
-    assert _dispatch(sb, "git status").returncode == 0
-    assert not sb["lock"].exists()
+    _dispatch_clears(sb, "git status")
 
 
 @pytest.mark.parametrize("command", ["echo legit", "open https://github.com/x/y", "ls digits"])
@@ -134,8 +141,7 @@ def test_lock_held_by_a_live_process_stays(sb):
         holder.kill()
         holder.wait()
     # Positive control: once the holder is gone the same lock is cleared.
-    assert _dispatch(sb, "git status").returncode == 0
-    assert not sb["lock"].exists()
+    _dispatch_clears(sb, "git status")
 
 
 def _commit_in_hook_phase(sb: dict) -> subprocess.Popen:
@@ -190,8 +196,7 @@ def test_lock_orphaned_mid_hook_is_removed(sb):
     commit.wait()
     assert sb["lock"].exists()  # SIGKILL: git could not clean up
     sb["env"]["GIT_STALE_LOCK_MIN_AGE_SECONDS"] = "0"
-    assert _dispatch(sb, "git status").returncode == 0
-    assert not sb["lock"].exists()
+    _dispatch_clears(sb, "git status")
 
 
 @pytest.fixture
