@@ -715,6 +715,24 @@ def test_launchd_job_blocks_same_name_launches_on_either_route(launchd_job) -> N
 
 
 @needs_launchd
+def test_launchd_job_with_a_relative_dir_runs_and_publishes(launchd_job) -> None:
+    # 2026-10-27: BGRUN_DIR=.claude/cache/... from the repo root; launchd starts in /, so the job never
+    # started and the launcher exited 125 with no error file.
+    directory, env, _run, launch, _services = launchd_job
+    relative = {**env, "BGRUN_DIR": directory.name}
+    launched = launch(
+        "case", "--", sys.executable, "-c", "raise SystemExit(3)", cwd=directory.parent, env=relative
+    )
+    assert launched.returncode == 0, launched.stderr
+    done_lines = [line for line in launched.stdout.splitlines() if line.startswith("  done: ")]
+    assert len(done_lines) == 1, launched.stdout
+    done_path = Path(done_lines[0].removeprefix("  done: ").split(" ")[0])
+    assert done_path.is_absolute()
+    assert done_path.resolve() == (directory / "case.done").resolve()
+    assert wait_file(directory / "case.done") == "3\n"
+
+
+@needs_launchd
 def test_launchd_relaunch_replaces_a_finished_registration(launchd_job) -> None:
     directory, _env, run, launch, services = launchd_job
     for exit_code in (0, 7):

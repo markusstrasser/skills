@@ -114,6 +114,9 @@ case "$name" in (""|-*|*/*|*[[:space:]]*) echo "bgrun: name must be a plain toke
 
 dir="${BGRUN_DIR:-${TMPDIR:-/tmp}/bgrun}"
 mkdir -p "$dir"
+# Absolute from here on: a launchd job starts in /, so a relative BGRUN_DIR left it unable to reach its
+# payload or marker, and the launcher waited for a PID that never came (2026-10-27, genomics HG002 drive).
+dir=$(cd "$dir" && pwd) || { echo "bgrun: cannot resolve $dir" >&2; exit 2; }
 log="$dir/$name.log"; done_marker="$dir/$name.done"; pid_file="$dir/$name.pid"
 started_file="$dir/$name.started"
 launch_lock="$dir/$name.launch-lock"
