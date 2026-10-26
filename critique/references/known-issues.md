@@ -187,3 +187,5 @@ Controls use the real shared helper artifact lifecycle for both fallback success
 - **[2026-10-24] 2026-10-24 --claude-api: an agent session keeps the Anthropic key it loaded at start (SECRET_ENV_LOADED is inherited), so after a key rotation every claude axis got 400 'credit balance is too low' (llmx now exits 6 for it, da042c2). Launch from env -u SECRET_ENV_LOADED -u ANTHROPIC_API_KEY_METERED zsh -c '...' and probe one tiny call first.**
 
 - **[2026-10-24] 2026-10-24: max-effort Opus 5.5 via --claude-api died twice with stop_reason=max_tokens at 104,192 (8,192 visible + 96K reserve; reasoning 70K-103K). Fixed in llmx 7b52995: max effort requests the 128K ceiling. If it recurs at 128K, split the packet.**
+
+- **[2026-10-26] 2026-10-26 genomics: --context-scope packet + --no-scout does NOT sandbox the codex-cli/claude-cli axes; they still read the --project workspace (correctness/contracts inspected the primary checkout; the claude axis ran uv run in a lane worktree and made a .venv). In a donor-data repo pass a filtered clone or neutral dir as --project; the Gemini API axes stay packet-only. Checked: 0 donor-path reads in the two codex rollouts.**
