@@ -2703,6 +2703,132 @@ def gate_rg_replace_flag_guard(raw_payload: str) -> GateResult:
         return GateResult(0, "", "")
 
 
+# --- zsh-modifier-guard (WARNER, 2026-10-27) --------------------------------
+# The Bash tool runs $SHELL, zsh here, where an unbraced `$var:<letter>` is a
+# history modifier, inside double quotes and unquoted heredoc bodies too:
+# `git show $rev:tests/x.py` reads `:t` (tail), `"$T:scripts/x.py"` reads `:s`
+# and `"$img:latest"` lowercases. A tree comparison printed wrong offender
+# counts for three revisions (genomics 2026-10-27); same trap 2026-09-30.
+# Single-quoted, $'…', escaped and commented text and quoted-delimiter heredoc
+# bodies are literal, so they are blanked before the match. `:p` stays literal
+# in parameter expansion, so it is not listed.
+
+_ZSH_MODIFIER_RE = re.compile(r"(?<!\$)\$([A-Za-z_][A-Za-z0-9_]*|[0-9])(:[aAcehlPqQrstux&g])")
+_HEREDOC_WORD_END = " \t\n;|&<>()"
+
+
+def _zsh_expanding_text(command: str) -> str:
+    """The command with zsh-literal text blanked; offsets are preserved."""
+    out = list(command)
+    n = len(command)
+
+    def blank(start: int, end: int) -> None:
+        for k in range(start, min(end, n)):
+            if out[k] != "\n":
+                out[k] = " "
+
+    pending: list[tuple[str, bool, bool]] = []  # (delimiter, strip_tabs, literal body)
+    in_double = False
+    i = 0
+    while i < n:
+        ch = command[i]
+        if in_double:
+            if ch == "\\":
+                blank(i, i + 2)
+                i += 2
+                continue
+            in_double = ch != '"'
+            i += 1
+            continue
+        if ch == "\\":
+            blank(i, i + 2)
+            i += 2
+        elif ch == "'":
+            end = command.find("'", i + 1)
+            end = n if end < 0 else end
+            blank(i, end + 1)
+            i = end + 1
+        elif ch == "$" and command.startswith("'", i + 1):
+            j = i + 2
+            while j < n and command[j] != "'":
+                j += 2 if command[j] == "\\" else 1
+            blank(i, j + 1)
+            i = j + 1
+        elif ch == '"':
+            in_double = True
+            i += 1
+        elif ch == "#" and (i == 0 or command[i - 1] in " \t\n;|&("):
+            end = command.find("\n", i)
+            end = n if end < 0 else end
+            blank(i, end)
+            i = end
+        elif command.startswith("<<", i) and not command.startswith("<<<", i):
+            j = i + 2
+            strip_tabs = command.startswith("-", j)
+            j += 1 if strip_tabs else 0
+            while j < n and command[j] in " \t":
+                j += 1
+            k = j
+            while k < n and command[k] not in _HEREDOC_WORD_END:
+                k += 1
+            raw = command[j:k]
+            delimiter = raw.replace("'", "").replace('"', "").replace("\\", "")
+            if delimiter:
+                pending.append((delimiter, strip_tabs, raw != delimiter))
+            blank(j, k)
+            i = k
+        elif ch == "\n" and pending:
+            i += 1
+            for delimiter, strip_tabs, literal in pending:
+                start = body_end = i
+                while i < n:
+                    line_end = command.find("\n", i)
+                    line_end = n if line_end < 0 else line_end
+                    line = command[i:line_end]
+                    if (line.lstrip("\t") if strip_tabs else line) == delimiter:
+                        body_end = i
+                        i = min(line_end + 1, n)
+                        break
+                    i = body_end = min(line_end + 1, n)
+                if literal:
+                    blank(start, body_end)
+                else:
+                    k = start
+                    while k < body_end:
+                        if command[k] == "\\":
+                            blank(k, k + 2)
+                            k += 2
+                        else:
+                            k += 1
+            pending = []
+        else:
+            i += 1
+    return "".join(out)
+
+
+def gate_zsh_modifier_guard(raw_payload: str) -> GateResult:
+    try:
+        if os.path.basename(os.environ.get("SHELL", "")) != "zsh":
+            return GateResult(0, "", "")
+        data = json.loads(raw_payload)
+        cmd = (data.get("tool_input") or {}).get("command", "") or ""
+        if "$" not in cmd or ":" not in cmd:
+            return GateResult(0, "", "")
+        hits = [m.group(0) for m in _ZSH_MODIFIER_RE.finditer(_zsh_expanding_text(cmd))]
+        if not hits:
+            return GateResult(0, "", "")
+        shown = ", ".join(f"`{hit}`" for hit in dict.fromkeys(hits))
+        _log_trigger("zsh-modifier-guard", "warn", hits[0], cmd)
+        msg = (
+            f"zsh reads {shown} as a history modifier (`:t` tail, `:h` head, `:r` root, `:e` "
+            "extension, `:s` substitute, `:a` absolute, `:l`/`:u` case), inside double quotes "
+            "and unquoted heredocs too. Write `${name}:…`, or run the loop under `bash -c '…'`."
+        )
+        return GateResult(0, "", json.dumps({"additionalContext": msg}))
+    except Exception:
+        return GateResult(0, "", "")
+
+
 MANIFEST: list[dict] = [
     {
         "name": "secret-output-guard",
@@ -2815,6 +2941,8 @@ MANIFEST: list[dict] = [
     {"name": "remote-delete-guard", "if": None, "run": gate_remote_delete_guard},
     # --- 2026-09-23: glued `rg -rn` silently rewrites matches (advisory) ---
     {"name": "rg-replace-flag-guard", "if": None, "run": gate_rg_replace_flag_guard},
+    # --- 2026-10-27: unbraced `$var:<letter>` is a zsh history modifier (advisory) ---
+    {"name": "zsh-modifier-guard", "if": None, "run": gate_zsh_modifier_guard},
 ]
 
 

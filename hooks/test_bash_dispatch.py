@@ -1624,6 +1624,72 @@ def test_rg_glued_replace_logs_a_warn_row(sandbox):
     assert rows[0].get("cmd_tok") == "rg" and "cmd" not in rows[0]
 
 
+# ---------------------------------------------------------------------------
+# zsh-modifier-guard (2026-10-27): unbraced `$var:<letter>` is a zsh history modifier.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command,hit",
+    [
+        ("for rev in a b; do git cat-file -e $rev:tests/x.py; done", "$rev:t"),
+        ('git show "$T:scripts/x.py"', "$T:s"),
+        ('docker pull "$img:latest"', "$img:l"),
+        ("scp f $host:tmp/", "$host:t"),
+        ("cat <<EOF\n$x:h\nEOF", "$x:h"),
+        ('y=$(echo "$x:r")', "$x:r"),
+        ("echo $1:a", "$1:a"),
+    ],
+)
+def test_zsh_modifier_advises(sandbox, command, hit):
+    env = dict(sandbox["env"], SHELL="/bin/zsh")
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, env, sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert f"zsh reads `{hit}` as a history modifier" in (disp.get("additionalContext") or "")
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'git show "${rev}:tests/x.py"',
+        "echo '$rev:tests'",
+        "echo \\$rev:tests",
+        "echo $'$x:t'",
+        "cat <<'EOF'\n$x:t\nEOF",
+        'cat <<"EOF"\n$x:t\nEOF',
+        "cat <<\\EOF\n$x:t\nEOF\necho done",
+        "ls # $x:t",
+        'echo "$a:$b" $HOST:8080 $PWD:/app "$x:p"',
+        "bash -c 'git show $rev:tests/x.py'",
+        'echo "${x:t}"',
+        "echo \"it's $x\"",
+    ],
+)
+def test_zsh_literal_and_braced_forms_stay_silent(sandbox, command):
+    env = dict(sandbox["env"], SHELL="/bin/zsh")
+    envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
+    disp = run_dispatcher(envelope, env, sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert "history modifier" not in (disp.get("additionalContext") or "")
+
+
+def test_zsh_modifier_guard_is_silent_under_bash(sandbox):
+    env = dict(sandbox["env"], SHELL="/bin/bash")
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "git show $rev:tests/x.py"}}
+    disp = run_dispatcher(envelope, env, sandbox["cwd"])
+    assert disp["exit_code"] == 0
+    assert "history modifier" not in (disp.get("additionalContext") or "")
+
+
+def test_zsh_modifier_logs_a_warn_row(sandbox):
+    env = dict(sandbox["env"], SHELL="/bin/zsh")
+    envelope = {"tool_name": "Bash", "tool_input": {"command": "git show $rev:tests/x.py"}}
+    run_dispatcher(envelope, env, sandbox["cwd"])
+    rows = [r for r in _read_trigger_log(sandbox) if r.get("hook") == "zsh-modifier-guard"]
+    assert [(r["action"], r["detail"]) for r in rows] == [("warn", "$rev:t")]
+
+
 # --- 2026-10-14..21 false-positive classes (cat guard A, timeout-modal B) ---
 
 
