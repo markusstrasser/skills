@@ -31,10 +31,16 @@ prompt=${1:?lane-opencode: no prompt}
 # automatically when the command finishes". Under `opencode run` nothing resumes the session: the run exits with the
 # turn and its background commands stop. A teleport lane ended so at step 61 of its brief, its build still queued
 # for a cargo slot (arena, 2026-10-26). The default foreground timeout, 120000 ms, kills longer commands.
+# A command that prompts waits on a stdin nobody writes until its timeout: `lldb -b -o run` drops to lldb's prompt
+# when the program crashes, and an implicit-targets lane sat 12 minutes there under a 3600000 timeout (arena,
+# 2026-10-27). `-k` commands run only on a crash, and </dev/null makes any prompt read EOF.
 headless_note="This run is headless: nothing resumes you after your turn ends, so a background command's result never \
 reaches you, and the lane ends with your turn. Run every command in the foreground, never with the shell tool's \
 background option, and set its timeout above the command's expected time (the default, 120000 ms, kills it; a build \
-queued behind other lanes can take 30 minutes, so give builds and test runs 3600000)."
+queued behind other lanes can take 30 minutes, so give builds and test runs 3600000). Nobody answers a prompt: give \
+every command that can ask for input </dev/null, and run a debugger as \
+\`lldb -b -o run -k 'thread backtrace -c 40' -k 'quit 1' -- <program> </dev/null\`, since -b alone stops at lldb's \
+prompt when the program crashes."
 prompt="$prompt
 
 $headless_note"
