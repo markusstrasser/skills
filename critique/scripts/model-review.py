@@ -2205,12 +2205,39 @@ def build_context(
     }
 
 
+def _review_root(project_dir: Path) -> Path:
+    """Where a review of project_dir is kept: the primary checkout when project_dir is a linked worktree.
+
+    Lane and isolated-agent worktrees are deleted when their work lands or their agent ends, and
+    .model-review is git-ignored, so no archive of git state keeps a review written there. One was
+    lost that way while its landing commit still cited it (genomics d17-residue, 2026-10-26).
+    Outside git, in the primary checkout, or in a bare or submodule layout, it stays project_dir.
+    """
+
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(project_dir), "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return project_dir
+    lines = completed.stdout.splitlines()
+    if completed.returncode != 0 or len(lines) != 2:
+        return project_dir
+    toplevel, common_dir = Path(lines[0]), Path(lines[1])
+    if common_dir.name != ".git" or toplevel == common_dir.parent:
+        return project_dir
+    return common_dir.parent
+
+
 def create_review_dir(project_dir: Path, topic: str) -> Path:
-    """Create review artifacts under the target project, never the caller's CWD."""
+    """Create review artifacts under the target project's durable checkout, never the caller's CWD."""
 
     slug = slugify(topic)
     hex_id = os.urandom(3).hex()
-    review_dir = project_dir / ".model-review" / f"{date.today().isoformat()}-{slug}-{hex_id}"
+    review_dir = _review_root(project_dir) / ".model-review" / f"{date.today().isoformat()}-{slug}-{hex_id}"
     review_dir.mkdir(parents=True, exist_ok=True)
     return review_dir
 

@@ -1801,6 +1801,26 @@ class ModelReviewContextBuildTest(unittest.TestCase):
             self.assertEqual(review_dir.parent, project_dir / ".model-review")
             self.assertTrue(review_dir.name.endswith("-packet-ownership-010203"))
 
+    def test_review_of_a_linked_worktree_lands_in_the_primary_checkout(self) -> None:
+        """A lane worktree is deleted when it retires; its ignored .model-review went with it."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir).resolve()
+            primary = root / "primary"
+            lane = root / "lane"
+            git = ["git", "-c", "core.hooksPath=/dev/null", "-c", "user.name=t", "-c", "user.email=t@t"]
+            subprocess.run([*git, "init", "-q", str(primary)], check=True)
+            subprocess.run([*git, "-C", str(primary), "commit", "-q", "--allow-empty", "-m", "seed"], check=True)
+            subprocess.run([*git, "-C", str(primary), "worktree", "add", "-q", "--detach", str(lane)], check=True)
+            (primary / "scripts").mkdir()
+
+            from_lane = model_review.create_review_dir(lane, "lane review")
+            from_primary_subdir = model_review.create_review_dir(primary / "scripts", "subdir review")
+
+            self.assertEqual(from_lane.parent, primary / ".model-review")
+            self.assertFalse((lane / ".model-review").exists())
+            # The primary checkout keeps today's placement, subdirectory projects included.
+            self.assertEqual(from_primary_subdir.parent, primary / "scripts" / ".model-review")
+
     def test_build_context_drops_file_specs_when_budget_is_tiny(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
