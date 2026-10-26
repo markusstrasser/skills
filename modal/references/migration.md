@@ -433,3 +433,31 @@ Modal supports Python 3.14 (including free-threaded 3.14t). Python 3.9 dropped.
 stats = fn.get_current_stats()
 print(stats.num_running_inputs)
 ```
+
+<!-- moved-from modal/SKILL.md L108-129 2026-10-26 -->
+## Critical Breaking Changes (SKILL.md summary block) (moved verbatim from SKILL.md)
+
+> Moved verbatim from modal/SKILL.md (2026-10-26, context-cost reduction; SKILL.md keeps a one-line rule for each actionable item).
+
+## Critical Breaking Changes
+
+```python
+modal.Stub("name")           ->  modal.App("name")
+modal.Mount(...)             ->  REMOVED -- use Image.add_local_python_source()
+mount= parameter             ->  REMOVED everywhere
+modal.gpu.H100() objects     ->  gpu="H100" strings
+@modal.build decorator       ->  Image.run_function() or Volumes
+modal.web_endpoint           ->  modal.fastapi_endpoint
+.lookup()                    ->  .from_name() + .hydrate()
+allow_concurrent_inputs=N    ->  @modal.concurrent(max_inputs=N)
+concurrency_limit/keep_warm  ->  max_containers/min_containers/scaledown_window
+```
+
+Also remember:
+
+- automounting is off; local packages are not included unless you add them
+- CLI flags go before the script path: `modal run --detach script.py`
+- lifecycle hooks use `@modal.enter()` / `@modal.exit()`
+- `modal app logs` needs `--follow` on v1.4+
+
+See `references/migration.md` for the full migration table.

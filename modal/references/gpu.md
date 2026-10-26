@@ -200,3 +200,24 @@ can't find cuDNN even though the driver is mounted. See `images.md` →
 Add a two-layer check (nvidia-smi + framework device count) at the top of
 every GPU function body so split-brain CUDA fails at launch, not after hours
 of CPU fallback.
+
+<!-- moved-from modal/SKILL.md L92-106 2026-10-26 -->
+## GPU Decision Tree (moved verbatim from SKILL.md)
+
+> Moved verbatim from modal/SKILL.md (2026-10-26, context-cost reduction; SKILL.md keeps a one-line rule for each actionable item).
+
+## GPU Decision Tree
+
+| GPU | VRAM | $/hr | Use when |
+|-----|------|------|----------|
+| T4 | 16GB | ~$0.59 | Model fits <16GB |
+| L4 | 24GB | ~$0.73 | Model fits <24GB. **Never A10G** (same VRAM, 50% more) |
+| L40S | 48GB | ~$1.65 | Best cost/perf. 24-48GB models |
+| A100-80GB | 80GB | ~$3.73 | Need >48GB or SM80 flash-attn |
+| H100 | 80GB | ~$3.95 | High-perf training |
+| H200 | 141GB | ~$4.54 | Memory-bound workloads |
+| B200 | 192GB | ~$6.25 | Flagship, sparse FP4 |
+
+Multi-GPU: `gpu="H100:8"`. Fallback: `gpu=["H100", "A100-80GB"]`.
+
+**Rules:** Inference -> prefer L4/L40S. Use `gpu=["L4", "A10G"]` for availability fallback only. See `references/gpu.md` for full specs.

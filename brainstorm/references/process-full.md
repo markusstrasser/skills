@@ -1,0 +1,131 @@
+# Brainstorm process: full wording with evidence
+
+<!-- moved-from brainstorm/SKILL.md L18-44 2026-10-26 -->
+## Core mechanism and Mode Discipline (full wording with evidence) (moved verbatim from SKILL.md)
+
+> Moved verbatim from brainstorm/SKILL.md (2026-10-26, context-cost reduction; SKILL.md keeps a one-line rule for each actionable item).
+
+You are orchestrating divergent ideation. The goal is ideas that escape the default attractor basin — the high-probability outputs that any model (including you) produces first.
+
+**Core mechanism:** Systematic perturbation, not model diversity. Models trained on similar data converge on similar ideas regardless of vendor — the prompting structure does the work. Perturbation operates on two independent dimensions, and you use both:
+- **Content-space perturbation** — denial cascade, domain forcing, constraint inversion, TRIZ contradiction, conceptual blending. Moves *where* in idea-space you look.
+- **Output-distribution perturbation** — verbalized sampling (Step 2). Relieves the typicality pressure alignment bakes in, surfacing the low-probability tail. Independent of content; composes with every content-space axis. (Verbalized Sampling, Zhang et al., ICML 2026: +1.6–2.1× diversity, training-free, and *more capable models benefit more* — so it's always-on here, not a toggle.)
+
+**This skill is DIVERGENT only.** It produces candidate space and coverage artifacts, not final selections or implementation plans. For convergent critique, use `/critique`.
+
+## Mode Discipline (READ FIRST — gates everything below)
+
+This skill is **GENERATIVE**, not analytical. It produces ideas that did not exist before the session started. It does NOT search the codebase to find what is missing.
+
+**Forbidden during ideation phases (Steps 2 and 3):**
+- `rg`, `grep`, `sed`, `awk`, `wc`, `find`, `cat`, `head`, `tail` to inspect caller code or "discover what to brainstorm about"
+- `sleep N && check` polling loops on background dispatch output files
+- Treating the absence of a feature in the codebase as a signal to add that feature (that's gap-analysis, a different task)
+- Reading any file written by an in-flight `llmx`/external-dispatch process before completion is signalled — read once after the process exits, never poll
+- Converging to "single survivor" before the disposition table exists
+
+**Required before any tool call other than packet-build (Pre-Flight) and dispatch-launch:**
+- Produce ≥5 candidate ideas as **plain text in the conversation**, with no tool use between them. This is non-negotiable. If you cannot generate 5 candidates from your own reasoning, the topic is under-specified — push back to the user, do not search the codebase to compensate.
+
+**If you find yourself running `rg`/`grep`/`sed`/`wc` or polling files in this skill:** STOP. You are violating the contract. Re-enter divergent mode: write 5 raw ideas as conversation text, then continue from Step 3. This is not optional and is not advisory.
+
+**Why this gate exists:** Codex/GPT-5.4 with the multi-MCP execution harness defaulted to `rg`/`sed` filtering loops in 8/8 automated brainstorm sessions on 2026-04-18 (genomics), ignoring the skill body entirely. HAIExplore v2 (arxiv 2512.18388, April 2026): execution-first interfaces cause premature convergence and design fixation. ReDNA (Beyond One Path, arxiv 2605.28465, May 2026) independently re-derives the fix: separating unconstrained divergent generation from convergent selection beats prior methods, and frontier LLMs under "immediate convergence pressure" fall into action fixation — exactly this failure. Architecture beats instructions — this section is the architecture.
+
+**Late-stage warning:** When a frontier is mature, this skill should produce fewer, sharper ideas, not preserve the same idea count with weaker variants. One strong perturbation survivor is enough. If forced-domain rounds only yield reframings, stop and hand back to convergent filtering.
+
+<!-- moved-from brainstorm/SKILL.md L82-172 2026-10-26 -->
+## The Process and Anti-Patterns (full wording with evidence) (moved verbatim from SKILL.md)
+
+> Moved verbatim from brainstorm/SKILL.md (2026-10-26, context-cost reduction; SKILL.md keeps a one-line rule for each actionable item).
+
+## The Process
+
+### Step 1: Define the Design Space
+
+State clearly: the question, current approach (if any), hard constraints vs soft preferences, evaluation criteria.
+
+**Reformulate before generating.** Write 3 distinct constructions of the problem: a different goal, a different obstacle to attack, or a different constraint set ("where do we get a jack?" vs "how do we raise the car?"). Generate against at least two. Problem-construction ability predicts originality, most when cues conflict (Reiter-Palmon et al. 1997). Instructing people to reformulate has weak support: null in 1997 and marginal for teams in 2018. Keep it because it is cheap. `--quick` on a well-specified task may skip this.
+
+### Step 2: Initial Generation
+
+**In-conversation first, dispatch second.** Generate `$N_IDEAS` approaches as plain text in the conversation BEFORE launching any external dispatch. The Mode Discipline gate above requires this — at least 5 candidate ideas must exist as conversation text before any non-packet tool call. No evaluation yet. Optimize for volume and diversity over individual brilliance. More seeds = more raw material for perturbation. If user included seed ideas, diversify from there.
+
+**Don't cast wide blindly — stratify, then verbalize.** Two structural moves replace undirected breadth (both are training-free and measured to beat naive generation):
+1. **Semantic-direction stratification.** First, in one planning pass, name 4–6 *broad, mutually distant semantic directions* the solution could take (not ideas yet — directions). Then generate ideas to fill each direction. Pre-partitioning the space beats casting wide and deduping after, on the diversity–quality–compute frontier (Anchorless Diversification, arxiv 2605.30150, May 2026). Record the directions; they seed the `domain_row`/paradigm columns later.
+   - *Reusable preset — interface/API/module design:* four mutually-distant directions are **minimize the interface** (1–3 high-leverage entry points), **maximize flexibility** (many use cases / extension), **optimize the common caller** (trivial default case), **ports & adapters** (logic behind a seam). (Ousterhout "Design It Twice"; see `agent-infra/research/2026-06-19-mattpocock-skills-best-ideas.md`.) Stratify *by constraint*, then generate — do NOT spawn one agent per direction expecting diversity (fan-out converges — see anti-patterns). The stratification is the mechanism; the agent count is not.
+2. **Verbalized sampling, with an originality goal.** Say "optimize for originality, not the most effective or expected answer": that one instruction moved creativity dz = +1.40 across 18 frontier models with no quality loss, four times the effect of enabling reasoning (AGC-Bench, arxiv 2607.01152). Frame the generation request as a *distribution*: "give me N genuinely different approaches **and your probability/confidence for each**." Asking for the distribution — not the single best answer — relieves typicality pressure and surfaces the low-probability tail (+1.6–2.1× diversity, ICML 2026). Keep the probabilities in the raw artifact; they are NOT a ranking signal (this is divergent mode — see the coverage≠quality caveat in synthesis-templates).
+
+With external dispatch: AFTER your own in-conversation set exists, dispatch a parallel external pass **for volume/availability only — not for diversity**. Parallel fan-out is mildly diversity-*negative* (agents converge on overlapping ideas); a single self-conditioning generator producing many outputs is the diversity mechanism. See `references/llmx-dispatch.md` for the Multi-Output default, persona constraints, and prompt payloads. **Do not poll** the dispatch output file — wait for the explicit completion signal (process exit, marker file), then read once.
+
+### Step 3: Perturbation Rounds (The Core Mechanism)
+
+Run axes specified by `--axes` (default: `denial,domain,constraint`; `contradiction` and `blend` run when named or under `--deep`). With external dispatch, fan out active axes in parallel. Without it, run sequentially.
+
+First: identify the 3-5 dominant paradigms from Step 2. These are what we're escaping.
+
+**3a: Denial Cascade** — Ban dominant paradigms, force genuinely different approaches. Novelty rises continuously with denial depth (NEOGAUGE, NAACL 2025). This is the primary divergence mechanism. Round 1 always also bans "bridge/connect X and Y" and "unify/integrate existing approaches": these frame 47–64% of LLM research ideas against 12% of human ones, across 9 models (arxiv 2607.01233). Pass paradigm *labels*, never example idea text: examples narrow the categories explored even when correct. See `references/llmx-dispatch.md` for prompt payloads.
+
+**3b: Domain Forcing** — Map the problem to unrelated domains from `references/domain-pools.md`. Far domains buy novelty and quality *variance*; field data link conceptually closer sources to better-rated ideas, and sources can be too far (Chan, Dow & Schunn 2015; Fu et al. 2013). So make one domain mid-distance (shares the problem's function or relational structure, not its vocabulary) and the rest far.
+
+**3c: Constraint Inversion** — Flip key assumptions (e.g., "compute free but storage costs $1/byte"). Design optimal solutions under altered constraints, then identify what transfers back to reality. Skipped in `--quick` mode.
+
+**3d: Contradiction (TRIZ)** — Opt-in (`--axes contradiction`; on under `--deep`). Restate the problem as technical contradictions: "improve X without worsening Y." For each pair, pull 3-5 candidate inventive principles from `references/triz-principles.md` and generate one idea per principle, applied to the actual system. The value is the external non-LLM prior: the principle is a structural constraint the idea must instantiate, not a vibe to sample near. A resolution *dissolves* the contradiction (both X and Y improve, or the tradeoff frame disappears); an idea that just picks a point on the X/Y tradeoff curve fails the round. Name the contradiction pairs explicitly before generating — infra decisions usually are one (depth vs maintenance surface, autonomy vs blast radius, context richness vs token cost).
+
+**3e: Conceptual Blending** — Opt-in (`--axes blend`; on under `--deep`). Distinct from domain forcing: 3b runs a one-way analogy ("how does immunology solve this?"); blending force-merges TWO input frames (the problem frame + one distant frame, or two distant frames) into a single blended space and mines the *emergent* structure — properties present in neither input alone (Fauconnier–Turner). Procedure: state each frame's roles/relations/dynamics, map counterpart elements across them, describe the blend as one coherent system, then keep ONLY the emergent structure. Straight A→B transfers get discarded (they belong to 3b); so does a blend whose output is "unify A and B" (the default LLM attractor, see 3a). If a blend yields no emergent structure, record the dry cell in `coverage.json` and move on.
+
+**Knowledge injection:** Before perturbation, query 2-3 tangential domain examples via Exa to prime the search space with real-world mechanisms.
+
+**Mature frontier cutoff:** After one forced-domain pass on a mature frontier, discard duplicates/no-caller ideas, don't keep forcing more domains.
+
+### Step 3.5: Build Coverage Artifacts
+
+Before synthesis, create the structured coverage artifacts first, then render the operator views:
+
+- `$BRAINSTORM_DIR/matrix.json` — one row per idea/cell with axis, domain row, paradigm escaped, transfer mechanism, and disposition fields.
+- `$BRAINSTORM_DIR/matrix.md` — rendered coverage table for operator review.
+- `$BRAINSTORM_DIR/coverage.json` — requested axes, executed axes, counts, uncovered cells, merge counts, and mature-frontier stop reason.
+
+If you cannot populate `matrix.json` without hand-waving, stop. The frontier is not covered enough to synthesize yet.
+
+### Step 4: Extract & Enumerate (Anti-Loss Protocol)
+
+**Do this BEFORE synthesis.** Single-pass synthesis drops ideas.
+
+Mechanically extract every discrete idea from all artifacts into a numbered list tagged by source and matrix cell. Then build a disposition table: `EXPLORE`, `PARK`, `REJECT`, or `MERGE WITH [ID]`. Every extracted item must have a disposition, and the disposition table should render from the same `matrix.json` rows rather than becoming a second source of truth. See `references/synthesis-templates.md` for the matrix, coverage, and extraction templates.
+
+### Step 5: Synthesize
+
+Produce synthesis with: Ideas to Explore, Parked, Rejected, Paradigm Gaps, Suggested Next Step. **Select by gate, then spread; never by novelty × feasibility.** Gate each idea on feasibility and soundness, then choose the largest set of survivors that differ on a core mechanism, ordered by feasibility. Judge novelty only against a reference (the Step 2 dominant paradigms and prior `.brainstorm/` runs), and ask directly whether each idea is narrow or source-bound. LLM judges, including you, rate generated ideas as novel where experts disagree, and pairwise comparison makes it worse (arxiv 2606.12071); a pipeline built around this gated-set objective beat the best baseline 2–3.9× on it (IDEAgent, arxiv 2607.22375). Save to `$BRAINSTORM_DIR/synthesis.md`. See `references/synthesis-templates.md` for output template.
+
+### Step 5.5: Pain-Point Gate (MANDATORY before implementation)
+
+Before offering to plan or implement ANY explore item, verify it solves a real problem:
+
+1. `git log --oneline --all | grep -i "<topic keywords>"` — actual incidents
+2. `grep -r "<topic>" ~/.claude/projects/*/memory/` — session pain moments
+3. For each EXPLORE item: "This would have prevented [specific incident] on [date]"
+4. If no incident: mark `SPECULATIVE` in disposition. Default to PARK, not EXPLORE.
+
+This gate exists to populate `caller_evidence`, `speculative`, and final disposition support. It is not a convergent review pass and should not turn brainstorm into a findings engine.
+
+**Why this exists:** Brainstorm session (2026-03-26) generated 47 ideas, 12 explored, 7 planned, 1 built. 6/7 layers defended against hypothetical problems with zero incident history. Absence of a feature ≠ presence of a problem.
+
+### Step 6: Bridge to Action
+
+If EXPLORE items survive the pain-point gate:
+
+> "Brainstorm identified N ideas worth exploring (M survived pain-point gate). Want a plan for the top 1-2, or `/critique` to stress-test a specific idea?"
+
+Don't auto-implement — divergent ideas need convergent validation first.
+
+## Anti-Patterns
+
+- **Evaluating during generation.** Steps 2-3 generate. Steps 4-5 evaluate. Don't mix.
+- **Skipping denial rounds.** Initial generation IS the attractor basin. Denial is how you escape it.
+- **All-adjacent domains for domain forcing.** Adjacent fields converge to the same basin. One mid-distance domain is deliberate; the rest are far.
+- **Implementing brainstorm output directly.** Prototype cheaply or stress-test with `/critique` first.
+- **Skipping coverage artifacts.** If you cannot name the matrix cells you covered, you do not yet know what was actually explored.
+- **Using brainstorm as a decision memo.** It produces candidate space plus coverage, not the final call.
+- **Synthesizing without extracting.** Drops ideas silently. Always extract first.
+- **Treating model choice (or parallel multi-agent fan-out) as the diversity mechanism.** The prompting structure (stratification, verbalized sampling, denial, domains, inversions) produces divergence. Parallel agents converge and closed loops semantically collapse — model/agent count is for volume and availability only. (Different in a *verifier-gated search loop*: forks that keep the work but drop the chat history, with a grader picking the winner, do escape idea basins — arXiv:2610.07447. That gain is context reset plus selection; brainstorm has no grader, so it does not transfer here.)
+- **Using expert/authority personas during generation.** "Senior scientist" framing suppresses semantic diversity. Generate with independent/neutral framing; bring expertise in at the convergent (`/critique`) stage.

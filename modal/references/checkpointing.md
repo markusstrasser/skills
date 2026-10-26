@@ -127,3 +127,26 @@ A timeout equal to the actual runtime kills the subprocess at the finish line. S
 
 ### Rule: `.map()` containers are invisible without per-trait logging
 A `.map()` fanout over N traits runs N containers. Each has its own PipelineLogger writing to volume. But the volume commit only happens at trait completion. Until the first trait finishes, you have zero visibility into what any container is doing. Add stdout `print()` at step boundaries so `modal app logs` shows step transitions, not just "Starting..."
+
+<!-- moved-from modal/SKILL.md L142-158 2026-10-26 -->
+## Progress Survivability (SKILL.md rule block) (moved verbatim from SKILL.md)
+
+> Moved verbatim from modal/SKILL.md (2026-10-26, context-cost reduction; SKILL.md keeps a one-line rule for each actionable item).
+
+## Progress Survivability
+
+The commit-at-step-boundary model is a trap for long subprocess steps (>30min): a 4h step that
+commits only at the end loses 4h on any interruption. Design for survivability from the start.
+Rule one-liners below; full mechanics and copy-paste patterns (`@modal.exit` class pattern,
+dirty-flag emergency save, `.SUCCESS` sentinels, mid-step checkpoint loop, tee-to-volume):
+[references/checkpointing.md](references/checkpointing.md).
+
+- **Ephemeral disk is ephemeral** — `/tmp`/`/root`/container-local paths are wiped on preemption, budget kill, OOM, and between retries of the same call.
+- **`vol.commit()` only persists what's already on the volume mount** — `shutil.copy` from `/tmp` to the mount FIRST, then commit.
+- **`@modal.exit()` requires `@app.cls`, not `@app.function`** — convert `.map()` workers to a class for 30s-grace preemption handling; fires on preemption, NOT budget kill; handler needs dirty-flag logic (an unconditional `vol.commit()` can overrun the grace window mid-sync).
+- **Checkpoint durability = `.SUCCESS` sentinels** — size-only resume checks pass truncated files; write the sentinel AFTER `vol.commit()` returns, commit again; resume trusts only artifact+sentinel pairs.
+- **Mid-step checkpoint for subprocess steps >30min** — copy partial artifacts to volume in the heartbeat loop with a ONCE-only flag (a naive loop copies 21GB every 60s heartbeat).
+- **Subprocess stdout is fully buffered without `PYTHONUNBUFFERED=1`** — multi-hour runs show nothing until exit; set it on every subprocess env.
+- **Tee subprocess partial stdout to a volume-visible log** — heartbeat-captured output must survive the container.
+- **Timeout = max expected + 50%** — a timeout equal to the actual runtime kills at the finish line (sven: 4h job, 4h timeout, artifact lost, retry from scratch).
+- **`.map()` containers are invisible without per-step stdout prints** — volume commits land at unit completion; `print()` at step boundaries so `modal app logs` shows transitions.

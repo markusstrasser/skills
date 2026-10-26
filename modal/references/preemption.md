@@ -44,3 +44,19 @@ SDK before building around it. Historical 1.4.1 probe: importing it from
 `modal app stop <app-id>` mid-work — imperfect proxy because it fires the
 graceful-shutdown path but does NOT validate budget-kill behavior (which
 SIGKILLs with no handler run).
+
+<!-- moved-from modal/SKILL.md L131-140 2026-10-26 -->
+## Preemption, Retries & Budget (SKILL.md rule block) (moved verbatim from SKILL.md)
+
+> Moved verbatim from modal/SKILL.md (2026-10-26, context-cost reduction; SKILL.md keeps a one-line rule for each actionable item).
+
+## Preemption, Retries & Budget (rules; detail in references)
+
+- Default detached behavior auto-retries once, which is not enough for long stages. Any stage >30 min or ever preempted gets `retries=modal.Retries(initial_delay=0.0, max_retries=5)` + `single_use_containers=True` (free).
+- Chunk size is the preemption-loss budget: aim ~30 min per `.map()` chunk; never put a per-step `timeout=` on a monolithic all-or-nothing step.
+- `nonpreemptible=True` costs 3x CPU+memory, is CPU-only, and is not death-proof (infra events, budget kill, OOM, `app stop` still kill it). Reserve it for short critical stages that cannot checkpoint mid-step.
+- "Waiting to be scheduled ... relaxing requirements" also fires when the account budget cap is hit. Check `modal billing report --for today` before concluding capacity. `modal app stop` on a stage a driver awaits deadlocks the driver.
+- Budget kill SIGKILLs every container: no grace, no `@modal.exit()`, no retry. Only committed volume state survives.
+- Spend-cap freeze: endpoints 404 "workspace disabled", `app list` is empty, new containers never schedule. Poll loops must fail fast on the "disabled" body.
+- Check Live Usage before launching (>85% = no long jobs). Billing lags; pair polling with launch admission (a `modal.Dict` halt flag).
+- Full detail: `references/preemption.md` (Retries, chunking, nonpreemptible, high-memory scheduling, testing `@modal.exit`), `references/budget-and-spend.md` (budget kills, spend-query CLI/API, watchdog daemon). `modal.Dict` control plane and the identity API: `references/debugging.md`.

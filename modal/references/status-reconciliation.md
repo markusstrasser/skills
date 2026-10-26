@@ -136,3 +136,56 @@ Usual checks:
 - per-stage billing aggregation
 
 See `references/attribution.md` for the reporting template.
+
+<!-- moved-from modal/SKILL.md L30-60 2026-10-26 -->
+## Truth Surface By Question (full wording) (moved verbatim from SKILL.md)
+
+> Moved verbatim from modal/SKILL.md (2026-10-26, context-cost reduction; SKILL.md keeps a one-line rule for each actionable item).
+
+## Truth Surface By Question
+
+"Is it running?" is NOT one question — it splits across three liveness planes, and
+the *obvious* check is wrong on each:
+
+- `Is a STAGE executing on Modal right now?` -> live Modal app state — but read
+  `task_count`/ephemeral, NOT `is_running`. An always-deployed infra app reads
+  `is_running: true` at `task_count: 0` (idle, not working).
+- `Is the local DRIVER/orchestrator alive right now?` -> the LOCAL process plane
+  (`ps` for the driver subprocess), NOT Modal. A local-driven workflow's heavy
+  phase (planning, volume crawl, repin) runs on your host and dispatches Modal
+  apps only AFTER it — so Modal is empty while the driver grinds. Modal app state
+  is structurally blind to the driver.
+- `Is it ADVANCING (vs hung)?` -> the driver's own progress log, NOT CPU% or "the
+  log looks frozen". Rate-limit backoff (e.g. Modal `VolumeListFiles`) freezes CPU
+  and stdout for tens of seconds and mimics a deadlock — the log line
+  (`backing off`, `N/M probed`) is the liveness signal, not process vitals.
+- `Did the worker finish?` -> immutable receipt / terminal artifact
+- `Why did it fail?` -> container logs, app logs, stderr tails, worker receipt error
+- `Can I trust the output?` -> volume artifact plus checksum/validation, not app state
+- `What did this cost?` -> billing rows joined by tags. In genomics,
+  `stage-telemetry` reports `billing_actual` from Modal billing and
+  `planning_cost_projection` separately; if billing is unavailable, do not
+  substitute the projection or treat the attempt as `$0`.
+
+Do not answer a live-state question from a volume file.
+Do not answer a billing question from app state.
+Do not answer driver/orchestrator liveness from Modal app state — join with the
+local process plane (`ps`); an empty Modal app list does NOT mean nothing is running.
+Do not read `is_running` as "doing work" — join with `task_count`/ephemeral.
+Do not merge these into one synthetic status.
+
+<!-- moved-from modal/SKILL.md L160-169 2026-10-26 -->
+## Failure-Mode Cheatsheet (full wording) (moved verbatim from SKILL.md)
+
+> Moved verbatim from modal/SKILL.md (2026-10-26, context-cost reduction; SKILL.md keeps a one-line rule for each actionable item).
+
+## Failure-Mode Cheatsheet
+
+- **Import error or crash loop after detach** -> inspect live app state first; `retries=0` does not stop container crash retries
+- **Receipt says running forever** -> likely `stale_receipt`; compare receipt timestamp to live logs/progress
+- **Detached app looks alive for hours** -> app age is not progress; check latest worker logs and receipt heartbeat before assuming compute is still happening
+- **Logs show `Runner interrupted due to worker preemption` or `Worker disappeared`** -> treat the run as unhealthy until you see fresh progress after the restart
+- **Old results still visible after stop** -> outputs need run identity; volume state is not liveness
+- **Large sync or probe is slow/heavy** -> use Modal SDK reads, not repeated CLI subprocesses
+- **Download or write looks complete but is wrong** -> validate integrity, not just size; use atomic completion markers
+- **Unexpected GPU bill** -> check `max_containers`, tags, and `.starmap()` fanout before anything else

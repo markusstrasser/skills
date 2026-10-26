@@ -10,38 +10,38 @@ effort: low
 
 Choose a model and effort from the principles below, then read the model's reference file for prompting and watch-items. Transport mechanics belong to `/llmx-guide` and the live mirror `llmx info`.
 
-## Principles
+## Principles (full wording and evidence: [principles.md](references/principles.md))
 
-1. **Use the cheapest model and effort that passes the task's verifier.** The verifier in the brief sets the tier, not how hard the task feels. A gated brief licenses a cheap executor, and a gate-less brief makes your review the gate ([Dispatch Economics](references/dispatch-economics.md)).
-2. **On a subscription every tier costs $0, so choose by quality and plan headroom. On a metered API, choose the cheapest tier that passes.** Claude runs on the subscription only. Metered Anthropic API use needs an explicit request, because a metered lane can never beat a $0 lane on cost.
-3. **Route only to the Pareto frontier: retire dominated models and migrate their callers.** A dominated id left in an allowlist gets picked by accident. llmx keeps retired prices for historical cost accounting.
-4. **Effort is a per-model dial that you tune against the verifier. Never switch to a weaker model as a fix.** Effort names do not carry across models (Opus 5.5 at `low` collapses on research). Tools and in-loop checks scale test-time compute better than extra thinking (code and web access took Opus 5.5 from 69.8 to 180.1 on the Endless Exam, arXiv:2609.24555). More effort on a poorly calibrated model tends to buy longer confident errors ([trilemma](references/selection-trilemma.md)).
-5. **Use cross-model review for consequential judgment. A model grading its own output is not review.** A second diverse pass is worth running because it finds issues the first missed. The measured gain from a different lab over a second same-lab instance is about zero, but you must still check any facts a reviewer asserts ([review pattern](references/cross-model-review.md)).
-6. **Facts come from tools, not model recall.** Every model card shows factuality limits. When a model has to judge without a source, choose it for calibration (willingness to abstain) over index rank or size, and require an execution receipt for computed numbers.
-7. **Probe the live transport and read back the served model before trusting config.** An alias or a successful dry-run proves configuration only, aliases move on release day, and a self-report is not proof ([transport](references/transport.md)).
-8. **Vendor benchmarks are claims. Check `~/Projects/evals/DECISIONS.md` before any bake-off.** A fresh n=1 probe must not overturn a question an eval already settled. Treat CursorBench as contaminated until shown otherwise.
-9. **Route classifier niches by exact id.** Opus 5.5 re-routes most cyber work to Opus 4.8 and declines dual-use biology, so that work goes to `claude-opus-5` by exact id.
-10. **Work the principal verifies (taste, voice, conviction) stays with the operator.** Models draft and critique, but a model judge does not make taste verifiable.
+1. **Use the cheapest model and effort that passes the task's verifier.** The brief's verifier sets the tier, not how hard the task feels; a gate-less brief makes your review the gate ([Dispatch Economics](references/dispatch-economics.md)).
+2. **Subscription: every tier is $0, so choose by quality and plan headroom. Metered: the cheapest tier that passes.** Claude runs on the subscription only; metered Anthropic API needs an explicit request.
+3. **Route only to the Pareto frontier: retire dominated models and migrate their callers.** A dominated id left in an allowlist gets picked by accident.
+4. **Effort is a per-model dial tuned against the verifier. Never switch to a weaker model as a fix.** Effort names do not carry across models (Opus 5.5 at `low` collapses on research). Prefer tools and in-loop checks over extra thinking ([trilemma](references/selection-trilemma.md)).
+5. **Cross-model review for consequential judgment; a model grading its own output is not review.** Run a second diverse pass and check every fact a reviewer asserts ([review pattern](references/cross-model-review.md)).
+6. **Facts come from tools, not model recall.** Without a source, pick for calibration (willingness to abstain) over rank or size; require an execution receipt for computed numbers.
+7. **Probe the live transport and read back the served model before trusting config.** Aliases and dry-runs prove configuration only; a self-report is not proof ([transport](references/transport.md)).
+8. **Vendor benchmarks are claims. Check `~/Projects/evals/DECISIONS.md` before any bake-off.** A fresh n=1 probe must not overturn a settled eval. Treat CursorBench as contaminated.
+9. **Route classifier niches by exact id.** Opus 5.5 re-routes most cyber work to Opus 4.8 and declines dual-use biology: send that work to `claude-opus-5` by exact id.
+10. **Work the principal verifies (taste, voice, conviction) stays with the operator.** Models draft and critique; a model judge does not make taste verifiable.
 
-## Roster (Pareto frontier, 2026-09-25)
+## Roster (Pareto frontier, 2026-09-25; why each is on the frontier: [roster.md](references/roster.md))
 
-| Model | Role | Why it is on the frontier | Transport |
-|---|---|---|---|
-| [claude-opus-5-5](references/models/claude-opus-5-5.md) | Default Claude: coding (`medium`), hard work (`xhigh`), architecture (`max`), research (`high`+) | Matches or beats Fable 5.1 on most card rows at 40% of the token price; best-calibrated Claude | Subscription: `opus` alias, Agent tool, `llmx --subscription` |
-| [claude-fable-5-1](references/models/claude-fable-5-1.md) | Named-edge lane; the operator's interactive choice | Table reasoning edge; `low` effort holds up on research | Subscription (Max allowance), claude-cli |
-| [claude-opus-5](references/models/claude-opus-5.md) | Cyber and dual-use biology work; lanes pinned to it | No bio classifier; 5.5 re-routes cyber | Subscription, exact id only |
-| [claude-sonnet-5](references/models/claude-sonnet-5.md) | Cost tier: gated coding, no-gate mechanical work, injection-heavy input | Strongest prompt-injection robustness at a lower price than Opus | Agent tool / `claude -p`; not on the llmx subscription allowlist |
-| claude-haiku-4-5 | Cheapest Claude for mechanical no-gate work | Lowest-cost Claude tier | Agent tool; llmx anthropic-direct |
-| [gpt-6-astra](references/models/gpt-6-astra.md) | Default GPT: headless cheap lane at `low` (incl. the `/critique` premise scout and `/diff-review` scout), Codex implementation, cross-lab reviewer, quantitative work (pro mode) | Beats Luna at any effort on quality; $0 on the subscription | codex-cli subscription (`llmx --subscription`, `codex exec`) |
-| [gpt-6.1-sol](references/models/gpt-6.1-sol-luna.md) | Metered mid tier; fallback when Astra's plan limit binds | Astra training at a lower serving cost | Codex subscription + API |
-| [gpt-6-luna](references/models/gpt-6.1-sol-luna.md) | Metered bulk extraction and mechanical work | Cheapest GPT ("6 luna wins") | Codex subscription + API |
-| [grok-4.7](references/models/grok-4-7.md) | Opt-in read-only repo critique axis; Grok Build headless | Separate lab with workspace access; cost and speed edge | cursor-agent `grok-4.7-<effort>[-fast]`; `grok` CLI; xAI API unverified |
-| [gemini-3.8-flash](references/models/gemini.md) | Search-grounded and vision dispatch; critique cosigner until 2026-10-14 | Cheap diverse reviewer | Metered API (`GEMINI_API_KEY_METERED`) |
-| [gemini-4-argon](references/models/gemini.md) | Critique Gemini axes (`arch`, `gaps`) since 2026-10-14 (operator), never the sole reviewer | Third-party knowledge-work lead (Vals Index #1) at about half Opus 5.5's cost; weak agentic coder; Google's own long-context numbers unreplicated | Metered API (`GEMINI_API_KEY_METERED`) |
-| [gemini-3.1-pro-preview](references/models/gemini.md) | Explicit `-m` one-offs (ARC-AGI-2, GPQA, video) | Registered, not a default anywhere | Metered API |
-| [gemini-3.5/3.1-flash-lite](references/models/gemini.md) | Registered for pricing, not routed | Lets the spend guard price them | Metered API |
-| [GLM-5.2](references/models/glm-5-2.md) | Opt-in review cosigner and epistemic guardrail; not an extractor | Separate training lab; best measured calibration among routed models | OpenRouter/zai metered, `--axes …,glm` |
-| [kimi-k3](references/models/kimi-k3.md) | Opt-in long-horizon coding probe | Open-weight model from a separate lab; cache-cheap repeated context | `llmx -p kimi` metered; Kimi Code CLI |
+| Model | Role | Transport |
+|---|---|---|
+| [claude-opus-5-5](references/models/claude-opus-5-5.md) | Default Claude: coding (`medium`), hard work (`xhigh`), architecture (`max`), research (`high`+) | Subscription: `opus` alias, Agent tool, `llmx --subscription` |
+| [claude-fable-5-1](references/models/claude-fable-5-1.md) | Named-edge lane; the operator's interactive choice | Subscription (Max allowance), claude-cli |
+| [claude-opus-5](references/models/claude-opus-5.md) | Cyber and dual-use biology work; lanes pinned to it | Subscription, exact id only |
+| [claude-sonnet-5](references/models/claude-sonnet-5.md) | Cost tier: gated coding, no-gate mechanical work, injection-heavy input | Agent tool / `claude -p`; not on the llmx subscription allowlist |
+| claude-haiku-4-5 | Cheapest Claude for mechanical no-gate work | Agent tool; llmx anthropic-direct |
+| [gpt-6-astra](references/models/gpt-6-astra.md) | Default GPT: headless cheap lane at `low` (incl. the `/critique` premise scout and `/diff-review` scout), Codex implementation, cross-lab reviewer, quantitative work (pro mode) | codex-cli subscription (`llmx --subscription`, `codex exec`) |
+| [gpt-6.1-sol](references/models/gpt-6.1-sol-luna.md) | Metered mid tier; fallback when Astra's plan limit binds | Codex subscription + API |
+| [gpt-6-luna](references/models/gpt-6.1-sol-luna.md) | Metered bulk extraction and mechanical work | Codex subscription + API |
+| [grok-4.7](references/models/grok-4-7.md) | Opt-in read-only repo critique axis; Grok Build headless | cursor-agent `grok-4.7-<effort>[-fast]`; `grok` CLI; xAI API unverified |
+| [gemini-3.8-flash](references/models/gemini.md) | Search-grounded and vision dispatch; critique cosigner until 2026-10-14 | Metered API (`GEMINI_API_KEY_METERED`) |
+| [gemini-4-argon](references/models/gemini.md) | Critique Gemini axes (`arch`, `gaps`) since 2026-10-14 (operator), never the sole reviewer; weak agentic coder | Metered API (`GEMINI_API_KEY_METERED`) |
+| [gemini-3.1-pro-preview](references/models/gemini.md) | Explicit `-m` one-offs (ARC-AGI-2, GPQA, video); not a default anywhere | Metered API |
+| [gemini-3.5/3.1-flash-lite](references/models/gemini.md) | Registered for pricing, not routed | Metered API |
+| [GLM-5.2](references/models/glm-5-2.md) | Opt-in review cosigner and epistemic guardrail; not an extractor | OpenRouter/zai metered, `--axes …,glm` |
+| [kimi-k3](references/models/kimi-k3.md) | Opt-in long-horizon coding probe | `llmx -p kimi` metered; Kimi Code CLI |
 
 Retired 2026-09-25 (operator: allowlists hold the Pareto frontier only): every model not in this table; git history keeps their old guidance. Retired 2026-10-07 (operator: "outdated"): composer-2.5 and composer-2.5-fast; successor gpt-6-astra at `low` effort, with gpt-6.1-sol at `high` when Astra's plan limit binds.
 
@@ -65,12 +65,12 @@ Retired 2026-09-25 (operator: allowlists hold the Pareto frontier only): every m
 
 ## When to Update This Skill
 
-When a model is released or a system card is materially revised:
-1. Read the model card, then add or update its `references/models/<slug>.md` file, `references/BENCHMARKS.md`, and the relevant prompting guide.
-2. Update the roster row and register the id in llmx (`llmx info` must show it).
-3. Prune the ids it dominates from llmx allowlists and the roster, and migrate every caller. Build a complete inventory first: count the matches (`rg -c`), then page through all of them.
-4. Update [transport.md](references/transport.md) when a lane starts or stops serving the model it claims. Re-probe instead of assuming.
-5. Add a dated entry to [CHANGELOG.md](references/CHANGELOG.md). Change the principles only when the evidence changes.
+When a model is released or a system card is materially revised (full wording: end of [CHANGELOG.md](references/CHANGELOG.md)):
+1. Read the model card; update `references/models/<slug>.md`, `references/BENCHMARKS.md` and the prompting guide.
+2. Update the roster row here and in [roster.md](references/roster.md); register the id in llmx (`llmx info` must show it).
+3. Prune dominated ids from llmx allowlists and the roster and migrate every caller; inventory first (`rg -c`, then page through all matches).
+4. Update [transport.md](references/transport.md) when a lane starts or stops serving its claimed model; re-probe, don't assume.
+5. Add a dated entry to [CHANGELOG.md](references/CHANGELOG.md). Change principles only when evidence changes.
 
 To log a defect or point of friction: `~/Projects/skills/hooks/append-skill-memento.sh model-guide '<one-line issue>'`.
 

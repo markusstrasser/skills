@@ -466,3 +466,17 @@ for CC-dispatched subagents.
 - `cursor-agent models` lists only `cursor-grok-4.6-{low,medium,high,xhigh}[-fast]`; every `cursor-grok-4.5-*` pin (critique `grok` axis, memory dispatch lines, routing allowlist) was dead. Updated the Grok section, Verified Transport, routing rows, llmx-guide models table/footgun 7b, `~/.claude/rules/llmx-routing.md`.
 - Grok Build (`~/.grok/bin/grok` 1.0.13, SuperGrok subscription) smoke-tested headless: JSON output with usage, served model `grok-4.6-build`, ~26K tokens of CLI context per call. Recorded as a separate lane; llmx transport pending.
 - Grok 4.6 API facts (500K context, $2/$6 <200K, $4/$12 ≥200K, `xhigh` effort, released 2026-08-12) from vendor/partner pages; no local AA measurement yet — the 4.5 AA table stays as the calibration snapshot.
+
+<!-- moved-from model-guide/SKILL.md L66-73 2026-10-26 -->
+## When to Update This Skill (full wording) (moved verbatim from SKILL.md)
+
+> Moved verbatim from model-guide/SKILL.md (2026-10-26, context-cost reduction; SKILL.md keeps a one-line rule for each actionable item).
+
+## When to Update This Skill
+
+When a model is released or a system card is materially revised:
+1. Read the model card, then add or update its `references/models/<slug>.md` file, `references/BENCHMARKS.md`, and the relevant prompting guide.
+2. Update the roster row and register the id in llmx (`llmx info` must show it).
+3. Prune the ids it dominates from llmx allowlists and the roster, and migrate every caller. Build a complete inventory first: count the matches (`rg -c`), then page through all of them.
+4. Update [transport.md](references/transport.md) when a lane starts or stops serving the model it claims. Re-probe instead of assuming.
+5. Add a dated entry to [CHANGELOG.md](references/CHANGELOG.md). Change the principles only when the evidence changes.

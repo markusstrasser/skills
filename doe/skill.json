@@ -31,6 +31,8 @@
     "doe/references/failure-catalogue.md",
     "doe/references/house-rules.md",
     "doe/references/classical-doe.md",
+    "doe/references/protocol-full.md",
+    "doe/references/family-fit.md",
     "doe/examples/worked-constructed-h.md"
   ],
   "registration_status": "NOT REGISTERED — this manifest describes the skill for internal consistency with existing skill directories; it is intentionally absent from ~/Projects/skills/skill_manifest.jsonl. Registration into that central list is the operator's call, per the 2026-07-14 charter."

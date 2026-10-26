@@ -1,0 +1,324 @@
+# /doe protocol: full wording with evidence
+
+<!-- moved-from doe/SKILL.md L94-410 2026-10-26 -->
+## The protocol, tier scoping, depth map and non-goals (full wording with evidence) (moved verbatim from SKILL.md)
+
+> Moved verbatim from doe/SKILL.md (2026-10-26, context-cost reduction; SKILL.md keeps a one-line rule for each actionable item).
+
+## The protocol — fill in this template, in order
+
+Work through these in order; each step's output feeds the next. Write the answers into a design
+doc as you go — this IS the prereg, not a separate summary of it.
+
+### 1. Construct — state precisely what mechanism is being isolated
+
+Not "does X help" — WHICH specific causal channel does X move, and what would it look like if X
+moved something else instead? (`ratchet-untransported-target`, `cert-distill-scorer-vacuity`:
+both catalogue entries are exactly "the design measured a real effect, on the wrong construct.")
+
+### 2. Arms — and the rule-privilege check
+
+For every PAIR of arms being contrasted, ask explicitly: **are they graded under the identical
+rule/instrument, or does the instrument structurally favor one arm's behavior?** A shared
+grading function is not automatically a fair one — verify it is the FULL sound rule for every
+arm, not tuned/scoped around the treatment arm's behavior. (`rule-privilege-asymmetry`.)
+
+### 3. Sham ladder — isolate WHICH component, not just THAT something changed
+
+If the treatment bundles multiple mechanisms (gating + read-back + specific content, e.g.), a
+single treatment-vs-control arm cannot attribute the effect to any one of them. Build a ladder:
+
+- **SHAM-0** (prerequisite gate, run first, cheapest): does the treatment beat the naive baseline
+  AT ALL, on the SAME budget/metric? If this doesn't clear, the finer ladder is wasted spend.
+- **SHAM-A / SHAM-B / SHAM-C**: each strips exactly ONE component (e.g., gate-off/schema-on,
+  gate-on/read-back-off, everything-on-but-content-scrambled) — run cheapest-and-most-damning
+  first (a content-scramble sham is usually the sharpest single test of "does the SPECIFIC
+  content matter, or just its presence/structure"). (`sham-integrity`, `research/2026-07-14-
+  composed-microloop-design.md`.)
+- **Treatment information budget** (any arm that compresses/summarizes/re-represents context):
+  compute the per-unit token budget the treatment actually grants (total ÷ units) and NAME the
+  decision-relevant primitives the observable needs — if the primitives cannot physically fit
+  the per-unit budget, the treatment arm is STARVED and the design measures compression loss,
+  not the mechanism. Simple division, checkable at design time; no heretic round type covers it
+  by default. (`treatment-starvation`, arc-agi rcm_topology 2026-08-01: 600 tok ÷ 16-25 segments
+  ≈ 40 tok/child = stats header, zero micro-log — treatment scored at the no-context floor on
+  8/9 cells and the topology question was never posed, despite 5 other defects caught by 2
+  pre-results attack rounds.)
+
+### 4. Controls — can the negative control possibly pass?
+
+State the grading rule, then check: under that EXACT rule, is there any way the negative control
+COULD register a pass? **A control that can never pass is as broken as one that can never fail**
+— both make the diagnostic vacuous. Separately: any FLOOR/ANCHOR used to size an effect must be
+measured on the SAME policy/condition as the arm it anchors — a baseline borrowed from a
+different regime (a different agent, a different corpus, an earlier calibration run) is not a
+valid floor for THIS arm's power calculation until checked. (`negative-control-cannot-pass`,
+`zero-context-floor-invalidity`.)
+
+### 4a. Dependency-claim verification — grep every "already exists / already provides" claim
+
+Any design-doc sentence of the shape "the hook/vocabulary/representation/extractor already
+exists in [artifact X]," "X already carries Y," or "the converter closes blocked items N-M" is a
+CODE FACT, not a design decision — it must be grep-verified AT THAT ARTIFACT before the claim is
+used to justify a formula, a launch-checklist item, or a ratification. Verify the ENUMERATION,
+not just the field's presence: a contract that declares a field but never enumerates its legal
+values is a standing hazard — every downstream consumer will fill the hole differently, and each
+will believe its filling is the ratified one. Re-run this check at LAUNCH time, not only at
+design time, for any dependency that did not yet exist when the design was written — a claim
+that was aspirational ("will carry X") at design time silently reads as achieved by launch time
+unless someone re-checks. (`dependency-claim-unverified`; `prose-asserts-a-code-fact`,
+arc-agi `eval-conventions-exhibits.md` §C; real cascade: 6 artifacts / 4 incompatible fillings /
+3 false "already exists" claims over one unenumerated `confidence` field, 2026-07-16.)
+
+Not every dependency claim is discharged the same way — name which VERIFICATION MODE applies:
+**grep** (a static existence/enumeration claim, verified by literal search against the cited
+artifact — the existing check above); **derivation** (a structural/mathematical relationship
+claim — nesting, coarsening, equivalence between two representations — verified by comparing
+their actual definitions, not asserted from a resemblance); or **runtime assert with a declared
+fallback** (a claim about a resource whose existence depends on a stochastic process and may hold
+now but not on a future run — verified by a runtime check with a stated behavior if it fails,
+never silently assumed to persist). A claim naming no mode is unverified by default. (arc-agi
+2026-07-20: an "objectbasis's key is a strict coarsening of exact-shape hash" claim was a math
+error caught only by deriving both keys' actual feature sets — derivation mode; a cited
+win-condition's presence in a fresh induction run was asserted from a past run without a runtime
+check — runtime-assert mode, absent; a validation set's coverage against the design's own cited
+taxonomy went unchecked — an enumeration sub-case of grep mode.)
+
+### 4b. Eligibility-provenance and witness-pair tables
+
+**Eligibility-provenance table** (one row per measured quantity the design relies on): what
+determines an observation's inclusion in this quantity's scored/denominator set; is that
+inclusion rule fixed independent of any arm's own behavior; if not, state the
+treatment-independence argument explicitly or flag the quantity INADMISSIBLE as a primary
+observable on the affected stratum.
+
+**Witness-pair table** (one row per gate/bound/threshold/falsifier the design relies on): one
+concrete input on which the surface would PASS, one concrete input on which it would FAIL, both
+constructed from reachable states — not merely asserted as possible in prose.
+
+Both tables are mandatory; "N/A — this design has no gates/no arm-dependent quantities" is a
+legal row, not an exemption from stating it. Presence is checked by the project's own
+refuse-to-launch gate, if one exists (arc-agi: `just dispatch-lint`), before any spend.
+
+### 5. Screen-entailment check
+
+If any venue/task parameter was TUNED until a baseline arm failed (a difficulty knob raised until
+random play scores 0), that baseline's subsequent "failure" is not a finding — it is the
+tuning criterion restated. State explicitly whether any band was calibrated by iterating against
+the same data it will later be cited as evidence from. (`screen-entailed-floor`.)
+
+### 6. Termination / transport semantics — pin them before any code
+
+State exactly when an episode/attempt/trial ENDS and what state persists across attempts, for
+EVERY arm, before writing the harness. Unstated termination semantics let different arms be
+silently graded under different implicit rules — this produces headline numbers that are
+individually plausible but **jointly impossible** (three claims that cannot all be true under any
+single consistent rule). (`termination-semantics-unstated`.)
+
+For any CROSS-HARNESS or cross-system comparison, additionally pin each arm's TRANSPORT
+PROVENANCE from artifacts (the reference run's own config/run.json — which client, which system
+prompt, session persistence), not from assumption. A "same model" comparison where one arm rides
+a different client is a silent confound; conversely, verifying both arms share the client
+converts a feared confound into a shared constant. (arc-agi 2026-07-18: the operator had to ask
+whether codex-vs-API system prompts broke a model-matched A/B — the answer sat in the reference
+trace's run.json the whole time and belonged in the prereg.)
+
+### 7. Scorer validation — if the verifier is a deterministic/mechanical extractor, attack it FIRST
+
+Before trusting ANY pass/fail from a code-based (non-live-replay) verifier, run an adversarial
+mutation suite: no-op, unrelated-field/random-value padding, hedged-disjunction, delete-to-
+vagueness (collapse to near-empty content), evidence-copying, **polarity/negation-flip (flip a
+clause's truth value while holding every other token fixed — absent from this list until
+2026-07-16, and exactly the mutation type that would have caught a stopword-stripped "not"
+labeling truth-flips as PERSIST)**, and one KNOWN-VALID case.
+
+Classify every mutation into one of two tiers, not one flat pass/fail list: **MUST-REJECT**
+(no-op, delete-to-vagueness, and any mutation whose acceptance makes the instrument STRUCTURALLY
+invalid as a reward/gating input — accepting even one of these voids the instrument for that
+role; stop before any live query runs) vs **NAMED-RESIDUAL** (a mutation the scorer fails but
+whose acceptance only CAPS the instrument's role — e.g. fabricated-but-well-formed padding). An
+instrument may ship with NAMED-RESIDUAL failures acknowledged, but **never as a reward-signal
+input** — only as a screen/instrumentation/triage tool — and the suite's headline MUST report
+"N residuals accepted, capped at [screen/instrumentation-only]" beside the match count. A bare
+"X/X passed" headline that silences an accepted residual is itself a defect.
+
+Separately: a **LABELING instrument** (a miner/filter/converter whose output feeds a persistent
+dataset label) is a different hazard class from a single-trajectory pass/fail scorer — it
+additionally owes (i) a HAND-GRADED calibration sample against its own labels before the dataset
+ships, and (ii) a DIFFERING-INPUT positive control (two inputs whose upstream ground truth
+differs must produce outputs that track the difference — a passthrough that hardcodes the label
+passes every same-input smoke while fabricating at scale). (`scorer-mutation-suite`,
+`polarity-blind-labeling-instrument`, `dependency-claim-unverified`.)
+
+### 7a. Objective dry-run — before trusting a composed reward/score, run it on hand-built trajectories
+
+If the design composes a reward or score from multiple branches/factors (a ternary reward, a
+gated `+1/0/−λ`, any formula with an `∀`/`∃` over a set the design does not yet have a working
+extractor/computer for), **do not trust the formula's validity proof in isolation.** Hand-
+construct at least three trajectories — (i) a genuine win with full, real process content, (ii)
+a silent/degenerate win (the exact pathology the gating exists to prevent), (iii) an
+empty/no-op trajectory — and evaluate the ACTUAL composed formula, using the ACTUAL shipped
+computer for every quantified-over artifact (not a described-but-unbuilt stand-in), on all
+three. Verify the ORDERING matches intent: (i) strictly above (ii), (ii) at or above (iii).
+**If any input the formula quantifies over does not yet exist as working code, the dry-run is
+not yet dischargeable — the formula's own adversarial re-check (step 7) may proceed on paper,
+but no launch checklist may cite the formula as "closed" or "reward-safe" until the dry-run has
+run against the artifact that actually shipped.** (`dependency-claim-unverified` — the
+`non_silent` inversion: `∀e: ∃claim` was FALSE on every real decision point and vacuously TRUE
+on the empty set once the shipped extractor emitted `claims=[]`.)
+
+The dry-run obligation extends to every SUMMARY STATISTIC and ENCODING a design relies on, not
+only its composed reward/score formula — hand-evaluate the statistic at its actual operating
+point (the regime the design expects to run in), not only in the abstract. A dispersion measure
+that degenerates to a constant when most mass sits at one value, or a sentinel/legend value that
+collides with a legitimate value in the domain, passes an abstract sanity check while failing
+exactly where it matters. (arc-agi 2026-07-20: MAD = median(|xᵢ−median|) collapses to exactly 0
+whenever >50% of mass sits at the modal value — precisely the certified-champion regime
+(exact-match fidelity = 1.0) the detector was built to operate in, silently degrading a "robust,
+noise-adaptive" margin into a bare miss-counter; a fog/dark sentinel legend value collided with a
+legitimate background tile, silently excluding every sprite-arrival transition from scoring with
+no adversarial model required.)
+
+### 8. Bands and power — state the decision rule before data, size it honestly
+
+- State SIGNAL / NULL / DEGENERATE (or equivalent) thresholds against a REAL, measured floor —
+  never a borrowed or assumed one (see step 4).
+- If the claim is "no effect," that needs a pre-registered **equivalence test** (TOST: both
+  one-sided tests inside a stated margin), not "the difference wasn't significant" — failure to
+  reject a null is not evidence of equivalence. (`classical-doe.md` §TOST.)
+- Compute actual power/CI arithmetic for the stated n — don't eyeball a threshold. `loop/
+  seq_stop.py` has ready SPRT (Wald boundaries) / O'Brien-Fleming / successive-halving
+  implementations if a sequential design is the right shape; state explicitly whether you're
+  using fixed-n or sequential stopping and why.
+- **Agent-run arms** (whole agent sessions or loops, not single calls): size n from measured
+  run-to-run spread, never from a convention. Identical runs of one agent-model pairing varied
+  more than pairings differed, and ranking them took tens to >100 runs each (arXiv 2609.33812,
+  open-weight models). Spread peaks near half of attainable score and collapses at both ends
+  (arXiv 2610.07447 §6.2), so pilot where the arms actually sit. A loop-policy arm (fork, restart,
+  tree search, long session) needs **equal-compute** controls: one long run AND the same budget
+  split into independent runs (best-of-N); a policy that only beats the single run may just be
+  buying samples (2610.07447 Table 1; 2609.15309). A best-of-N or fork arm selects its winner
+  with the rule a deployment would have (validation score or the agent's own pick), never the
+  hidden test: parallel sessions raised the test-selected ceiling but lost it under agent
+  selection (arXiv 2609.40303), and test-vs-validation selection is worth 9–13 points on
+  MLE-bench lite (arXiv 2507.02554). If the claim is about an *idea*, not the
+  artifact, each idea arm needs ≥2 fresh-session implementations: one implementation draw
+  reversed the idea-level winner in 26–44% of decisions (arXiv 2607.26587).
+
+### 8a. Runtime semantics — separate spend ceilings from stall watchdogs
+
+A wall-clock number is not automatically a cost budget. For paid APIs/GPUs, freeze a hard external
+spend circuit breaker. For local `$0` CPU work, derive expected runtime from a measured calibration
+and declared workload units, then use a **stall watchdog** sized from that estimate—not a ritual
+round number that turns a slow machine into an `INVALID` scientific result.
+
+- Record `calibration × workload ratio × safety factor`, or a startup throughput probe, so the
+  wall is reproducible and challengeable.
+- Prefer progress-aware watchdogs: verified new checkpoints extend the total wall; lack of progress
+  for the derived inactivity window kills the worker.
+- A watchdog kill is transport/runtime invalidity, never capability zero. Resume from the last
+  immutable checkpoint when semantics permit; do not silently shrink the scientific budget.
+- If fixed total wall is genuinely part of the construct (latency/online-decision task), label it a
+  measured treatment variable and match it across arms. Otherwise keep it out of capability bands.
+
+(`fixed-wall-as-cost-ceiling`.)
+
+### 9. Effect-target transport — never assume Δ_here = Δ_there without justifying it
+
+If the target effect size for a power calculation is measured in a DIFFERENT venue/instrument's
+units (a real-world board score, a different corpus, a historical policy), state explicitly why
+that number transfers to THIS venue's units — or treat the transform itself as unknown and report
+the result as scoped to THIS venue only. (`untransported-effect-target` — this is the single
+most consequential catalogue entry: an entire "powered null" headline inverted once this was
+checked.)
+
+### 10. Escape-a-kill check
+
+If this design's premise is "this mechanism escapes a previously-killed approach because it's
+structurally different," that escape must be demonstrated by the design's OBSERVABLES — not
+merely argued in the packet's prose. Name the specific observable that would fire if the escape
+were illusory (the killed mechanism reappearing under a different name), and check for it.
+(`escape-by-assertion-not-observable`.)
+
+After drafting any MUST-NOT/exclusion principle anywhere in the design, mechanically re-apply it
+to every OTHER mechanism named in the same packet — not only the one it was written against.
+(arc-agi 2026-07-20: two same-day instances of a designer's own stated exclusion applied
+inconsistently to their own preferred mechanism, `research/2026-07-20-goalterm-successor-
+design.md` F6 and `research/2026-07-20-perception-identity-contract.md` CAP-re-entry.)
+
+### 11. Heretic-before-results
+
+Once the design clears 1-10, get it attacked BEFORE any results land — use the project's own
+dispatch-protocol file, if it has one (arc-agi instance: `.claude/rules/verified-fable-
+dispatch.md`; it wins on divergence), else the generic six-step mechanism inlined in
+`references/house-rules.md`. Grade the attack's findings against the project's own verdict
+grammar, if it has one (arc-agi instance: `eval-conventions-exhibits.md` §C
+"Heretic-before-results"). A design this skill produces is a draft until it has survived one
+adversarial pass — the catalogue exists because that pass reliably finds real holes, including in
+designs written with this exact checklist in hand (see the worked example).
+
+**Decision tables freeze as EXECUTABLE CODE, prose demotes to documentation (2026-07-19).** Any
+prereg whose §-sections restate a decision calculus (aggregation rules, label predicates, row
+selection) in prose across multiple sections WILL grow seam divergences two implementers read
+differently — measured: the SAME defect class three times in one 12-round attack cycle
+(arc-agi wave-2, rounds 5/6b: S2, S10, S11), retired only when the full label pipeline became
+one module with an EXHAUSTIVE property test over its enumerable state space (row totality over
+all 3^k label states; guards proved as theorems) and the prose sections were stamped
+"documentation — module wins on divergence," module sha pinned in the launch descriptor. Default
+for every new prereg with a decision table. Corollary for multi-round attacks at PROBE tier
+(n=1/cell, $0): the arc-agi cycle took 12 rounds because each repair minted fresh attack surface
+— budget ~2 dual-lane rounds for probe-tier preregs and accept residual risk the executable
+tests carry, reserving convergence-to-clean cycles for decision-gating or spend-bearing designs.
+(Evidence: arc-agi freeze b5c69c06; dual-lane convergence measured 3× on same-defect rounds.)
+
+## Scope the protocol to the spend — not every step earns its keep at every tier
+
+Retrodicted 2026-07-16 (arc-agi `research/2026-07-16-doe-calibration.md`): at FULL weight
+against a $18-30, two-round-attacked component design (microvideo-wm), the 11 steps showed
+**zero dead weight** — every step fired usefully. Against $0, n≈4-arm screening probes and
+reused-instrument calibrations, roughly HALF the steps are disproportionate as literally
+written:
+
+- **Steps 2 (rule-privilege) and 5 (screen-entailment)** collapse to a one-line confirmation
+  when there is no paired-arm contest or difficulty-tuned venue — do not manufacture rework.
+- **Steps 3 (sham ladder) and 6 (termination semantics)** are N/A for single-instrument
+  calibration tasks (no episode/attempt boundary, no bundled treatment to decompose).
+- **Step 8 (bands/power)** downscales to a single hand-graded sample with a Wilson CI at
+  instrument/$0-probe tier — full TOST/`seq_stop.py` sequential-boundary apparatus is for
+  experiments sizing a real decision at $50+ tier, not a same-day calibration check.
+- **Steps 9 (effect transport) and 10 (escape-a-kill)** are usually N/A at probe tier UNLESS
+  the probe sits adjacent to a standing KILL — in which case step 10 becomes the single MOST
+  important step (state explicitly how the probe's object differs from the killed one, and
+  name the observable that would show it quietly becoming the killed thing).
+- **Step 11 (heretic-before-results)** downscales from a frontier-max dispatch to a cheap-lane
+  sanity pass when the design is "grading against frozen hand-graded bands" — the same
+  economics as "When NOT to spend Fable," applied to this skill's own step 11.
+
+Steps 1 (construct), 4/4a (controls + dependency claims), and 7/7a (scorer validation +
+objective dry-run) are load-bearing at EVERY tier measured — never skip these.
+
+## Where the depth lives
+
+- **`references/failure-catalogue.md`** — the full, dated, quoted catalogue every numbered step
+  above cites by tag. Read the entries, not just the tag names — the exact quoted language is
+  what makes each one checkable against a new design.
+- **`references/house-rules.md`** — pointers (not copies, per the single-invariant-definition
+  discipline) into the project's own verdict grammar, exhibits/phase-rule library,
+  sequential-testing library, and standing-kill ledger, if it has them (arc-agi instances:
+  `eval-conventions.md` §0, `eval-conventions-exhibits.md` §A-D, `loop/seq_stop.py`,
+  `vetoed-decisions.md`'s KILL/CAP/ARG grammar) — plus an inlined, project-agnostic six-step
+  heretic-before-results mechanism for projects without their own dispatch-protocol file.
+- **`references/classical-doe.md`** — the short canon pass (Fisher, TOST, sequential/optimal
+  design) with each citation mapped to the catalogue failure class it formally backs.
+- **`examples/worked-constructed-h.md`** — the protocol applied end-to-end to a real, live
+  in-repo design (`active-goalid` rung 4, "constructed-H"), diffed against the actual packet that
+  was independently written for it — shows where the template would have caught the same holes
+  the real attack found, and where it wouldn't have.
+
+## What this skill does NOT do
+
+It does not run experiments, dispatch frontier attacks, or grade results — it produces the design
+doc a human or agent then executes (possibly via `/eval`'s Phase 2-5 machinery once the design
+exists) and gets attacked (via the verified-fable-dispatch protocol). It is not a replacement for
+`dispatch_lint`'s mechanical refuse-to-launch gate — a design produced here should still pass
+that gate before spending.

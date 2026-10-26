@@ -29,33 +29,19 @@ Shared status contract:
 
 ## Truth Surface By Question
 
-"Is it running?" is NOT one question — it splits across three liveness planes, and
-the *obvious* check is wrong on each:
+"Is it running?" splits into three liveness planes, and the obvious check is wrong on each (full wording: `references/status-reconciliation.md`):
 
-- `Is a STAGE executing on Modal right now?` -> live Modal app state — but read
-  `task_count`/ephemeral, NOT `is_running`. An always-deployed infra app reads
-  `is_running: true` at `task_count: 0` (idle, not working).
-- `Is the local DRIVER/orchestrator alive right now?` -> the LOCAL process plane
-  (`ps` for the driver subprocess), NOT Modal. A local-driven workflow's heavy
-  phase (planning, volume crawl, repin) runs on your host and dispatches Modal
-  apps only AFTER it — so Modal is empty while the driver grinds. Modal app state
-  is structurally blind to the driver.
-- `Is it ADVANCING (vs hung)?` -> the driver's own progress log, NOT CPU% or "the
-  log looks frozen". Rate-limit backoff (e.g. Modal `VolumeListFiles`) freezes CPU
-  and stdout for tens of seconds and mimics a deadlock — the log line
-  (`backing off`, `N/M probed`) is the liveness signal, not process vitals.
+- Is a STAGE executing on Modal now? -> live app state, read `task_count`/ephemeral, not `is_running` (a deployed infra app shows `is_running: true` at `task_count: 0`).
+- Is the local DRIVER alive? -> local `ps` on the driver subprocess, not Modal: a local driver's planning/volume-crawl/repin phase runs on the host before any app is dispatched.
+- Is it ADVANCING or hung? -> the driver's progress log (`backing off`, `N/M probed`), not CPU% or a frozen log: rate-limit backoff (`VolumeListFiles`) mimics a deadlock for tens of seconds.
 - `Did the worker finish?` -> immutable receipt / terminal artifact
 - `Why did it fail?` -> container logs, app logs, stderr tails, worker receipt error
 - `Can I trust the output?` -> volume artifact plus checksum/validation, not app state
-- `What did this cost?` -> billing rows joined by tags. In genomics,
-  `stage-telemetry` reports `billing_actual` from Modal billing and
-  `planning_cost_projection` separately; if billing is unavailable, do not
-  substitute the projection or treat the attempt as `$0`.
+- `What did this cost?` -> billing rows joined by tags. In genomics `stage-telemetry`, `billing_actual` and `planning_cost_projection` are separate; if billing is unavailable, never substitute the projection or call the attempt `$0`.
 
 Do not answer a live-state question from a volume file.
 Do not answer a billing question from app state.
-Do not answer driver/orchestrator liveness from Modal app state — join with the
-local process plane (`ps`); an empty Modal app list does NOT mean nothing is running.
+Do not answer driver/orchestrator liveness from Modal app state; an empty Modal app list does NOT mean nothing is running.
 Do not read `is_running` as "doing work" — join with `task_count`/ephemeral.
 Do not merge these into one synthetic status.
 
@@ -89,86 +75,60 @@ Minimum checklist:
 4. Attach tags: `question_id`, `run_id`, `stage`.
 5. Decide how progress will become visible during the run.
 
-## GPU Decision Tree
+## GPU Choice
 
-| GPU | VRAM | $/hr | Use when |
-|-----|------|------|----------|
-| T4 | 16GB | ~$0.59 | Model fits <16GB |
-| L4 | 24GB | ~$0.73 | Model fits <24GB. **Never A10G** (same VRAM, 50% more) |
-| L40S | 48GB | ~$1.65 | Best cost/perf. 24-48GB models |
-| A100-80GB | 80GB | ~$3.73 | Need >48GB or SM80 flash-attn |
-| H100 | 80GB | ~$3.95 | High-perf training |
-| H200 | 141GB | ~$4.54 | Memory-bound workloads |
-| B200 | 192GB | ~$6.25 | Flagship, sparse FP4 |
+- Inference: L4 if the model fits <24GB, L40S for 24-48GB (best cost/perf), T4 if <16GB. >48GB or SM80 flash-attn: A100-80GB. H100 high-perf training, H200 memory-bound, B200 flagship.
+- **Never A10G** (same VRAM as L4, 50% more); `gpu=["L4", "A10G"]` only as an availability fallback.
+- Multi-GPU: `gpu="H100:8"`. Fallback: `gpu=["H100", "A100-80GB"]`.
+- Put a two-layer check (nvidia-smi + framework device count) at the top of every GPU function so split-brain CUDA fails at launch, not after hours of CPU fallback.
+- Before pricing a run or picking a GPU, read `references/gpu.md` ($/hr table, specs, split-brain CUDA fix).
 
-Multi-GPU: `gpu="H100:8"`. Fallback: `gpu=["H100", "A100-80GB"]`.
+## v1 API Renames (old -> new; full table: `references/migration.md`, read when touching pre-1.0 code)
 
-**Rules:** Inference -> prefer L4/L40S. Use `gpu=["L4", "A10G"]` for availability fallback only. See `references/gpu.md` for full specs.
-
-## Critical Breaking Changes
-
-```python
-modal.Stub("name")           ->  modal.App("name")
-modal.Mount(...)             ->  REMOVED -- use Image.add_local_python_source()
-mount= parameter             ->  REMOVED everywhere
-modal.gpu.H100() objects     ->  gpu="H100" strings
-@modal.build decorator       ->  Image.run_function() or Volumes
-modal.web_endpoint           ->  modal.fastapi_endpoint
-.lookup()                    ->  .from_name() + .hydrate()
-allow_concurrent_inputs=N    ->  @modal.concurrent(max_inputs=N)
-concurrency_limit/keep_warm  ->  max_containers/min_containers/scaledown_window
-```
-
-Also remember:
+`modal.Stub` -> `modal.App`; `modal.Mount`/`mount=` REMOVED -> `Image.add_local_python_source()`; `modal.gpu.H100()` -> `gpu="H100"`; `@modal.build` -> `Image.run_function()` or Volumes; `modal.web_endpoint` -> `modal.fastapi_endpoint`; `.lookup()` -> `.from_name()` + `.hydrate()`; `allow_concurrent_inputs=N` -> `@modal.concurrent(max_inputs=N)`; `concurrency_limit`/`keep_warm` -> `max_containers`/`min_containers`/`scaledown_window`.
 
 - automounting is off; local packages are not included unless you add them
 - CLI flags go before the script path: `modal run --detach script.py`
 - lifecycle hooks use `@modal.enter()` / `@modal.exit()`
 - `modal app logs` needs `--follow` on v1.4+
 
-See `references/migration.md` for the full migration table.
+## Preemption, Retries & Budget
 
-## Preemption, Retries & Budget (rules; detail in references)
-
-- Default detached behavior auto-retries once, which is not enough for long stages. Any stage >30 min or ever preempted gets `retries=modal.Retries(initial_delay=0.0, max_retries=5)` + `single_use_containers=True` (free).
-- Chunk size is the preemption-loss budget: aim ~30 min per `.map()` chunk; never put a per-step `timeout=` on a monolithic all-or-nothing step.
-- `nonpreemptible=True` costs 3x CPU+memory, is CPU-only, and is not death-proof (infra events, budget kill, OOM, `app stop` still kill it). Reserve it for short critical stages that cannot checkpoint mid-step.
-- "Waiting to be scheduled ... relaxing requirements" also fires when the account budget cap is hit. Check `modal billing report --for today` before concluding capacity. `modal app stop` on a stage a driver awaits deadlocks the driver.
+- Stage >30 min or ever preempted: `retries=modal.Retries(initial_delay=0.0, max_retries=5)` + `single_use_containers=True` (free); the default detached retry is once.
+- Chunk size is the preemption-loss budget: ~30 min per `.map()` chunk; never a per-step `timeout=` on a monolithic all-or-nothing step.
+- `nonpreemptible=True`: 3x CPU+memory, CPU-only, not death-proof (infra events, budget kill, OOM, `app stop`); only for short critical stages that cannot checkpoint.
+- "Waiting to be scheduled ... relaxing requirements" also fires at the budget cap: run `modal billing report --for today` before blaming capacity.
+- `modal app stop` on a stage a driver awaits deadlocks the driver.
 - Budget kill SIGKILLs every container: no grace, no `@modal.exit()`, no retry. Only committed volume state survives.
-- Spend-cap freeze: endpoints 404 "workspace disabled", `app list` is empty, new containers never schedule. Poll loops must fail fast on the "disabled" body.
-- Check Live Usage before launching (>85% = no long jobs). Billing lags; pair polling with launch admission (a `modal.Dict` halt flag).
-- Full detail: `references/preemption.md` (Retries, chunking, nonpreemptible, high-memory scheduling, testing `@modal.exit`), `references/budget-and-spend.md` (budget kills, spend-query CLI/API, watchdog daemon). `modal.Dict` control plane and the identity API: `references/debugging.md`.
+- Spend-cap freeze: endpoints 404 "workspace disabled" or 503 with zero bootlogs, `app list` empty, new containers never schedule, running ones later die with `ConflictError: workspace ... is disabled`. Check the workspace first; poll loops must fail fast on the "disabled" body.
+- Live Usage >85% = no long jobs. Billing lags (same-day `modal billing report` is not final; book actuals at next-day close); pair polling with launch admission (a `modal.Dict` halt flag).
+- When sizing retries/chunks, considering `nonpreemptible`, or a stage won't schedule, read `references/preemption.md`. When querying spend, writing a budget watchdog, or after a budget kill, read `references/budget-and-spend.md`. `modal.Dict` control plane and the identity API: `references/debugging.md`.
 
 ## Progress Survivability
 
-The commit-at-step-boundary model is a trap for long subprocess steps (>30min): a 4h step that
-commits only at the end loses 4h on any interruption. Design for survivability from the start.
-Rule one-liners below; full mechanics and copy-paste patterns (`@modal.exit` class pattern,
-dirty-flag emergency save, `.SUCCESS` sentinels, mid-step checkpoint loop, tee-to-volume):
-[references/checkpointing.md](references/checkpointing.md).
+A long step that commits only at its end loses everything on interruption; design for survival from the start. When writing `@modal.exit`, `.SUCCESS` sentinels, mid-step checkpoints or tee-to-volume, read [references/checkpointing.md](references/checkpointing.md) for the copy-paste patterns.
 
-- **Ephemeral disk is ephemeral** — `/tmp`/`/root`/container-local paths are wiped on preemption, budget kill, OOM, and between retries of the same call.
-- **`vol.commit()` only persists what's already on the volume mount** — `shutil.copy` from `/tmp` to the mount FIRST, then commit.
-- **`@modal.exit()` requires `@app.cls`, not `@app.function`** — convert `.map()` workers to a class for 30s-grace preemption handling; fires on preemption, NOT budget kill; handler needs dirty-flag logic (an unconditional `vol.commit()` can overrun the grace window mid-sync).
-- **Checkpoint durability = `.SUCCESS` sentinels** — size-only resume checks pass truncated files; write the sentinel AFTER `vol.commit()` returns, commit again; resume trusts only artifact+sentinel pairs.
-- **Mid-step checkpoint for subprocess steps >30min** — copy partial artifacts to volume in the heartbeat loop with a ONCE-only flag (a naive loop copies 21GB every 60s heartbeat).
-- **Subprocess stdout is fully buffered without `PYTHONUNBUFFERED=1`** — multi-hour runs show nothing until exit; set it on every subprocess env.
-- **Tee subprocess partial stdout to a volume-visible log** — heartbeat-captured output must survive the container.
-- **Timeout = max expected + 50%** — a timeout equal to the actual runtime kills at the finish line (sven: 4h job, 4h timeout, artifact lost, retry from scratch).
-- **`.map()` containers are invisible without per-step stdout prints** — volume commits land at unit completion; `print()` at step boundaries so `modal app logs` shows transitions.
+- Ephemeral disk (`/tmp`, `/root`, container-local) is wiped on preemption, budget kill, OOM, and between retries of the same call.
+- `vol.commit()` persists only what is already on the mount: copy from `/tmp` to the mount FIRST, then commit.
+- `@modal.exit()` needs `@app.cls`, not `@app.function` (convert `.map()` workers to a class); it fires on preemption (30s grace), NOT budget kill; use dirty-flag logic, since an unconditional `vol.commit()` can overrun the grace window.
+- Resume trusts only artifact + `.SUCCESS` sentinel pairs: write the sentinel AFTER `vol.commit()` returns, then commit again; size-only checks pass truncated files.
+- Subprocess steps >30 min: copy partial artifacts to the volume in the heartbeat loop with a ONCE-only flag (a naive loop recopies 21GB every heartbeat).
+- Set `PYTHONUNBUFFERED=1` on every subprocess env, and tee partial stdout to a volume-visible log.
+- Timeout = max expected + 50%; a timeout equal to the runtime kills at the finish line.
+- `print()` at step boundaries in `.map()` workers; volume commits land only at unit completion.
 
 ## Failure-Mode Cheatsheet
 
-- **Import error or crash loop after detach** -> inspect live app state first; `retries=0` does not stop container crash retries
-- **Receipt says running forever** -> likely `stale_receipt`; compare receipt timestamp to live logs/progress
-- **Detached app looks alive for hours** -> app age is not progress; check latest worker logs and receipt heartbeat before assuming compute is still happening
-- **Logs show `Runner interrupted due to worker preemption` or `Worker disappeared`** -> treat the run as unhealthy until you see fresh progress after the restart
-- **Old results still visible after stop** -> outputs need run identity; volume state is not liveness
-- **Large sync or probe is slow/heavy** -> use Modal SDK reads, not repeated CLI subprocesses
-- **Download or write looks complete but is wrong** -> validate integrity, not just size; use atomic completion markers
-- **Unexpected GPU bill** -> check `max_containers`, tags, and `.starmap()` fanout before anything else
+- Import error or crash loop after detach -> live app state first; `retries=0` does not stop container crash retries; a poller keyed on "app exists" sees flat `running` through a crash-loop (C6): judge by logs, fresh `task_count`, retry count.
+- Receipt says running forever -> likely `stale_receipt`; compare its timestamp to live logs/progress.
+- Detached app alive for hours -> app age is not progress; check latest worker logs and receipt heartbeat.
+- `Runner interrupted due to worker preemption` / `Worker disappeared` -> unhealthy until fresh progress after the restart.
+- Old results visible after stop -> outputs need run identity; volume state is not liveness.
+- Large sync or probe slow/heavy -> Modal SDK reads, not repeated CLI subprocesses.
+- Download/write looks complete but is wrong -> validate integrity, not size; atomic completion markers.
+- Unexpected GPU bill -> check `max_containers`, tags, and `.starmap()` fanout first.
 
-## Durable Gotchas (most-hit; full list in `references/gotchas.md`)
+## Durable Gotchas (when debugging odd platform behavior, read `references/gotchas.md` for wording and incidents)
 
 - `volume.commit()` is required; no relative paths (cwd is `/root`); no SQLite on volumes.
 - Long runs: `modal run --detach` + `.spawn()` + a function-written completion marker. A non-detached run or an awaited `.remote()` dies with the laptop or agent.
@@ -177,6 +137,16 @@ dirty-flag emergency save, `.SUCCESS` sentinels, mid-step checkpoint loop, tee-t
 - Warm zombie containers serve old code after a redeploy: `modal app stop -y NAME`, then deploy.
 - Never fan out recursive volume lists while stages write (workspace-wide VolumeListFiles quota, C1); volume RPCs have no per-call timeout (C2).
 - Use JSON output for tooling and the SDK, not CLI subprocesses, for volume probes.
+- Before restarting orchestrated work, dedup with `modal app list --json`.
+- Never wrap `modal run --detach` in a local timeout (the build continues server-side); `modal volume get` is silent under captured output, so watch file growth.
+- `container stop` returning 0 is not death: poll `container list` until the ID is gone and assert the answering container ID changed.
+- Heavy cold start (model download): `modal deploy` once, then call via `Cls.from_name` from a separate client so local timeouts don't kill it. Zombie tell: traceback line numbers differ from the local file.
+- Compiled CUDA stacks on CUDA base images: `pip_install`, not `uv_pip_install`.
+- File watchdogs can read a previous container's retry leftovers: verify by timestamp, not presence.
+- `vol.reload()`: one best-effort reload, never a reload loop under parallel workers (C9). Wrap control-loop volume RPCs in a tick watchdog (C2). Give each concurrent launch its own staging dir or flock it (C11, `[Errno 17] File exists`).
+- `@app.server` (flash) URLs are `*.modal.direct`, not `*.modal.run`; parse `modal deploy` output only with `COLUMNS=300` (it wraps at 80 in non-tty).
+- vLLM: bake `VLLM_USE_FLASHINFER_SAMPLER=0` into the image `.env()` (flashinfer JIT can take >18 min inside a readiness window). Qwen3-Next/Qwen3.6/GDN-Mamba hybrids with a repeated shared long prefix: pass `--no-enable-prefix-caching` via `SERVE_EXTRA_ARGS` (symptom: one HTTP 500 `EngineCore`, then empty 204s; only a redeploy recovers).
+- vLLM compile cache is keyed per engine-config hash: changing `max_inputs`/quant/spec forces a full recompile (~11-18 min). GPU-snapshot restore measured ~93s trigger→ready for a 27B, not the vendor 5-12s.
 
 ## MANDATORY: Test Before Deploying
 
@@ -186,31 +156,12 @@ dirty-flag emergency save, `.SUCCESS` sentinels, mid-step checkpoint loop, tee-t
 4. **Interactive debug**: `modal shell script.py` or Sandbox-as-REPL (see `references/debugging.md`)
 5. **Full run**: Only after 1-3 pass
 
-## Reference Docs
+## Reference Docs (in `references/`; read when the trigger fits)
 
-Detailed docs in `references/`:
-- `migration.md` -- v1.0 breaking changes, v1.1-v1.3 features, v1.4 features/breaking changes
-- `debugging.md` -- CLI commands, Sandbox-as-REPL, image probing, output control
-- `images.md` -- base images, deps, build caching, eStargz
-- `functions.md` -- definition, calling, deployment, parallel execution
-- `gpu.md` -- GPU types, multi-GPU, fallbacks
-- `volumes.md` -- creation, commits, concurrent access, v1 vs v2, uploads
-- `scaling.md` -- autoscaling, .map/.starmap, concurrency, limits
-- `secrets.md` -- creation, usage, patterns
-- `web-endpoints.md` -- FastAPI, ASGI/WSGI, streaming, auth, custom domains
-- `scheduled-jobs.md` -- Period, Cron, timezone, deployment
-- `resources.md` -- CPU, memory, disk, billing
-- `status-reconciliation.md` -- question -> truth surface -> mismatch class
-- `attribution.md` -- question/source/status/spend reporting pattern
-- `sandboxes.md` -- creation, exec, snapshots, named sandboxes
-- `examples.md` -- end-to-end code examples
-- `checkpointing.md` -- read when writing `@modal.exit`, `.SUCCESS` sentinels, mid-step checkpoints
-- `preemption.md` -- read when sizing retries/chunks, considering `nonpreemptible`, or a stage won't schedule
-- `budget-and-spend.md` -- read when querying spend, writing a budget watchdog, or after a budget kill
-- `gotchas.md` -- read when debugging any odd platform behavior (durable gotchas, C1–C11, deploy zombies)
-- `changelog.md` -- read when bumping Modal, checking a dated platform note, or adopting a 1.5.x feature
-- `known-issues.md` -- read when a failure matches a dated incident (memento helper appends here)
-- `marker-pdf-extraction.md` -- read when running Marker PDF→Markdown on Modal
+- Writing code against an API you have not used this session: `functions.md`, `images.md` (base images, deps, build caching, eStargz), `volumes.md` (commits, concurrent access, v1 vs v2, uploads), `scaling.md` (.map/.starmap, concurrency, limits), `secrets.md`, `web-endpoints.md`, `scheduled-jobs.md`, `sandboxes.md`, `resources.md` (CPU, memory, disk, billing), `examples.md` (end-to-end code).
+- Bumping Modal or porting old code: `migration.md`, `changelog.md`. CLI, Sandbox-as-REPL, image probing: `debugging.md`.
+- Reporting status or spend: `status-reconciliation.md`, `attribution.md` (question/source/status/spend pattern).
+- A failure matches a dated incident: `known-issues.md`. Marker PDF→Markdown on Modal: `marker-pdf-extraction.md`. Full original index: `index.md`.
 
 **Hit a fresh Modal gotcha or a defect in THIS skill?** Log it so the next deploy inherits the fix:
 `~/Projects/skills/hooks/append-skill-memento.sh modal '<one-line issue>'`.
