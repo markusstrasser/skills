@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # bgrun — process-group-isolated background dispatch with a done-marker contract.
 #
-#   bgrun <name> -- <command ...>
+#   bgrun [--launchd] <name> -- <command ...>
 #
 # Runs the command under nohup+disown with PYTHONUNBUFFERED=1, redirecting all
 # output to <dir>/<name>.log.tmp while running, then appending it to .log.
@@ -15,6 +15,17 @@
 # the job touch its own marker after the step that matters. SIGKILL cannot be
 # trapped: use --wait so a missing terminal marker fails loudly.
 #
+# --launchd hands the same supervisor to launchd as a one-shot job in the GUI domain
+# (printed as `launchd: gui/<uid>/local.bgrun.<name>.<hash>`), so the job descends from no
+# terminal app. Use it for jobs that must outlive the terminal. Evidence: on 2026-10-26 a
+# Dock force-quit of the Rex terminal app (20:33:52.448) was followed within 10-60 ms by the
+# exit of every detached job launched from a Rex pane: three setsid'd bgrun supervisors
+# reparented to launchd, two codex processes and an opencode lane worker. Detached processes
+# started outside Rex survived. Whether Rex selects by lineage or by its REX_* environment
+# markers is open, so this route also drops REX_* and TERM_PROGRAM*. The rest of the
+# caller's environment, the command and the cwd travel through a FIFO in a 0700 directory
+# and never touch disk; the plist holds only paths.
+#
 # Dir: $BGRUN_DIR if set, else ${TMPDIR:-/tmp}/bgrun. Existing markers for the
 # same name are cleared at launch only after a prior live job is ruled out.
 # Evidence: 2026-09-13 Codex exec cleanup reaped an audit and its supervisor in
@@ -22,17 +33,84 @@
 # native marker probe; nohup/disown alone only protect against shell hangup.
 set -euo pipefail
 
+# The job supervisor, shared by both launch routes: $0 is <dir>/<name>, "$@" is the command.
+supervisor_script='
+  finish_job() {
+    local child_rc="$1"
+    trap "" TERM
+    cat "$0.log.tmp" >> "$0.log" 2>/dev/null || true
+    rm -f "$0.log.tmp"
+    printf "%s\n" "$child_rc" > "$0.done.tmp.$$"
+    mv "$0.done.tmp.$$" "$0.done"
+  }
+  cancel_job() {
+    trap "" TERM
+    # This shell leads the existing isolated job group. Ignore our forwarded
+    # TERM, reap the child, then publish cancellation even if it exits zero.
+    kill -TERM -- "-$$" 2>/dev/null || true
+    wait || true
+    finish_job 143
+    exit 143
+  }
+  trap cancel_job TERM
+  # Keep caffeinate and the existing route; an asynchronous child makes wait
+  # interruptible so supervisor-only TERM reaches cancel_job immediately.
+  # A noninteractive shell starts that child with SIGINT and SIGQUIT ignored, and an ignored
+  # signal survives exec: pytest and Modal clients could not be interrupted (genomics,
+  # 2026-10-20). The plain route starts under nohup, which leaves SIGHUP ignored the same way.
+  # The job has no controlling terminal, so no terminal hangup can reach it, but a
+  # SIGHUP-cancellation test failed every time under bgrun (genomics, 2026-10-23). caffeinate
+  # keeps the ignores and waits out its utility; the command gets defaults.
+  caffeinate -i /usr/bin/perl -e "\$SIG{INT} = \$SIG{QUIT} = \$SIG{HUP} = q(DEFAULT); exec { \$ARGV[0] } @ARGV or die qq(bgrun: exec: \$!\n)" "$@" > "$0.log.tmp" 2>&1 &
+  worker_pid=$!
+  rc=0
+  wait "$worker_pid" || rc=$?
+  finish_job "$rc"
+  exit "$rc"
+'
+
+# launchd runs `bgrun --launchd-stage2 <dir> <name> <fifo>`; the launcher holds the launch lock
+# until this process has taken its payload, then records this PID as the supervisor.
+if [ "$#" = 4 ] && [ "$1" = "--launchd-stage2" ]; then
+  job_base="$2/$3"
+  stage_fail() {
+    printf 'bgrun: launchd stage: %s\n' "$1" >> "$job_base.log"
+    printf '125\n' > "$job_base.done.tmp.$$"
+    mv "$job_base.done.tmp.$$" "$job_base.done"
+    exit 125
+  }
+  # The reader unlinks the FIFO once it is open, so the payload only ever lives in pipes.
+  exec 3< <(/usr/bin/perl -e 'alarm 30; open(my $fifo, "<", $ARGV[0]) or die "bgrun: payload: $!\n"; unlink $ARGV[0]; local $/; print scalar <$fifo>' "$4")
+  IFS= read -r -d '' job_cwd <&3 || stage_fail "no payload arrived from the launcher"
+  IFS= read -r -d '' job_argc <&3 || stage_fail "truncated payload"
+  case "$job_argc" in (""|*[!0-9]*|0) stage_fail "invalid argument count in payload";; esac
+  job_argv=()
+  while [ "${#job_argv[@]}" -lt "$job_argc" ]; do
+    IFS= read -r -d '' argument <&3 || stage_fail "truncated payload"
+    job_argv+=("$argument")
+  done
+  job_env=()
+  while IFS= read -r -d '' entry <&3; do job_env+=("$entry"); done
+  exec 3<&-
+  cd "$job_cwd" || stage_fail "cannot enter $job_cwd"
+  exec /usr/bin/env -i ${job_env[@]+"${job_env[@]}"} PYTHONUNBUFFERED=1 bash -c "$supervisor_script" "$job_base" "${job_argv[@]}"
+fi
+
 wait_mode=false
+launchd_mode=false
 if [ "$#" = 2 ] && [ "$1" = "--wait" ]; then
   wait_mode=true
   name="$2"
+elif [ "$#" -ge 4 ] && [ "$1" = "--launchd" ] && [ "$3" = "--" ]; then
+  launchd_mode=true
+  name="$2"; shift 3
 elif [ "$#" -ge 3 ] && [ "$2" = "--" ]; then
   name="$1"; shift 2
 else
-  echo "usage: bgrun <name> -- <command ...> | bgrun --wait <name>" >&2
+  echo "usage: bgrun [--launchd] <name> -- <command ...> | bgrun --wait <name>" >&2
   exit 2
 fi
-case "$name" in (""|*/*|*[[:space:]]*) echo "bgrun: name must be a plain token" >&2; exit 2;; esac
+case "$name" in (""|-*|*/*|*[[:space:]]*) echo "bgrun: name must be a plain token" >&2; exit 2;; esac
 
 dir="${BGRUN_DIR:-${TMPDIR:-/tmp}/bgrun}"
 mkdir -p "$dir"
@@ -129,58 +207,81 @@ case "$PWD" in
 esac
 printf 'bgrun: cwd=%s\n' "$PWD" > "$log"
 
-# Match bin/lane: noninteractive in-script job control creates a separate group.
-# `bash -m` at startup cannot enable it in Codex's non-TTY exec environment.
-# A new SESSION, not only a new group: on 2026-09-29 closing a Claude Code session SIGTERMed a
-# bgrun replay mid-commit although its supervisor led its own group (`set -m`) and had launchd as
-# parent; it still shared the tool shell's session. setsid() refuses a group leader, so there is
-# no `set -m`: perl makes the job lead a new session and group (sid = pgid = pid), which keeps
-# `kill -- -$launch_pid` exact. macOS ships no setsid(1).
-nohup /usr/bin/perl -MPOSIX -e 'POSIX::setsid() or die "bgrun: setsid: $!\n"; exec { $ARGV[0] } @ARGV or die "bgrun: exec: $!\n"' \
-  env PYTHONUNBUFFERED=1 bash -c '
-  finish_job() {
-    local child_rc="$1"
-    trap "" TERM
-    cat "$0.log.tmp" >> "$0.log" 2>/dev/null || true
-    rm -f "$0.log.tmp"
-    printf "%s\n" "$child_rc" > "$0.done.tmp.$$"
-    mv "$0.done.tmp.$$" "$0.done"
-  }
-  cancel_job() {
-    trap "" TERM
-    # This shell leads the existing isolated job group. Ignore our forwarded
-    # TERM, reap the child, then publish cancellation even if it exits zero.
-    kill -TERM -- "-$$" 2>/dev/null || true
-    wait || true
-    finish_job 143
-    exit 143
-  }
-  trap cancel_job TERM
-  # Keep caffeinate and the existing route; an asynchronous child makes wait
-  # interruptible so supervisor-only TERM reaches cancel_job immediately.
-  # A noninteractive shell starts that child with SIGINT and SIGQUIT ignored, and an ignored
-  # signal survives exec: pytest and Modal clients could not be interrupted (genomics,
-  # 2026-10-20). The nohup above leaves SIGHUP ignored the same way. The job leads its own
-  # session, so no terminal hangup can reach it, but a SIGHUP-cancellation test failed every
-  # time under bgrun (genomics, 2026-10-23). caffeinate keeps the ignores and waits out its
-  # utility; the command gets defaults.
-  caffeinate -i /usr/bin/perl -e "\$SIG{INT} = \$SIG{QUIT} = \$SIG{HUP} = q(DEFAULT); exec { \$ARGV[0] } @ARGV or die qq(bgrun: exec: \$!\n)" "$@" > "$0.log.tmp" 2>&1 &
-  worker_pid=$!
-  rc=0
-  wait "$worker_pid" || rc=$?
-  finish_job "$rc"
-  exit "$rc"
-' "$dir/$name" "$@" 9>&- </dev/null >/dev/null 2>&1 &
-launch_pid=$!
-disown "$launch_pid" 2>/dev/null || true
-# The job leads its group only after perl's setsid(); wait for that before the isolation checks.
-for _ in $(seq 1 250); do
-  [ "$(ps -o pgid= -p "$launch_pid" 2>/dev/null | tr -d ' ')" = "$launch_pid" ] && break
-  kill -0 "$launch_pid" 2>/dev/null || break
-  sleep 0.02
-done
+launch_started=""
+if [ "$launchd_mode" = true ]; then
+  domain="gui/$(id -u)"
+  launchctl print "$domain" >/dev/null 2>&1 || {
+    echo "bgrun: --launchd needs the launchd GUI domain $domain (no GUI login session here)" >&2; exit 125; }
+  label="local.bgrun.$(printf '%s' "$name" | LC_ALL=C tr -c 'A-Za-z0-9._-' '_').$(printf '%s' "$dir/$name" | shasum -a 256 | cut -c1-8)"
+  service="$domain/$label"
+  plist="$dir/$name.launchd.plist" handoff="$dir/$name.launchd" stage_log="$dir/$name.launchd.err"
+  self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/$(basename "${BASH_SOURCE[0]}")"
+  if launchctl print "$service" >/dev/null 2>&1; then
+    # The checks above ruled out a live predecessor, so this is a finished job's registration.
+    launchctl bootout "$service" 2>/dev/null || {
+      echo "bgrun: cannot remove the finished launchd job $service" >&2; exit 125; }
+  fi
+  rm -rf "$handoff" "$stage_log"
+  (umask 077 && mkdir "$handoff" && mkfifo "$handoff/payload")
+  # ProcessType Interactive gets an app's resource limits (none), as on the plain route;
+  # unset or Standard throttles CPU and I/O. AbandonProcessGroup lets leftover group members
+  # outlive the supervisor, as they do on the plain route.
+  /usr/bin/perl -e '
+    sub xml { my $text = shift; $text =~ s/&/&amp;/g; $text =~ s/</&lt;/g; $text =~ s/>/&gt;/g; return $text }
+    my ($label, $stage_log, @program) = @ARGV;
+    print qq(<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n);
+    print qq(<plist version="1.0"><dict>\n<key>Label</key><string>), xml($label), qq(</string>\n<key>ProgramArguments</key><array>\n);
+    print qq(<string>), xml($_), qq(</string>\n) for @program;
+    print qq(</array>\n<key>StandardOutPath</key><string>), xml($stage_log), qq(</string>\n);
+    print qq(<key>StandardErrorPath</key><string>), xml($stage_log), qq(</string>\n);
+    print qq(<key>ProcessType</key><string>Interactive</string>\n<key>RunAtLoad</key><true/>\n);
+    print qq(<key>KeepAlive</key><false/>\n<key>AbandonProcessGroup</key><true/>\n</dict></plist>\n);
+  ' "$label" "$stage_log" "$BASH" "$self" --launchd-stage2 "$dir" "$name" "$handoff/payload" > "$plist"
+  plutil -lint -s "$plist" || { echo "bgrun: invalid launchd plist $plist" >&2; exit 125; }
+  launchctl bootstrap "$domain" "$plist" || {
+    rm -rf "$handoff"; echo "bgrun: launchctl bootstrap of $service failed" >&2; exit 125; }
+  # The stage blocks opening the FIFO until the payload is written, so it cannot exit first.
+  launch_pid=""
+  for _ in $(seq 1 250); do
+    launch_pid=$(launchctl print "$service" 2>/dev/null | awk '$1 == "pid" && $2 == "=" { print $3; exit }')
+    [ -n "$launch_pid" ] && break
+    sleep 0.02
+  done
+  if [ -z "$launch_pid" ]; then
+    launchctl bootout "$service" 2>/dev/null || true
+    rm -rf "$handoff"
+    echo "bgrun: launchd job $service never reported a PID; see $stage_log" >&2; exit 125
+  fi
+  launch_started=$(started_identity "$launch_pid" || true)
+  # Payload: cwd, argument count, arguments, then the environment minus Rex's markers, each NUL-terminated.
+  if ! { printf '%s\0' "$PWD" "$#" "$@"; env -0 | /usr/bin/perl -0 -ne 'print unless /^(?:REX_\w*|TERM_PROGRAM(?:_VERSION)?)=/'; } |
+      /usr/bin/perl -e 'alarm 30; open(my $fifo, ">", $ARGV[0]) or die "bgrun: payload: $!\n"; local $/; print {$fifo} scalar <STDIN>; close $fifo or die "bgrun: payload: $!\n"' "$handoff/payload"; then
+    launchctl bootout "$service" 2>/dev/null || true
+    rm -rf "$handoff"
+    echo "bgrun: launchd job $service did not take its payload; see $stage_log" >&2; exit 125
+  fi
+  rm -rf "$handoff"
+else
+  # Match bin/lane: noninteractive in-script job control creates a separate group.
+  # `bash -m` at startup cannot enable it in Codex's non-TTY exec environment.
+  # A new SESSION, not only a new group: on 2026-09-29 closing a Claude Code session SIGTERMed a
+  # bgrun replay mid-commit although its supervisor led its own group (`set -m`) and had launchd as
+  # parent; it still shared the tool shell's session. setsid() refuses a group leader, so there is
+  # no `set -m`: perl makes the job lead a new session and group (sid = pgid = pid), which keeps
+  # `kill -- -$launch_pid` exact. macOS ships no setsid(1).
+  nohup /usr/bin/perl -MPOSIX -e 'POSIX::setsid() or die "bgrun: setsid: $!\n"; exec { $ARGV[0] } @ARGV or die "bgrun: exec: $!\n"' \
+    env PYTHONUNBUFFERED=1 bash -c "$supervisor_script" "$dir/$name" "$@" 9>&- </dev/null >/dev/null 2>&1 &
+  launch_pid=$!
+  disown "$launch_pid" 2>/dev/null || true
+  # The job leads its group only after perl's setsid(); wait for that before the isolation checks.
+  for _ in $(seq 1 250); do
+    [ "$(ps -o pgid= -p "$launch_pid" 2>/dev/null | tr -d ' ')" = "$launch_pid" ] && break
+    kill -0 "$launch_pid" 2>/dev/null || break
+    sleep 0.02
+  done
+fi
 echo "$launch_pid" > "$pid_file"
-launch_started=$(started_identity "$launch_pid" || true)
+[ -n "$launch_started" ] || launch_started=$(started_identity "$launch_pid" || true)
 if [ -n "$launch_started" ]; then printf '%s\n' "$launch_started" > "$started_file"; fi
 if [ ! -f "$done_marker" ]; then
   if ! job_group_alive "$launch_pid" || ! supervisor_alive "$launch_pid" "$launch_started"; then
@@ -193,4 +294,5 @@ echo "bgrun: $name pid=$launch_pid cwd=$PWD"
 echo "  log:  $log"
 echo "  live-log: $log.tmp"
 echo "  done: $done_marker (contains exit code)"
+if [ "$launchd_mode" = true ]; then echo "  launchd: $service"; fi
 printf '  watch: BGRUN_DIR=%q %q --wait %q\n' "$dir" "${BASH_SOURCE[0]}" "$name"

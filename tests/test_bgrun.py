@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import signal
@@ -45,7 +46,7 @@ def job(tmp_path: Path, request):
     def run(*args: str, **kwargs):
         result = subprocess.run(
             [str(BGRUN), *args],
-            env=env,
+            env=kwargs.pop("env", env),
             capture_output=True,
             text=True,
             check=False,
@@ -552,3 +553,174 @@ def test_term_reaps_child_before_publishing_nonzero(job, term_scope: str) -> Non
                         break
                 except ProcessLookupError:
                     pass
+
+
+def launchd_available() -> bool:
+    if sys.platform != "darwin":
+        return False
+    probe = subprocess.run(
+        ["launchctl", "print", f"gui/{os.getuid()}"], capture_output=True, check=False
+    )
+    return probe.returncode == 0
+
+
+needs_launchd = pytest.mark.skipif(
+    not launchd_available(), reason="needs a macOS GUI launchd domain"
+)
+
+
+@pytest.fixture
+def launchd_job(job):
+    """Launch through --launchd; boot out every launchd service the test created."""
+    directory, env, run = job
+    services: list[str] = []
+
+    def launch(*args: str, **kwargs):
+        result = run("--launchd", *args, **kwargs)
+        services.extend(
+            line.removeprefix("  launchd: ")
+            for line in result.stdout.splitlines()
+            if line.startswith("  launchd: ")
+        )
+        return result
+
+    yield directory, env, run, launch, services
+    for service in services:
+        subprocess.run(["launchctl", "bootout", service], capture_output=True, check=False)
+
+
+def wait_gone(pid: int) -> None:
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.02)
+    raise AssertionError(f"supervisor {pid} still running")
+
+
+@needs_launchd
+def test_launchd_job_runs_under_launchd_with_the_callers_environment(launchd_job) -> None:
+    # 2026-10-26 20:33:52: a Dock force-quit of the Rex terminal app was followed by SIGTERM to
+    # every detached job launched from a Rex pane, setsid'd bgrun supervisors included. The
+    # --launchd route must make launchd the supervisor's parent, keep the caller's environment
+    # minus Rex's markers, and write nothing from that environment to disk.
+    directory, env, run, launch, services = launchd_job
+    secret = f"bgrun-secret-{os.getpid()}-{time.monotonic_ns()}"
+    kept = ("PATH", "UV_CACHE_DIR", "UV_PROJECT_ENVIRONMENT")
+    caller_env = {
+        **env,
+        "UV_CACHE_DIR": str(directory / "uv-cache"),
+        "UV_PROJECT_ENVIRONMENT": str(directory / "venv"),
+        "BGRUN_TEST_SECRET": secret,
+        "REX_SESSION": "session:test",
+        "REX_BLOCK": "block:test",
+        "TERM_PROGRAM": "rex",
+    }
+    child = (
+        "import hashlib, json, os, time\n"
+        "from pathlib import Path\n"
+        f"kept = {kept!r}\n"
+        "Path('child-ready').write_text(json.dumps(dict(\n"
+        "    env={key: os.environ.get(key) for key in kept},\n"
+        "    secret_sha=hashlib.sha256(os.environ.get('BGRUN_TEST_SECRET', '').encode()).hexdigest(),\n"
+        "    markers=sorted(key for key in os.environ if key.startswith(('REX_', 'TERM_PROGRAM'))),\n"
+        "    supervisor=os.getppid(), cwd=os.getcwd())))\n"
+        "deadline = time.monotonic() + 12\n"
+        "while not Path('release').exists() and time.monotonic() < deadline: time.sleep(0.02)\n"
+        "print('LAUNCHD_CHILD_DONE', flush=True)\n"
+        "raise SystemExit(5)\n"
+    )
+    launched = launch("case", "--", sys.executable, "-c", child, cwd=directory, env=caller_env)
+    assert launched.returncode == 0, launched.stderr
+    assert len(services) == 1, launched.stdout
+    assert services[0].startswith(f"gui/{os.getuid()}/local.bgrun.case.")
+    try:
+        ready = json.loads(wait_file(directory / "child-ready"))
+        supervisor = int((directory / "case.pid").read_text())
+        assert ready["supervisor"] == supervisor
+        printed = subprocess.run(
+            ["launchctl", "print", services[0]], capture_output=True, text=True, check=True
+        ).stdout
+        assert "state = running" in printed
+        assert f"pid = {supervisor}" in printed
+        parent = subprocess.run(
+            ["ps", "-o", "ppid=", "-p", str(supervisor)], capture_output=True, text=True, check=True
+        )
+        assert int(parent.stdout) == 1
+        assert os.getpgid(supervisor) == supervisor
+        assert os.getsid(supervisor) != os.getsid(0)
+        assert ready["env"] == {key: caller_env[key] for key in kept}
+        assert ready["secret_sha"] == hashlib.sha256(secret.encode()).hexdigest()
+        assert ready["markers"] == []
+        assert Path(ready["cwd"]).resolve() == directory.resolve()
+    finally:
+        (directory / "release").touch()
+    waited = run("--wait", "case")
+    assert waited.returncode == 5, waited.stderr
+    assert (directory / "case.done").read_text() == "5\n"
+    assert "LAUNCHD_CHILD_DONE" in (directory / "case.log").read_text()
+    assert not (directory / "case.log.tmp").exists()
+    leaked = [
+        path for path in directory.rglob("*") if path.is_file() and secret.encode() in path.read_bytes()
+    ]
+    assert leaked == []
+    assert b"EnvironmentVariables" not in (directory / "case.launchd.plist").read_bytes()
+    assert not (directory / "case.launchd").exists()
+
+
+@needs_launchd
+def test_launchd_term_reaps_child_before_publishing_143(launchd_job) -> None:
+    directory, _env, run, launch, _services = launchd_job
+    child = (
+        "from pathlib import Path\n"
+        "import signal, time\n"
+        "def stop(signum, frame):\n"
+        "    Path('child-term').touch()\n"
+        "    while not Path('release-child').exists(): time.sleep(0.02)\n"
+        "    print('CHILD_FINISHED', flush=True)\n"
+        "    raise SystemExit(0)\n"
+        "signal.signal(signal.SIGTERM, stop)\n"
+        "Path('child-ready').touch()\n"
+        "deadline = time.monotonic() + 12\n"
+        "while time.monotonic() < deadline: time.sleep(0.02)\n"
+        "raise SystemExit(92)\n"
+    )
+    launched = launch("case", "--", sys.executable, "-c", child, cwd=directory)
+    assert launched.returncode == 0, launched.stderr
+    try:
+        wait_file(directory / "child-ready")
+        supervisor = int((directory / "case.pid").read_text())
+        os.kill(supervisor, signal.SIGTERM)
+        wait_file(directory / "child-term")
+        assert not (directory / "case.done").exists()
+    finally:
+        (directory / "release-child").touch()
+    waited = run("--wait", "case")
+    assert waited.returncode == 143, waited.stderr
+    assert (directory / "case.done").read_text() == "143\n"
+    assert "CHILD_FINISHED" in (directory / "case.log").read_text()
+
+
+@needs_launchd
+def test_launchd_job_blocks_same_name_launches_on_either_route(launchd_job) -> None:
+    directory, _env, run, launch, _services = launchd_job
+    launched = launch("case", "--", sys.executable, "-c", "import time; time.sleep(20)", cwd=directory)
+    assert launched.returncode == 0, launched.stderr
+    for relaunch in (run, launch):
+        refused = relaunch("case", "--", "false")
+        assert refused.returncode == 125
+        assert "already running" in refused.stderr
+
+
+@needs_launchd
+def test_launchd_relaunch_replaces_a_finished_registration(launchd_job) -> None:
+    directory, _env, run, launch, services = launchd_job
+    for exit_code in (0, 7):
+        launched = launch("case", "--", sys.executable, "-c", f"raise SystemExit({exit_code})", cwd=directory)
+        assert launched.returncode == 0, launched.stderr
+        assert run("--wait", "case").returncode == exit_code
+        wait_gone(int((directory / "case.pid").read_text()))
+    assert (directory / "case.done").read_text() == "7\n"
+    assert len(set(services)) == 1
