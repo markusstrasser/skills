@@ -346,6 +346,31 @@ expected_slot=$(printf '%s\n' \
 assert_eq "$expected_slot" "$(<"$LANE_CAPTURE/codex.args")" "codex cpu-slot writable root"
 grep -Fq "add_dirs=$SLOT_REAL network=" <<<"$slot_output" || fail "settings line omitted the cpu-slot root"
 
+echo "test: codex adds each directory the repo names in lane.codexAddDir as a writable root"
+git -C "$REPO" config --add lane.codexAddDir "$TEST_TMP/repo-roots/a"
+git -C "$REPO" config --add lane.codexAddDir "$TEST_TMP/repo-roots/b"
+roots_output=$("$LANE" run codexreporoots --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree)
+wait_for_file "$LANE_HOME/codexreporoots.done"
+git -C "$REPO" config --unset-all lane.codexAddDir
+ROOT_A=$(cd "$TEST_TMP/repo-roots/a" && pwd -P)
+ROOT_B=$(cd "$TEST_TMP/repo-roots/b" && pwd -P)
+expected_roots=$(printf '%s\n' \
+  exec \
+  -m \
+  gpt-6-astra \
+  --add-dir \
+  "$ROOT_A" \
+  --add-dir \
+  "$ROOT_B" \
+  -s \
+  workspace-write \
+  --add-dir \
+  "$HOME/.cache/uv" \
+  --skip-git-repo-check \
+  "$CODEX_PROMPT")
+assert_eq "$expected_roots" "$(<"$LANE_CAPTURE/codex.args")" "codex repo writable roots"
+grep -Fq "add_dirs=$ROOT_A:$ROOT_B network=" <<<"$roots_output" || fail "settings line omitted the repo's roots"
+
 echo "test: codex resume retains settings without caller exports"
 resume_output=$("$LANE" resume codexoverride --no-note)
 wait_for_file "$LANE_HOME/codexoverride.done"

@@ -38,6 +38,7 @@ usage:
       (opencode worker: a provider at capacity (429) is retried in the lane's session for ~20 min, then exit 85; lane resume continues it)
       (codex worker: LANE_CODEX_MODEL=<m> LANE_CODEX_EFFORT=<e> env override the default gpt-6-astra/config effort)
       (codex worker: LANE_CODEX_ADD_DIRS=<a:b> adds writable roots; LANE_CODEX_NETWORK=1 enables network; git metadata stays read-only, so the parent merges and commits)
+      (codex worker: each `git config --add lane.codexAddDir <absolute dir>` in the repo adds a writable root to every codex lane)
       (codex worker: a model at capacity is waited out and codex started again on the checkout for ~30 min, then exit 85; lane resume continues it)
   lane review <name> [--model <m>] [--effort <e>] [--focus <file>] [--report <file>] [--out <file>] [--bg]
   lane ls [--stall-min <minutes>]
@@ -693,6 +694,30 @@ add_cpu_slot_writable_root() {
   export LANE_CODEX_ADD_DIRS
 }
 
+# A repo names the directories outside the checkout its codex lanes must write, one per value of
+# `git config --add lane.codexAddDir <absolute dir>`. arena's ratchet claims and lane-cargo's job
+# files live in ~/.cache/arena: a codex lane launched without it could neither claim a function
+# nor build (arena char-rows, 2026-10-27).
+add_repo_writable_roots() {
+  local repo="$1"
+  local directory
+  local directories
+  directories=$(git -C "$repo" config --get-all lane.codexAddDir 2>/dev/null || true)
+  while IFS= read -r directory; do
+    [ -n "$directory" ] || continue
+    case "$directory" in /*) ;; *) die "lane.codexAddDir in $repo must be an absolute path: $directory" ;; esac
+    if ! mkdir -p "$directory" || ! directory=$(cd "$directory" && pwd -P); then
+      echo "lane: cannot prepare $directory, which lane.codexAddDir in $repo names; it is not writable in the sandbox" >&2
+      continue
+    fi
+    case ":$LANE_CODEX_ADD_DIRS:" in
+      *":$directory:"*) continue ;;
+    esac
+    LANE_CODEX_ADD_DIRS="${LANE_CODEX_ADD_DIRS:+$LANE_CODEX_ADD_DIRS:}$directory"
+  done <<<"$directories"
+  export LANE_CODEX_ADD_DIRS
+}
+
 # Per-worktree bootstrap: run the repo's `.agents/prepare` (Delta/agent-skills
 # convention; `.claude/prepare` as a local override) inside a freshly created
 # worktree. Must be fast, idempotent and non-interactive — a lane never blocks on it.
@@ -833,6 +858,7 @@ launch_worker() {
   if [ "$worker" = codex ]; then
     add_uv_cache_writable_root "$worktree"
     add_cpu_slot_writable_root "$worktree"
+    add_repo_writable_roots "$repo"
   fi
   print_worker_settings "$worker"
   if [ "$checkout_mode" = hook ]; then
