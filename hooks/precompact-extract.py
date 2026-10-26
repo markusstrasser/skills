@@ -204,8 +204,23 @@ def main():
             with open(transcript) as f:
                 all_lines = f.readlines()
             t_lines = len(all_lines)
+            # Only the window this compaction summarizes: earlier windows were carried by
+            # their own summaries, and re-extracting them listed questions answered hours
+            # before as open (arena b973408c, 2026-10-26: 70 compactions in one transcript).
+            window = all_lines
+            for i in range(len(all_lines) - 1, -1, -1):
+                line = all_lines[i]
+                if "compact_boundary" not in line:
+                    continue
+                try:
+                    boundary = json.loads(line).get("subtype") == "compact_boundary"
+                except ValueError:
+                    boundary = False
+                if boundary:
+                    window = all_lines[i + 1 :]
+                    break
 
-            for raw_line in all_lines:
+            for raw_line in window:
                 try:
                     entry = json.loads(raw_line.strip())
                 except Exception:
@@ -224,8 +239,8 @@ def main():
                     if block.get("type") == "tool_use":
                         name = block.get("name", "")
                         inp = block.get("input", {})
-                        if len(recent_tools) < 3 and name:
-                            recent_tools.append(name)
+                        if name:
+                            recent_tools = (recent_tools + [name])[-3:]
                         if name in ("Write", "Edit"):
                             fp = inp.get("file_path", "")
                             if "MEMORY.md" in fp or "/memory/" in fp:
