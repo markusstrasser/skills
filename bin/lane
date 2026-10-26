@@ -1234,6 +1234,35 @@ if candidates:
 ' "$worktree"
 }
 
+# The commit a lane checkout was cut at: clone mode records it in .git/lane-checkout-base, worktree
+# mode in metadata checkout_base. Review and harvest diff against it, never HEAD: a commit inside the
+# checkout (a Stop-hook [wip] checkpoint, 2026-10-24 genomics 8cdaf0f6) otherwise drops out silently.
+lane_review_base() {
+  local name="$1"
+  local worktree="$2"
+  local base=""
+  if [ -f "$worktree/.git/lane-checkout-base" ]; then
+    base=$(<"$worktree/.git/lane-checkout-base")
+  elif [ -f "$(metadata_path "$name")" ]; then
+    base=$(json_get_or "$(metadata_path "$name")" checkout_base "") || die "invalid metadata for $name"
+  fi
+  [ -n "$base" ] || die "no recorded checkout base for $name; refusing to diff against HEAD"
+  git -C "$worktree" rev-parse --verify --quiet "$base^{commit}" >/dev/null || die "recorded checkout base $base is not a commit in $worktree"
+  printf '%s\n' "$base"
+}
+
+# Name the commits made inside the checkout on stdout (as header lines) and stderr.
+lane_note_base_commits() {
+  local worktree="$1"
+  local base="$2"
+  local commits
+  commits=$(git -C "$worktree" log --oneline "$base..HEAD" --) || die "cannot list $base..HEAD in $worktree"
+  [ -n "$commits" ] || return 0
+  printf '# checkout HEAD moved past base %s; diff includes these commits:\n' "$base"
+  sed 's/^/#   /' <<<"$commits"
+  printf 'lane: %s has commits after its checkout base %s:\n%s\n' "$worktree" "$base" "$commits" >&2
+}
+
 build_review_patch() {
   local name="$1"
   local worktree="$2"
@@ -1250,14 +1279,17 @@ build_review_patch() {
   local size
   local rc
 
-  printf '# lane review patch: %s\n# worktree: %s\n' "$name" "$worktree" >"$header"
+  local base
+  base=$(lane_review_base "$name" "$worktree") || exit 1
+  printf '# lane review patch: %s\n# worktree: %s\n# base: %s\n' "$name" "$worktree" "$base" >"$header"
+  lane_note_base_commits "$worktree" "$base" >>"$header"
   if [ -z "$report" ]; then
     printf '# no lane report found\n' >>"$header"
   fi
   case "$report" in
     "$worktree"/*) report_relative=${report#"$worktree"/} ;;
   esac
-  git -C "$worktree" diff --no-ext-diff HEAD -- >"$body"
+  git -C "$worktree" diff --no-ext-diff "$base" -- >"$body"
   while IFS= read -r -d '' path; do
     if [ -n "$report_relative" ] && [ "$path" = "$report_relative" ]; then
       printf '# report attached separately; omitted untracked hunk: %s\n' "$path" >>"$header"
@@ -1835,8 +1867,11 @@ cmd_reap() {
   esac
 
   if [ -d "$worktree" ]; then
-    echo "lane: git diff --stat for $worktree"
-    git -C "$worktree" diff --no-ext-diff HEAD --stat --
+    local stat_base
+    stat_base=$(lane_review_base "$name" "$worktree") || exit 1
+    echo "lane: git diff --stat for $worktree against checkout base $stat_base"
+    lane_note_base_commits "$worktree" "$stat_base"
+    git -C "$worktree" diff --no-ext-diff "$stat_base" --stat --
     echo "lane: untracked files"
     git -C "$worktree" ls-files --others --exclude-standard
     if [ "$force" != "true" ]; then

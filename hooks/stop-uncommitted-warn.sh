@@ -32,6 +32,12 @@ if not os.path.isdir(os.path.join(cwd, ".git")):
 # 2026-09-17/18, nine [wip] checkpoints of half-edited memos and in-flight lane
 # files in one session, each superseded by the real commit minutes later.
 auto_commit_enabled = not os.path.exists(os.path.join(cwd, ".claude", "no-auto-checkpoint"))
+# A lane clone (bin/lane records .git/lane-checkout-base) never gets a [wip] commit: the lane is
+# reviewed and harvested as a diff from that base, and a commit inside the clone once dropped out
+# of the review patch (genomics session 8cdaf0f6, 2026-10-24, aab3bf7 on base 7626008).
+lane_checkout = os.path.exists(os.path.join(cwd, ".git", "lane-checkout-base"))
+if lane_checkout:
+    auto_commit_enabled = False
 
 # Every git call in this hook goes through _git_run: SIGTERM first, SIGKILL only after
 # a 2 s grace. subprocess.run(timeout=) SIGKILLs the child, which git cannot catch, so a
@@ -484,8 +490,11 @@ if not new_changes or not auto_commit_enabled:
         if own_fresh:
             o = len(own_fresh)
             oplural = "s" if o != 1 else ""
-            why = "auto-checkpoint is off for this repo" if os.path.exists(os.path.join(cwd, ".claude", "no-auto-checkpoint")) else "subagents or peers are active on this checkout"
-            parts.append(f"{o} session file{oplural} uncommitted ({why}); commit explicitly when the work is done: " + ", ".join(own_fresh[:8]))
+            why = ("this is a lane checkout; the lane harvests its diff" if lane_checkout
+                   else "auto-checkpoint is off for this repo" if os.path.exists(os.path.join(cwd, ".claude", "no-auto-checkpoint"))
+                   else "subagents or peers are active on this checkout")
+            todo = "leave them uncommitted for the harvest" if lane_checkout else "commit explicitly when the work is done"
+            parts.append(f"{o} session file{oplural} uncommitted ({why}); {todo}: " + ", ".join(own_fresh[:8]))
     if contested_note:
         parts.append(contested_note.strip())
     if unattributable_fresh and _peer_count(cwd) < 1:

@@ -27,7 +27,7 @@ cleanup() {
   local name
   # The live-lane test gives a running lane a fake marker, and lane stop signals no lane that has one.
   rm -f "$LANE_HOME/archlive.done"
-  for name in first hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride ocargs ocquota failure rvcache rvown rvnone retire1 retirefail retirebusy hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit; do
+  for name in first rvcommit rvnobase hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride ocargs ocquota failure rvcache rvown rvnone retire1 retirefail retirebusy hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit; do
     if [ -f "$LANE_HOME/$name.json" ]; then
       "$LANE" stop "$name" >/dev/null 2>&1 || true
     fi
@@ -930,6 +930,28 @@ mkdir -p "$RVOWN_WT/docs/audit/topic"
 printf '%s\n' mine >"$RVOWN_WT/docs/audit/topic/new-report.md"
 LLMX_CAPTURE_NAME=rvown "$LANE" review rvown --out "$TEST_TMP/rvown.md" >/dev/null
 grep -Fxq "$RVOWN_WT/docs/audit/topic/new-report.md" "$LANE_CAPTURE/rvown.args" || fail "review omitted the lane's own report"
+
+echo "test: review patch diffs against the checkout base and names commits made after it"
+"$LANE" run rvcommit --repo "$REPO" --brief "$BRIEF" --worker fake --keep-checkout >/dev/null
+wait_for_file "$LANE_HOME/rvcommit.done"
+RVCOMMIT_WT="$REPO_REAL/.claude/worktrees/codex-rvcommit"
+printf '%s\n' committed-lane-sentinel >"$RVCOMMIT_WT/committed.txt"
+git -C "$RVCOMMIT_WT" add committed.txt
+git -C "$RVCOMMIT_WT" -c user.email=t@t -c user.name=t commit -q -m "[wip] Auto-checkpoint lane work"
+rvcommit_stderr="$TEST_TMP/rvcommit.stderr"
+LLMX_CAPTURE_NAME=rvcommit "$LANE" review rvcommit --out "$TEST_TMP/rvcommit.md" >/dev/null 2>"$rvcommit_stderr"
+grep -Fq '+committed-lane-sentinel' "$LANE_HOME/rvcommit.patch" || fail "review patch dropped the committed lane change"
+grep -Fq '[wip] Auto-checkpoint lane work' "$LANE_HOME/rvcommit.patch" || fail "patch header did not name the commit after base"
+grep -Fq '[wip] Auto-checkpoint lane work' "$rvcommit_stderr" || fail "stderr did not name the commit after base"
+
+echo "test: review without a recorded checkout base fails loud"
+"$LANE" run rvnobase --repo "$REPO" --brief "$BRIEF" --worker fake --keep-checkout >/dev/null
+wait_for_file "$LANE_HOME/rvnobase.done"
+python3 -c 'import json,sys; p=sys.argv[1]; d=json.load(open(p)); d.pop("checkout_base",None); json.dump(d,open(p,"w"))' "$LANE_HOME/rvnobase.json"
+if LLMX_CAPTURE_NAME=rvnobase "$LANE" review rvnobase --out "$TEST_TMP/rvnobase.md" >/dev/null 2>"$TEST_TMP/rvnobase.stderr"; then
+  fail "review without a checkout base succeeded"
+fi
+grep -Fq 'no recorded checkout base' "$TEST_TMP/rvnobase.stderr" || fail "missing-base failure did not name the cause"
 
 echo "test: review with no report fails loud in header and prompt"
 "$LANE" run rvnone --repo "$REPO" --brief "$BRIEF" --worker fake --keep-checkout >/dev/null
