@@ -2335,7 +2335,7 @@ def _dynamic_cd_target(cmd: str) -> str | None:
 
 
 def gate_worktree_cd_guard(raw_payload: str) -> GateResult:
-    """Block a persistent ``cd`` into a lane worktree (``.claude/worktrees/...``).
+    """Neutralize a persistent ``cd`` into a lane worktree (``.claude/worktrees/...``).
 
     The Bash tool's cwd persists across calls, so ``cd <worktree> && ...`` leaves
     every later command — ``git log`` ranges, ``uv run``, file swaps — running
@@ -2344,7 +2344,8 @@ def gate_worktree_cd_guard(raw_payload: str) -> GateResult:
     inside the worktree, and an edit that landed in the wrong tree. A subshell
     ``(cd <wt> && ...)`` cannot persist and passes; ``git -C <wt>`` and absolute
     paths are the intended spellings. A persistent ``cd`` to a target the guard
-    cannot read (``cd $WT``, ``cd "$(...)"``) blocks too, since it may be a worktree.
+    cannot read (``cd $WT``, ``cd "$(...)"``) is treated the same, since it may be a
+    worktree. Since 2026-10-26 the command is rewritten into a subshell instead of blocked.
     The same holds for ``.claude/cache/...`` and ``~/.cache/oc-lanes/...``: one genomics
     session (1cce6699, 2026-10-22) made five persistent cds into those trees, past
     this guard, each caught only by the harness's working-directory notice.
@@ -2377,26 +2378,29 @@ def gate_worktree_cd_guard(raw_payload: str) -> GateResult:
         dynamic = _dynamic_cd_target(stripped)
         if dynamic is None:
             return GateResult(0, "", "")
-        msg = (
-            f"BLOCK: `cd {dynamic}` moves this session's persistent cwd to a path this guard "
-            "cannot read; if it is a lane worktree, every later Bash call (git log ranges, "
-            "uv run, edits) runs against the worktree, not main (genomics catalog M122).\n"
-            f'Use `git -C "{dynamic}" ...`, absolute paths, or a subshell '
-            f'`(cd "{dynamic}" && ...)`, which cannot persist.\n'
-        )
-        _log_trigger("worktree-cd-guard", "block", cmd[:80], cmd)
-        return GateResult(2, msg, "")
-    target = match.group(1)
-    msg = (
-        f"BLOCK: `cd {target}` would leave this session's persistent cwd inside a lane "
-        "worktree, lane clone or cache directory; every later Bash call (git log ranges, "
-        "uv run, edits) would then run there, not in main (genomics catalog M122, recurred "
-        "2026-09-02 and 2026-10-22).\n"
-        f"Use `git -C {target} ...`, absolute `{target}/...` paths, or a subshell "
-        f"`(cd {target} && ...)`, which cannot persist.\n"
+        return _subshell_rewrite(data, cmd, dynamic)
+    return _subshell_rewrite(data, cmd, match.group(1))
+
+
+def _subshell_rewrite(data: dict, cmd: str, target: str) -> GateResult:
+    """Run the command in a subshell so its cd cannot persist, and tell the agent so.
+
+    Blocking cost a wasted round trip per fire (591 blocks in 7 days to 2026-10-26, each
+    re-reading ~240K of context) for the same protection. The note matters: an agent that
+    believes it moved would run its next relative command in main.
+    """
+    ti = dict(data.get("tool_input") or {})
+    ti["command"] = f"(\n{cmd}\n)"
+    cwd = data.get("cwd") or "the session directory"
+    note = (
+        f"worktree-cd-guard ran this command in a subshell, so `cd {target}` did not persist: "
+        f"the next Bash call still starts in {cwd}. Keep using absolute paths or "
+        f"`git -C {target} ...` there (genomics catalog M122)."
     )
-    _log_trigger("worktree-cd-guard", "block", cmd[:80], cmd)
-    return GateResult(2, msg, "")
+    _log_trigger("worktree-cd-guard", "rewrite", cmd[:80], cmd)
+    out = json.dumps({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse", "updatedInput": ti, "additionalContext": note}})
+    return GateResult(0, "", out)
 
 
 # --- remote-delete-guard (BLOCKER, no if) --------------------------------------
@@ -2824,6 +2828,15 @@ MANIFEST: list[dict] = [
 # ─────────────────────────────────────────────────────────────────────────
 
 
+def _mutate_note(result: GateResult) -> str:
+    """additionalContext a rewriting gate attached to its updatedInput, or ''."""
+    try:
+        hso = json.loads(result.stdout).get("hookSpecificOutput") or {}
+    except Exception:
+        return ""
+    return hso.get("additionalContext") or "" if isinstance(hso, dict) else ""
+
+
 def _classify(result: GateResult) -> tuple[str, str | dict]:
     stdout, stderr = result.stdout.strip(), result.stderr.strip()
     if result.code == 2:
@@ -2910,6 +2923,9 @@ def main() -> None:
             sys.exit(2)
         if kind == "mutate" and isinstance(val, dict):
             current_ti = val
+            note = _mutate_note(result)
+            if note:
+                advisories.append(note)
         elif kind == "advise" and val:
             advisories.append(val if isinstance(val, str) else json.dumps(val))
 

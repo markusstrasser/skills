@@ -992,15 +992,35 @@ if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
 
 
-def test_worktree_cd_persistent_blocks(sandbox):
-    envelope = {
-        "tool_name": "Bash",
-        "tool_input": {"command": "cd /repo/.claude/worktrees/codex-x && git log --oneline -3"},
-    }
+def _assert_subshelled(disp, command):
+    assert disp["exit_code"] == 0, disp.get("block_msg")
+    assert disp["final_command"].startswith("(\n") and disp["final_command"].endswith("\n)")
+    assert command.split("&&")[0].split(";")[0].strip() in disp["final_command"]
+    assert "did not persist" in (disp.get("additionalContext") or "")
+
+
+def test_worktree_cd_persistent_is_subshelled(sandbox):
+    command = "cd /repo/.claude/worktrees/codex-x && git log --oneline -3"
+    disp = run_dispatcher({"tool_name": "Bash", "tool_input": {"command": command}},
+                          dict(sandbox["env"]), sandbox["cwd"])
+    _assert_subshelled(disp, command)
+    assert "git -C /repo/.claude/worktrees/codex-x" in disp["additionalContext"]
+
+
+def test_subshell_rewrite_keeps_later_git_gates(sandbox):
+    """A later gate must still see `git add -A` inside the wrapped command."""
+    envelope = {"tool_name": "Bash",
+                "tool_input": {"command": "cd /repo/.claude/worktrees/codex-x && git add -A"}}
     disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
-    assert disp["exit_code"] == 2
-    assert "persistent cwd" in disp["block_msg"]
-    assert "git -C /repo/.claude/worktrees/codex-x" in disp["block_msg"]
+    assert disp["exit_code"] == 2, disp
+
+
+def test_subshell_rewrite_runs_with_heredoc_and_trailing_comment(tmp_path):
+    """The wrapper must stay valid bash for heredocs and a trailing comment."""
+    cmd = f"cd {tmp_path} && cat <<'EOF'\nhi\nEOF\npwd # where"
+    out = subprocess.run(["bash", "-c", f"(\n{cmd}\n)"], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.splitlines() == ["hi", str(tmp_path)]
 
 
 def test_worktree_cd_in_subagent_passes(sandbox):
@@ -1025,13 +1045,11 @@ def test_worktree_cd_in_subagent_passes(sandbox):
         "cd /Users/a/.cache/oc-lanes/a1-r3/genomics && git status",
     ],
 )
-def test_cache_and_lane_clone_cd_persistent_blocks(sandbox, command):
+def test_cache_and_lane_clone_cd_persistent_is_subshelled(sandbox, command):
     """2026-10-22: five persistent cds into .claude/cache and ~/.cache/oc-lanes passed."""
     envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
     disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
-    assert disp["exit_code"] == 2
-    assert "persistent cwd" in disp["block_msg"]
-    assert "git -C" in disp["block_msg"]
+    _assert_subshelled(disp, command)
 
 
 @pytest.mark.parametrize(
@@ -1077,13 +1095,11 @@ def test_worktree_paths_without_persistent_cd_pass(sandbox, command):
         "git commit -m 'set W=/tmp/x'; cd $W",
     ],
 )
-def test_persistent_cd_to_an_unreadable_target_blocks(sandbox, command):
+def test_persistent_cd_to_an_unreadable_target_is_subshelled(sandbox, command):
     """`cd $WT && …` passed the literal .claude/worktrees check: the variable hid the path."""
     envelope = {"tool_name": "Bash", "tool_input": {"command": command}}
     disp = run_dispatcher(envelope, dict(sandbox["env"]), sandbox["cwd"])
-    assert disp["exit_code"] == 2
-    assert "persistent cwd" in disp["block_msg"]
-    assert "subshell" in disp["block_msg"]
+    _assert_subshelled(disp, command)
 
 
 @pytest.mark.parametrize(
