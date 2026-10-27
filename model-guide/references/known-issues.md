@@ -33,3 +33,7 @@ Append-only incident history. Consult for a matching failure; dated entries may 
 - **[2026-09-26] RESOLVED — GPT-5.6 API-lane gap above:** llmx `1aa8ed9` ("[models] Refuse pass-1 retired ids on the API lane too"); re-probe `llmx chat --dry-run -m gpt-5.6-luna` now errors "retired 2026-09-25 … use -m gpt-6-luna".
 
 - **[2026-10-14] 2026-10-14: every ~/Projects/*/.claude/overview.conf pins OVERVIEW_MODEL=gemini-3-flash-preview, retired from routing 2026-09-25 and absent from shared/llm_dispatch.py MODEL_TO_PROFILE, so scripts/generate_overview.py map_model_to_profile raises for all five repos. A Gemini overview also conflicts with the critique-only Gemini policy; choose a non-Gemini profile or retire the overview feature (operator's call). Separately, MODEL_TO_PROFILE no longer maps gemini-3.8-flash to deep_review, because deep_review now runs gemini-4-argon.**
+
+- **[2026-10-27] 2026-10-27 15:20: grok-4.7-high via cursor-cli subscription failed: "ActionRequiredError: Named models unavailable Free plans can only use Auto" (account on Cursor free plan). Roster lists cursor-agent grok-4.7 as a live lane; it is not. Probe before routing reviews to it.**
+
+- **[2026-10-27] 2026-10-27 deepseek-flash-fast (LithosAI) review packet (genomics mitomap-wording delta): rc 5 twice, reasoning_tokens=131072 with no text at -e high and -e medium ($0.26 lost); same day 4 other packets reviewed fine (~$0.03-0.09). On rc 5 retry once at -e none or with a smaller packet, not a lower thinking tier.**
