@@ -39,3 +39,5 @@ Append-only incident history. Consult for a matching failure; dated entries may 
 - **[2026-10-27] 2026-10-27 deepseek-flash-fast (LithosAI) review packet (genomics mitomap-wording delta): rc 5 twice, reasoning_tokens=131072 with no text at -e high and -e medium ($0.26 lost); same day 4 other packets reviewed fine (~$0.03-0.09). On rc 5 retry once at -e none or with a smaller packet, not a lower thinking tier.**
 
 - **[2026-10-28] Cursor account is on the Free tier (2026-10-28 05:29): cursor-agent refuses grok-4.7-{low..xhigh} with "Model unavailable on Free … includes Grok 4.7, Grok 4.6, and Auto with fixed settings"; the roster/transport rows still offer the effort variants. Route Grok via `llmx chat -p grok -m grok-4.7` (Grok Build) or plain fixed-settings ids.**
+
+- **[2026-10-28] Correction to the 05:29 Cursor entry: Grok Build (`llmx chat -p grok -m grok-4.7`) is not a working fallback either: it exits 1 asking for `grok login --device-code` (operator-only). With Cursor on Free, no Grok route works headless until he logs in or upgrades.**
