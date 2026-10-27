@@ -47,7 +47,8 @@ cd ~/Projects/agent-infra && uv run python3 "$SCOUT" <repo path> \
 **Provider order (local-first; full wording in [background.md](references/background.md)):**
 1. **`openai`** (default) — `gpt-6-astra` low effort, codex-cli subscription ($0).
 2. **`sol`** — `gpt-6.1-sol` high effort; rerun with `--provider sol` on an Astra plan-limit error (llmx exit 6).
-3. **`google`** — Gemini via llmx (paid API); only when both Codex models are exhausted.
+3. **`sol-api`** — `gpt-6.1-sol` high on the metered OpenAI API (`--auth api`, ~$0.1–0.3 per review) when Astra and Sol both return exit 6.
+4. **`google`** — Gemini via llmx (paid API); last resort. It may also be capped (exit 6 "SPENDING CAP REACHED").
 
 No `cursor` provider (retired 2026-10-07). `--both` (google + openai; `--all-providers` is the same set) only for an explicitly requested high-recall review or a concrete unresolved risk needing another model; module size alone does not justify it.
 
@@ -169,3 +170,4 @@ $ARGUMENTS
 - **[2026-10-24] Module mode silently skipped every `.swift` file and extensionless script (suffix allowlist) and printed "No new findings" (arena tools/wow-run, 2,087 Swift lines). Fixed agent-infra ab4d70bd: more suffixes, shebang scripts, and a `Not reviewed (not source by suffix): …` stderr line. Read that line before reporting coverage.**
 - **[2026-10-26] The openai provider's fixed `--timeout 180` killed a 65 KB file (arena tools/wow-logger/src/bin/hudcheck.rs, llmx exit 4), and `--file` refuses a file over 100,000 bytes without chunking (hud.rs, 110,901 bytes): both stayed unreviewed until the parent ran `llmx chat --subscription -m gpt-6-astra --timeout 1200 -f <file>` by hand. The timeout should scale with batch bytes and `--file` should chunk.**
 - **[2026-10-27] Sol does not survive Astra's account limit. Astra exited 6 with "You've hit your usage limit. Visit https://chatgpt.com/settings/usage to purchase more credits or try again at Nov 2nd, 2026 5:00 PM", and `gpt-6.1-sol` exited 6 a minute later with the identical text (genomics negatives-panels review, llmx logs 06:56/06:57 JST). That message is the ChatGPT account's usage limit, which both codex-cli models draw on; when it appears, skip step 2 and go to google (`gemini-4-argon`).**
+- **[2026-10-27] Codex plan exhausted until 11-02 for both Codex models; Gemini monthly spending cap hit the same day; added `--provider sol-api` (metered gpt-6.1-sol) as step 3.**
