@@ -1698,6 +1698,8 @@ stop_lane() {
   else
     echo "lane: process group $pid is not running"
   fi
+  # A debugserver the worker's lldb started sits outside the group (bin/lane-reap-debuggers).
+  "$LANE_BIN_DIR/lane-reap-debuggers" "$(json_get "$metadata" worktree 2>/dev/null)" "/tmp/lane-opencode/$name"
   archive_log "$name"
   rm -f "$(done_path "$name")"
 }

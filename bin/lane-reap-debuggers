@@ -1,0 +1,33 @@
+#!/bin/bash
+# lane-reap-debuggers — kill every debugserver and lldb whose working directory lies under one of the given directories.
+# lldb run under `timeout` leaves its debugserver behind when timeout kills lldb: debugserver starts with --setsid, so
+# neither the lane's end nor `lane stop`'s process-group signal reaches it (arena implicit-targets, 2026-10-26: six
+# orphaned debugservers, each holding its stopped inferior). lane-opencode runs this on the lane's worktree and scratch
+# directory when its worker ends, and `lane stop` after the group exits.
+# usage: lane-reap-debuggers <dir>...
+{
+set -u
+[ "$#" -ge 1 ] || { echo "usage: lane-reap-debuggers <dir>..." >&2; exit 2; }
+roots=()
+for dir in "$@"; do
+  [ -n "$dir" ] || continue
+  roots+=("${dir%/}")
+  # lsof reports resolved paths: /tmp is /private/tmp, and a symlinked worktree its target.
+  case $dir in /tmp/*) roots+=("/private${dir%/}") ;; esac
+  real=$(cd "$dir" 2>/dev/null && pwd -P) && roots+=("$real")
+done
+for pid in $(pgrep -x debugserver; pgrep -x lldb); do
+  cwd=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')
+  [ -n "$cwd" ] || continue
+  for root in "${roots[@]}"; do
+    case $cwd in
+      "$root" | "$root"/*)
+        name=$(ps -o comm= -p "$pid" 2>/dev/null)
+        kill "$pid" 2>/dev/null && echo "lane-reap-debuggers: killed ${name##*/} $pid (cwd $cwd)"
+        break
+        ;;
+    esac
+  done
+done
+exit 0
+}

@@ -394,6 +394,8 @@ $task_prompt"
     *) break ;;
   esac
 done
+# The worker's lldb may have left its debugserver running (bin/lane-reap-debuggers).
+"$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/lane-reap-debuggers" "$worktree" "$tmp"
 chmod -R u+w "$tmp" 2>/dev/null
 rm -rf "$tmp"
 usage_line
