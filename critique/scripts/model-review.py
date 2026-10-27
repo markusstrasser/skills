@@ -1987,6 +1987,45 @@ def rerun_gpt_axis_via_subscription(
         }
 
 
+# Metered fallback when the Codex plan is exhausted (llmx exit 6) on a subscription GPT
+# route. Named and recorded, never silent; Sol is $2/$10 per M tokens on the API.
+METERED_GPT_FALLBACK_MODEL = "gpt-6.1-sol"
+
+
+def rerun_gpt_axis_via_metered_api(
+    axis: str,
+    review_dir: Path,
+    ctx_file: Path | ContextArtifact,
+    prompt: str,
+    effort: str,
+    timeout: int,
+    budget: DispatchBudget | None = None,
+) -> dict:
+    """Retry an axis whose subscription GPT route hit the Codex plan limit, once,
+    on the metered OpenAI API (`llmx --auth api`)."""
+    import subprocess
+
+    out_path = review_dir / f"{axis}-output.md"
+    print(
+        f"[DEGRADED] {axis}: Codex plan limit on the subscription route; retrying once on "
+        f"the metered OpenAI API ({METERED_GPT_FALLBACK_MODEL}, llmx --auth api)",
+        file=sys.stderr,
+    )
+    if budget is not None and not budget.can_start(timeout):
+        return {"exit_code": 1, "size": 0, "latency": 0, "error": "budget exhausted before metered retry"}
+    cmd = ["llmx", "chat", "--auth", "api", "-m", METERED_GPT_FALLBACK_MODEL, "-e", effort,
+           "--timeout", str(timeout), "-f", str(context_content_path(ctx_file)),
+           "-o", str(out_path), prompt]  # fmt: skip
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 60)
+    except Exception as e:  # noqa: BLE001 — fallback must never raise into the axis loop
+        return {"exit_code": 1, "size": 0, "latency": 0, "error": f"metered retry failed: {str(e)[:300]}"}
+    size = out_path.stat().st_size if out_path.exists() else 0
+    ok = r.returncode == 0 and size > 0
+    error = None if ok else (stderr_excerpt(r.stderr, 500) or "metered retry produced no output")
+    return {"exit_code": 0 if ok else 1, "size": size, "latency": 0, "error": error}
+
+
 # CLI transports cannot enforce FINDING_SCHEMA, so models named the keys themselves:
 # from 2026-07 most findings said file_path/proposed_fix, which every findings.json
 # reader ignored (disposition "File: N/A"/"Fix: N/A", no verify anchors; 2026-10-14).
@@ -2408,6 +2447,34 @@ def dispatch(
             entry.pop("stderr", None)
             if sub_result.get("error"):
                 entry["stderr"] = sub_result["error"]
+
+        # Codex plan exhausted on a subscription GPT route (the axis itself, or the
+        # Gemini fallback target) -> one named retry on the metered API.
+        served = dispatch_core.PROFILES["gpt_general"] if entry.get("fallback_reason", "").startswith("gemini") else profile_def
+        if (
+            not axis_needs_repo_workspace(axis)
+            and served.provider == "openai"
+            and served.auth == "subscription"
+            and entry["exit_code"] != 0
+            and _is_plan_limit(str(entry.get("stderr") or ""))
+        ):
+            entry["initial_dispatch"] = entry.get("initial_dispatch") or _retain_initial_dispatch(entry)
+            entry["fallback_from"] = entry["model"]
+            entry["fallback_reason"] = "codex_plan_limit"
+            entry["initial_exit_code"] = entry.get("initial_exit_code", entry["exit_code"])
+            api_result = rerun_gpt_axis_via_metered_api(
+                axis, review_dir, ctx_files[axis], prompts[axis],
+                effort=served.reasoning_effort or "medium",
+                timeout=_profile_resolved_timeout(served.name), budget=budget,
+            )  # fmt: skip
+            entry["model"] = f"{METERED_GPT_FALLBACK_MODEL} (metered api)"
+            entry["exit_code"] = api_result["exit_code"]
+            entry["size"] = api_result["size"]
+            entry.update({key: None for key in _DISPATCH_PROVENANCE_FIELDS})
+            entry.pop("latency", None)
+            entry.pop("stderr", None)
+            if api_result.get("error"):
+                entry["stderr"] = api_result["error"]
 
         reason = dispatch_failure_reason(entry)
         if reason is not None:

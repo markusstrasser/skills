@@ -553,6 +553,32 @@ class StructuredDispatchFailureTest(unittest.TestCase):
         for field in ("dispatch_status","retryable","dispatch_config_auth","dispatch_meta"):
             self.assertIsNone(entry[field])
 
+    def test_codex_plan_limit_on_both_subscription_routes_falls_back_to_metered_api(self):
+        limit = "You've hit your usage limit. Try again at Nov 2nd, 2026 5:00 PM."
+        replies = [self.reply(status="quota",message="SPENDING CAP REACHED ai.studio/spend"),
+                   self.reply(status="model_error",message=limit)]
+        api_calls = []
+        def fake_run(cmd, **kwargs):
+            api_calls.append(cmd)
+            Path(cmd[cmd.index("-o") + 1]).write_text("metered review")
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        with (
+            patch.object(model_review.dispatch_core,"dispatch",side_effect=lambda **kw: replies.pop(0)(**kw)),
+            patch("subprocess.run", side_effect=fake_run),
+        ):
+            result = model_review.dispatch(self.review_dir,{"arch":self.context},["arch"],
+                                           "Check metered fallback",False)
+        self.assertEqual(len(api_calls),1)
+        cmd = api_calls[0]
+        self.assertEqual(cmd[cmd.index("--auth") + 1],"api")
+        self.assertEqual(cmd[cmd.index("-m") + 1],"gpt-6.1-sol")
+        entry = result["arch"]
+        self.assertEqual(entry["fallback_reason"],"codex_plan_limit")
+        self.assertEqual(entry["fallback_from"],model_review.GEMINI_FALLBACK_MODEL)
+        self.assertEqual(entry["model"],"gpt-6.1-sol (metered api)")
+        self.assertEqual(entry["exit_code"],0)
+        self.assertNotIn("failure_reason",entry)
+
     def test_existing_fallback_retains_distinct_initial_artifact_bytes(self):
         for final_success in (True,False):
             with self.subTest(final_success=final_success):
