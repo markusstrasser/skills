@@ -126,3 +126,34 @@ def test_an_ordinary_result_name_is_not_flagged(tmp_path):
     context, _ = gate("Write your result to out/result_01.md, first line **Verdict:**, then reply with its path.",
                       stype="general-purpose", description="Fact-check batch")
     assert "BLOCKED FILENAME" not in context
+
+
+def gate_output(tool_input):
+    envelope = {"tool_name": "Agent", "session_id": "s", "tool_input": tool_input}
+    env = dict(os.environ, HOOK_TRIGGER_LOG=os.devnull,
+               SUBAGENT_MEMORY_BLOCK_MB="0", SUBAGENT_MEMORY_WARN_MB="0")
+    proc = subprocess.run(["bash", str(GATE)], input=json.dumps(envelope), capture_output=True,
+                          text=True, env=env)
+    if proc.returncode == 2:
+        pytest.skip(f"machine-state block, not under test: {proc.stdout[:80]}")
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout)["hookSpecificOutput"] if proc.stdout.strip() else {}
+
+
+LANE_CHILD = {"description": "Measure SR baselines", "subagent_type": "general-purpose", "model": "opus",
+              "prompt": "Run the probe, write results to out/result_01.md, first line **Verdict:**."}
+
+
+@pytest.mark.parametrize("value, expected", [("true", True), ("True", True), ("false", False)])
+def test_a_string_background_flag_becomes_the_boolean_it_names(value, expected):
+    # 2026-10-27 genomics: lanes lr-dv, donor-authority and lr-hardgenes passed the STRING "true";
+    # each child ran in the foreground and blocked its lane (lr-dv 48 min).
+    out = gate_output(dict(LANE_CHILD, run_in_background=value))
+    assert out["updatedInput"]["run_in_background"] is expected
+    assert "BACKGROUND-GUARD" in out["additionalContext"]
+
+
+def test_a_boolean_background_flag_is_left_alone():
+    out = gate_output(dict(LANE_CHILD, run_in_background=True))
+    assert out.get("updatedInput", {}).get("run_in_background", True) is True
+    assert "BACKGROUND-GUARD" not in out.get("additionalContext", "")

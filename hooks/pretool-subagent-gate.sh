@@ -507,11 +507,18 @@ fi
 # original dispatch proceeds unchanged (no-op, can never BREAK the call).
 MODEL_UNSET=$(printf '%s' "$INPUT" | jq -r 'if ((.tool_input.model // "") | tostring) == "" then "1" else "" end' 2>/dev/null || true)
 
+# BACKGROUND-GUARD (2026-10-27, genomics): a lane that passes run_in_background as the STRING
+# "true" gets a FOREGROUND child and blocks until it returns (lr-dv 48 min; donor-authority and
+# lr-hardgenes the same evening, although their brief said "the boolean true"). Coerce the string
+# to the boolean it names via updatedInput, and say so in additionalContext.
+BG_STRING=$(printf '%s' "$INPUT" | jq -r 'if (.tool_input.run_in_background | type) == "string" then "1" else "" end' 2>/dev/null || true)
+
 # AUTO-INJECT emission (2026-06-17): if a discipline suffix was set, append it to the dispatch
 # prompt via updatedInput so the dispatch proceeds first-time (no block/retry). Also carries the
-# model-guard. Fold any accumulated advisory warnings into the same additionalContext.
-if [ -n "$INJECT_SUFFIX" ] || [ -n "$MODEL_UNSET" ]; then
-    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "inject-emit" "checks=${CHECK_IDS%,}${MODEL_UNSET:+model}" 2>/dev/null || true
+# model-guard and the background-guard. Fold any accumulated advisory warnings into the same
+# additionalContext.
+if [ -n "$INJECT_SUFFIX" ] || [ -n "$MODEL_UNSET" ] || [ -n "$BG_STRING" ]; then
+    ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-gate" "inject-emit" "checks=${CHECK_IDS%,}${MODEL_UNSET:+model}${BG_STRING:+bgstring}" 2>/dev/null || true
     printf '%s' "$INPUT" | INJECT="$INJECT_SUFFIX" WARN="$WARNINGS" MODEL_UNSET="$MODEL_UNSET" python3 -c '
 import sys, json, os
 data = json.load(sys.stdin)
@@ -523,6 +530,11 @@ warn = (os.environ.get("WARN", "") or "").strip()
 if os.environ.get("MODEL_UNSET"):
     ti["model"] = "opus"
     warn = (warn + " MODEL-GUARD: no model set -> injected model:opus. Pins are not ground truth (07-19: sonnet-5 served regardless of pin; 09-05: opus-5 served) — read back the first-line model self-report before trusting tier-sensitive work.").strip()
+background = ti.get("run_in_background")
+if isinstance(background, str):
+    coerced = background.strip().lower() == "true"
+    ti["run_in_background"] = coerced
+    warn = (warn + f" BACKGROUND-GUARD: run_in_background was the string {background!r}; coerced to the boolean {str(coerced).lower()}. Pass the JSON boolean: a string runs the child in the foreground and blocks you until it returns.").strip()
 out = {"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": ti}}
 if warn:
     out["hookSpecificOutput"]["additionalContext"] = warn
