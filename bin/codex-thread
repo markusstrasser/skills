@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+"""codex-thread — message a Codex agent running in ChatGPT.app's Codex tab, from outside the app.
+
+  codex-thread settings <thread>                         read-only probe: model, effort
+  codex-thread steer <thread> <file> [--cwd DIR]         add a user message to the running turn
+  codex-thread unqueue <thread> <queued item id>         drop an item from the thread's queue
+
+`steer` is what the app's "send now" does while a turn runs. It needs a turn in progress. For an
+idle thread, or to wait for the turn to end, use the app's bundled CLI instead:
+`/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex
+queue --thread <thread> --message <text>`.
+
+The commands use the app's internal IPC router at ~/.codex/ipc/ipc.sock, read from its app.asar on
+2026-10-30 (`IpcRouter`, `ml`/`hl`, the `Oe` version table):
+- Each frame is a 4-byte little-endian length, then UTF-8 JSON. A client registers with
+  `initialize`.
+- The router asks every other client whether it can handle a request. For `thread-follower-*`
+  methods, the window that owns the thread says yes.
+- That window runs `steerTurn` (`turn/steer` on its app-server) or `removeQueuedMessage`
+  (`thread/queue/delete`).
+- The versions below apply to requests sent without a hostId. If an app update changes them, the
+  window answers `request-version-mismatch`; re-read them with
+  `rg -a -o 'Oe=\\{"thread-stream-state-changed[^}]*\\}' /Applications/ChatGPT.app/Contents/Resources/app.asar`.
+"""
+
+import argparse
+import json
+import os
+import socket
+import struct
+import sys
+import time
+import uuid
+
+SOCK = os.path.expanduser("~/.codex/ipc/ipc.sock")
+VERSIONS = {
+    "thread-follower-read-model-settings": 1,
+    "thread-follower-steer-turn": 1,
+    "thread-follower-remove-queued-message": 1,
+}
+
+
+def send(s: socket.socket, msg: dict) -> None:
+    data = json.dumps(msg).encode()
+    s.sendall(struct.pack("<I", len(data)) + data)
+
+
+def recv_exact(s: socket.socket, n: int) -> bytes:
+    buf = b""
+    while len(buf) < n:
+        chunk = s.recv(n - len(buf))
+        if not chunk:
+            raise ConnectionError("the router closed the connection")
+        buf += chunk
+    return buf
+
+
+def recv(s: socket.socket) -> dict:
+    (n,) = struct.unpack("<I", recv_exact(s, 4))
+    return json.loads(recv_exact(s, n))
+
+
+def call(s: socket.socket, client_id: str | None, method: str, params: dict, timeout: float) -> dict:
+    rid = str(uuid.uuid4())
+    msg = {"type": "request", "requestId": rid, "version": VERSIONS.get(method, 0),
+           "method": method, "params": params, "timeoutMs": int(timeout * 1000)}
+    if client_id is not None:
+        msg["sourceClientId"] = client_id
+    send(s, msg)
+    deadline = time.monotonic() + timeout
+    s.settimeout(timeout)
+    while time.monotonic() < deadline:
+        reply = recv(s)
+        if reply.get("type") == "client-discovery-request":
+            # Another client's request: this client handles nothing.
+            send(s, {"type": "client-discovery-response", "requestId": reply["requestId"],
+                     "response": {"canHandle": False}})
+        elif reply.get("type") == "response" and reply.get("requestId") == rid:
+            return reply
+    raise TimeoutError(method)
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    sub = p.add_subparsers(dest="mode", required=True)
+    sub.add_parser("settings").add_argument("thread")
+    steer = sub.add_parser("steer")
+    steer.add_argument("thread")
+    steer.add_argument("file", help="the message text; - reads stdin")
+    steer.add_argument("--cwd", default=os.getcwd(), help="the thread's workspace root")
+    unqueue = sub.add_parser("unqueue")
+    unqueue.add_argument("thread")
+    unqueue.add_argument("item")
+    a = p.parse_args()
+
+    if a.mode == "settings":
+        method, params = "thread-follower-read-model-settings", {"conversationId": a.thread}
+    elif a.mode == "steer":
+        text = sys.stdin.read() if a.file == "-" else open(a.file).read()
+        message_id = str(uuid.uuid4())
+        method = "thread-follower-steer-turn"
+        params = {
+            "conversationId": a.thread,
+            "input": [{"type": "text", "text": text, "text_elements": []}],
+            # The owner reads restoreMessage.context and .cwd before it steers (`Pke`, `Dr`).
+            "restoreMessage": {"id": message_id, "text": text, "cwd": a.cwd,
+                               "context": {"workspaceRoots": [a.cwd], "collaborationMode": None,
+                                           "commentAttachments": []}},
+            "clientUserMessageId": message_id,
+            "attachments": [],
+        }
+    else:
+        method = "thread-follower-remove-queued-message"
+        params = {"conversationId": a.thread, "messageId": a.item}
+
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        s.connect(SOCK)
+        init = call(s, None, "initialize", {"clientType": "codex-thread"}, 10)
+        reply = call(s, init["result"]["clientId"], method, params, 60)
+    print(json.dumps({k: reply.get(k) for k in ("resultType", "error", "result")})[:2000])
+    if reply.get("error") == "no-client-found":
+        print("No open window owns this thread: open it in ChatGPT.app's Codex tab.", file=sys.stderr)
+    elif reply.get("error") == "request-version-mismatch":
+        print("The app changed its IPC versions: re-read them (see the docstring).", file=sys.stderr)
+    return 0 if reply.get("resultType") == "success" else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

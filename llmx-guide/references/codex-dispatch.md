@@ -48,13 +48,17 @@ The Codex tab of ChatGPT.app runs its own `codex app-server` over stdio. `pgrep 
   - A subagent's rollout carries `source.subagent.thread_spawn.parent_thread_id`, a nickname and an `agent_path`.
   - Messages between agents are encrypted (`gAAAA…`), but commands and their outputs are plain.
   - User-role entries that start with `<environment_context>` come from the app (the date rollover at local midnight, the subagent list), not from the user.
-- **Messaging a running thread.** Run `codex queue --thread <uuid> --message <text>` with the app's bundled binary, `/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`, which matches its app-server's version.
+- **Sending now: `~/Projects/skills/bin/codex-thread steer <uuid> <file> --cwd <workspace>`.** This does what the app's "send now" does: it adds the message to the running turn, and the model reads it at its next step.
+  - On 2026-10-30 a steer sent at 00:24 reached the rollout at 00:32, after a long command finished.
+  - It needs a turn in progress and the thread open in an app window. An unknown thread fails loudly with `no-client-found`.
+  - `codex-thread settings <uuid>` is a read-only probe that returns the model and effort. `codex-thread unqueue <uuid> <item>` drops a queued item.
+  - The route is the app's internal IPC router, `~/.codex/ipc/ipc.sock`: `thread-follower-*` requests, versioned by the app's `Oe` table. An app update can change those versions; the tool's docstring says how to re-read them.
+- **Sending at the end of the turn: `codex queue --thread <uuid> --message <text>`,** with the app's bundled binary, `/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`, which matches its app-server's version.
   - With no local app-server daemon running (no socket under `~/.codex/app-server-control/`), the command starts an embedded server. That server adds the message to `~/.codex/queue_1.sqlite`.
-  - The app's server polls that file for the threads it has loaded (openai/codex `codex-rs/state/src/runtime/queued_items.rs`, `changes_since`). It submits the message when the thread's current turn ends.
-  - A paste into the app's composer steers the running turn at once. From outside, you can only queue.
-  - Before queueing, check that the same text is not already in the thread's user messages or in `queued_items`. Afterwards, confirm delivery by watching the rollout for the text.
+  - The app's server polls that file for the threads it has loaded (openai/codex `codex-rs/state/src/runtime/queued_items.rs`, `changes_since`), and submits the message when the thread's current turn ends.
+  - Before sending, check that the same text is not already in the thread's user messages or in `queued_items`. Afterwards, confirm delivery by watching the rollout for the text.
 - **Do not resume a thread the app holds** with `codex resume` or `codex exec resume`. The source refuses a second writer ("thread already has an active writer"; test `queue_succeeds_when_another_server_owns_the_thread`).
 
-On 2026-10-30 the codex-cli 0.165.0-alpha.1.2 bundled with ChatGPT.app queued a message for a live thread: rc 0, and its row appeared in `queued_items`.
+Checked 2026-10-30 against ChatGPT.app's bundled codex-cli 0.165.0-alpha.1.2. `codex queue` returned rc 0 and its row appeared in `queued_items`. `codex-thread steer` then delivered the same text into the running turn, and `unqueue` removed the queued copy.
 
 [Historical observations](codex-dispatch-history.md) retain the original overhead, output-loss, contention and isolation incidents. Re-probe live limits before using those old rates or model lists in a current decision.
