@@ -15,6 +15,7 @@ Use this reference when the source route is unclear or retrieval fails. Discover
 | UniProt / gnomAD / ClinVar / PDB facts | Query the relevant database; paper search returns papers about the database |
 | Citation stance | scite `search_literature` if available; inspect the supporting/contrasting source papers |
 | Patents / grants / trial or device records | The authoritative register; configured scite tools can assist discovery |
+| What is new in an ML/CS area (last days) | `frontier scan --lens <name>` (arXiv, HF, HN, lab feeds, citations of exemplar papers; ranked top 12) and `frontier feed --lens <name>` (repos the lens's people starred); `frontier lenses` lists lenses, `~/Projects/frontier/README.md` explains them |
 | News or events | Date-anchored news search and the original source; distinguish publication date from event date |
 | Structured entity enrichment | Exa deep search and `outputSchema` if supported; retain per-field source pointers |
 | Broad, multi-hop question | A configured Parallel/deep-research tool can help; exact-source questions usually start with targeted search |
