@@ -3474,6 +3474,7 @@ def verify_claims(
         ".json",
         ".md",
         ".py",
+        ".rs",
         ".sh",
         ".sql",
         ".toml",
@@ -3678,7 +3679,7 @@ def verify_claims(
         # was captured as "x.md").
         def _body_refs(text: str) -> list[tuple[str, str]]:
             return re.findall(
-                r"`?((?:~/|\.\.?/|/|(?<![\w.])\.(?=\w))?\w[\w/.-]*\.(?:py|js|ts|tsx|md|sh|json|yaml|yml|toml|cfg|sql|html|css|clj|cljc|cljs|edn)(?!\w))(?::(\d+))?`?",
+                r"`?((?:~/|\.\.?/|/|(?<![\w.])\.(?=\w))?\w[\w/.-]*\.(?:py|rs|js|ts|tsx|md|sh|json|yaml|yml|toml|cfg|sql|html|css|clj|cljc|cljs|edn)(?!\w))(?::(\d+))?`?",
                 re.sub(r"\S*(?:" + _NOT_A_PATH.pattern + r")\S*", " ", text),
             )
 

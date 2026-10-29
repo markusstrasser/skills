@@ -1239,11 +1239,13 @@ class ExtractionCoverageTest(unittest.TestCase):
             project_dir.mkdir()
             source_file = project_dir / "module.py"
             source_file.write_text("value = 1\n")
+            (project_dir / "module.rs").write_text("fn rust_anchor() {}\n")
             disposition = review_dir / "disposition.md"
             disposition.write_text(
                 "# Review Findings\n\n"
                 "1. `module.py:1` defines `value` with the wrong value\n"
                 "2. `missing.py:1` is referenced but absent\n"
+                "3. `module.rs:1` defines `rust_anchor`\n"
             )
             coverage = {
                 "schema_version": "review-coverage.v1",
@@ -1261,13 +1263,13 @@ class ExtractionCoverageTest(unittest.TestCase):
             self.assertEqual(Path(verified_path).name, "verified-disposition.md")
             updated = json.loads((review_dir / "coverage.json").read_text())
             self.assertTrue(updated["verification"]["enabled"])
-            self.assertEqual(updated["verification"]["claim_count"], 2)
-            self.assertEqual(updated["verification"]["confirmed_count"], 1)
+            self.assertEqual(updated["verification"]["claim_count"], 3)
+            self.assertEqual(updated["verification"]["confirmed_count"], 2)
             self.assertEqual(updated["verification"]["corrected_count"], 0)
             self.assertEqual(updated["verification"]["hallucinated_count"], 1)
             self.assertEqual(updated["verification"]["inconclusive_count"], 0)
             self.assertEqual(updated["verification"]["unverifiable_count"], 0)
-            self.assertEqual(updated["verification"]["hallucination_rate"], 0.5)
+            self.assertEqual(updated["verification"]["hallucination_rate"], 0.333)
             self.assertEqual(
                 Path(updated["artifacts"]["verified_disposition"]).name, "verified-disposition.md"
             )
