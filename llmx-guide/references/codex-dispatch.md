@@ -39,4 +39,22 @@ Delegate independent lanes within available quota, provider limits and file owne
 
 Codex can read its working tree. A prose information restriction alone does not make a run blind. For a blind lane, use a clean authorized directory with only its allowed material, or an appropriate text-only API route within the spending boundary. For repository-aware review, preserve access and say which evidence was available.
 
+## Live Codex Desktop threads
+
+The Codex tab of ChatGPT.app runs its own `codex app-server` over stdio. `pgrep -l codex` shows it as a child of ChatGPT.app. Its threads are ordinary Codex sessions:
+
+- **Reading a thread.** Transcripts are in `~/.codex/sessions/YYYY/MM/DD/rollout-*-<thread uuid>.jsonl`.
+  - Line 1's `payload` holds `originator: "Codex Desktop"`, `cwd` and the model.
+  - A subagent's rollout carries `source.subagent.thread_spawn.parent_thread_id`, a nickname and an `agent_path`.
+  - Messages between agents are encrypted (`gAAAA…`), but commands and their outputs are plain.
+  - User-role entries that start with `<environment_context>` come from the app (the date rollover at local midnight, the subagent list), not from the user.
+- **Messaging a running thread.** Run `codex queue --thread <uuid> --message <text>` with the app's bundled binary, `/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`, which matches its app-server's version.
+  - With no local app-server daemon running (no socket under `~/.codex/app-server-control/`), the command starts an embedded server. That server adds the message to `~/.codex/queue_1.sqlite`.
+  - The app's server polls that file for the threads it has loaded (openai/codex `codex-rs/state/src/runtime/queued_items.rs`, `changes_since`). It submits the message when the thread's current turn ends.
+  - A paste into the app's composer steers the running turn at once. From outside, you can only queue.
+  - Before queueing, check that the same text is not already in the thread's user messages or in `queued_items`. Afterwards, confirm delivery by watching the rollout for the text.
+- **Do not resume a thread the app holds** with `codex resume` or `codex exec resume`. The source refuses a second writer ("thread already has an active writer"; test `queue_succeeds_when_another_server_owns_the_thread`).
+
+On 2026-10-30 the codex-cli 0.165.0-alpha.1.2 bundled with ChatGPT.app queued a message for a live thread: rc 0, and its row appeared in `queued_items`.
+
 [Historical observations](codex-dispatch-history.md) retain the original overhead, output-loss, contention and isolation incidents. Re-probe live limits before using those old rates or model lists in a current decision.
