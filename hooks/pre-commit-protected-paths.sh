@@ -18,7 +18,8 @@
 #                               blocked; a pure rename (R100) passes only when the
 #                               destination also matches the pattern.
 #   PRECOMMIT_PROTECTED_PATHS   ERE regex; matching files immutable-once-written
-#                               (block staged M/D/T/rename; new adds A allowed)
+#                               (block staged M/D/T and either side of a rename;
+#                               new adds A allowed)
 # The config file itself is ALWAYS protected (hardcoded) so it can't be neutered.
 #
 # Bypass: GIT_ALLOW_GUARD_BYPASS=1   Exit: 0 pass · 1 block.
@@ -63,11 +64,15 @@ PROTECTED="${PROTECTED:+$PROTECTED|}$SELF"
 violations=()
 
 # PROTECTED: immutable once written — block modify/delete/type-change/rename; allow new adds.
-# --diff-filter=MDTR catches modify, delete, type-change (regular<->symlink), and rename.
-while IFS= read -r path; do
-    [ -z "$path" ] && continue
-    echo "$path" | grep -qE "$PROTECTED" && violations+=("PROTECTED (immutable, no modify/delete/retype/rename): $path")
-done < <(git diff --cached --name-only --diff-filter=MDTR -- 2>/dev/null)
+# --diff-filter=MDTR catches modify, delete, type-change (regular<->symlink), and rename. Both sides of a
+# rename are checked: --name-only names only the destination, so renaming a protected file to an unprotected
+# name passed until 2026-10-29 (the append-only guard closed the same escape on 2026-08-24).
+while IFS=$'\t' read -r status src dst; do
+    [ -z "$status" ] && continue
+    for path in "$src" ${dst:+"$dst"}; do
+        echo "$path" | grep -qE "$PROTECTED" && violations+=("PROTECTED (immutable, no modify/delete/retype/rename): $path")
+    done
+done < <(git diff --cached --name-status --diff-filter=MDTR -- 2>/dev/null)
 
 if [ -n "$APPENDONLY" ]; then
     # Pure renames (R100) keep every byte; collect their sources so the deletion
