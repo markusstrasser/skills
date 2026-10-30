@@ -50,6 +50,8 @@ DERIVED_CACHE_DIRS = {"source-epochs", "index-trees"}
 CACHEDIR_TAG_SIGNATURE = b"Signature: 8a477f597d28d172789f06886806bc55"
 CACHE_DIR = ".claude/cache"
 HARVEST_CAP_BYTES = 1024 * 1024 * 1024
+# `git status --porcelain=v1` codes of an unmerged path.
+UNMERGED = frozenset({"DD", "AU", "UD", "UA", "DU", "AA", "UU"})
 
 
 class Keep(Exception):
@@ -373,6 +375,12 @@ def make_writable(checkout):
 
 def harvest(args, checkout):
     statuses = status_paths(checkout)
+    # A `git apply --3way` or merge conflict leaves unmerged index entries even once the file is fixed;
+    # `git diff HEAD` then omits the path, which read as "status names X but git diff HEAD does not"
+    # (arena unavailable-spells-fix-fix, 2026-10-30).
+    unmerged = sorted(path for path, code in statuses.items() if code in UNMERGED)
+    if unmerged:
+        raise Keep(f"unmerged paths (resolve each, then git add it): {', '.join(unmerged)}")
     copy_list = []
     tagged = set()
     if (checkout / CACHE_DIR).is_dir():

@@ -1043,6 +1043,23 @@ kill "$BUSY_PID"
 wait "$BUSY_PID" 2>/dev/null || true
 "$LANE" reap retirebusy --force >/dev/null
 
+echo "test: an unmerged path keeps the checkout and is named"
+LANE_FAKE_HOLD="$TEST_TMP/release-retireumg" "$LANE" run retireumg --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+UMG_WT="$REPO_REAL/.claude/worktrees/codex-retireumg"
+printf 'resolved\n' > "$UMG_WT/conflicted.txt"
+umg_blob=$(git -C "$UMG_WT" hash-object -w "$UMG_WT/conflicted.txt")
+printf '100644 %s 1\tconflicted.txt\n100644 %s 2\tconflicted.txt\n100644 %s 3\tconflicted.txt\n' \
+  "$umg_blob" "$umg_blob" "$umg_blob" | git -C "$UMG_WT" update-index --index-info
+[ "$(git -C "$UMG_WT" status --porcelain=v1 -- conflicted.txt | cut -c1-2)" = UU ] || fail "the fixture is not unmerged"
+touch "$TEST_TMP/release-retireumg"
+wait_for_file "$LANE_HOME/retireumg.done"
+grep -Fq "CHECKOUT=kept unmerged paths (resolve each, then git add it): conflicted.txt" \
+  "$LANE_HOME/retireumg.checkout-state" ||
+  fail "an unmerged path was not named: $(<"$LANE_HOME/retireumg.checkout-state")"
+[ -d "$UMG_WT" ] || fail "an unmerged checkout was removed"
+git -C "$UMG_WT" add conflicted.txt
+"$LANE" reap retireumg --force >/dev/null
+
 echo "test: a detached HEAD or a merge commit keeps the worktree and its branch"
 LANE_FAKE_HOLD="$TEST_TMP/release-retiredet" "$LANE" run retiredet --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
 DET_WT="$REPO_REAL/.claude/worktrees/codex-retiredet"
