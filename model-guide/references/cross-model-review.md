@@ -11,7 +11,8 @@ Opus 5.5 (max for architecture): architectural/professional judgment and impleme
 GPT-6 Astra: terminal/tool/process critique and structured failure search (hard).
 GPT-6 Luna: mechanical / bulk (low).
 GPT-6 Astra + reasoning.mode=pro: quantitative or high-irreversibility decisions.
-Grok 4.7 high (Cursor opt-in, or Grok Build headless in the repo): repo-grounded premise falsification after live preflight.
+[stale 2026-10-30] Grok 4.7 high (Cursor opt-in, or Grok Build headless in the repo): repo-grounded premise falsification after live preflight.
+Reviews since 2026-10-30 (Markus): Astra, or Opus when Astra's plan binds; no Cursor or Grok.
 Ground truth: tests, git, databases, source documents, primary web pages.
 ```
 

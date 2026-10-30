@@ -22,7 +22,7 @@ Optional axes are outside the presets:
 |---|---|
 | `formal` | Math, Bayes/stats, proofs or formal invariants; `formal_review` profile at high effort |
 | `glm` | Explicit additional model family; metered profile |
-| `grok` | Repo-grounded premise falsification; exact Cursor registry and repo canary required |
+| `grok` | Off since 2026-10-30 (Markus: reviews run on Astra or Opus, no Cursor/Grok). Was: repo-grounded premise falsification; exact Cursor registry and repo canary required |
 
 The `composer` axis was retired 2026-10-07 (Composer 2.5 outdated); `model-review.py` refuses it with a pointer and `review_gate` blocks a manifest that still names it.
 

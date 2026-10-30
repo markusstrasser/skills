@@ -52,6 +52,7 @@ llmx chat -p codex-cli --subscription -m gpt-6-astra -f ctx.md -o out.md "query"
 llmx chat -p codex-cli --subscription -m gpt-6.1-sol -f ctx.md -o out.md "query"   # codex-cli >= 0.162
 llmx chat --subscription -m grok-4.7-high -f ctx.md -o out.md "query"       # no cursor- prefix; re-list with cursor-agent models
 llmx chat -p grok -m grok-4.7 -e high -f ctx.md -o out.md "query"           # Grok Build CLI lane (subscription-only; grok CLI 1.0.41 lists 4.7 as default)
+# Neither Grok line is for reviews (Markus 2026-10-30): reviews run on Astra or Opus.
 ```
 
 Repository-coupled agent review (caller cwd, project rules, native CLI tools):
@@ -108,7 +109,7 @@ Routing table: `critique/lenses/repo-audit-plan-review.md`. Preflight via `model
 4. Python: list args + `input=`, never `shell=True` with a prompt (parens break it).
 5. Model 404: hyphens not dots; check [models.md](references/models.md).
 6. Fable: `--subscription -m claude-fable-5-1`; never fall back to paid API or usage credits without authorization; verify Agent-tool Fable pins via `/model-guide`.
-7. Grok: rederive slugs from `cursor-agent models`, never memory. Current `grok-4.7-{low,medium,high,xhigh}[-fast]`, no `cursor-` prefix; `-e` is ignored on cursor-cli; bare `grok-4.7` is xAI / Grok Build (`llmx chat -p grok`). xAI API 403 `API key is currently blocked` = key status, not geo: rotate/unblock, use the Cursor pool meanwhile. Critique `grok` axis (repo workspace) and `llmx -p cursor` (empty cwd, packet-only) are not substitutes.
+7. Grok: rederive slugs from `cursor-agent models`, never memory. Current `grok-4.7-{low,medium,high,xhigh}[-fast]`, no `cursor-` prefix; `-e` is ignored on cursor-cli; bare `grok-4.7` is xAI / Grok Build (`llmx chat -p grok`). xAI API 403 `API key is currently blocked` = key status, not geo: rotate/unblock, use the Cursor pool meanwhile. Critique `grok` axis (repo workspace) and `llmx -p cursor` (empty cwd, packet-only) are not substitutes. Since 2026-10-30 no review runs on Grok or Cursor (Markus: Astra or Opus; his Cursor subscription is unverified, so cursor-agent may bill); on Astra's plan limit reviews run on Opus.
 8. Shelling llmx from Python: `Popen(start_new_session=True)` + `communicate(timeout)` + `os.killpg` on expiry; `subprocess.run(capture_output=True, timeout=)` can hang forever at 0% CPU.
 9. Zero-byte `-o` after a timeout is transport failure, never reviewer evidence. After changing `--mode agent`, live-smoke with `pwd` + `git log` (workspace agent keeps caller cwd; `--lite research` stays isolated).
 10. Claude subscription: omit `--max-tokens` (the CLI rejects it); set an explicit `--timeout`.
