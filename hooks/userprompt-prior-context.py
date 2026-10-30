@@ -587,7 +587,8 @@ def _normalize_pointer_url(url: str) -> str:
     if netloc == "raw.githubusercontent.com" and m2:
         netloc = "github.com"
         path = f"/{m2.group(1)}/{m2.group(2)}/{m2.group(3)}"
-    return urlunparse((scheme, netloc, path.rstrip("/"), "", "", ""))
+    frag = p.fragment if "/" in p.fragment else ""
+    return urlunparse((scheme, netloc, path.rstrip("/"), "", "", frag))
 
 
 def _pointer_disposition_lines(prompt: str) -> list[str]:
