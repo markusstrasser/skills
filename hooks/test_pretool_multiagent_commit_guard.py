@@ -341,5 +341,79 @@ class PartialStagingPathspecTests(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
 
+class SealedIndexTests(unittest.TestCase):
+    """2026-10-30: the block text prescribed a bare commit of isolated hunks, and the
+    bare-commit branch blocked it whenever a peer shared the checkout (arena 4c16f2c went
+    through a linked worktree). stage-anchor's seal lets exactly that index through."""
+
+    STAGE_ANCHOR = Path(__file__).resolve().parent.parent / "bin" / "stage-anchor"
+
+    def setUp(self) -> None:
+        self._log_dir = tempfile.TemporaryDirectory()
+        env = mock.patch.dict(os.environ, {"HOOK_TRIGGER_LOG": str(Path(self._log_dir.name) / "t.jsonl")})
+        env.start()
+        self.addCleanup(env.stop)
+        self.addCleanup(self._log_dir.cleanup)
+
+    def _mixed_repo(self, tmp_path: Path) -> tuple[Path, Path]:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        _git("init", cwd=repo)
+        _git("config", "user.email", "test@example.com", cwd=repo)
+        _git("config", "user.name", "Test", cwd=repo)
+        (repo / "doc.md").write_text("top\n\nmiddle\n\nend\n", encoding="utf-8")
+        _git("add", "doc.md", cwd=repo)
+        _git("commit", "-m", "baseline", cwd=repo)
+        # Peer's hunk above, mine below; only mine gets staged.
+        (repo / "doc.md").write_text("top peer\n\nmiddle\n\nend\nmine\n", encoding="utf-8")
+        subprocess.run([str(self.STAGE_ANCHOR), "doc.md", "insert_after:end => mine"], cwd=repo,
+                       check=True, capture_output=True, text=True)
+        fake_bin = tmp_path / "bin"
+        fake_bin.mkdir()
+        return repo, fake_bin
+
+    def _commit(self, repo: Path, fake_bin: Path, cmd: str = 'git commit -m "mine"'):
+        return _run_guard(cmd, process_cwd=repo, tool_workdir=repo, fake_bin=fake_bin, peer_count=1)
+
+    def test_sealed_index_allows_bare_commit_with_peer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, fake_bin = self._mixed_repo(Path(tmp))
+            r = self._commit(repo, fake_bin)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_seal_voided_by_later_staging(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, fake_bin = self._mixed_repo(Path(tmp))
+            (repo / "other.txt").write_text("peer\n", encoding="utf-8")
+            _git("add", "other.txt", cwd=repo)
+            r = self._commit(repo, fake_bin)
+            self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+            self.assertIn("stage-anchor --seal", json.loads(r.stdout)["reason"])
+
+    def test_seal_voided_by_head_moving(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, fake_bin = self._mixed_repo(Path(tmp))
+            _git("commit", "--allow-empty", "-m", "peer landed", cwd=repo)
+            r = self._commit(repo, fake_bin)
+            self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+
+    def test_dash_a_never_rides_a_seal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, fake_bin = self._mixed_repo(Path(tmp))
+            for cmd in ('git commit -am "mine"', 'git commit -a -m "mine"', 'git commit --all -m "mine"'):
+                r = self._commit(repo, fake_bin, cmd)
+                self.assertEqual(r.returncode, 2, cmd + r.stdout + r.stderr)
+
+    def test_seal_flag_seals_an_index_staged_another_way(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, fake_bin = self._mixed_repo(Path(tmp))
+            (repo / "new.txt").write_text("mine\n", encoding="utf-8")
+            _git("add", "new.txt", cwd=repo)
+            self.assertEqual(self._commit(repo, fake_bin).returncode, 2)
+            subprocess.run([str(self.STAGE_ANCHOR), "--seal"], cwd=repo, check=True, capture_output=True)
+            r = self._commit(repo, fake_bin)
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

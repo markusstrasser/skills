@@ -145,7 +145,7 @@ elif echo "$CMD_FIRST" | grep -qE '^[[:space:]]*git[[:space:]]+(-C[[:space:]]+[^
             PARTIAL_REASON="PARTIAL STAGING WOULD BE DISCARDED: these listed paths have staged AND unstaged changes:
 $_PARTIAL
 \`git commit -- <paths>\` commits each listed path's working-tree content and ignores what you staged, so the unstaged hunks (usually a peer's work) would land in your commit.
-- To commit exactly what you staged: inspect \`git diff --cached\`, then run a bare \`git commit -m \"...\"\` (no pathspec).
+- To commit exactly what you staged: inspect \`git diff --cached\`, run \`~/Projects/skills/bin/stage-anchor --seal\` (a peer in the checkout blocks an unsealed bare commit), then a bare \`git commit -m \"...\"\` (no pathspec, no -a).
 - To commit the whole file on purpose: \`git add <file>\` first, then commit."
             jq -n --arg reason "$PARTIAL_REASON" '{decision: "block", reason: $reason}'
             exit 2
@@ -183,6 +183,26 @@ $_PARTIAL
         "$HOOK_DIR/hook-trigger-log.sh" "multiagent-commit" "allow-merge" \
             "MERGE_HEAD present; --only impossible during merge" "$CMD" 2>/dev/null || true
         exit 0
+    fi
+    # Sealed index: stage-anchor records HEAD and the index tree after isolating
+    # hunks in a mixed-authorship file. While both still match, a bare commit
+    # commits exactly that reviewed index; a peer's later staging or commit
+    # changes one of them and voids the seal. -a/--all restages tracked files
+    # (the peer's hunks), so it never rides a seal. Before 2026-10-30 this
+    # branch blocked the very bare commit the block text prescribes (arena
+    # 4c16f2c had to go through a linked worktree).
+    if ! echo "$CMD_FIRST" | grep -qE '[[:space:]](-[[:alnum:]]*a[[:alnum:]]*|--all)([[:space:]]|$)'; then
+        _SEAL=$(git -C "$TARGET_DIR" rev-parse --path-format=absolute --git-path stage-anchor-seal 2>/dev/null || true)
+        if [ -n "$_SEAL" ] && [ -f "$_SEAL" ]; then
+            read -r _SEAL_HEAD _SEAL_TREE < "$_SEAL"
+            _NOW_HEAD=$(git -C "$TARGET_DIR" rev-parse -q --verify HEAD 2>/dev/null || true)
+            _NOW_TREE=$(git -C "$TARGET_DIR" write-tree 2>/dev/null || true)
+            if [ -n "$_NOW_TREE" ] && [ "$_SEAL_HEAD" = "$_NOW_HEAD" ] && [ "$_SEAL_TREE" = "$_NOW_TREE" ]; then
+                "$HOOK_DIR/hook-trigger-log.sh" "multiagent-commit" "allow-sealed" \
+                    "tree=${_NOW_TREE:0:12}" "$CMD" 2>/dev/null || true
+                exit 0
+            fi
+        fi
     fi
     : # bare commit — continue to multi-agent check
 else
@@ -227,7 +247,7 @@ For git add: use specific files (not -A/-p/.).
 
 For git commit: the canonical safe form is \`git commit --only -m "..." -- <paths>\` (bare \`git commit -m "..." -- <paths>\` is git-semantically identical — a pathspec given to git commit with no --only/-i already defaults to --only's behavior). This reads ONLY the current working-tree content of the named paths and disregards anything staged for other paths, so a peer's own pre-staged files can never sweep into this commit (2026-05-27 substrate-session sweep on 486973e; 2026-07-18 auto-checkpoint sweep on 754b702c).
 
-If a peer has ALSO edited one of your target files (mixed authorship, same file): --only still reads that file's CURRENT working-tree content, which includes the peer's unstaged edits too — a pathspec does not protect against same-file hunks. Isolate your own hunks with \`~/Projects/skills/bin/stage-anchor <file> ...\` (index-only; \`git add -p\` is blocked here), check \`git diff --cached\`, then a bare \`git commit\` commits exactly what is staged, or work in a linked worktree.
+If a peer has ALSO edited one of your target files (mixed authorship, same file): --only still reads that file's CURRENT working-tree content, which includes the peer's unstaged edits too — a pathspec does not protect against same-file hunks. Isolate your own hunks with \`~/Projects/skills/bin/stage-anchor <file> ...\` (index-only; \`git add -p\` is blocked here), which seals the index; staged another way (\`git apply --cached\`), inspect \`git diff --cached\` and \`git diff\`, then run \`~/Projects/skills/bin/stage-anchor --seal\`. A bare \`git commit\` (no -a) then passes while HEAD and the index match the seal, and commits exactly what is staged. Or work in a linked worktree.
 
 For git checkout/restore (destructive): prefer Read + Edit to repair in place; if you must discard, run "git stash push -- <files>" first so it's reversible.
 

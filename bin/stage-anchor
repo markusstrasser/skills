@@ -2,6 +2,7 @@
 """stage-anchor — stage YOUR edits to a file a peer session is also editing, index only, by content anchor.
 
 usage: stage-anchor <file> <op> [<op> ...]      (run from the repo root)
+       stage-anchor --seal                        (seal an index staged another way, e.g. git apply --cached)
   op = 'insert_before:<anchor-line-prefix> => <new-line-prefix>'
        'insert_after:<anchor-line-prefix> => <new-line-prefix>'
        'replace:<line-prefix>'          (new line = the working-tree line with that prefix)
@@ -15,6 +16,12 @@ tree by prefix (a prefix ending in '...' takes the whole block up to the next bl
 writes the result to the index with hash-object + update-index. The working tree is never
 touched. Then inspect `git diff --cached` and bare-commit. Afterwards `git diff -- <file>` must
 show only the peer's hunks. Refuses when an anchor or prefix is not unique in its file.
+
+Each run seals the index: it records HEAD and the index's tree in the git dir's stage-anchor-seal.
+pretool-multiagent-commit-guard.sh lets a bare `git commit` (no -a) through with a peer present
+only while both still match, so a peer's later staging or commit voids the seal. Before 2026-10-30
+the guard told agents to bare-commit their isolated hunks and then blocked that commit (arena
+4c16f2c went through a linked worktree instead).
 """
 import subprocess
 import sys
@@ -43,7 +50,19 @@ def take(wt, prefix):
     return wt[i:j + 1]
 
 
+def seal() -> None:
+    head = git("rev-parse", "HEAD").strip()
+    tree = git("write-tree").strip()
+    path = git("rev-parse", "--path-format=absolute", "--git-path", "stage-anchor-seal").strip()
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(f"{head} {tree}\n")
+    print(f"  ✓ sealed index {tree[:12]} on HEAD {head[:12]}: a bare `git commit` (no -a) commits it")
+
+
 def main() -> None:
+    if sys.argv[1:] == ["--seal"]:
+        seal()
+        return
     if len(sys.argv) < 3:
         sys.exit(__doc__)
     path, ops = sys.argv[1], sys.argv[2:]
@@ -75,6 +94,7 @@ def main() -> None:
     print(git("diff", "--cached", "--stat", "--", path))
     print(subprocess.run(["git", "diff", "--cached", "-U0", "--no-ext-diff", "--", path],
                          capture_output=True, text=True).stdout[:3000])
+    seal()
 
 
 if __name__ == "__main__":
