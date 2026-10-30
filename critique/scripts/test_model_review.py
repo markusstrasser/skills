@@ -10,6 +10,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import patch, MagicMock
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -3237,3 +3238,118 @@ class TreeIndexParityTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExtractionFailureFailLoudTest(unittest.TestCase):
+    """2026-10-30: a quota-failed extraction printed "Findings: 0" and exited 0."""
+
+    QUOTA: ClassVar[dict] = {
+        "exit_code": 1,
+        "size": 0,
+        "latency": 0,
+        "error": "You've hit your usage limit. Try again at Nov 5th",
+        "error_type": "quota",
+    }
+
+    def _run_main(self, project_dir: Path, mock_call_llmx) -> tuple[int, str, Path]:
+        context_path = project_dir / "context.md"
+        context_path.write_text("context")
+        review_dir = project_dir / ".model-review" / "auto"
+        review_dir.mkdir(parents=True)
+        output = review_dir / "claude-output.md"
+        output.write_text("review prose with a real bug")
+        dispatch_result = {
+            "review_dir": str(review_dir),
+            "axes": ["claude"],
+            "queries": 1,
+            "elapsed_seconds": 1.0,
+            "claude": {
+                "label": "Claude",
+                "model": "claude-opus-5-5",
+                "requested_model": "claude-opus-5-5",
+                "exit_code": 0,
+                "size": output.stat().st_size,
+                "output": str(output),
+            },
+        }
+        stdout = io.StringIO()
+        old_cwd = Path.cwd()
+        os.chdir(project_dir)
+        try:
+            with (
+                patch.object(
+                    model_review, "build_context", return_value={"claude": project_dir / "ctx.md"}
+                ),
+                patch.object(model_review, "dispatch", return_value=dispatch_result),
+                patch.object(model_review, "find_governance", return_value=None),
+                patch.object(model_review, "_call_llmx", side_effect=mock_call_llmx),
+                patch.object(model_review.os, "urandom", return_value=b"\xab\xcd\x12"),
+                patch.object(
+                    model_review.sys,
+                    "argv",
+                    [
+                        "model-review.py", "--context", str(context_path), "--topic", "x",
+                        "--project", str(project_dir), "--axes", "claude", "--no-scout",
+                        "--allow-non-gpt",
+                    ],
+                ),
+                contextlib.redirect_stdout(stdout),
+            ):
+                rc = model_review.main()
+        finally:
+            os.chdir(old_cwd)
+        coverage = next(project_dir.rglob("coverage.json"))
+        return rc, stdout.getvalue(), coverage.parent
+
+    def test_quota_extraction_and_failed_claude_retry_is_degraded(self) -> None:
+        calls: list[str] = []
+
+        def mock_call_llmx(**kwargs):
+            calls.append(kwargs["profile"].name)
+            return dict(self.QUOTA)
+
+        with tempfile.TemporaryDirectory() as td:
+            rc, out, review_dir = self._run_main(Path(td), mock_call_llmx)
+            ext = json.loads((review_dir / "coverage.json").read_text())["extraction"]
+        self.assertEqual(calls, ["fast_extract", "claude_review"])
+        self.assertEqual(ext["status"], "degraded")
+        self.assertEqual(ext["failed_axes"]["claude"]["error_type"], "quota")
+        self.assertIn("[DEGRADED] extraction failed for claude (quota)", out)
+        self.assertEqual(rc, 4)
+
+    def test_codex_quota_falls_back_to_claude_subscription(self) -> None:
+        def mock_call_llmx(**kwargs):
+            if kwargs["profile"].name == "fast_extract":
+                return dict(self.QUOTA)
+            self.assertEqual(kwargs["profile"].auth, "subscription")
+            output_path = Path(kwargs["output_path"])
+            output_path.write_text(json.dumps({"findings": [{
+                "category": "bug", "severity": "high", "title": "Real bug",
+                "description": "d", "file": "a.py", "line": 1, "fix": "f", "confidence": 0.9,
+            }]}))
+            return {"exit_code": 0, "size": output_path.stat().st_size, "latency": 0, "error": None}
+
+        with tempfile.TemporaryDirectory() as td:
+            rc, out, review_dir = self._run_main(Path(td), mock_call_llmx)
+            ext = json.loads((review_dir / "coverage.json").read_text())["extraction"]
+            meta = json.loads((review_dir / "claude-extraction.meta.json").read_text())
+        self.assertEqual(rc, 0)
+        self.assertEqual(ext["findings_after_dedup"], 1)
+        self.assertEqual(ext["status"], "ok")
+        self.assertEqual(ext["fallbacks"]["claude"]["fallback_reason"], "codex_plan_limit")
+        self.assertEqual(meta["fallback_from"], "fast_extract")
+        self.assertNotIn("[DEGRADED]", out)
+
+    def test_genuine_zero_findings_exits_zero(self) -> None:
+        def mock_call_llmx(**kwargs):
+            output_path = Path(kwargs["output_path"])
+            output_path.write_text('{"findings": []}')
+            return {"exit_code": 0, "size": output_path.stat().st_size, "latency": 0, "error": None}
+
+        with tempfile.TemporaryDirectory() as td:
+            rc, out, review_dir = self._run_main(Path(td), mock_call_llmx)
+            ext = json.loads((review_dir / "coverage.json").read_text())["extraction"]
+        self.assertEqual(rc, 0)
+        self.assertIn("Findings:    0", out)
+        self.assertNotIn("[DEGRADED]", out)
+        self.assertEqual(ext["status"], "ok")

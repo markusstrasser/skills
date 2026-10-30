@@ -2685,6 +2685,8 @@ def write_coverage_artifact(
     verification_summary: dict[str, object] | None = None,
     verified_disposition_path: str | None = None,
     key_drift: dict[str, dict[str, list[str]]] | None = None,
+    extraction_failures: dict[str, dict] | None = None,
+    extraction_fallbacks: dict[str, dict] | None = None,
 ) -> Path:
     coverage_path = review_dir / "coverage.json"
     existing_payload = _load_json(coverage_path)
@@ -2783,6 +2785,9 @@ def write_coverage_artifact(
             if usable_axis_count
             else 0.0,
             "key_drift": key_drift or {},
+            "failed_axes": extraction_failures or {},
+            "fallbacks": extraction_fallbacks or {},
+            "status": "degraded" if extraction_failures else "ok",
         }
 
     if verification_summary is not None:
@@ -2878,6 +2883,18 @@ def extract_claims(
     )
 
     key_drift: dict[str, dict[str, list[str]]] = {}
+    extraction_failures: dict[str, dict] = {}
+    extraction_fallbacks: dict[str, dict] = {}
+
+    def _fail(axis: str, error_type: str, error: object, extraction_path: Path) -> tuple[str, None]:
+        error_path = extraction_path.with_name(f"{extraction_path.stem}.error.json")
+        extraction_failures[axis] = {
+            "error_type": error_type,
+            "error": str(error or "")[:300],
+            "error_path": str(error_path) if error_path.exists() else None,
+            "axis_output": str({task_axis: out for task_axis, out, _ in extraction_tasks}[axis]),
+        }
+        return axis, None
 
     def _extract_one(task: tuple[str, Path, str]) -> tuple[str, list[dict] | None]:
         axis, output_path, profile = task
@@ -2889,7 +2906,7 @@ def extract_claims(
                 f"{profile_timeout}s needed, {budget.remaining():.0f}s left",
                 file=sys.stderr,
             )
-            return axis, None
+            return _fail(axis, "budget", "extraction skipped: wall budget", review_dir / f"{axis}-extraction.json")
         extraction_path = review_dir / f"{axis}-extraction.json"
         subscription_transport = profile_def.auth == "subscription"
         extraction_prompt = (
@@ -2925,12 +2942,58 @@ def extract_claims(
                 extraction_path,
                 timeout=profile_timeout,
             )
+        # Codex subscription plan limit: the lane above IS the subscription, so retry
+        # once on the Claude subscription (never anthropic-direct). Recorded as a
+        # fallback, never a silent swap (2026-10-30: quota-failed extraction read as
+        # "Findings: 0").
+        if (
+            result["exit_code"] != 0
+            and profile_def.provider == "openai"
+            and subscription_transport
+            and (
+                result.get("error_type") == "quota"
+                or any(m in str(result.get("error") or "").lower() for m in GPT_QUOTA_MARKERS)
+            )
+        ):
+            print(
+                f"warning: {axis} extraction hit the codex plan limit; retrying once via "
+                f"Claude subscription (claude_review)",
+                file=sys.stderr,
+            )
+            first_error = result
+            fallback_profile = dispatch_core.PROFILES["claude_review"]
+            result = _call_llmx(
+                profile=fallback_profile,
+                context_path=output_path,
+                context_manifest_path=None,
+                prompt=extraction_prompt,
+                output_path=extraction_path,
+                schema=None,
+                timeout=1800,
+            )
+            fallback = {
+                "fallback_from": profile,
+                "fallback_to": fallback_profile.name,
+                "fallback_reason": "codex_plan_limit",
+                "first_error": str(first_error.get("error") or "")[:300],
+                "succeeded": result["exit_code"] == 0,
+            }
+            extraction_fallbacks[axis] = fallback
+            meta_path = extraction_path.with_name(f"{extraction_path.stem}.meta.json")
+            try:
+                meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
+            except json.JSONDecodeError:
+                meta = {}
+            meta.update(fallback)
+            meta_path.write_text(json.dumps(meta, indent=2) + "\n")
         if result["exit_code"] != 0:
             print(
                 f"warning: extraction for {axis} failed: {result.get('error', 'unknown')}",
                 file=sys.stderr,
             )
-            return axis, None
+            return _fail(
+                axis, str(result.get("error_type") or "nonzero_exit"), result.get("error"), extraction_path
+            )
         if result["size"] > 0:
             try:
                 raw = extraction_path.read_text().strip()
@@ -2957,10 +3020,9 @@ def extract_claims(
                     f"warning: extraction for {axis} returned invalid JSON: {e}",
                     file=sys.stderr,
                 )
-                # Fall back to raw text
-                return axis, None
+                return _fail(axis, "invalid_json", e, extraction_path)
         print(f"warning: extraction for {axis} produced empty output", file=sys.stderr)
-        return axis, None
+        return _fail(axis, "empty_output", "extraction produced empty output", extraction_path)
 
     # Parallel extraction
     axis_findings: dict[str, list[dict]] = {}
@@ -2977,6 +3039,8 @@ def extract_claims(
             axis_findings={},
             merged_findings=[],
             key_drift=key_drift,
+            extraction_failures=extraction_failures,
+            extraction_fallbacks=extraction_fallbacks,
         )
         return None
 
@@ -3103,6 +3167,8 @@ def extract_claims(
         merged_findings=merged_findings,
         disposition_path=str(disposition),
         key_drift=key_drift,
+        extraction_failures=extraction_failures,
+        extraction_fallbacks=extraction_fallbacks,
     )
     return str(disposition)
 
@@ -4526,6 +4592,7 @@ def main() -> int:
         summary_lines.append(f"Disposition: {result['disposition']}")
     if result.get("verified_disposition"):
         summary_lines.append(f"Verified:    {result['verified_disposition']}")
+    extraction_failed: dict = {}
     try:
         cov_path = result.get("coverage")
         if cov_path:
@@ -4536,12 +4603,20 @@ def main() -> int:
                     f"Findings:    {ext.get('findings_after_dedup', '?')} after dedup, "
                     f"{ext.get('cross_model_agreements', 0)} cross-model"
                 )
+                extraction_failed = ext.get("failed_axes") or {}
     except Exception:
         pass
+    for axis, failure in extraction_failed.items():
+        summary_lines.append(
+            f"[DEGRADED] extraction failed for {axis} ({failure.get('error_type')}); "
+            f"read {failure.get('axis_output')} by hand"
+        )
     if result.get("failed_axes"):
         summary_lines.append(f"FAILED axes: {', '.join(result['failed_axes'])}")
     print("\n".join(summary_lines))
-    return 0
+    # 4 = review outputs exist but finding extraction failed for >=1 axis; a
+    # "Findings: 0" count is then not evidence that the reviewer found nothing.
+    return 4 if extraction_failed else 0
 
 
 if __name__ == "__main__":

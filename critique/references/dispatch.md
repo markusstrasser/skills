@@ -113,6 +113,8 @@ The executor derives its internal collection wait from the longest selected prof
 
 There is **no wall-clock budget by default**. Use `--budget-seconds SEC` only for a requested time box. It covers parallel axis dispatch plus extraction; the premise scout has a separate fixed timeout. The full selected profile must fit in the remaining budget: calls are skipped, never truncated. A cap below the largest resolved timeout is a triage configuration error. Dispatch records `budget_exhausted` / `budget_insufficient_for_profile` and partial or `incomplete_all_skipped` receipts (exit 2); do not report that as a completed review.
 
+**Exit 4 = extraction degraded:** review outputs exist but finding extraction failed for ≥1 axis (`coverage.json` `extraction.status: degraded`, `failed_axes`); the summary prints `[DEGRADED] extraction failed for <axis>`. A codex plan-limit extraction retries once on `claude_review` (`fallback_reason: codex_plan_limit`). Read the named axis output by hand; "Findings: 0" is not evidence.
+
 Never shell-redirect review artifacts or pipe model-review output through `tail`. The script writes artifacts directly. Debug using [Known issues](known-issues.md), shared dispatch metadata, and the recorded axis errors; do not silently change the model.
 
 ## Questions, context, and extraction
