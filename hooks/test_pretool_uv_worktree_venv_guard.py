@@ -105,6 +105,25 @@ def test_passes_where_a_separate_environment_is_right_or_unknown() -> None:
         assert _run("uv run python3 x.py", wt) == {}
 
 
+def test_a_caller_choice_covers_only_the_commands_the_shell_applies_it_to() -> None:
+    """A later `UV_PROJECT_ENVIRONMENT=x uv run` once left an earlier bare `uv run` unguarded
+    (genomics 2026-10-31: a candidate worktree grew a .venv twice in one session)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        main, wt = _repo(Path(tmp))
+        later = "uv run python3 a.py\nUV_PROJECT_ENVIRONMENT=/x UV_NO_SYNC=1 uv run ruff check a.py"
+        assert _command(_run(later, wt)) == _prefix(main) + later
+        assert _run("export UV_PROJECT_ENVIRONMENT=/x; uv run python3 a.py", wt) == {}
+        assert _run("UV_PROJECT_ENVIRONMENT=/x\nuv run python3 a.py", wt) == {}
+        before = "uv run python3 a.py; export UV_PROJECT_ENVIRONMENT=/x; uv run b"
+        assert _command(_run(before, wt)) == _prefix(main) + before
+        quoted = "echo 'UV_PROJECT_ENVIRONMENT=/x' && uv run python3 a.py"
+        assert _command(_run(quoted, wt)) == "echo 'UV_PROJECT_ENVIRONMENT=/x' && " + _prefix(main) + "uv run python3 a.py"
+        prefixed_other = "UV_PROJECT_ENVIRONMENT=/x ruff check a.py; uv run python3 a.py"
+        assert _command(_run(prefixed_other, wt)) == (
+            "UV_PROJECT_ENVIRONMENT=/x ruff check a.py; " + _prefix(main) + "uv run python3 a.py"
+        )
+
+
 def test_rewritten_command_delivers_the_variables_through_wrappers() -> None:
     """Positive control: a fake `uv` sees the shared venv even behind `exec` and `nohup`."""
     with tempfile.TemporaryDirectory() as tmp:

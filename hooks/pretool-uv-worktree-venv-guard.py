@@ -132,23 +132,56 @@ def shared_env(project: Path, main_project: Path) -> Path | None:
     return shared
 
 
+def _segment(spans: list[tuple[int, int]], start: int, end: int, size: int) -> tuple[int, int]:
+    """Bounds of the simple command holding [start, end): the nearest unquoted separators."""
+    return (
+        max((stop for _, stop in spans if stop <= start), default=0),
+        min((begin for begin, _ in spans if begin >= end), default=size),
+    )
+
+
+def _governs_later(cmd: str, match: re.Match, bounds: tuple[int, int]) -> bool:
+    """An exported or standalone assignment sets the variable for the commands after it; a prefix
+    assignment (`VAR=x cmd`) sets it for that one command only."""
+    head = cmd[bounds[0] : match.start()].split()
+    tail = cmd[match.end() : bounds[1]].split()
+    if head[:1] in (["export"], ["declare"], ["typeset"]):
+        return True
+    return all("=" in word for word in head + tail)
+
+
 def rewrite(cmd: str, cwd: str) -> tuple[str, list[str]] | None:
-    """The command with each worktree-bound `uv run` prefixed, plus the venvs used; None if unchanged."""
-    if "uv" not in cmd or "UV_PROJECT_ENVIRONMENT" in cmd or not _UV_RUN.search(cmd):
+    """The command with each worktree-bound `uv run` prefixed, plus the venvs used; None if unchanged.
+
+    A caller's own UV_PROJECT_ENVIRONMENT is kept where the shell applies it: a prefix assignment
+    covers its own command, an exported or standalone one every command after it.
+    """
+    if "uv" not in cmd or not _UV_RUN.search(cmd):
         return None
     mask = _masked(cmd)
+    spans = [(m.start(), m.end()) for m in _SEGMENT_END.finditer(cmd) if not mask[m.start()]]
     events: list[tuple[int, str, re.Match]] = []
     for kind, pattern in (("assign", _ASSIGN), ("cd", _CD), ("uv", _UV_RUN)):
         events.extend((m.start(), kind, m) for m in pattern.finditer(cmd) if not mask[m.start()])
     names: dict[str, str] = {}
     here: Path | None = Path(cwd).resolve() if cwd else None
     inserts: list[tuple[int, Path]] = []
+    chosen_everywhere = False
+    chosen_segments: set[int] = set()
     for start, kind, match in sorted(events, key=lambda event: event[0]):
         if kind == "assign":
             value = match.group(2)
             names[match.group(1)] = value[1:-1] if value[:1] in "'\"" else value
+            if match.group(1) == "UV_PROJECT_ENVIRONMENT":
+                bounds = _segment(spans, start, match.end(), len(cmd))
+                if _governs_later(cmd, match, bounds):
+                    chosen_everywhere = True
+                else:
+                    chosen_segments.add(bounds[0])
         elif kind == "cd":
             here = _resolve(match.group(1), here, names)
+        elif chosen_everywhere or _segment(spans, start, match.end(), len(cmd))[0] in chosen_segments:
+            continue
         elif here is not None:
             end = _SEGMENT_END.search(cmd, match.end())
             segment = cmd[match.end() : end.start() if end else len(cmd)]
