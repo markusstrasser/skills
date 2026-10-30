@@ -145,6 +145,17 @@ def is_content(path):
     return stat.S_ISREG(mode) or stat.S_ISLNK(mode)
 
 
+def index_only(checkout, relative):
+    """The working file holds HEAD's bytes, or neither has the path: only the index differs."""
+    head = git(checkout, "rev-parse", "-q", "--verify", f"HEAD:{relative}", check=False).stdout.strip()
+    full = checkout / relative
+    if not head:
+        return not os.path.lexists(full)
+    if os.path.islink(full) or not os.path.isfile(full):
+        return False
+    return git(checkout, "hash-object", "--", relative).stdout.strip() == head
+
+
 def build_patch(checkout, statuses, skipped):
     """lane.patch, one diff per status path, each proven to reproduce the working file."""
     chunks = []
@@ -163,6 +174,10 @@ def build_patch(checkout, statuses, skipped):
                 raise Keep(f"could not diff untracked {relative}: {diff.stderr.decode(errors='replace')[:200]}")
         else:
             if relative not in tracked:
+                if index_only(checkout, relative):
+                    # Staged, then the file went back to HEAD's bytes: the working tree, which the harvest
+                    # takes, holds no change (arena channels-core-fix-fix-fix, 2026-10-30).
+                    continue
                 raise Keep(f"status names {relative} but git diff HEAD does not")
             diff = git(checkout, "diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", "--no-color",
                        "--no-renames", "--src-prefix=a/", "--dst-prefix=b/", "HEAD", "--", f":(literal){relative}")

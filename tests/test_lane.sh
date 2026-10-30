@@ -1060,6 +1060,22 @@ grep -Fq "CHECKOUT=kept unmerged paths (resolve each, then git add it): conflict
 git -C "$UMG_WT" add conflicted.txt
 "$LANE" reap retireumg --force >/dev/null
 
+echo "test: a change staged, then reverted in the file, is no change"
+LANE_FAKE_HOLD="$TEST_TMP/release-retirestg" "$LANE" run retirestg --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+STG_WT="$REPO_REAL/.claude/worktrees/codex-retirestg"
+cp "$STG_WT/tracked.txt" "$TEST_TMP/tracked-retirestg"
+printf 'staged\n' >> "$STG_WT/tracked.txt"
+git -C "$STG_WT" add tracked.txt
+cp "$TEST_TMP/tracked-retirestg" "$STG_WT/tracked.txt"
+printf 'kept\n' > "$STG_WT/stg-new.txt"
+[ "$(git -C "$STG_WT" status --porcelain=v1 -- tracked.txt | cut -c1-2)" = MM ] || fail "the fixture is not staged, then reverted"
+touch "$TEST_TMP/release-retirestg"
+wait_for_file "$LANE_HOME/retirestg.done"
+grep -q '^CHECKOUT=retired ' "$LANE_HOME/retirestg.checkout-state" ||
+  fail "a staged, then reverted path kept the checkout: $(<"$LANE_HOME/retirestg.checkout-state")"
+grep -q 'stg-new.txt' "$(latest_harvest_of retirestg)/lane.patch" || fail "the harvest lost the lane's new file"
+if grep -q 'tracked.txt' "$(latest_harvest_of retirestg)/lane.patch"; then fail "the harvest carried an index-only change"; fi
+
 echo "test: a detached HEAD or a merge commit keeps the worktree and its branch"
 LANE_FAKE_HOLD="$TEST_TMP/release-retiredet" "$LANE" run retiredet --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
 DET_WT="$REPO_REAL/.claude/worktrees/codex-retiredet"
