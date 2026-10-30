@@ -480,7 +480,7 @@ if [ -n "$PROMPT" ]; then
             PROMPT_WRITES=$(echo "$PROMPT" | grep -ciE '(write|save|output).*(json|file)' || true)
             if [ "$PROMPT_WRITES" -gt 0 ]; then
                 CHECK_IDS="${CHECK_IDS}9,"
-                WARNINGS="${WARNINGS}GENOMICS JSON: Use write_json_atomic from variant_evidence_core, not json.dump(…, fh). Ratchet test blocks new json.dump-to-file. "
+                WARNINGS="${WARNINGS}GENOMICS JSON: Use write_json_atomic from json_io, not json.dump(…, fh). Ratchet test blocks new json.dump-to-file. "
             fi
         fi
     fi
