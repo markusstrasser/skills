@@ -120,6 +120,10 @@ config = {
     # tokens in 777 genomics lane messages through 2026-10-22). LithosAI behaves the same on every tier.
     "providers": {"lithosai": {"settings": {"reasoningEffort": "high"}}},
     "permissions": rules,
+    # A lane never undoes: its harvest is the record. OpenCode's undo snapshots are a shadow git of the
+    # whole worktree, packed in the background: on 2026-10-30 one pack ran 20 min at 35% CPU in a lane
+    # checkout, and the store held 2.9 GB, while the Mac sat at load 137 on 12 cores.
+    "snapshots": False,
 }
 out = worktree / ".opencode" / "opencode.json"
 out.parent.mkdir(exist_ok=True)
