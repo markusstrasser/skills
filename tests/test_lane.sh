@@ -1043,22 +1043,28 @@ kill "$BUSY_PID"
 wait "$BUSY_PID" 2>/dev/null || true
 "$LANE" reap retirebusy --force >/dev/null
 
-echo "test: an unmerged path keeps the checkout and is named"
+echo "test: an unmerged path with a conflict marker keeps the checkout and is named; a resolved one is staged"
 LANE_FAKE_HOLD="$TEST_TMP/release-retireumg" "$LANE" run retireumg --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
 UMG_WT="$REPO_REAL/.claude/worktrees/codex-retireumg"
-printf 'resolved\n' > "$UMG_WT/conflicted.txt"
-umg_blob=$(git -C "$UMG_WT" hash-object -w "$UMG_WT/conflicted.txt")
-printf '100644 %s 1\tconflicted.txt\n100644 %s 2\tconflicted.txt\n100644 %s 3\tconflicted.txt\n' \
-  "$umg_blob" "$umg_blob" "$umg_blob" | git -C "$UMG_WT" update-index --index-info
-[ "$(git -C "$UMG_WT" status --porcelain=v1 -- conflicted.txt | cut -c1-2)" = UU ] || fail "the fixture is not unmerged"
+printf '<<<<<<< ours\nmine\n=======\ntheirs\n>>>>>>> theirs\n' > "$UMG_WT/conflicted.txt"
+printf 'resolved\n=======\n' > "$UMG_WT/resolved.txt"
+for umg_path in conflicted.txt resolved.txt; do
+  umg_blob=$(git -C "$UMG_WT" hash-object -w "$UMG_WT/$umg_path")
+  printf '100644 %s 1\t%s\n100644 %s 2\t%s\n100644 %s 3\t%s\n' \
+    "$umg_blob" "$umg_path" "$umg_blob" "$umg_path" "$umg_blob" "$umg_path" | git -C "$UMG_WT" update-index --index-info
+  [ "$(git -C "$UMG_WT" status --porcelain=v1 -- "$umg_path" | cut -c1-2)" = UU ] || fail "$umg_path is not unmerged"
+done
 touch "$TEST_TMP/release-retireumg"
 wait_for_file "$LANE_HOME/retireumg.done"
-grep -Fq "CHECKOUT=kept unmerged paths (resolve each, then git add it): conflicted.txt" \
+grep -Fxq "CHECKOUT=kept unmerged paths (resolve each, then git add it): conflicted.txt" \
   "$LANE_HOME/retireumg.checkout-state" ||
-  fail "an unmerged path was not named: $(<"$LANE_HOME/retireumg.checkout-state")"
+  fail "the marked path alone was not named: $(<"$LANE_HOME/retireumg.checkout-state")"
 [ -d "$UMG_WT" ] || fail "an unmerged checkout was removed"
-git -C "$UMG_WT" add conflicted.txt
+[ "$(git -C "$UMG_WT" status --porcelain=v1 -- resolved.txt | cut -c1-2)" = "A " ] || fail "the resolved path was not staged"
+printf 'resolved\n' > "$UMG_WT/conflicted.txt"
 "$LANE" reap retireumg --force >/dev/null
+grep -q '^+++ b/conflicted.txt' "$(latest_harvest_of retireumg)/lane.patch" || fail "the harvest lost the fixed conflict"
+grep -q '^+++ b/resolved.txt' "$(latest_harvest_of retireumg)/lane.patch" || fail "the harvest lost the staged path"
 
 echo "test: a change staged, then reverted in the file, is no change"
 LANE_FAKE_HOLD="$TEST_TMP/release-retirestg" "$LANE" run retirestg --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null

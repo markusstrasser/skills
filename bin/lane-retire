@@ -33,6 +33,7 @@ import gzip
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -52,6 +53,8 @@ CACHE_DIR = ".claude/cache"
 HARVEST_CAP_BYTES = 1024 * 1024 * 1024
 # `git status --porcelain=v1` codes of an unmerged path.
 UNMERGED = frozenset({"DD", "AU", "UD", "UA", "DU", "AA", "UU"})
+# The marker lines a conflicted merge leaves (`=======` alone also underlines a Markdown heading).
+CONFLICT_MARKER = re.compile(rb"^(?:<{7}|>{7}|\|{7})(?: |\r?$)", re.MULTILINE)
 
 
 class Keep(Exception):
@@ -388,11 +391,34 @@ def make_writable(checkout):
     os.chmod(checkout, os.lstat(checkout).st_mode | stat.S_IWUSR | stat.S_IXUSR)
 
 
+def stage_resolved(checkout, statuses):
+    """`git add` the unmerged paths a lane resolved but never staged; return them.
+
+    Only both sides' edits (UU, AA) in a text file with no conflict marker left: a deletion, a binary file (a merge
+    leaves one side's bytes, unmarked) or a marker keeps the path unmerged, for the lane to decide.
+    """
+    resolved = []
+    for path, code in sorted(statuses.items()):
+        target = checkout / path
+        if code not in ("UU", "AA") or target.is_symlink() or not target.is_file():
+            continue
+        content = target.read_bytes()
+        if b"\0" not in content and not CONFLICT_MARKER.search(content):
+            resolved.append(path)
+    if resolved:
+        git(checkout, "add", "--", *resolved)
+        print(f"lane-retire: staged {', '.join(resolved)}: unmerged, with no conflict marker left")
+    return resolved
+
+
 def harvest(args, checkout):
     statuses = status_paths(checkout)
     # A `git apply --3way` or merge conflict leaves unmerged index entries even once the file is fixed;
     # `git diff HEAD` then omits the path, which read as "status names X but git diff HEAD does not"
-    # (arena unavailable-spells-fix-fix, 2026-10-30).
+    # (arena unavailable-spells-fix-fix, 2026-10-30). Rebase lanes kept leaving resolved files unstaged
+    # (arena playtest-anim-rb1 and gate-open-rb1, 2026-10-31), so those are staged; the rest are named.
+    if stage_resolved(checkout, statuses):
+        statuses = status_paths(checkout)
     unmerged = sorted(path for path, code in statuses.items() if code in UNMERGED)
     if unmerged:
         raise Keep(f"unmerged paths (resolve each, then git add it): {', '.join(unmerged)}")
