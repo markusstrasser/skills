@@ -17,10 +17,14 @@ line per state change:
                  and nothing followed for 12 min (an API 529/overload death)
   IDLE           the lane ended its turn and waits for a message (an inbox write
                  does not wake it; TaskStop + SendMessage does)
+  UNREAD         the lane is busy, but a message sent after the last one it received
+                 has sat unread in its inbox for 10 min: a busy lane reads its inbox only
+                 when its turn ends (TaskStop, then one SendMessage that restates them)
 
 Run it as a Monitor when dispatching teammates. --once prints every lane that is
 not BUSY and exits. Evidence: on 2026-10-26 three genomics lanes sat dead or
-unread for 84, 43 and 12 min before anyone looked.
+unread for 84, 43 and 12 min before anyone looked; on 2026-10-31 vcep-l80 ran one
+3 h turn while six parent messages (02:49-05:13 JST) never reached it.
 """
 
 from __future__ import annotations
@@ -36,8 +40,10 @@ BASH_GRACE = timedelta(minutes=3)
 QUICK_TOOL_BUDGET = timedelta(minutes=5)
 AGENT_BUDGET = timedelta(minutes=90)
 MODEL_GRACE = timedelta(minutes=12)
+UNREAD_GRACE = timedelta(minutes=10)
 RECENT = timedelta(hours=6)
 TAIL_BYTES = 400_000
+TEAMS = Path.home() / ".claude" / "teams"
 
 
 def parse_stamp(stamp: str) -> datetime:
@@ -94,6 +100,65 @@ def tail_rows(path: Path) -> list[dict]:
     return rows
 
 
+def received(row: dict) -> bool:
+    """A message the lane was handed: a prompt row opening with <teammate-message, not a tool result."""
+    if row.get("type") != "user":
+        return False
+    content = (row.get("message") or {}).get("content")
+    if isinstance(content, str):
+        return content.lstrip().startswith("<teammate-message")
+    return any(
+        isinstance(block, dict)
+        and block.get("type") == "text"
+        and str(block.get("text", "")).lstrip().startswith("<teammate-message")
+        for block in content or []
+    )
+
+
+def last_received(path: Path, rows: list[dict]) -> datetime | None:
+    stamps = [parse_stamp(row["timestamp"]) for row in rows if received(row)]
+    if stamps:
+        return max(stamps)
+    latest = None
+    with path.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if "<teammate-message" not in line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if row.get("timestamp") and received(row):
+                latest = parse_stamp(row["timestamp"])
+    return latest
+
+
+def inbox_rows(directory: Path, lane: str) -> list[dict]:
+    """The lane's inbox: ~/.claude/teams/session-<first 8 of the session id>/inboxes/<lane>.json."""
+    path = TEAMS / f"session-{directory.parent.name[:8]}" / "inboxes" / f"{lane}.json"
+    try:
+        rows = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return []
+    return rows if isinstance(rows, list) else []
+
+
+def overdue_unread(inbox: list[dict], floor: datetime | None, now: datetime) -> list[datetime]:
+    """Unread messages past UNREAD_GRACE that were sent after the last one the lane received.
+
+    A TaskStop plus a resume message leaves the queued messages unread for good, so a message
+    older than the last received one counts as superseded.
+    """
+    stamps = []
+    for item in inbox:
+        if item.get("read") or not item.get("timestamp"):
+            continue
+        stamp = parse_stamp(item["timestamp"])
+        if (floor is None or stamp > floor) and now - stamp > UNREAD_GRACE:
+            stamps.append(stamp)
+    return sorted(stamps)
+
+
 def lane_transcripts(directory: Path, lanes: list[str], now: datetime) -> dict[str, Path]:
     found: dict[str, Path] = {}
     for path in sorted(directory.glob("agent-a*.jsonl"), key=lambda item: item.stat().st_mtime):
@@ -127,6 +192,19 @@ def selftest() -> None:
     assert classify([{"type": "api-request", "timestamp": "2026-10-26T14:55:00Z"}], now) == "BUSY"
     ended = {"type": "assistant", "timestamp": old, "message": {"stop_reason": "end_turn"}}
     assert classify([ended], now) == "IDLE"
+
+    prompt = {"type": "user", "timestamp": old,
+              "message": {"content": '<teammate-message teammate_id="team-lead">go</teammate-message>'}}
+    tool_output = {"type": "user", "timestamp": old, "message": {"content": [
+        {"type": "tool_result", "content": "<teammate-message teammate_id=x>"}]}}
+    assert received(prompt) and not received(tool_output)
+    def message(minutes_ago: int, read: bool = False) -> dict:
+        return {"timestamp": (now - timedelta(minutes=minutes_ago)).isoformat(), "read": read}
+    assert len(overdue_unread([message(15)], None, now)) == 1
+    assert overdue_unread([message(15, read=True)], None, now) == []
+    assert overdue_unread([message(5)], None, now) == []  # inside the grace
+    assert overdue_unread([message(30)], parse_stamp(old), now) == []  # superseded by a later prompt
+    assert len(overdue_unread([message(15)], parse_stamp(old), now)) == 1
     print("PASS selftest")
 
 
@@ -154,10 +232,17 @@ def main(argv: list[str]) -> int:
     while True:
         now = datetime.now(timezone.utc)
         for lane, path in lane_transcripts(directory, lanes, now).items():
-            state = classify(tail_rows(path), now)
+            rows = tail_rows(path)
+            state, detail = classify(rows, now), ""
+            if state == "BUSY":
+                inbox = inbox_rows(directory, lane)
+                overdue = overdue_unread(inbox, last_received(path, rows), now) if inbox else []
+                if overdue:
+                    oldest = int((now - overdue[0]).total_seconds() // 60)
+                    state, detail = "UNREAD", f" ({len(overdue)} queued, oldest {oldest} min)"
             if previous.get(lane, "BUSY") != state:
                 stamp = datetime.now().strftime("%H:%M")
-                print(f"{stamp} {lane}: {previous.get(lane, 'BUSY')} -> {state}", flush=True)
+                print(f"{stamp} {lane}: {previous.get(lane, 'BUSY')} -> {state}{detail}", flush=True)
             previous[lane] = state
         if once:
             return 0
