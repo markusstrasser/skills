@@ -2,7 +2,7 @@
 # pretool-commit-check.sh — Check git commit messages before execution.
 # PreToolUse:Bash hook. Advisory for most checks, blocks Co-Authored-By.
 # Checks: no Co-Authored-By, has [prefix], Type: trailer, body presence,
-# em-dash in subject, governance trailers.
+# subject length, governance trailers.
 
 trap 'exit 0' ERR
 

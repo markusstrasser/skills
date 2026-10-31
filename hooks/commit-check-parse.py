@@ -245,14 +245,10 @@ def main():
             warnings.append(f"Unknown scope [{scope}]. Known: {sample}.")
 
     # --- Subject length ---
-    if len(subject) > 80:
+    if len(subject) > 72:
         warnings.append(
-            f"Subject is {len(subject)} chars (>80). Move the why to the body."
+            f"Subject is {len(subject)} chars (>72). Move the why to the body."
         )
-
-    # --- Em-dash separator ---
-    if "\u2014" not in subject:
-        warnings.append("Subject lacks em-dash. Format: [scope] Verb thing \u2014 why.")
 
     # --- Body presence (shell wrapper filters by staged file count) ---
     body_lines = [
