@@ -11,12 +11,18 @@ lane runs this when a worker exits, and `lane reap --force` runs it by hand. The
                  .git/lane-checkout.json ("provided": {path: sha256}) while their bytes are unchanged; MANIFEST.json
                  names the skipped tagged directories and those inputs instead
   run.log.gz, brief.md, head.txt, status.txt, MANIFEST.json (sha256 and size of every file above)
+  lane.json      the lane's ledger (--meta), and MANIFEST.json's "exit_code": the worker's exit code (from --done at a
+                 reap, null for a lane that died without a marker), so a harvest still says what ran and how it ended
+                 once `lane reap --force` has removed the ledger and the marker
 The checkout is removed only when the harvest is proven lossless:
   1. lane.patch holds one diff per path `git status` reports, and each diff's post-image blob id equals the working
      file's hash, so the patch applied to HEAD reproduces the tree; it also applies to HEAD (`git apply --check`);
   2. every copied file reads back with the hash it was copied with;
   3. the checkout did not change while it was harvested;
-  4. no process has its cwd or an open file inside it (lsof; no answer from lsof keeps it, [DEGRADED]).
+  4. no process has its cwd or an open file inside it (lsof; no answer from lsof keeps it, [DEGRADED]). One scan is
+     not enough: readers come and go, `lane ls`'s git status runs in every checkout, and on 2026-11-01 four arena
+     lanes that exited 0 were kept for a holder of a moment. lsof scans again every 2 s for LANE_RETIRE_SETTLE_S
+     (45 at a worker's exit, 10 at a reap), and the checkout is kept only while a scan still finds a holder.
 At a worker's exit it also needs exit code 0 and no --keep reason (lane run --keep-checkout); --reap skips those two.
 A worktree lane's branch is deleted only when another branch, remote branch or tag holds its HEAD; otherwise it
 stays, and commits.patch has the commits too.
@@ -39,6 +45,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 # Rederivable trees and caches: never harvested, never a reason to keep a checkout.
@@ -336,9 +343,11 @@ def provided_inputs(args, checkout):
 
 
 def busy_pids(checkout):
-    """Processes with a cwd or open file inside the checkout, from one lsof pass. None when lsof gives no answer."""
+    """Processes with a cwd or open file inside the checkout, from one lsof pass, each as "command: what", what being
+    `cwd` or the first path it holds, relative to the checkout. None when lsof gives no answer."""
     try:
-        result = subprocess.run(["lsof", "-w", "-n", "-P", "-F", "pcn"], capture_output=True, check=False, timeout=120)
+        result = subprocess.run(["lsof", "-w", "-n", "-P", "-F", "pcfn"], capture_output=True, check=False,
+                                timeout=120)
     except (OSError, subprocess.TimeoutExpired):
         return None
     if not result.stdout:
@@ -346,15 +355,29 @@ def busy_pids(checkout):
     own = {os.getpid(), os.getppid()}
     prefix = str(checkout) + "/"
     busy = {}
-    pid, command = None, ""
+    pid, command, fd = None, "", ""
     for line in result.stdout.decode(errors="replace").splitlines():
         if line.startswith("p"):
-            pid, command = int(line[1:]), ""
+            pid, command, fd = int(line[1:]), "", ""
         elif line.startswith("c"):
             command = line[1:]
-        elif line.startswith("n") and pid not in own and (line[1:] == str(checkout) or line[1:].startswith(prefix)):
-            busy[pid] = command
+        elif line.startswith("f"):
+            fd = line[1:]
+        elif line.startswith("n") and pid not in own and pid not in busy \
+                and (line[1:] == str(checkout) or line[1:].startswith(prefix)):
+            busy[pid] = f"{command}: {'cwd' if fd == 'cwd' else line[1:].removeprefix(prefix) or '.'}"
     return busy
+
+
+def settled_busy(checkout, settle_s, scan=busy_pids, sleep=time.sleep, clock=time.monotonic):
+    """busy_pids, scanned again every 2 s while it finds a holder, for up to settle_s: the holders of the last scan
+    (empty once the checkout is free), or None when lsof gives no answer."""
+    deadline = clock() + settle_s
+    while True:
+        busy = scan(checkout)
+        if not busy or clock() >= deadline:
+            return busy
+        sleep(2)
 
 
 def validate_identity(args, checkout):
@@ -498,12 +521,28 @@ def write_harvest(args, checkout, statuses, copy_list, watched, unchanged, tagge
         record(partial / "run.log.gz", manifest, "run.log.gz")
     if args.brief and os.path.isfile(args.brief):
         copy_verified(Path(args.brief), partial / "brief.md", manifest, "brief.md")
+    if args.meta and os.path.isfile(args.meta):
+        copy_verified(Path(args.meta), partial / "lane.json", manifest, "lane.json")
     if fingerprint(checkout, status_paths(checkout), watched) != before:
         raise Keep("the checkout changed while it was harvested")
     (partial / "MANIFEST.json").write_text(json.dumps(
         {"name": args.name, "mode": args.mode, "checkout": str(checkout), "head": head, "base": args.base,
-         "status_paths": len(statuses), "skipped_special_files": skipped, "provided_unchanged": unchanged,
-         "tagged_caches_skipped": tagged, "files": manifest}, indent=1, sort_keys=True) + "\n")
+         "exit_code": run_exit_code(args), "status_paths": len(statuses), "skipped_special_files": skipped,
+         "provided_unchanged": unchanged, "tagged_caches_skipped": tagged, "files": manifest},
+        indent=1, sort_keys=True) + "\n")
+
+
+def run_exit_code(args):
+    """The worker's exit code: --exit-code at its exit; at a reap, the EXIT= of the --done marker, or None for a lane
+    that left none (stopped or crashed)."""
+    if not args.reap:
+        return args.exit_code
+    try:
+        first = Path(args.done).read_text(encoding="utf-8").splitlines()[0] if args.done else ""
+    except (OSError, IndexError, UnicodeDecodeError):
+        return None
+    code = first.removeprefix("EXIT=")
+    return int(code) if first.startswith("EXIT=") and code.lstrip("-").isdigit() else None
 
 
 def branch_is_held_elsewhere(repo, branch, head):
@@ -528,8 +567,15 @@ def main():
     parser.add_argument("--exit-code", type=int, default=0)
     parser.add_argument("--keep", default="", help="a reason to keep the checkout (lane run --keep-checkout)")
     parser.add_argument("--reap", action="store_true", help="explicit removal: ignore the exit code and --keep")
+    parser.add_argument("--meta", default="", help="the lane's ledger, copied into the harvest as lane.json")
+    parser.add_argument("--done", default="", help="at a reap, the lane's completion marker, for the exit code")
     args = parser.parse_args()
     checkout = Path(args.checkout)
+    settle = os.environ.get("LANE_RETIRE_SETTLE_S", "10" if args.reap else "45")
+    try:
+        settle_s = float(settle)
+    except ValueError:
+        sys.exit(f"lane-retire: LANE_RETIRE_SETTLE_S={settle!r} is not a number of seconds")
     validate_identity(args, checkout)
     if not checkout.exists():
         print("CHECKOUT=gone")
@@ -542,7 +588,7 @@ def main():
         print(f"CHECKOUT=kept {args.keep}")
         return
     try:
-        busy = busy_pids(checkout)
+        busy = settled_busy(checkout, settle_s)
         if busy is None:
             raise Keep("[DEGRADED] lsof gave no answer, so open files inside the checkout are unknown")
         if busy:

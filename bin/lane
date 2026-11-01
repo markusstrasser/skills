@@ -997,7 +997,7 @@ A provider capacity error stopped your previous attempt. The checkout keeps its 
       if [ "$LANE_KEEP_CHECKOUT" = true ]; then keep_reason="launched with --keep-checkout"; fi
       retire_out=$("$LANE_RETIRE" --name "$LANE_NAME" --mode "$LANE_CHECKOUT_MODE" --checkout "$worktree" \
         --repo "$LANE_REPO" --base "$LANE_CHECKOUT_BASE" --branch "$LANE_BRANCH" --harvest-root "$LANE_HOME" \
-        --log "$log" --brief "$brief" --exit-code "$rc" --keep "$keep_reason" 2>&1)
+        --log "$log" --brief "$brief" --exit-code "$rc" --keep "$keep_reason" --meta "$LANE_HOME/$LANE_NAME.json" 2>&1)
       printf "%s\n" "$retire_out" >> "$log"
       state=$(printf "%s\n" "$retire_out" | tail -n 1)
       case "$state" in CHECKOUT=*) ;; *) state="CHECKOUT=kept lane-retire failed; its output is in the log" ;; esac
@@ -1891,7 +1891,8 @@ cmd_reap() {
     fi
     retire_out=$("$LANE_BIN_DIR/lane-retire" --reap --name "$name" --mode "$checkout_mode" --checkout "$worktree" \
       --repo "$repo" --base "$checkout_base" --branch "$branch" --harvest-root "$LANE_HOME" \
-      --log "$reap_log" --brief "$brief") || die "lane-retire refused $name: $retire_out"
+      --log "$reap_log" --brief "$brief" --meta "$metadata" --done "$(done_path "$name")") ||
+      die "lane-retire refused $name: $retire_out"
     printf '%s\n' "$retire_out"
     last=$(printf '%s\n' "$retire_out" | tail -n 1)
     case "$last" in CHECKOUT=retired\ *) ;; *) die "kept $name: ${last#CHECKOUT=}" ;; esac

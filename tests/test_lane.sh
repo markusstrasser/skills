@@ -27,7 +27,7 @@ cleanup() {
   local name
   # The live-lane test gives a running lane a fake marker, and lane stop signals no lane that has one.
   rm -f "$LANE_HOME/archlive.done"
-  for name in first rvcommit rvnobase hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride ocargs ocquota failure rvcache rvown rvnone retire1 retirefail retirebusy hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit; do
+  for name in first rvcommit rvnobase hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride ocargs ocquota failure rvcache rvown rvnone retire1 retirefail retirebusy retireread hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit; do
     if [ -f "$LANE_HOME/$name.json" ]; then
       "$LANE" stop "$name" >/dev/null 2>&1 || true
     fi
@@ -991,9 +991,13 @@ assert_eq "lane notes" "$(<"$RETIRE_HARVEST/ignored/wrongtag/notes.txt")" "a wro
 python3 - "$RETIRE_HARVEST/MANIFEST.json" <<'PY'
 import json
 import sys
-skipped = json.load(open(sys.argv[1], encoding="utf-8"))["tagged_caches_skipped"]
-assert skipped == ["target"], skipped
+manifest = json.load(open(sys.argv[1], encoding="utf-8"))
+assert manifest["tagged_caches_skipped"] == ["target"], manifest["tagged_caches_skipped"]
+# The harvest says what ran and how it ended once a reap removes the ledger and the marker.
+assert manifest["exit_code"] == 0, manifest["exit_code"]
+assert "lane.json" in manifest["files"], sorted(manifest["files"])
 PY
+cmp -s "$LANE_HOME/retire1.json" "$RETIRE_HARVEST/lane.json" || fail "the harvest's lane.json is not the ledger"
 assert_eq "ret" "$(dirty_for retire1)" "ls marks a retired lane"
 # The patch reproduces the lane's tree on the base it was cut from.
 git -C "$REPO" worktree add -q --detach "$TEST_TMP/replay" HEAD
@@ -1027,21 +1031,50 @@ PY
 reap_output=$("$LANE" reap retirefail --force)
 grep -q '^CHECKOUT=retired ' <<<"$reap_output" || fail "reap of a stopped lane did not harvest it"
 grep -Fq '+unfinished' "$(latest_harvest_of retirefail)/lane.patch" || fail "stopped lane's harvest lacks its edit"
+python3 - "$(latest_harvest_of retirefail)" <<'PY'
+import json
+import sys
+from pathlib import Path
+harvest = Path(sys.argv[1])
+assert json.loads((harvest / "MANIFEST.json").read_text())["exit_code"] is None, "a stopped lane has no exit code"
+assert json.loads((harvest / "lane.json").read_text())["name"] == "retirefail"
+PY
 assert_file "$(latest_harvest_of retirefail)/run.log.gz"
 [ ! -e "$REPO_REAL/.claude/worktrees/codex-retirefail" ] || fail "reap left the stopped lane's worktree"
 
 echo "test: a process inside the checkout keeps it"
-LANE_FAKE_HOLD="$TEST_TMP/release-retirebusy" "$LANE" run retirebusy --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+LANE_RETIRE_SETTLE_S=1 LANE_FAKE_HOLD="$TEST_TMP/release-retirebusy" \
+  "$LANE" run retirebusy --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
 (cd "$REPO_REAL/.claude/worktrees/codex-retirebusy" && exec sleep 60) &
 BUSY_PID=$!
 touch "$TEST_TMP/release-retirebusy"
-wait_for_file "$LANE_HOME/retirebusy.done"
-grep -q "^CHECKOUT=kept busy: pid $BUSY_PID " "$LANE_HOME/retirebusy.checkout-state" ||
+wait_for_file "$LANE_HOME/retirebusy.done" 300
+grep -q "^CHECKOUT=kept busy: pid $BUSY_PID (sleep: cwd)" "$LANE_HOME/retirebusy.checkout-state" ||
   fail "busy checkout was not kept: $(<"$LANE_HOME/retirebusy.checkout-state")"
 [ -d "$REPO_REAL/.claude/worktrees/codex-retirebusy" ] || fail "busy checkout was removed"
 kill "$BUSY_PID"
 wait "$BUSY_PID" 2>/dev/null || true
 "$LANE" reap retirebusy --force >/dev/null
+python3 - "$(latest_harvest_of retirebusy)" <<'PY'
+import json
+import sys
+from pathlib import Path
+harvest = Path(sys.argv[1])
+assert json.loads((harvest / "MANIFEST.json").read_text())["exit_code"] == 0, "a reaped DONE:0 lane says exit 0"
+assert json.loads((harvest / "lane.json").read_text())["name"] == "retirebusy"
+PY
+
+echo "test: a reader of a moment inside the checkout does not keep it"
+LANE_RETIRE_SETTLE_S=60 LANE_FAKE_HOLD="$TEST_TMP/release-retireread" \
+  "$LANE" run retireread --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+(cd "$REPO_REAL/.claude/worktrees/codex-retireread" && exec sleep 4) &
+READ_PID=$!
+touch "$TEST_TMP/release-retireread"
+wait_for_file "$LANE_HOME/retireread.done" 900
+grep -q '^CHECKOUT=retired ' "$LANE_HOME/retireread.checkout-state" ||
+  fail "a passing reader kept the checkout: $(<"$LANE_HOME/retireread.checkout-state")"
+wait "$READ_PID" 2>/dev/null || true
+"$LANE" reap retireread --force >/dev/null
 
 echo "test: an unmerged path with a conflict marker keeps the checkout and is named; a resolved one is staged"
 LANE_FAKE_HOLD="$TEST_TMP/release-retireumg" "$LANE" run retireumg --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
