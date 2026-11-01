@@ -11,6 +11,10 @@
 # Rule 1 masks every NAME=value token that starts a word (environment shape);
 # `--flag=value` arguments keep their values. Rule 2 masks bare key shapes.
 set -euo pipefail
-exec sed -E \
+# Line-buffered, so a watcher that ends in this filter sees each line as it arrives: block-buffered
+# sed kept a Monitor on a live Modal fetch silent for 10 min (genomics, 2026-11-02). BSD sed takes
+# -l, GNU sed -u.
+if sed --version >/dev/null 2>&1; then line_buffered=-u; else line_buffered=-l; fi
+exec sed -E "$line_buffered" \
   -e 's/(^|[[:space:]])([A-Za-z_][A-Za-z0-9_]*)=[^[:space:]]*/\1\2=<redacted>/g' \
   -e 's/(sk-ant-|sk-|AIza|ghp_|gho_|github_pat_|xox[abprs]-|AKIA|ASIA|hf_)[A-Za-z0-9_-]{8,}/<redacted-key>/g'
