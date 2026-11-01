@@ -43,6 +43,8 @@ usage:
   lane review <name> [--model <m>] [--effort <e>] [--focus <file>] [--report <file>] [--out <file>] [--bg]
   lane ls [--stall-min <minutes>]
       (WAITING: a claude worker sleeping out the api_retry delay it logged, e.g. a usage-limit reset)
+  lane state <name>
+      (one line of JSON: name, state as ls prints it or NONE without metadata or marker, pid, started_epoch)
   lane stop <name>
   lane resume <name> [--note <file>|--no-note]
       (exported worker settings override recorded settings; all others are retained)
@@ -1710,6 +1712,38 @@ cmd_stop() {
   stop_lane "$1"
 }
 
+# One lane's state for a program, as `lane ls` decides it: {"name", "state", "pid", "started_epoch"}, state NONE when
+# the lane has neither metadata nor a done marker. A program that counts live lanes (arena's autoland caps its readers)
+# reads this instead of re-checking a pid, so a reused pid stays DEAD through lane_group_is_alive's identity check.
+cmd_state() {
+  [ "$#" -eq 1 ] || die "state requires exactly one name"
+  validate_name "$1"
+  local name="$1"
+  local metadata
+  local pid=""
+  local started_epoch=""
+  local state="NONE"
+  metadata=$(metadata_path "$name")
+  if [ -f "$metadata" ]; then
+    pid=$(json_get "$metadata" pid) || die "invalid metadata for $name"
+    started_epoch=$(json_get_or "$metadata" started_epoch "") || die "invalid metadata for $name"
+    state=$(lane_state "$name" "$pid" "$started_epoch" "$DEFAULT_STALL_MIN")
+  elif [ -f "$(done_path "$name")" ]; then
+    state=$(lane_state "$name" "" "" "$DEFAULT_STALL_MIN")
+  fi
+  require_python
+  python3 -c '
+import json
+import sys
+
+def number(text):
+    return int(text) if text.isdigit() else None
+
+name, state, pid, started_epoch = sys.argv[1:]
+print(json.dumps({"name": name, "state": state, "pid": number(pid), "started_epoch": number(started_epoch)}))
+' "$name" "$state" "$pid" "$started_epoch"
+}
+
 cmd_resume() {
   [ "$#" -ge 1 ] || die "resume requires a name"
   local name="$1"
@@ -1934,12 +1968,13 @@ main() {
   shift
   case "$command" in
     -h | --help | help) usage ;;
-    run | review | ls | stop | resume | reap | archive | unarchive)
+    run | review | ls | state | stop | resume | reap | archive | unarchive)
       init_lane_home
       case "$command" in
         run) cmd_run "$@" ;;
         review) cmd_review "$@" ;;
         ls) cmd_ls "$@" ;;
+        state) cmd_state "$@" ;;
         stop) cmd_stop "$@" ;;
         resume) cmd_resume "$@" ;;
         reap) cmd_reap "$@" ;;

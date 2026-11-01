@@ -654,6 +654,15 @@ assert_eq "EXIT=0" "$(<"$LANE_HOME/first.done")" "completion marker"
 assert_eq "DONE:0" "$(state_for first)" "completed state"
 assert_eq "-" "$(review_for first)" "initial review state"
 
+echo "test: state prints one lane's ls state as JSON, NONE for a lane with no record"
+first_pid=$(json_value "$LANE_HOME/first.json" pid)
+first_started_epoch=$(json_value "$LANE_HOME/first.json" started_epoch)
+assert_eq "{\"name\": \"first\", \"state\": \"DONE:0\", \"pid\": $first_pid, \"started_epoch\": $first_started_epoch}" \
+  "$("$LANE" state first)" "state of a finished lane"
+assert_eq '{"name": "nosuchlane", "state": "NONE", "pid": null, "started_epoch": null}' "$("$LANE" state nosuchlane)" \
+  "state of an unknown lane"
+if "$LANE" state first extra >/dev/null 2>&1; then fail "state accepted two names"; fi
+
 echo "test: positive control proves git diff HEAD omits untracked files"
 FIRST_WORKTREE="$REPO_REAL/.claude/worktrees/codex-first"
 printf '%s\n' reviewed >>"$FIRST_WORKTREE/tracked.txt"
@@ -765,9 +774,13 @@ case "$hang_started_epoch" in "" | *[!0-9]*) fail "worker metadata omitted start
 kill -0 -- "-$hang_pid" 2>/dev/null || fail "real worker process group is not alive"
 set_started_epoch "$hang_metadata" "$((hang_started_epoch + 1))"
 assert_eq "DEAD" "$(state_for hang)" "forged worker identity"
+assert_eq "\"DEAD\"" "$("$LANE" state hang | python3 -c 'import json, sys; print(json.dumps(json.load(sys.stdin)["state"]))')" \
+  "state's forged worker identity"
 kill -0 -- "-$hang_pid" 2>/dev/null || fail "forged identity check signalled the real worker"
 set_started_epoch "$hang_metadata" "$hang_started_epoch"
 assert_eq "RUNNING" "$(state_for hang)" "real worker identity"
+assert_eq "{\"name\": \"hang\", \"state\": \"RUNNING\", \"pid\": $hang_pid, \"started_epoch\": $hang_started_epoch}" \
+  "$("$LANE" state hang)" "state of a running lane"
 clear_started_epoch "$hang_metadata"
 legacy_state=$(state_for hang 2>"$TEST_TMP/legacy-liveness.warn")
 assert_eq "RUNNING" "$legacy_state" "legacy worker liveness fallback"
