@@ -21,6 +21,9 @@ BRIEF="$TEST_TMP/brief.md"
 FAKE_BIN="$TEST_TMP/bin"
 LANE_CAPTURE="$TEST_TMP/capture"
 export LANE_CAPTURE
+# Fake workers run at lane's own priority, so a loaded machine cannot starve them past a wait:
+# at load 95 a nice-10 worker missed the 10 s harvest wait (2026-11-02). The hang lane checks the default.
+export LANE_NICE=0
 UNRELATED_PID=""
 CAP_WAIT_PID=""
 
@@ -32,7 +35,7 @@ cleanup() {
   fi
   # The live-lane test gives a running lane a fake marker, and lane stop signals no lane that has one.
   rm -f "$LANE_HOME/archlive.done"
-  for name in first rvcommit rvnobase hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride ocargs ocquota failure rvcache rvown rvnone retire1 retirefail retirebusy retireread hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit capa capb capfree; do
+  for name in first rvcommit rvnobase hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride ocargs ocquota failure rvcache rvown rvnone retire1 retirefail retirebusy retireread hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit capa capb capfree nice0; do
     if [ -f "$LANE_HOME/$name.json" ]; then
       "$LANE" stop "$name" >/dev/null 2>&1 || true
     fi
@@ -782,12 +785,16 @@ printf '%s\n' \
   'if [ "$1" = "-d" ]; then printf "%s\n" 1787846400; exit 0; fi' \
   'exec /bin/date "$@"' >"$FAKE_BIN/date"
 chmod +x "$FAKE_BIN/date"
-"$LANE" run hang --repo "$REPO" --brief "$BRIEF" --worker fake-hang >/dev/null
+LANE_NICE= "$LANE" run hang --repo "$REPO" --brief "$BRIEF" --worker fake-hang >/dev/null
 hang_metadata="$LANE_HOME/hang.json"
 hang_pid=$(json_value "$hang_metadata" pid)
 hang_started_epoch=$(json_value "$hang_metadata" started_epoch)
 case "$hang_started_epoch" in "" | *[!0-9]*) fail "worker metadata omitted started_epoch" ;; esac
 kill -0 -- "-$hang_pid" 2>/dev/null || fail "real worker process group is not alive"
+# /bin/ps: FAKE_BIN's ps answers with a start time whatever -o asks for.
+own_nice=$(/bin/ps -o nice= -p $$ | tr -d ' ')
+assert_eq "$((own_nice + 10 > 20 ? 20 : own_nice + 10))" "$(/bin/ps -o nice= -p "$hang_pid" | tr -d ' ')" \
+  "a worker runs 10 nicer than lane by default"
 set_started_epoch "$hang_metadata" "$((hang_started_epoch + 1))"
 assert_eq "DEAD" "$(state_for hang)" "forged worker identity"
 assert_eq "\"DEAD\"" "$("$LANE" state hang | python3 -c 'import json, sys; print(json.dumps(json.load(sys.stdin)["state"]))')" \
@@ -1437,5 +1444,20 @@ fi
 grep -Fq "lane.maxRunning must be a whole number or none, not many" "$TEST_TMP/capbad.err" \
   || fail "a bad cap gave no reason: $(cat "$TEST_TMP/capbad.err")"
 assert_no_file "$LANE_HOME/capbad.json"
+
+echo "test: LANE_NICE sets how much nicer the worker runs, and a bad value refuses before anything changes"
+LANE_NICE=0 "$LANE" run nice0 --repo "$REPO" --brief "$BRIEF" --worker fake-hang --no-worktree >/dev/null
+assert_eq "$own_nice" "$(/bin/ps -o nice= -p "$(json_value "$LANE_HOME/nice0.json" pid)" | tr -d ' ')" \
+  "LANE_NICE=0 keeps lane's priority"
+"$LANE" stop nice0 >/dev/null
+for bad_nice in 21 -1 many; do
+  if LANE_NICE="$bad_nice" "$LANE" run nicebad --repo "$REPO" --brief "$BRIEF" --worker fake 2>"$TEST_TMP/nicebad.err"; then
+    fail "LANE_NICE=$bad_nice started a lane"
+  fi
+  grep -Fq "LANE_NICE must be a whole number from 0 to 20, not $bad_nice" "$TEST_TMP/nicebad.err" \
+    || fail "LANE_NICE=$bad_nice gave no reason: $(cat "$TEST_TMP/nicebad.err")"
+  assert_no_file "$LANE_HOME/nicebad.json"
+  [ ! -e "$REPO/.claude/worktrees/codex-nicebad" ] || fail "LANE_NICE=$bad_nice left a worktree"
+done
 
 echo "PASS: lane lifecycle"

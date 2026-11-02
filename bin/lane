@@ -31,6 +31,8 @@ usage:
       (a repo that caps its lanes, `git config lane.maxRunning <n>`, makes run wait until fewer than n of its lanes
        live (RUNNING, STALLED or WAITING); 0 holds every new run, for a playtest; LANE_MAX_RUNNING=<n> overrides the
        config for one run and LANE_MAX_RUNNING=none skips the cap; resume is never capped)
+      (run and resume start the worker LANE_NICE, default 10, nicer than themselves, so landings and play get the
+       cores first; LANE_NICE=0 keeps lane's own priority)
       (a repo that declares a checkout hook, `git config lane.checkout <exe>` or an executable .claude/lane-checkout,
        gets its lanes in $LANE_HOME/checkouts/<name>, built by `<hook> <dest> <base-oid>` and rechecked on reuse by
        `<hook> --verify <dest> <base-oid>`, env LANE_NAME LANE_REPO LANE_BRIEF LANE_SEED_PATCH LANE_SEED_FILES; the
@@ -892,7 +894,10 @@ launch_worker() {
   # silently fell back to a per-worktree .uv-cache and re-downloaded the world per lane
   # (13G + 9.7G in two lanes; .claude hit 60G, 2026-09-01). One shared, writable cache.
   # LANE_CHECKOUT_ENV names the hook's settings, which lane-opencode passes through its scrubbed environment.
-  nohup /usr/bin/perl -MPOSIX -e 'POSIX::setsid() or die "lane: setsid: $!\n"; exec { $ARGV[0] } @ARGV or die "lane: exec: $!\n"' \
+  # The worker and everything it starts run LANE_NICE (default 10) above the launcher's nice value: on 2026-11-02
+  # ten lanes' builds and tests held the Mac at load 60-160 while the landing gate, the one serial step, and a
+  # playtest client competed with them as equals.
+  nohup /usr/bin/nice -n "$(lane_nice)" /usr/bin/perl -MPOSIX -e 'POSIX::setsid() or die "lane: setsid: $!\n"; exec { $ARGV[0] } @ARGV or die "lane: exec: $!\n"' \
     env PYTHONUNBUFFERED=1 LANE_WORKER=1 UV_CACHE_DIR="$HOME/.cache/uv" LANE_NAME="$name" LANE_REPO="$repo" LANE_LOG="$log" \
     LANE_OPENCODE_HELPER="$LANE_BIN_DIR/lane-opencode" LANE_RETIRE="$LANE_BIN_DIR/lane-retire" LANE_HOME="$LANE_HOME" \
     LANE_ARCHIVE="$LANE_BIN_DIR/lane-archive" \
@@ -1060,6 +1065,16 @@ A provider capacity error stopped your previous attempt. The checkout keeps its 
     fi
   fi
   print_watch "$name" "$log" "$marker"
+}
+
+# How much nicer than lane the worker runs: LANE_NICE, default 10. run and resume check it before they change anything.
+lane_nice() {
+  local nice_value="${LANE_NICE:-10}"
+  case "$nice_value" in
+    *[!0-9]*) die "LANE_NICE must be a whole number from 0 to 20, not $nice_value" ;;
+  esac
+  [ "$((10#$nice_value))" -le 20 ] || die "LANE_NICE must be a whole number from 0 to 20, not $nice_value"
+  printf '%s\n' "$((10#$nice_value))"
 }
 
 # The repo's cap on live lanes: LANE_MAX_RUNNING, else `git config lane.maxRunning`; none when neither is set.
@@ -1244,6 +1259,7 @@ cmd_run() {
   local seed
 
   validate_name "$name"
+  lane_nice >/dev/null
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --repo)
@@ -1929,6 +1945,7 @@ cmd_resume() {
   local hook
   local harvest
   validate_name "$name"
+  lane_nice >/dev/null
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --note)
