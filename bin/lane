@@ -39,6 +39,7 @@ usage:
        seeds go only to a new checkout; <dest>/.git/lane-checkout.json may name {"env": {...}} for the worker and
        {"provided": {<path>: <sha256>}} for inputs the hook copied in, which a harvest skips while unchanged)
       (claude worker: LANE_CLAUDE_MODEL=<m> LANE_CLAUDE_EFFORT=<e> env override the default opus/default effort)
+      (claude worker: LANE_CLAUDE_ADD_DIRS=<a:b> passes each directory as --add-dir, for writes outside the checkout)
       (opencode worker: bin/lane-opencode's default model, DeepSeek V4.1 Flash with thinking on; LANE_OPENCODE_MODEL=<provider/model> overrides it)
       (opencode worker: no sandbox; a scrubbed env and a deny-list guard it, see bin/lane-opencode; exit 86 = balance exhausted)
       (opencode worker: a provider at capacity (429) is retried in the lane's session for ~20 min, then exit 85; lane resume continues it)
@@ -156,6 +157,7 @@ defaults = {
     "codex_network": "0",
     "claude_model": "opus",
     "claude_effort": "",
+    "claude_add_dirs": "",
     # Empty: bin/lane-opencode's own default applies, so the model is defined once (a copy here overrode it).
     "opencode_model": "",
 }
@@ -181,7 +183,7 @@ for key, default in defaults.items():
         sys.exit(f"lane: {env_key} must not contain tabs or newlines")
     if key.endswith("_model"):
         value = value or default
-    elif key == "codex_add_dirs":
+    elif key in ("codex_add_dirs", "claude_add_dirs"):
         value = ":".join(directory for directory in value.split(":") if directory)
     elif key == "codex_network":
         value = "1" if value == "1" else "0"
@@ -202,7 +204,7 @@ PY
 print_worker_settings() {
   case "$1" in
     claude)
-      echo "lane: settings claude_model=$LANE_CLAUDE_MODEL claude_effort=${LANE_CLAUDE_EFFORT:-default}"
+      echo "lane: settings claude_model=$LANE_CLAUDE_MODEL claude_effort=${LANE_CLAUDE_EFFORT:-default}${LANE_CLAUDE_ADD_DIRS:+ add_dirs=$LANE_CLAUDE_ADD_DIRS}"
       ;;
     opencode)
       echo "lane: settings opencode_model=${LANE_OPENCODE_MODEL:-default}"
@@ -965,7 +967,15 @@ A provider capacity error stopped your previous attempt. The checkout keeps its 
       # Retry watchdog (CC 2.1.199+): wait out 429/529 and usage-limit resets in place instead of
       # dying. Both caps default to unlimited in CC 2.1.309, so cap them: 6 h covers a 5 h session
       # reset, a weekly limit fails out; 2 h for capacity; recheck every 15 min for a lifted limit.
-        caffeinate -i env -u ANTHROPIC_API_KEY -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDECODE -u CLAUDE_PID -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_BRIDGE_SESSION_ID -u CLAUDE_CODE_SESSION_ATTENDED -u CLAUDE_EFFORT CLAUDE_CODE_RETRY_WATCHDOG=1 CLAUDE_CODE_RETRY_WATCHDOG_MAX_USAGE_LIMIT_WAIT_MS=21600000 CLAUDE_CODE_RETRY_WATCHDOG_MAX_WAIT_MS=7200000 CLAUDE_CODE_RETRY_WATCHDOG_USAGE_LIMIT_RECHECK_MS=900000 claude -p --model "$LANE_CLAUDE_MODEL" ${LANE_CLAUDE_EFFORT:+--effort "$LANE_CLAUDE_EFFORT"} --output-format stream-json --verbose "$prompt" < /dev/null
+        claude_args=(--model "$LANE_CLAUDE_MODEL")
+        if [ -n "$LANE_CLAUDE_EFFORT" ]; then claude_args+=(--effort "$LANE_CLAUDE_EFFORT"); fi
+        # Directories outside the checkout the worker may write, colon-separated (e.g. a reviews
+        # directory). --add-dir takes several values, so an option must follow the last one.
+        IFS=: read -r -a claude_dirs <<< "$LANE_CLAUDE_ADD_DIRS"
+        for claude_dir in "${claude_dirs[@]}"; do
+          if [ -n "$claude_dir" ]; then claude_args+=(--add-dir "$claude_dir"); fi
+        done
+        caffeinate -i env -u ANTHROPIC_API_KEY -u CLAUDE_SESSION_ID -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION -u CLAUDECODE -u CLAUDE_PID -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN -u CLAUDE_CODE_BRIDGE_SESSION_ID -u CLAUDE_CODE_SESSION_ATTENDED -u CLAUDE_EFFORT CLAUDE_CODE_RETRY_WATCHDOG=1 CLAUDE_CODE_RETRY_WATCHDOG_MAX_USAGE_LIMIT_WAIT_MS=21600000 CLAUDE_CODE_RETRY_WATCHDOG_MAX_WAIT_MS=7200000 CLAUDE_CODE_RETRY_WATCHDOG_USAGE_LIMIT_RECHECK_MS=900000 claude -p "${claude_args[@]}" --output-format stream-json --verbose "$prompt" < /dev/null
         ;;
       opencode)
         # bin/lane-opencode writes the guard, scrubs the environment, resumes transport errors, waits out a provider at

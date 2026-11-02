@@ -35,7 +35,7 @@ cleanup() {
   fi
   # The live-lane test gives a running lane a fake marker, and lane stop signals no lane that has one.
   rm -f "$LANE_HOME/archlive.done"
-  for name in first rvcommit rvnobase hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride ocargs ocquota failure rvcache rvown rvnone retire1 retirefail retirebusy retireread hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit capa capb capfree nice0; do
+  for name in first rvcommit rvnobase hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride claudedirs ocargs ocquota failure rvcache rvown rvnone retire1 retirefail retirebusy retireread hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit capa capb capfree nice0; do
     if [ -f "$LANE_HOME/$name.json" ]; then
       "$LANE" stop "$name" >/dev/null 2>&1 || true
     fi
@@ -465,6 +465,17 @@ assert_eq "low" "$(arg_after --effort "$LANE_CAPTURE/claude.args")" "claude effo
 LANE_CLAUDE_MODEL= LANE_CLAUDE_EFFORT= "$LANE" resume claudeoverride --no-note >/dev/null
 wait_for_file "$LANE_HOME/claudeoverride.done"
 assert_eq "$expected_claude" "$(<"$LANE_CAPTURE/claude.args")" "empty exports restore default claude arguments"
+
+echo "test: claude worker passes LANE_CLAUDE_ADD_DIRS as --add-dir and keeps them on resume"
+claudedirs_output=$(LANE_CLAUDE_ADD_DIRS="$TEST_TMP/reviews:$TEST_TMP/extra root:" "$LANE" run claudedirs --repo "$REPO" --brief "$BRIEF" --worker claude --no-worktree)
+wait_for_file "$LANE_HOME/claudedirs.done"
+expected_claude_dirs=$(printf '%s\n' -p --model opus --add-dir "$TEST_TMP/reviews" --add-dir "$TEST_TMP/extra root" --output-format stream-json --verbose "Do the fake task.")
+assert_eq "$expected_claude_dirs" "$(<"$LANE_CAPTURE/claude.args")" "claude add-dir arguments"
+grep -Fxq "lane: settings claude_model=opus claude_effort=default add_dirs=$TEST_TMP/reviews:$TEST_TMP/extra root" <<<"$claudedirs_output" || fail "run omitted claude add_dirs"
+assert_eq "$TEST_TMP/reviews:$TEST_TMP/extra root" "$(worker_setting "$LANE_HOME/claudedirs.json" claude_add_dirs)" "recorded claude add dirs"
+"$LANE" resume claudedirs --no-note >/dev/null
+wait_for_file "$LANE_HOME/claudedirs.done"
+assert_eq "$expected_claude_dirs" "$(<"$LANE_CAPTURE/claude.args")" "resumed claude add-dir arguments"
 
 echo "test: opencode worker scrubs the env, writes its guard, resumes a transport error and logs usage"
 export DEEPSEEK_API_KEY_METERED="must-not-leak" LANE_OPENCODE_RETRY_SLEEP=0 LANE_OPENCODE_PROVIDER_HOST=""
