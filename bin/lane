@@ -801,7 +801,11 @@ Git state belongs to the parent: edit files and run checks, but do not stage, co
     # (2026-10-11: a Sol lane merge died on ORIG_HEAD.lock in .git/worktrees/<lane>).
     # It also denies ps and sysctl: on 2026-10-14 `/usr/bin/time -l` exited 1 after a successful child
     # ("sysctl kern.clockrate: Operation not permitted"), so a worker's timing wrapper failed a passing run.
-    prompt="Do the task in $brief.
+    # The brief goes inline, never as a path: the sandbox reads the whole disk, and a path into the parent's
+    # checkout led a codex reviewer from its filtered checkout into the primary one, where it read an unfiltered
+    # patch beside its brief (genomics 2026-11-02 review-row107-repo).
+    prompt="$(<"$brief")
+
 Git metadata is read-only in this sandbox: edit files and run checks, but do not merge, stage or commit. The parent does that. The sandbox also denies ps and sysctl, so /usr/bin/time -l exits 1 after a successful command: measure time and memory from Python (time.perf_counter, resource.getrusage). End by listing every path you changed."
   fi
   if [ -n "$resume_note" ]; then

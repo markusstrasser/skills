@@ -283,7 +283,8 @@ chmod +x "$FAKE_BIN/codex" "$FAKE_BIN/claude" "$FAKE_BIN/ps" "$FAKE_BIN/llmx" "$
 export PATH="$FAKE_BIN:$PATH"
 
 echo "test: codex and claude worker commands match the dispatch contract"
-CODEX_PROMPT="Do the task in $BRIEF_REAL.
+CODEX_PROMPT="Do the fake task.
+
 Git metadata is read-only in this sandbox: edit files and run checks, but do not merge, stage or commit. The parent does that. The sandbox also denies ps and sysctl, so /usr/bin/time -l exits 1 after a successful command: measure time and memory from Python (time.perf_counter, resource.getrusage). End by listing every path you changed."
 "$LANE" run codexargs --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null
 wait_for_file "$LANE_HOME/codexargs.done"
@@ -872,7 +873,8 @@ grep -Fq 'lane: no resume note for first (pass --note <file> or --no-note)' <<<"
 echo "test: resume --no-note uses only the standard worker prompt"
 "$LANE" resume first --no-note >/dev/null
 wait_for_file "$LANE_HOME/first.done"
-assert_eq "Do the task in $BRIEF_REAL." "$(head -1 "$LANE_HOME/first.log")" "no-note prompt"
+assert_eq "Do the fake task." "$(head -1 "$LANE_HOME/first.log")" "no-note prompt"
+grep -Fq "$BRIEF_REAL" "$LANE_HOME/first.log" && fail "no-note prompt names the brief path"
 grep -q '^hi$' "$LANE_HOME/first.log" || fail "no-note resumed fake worker did not finish"
 
 echo "test: --no-note re-sends the note of a stopped run"
