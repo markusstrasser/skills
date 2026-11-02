@@ -20,11 +20,22 @@ line per state change:
   UNREAD         the lane is busy, but a message sent after the last one it received
                  has sat unread in its inbox for 10 min: a busy lane reads its inbox only
                  when its turn ends (TaskStop, then one SendMessage that restates them)
+  IDLE_UNREAD    the lane is idle and a message sent after the last one it received has
+                 sat unread for 2 min: it landed after the lane's turn ended and will never
+                 be delivered (TaskStop, then one SendMessage that restates it)
+
+The inbox read is the newest ~/.claude/teams/*/inboxes/<lane>.json. The team directory
+is named for the session that created the team, which need not be the session whose
+transcript directory holds the lane.
 
 Run it as a Monitor when dispatching teammates. --once prints every lane that is
 not BUSY and exits. Evidence: on 2026-10-26 three genomics lanes sat dead or
 unread for 84, 43 and 12 min before anyone looked; on 2026-10-31 vcep-l80 ran one
-3 h turn while six parent messages (02:49-05:13 JST) never reached it.
+3 h turn while six parent messages (02:49-05:13 JST) never reached it; on 2026-11-02
+a 15:14 ruling sat unread for two hours (the lane asked again at 16:52), and a message
+that reached eh-pstop-science 16 s after it went idle was never delivered. The watcher
+missed both: it read session-e5c8db34's stale inbox while the lanes' team was
+session-1e6b2b97, and it checked unread messages only for busy lanes.
 """
 
 from __future__ import annotations
@@ -41,6 +52,7 @@ QUICK_TOOL_BUDGET = timedelta(minutes=5)
 AGENT_BUDGET = timedelta(minutes=90)
 MODEL_GRACE = timedelta(minutes=12)
 UNREAD_GRACE = timedelta(minutes=10)
+IDLE_UNREAD_GRACE = timedelta(minutes=2)
 RECENT = timedelta(hours=6)
 TAIL_BYTES = 400_000
 TEAMS = Path.home() / ".claude" / "teams"
@@ -133,18 +145,26 @@ def last_received(path: Path, rows: list[dict]) -> datetime | None:
     return latest
 
 
-def inbox_rows(directory: Path, lane: str) -> list[dict]:
-    """The lane's inbox: ~/.claude/teams/session-<first 8 of the session id>/inboxes/<lane>.json."""
-    path = TEAMS / f"session-{directory.parent.name[:8]}" / "inboxes" / f"{lane}.json"
+def inbox_rows(lane: str, teams: Path = TEAMS) -> list[dict]:
+    """The lane's inbox: the most recently written ~/.claude/teams/*/inboxes/<lane>.json.
+
+    A send writes the inbox, so the live team's copy is the newest; a stale team directory
+    can still hold an older inbox under the same lane name.
+    """
+    candidates = sorted(teams.glob(f"*/inboxes/{lane}.json"), key=lambda item: item.stat().st_mtime)
+    if not candidates:
+        return []
     try:
-        rows = json.loads(path.read_text())
+        rows = json.loads(candidates[-1].read_text())
     except (OSError, json.JSONDecodeError):
         return []
     return rows if isinstance(rows, list) else []
 
 
-def overdue_unread(inbox: list[dict], floor: datetime | None, now: datetime) -> list[datetime]:
-    """Unread messages past UNREAD_GRACE that were sent after the last one the lane received.
+def overdue_unread(
+    inbox: list[dict], floor: datetime | None, now: datetime, grace: timedelta = UNREAD_GRACE
+) -> list[datetime]:
+    """Unread messages past the grace that were sent after the last one the lane received.
 
     A TaskStop plus a resume message leaves the queued messages unread for good, so a message
     older than the last received one counts as superseded.
@@ -154,7 +174,7 @@ def overdue_unread(inbox: list[dict], floor: datetime | None, now: datetime) -> 
         if item.get("read") or not item.get("timestamp"):
             continue
         stamp = parse_stamp(item["timestamp"])
-        if (floor is None or stamp > floor) and now - stamp > UNREAD_GRACE:
+        if (floor is None or stamp > floor) and now - stamp > grace:
             stamps.append(stamp)
     return sorted(stamps)
 
@@ -200,6 +220,20 @@ def selftest() -> None:
     assert received(prompt) and not received(tool_output)
     def message(minutes_ago: int, read: bool = False) -> dict:
         return {"timestamp": (now - timedelta(minutes=minutes_ago)).isoformat(), "read": read}
+    assert len(overdue_unread([message(3)], None, now, IDLE_UNREAD_GRACE)) == 1  # idle: 2 min
+    assert overdue_unread([message(1)], None, now, IDLE_UNREAD_GRACE) == []
+    import os
+    import tempfile
+    with tempfile.TemporaryDirectory() as scratch:
+        teams = Path(scratch)
+        for team, stamp, rows in (("session-old", 1_000, [{"read": True}]),
+                                  ("session-new", 2_000, [{"read": False}])):
+            inbox = teams / team / "inboxes" / "lane.json"
+            inbox.parent.mkdir(parents=True)
+            inbox.write_text(json.dumps(rows))
+            os.utime(inbox, (stamp, stamp))
+        assert inbox_rows("lane", teams) == [{"read": False}]  # the newest team's inbox
+        assert inbox_rows("absent", teams) == []
     assert len(overdue_unread([message(15)], None, now)) == 1
     assert overdue_unread([message(15, read=True)], None, now) == []
     assert overdue_unread([message(5)], None, now) == []  # inside the grace
@@ -234,12 +268,15 @@ def main(argv: list[str]) -> int:
         for lane, path in lane_transcripts(directory, lanes, now).items():
             rows = tail_rows(path)
             state, detail = classify(rows, now), ""
-            if state == "BUSY":
-                inbox = inbox_rows(directory, lane)
-                overdue = overdue_unread(inbox, last_received(path, rows), now) if inbox else []
+            if state in ("BUSY", "IDLE"):
+                inbox = inbox_rows(lane)
+                grace = UNREAD_GRACE if state == "BUSY" else IDLE_UNREAD_GRACE
+                floor = last_received(path, rows)
+                overdue = overdue_unread(inbox, floor, now, grace) if inbox else []
                 if overdue:
                     oldest = int((now - overdue[0]).total_seconds() // 60)
-                    state, detail = "UNREAD", f" ({len(overdue)} queued, oldest {oldest} min)"
+                    label = "UNREAD" if state == "BUSY" else "IDLE_UNREAD"
+                    state, detail = label, f" ({len(overdue)} queued, oldest {oldest} min)"
             if previous.get(lane, "BUSY") != state:
                 stamp = datetime.now().strftime("%H:%M")
                 print(f"{stamp} {lane}: {previous.get(lane, 'BUSY')} -> {state}{detail}", flush=True)
