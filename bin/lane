@@ -19,6 +19,7 @@ LANE_HOME="${LANE_HOME:-${HOME:?lane: HOME is not set}/.cache/lanes}"
 LANE_BIN_DIR=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd -P)
 DEFAULT_STALL_MIN=20
 WORKER_SETTINGS=""
+SLOT_LOCK=""
 
 usage() {
   cat >&2 <<'EOF'
@@ -27,6 +28,9 @@ usage:
            [--keep-checkout] [--seed-patch <patch>] [--seed-file <file>]...
       (a finished lane's checkout is harvested to $LANE_HOME/<name>.harvest/<stamp>/ and removed when the worker
        exits 0, see bin/lane-retire; --keep-checkout keeps it, for a lane you will resume; a failed lane keeps it)
+      (a repo that caps its lanes, `git config lane.maxRunning <n>`, makes run wait until fewer than n of its lanes
+       live (RUNNING, STALLED or WAITING); 0 holds every new run, for a playtest; LANE_MAX_RUNNING=<n> overrides the
+       config for one run and LANE_MAX_RUNNING=none skips the cap; resume is never capped)
       (a repo that declares a checkout hook, `git config lane.checkout <exe>` or an executable .claude/lane-checkout,
        gets its lanes in $LANE_HOME/checkouts/<name>, built by `<hook> <dest> <base-oid>` and rechecked on reuse by
        `<hook> --verify <dest> <base-oid>`, env LANE_NAME LANE_REPO LANE_BRIEF LANE_SEED_PATCH LANE_SEED_FILES; the
@@ -45,6 +49,8 @@ usage:
       (WAITING: a claude worker sleeping out the api_retry delay it logged, e.g. a usage-limit reset)
   lane state <name>
       (one line of JSON: name, state as ls prints it or NONE without metadata or marker, pid, started_epoch)
+  lane slots --repo <path>
+      (`<live> <cap>`: the repo's live lanes and its lane.maxRunning, none without one; never waits)
   lane stop <name>
   lane resume <name> [--note <file>|--no-note]
       (exported worker settings override recorded settings; all others are retained)
@@ -1056,6 +1062,159 @@ A provider capacity error stopped your previous attempt. The checkout keeps its 
   print_watch "$name" "$log" "$marker"
 }
 
+# The repo's cap on live lanes: LANE_MAX_RUNNING, else `git config lane.maxRunning`; none when neither is set.
+max_running_for() {
+  local cap="${LANE_MAX_RUNNING-}"
+  [ -n "$cap" ] || cap=$(git -C "$1" config --get lane.maxRunning 2>/dev/null || true)
+  case "$cap" in
+    "" | none) printf 'none\n' ;;
+    *[!0-9]*) die "lane.maxRunning must be a whole number or none, not $cap" ;;
+    *) printf '%s\n' "$((10#$cap))" ;;
+  esac
+}
+
+# One line per metadata file of the repo's lanes without a DONE marker, fields split by \x1f: name, pid, started_epoch.
+open_lanes_of() {
+  require_python
+  python3 - "$LANE_HOME" "$1" <<'PY'
+import json
+import os
+import sys
+
+home, repo = sys.argv[1:]
+for entry in sorted(os.listdir(home)):
+    name = entry[: -len(".json")]
+    if not entry.endswith(".json") or os.path.exists(os.path.join(home, name + ".done")):
+        continue
+    path = os.path.join(home, entry)
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError) as error:
+        print(f"lane: warning: {path} is unreadable ({error}); it does not count toward lane.maxRunning",
+              file=sys.stderr)
+        continue
+    if isinstance(data, dict) and data.get("repo") == repo:
+        fields = (data.get("pid"), data.get("started_epoch"))
+        print(name, *("" if value is None else value for value in fields), sep="\x1f")
+PY
+}
+
+# Names of the repo's lanes whose process group lives (RUNNING, STALLED or WAITING), one per line.
+live_lanes_of() {
+  local rows
+  local name
+  local pid
+  local started_epoch
+  rows=$(open_lanes_of "$1") || return 1
+  while IFS=$'\x1f' read -r name pid started_epoch; do
+    if [ -n "$name" ] && lane_group_is_alive "$pid" "$started_epoch" 2>/dev/null; then
+      printf '%s\n' "$name"
+    fi
+  done <<<"$rows"
+  return 0
+}
+
+# A slot lock is stale when its holder died, or when it has no pid and is over a minute old (its holder died
+# between mkdir and writing the pid).
+stale_slot_lock() {
+  local holder
+  holder=$(cat "$1/pid" 2>/dev/null || true)
+  case "$holder" in
+    "" | *[!0-9]*) [ -n "$(find "$1" -maxdepth 0 -mmin +1 2>/dev/null)" ] ;;
+    *) ! kill -0 "$holder" 2>/dev/null ;;
+  esac
+}
+
+release_slot() {
+  [ -n "$SLOT_LOCK" ] || return 0
+  if [ "$(cat "$SLOT_LOCK/pid" 2>/dev/null || true)" = "$$" ]; then
+    rm -f "$SLOT_LOCK/pid"
+    rmdir "$SLOT_LOCK" 2>/dev/null || true
+  fi
+  SLOT_LOCK=""
+}
+
+# Waits until the repo runs fewer live lanes than its cap (max_running_for, reread on every pass), then holds the
+# repo's slot lock until this run exits, by when the new lane's metadata names its process group and the next waiting
+# run counts it. A cap of 0 holds every new run: stopping the lanes before a playtest frees every slot, so the cap
+# goes to 0 first. On 2026-11-02 about 16 arena lanes beside colima and the landing gate filled 13.6 of 14.3 GB of
+# swap and a release client drew its fourth frame after 23 minutes; starters waiting on landings each launched a lane
+# as its landing came.
+acquire_slot() {
+  local name="$1"
+  local repo_root="$2"
+  local poll="${LANE_SLOT_POLL_S:-30}"
+  local lock
+  local cap
+  local live
+  local count
+  local waited=0
+  local noted_at=""
+  local noted_cap=""
+  lock="$LANE_HOME/.slot-$(printf '%s' "$repo_root" | shasum | cut -c1-12).lock"
+  while :; do
+    cap=$(max_running_for "$repo_root") || exit 2
+    [ "$cap" != none ] || return 0
+    if ! mkdir "$lock" 2>/dev/null; then
+      if stale_slot_lock "$lock"; then
+        rm -f "$lock/pid"
+        rmdir "$lock" 2>/dev/null || true
+      else
+        sleep 1
+        waited=$((waited + 1))
+      fi
+      continue
+    fi
+    SLOT_LOCK="$lock"
+    trap release_slot EXIT
+    printf '%s\n' "$$" >"$lock/pid"
+    live=$(live_lanes_of "$repo_root") || exit 2
+    count=$(printf '%s' "$live" | grep -c . || true)
+    if [ "$count" -lt "$cap" ]; then
+      [ -z "$noted_at" ] || echo "lane: $name takes a slot after ${waited} s" >&2
+      return 0
+    fi
+    release_slot
+    if [ "$cap" != "$noted_cap" ] || [ "$((waited - noted_at))" -ge 600 ]; then
+      if [ "$cap" = 0 ]; then
+        echo "lane: $repo_root holds new lanes (lane.maxRunning 0); $name waits" >&2
+      else
+        echo "lane: $repo_root has $count live lanes and caps them at $cap (lane.maxRunning); $name waits for a slot" >&2
+      fi
+      noted_at=$waited
+      noted_cap=$cap
+    fi
+    sleep "$poll"
+    waited=$((waited + poll))
+  done
+}
+
+# `<live> <cap>` for a repo, without waiting: a caller that must not block on a slot (autoland's successors) checks it
+# and launches with LANE_MAX_RUNNING=none.
+cmd_slots() {
+  local repo=""
+  local repo_root
+  local cap
+  local live
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --repo)
+        [ "$#" -ge 2 ] || die "--repo requires a path"
+        repo="$2"
+        shift 2
+        ;;
+      *) die "unknown slots option: $1" ;;
+    esac
+  done
+  [ -n "$repo" ] || die "slots requires --repo"
+  repo_root=$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null) || die "not a git repository: $repo"
+  repo_root=$(cd "$repo_root" && pwd -P)
+  cap=$(max_running_for "$repo_root") || exit 2
+  live=$(live_lanes_of "$repo_root") || exit 2
+  printf '%s %s\n' "$(printf '%s' "$live" | grep -c . || true)" "$cap"
+}
+
 cmd_run() {
   [ "$#" -ge 1 ] || die "run requires a name"
   local name="$1"
@@ -1175,6 +1334,9 @@ cmd_run() {
       base=$(json_get "$(metadata_path "$name")" base) || die "invalid metadata for $name"
     fi
   fi
+  # A bad base fails before the wait; a good one resolves again after it, at the repo's newest commit.
+  git -C "$repo_root" rev-parse --verify --quiet "$base^{commit}" >/dev/null || die "base is not a commit in $repo_root: $base"
+  acquire_slot "$name" "$repo_root"
   base_oid=$(git -C "$repo_root" rev-parse --verify --quiet "$base^{commit}") || die "base is not a commit in $repo_root: $base"
   case "$checkout_mode" in
     hook)
@@ -1968,13 +2130,14 @@ main() {
   shift
   case "$command" in
     -h | --help | help) usage ;;
-    run | review | ls | state | stop | resume | reap | archive | unarchive)
+    run | review | ls | state | slots | stop | resume | reap | archive | unarchive)
       init_lane_home
       case "$command" in
         run) cmd_run "$@" ;;
         review) cmd_review "$@" ;;
         ls) cmd_ls "$@" ;;
         state) cmd_state "$@" ;;
+        slots) cmd_slots "$@" ;;
         stop) cmd_stop "$@" ;;
         resume) cmd_resume "$@" ;;
         reap) cmd_reap "$@" ;;

@@ -22,12 +22,17 @@ FAKE_BIN="$TEST_TMP/bin"
 LANE_CAPTURE="$TEST_TMP/capture"
 export LANE_CAPTURE
 UNRELATED_PID=""
+CAP_WAIT_PID=""
 
 cleanup() {
   local name
+  # A run still waiting for a slot would start its lane once the stops below free one.
+  if [ -n "$CAP_WAIT_PID" ]; then
+    kill "$CAP_WAIT_PID" >/dev/null 2>&1 || true
+  fi
   # The live-lane test gives a running lane a fake marker, and lane stop signals no lane that has one.
   rm -f "$LANE_HOME/archlive.done"
-  for name in first rvcommit rvnobase hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride ocargs ocquota failure rvcache rvown rvnone retire1 retirefail retirebusy retireread hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit; do
+  for name in first rvcommit rvnobase hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride ocargs ocquota failure rvcache rvown rvnone retire1 retirefail retirebusy retireread hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit capa capb capfree; do
     if [ -f "$LANE_HOME/$name.json" ]; then
       "$LANE" stop "$name" >/dev/null 2>&1 || true
     fi
@@ -79,6 +84,17 @@ wait_for_absent() {
     attempts=$((attempts + 1))
   done
   assert_no_file "$path"
+}
+
+wait_for_text() {
+  local path="$1"
+  local text="$2"
+  local attempts=0
+  while ! grep -Fq -- "$text" "$path" 2>/dev/null && [ "$attempts" -lt 300 ]; do
+    sleep 0.1
+    attempts=$((attempts + 1))
+  done
+  grep -Fq -- "$text" "$path" || fail "$path never said '$text': $(cat "$path" 2>/dev/null)"
 }
 
 json_value() {
@@ -1381,5 +1397,45 @@ assert_no_file "$LANE_HOME/arch1.b.json"
 assert_file "$LANE_HOME/arch1.json"
 rm -f "$LANE_HOME/archlive.done"
 "$LANE" stop archlive >/dev/null
+
+echo "test: lane.maxRunning makes a run wait for a slot, and 0 holds every run"
+CAP_REPO="$TEST_TMP/caprepo"
+mkdir -p "$CAP_REPO"
+git -C "$CAP_REPO" init -q
+git -C "$CAP_REPO" config user.email lane-test@example.invalid
+git -C "$CAP_REPO" config user.name "Lane Test"
+printf '%s\n' base >"$CAP_REPO/tracked.txt"
+git -C "$CAP_REPO" add tracked.txt
+git -C "$CAP_REPO" commit -qm "cap base"
+git -C "$CAP_REPO" config lane.maxRunning 1
+"$LANE" run capa --repo "$CAP_REPO" --brief "$BRIEF" --worker fake-hang >/dev/null
+DISK_FLOOR_GIB=0 LANE_SLOT_POLL_S=1 "$LANE" run capb --repo "$CAP_REPO" --brief "$BRIEF" --worker fake \
+  >"$TEST_TMP/capb.out" 2>&1 &
+CAP_WAIT_PID=$!
+wait_for_text "$TEST_TMP/capb.out" "has 1 live lanes and caps them at 1 (lane.maxRunning); capb waits for a slot"
+assert_no_file "$LANE_HOME/capb.json"
+assert_eq "1 1" "$("$LANE" slots --repo "$CAP_REPO")" "slots at the cap"
+assert_eq "0 none" "$("$LANE" slots --repo "$REPO")" "slots of a repo without a cap"
+DISK_FLOOR_GIB=0 LANE_MAX_RUNNING=none "$LANE" run capfree --repo "$CAP_REPO" --brief "$BRIEF" --worker fake >/dev/null
+wait_for_file "$LANE_HOME/capfree.done" 300
+git -C "$CAP_REPO" config lane.maxRunning 0
+wait_for_text "$TEST_TMP/capb.out" "holds new lanes (lane.maxRunning 0); capb waits"
+"$LANE" stop capa >/dev/null
+sleep 3
+assert_no_file "$LANE_HOME/capb.json"
+assert_eq "0 0" "$("$LANE" slots --repo "$CAP_REPO")" "slots while held"
+git -C "$CAP_REPO" config lane.maxRunning 1
+wait "$CAP_WAIT_PID" || fail "the held run failed: $(cat "$TEST_TMP/capb.out")"
+CAP_WAIT_PID=""
+grep -Fq "capb takes a slot after" "$TEST_TMP/capb.out" || fail "the held run did not say it took a slot"
+wait_for_file "$LANE_HOME/capb.done" 300
+assert_eq "" "$(find "$LANE_HOME" -maxdepth 1 -name '.slot-*' -print)" "a run left its slot lock"
+git -C "$CAP_REPO" config lane.maxRunning many
+if "$LANE" run capbad --repo "$CAP_REPO" --brief "$BRIEF" --worker fake 2>"$TEST_TMP/capbad.err"; then
+  fail "a cap that is not a number started a lane"
+fi
+grep -Fq "lane.maxRunning must be a whole number or none, not many" "$TEST_TMP/capbad.err" \
+  || fail "a bad cap gave no reason: $(cat "$TEST_TMP/capbad.err")"
+assert_no_file "$LANE_HOME/capbad.json"
 
 echo "PASS: lane lifecycle"
