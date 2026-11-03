@@ -1454,6 +1454,24 @@ assert_file "$LANE_HOME/arch1.json"
 rm -f "$LANE_HOME/archlive.done"
 "$LANE" stop archlive >/dev/null
 
+echo "test: a repo's lane.diskFloorGib sets its disk floor, and DISK_FLOOR_GIB still overrides it"
+FLOOR_REPO="$TEST_TMP/floorrepo"
+mkdir -p "$FLOOR_REPO"
+git -C "$FLOOR_REPO" init -q
+git -C "$FLOOR_REPO" config user.email lane-test@example.invalid
+git -C "$FLOOR_REPO" config user.name "Lane Test"
+printf '%s\n' base >"$FLOOR_REPO/tracked.txt"
+git -C "$FLOOR_REPO" add tracked.txt
+git -C "$FLOOR_REPO" commit -qm "floor base"
+git -C "$FLOOR_REPO" config lane.diskFloorGib 100000000
+if out=$(env -u DISK_FLOOR_GIB "$LANE" run floorhigh --repo "$FLOOR_REPO" --brief "$BRIEF" --worker fake 2>&1); then
+  fail "ran under the repo's disk floor"
+fi
+grep -Fq "under the 100000000 GiB floor" <<<"$out" || fail "repo disk floor: $out"
+assert_no_file "$LANE_HOME/floorhigh.json"
+DISK_FLOOR_GIB=0 "$LANE" run floorenv --repo "$FLOOR_REPO" --brief "$BRIEF" --worker fake >/dev/null
+wait_for_file "$LANE_HOME/floorenv.done" 300
+
 echo "test: lane.maxRunning makes a run wait for a slot, and 0 holds every run"
 CAP_REPO="$TEST_TMP/caprepo"
 mkdir -p "$CAP_REPO"

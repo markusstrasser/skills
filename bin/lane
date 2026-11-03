@@ -76,6 +76,20 @@ die() {
   exit 2
 }
 
+# disk_floor <repo> <disk-floor args...>: bin/disk-floor at DISK_FLOOR_GIB when that is set, else at the
+# repo's own `git config lane.diskFloorGib <n>`, else at the shared default. Markus lowered arena's floor
+# to 10 GiB on 2026-11-03 ("We can lower the limit to 10gb"); the other repos keep the shared one.
+disk_floor() {
+  local repo=$1 own=""
+  shift
+  [ -n "${DISK_FLOOR_GIB:-}" ] || own=$(git -C "$repo" config --get lane.diskFloorGib 2>/dev/null || true)
+  if [ -n "$own" ]; then
+    "$LANE_BIN_DIR/disk-floor" --min-gib "$own" "$@"
+  else
+    "$LANE_BIN_DIR/disk-floor" "$@"
+  fi
+}
+
 require_python() {
   command -v python3 >/dev/null 2>&1 || die "python3 is required for lane metadata"
 }
@@ -404,7 +418,7 @@ ensure_hook_checkout() {
     run_checkout_hook "$hook" "$name" "$repo" "$brief" "" "" "" --verify "$dest" "$base" ||
       die "checkout hook $hook refused to reuse $dest (rc=$?)"
   else
-    "$LANE_BIN_DIR/disk-floor" --path "$LANE_HOME" --what "lane checkout $dest" \
+    disk_floor "$repo" --path "$LANE_HOME" --what "lane checkout $dest" \
       --hint "lane ls, then lane reap <finished-lane> --force" || die "disk below the floor; reclaim first"
     mkdir -p "$LANE_HOME/checkouts"
     if run_checkout_hook "$hook" "$name" "$repo" "$brief" "" "$seed_patch" "$seed_list" "$dest" "$base"; then
@@ -811,7 +825,7 @@ ensure_worktree() {
   else
     # A new worktree is a full checkout (~600 MB for genomics); below the shared floor refuse it with the reclaim
     # commands instead of letting the lane die on ENOSPC (2026-10-24: 9.8 GiB free).
-    "$LANE_BIN_DIR/disk-floor" --path "$repo" --what "lane worktree $worktree" \
+    disk_floor "$repo" --path "$repo" --what "lane worktree $worktree" \
       --hint "lane ls, then lane reap <finished-lane> --force" || die "disk below the floor; reclaim first"
     mkdir -p "$(dirname "$worktree")"
     if git -C "$repo" show-ref --verify --quiet "refs/heads/$branch"; then
