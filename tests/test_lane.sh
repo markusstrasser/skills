@@ -192,6 +192,7 @@ printf '%s\n' \
   '#!/usr/bin/env bash' \
   'printf "%s\n" "$@" > "$LANE_CAPTURE/codex.args"' \
   'pwd -P > "$LANE_CAPTURE/codex.cwd"' \
+  'printf "%s\n" "${GIT_CONFIG_VALUE_0:-}" > "$LANE_CAPTURE/codex.githooks"' \
   'sleep 0.5' \
   'calls=$(( $(cat "$LANE_CAPTURE/codex.calls" 2>/dev/null || echo 0) + 1 ))' \
   'echo "$calls" > "$LANE_CAPTURE/codex.calls"' \
@@ -401,9 +402,17 @@ Git state belongs to the parent: edit files and run checks, but do not stage, co
 expected_full=$(printf '%s\n' exec -m gpt-6-astra -s danger-full-access --add-dir "$HOME/.cache/uv" --skip-git-repo-check "$FULL_PROMPT")
 assert_eq "$expected_full" "$(<"$LANE_CAPTURE/codex.args")" "codex repo sandbox"
 grep -Fq " sandbox=danger-full-access" <<<"$full_output" || fail "settings line omitted the repo's sandbox"
+assert_eq "$LANE_HOME/codex-git-hooks" "$(<"$LANE_CAPTURE/codex.githooks")" "full-access codex git hooks"
+HOOKREPO="$TEST_TMP/hookrepo"
+git init -q "$HOOKREPO"
+if GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0="$LANE_HOME/codex-git-hooks" \
+  git -C "$HOOKREPO" -c user.email=t@t -c user.name=t commit -q --allow-empty -m refused 2>/dev/null; then
+  fail "a full-access codex lane's hooks let a commit through"
+fi
 LANE_CODEX_SANDBOX=workspace-write "$LANE" run codexpinned --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null
 wait_for_file "$LANE_HOME/codexpinned.done"
 assert_eq "$expected_codex" "$(<"$LANE_CAPTURE/codex.args")" "caller's sandbox over the repo's"
+assert_eq "" "$(<"$LANE_CAPTURE/codex.githooks")" "a sandboxed codex lane gets no git hooks"
 git -C "$REPO" config lane.codexSandbox bogus
 if "$LANE" run codexbogus --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null 2>&1; then
   fail "an invalid lane.codexSandbox started a lane"

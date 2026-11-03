@@ -752,6 +752,22 @@ resolve_codex_sandbox() {
   export LANE_CODEX_SANDBOX
 }
 
+# No sandbox keeps a full-access codex lane's git metadata read-only, and codex loads no project rules from a
+# lane's worktree (2026-11-03: a `forbidden` rule for `git commit` in .codex/rules let the commit run). Git refuses
+# instead: the worker's environment points core.hooksPath at hooks that refuse every commit, merge, rebase and push.
+# That stops mistakes, as lane-opencode's deny-list does; `--no-verify` still passes.
+codex_git_hooks() {
+  local hooks="$LANE_HOME/codex-git-hooks"
+  local hook
+  mkdir -p "$hooks" || die "cannot create $hooks"
+  for hook in pre-commit pre-merge-commit pre-rebase pre-push pre-applypatch; do
+    printf '%s\n' '#!/bin/sh' 'echo "lane: git writes belong to the parent: edit files and leave staging and commits to it" >&2' \
+      'exit 1' >"$hooks/.$hook.$$" && chmod +x "$hooks/.$hook.$$" && mv -f "$hooks/.$hook.$$" "$hooks/$hook" ||
+      die "cannot write $hooks/$hook"
+  done
+  printf '%s\n' "$hooks"
+}
+
 # Per-worktree bootstrap: run the repo's `.agents/prepare` (Delta/agent-skills
 # convention; `.claude/prepare` as a local override) inside a freshly created
 # worktree. Must be fast, idempotent and non-interactive — a lane never blocks on it.
@@ -903,6 +919,11 @@ launch_worker() {
     add_cpu_slot_writable_root "$worktree"
     add_repo_writable_roots "$repo"
     resolve_codex_sandbox "$repo"
+    LANE_CODEX_GIT_HOOKS=""
+    if [ "$LANE_CODEX_SANDBOX" = danger-full-access ]; then
+      LANE_CODEX_GIT_HOOKS=$(codex_git_hooks)
+    fi
+    export LANE_CODEX_GIT_HOOKS
   fi
   print_worker_settings "$worker"
   if [ "$checkout_mode" = hook ]; then
@@ -967,6 +988,9 @@ launch_worker() {
         # on it on 2026-10-26. Wait in place, doubling the wait up to 5 min, and start codex again on the same
         # checkout with a note to continue, as lane resume does; after LANE_CODEX_CAPACITY_WAIT_S (30 min) of waits,
         # exit 85, which lane resume continues.
+        if [ -n "${LANE_CODEX_GIT_HOOKS:-}" ]; then
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0="$LANE_CODEX_GIT_HOOKS"
+        fi
         attempt_prompt=$prompt
         capacity_delay=${LANE_CODEX_CAPACITY_RETRY_S:-60}
         capacity_waited=0
