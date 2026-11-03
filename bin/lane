@@ -754,8 +754,11 @@ resolve_codex_sandbox() {
 
 # No sandbox keeps a full-access codex lane's git metadata read-only, and codex loads no project rules from a
 # lane's worktree (2026-11-03: a `forbidden` rule for `git commit` in .codex/rules let the commit run). Git refuses
-# instead: the worker's environment points core.hooksPath at hooks that refuse every commit, merge, rebase and push.
-# That stops mistakes, as lane-opencode's deny-list does; `--no-verify` still passes.
+# instead: codex's command environment points core.hooksPath at hooks that refuse every commit, merge, rebase and
+# push. The variables go in through `-c shell_environment_policy.set.*`, never the worker's environment: with
+# `inherit = "core"` in ~/.codex/config.toml, codex passed none of the exported GIT_CONFIG_* variables to its commands,
+# and a real probe's commit and push went through (2026-11-03); through the policy's set table both were refused and
+# `git status` still ran. That stops mistakes, as lane-opencode's deny-list does; `--no-verify` still passes.
 codex_git_hooks() {
   local hooks="$LANE_HOME/codex-git-hooks"
   local hook
@@ -984,13 +987,15 @@ launch_worker() {
         if [ "$LANE_CODEX_NETWORK" = 1 ]; then
           codex_args+=(-c "sandbox_workspace_write.network_access=true")
         fi
+        if [ -n "${LANE_CODEX_GIT_HOOKS:-}" ]; then
+          codex_args+=(-c "shell_environment_policy.set.GIT_CONFIG_COUNT=\"1\""
+            -c "shell_environment_policy.set.GIT_CONFIG_KEY_0=\"core.hooksPath\""
+            -c "shell_environment_policy.set.GIT_CONFIG_VALUE_0=\"$LANE_CODEX_GIT_HOOKS\"")
+        fi
         # A model at capacity (codex prints "Selected model is at capacity" and exits 1) passes: seven Sol lanes died
         # on it on 2026-10-26. Wait in place, doubling the wait up to 5 min, and start codex again on the same
         # checkout with a note to continue, as lane resume does; after LANE_CODEX_CAPACITY_WAIT_S (30 min) of waits,
         # exit 85, which lane resume continues.
-        if [ -n "${LANE_CODEX_GIT_HOOKS:-}" ]; then
-          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0="$LANE_CODEX_GIT_HOOKS"
-        fi
         attempt_prompt=$prompt
         capacity_delay=${LANE_CODEX_CAPACITY_RETRY_S:-60}
         capacity_waited=0
