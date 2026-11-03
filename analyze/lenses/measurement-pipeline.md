@@ -10,7 +10,12 @@ across groups, places or years, and before the null/base-rate lens: the number i
 2. **At each stage ask four things:** who controls it; what is the residual category and who renamed it
    ("unknown/other" → native-born, "not identified as legal" → illegal, "non-resident" still in a
    resident-rate numerator); what changed in the window (definition, form, coverage, leadership); what is
-   the sign on the published ratio. Checklist items 34, 37 and 38.
+   the sign on the published ratio. Checklist items 34, 37 and 38. Check the imputation share in each
+   outcome cell, not only overall. Hot-deck donors can come from the wrong pool in the cell that matters:
+   the 2000 census imputed birthplace for 68% of institutionalized Mexican-origin men, which turned a
+   measured 1.9× incarceration ratio into 3.45×. Recompute on non-imputed records. A household survey also
+   can't see payments that flow to providers rather than through respondents (supplemental hospital
+   payments are invisible to MEPS), so list the flows that bypass the instrument.
 3. **Date the extract.** Same-year numbers differ by pull date (late identification, revisions,
    right-censoring). Compare like vintage to like vintage; carry the extract date with the number.
    Checklist item 36.

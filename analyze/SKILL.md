@@ -1,6 +1,6 @@
 ---
 name: analyze
-description: "Use when: why/root-cause, confounder, regression, ACH, DAG adjustment, weakest-link, official/administrative statistic. Lenses: null, causal, dag, hypotheses, audit, pipeline, stop. NOT ideation (/brainstorm)."
+description: "Use when: why/root-cause, confounder, regression, ACH, DAG adjustment, weakest-link, official/administrative statistic. Lenses: null, causal, dag, hypotheses, fraud, audit, pipeline, stop. NOT ideation (/brainstorm)."
 user-invocable: true
 argument-hint: "[lens] [question or target]"
 allowed-tools: [Read, Glob, Grep, Bash, Write, Edit]
@@ -26,7 +26,8 @@ Project workflows decide:
 | null/base-rate | The observation may be normal, seasonal, sector-wide, or mean-reverting | `lenses/null-base-rate.md` |
 | causal-attribution | The user asks why something happened or what caused a change | `lenses/causal-attribution.md` |
 | dag-adjustment | Regression, controls, confounders, causal effect, bad controls | `lenses/dag-adjustment.md` |
-| hypotheses-ach | Multiple explanations, fraud-vs-error, anomaly triage, adversarial workup | `lenses/hypotheses-ach.md` |
+| hypotheses-ach | Multiple explanations, anomaly triage, adversarial workup | `lenses/hypotheses-ach.md` |
+| fraud-error | A claim, dataset, poll, paper or audit may be fabricated or misrepresented, or a claim alleges fraud; supplies the slots and tests for ACH (record's noun and status rung, vetting funnel, raw-record and too-clean tests, outcome-level check) | `lenses/fraud-error.md` |
 | weakest-link-audit | A causal story sounds plausible but may have one unsupported link | `lenses/weakest-link-audit.md` |
 | spirit-audit | A work-product is judged against a contract (eval verdict, backtest, gate, benchmark, claim) and may be letter-true but spirit-false (gaming, invalid gold, errors-scored-as-results, confounds, leakage) | `lenses/spirit-audit.md` |
 | proxy-validity | Estimating a latent quantity (ability, credibility, capability) from observable proxies, or applying a proposed bias-discount to such an estimate | `lenses/proxy-validity.md` |
