@@ -13,12 +13,9 @@ parallelizing, reporting, tidying up); you do those anyway.
 Ask what the operator would push on here: the weakest result, the obvious question nobody
 asked, the construct or comparison that is off.
 
-Misses inside the session (a number that changed since an earlier turn, a check that passes
-for the wrong reason, a change with a side effect beyond its intent) mostly arrive already, as
-"Heads up" cards that side-watch relays into the conversation. Those cards exist only in
-interactive Claude Code sessions launched with the mods. In Codex, unattended loops and lanes,
-or a session with no card yet, scan for those three misses yourself first. Then spend /steer on
-the moves the cards don't make. Pick the one register most likely to move the result:
+First scan for the common misses inside the session: a number that changed since an earlier
+turn, a check that passes for the wrong reason, a change with a side effect beyond its intent.
+Then pick the one register most likely to move the result:
 
 - **Abstract:** which founding assumption, if false, flips the conclusion? Test that one. No nitpicks.
 - **Abductive:** which single hidden mechanism would explain the open surprises together, and
