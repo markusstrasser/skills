@@ -5,8 +5,10 @@ falsified or misrepresented, or when someone else's claim says it was. Run
 hypotheses-ach for the ranking; this lens supplies the slots and the tests.
 
 The default rival is misreading, not invention. In the operator's own bookmark
-fact-checks (2026-10-17 and 10-29, plus the 11-02 election audit; ~71 graded
-errors), misreading a real primary record caused about two thirds of them.
+fact-checks (2026-09 through 2026-11, including the 11-02 election audit; ~104
+tagged errors), misreading a real primary record caused about three in five.
+The largest groups were true events with invented steps attached (16), a
+narrower measure relabeled with a stronger word (13) and status escalation (12).
 Outright fabrication and recycled media together caused about one in six.
 
 1. **Read the record's own noun and rung.** Write the quantity the source
@@ -19,7 +21,11 @@ Outright fabrication and recycled media together caused about one in six.
    ~2,600 → 85 removed; NJ: DHS 35,152 → ~6,600 registered → ~400 voted). With
    no confirmed-stage count, report the flag count as an upper bound.
 3. **Check each attached link separately.** A true anchor event transfers no
-   credibility to the motives, steps, totals or causes added to it.
+   credibility to the motives, steps, totals or causes added to it. Put the
+   cited source's own conclusion sentence next to the claim: some posts reverse
+   it. For images and video, compare the date inside the artifact (and its
+   earliest appearance) with the posting date, because recycled media is
+   reposted as current.
 4. **Ask for the raw record, not the summary.** Fabricators aiming to be
    believed copy the consensus, so plausibility and agreement with other
    sources are not evidence that data is real. Wedgewood's fake polls (Oct 2026)
