@@ -14,7 +14,7 @@ LANE_ARCHIVE_VOLUME="$ARCHIVE_BASE/ssd"
 LANE_ARCHIVE_REQUIRE_MOUNT=0
 export LANE_ARCHIVE_VOLUME LANE_ARCHIVE_REQUIRE_MOUNT
 mkdir -p "$LANE_ARCHIVE_VOLUME"
-unset LANE_CODEX_MODEL LANE_CODEX_EFFORT LANE_CODEX_ADD_DIRS LANE_CODEX_NETWORK
+unset LANE_CODEX_MODEL LANE_CODEX_EFFORT LANE_CODEX_ADD_DIRS LANE_CODEX_NETWORK LANE_CODEX_SANDBOX
 unset LANE_CLAUDE_MODEL LANE_CLAUDE_EFFORT LANE_OPENCODE_MODEL
 REPO="$TEST_TMP/repo"
 BRIEF="$TEST_TMP/brief.md"
@@ -391,11 +391,30 @@ expected_roots=$(printf '%s\n' \
 assert_eq "$expected_roots" "$(<"$LANE_CAPTURE/codex.args")" "codex repo writable roots"
 grep -Fq "add_dirs=$ROOT_A:$ROOT_B network=" <<<"$roots_output" || fail "settings line omitted the repo's roots"
 
+echo "test: codex runs in the sandbox the repo names in lane.codexSandbox, under the caller's override"
+git -C "$REPO" config lane.codexSandbox danger-full-access
+full_output=$("$LANE" run codexfull --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree)
+wait_for_file "$LANE_HOME/codexfull.done"
+FULL_PROMPT="Do the fake task.
+
+Git state belongs to the parent: edit files and run checks, but do not stage, commit, merge, stash or switch branches. Do not stop or kill processes you did not start. End by listing every path you changed."
+expected_full=$(printf '%s\n' exec -m gpt-6-astra -s danger-full-access --add-dir "$HOME/.cache/uv" --skip-git-repo-check "$FULL_PROMPT")
+assert_eq "$expected_full" "$(<"$LANE_CAPTURE/codex.args")" "codex repo sandbox"
+grep -Fq " sandbox=danger-full-access" <<<"$full_output" || fail "settings line omitted the repo's sandbox"
+LANE_CODEX_SANDBOX=workspace-write "$LANE" run codexpinned --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/codexpinned.done"
+assert_eq "$expected_codex" "$(<"$LANE_CAPTURE/codex.args")" "caller's sandbox over the repo's"
+git -C "$REPO" config lane.codexSandbox bogus
+if "$LANE" run codexbogus --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null 2>&1; then
+  fail "an invalid lane.codexSandbox started a lane"
+fi
+git -C "$REPO" config --unset lane.codexSandbox
+
 echo "test: codex resume retains settings without caller exports"
 resume_output=$("$LANE" resume codexoverride --no-note)
 wait_for_file "$LANE_HOME/codexoverride.done"
 assert_eq "$expected_override" "$(<"$LANE_CAPTURE/codex.args")" "resumed codex settings"
-settings_line="lane: settings codex_model=gpt-6.1-sol codex_effort=high add_dirs=$TEST_TMP/slots:$TEST_TMP/extra root network=1"
+settings_line="lane: settings codex_model=gpt-6.1-sol codex_effort=high add_dirs=$TEST_TMP/slots:$TEST_TMP/extra root network=1 sandbox=workspace-write"
 grep -Fxq "$settings_line" <<<"$override_output" || fail "run omitted effective codex settings"
 grep -Fxq "$settings_line" <<<"$resume_output" || fail "resume omitted effective codex settings"
 assert_eq "gpt-6.1-sol" "$(worker_setting "$LANE_HOME/codexoverride.json" codex_model)" "recorded codex model"

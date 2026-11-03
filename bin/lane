@@ -45,6 +45,7 @@ usage:
       (opencode worker: a provider at capacity (429) is retried in the lane's session for ~20 min, then exit 85; lane resume continues it)
       (codex worker: LANE_CODEX_MODEL=<m> LANE_CODEX_EFFORT=<e> env override the default gpt-6-astra/config effort)
       (codex worker: LANE_CODEX_ADD_DIRS=<a:b> adds writable roots; LANE_CODEX_NETWORK=1 enables network; git metadata stays read-only, so the parent merges and commits)
+      (codex worker: LANE_CODEX_SANDBOX=<mode>, else `git config lane.codexSandbox <mode>` in the repo, picks codex's sandbox: workspace-write (default), read-only or danger-full-access)
       (codex worker: each `git config --add lane.codexAddDir <absolute dir>` in the repo adds a writable root to every codex lane)
       (codex worker: a model at capacity is waited out and codex started again on the checkout for ~30 min, then exit 85; lane resume continues it)
   lane review <name> [--model <m>] [--effort <e>] [--focus <file>] [--report <file>] [--out <file>] [--bg]
@@ -155,6 +156,8 @@ defaults = {
     "codex_effort": "",
     "codex_add_dirs": "",
     "codex_network": "0",
+    # Empty: the repo's lane.codexSandbox, else workspace-write, resolved at launch (resolve_codex_sandbox).
+    "codex_sandbox": "",
     "claude_model": "opus",
     "claude_effort": "",
     "claude_add_dirs": "",
@@ -187,6 +190,8 @@ for key, default in defaults.items():
         value = ":".join(directory for directory in value.split(":") if directory)
     elif key == "codex_network":
         value = "1" if value == "1" else "0"
+    elif key == "codex_sandbox" and value not in ("", "read-only", "workspace-write", "danger-full-access"):
+        sys.exit(f"lane: {env_key} must be read-only, workspace-write or danger-full-access: {value}")
     settings[key] = value
     print(f"{env_key}\t{value}")
 print("WORKER_SETTINGS\t" + json.dumps(settings, sort_keys=True))
@@ -210,7 +215,7 @@ print_worker_settings() {
       echo "lane: settings opencode_model=${LANE_OPENCODE_MODEL:-default}"
       ;;
     *)
-      echo "lane: settings codex_model=$LANE_CODEX_MODEL codex_effort=${LANE_CODEX_EFFORT:-config} add_dirs=$LANE_CODEX_ADD_DIRS network=$LANE_CODEX_NETWORK"
+      echo "lane: settings codex_model=$LANE_CODEX_MODEL codex_effort=${LANE_CODEX_EFFORT:-config} add_dirs=$LANE_CODEX_ADD_DIRS network=$LANE_CODEX_NETWORK sandbox=$LANE_CODEX_SANDBOX"
       ;;
   esac
 }
@@ -730,6 +735,23 @@ add_repo_writable_roots() {
   export LANE_CODEX_ADD_DIRS
 }
 
+# A repo picks its codex lanes' sandbox with `git config lane.codexSandbox <mode>`; LANE_CODEX_SANDBOX, or the
+# value a resumed lane recorded, wins over it, and workspace-write is the default. arena runs
+# danger-full-access: workspace-write gave its Sol lanes no GPU for a screenshot or a frame-time check
+# (nagrand-surroundings, world-entry-ack) and failed lane-cargo's own tests (builder-data-fresh).
+resolve_codex_sandbox() {
+  local repo="$1"
+  if [ -z "${LANE_CODEX_SANDBOX:-}" ]; then
+    LANE_CODEX_SANDBOX=$(git -C "$repo" config --get lane.codexSandbox 2>/dev/null || true)
+  fi
+  LANE_CODEX_SANDBOX=${LANE_CODEX_SANDBOX:-workspace-write}
+  case "$LANE_CODEX_SANDBOX" in
+    read-only|workspace-write|danger-full-access) ;;
+    *) die "lane.codexSandbox in $repo must be read-only, workspace-write or danger-full-access: $LANE_CODEX_SANDBOX" ;;
+  esac
+  export LANE_CODEX_SANDBOX
+}
+
 # Per-worktree bootstrap: run the repo's `.agents/prepare` (Delta/agent-skills
 # convention; `.claude/prepare` as a local override) inside a freshly created
 # worktree. Must be fast, idempotent and non-interactive — a lane never blocks on it.
@@ -793,6 +815,11 @@ build_prompt() {
   elif [ "$worker" = "opencode" ]; then
     # OpenCode has no sandbox to keep git metadata read-only, so the contract is in the prompt (and in
     # lane-opencode's deny-list).
+    prompt="$(<"$brief")
+
+Git state belongs to the parent: edit files and run checks, but do not stage, commit, merge, stash or switch branches. Do not stop or kill processes you did not start. End by listing every path you changed."
+  elif [ "${LANE_CODEX_SANDBOX:-}" = danger-full-access ]; then
+    # No sandbox keeps git metadata read-only, so the contract is in the prompt, as for OpenCode.
     prompt="$(<"$brief")
 
 Git state belongs to the parent: edit files and run checks, but do not stage, commit, merge, stash or switch branches. Do not stop or kill processes you did not start. End by listing every path you changed."
@@ -875,6 +902,7 @@ launch_worker() {
     add_uv_cache_writable_root "$worktree"
     add_cpu_slot_writable_root "$worktree"
     add_repo_writable_roots "$repo"
+    resolve_codex_sandbox "$repo"
   fi
   print_worker_settings "$worker"
   if [ "$checkout_mode" = hook ]; then
@@ -944,7 +972,7 @@ launch_worker() {
         capacity_waited=0
         while :; do
           log_offset=$(wc -c < "$log")
-          caffeinate -i codex exec "${codex_args[@]}" -s workspace-write --add-dir "$HOME/.cache/uv" --skip-git-repo-check "$attempt_prompt" < /dev/null
+          caffeinate -i codex exec "${codex_args[@]}" -s "$LANE_CODEX_SANDBOX" --add-dir "$HOME/.cache/uv" --skip-git-repo-check "$attempt_prompt" < /dev/null
           codex_rc=$?
           if [ "$codex_rc" = 0 ] || ! tail -c +"$((log_offset + 1))" "$log" | grep -q "Selected model is at capacity"; then
             break
