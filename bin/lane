@@ -40,6 +40,7 @@ usage:
        {"provided": {<path>: <sha256>}} for inputs the hook copied in, which a harvest skips while unchanged)
       (claude worker: LANE_CLAUDE_MODEL=<m> LANE_CLAUDE_EFFORT=<e> env override the default opus/default effort)
       (claude worker: LANE_CLAUDE_ADD_DIRS=<a:b> passes each directory as --add-dir, for writes outside the checkout)
+      (claude worker: LANE_CLAUDE_CONTINUE=1 makes lane resume continue the lane's conversation, not start a new session)
       (opencode worker: bin/lane-opencode's default model, DeepSeek V4.1 Flash with thinking on; LANE_OPENCODE_MODEL=<provider/model> overrides it)
       (opencode worker: no sandbox; a scrubbed env and a deny-list guard it, see bin/lane-opencode; exit 86 = balance exhausted)
       (opencode worker: a provider at capacity (429) is retried in the lane's session for ~20 min, then exit 85; lane resume continues it)
@@ -1065,6 +1066,8 @@ A provider capacity error stopped your previous attempt. The checkout keeps its 
       # reset, a weekly limit fails out; 2 h for capacity; recheck every 15 min for a lifted limit.
         claude_args=(--model "$LANE_CLAUDE_MODEL")
         if [ -n "$LANE_CLAUDE_EFFORT" ]; then claude_args+=(--effort "$LANE_CLAUDE_EFFORT"); fi
+        # A resume is a new session on the same checkout unless asked: 1 continues the same conversation.
+        if [ "$resume_mode" = true ] && [ "${LANE_CLAUDE_CONTINUE:-}" = 1 ]; then claude_args+=(--continue); fi
         # Directories outside the checkout the worker may write, colon-separated (e.g. a reviews
         # directory). --add-dir takes several values, so an option must follow the last one.
         IFS=: read -r -a claude_dirs <<< "$LANE_CLAUDE_ADD_DIRS"

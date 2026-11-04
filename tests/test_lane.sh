@@ -547,6 +547,15 @@ LANE_CLAUDE_MODEL= LANE_CLAUDE_EFFORT= "$LANE" resume claudeoverride --no-note >
 wait_for_file "$LANE_HOME/claudeoverride.done"
 assert_eq "$expected_claude" "$(<"$LANE_CAPTURE/claude.args")" "empty exports restore default claude arguments"
 
+echo "test: claude resume continues the conversation only when asked"
+grep -Fxq -- --continue "$LANE_CAPTURE/claude.args" && fail "a plain resume must start a new session"
+LANE_CLAUDE_CONTINUE=1 "$LANE" resume claudeoverride --no-note >/dev/null
+wait_for_file "$LANE_HOME/claudeoverride.done"
+grep -Fxq -- --continue "$LANE_CAPTURE/claude.args" || fail "LANE_CLAUDE_CONTINUE=1 must pass --continue on resume"
+LANE_CLAUDE_CONTINUE=1 "$LANE" run claudefresh --repo "$REPO" --brief "$BRIEF" --worker claude --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/claudefresh.done"
+grep -Fxq -- --continue "$LANE_CAPTURE/claude.args" && fail "a first run has no conversation to continue"
+
 echo "test: claude worker passes LANE_CLAUDE_ADD_DIRS as --add-dir and keeps them on resume"
 claudedirs_output=$(LANE_CLAUDE_ADD_DIRS="$TEST_TMP/reviews:$TEST_TMP/extra root:" "$LANE" run claudedirs --repo "$REPO" --brief "$BRIEF" --worker claude --no-worktree)
 wait_for_file "$LANE_HOME/claudedirs.done"
