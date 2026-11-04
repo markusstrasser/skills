@@ -15,7 +15,10 @@ LANE_ARCHIVE_REQUIRE_MOUNT=0
 export LANE_ARCHIVE_VOLUME LANE_ARCHIVE_REQUIRE_MOUNT
 mkdir -p "$LANE_ARCHIVE_VOLUME"
 unset LANE_CODEX_MODEL LANE_CODEX_EFFORT LANE_CODEX_ADD_DIRS LANE_CODEX_NETWORK LANE_CODEX_SANDBOX
-unset LANE_CLAUDE_MODEL LANE_CLAUDE_EFFORT LANE_OPENCODE_MODEL
+unset LANE_CLAUDE_MODEL LANE_CLAUDE_EFFORT LANE_OPENCODE_MODEL CODEX_API_KEY LANE_CODEX_API_DAILY_USD
+# lane-api-spend prices with llmx; the fake llmx below shadows the real one, so its interpreter is read first.
+LANE_LLMX_PYTHON=$(sed -n '1s/^#!//p' "$(command -v llmx)")
+export LANE_LLMX_PYTHON
 REPO="$TEST_TMP/repo"
 BRIEF="$TEST_TMP/brief.md"
 FAKE_BIN="$TEST_TMP/bin"
@@ -35,7 +38,7 @@ cleanup() {
   fi
   # The live-lane test gives a running lane a fake marker, and lane stop signals no lane that has one.
   rm -f "$LANE_HOME/archlive.done"
-  for name in first rvcommit rvnobase hang inline codexargs codexoverride codexuvcache claudeargs claudeoverride claudedirs ocargs ocquota failure rvcache rvown rvnone retire1 retirefail retirebusy retireread hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit capa capb capfree nice0; do
+  for name in first rvcommit rvnobase hang inline codexargs codexoverride codexuvcache apicap2 claudeargs claudeoverride claudedirs ocargs ocquota failure rvcache rvown rvnone retire1 retirefail retirebusy retireread hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit capa capb capfree nice0; do
     if [ -f "$LANE_HOME/$name.json" ]; then
       "$LANE" stop "$name" >/dev/null 2>&1 || true
     fi
@@ -465,6 +468,47 @@ assert_eq "$expected_override" "$(<"$LANE_CAPTURE/codex.args")" "legacy codex en
 for key in name repo worktree brief pid started_at started_epoch worker; do
   grep -q "\"$key\"" "$LANE_HOME/codexargs.json" || fail "metadata omitted $key"
 done
+
+echo "test: a codex worker billed to CODEX_API_KEY starts only under the day's API cap"
+LANE_CODEX_SESSIONS="$TEST_TMP/codex-sessions"
+LLMX_USAGE_LOG="$TEST_TMP/llmx-usage.jsonl"
+export LANE_CODEX_SESSIONS LLMX_USAGE_LOG
+: >"$LLMX_USAGE_LOG"
+# One API call of 250k uncached Sol input and 150k output ($2.00, under the 272k long-prompt rate), the same call's
+# repeated token_count, and a plan call (Codex window).
+python3 - "$LANE_CODEX_SESSIONS" <<'PY'
+import json, sys
+from datetime import datetime, timezone
+from pathlib import Path
+now = datetime.now(timezone.utc)
+folder = Path(sys.argv[1]) / f"{now.astimezone():%Y/%m/%d}"
+folder.mkdir(parents=True)
+stamp = now.isoformat().replace("+00:00", "Z")
+def count(total, rate_limits):
+    usage = {"input_tokens": 250_000, "cached_input_tokens": 0, "cache_write_input_tokens": 0, "output_tokens": 150_000}
+    return {"timestamp": stamp, "type": "event_msg", "payload": {"type": "token_count", "rate_limits": rate_limits,
+            "info": {"last_token_usage": usage, "total_token_usage": {"total_tokens": total}}}}
+records = [{"timestamp": stamp, "type": "session_meta", "payload": {"cwd": "/work/apicap-fixture"}},
+           {"timestamp": stamp, "type": "turn_context", "payload": {"model": "gpt-6.1-sol"}},
+           count(1_000_000, None), count(1_000_000, None),
+           count(2_000_000, {"limit_id": "codex", "primary": {"used_percent": 50.0}})]
+(folder / "rollout-apicap.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
+PY
+assert_eq "2.00" "$("$ROOT/bin/lane-api-spend" --total)" "API spend counts the API call once and no plan call"
+if cap_output=$(CODEX_API_KEY=test-key LANE_CODEX_API_DAILY_USD=2 "$LANE" run apicap --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree 2>&1); then
+  fail "run started a codex worker billed to CODEX_API_KEY at the day's cap"
+fi
+grep -Fq 'at or over LANE_CODEX_API_DAILY_USD=$2' <<<"$cap_output" || fail "cap refusal omitted its reason: $cap_output"
+[ ! -e "$LANE_HOME/apicap.json" ] || fail "a refused run left lane metadata"
+under_output=$(CODEX_API_KEY=test-key LANE_CODEX_API_DAILY_USD=3 "$LANE" run apicap2 --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree)
+wait_for_file "$LANE_HOME/apicap2.done"
+grep -Fxq 'lane: OpenAI API spend today $2.00 of $3' <<<"$under_output" || fail "run under the cap omitted the spend: $under_output"
+if CODEX_API_KEY=test-key LANE_CODEX_API_DAILY_USD=1.5 "$LANE" resume apicap2 --no-note >/dev/null 2>&1; then
+  fail "resume started a codex worker billed to CODEX_API_KEY past the day's cap"
+fi
+"$LANE" resume apicap2 --no-note >/dev/null
+wait_for_file "$LANE_HOME/apicap2.done"
+unset LANE_CODEX_SESSIONS LLMX_USAGE_LOG
 
 OTHER_REPO="$TEST_TMP/other-repo"
 mkdir -p "$OTHER_REPO"

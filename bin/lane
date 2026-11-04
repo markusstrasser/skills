@@ -76,6 +76,25 @@ die() {
   exit 2
 }
 
+# check_api_budget <worker>: a codex worker with CODEX_API_KEY set bills the OpenAI API, not the ChatGPT plan. Markus,
+# 2026-11-04: "let's not burn through our api credits ... maybe 50$ a day is fine". Such a worker starts only while
+# the day's API spend, which bin/lane-api-spend prices from every codex rollout and llmx call, is under
+# LANE_CODEX_API_DAILY_USD (default 50). run checks before it waits for a slot, so a run that waited can start a read
+# or two past the cap.
+check_api_budget() {
+  local worker="$1"
+  local limit="${LANE_CODEX_API_DAILY_USD:-50}"
+  local spent
+  [ "$worker" = codex ] && [ -n "${CODEX_API_KEY:-}" ] || return 0
+  [[ "$limit" =~ ^[0-9]+([.][0-9]+)?$ ]] || die "LANE_CODEX_API_DAILY_USD must be a dollar amount: $limit"
+  spent=$("$LANE_BIN_DIR/lane-api-spend" --total) ||
+    die "cannot price today's OpenAI API spend (lane-api-spend failed): refusing a codex worker billed to CODEX_API_KEY"
+  if awk -v spent="$spent" -v limit="$limit" 'BEGIN { exit !(spent + 0 >= limit + 0) }'; then
+    die "today's OpenAI API spend is \$$spent, at or over LANE_CODEX_API_DAILY_USD=\$$limit: refusing a codex worker billed to CODEX_API_KEY (lane-api-spend lists the calls)"
+  fi
+  echo "lane: OpenAI API spend today \$$spent of \$$limit"
+}
+
 # disk_floor <repo> <disk-floor args...>: bin/disk-floor at DISK_FLOOR_GIB when that is set, else at the
 # repo's own `git config lane.diskFloorGib <n>`, else at the shared default. Markus lowered arena's floor
 # to 10 GiB on 2026-11-03 ("We can lower the limit to 10gb"); the other repos keep the shared one.
@@ -1437,6 +1456,7 @@ cmd_run() {
   fi
   # A bad base fails before the wait; a good one resolves again after it, at the repo's newest commit.
   git -C "$repo_root" rev-parse --verify --quiet "$base^{commit}" >/dev/null || die "base is not a commit in $repo_root: $base"
+  check_api_budget "$worker"
   acquire_slot "$name" "$repo_root"
   base_oid=$(git -C "$repo_root" rev-parse --verify --quiet "$base^{commit}") || die "base is not a commit in $repo_root: $base"
   case "$checkout_mode" in
@@ -2059,6 +2079,7 @@ cmd_resume() {
   checkout_mode=$(lane_checkout_mode "$metadata") || die "invalid metadata: $metadata"
   checkout_base=$(json_get_or "$metadata" checkout_base "") || die "invalid metadata: $metadata"
   keep_checkout=$(json_get_or "$metadata" keep_checkout "false") || die "invalid metadata: $metadata"
+  check_api_budget "$worker"
   [ -f "$brief" ] || die "brief no longer exists: $brief"
   if [ ! -d "$worktree" ]; then
     if harvest=$(latest_harvest "$name"); then
