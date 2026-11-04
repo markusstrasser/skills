@@ -84,7 +84,8 @@ die() {
 check_api_budget() {
   local worker="$1"
   # Markus, 2026-11-04: $50 a day, and $70 until the Codex plan returns on 11-11, since the API credit may lapse unused.
-  local limit="${LANE_CODEX_API_DAILY_USD:-$([ "$(date +%Y%m%d)" -le 20261111 ] && echo 70 || echo 50)}"
+  # Markus, 2026-11-04 21:31: "you can reset the sol budget now": $140 that day, $70.75 spent plus a fresh $70.
+  local limit="${LANE_CODEX_API_DAILY_USD:-$(d=$(date +%Y%m%d); [ "$d" -eq 20261104 ] && echo 140 || { [ "$d" -le 20261111 ] && echo 70 || echo 50; })}"
   local spent
   [ "$worker" = codex ] && [ -n "${CODEX_API_KEY:-}" ] || return 0
   [[ "$limit" =~ ^[0-9]+([.][0-9]+)?$ ]] || die "LANE_CODEX_API_DAILY_USD must be a dollar amount: $limit"
