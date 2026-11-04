@@ -323,18 +323,13 @@ def main() -> None:
           and "TRIAGE-VERDICT" not in c14 and "TRIAGE-DISPATCH" not in c14)
 
     td.cleanup()
+    # 2026-11-04: its shadow search loaded a 3.5 GB index per prompt and nothing read the answer.
+    # subprocess.run(["uv", "run", ...], timeout=2) kills uv alone, so each python child outlived the hook
+    # with PPID 1: seven Claude lanes starting together took swap from 1.5 to 19 GB in minutes.
+    check("starts no search of the prior-context index", "search_prior_context" not in HOOK.read_text())
+
     print(f"\n{passed} passed, {failed} failed")
     sys.exit(1 if failed else 0)
-
-
-def test_the_hook_starts_no_search_of_the_prior_context_index():
-    """2026-11-04: its shadow search loaded a 3.5 GB index per prompt, and nothing read the answer.
-
-    `subprocess.run(["uv", "run", ...], timeout=2)` kills uv alone, so each python child outlived the hook with
-    PPID 1. Seven Claude lanes starting together took swap from 1.5 to 19 GB in minutes.
-    """
-    source = (Path(__file__).parent / "userprompt-prior-context.py").read_text()
-    assert "search_prior_context" not in source
 
 
 if __name__ == "__main__":
