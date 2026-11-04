@@ -170,7 +170,13 @@ events = [event for here, event in events if here]
 if not events:
     print(f"error:empty {session}")
     raise SystemExit(0)
-last = events[-1]
+# The stream can print a run's last events out of order: on 2026-11-05 a 402 sat in the file before the step_start
+# it followed, so 8 of 9 lanes read as interrupted, retried twice and exited 1 with their balance gone. The clock
+# decides; events with equal or no timestamps keep their order.
+def when(pair):
+    stamp = pair[1].get("timestamp")
+    return (stamp if isinstance(stamp, (int, float)) else 0, pair[0])
+last = max(enumerate(events), key=when)[1]
 if last.get("type") != "error":
     # A failed exit without an error event is a run cut off mid-step: when the network dropped, OpenCode exited 1
     # right after a step_start and two arena lanes ended as finished (2026-10-24).

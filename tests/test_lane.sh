@@ -38,7 +38,7 @@ cleanup() {
   fi
   # The live-lane test gives a running lane a fake marker, and lane stop signals no lane that has one.
   rm -f "$LANE_HOME/archlive.done"
-  for name in first rvcommit rvnobase hang inline codexargs codexoverride codexuvcache apicap2 claudeargs claudeoverride claudedirs ocargs ocquota failure rvcache rvown rvnone retire1 retirefail retirebusy retireread hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit capa capb capfree nice0; do
+  for name in first rvcommit rvnobase hang inline codexargs codexoverride codexuvcache apicap2 claudeargs claudeoverride claudedirs ocargs ocquota ocquotalate failure rvcache rvown rvnone retire1 retirefail retirebusy retireread hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit capa capb capfree nice0; do
     if [ -f "$LANE_HOME/$name.json" ]; then
       "$LANE" stop "$name" >/dev/null 2>&1 || true
     fi
@@ -251,6 +251,11 @@ printf '%s\n' \
   'if [ -f "$capture/opencode-fail-once" ]; then' \
   '  rm "$capture/opencode-fail-once"' \
   '  printf "%s\n" "{\"type\":\"error\",\"sessionID\":\"ses_fake\",\"error\":{\"type\":\"provider.http\",\"message\":\"500 Internal Server Error\"}}"' \
+  '  exit 1' \
+  'fi' \
+  'if [ -f "$capture/opencode-quota-late" ]; then' \
+  '  printf "%s\n" "{\"type\":\"error\",\"timestamp\":2000,\"sessionID\":\"ses_fake\",\"error\":{\"type\":\"provider.quota\",\"message\":\"the organization is out of credit, add more to continue\",\"status\":402}}"' \
+  '  printf "%s\n" "{\"type\":\"step_start\",\"timestamp\":1000,\"sessionID\":\"ses_fake\"}"' \
   '  exit 1' \
   'fi' \
   'if [ -f "$capture/opencode-quota" ]; then' \
@@ -620,6 +625,16 @@ unset LANE_OPENCODE_RETRY_SLEEP LANE_OPENCODE_PROVIDER_HOST
 assert_eq "EXIT=86" "$(<"$LANE_HOME/ocquota.done")" "quota marker"
 grep -Fq "do not retry" "$LANE_HOME/ocquota.log" || fail "quota stop message missing"
 [ "$(find "$LANE_CAPTURE" -name 'opencode.args.*' | wc -l | tr -d ' ')" = 3 ] || fail "quota run retried"
+
+echo "test: a balance error logged before the step_start it follows still exits 86 without a retry"
+export LANE_OPENCODE_RETRY_SLEEP=0 LANE_OPENCODE_PROVIDER_HOST=""
+touch "$LANE_CAPTURE/opencode-quota-late"
+"$LANE" run ocquotalate --repo "$REPO" --brief "$BRIEF" --worker opencode --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/ocquotalate.done"
+rm "$LANE_CAPTURE/opencode-quota-late"
+unset LANE_OPENCODE_RETRY_SLEEP LANE_OPENCODE_PROVIDER_HOST
+assert_eq "EXIT=86" "$(<"$LANE_HOME/ocquotalate.done")" "out-of-order quota marker"
+[ "$(find "$LANE_CAPTURE" -name 'opencode.args.*' | wc -l | tr -d ' ')" = 4 ] || fail "out-of-order quota run retried"
 
 echo "test: an opencode step cut off without an error event resumes its session, and lane resume continues it"
 export LANE_OPENCODE_RETRY_SLEEP=0 LANE_OPENCODE_PROVIDER_HOST=""
