@@ -552,6 +552,22 @@ def branch_is_held_elsewhere(repo, branch, head):
     return any(ref != f"refs/heads/{branch}" for ref in refs)
 
 
+def worktree_lock(repo, checkout):
+    """Why git holds this linked worktree locked, or None.
+
+    `git worktree remove --force` refuses a locked worktree only after the harvest is written, so each retry wrote
+    another full harvest, up to the cap each (a read's sandbox run on 2026-11-04 made three in three autoland ticks).
+    """
+    listing = git(repo, "worktree", "list", "--porcelain").stdout.decode(errors="replace")
+    for block in listing.split("\n\n"):
+        lines = block.splitlines()
+        if lines and lines[0] == f"worktree {checkout}":
+            for line in lines[1:]:
+                if line == "locked" or line.startswith("locked "):
+                    return line.removeprefix("locked").strip() or "no reason given"
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--name", required=True)
@@ -593,6 +609,10 @@ def main():
             raise Keep("[DEGRADED] lsof gave no answer, so open files inside the checkout are unknown")
         if busy:
             raise Keep("busy: " + ", ".join(f"pid {pid} ({command})" for pid, command in sorted(busy.items())))
+        if args.mode == "worktree":
+            lock = worktree_lock(Path(args.repo), checkout)
+            if lock is not None:
+                raise Keep(f"locked: {lock}")
         final, head = harvest(args, checkout)
         # The identity is checked again right before the removal, so a path swapped meanwhile is never deleted.
         validate_identity(args, checkout)

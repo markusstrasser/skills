@@ -1180,6 +1180,20 @@ PY
 assert_file "$(latest_harvest_of retirefail)/run.log.gz"
 [ ! -e "$REPO_REAL/.claude/worktrees/codex-retirefail" ] || fail "reap left the stopped lane's worktree"
 
+echo "test: a locked worktree is kept, with no harvest, until it is unlocked"
+LANE_FAKE_HOLD="$TEST_TMP/release-retirelock" "$LANE" run retirelock --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
+printf '%s\n' "unfinished" >>"$REPO_REAL/.claude/worktrees/codex-retirelock/tracked.txt"
+"$LANE" stop retirelock >/dev/null
+git -C "$REPO_REAL" worktree lock --reason "a hand job" "$REPO_REAL/.claude/worktrees/codex-retirelock"
+reap_output=$("$LANE" reap retirelock --force 2>&1) || true
+grep -Fq 'CHECKOUT=kept locked: a hand job' <<<"$reap_output" || fail "reap of a locked worktree did not name the lock: $reap_output"
+[ -z "$(latest_harvest_of retirelock 2>/dev/null)" ] || fail "a locked worktree was harvested"
+[ -d "$REPO_REAL/.claude/worktrees/codex-retirelock" ] || fail "a locked worktree was removed"
+git -C "$REPO_REAL" worktree unlock "$REPO_REAL/.claude/worktrees/codex-retirelock"
+reap_output=$("$LANE" reap retirelock --force)
+grep -q '^CHECKOUT=retired ' <<<"$reap_output" || fail "reap after the unlock did not harvest: $reap_output"
+grep -Fq '+unfinished' "$(latest_harvest_of retirelock)/lane.patch" || fail "the unlocked lane's harvest lacks its edit"
+
 echo "test: a process inside the checkout keeps it"
 LANE_RETIRE_SETTLE_S=1 LANE_FAKE_HOLD="$TEST_TMP/release-retirebusy" \
   "$LANE" run retirebusy --repo "$REPO" --brief "$BRIEF" --worker fake >/dev/null
