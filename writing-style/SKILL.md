@@ -21,6 +21,7 @@ Three registers. Identify which one applies before drafting. Hard rules are non-
 7. **No performative enthusiasm**: "SO excited!", "absolutely love", "Perfect!".
 8. **No batch-identical emails.** Vary wording per recipient. Add at least one recipient-specific detail.
 9. **Sign-off**: `Markus` or `best, Markus`. NEVER `Best regards`, `Kind regards`, `Warm regards`, `Sincerely`, `Thanks!`.
+10. **No choppy sentence series in emails.** Combine related ideas into flowing sentences.
 
 ## Banned Vocabulary (always)
 
