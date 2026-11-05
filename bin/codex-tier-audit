@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""codex-tier-audit [--hours N]: headless Codex runs (originator codex_exec) in the last N hours (default 48) at a tier
+other than Standard, from ~/.codex/sessions. Exit 1 names them: each one got past codex-tier-shim or asked for that tier
+on its command line. The Desktop app's own threads are its speed setting and are not counted."""
+import argparse
+import json
+import os
+import re
+import sys
+import time
+from pathlib import Path
+
+TIER = re.compile(r'"service_tier":"([a-z_]+)"')
+
+
+def run_info(path: Path) -> tuple[str | None, str | None, str]:
+    """A rollout's originator, its last tier and its working directory, from its first lines' settings."""
+    originator, tier, cwd = None, None, "?"
+    with path.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if '"session_meta"' in line and originator is None:
+                try:
+                    payload = json.loads(line).get("payload") or {}
+                except ValueError:
+                    continue
+                originator, cwd = payload.get("originator"), payload.get("cwd") or cwd
+            if '"thread_settings_applied"' in line and (match := TIER.search(line)):
+                tier = match[1]
+    return originator, tier, cwd
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("--hours", type=float, default=48)
+    args = parser.parse_args()
+    root = Path(os.environ.get("LANE_CODEX_SESSIONS") or Path.home() / ".codex/sessions")
+    since = time.time() - args.hours * 3600
+    found, checked = [], 0
+    for path in root.glob("*/*/*/rollout-*.jsonl"):
+        if path.stat().st_mtime < since:
+            continue
+        originator, tier, cwd = run_info(path)
+        if originator != "codex_exec":
+            continue
+        checked += 1
+        if tier != "default":
+            found.append(f"{tier} {Path(cwd).name} {path.name}")
+    if found:
+        print(f"codex-tier-audit: {len(found)} of {checked} headless runs in {args.hours:g} h not at the Standard tier:")
+        print("\n".join(sorted(found)[:20]))
+        return 1
+    print(f"codex-tier-audit: {checked} headless runs in {args.hours:g} h, all at the Standard tier")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

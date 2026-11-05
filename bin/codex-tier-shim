@@ -1,0 +1,20 @@
+#!/bin/sh
+# codex-tier-shim: installed as ~/.local/bin/codex, ahead of Homebrew's on PATH. A headless `codex exec` runs at the
+# Standard tier unless the command itself names another: config.toml's service_tier is shared with the Desktop app's
+# speed setting, and on 2026-11-04 the Ultrafast value there (6x Standard) spent the $500 API credit through agents'
+# headless runs and very likely most of the plan's week. A later -c on the command line wins, so
+# `codex exec -c 'service_tier="ultrafast"'` still works for someone who means it. Every other subcommand
+# (the interactive client, resume, login) passes through untouched. CODEX_REAL names the real binary in tests.
+real=${CODEX_REAL:-/opt/homebrew/bin/codex}
+[ -x "$real" ] || { echo "codex-tier-shim: no codex at $real" >&2; exit 127; }
+skip=
+for arg in "$@"; do
+  if [ -n "$skip" ]; then skip=; continue; fi
+  case "$arg" in
+    -c|--config|-m|--model|-p|--profile|-s|--sandbox|-a|--ask-for-approval|-C|--cd|-i|--image|--add-dir) skip=1 ;;
+    -*) ;;
+    exec|e) exec "$real" -c 'service_tier="default"' "$@" ;;
+    *) break ;;
+  esac
+done
+exec "$real" "$@"
