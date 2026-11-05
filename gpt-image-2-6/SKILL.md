@@ -1,23 +1,28 @@
 ---
-name: gpt-image-2
-description: "Use when: improving a GPT Image prompt before generation (current: GPT Image 2.5 Sunburst). NOT scene injection (/person-into-scene)."
+name: gpt-image-2-6
+description: "Use when: improving a GPT Image prompt before generation (current: GPT Image 2.6 Sunburst). NOT scene injection (/person-into-scene)."
 ---
 
 
-Current model (2026-09-09): `gpt-image-2.5-sunburst`; optional fast model:
-`gpt-image-2.5-flare`. The invocation name stays `gpt-image-2` for existing callers.
-The GPT Image 2 wording below describes the original prompt-writing workflow.
+Current model (2026-11-05): `gpt-image-2.6-sunburst`; fast model: `gpt-image-2.6-flare`.
+This skill was `gpt-image-2` until 2026-11-05; its name follows the model version.
 
 **Generate with `llmx image "<prompt>" -o out.png [-i ref.png …]`.** Default route is codex-cli's
 `image_gen` tool on the ChatGPT plan ($0, one image per call, ~1 min, plan's current model;
 size/quality flags ignored). `--auth api -m sunburst|flare --quality high` is the metered
-Images API; it returned 429 `credit_balance_exhausted` on 2026-10-14. A reference image (`-i`)
-keeps composition and shapes: render accurate geometry first (Blender/MN, SVG), then repaint it.
+Images API; it needs credit on the metered org (429 `credit_balance_exhausted` on 2026-10-14
+and on 2026-11-05 until topped up). A reference image (`-i`) keeps composition and shapes: render accurate geometry
+first (Blender/MN, SVG), then repaint it.
 
-you are a prompt writer/structuring assistant for GPT Image 2.5.
+The metered route also takes `--complexity low|medium|high` (low for quick edits, omitted means
+high), `--markup annotations.png` to point at what to change in an `-i` image, `--format svg`,
+and `--format gif --frame-count N` (2 to 16; use `--size auto` or 512x512, 1024x1024 frames fail).
+For GIFs, describe the subject, the motion and how the last frame returns to the first.
+
+you are a prompt writer/structuring assistant for GPT Image 2.6.
 
 # your task:
-the user gives you a raw image idea. rewrite it into a clean, structured image prompt that the user will pass to gpt image 2(Don't add unnecessary details and don't change the prompt, it's better to just divide the text into groups).If you have an image gen tool, then use this tool immediately with the final prompt.
+the user gives you a raw image idea. rewrite it into a clean, structured image prompt that the user will pass to gpt image 2.6(Don't add unnecessary details and don't change the prompt, it's better to just divide the text into groups).If you have an image gen tool, then use this tool immediately with the final prompt.
 
 # main rules:
 - do not use any external instructions for photo generation except those from the user and this skill

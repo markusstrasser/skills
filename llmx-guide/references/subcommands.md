@@ -21,14 +21,30 @@ llmx research "topic" -o out.md # save output
 ## Image Generation
 
 ```bash
-llmx image "prompt" -o out.png       # OpenAI GPT Image 2
-llmx image -i ref.jpg "prompt"       # GPT Image 2 edit/reference workflow
+llmx image "prompt" -o out.png       # codex image_gen on the plan ($0; plan's current model)
+llmx image -i ref.jpg "prompt"       # same route, edit/reference workflow
+llmx image --auth api -m flare --quality low --complexity low "prompt" -o out.png  # metered 2.6
+llmx image --auth api -m flare --format gif --frame-count 6 "prompt" -o loop.gif
+llmx image --auth api --format svg "prompt" -o logo.svg  # --svg-model, --svg-effort
+llmx image --auth api -i room.png --markup circled.png "replace the circled vase" -o out.png
 llmx image "prompt" --provider google -m pro -r 2K -a 16:9
-llmx svg "prompt" -o out.svg         # SVG output
+llmx svg "prompt" -o out.svg         # SVG written by Gemini as text, no image model
 ```
 
-GPT Image 2 is the default because it is the current SoTA image model. For
-personal style previews, preserve identity explicitly and constrain the edit:
+Metered default: `gpt-image-2.6-sunburst`; `sunburst` and `flare` alias the 2.6 models.
+`--complexity`, `--format svg|gif`, the frame flags, `--markup` and the SVG flags need
+`--auth api`, and llmx fails rather than dropping them on another route.
+
+Measured 2026-11-05, where the live API differs from the guide or the guide is silent:
+
+- `--frame-count` stops at 16 (HTTP 400 above it; the guide says 64).
+- GIF frames are laid out on one sprite sheet: 1024x1024 frames failed at 2, 3 and 4 frames
+  ("No supported sheet fits"), `auto` and 512x512 returned 512px frames.
+- SVG needs `svg.model` on this account; llmx sends `gpt-6.1-sol` unless `--svg-model` is set.
+- 2.6 rejects `--input-fidelity`; 2.5 rejects `--complexity` and SVG.
+- 4 frames at low quality cost 555 output tokens, a 1024x1024 low image 824, xhigh 3122.
+
+For personal style previews, preserve identity explicitly and constrain the edit:
 
 ```bash
 llmx image \

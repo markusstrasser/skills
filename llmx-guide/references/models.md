@@ -58,7 +58,9 @@ Ids, prices and context windows below come from llmx (`usage_report.PRICING`, `C
 
 | Model | llmx name | Notes |
 |---|---|---|
-| GPT Image 2 | `gpt-image-2` | Default for `llmx image`; generation and edit/reference |
+| GPT Image 2.6 Sunburst | `gpt-image-2.6-sunburst` (`sunburst`) | Default for `llmx image --auth api`; generation, edit, SVG, GIF, markup |
+| GPT Image 2.6 Flare | `gpt-image-2.6-flare` (`flare`) | Faster; same features and token rates |
+| GPT Image 2.5 / 2 | `gpt-image-2.5-sunburst`, `gpt-image-2.5-flare`, `gpt-image-2` | Comparison only; no `complexity`, no SVG |
 | Gemini 3 Pro Image | `gemini-3-pro-image-preview` | `llmx image --provider google -m pro` |
 
 ## Name format and 404 traps

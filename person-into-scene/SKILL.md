@@ -1,6 +1,6 @@
 ---
 name: person-into-scene
-description: "Use when: photoreal Markus in scene template, 'put me in this photo', dating/lifestyle/cinematic shots, likeness fix. NOT generic image gen (/gpt-image-2)."
+description: "Use when: photoreal Markus in scene template, 'put me in this photo', dating/lifestyle/cinematic shots, likeness fix. NOT generic image gen (/gpt-image-2-6)."
 ---
 
 # Person-into-scene image generation
@@ -58,9 +58,18 @@ the memo's prediction didn't survive measurement). Override per profile/shot YAM
 Nano Banana Pro as generator, DreamID / BFS diffusion head-swap (probed via
 `scripts/modal/bfs_head_swap_probe.py`).
 
+## GPT Image 2.6 update (2026-11-05)
+
+The engine defaults to `gpt-image-2.6-sunburst`; select `gpt-image-2.6-flare` for
+faster comparisons, or pin a 2.5 model or `gpt-image-2` with `model:`. Shots, CLIs, UI and
+MCP accept `complexity: low|medium|high` (2.6 only; omitted means high).
+No likeness trial has run on 2.6. The 2.5 trial outcome below still stands as the
+latest evidence on direct identity: keep the swap recipe until exact-file comparisons
+and Markus's judgment say otherwise.
+
 ## GPT Image 2.5 update (2026-09-09; supersedes the model ceiling below)
 
-The engine defaults to `gpt-image-2.5-sunburst`; select `gpt-image-2.5-flare` for
+At the time the engine defaulted to `gpt-image-2.5-sunburst`, with `gpt-image-2.5-flare` as
 an explicit faster-model comparison. Both accept low/medium/high/xhigh/max/auto.
 See [official capabilities](https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst).
 The prior mandatory-swap guidance below describes measured GPT Image 2 behavior,
