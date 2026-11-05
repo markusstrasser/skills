@@ -11,6 +11,10 @@ with provider openai over transport api. A priced call whose model has no price 
 cap cannot hold what it cannot price; an llmx call that failed before reporting usage counts $0
 and is named on stderr.
 
+A rollout's calls cost the tier its thread settings name: on 2026-11-04 config.toml's service_tier of
+ultrafast billed every API lane at 6x while this tool, then blind to tiers, reported $82.96 against
+about $498 and the cap never held. An API call with a tier that has no price here also exits 3.
+
 Usage: lane-api-spend [--day YYYY-MM-DD] [--total]
 """
 import argparse
@@ -47,17 +51,22 @@ except ModuleNotFoundError:
     os.execv(python, [python, "-I", os.path.abspath(__file__), *sys.argv[1:]])
 
 
+# developers.openai.com/api/docs/models/gpt-6.1-sol, read 2026-11-05: "Batch and Flex prices are 50% lower than
+# Standard", "Fast mode prices are 2x Standard", "Ultrafast mode prices are 6x Standard". Priority is not on the page.
+TIER_PRICE = {"default": 1.0, "flex": 0.5, "fast": 2.0, "ultrafast": 6.0}
+
+
 def local_day(stamp: str) -> date:
     return datetime.fromisoformat(stamp.replace("Z", "+00:00")).astimezone().date()
 
 
 def rollout_calls(path: Path):
-    """(local day, model, last_token_usage) of each API-billed call in one rollout. A token_count
-    whose running total did not grow repeats the call before it and is skipped."""
-    cwd, model, total = "?", None, None
+    """(cwd, local day, model, last_token_usage, tier) of each API-billed call in one rollout. A
+    token_count whose running total did not grow repeats the call before it and is skipped."""
+    cwd, model, total, tier = "?", None, None, None
     with path.open(encoding="utf-8", errors="replace") as handle:
         for line in handle:
-            if '"session_meta"' not in line and '"turn_context"' not in line and '"token_count"' not in line:
+            if not any(kind in line for kind in ('"session_meta"', '"turn_context"', '"token_count"', '"thread_settings_applied"')):
                 continue
             try:
                 record = json.loads(line)
@@ -70,6 +79,8 @@ def rollout_calls(path: Path):
                 cwd = payload.get("cwd") or cwd
             elif record.get("type") == "turn_context":
                 model = payload.get("model") or model
+            elif payload.get("type") == "thread_settings_applied":
+                tier = (payload.get("thread_settings") or {}).get("service_tier") or tier
             elif record.get("type") == "event_msg" and payload.get("type") == "token_count":
                 info = payload.get("info") or {}
                 usage, running = info.get("last_token_usage"), (info.get("total_token_usage") or {}).get("total_tokens")
@@ -77,7 +88,7 @@ def rollout_calls(path: Path):
                     continue
                 total = running
                 if payload.get("rate_limits") is None:
-                    yield cwd, local_day(record["timestamp"]), model, usage
+                    yield cwd, local_day(record["timestamp"]), model, usage, tier
 
 
 def main() -> int:
@@ -95,17 +106,17 @@ def main() -> int:
         for rollout in sorted(folder.glob("rollout-*.jsonl")) if folder.is_dir() else ():
             if rollout.stat().st_mtime < start:
                 continue
-            for cwd, day, model, usage in rollout_calls(rollout):
+            for cwd, day, model, usage, tier in rollout_calls(rollout):
                 if day != args.day:
                     continue
                 label = f"codex {Path(cwd).name}"
                 price = est_cost(model or "", usage.get("input_tokens", 0), usage.get("output_tokens", 0),
                                  cached_tokens=usage.get("cached_input_tokens", 0),
                                  cache_write_tokens=usage.get("cache_write_input_tokens", 0))
-                if price is None:
-                    unpriced[f"{model} ({label})"] += 1
+                if price is None or tier not in TIER_PRICE:
+                    unpriced[f"{model} at tier {tier} ({label})"] += 1
                     continue
-                cost[label] += price
+                cost[label] += price * TIER_PRICE[tier]
                 calls[label] += 1
 
     log = Path(os.environ.get("LLMX_USAGE_LOG") or Path.home() / ".claude/llmx-usage.jsonl")

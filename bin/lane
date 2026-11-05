@@ -1015,6 +1015,8 @@ launch_worker() {
         if [ -n "$LANE_CODEX_EFFORT" ]; then
           codex_args+=(-c "model_reasoning_effort=\"$LANE_CODEX_EFFORT\"")
         fi
+        # Standard tier, whatever config.toml says: a service_tier of ultrafast there billed every API lane at 6x on 2026-11-04.
+        codex_args+=(-c "service_tier=\"default\"")
         # Extra writable roots, colon-separated (e.g. a host cpu-slot directory).
         IFS=: read -r -a extra_dirs <<< "$LANE_CODEX_ADD_DIRS"
         for extra_dir in "${extra_dirs[@]}"; do

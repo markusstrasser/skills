@@ -300,6 +300,8 @@ expected_codex=$(printf '%s\n' \
   exec \
   -m \
   gpt-6-astra \
+  -c \
+  'service_tier="default"' \
   -s \
   workspace-write \
   --add-dir \
@@ -316,6 +318,8 @@ expected_override=$(printf '%s\n' \
   gpt-6.1-sol \
   -c \
   'model_reasoning_effort="high"' \
+  -c \
+  'service_tier="default"' \
   --add-dir \
   "$TEST_TMP/slots" \
   --add-dir \
@@ -341,6 +345,8 @@ expected_uvcache=$(printf '%s\n' \
   exec \
   -m \
   gpt-6-astra \
+  -c \
+  'service_tier="default"' \
   --add-dir \
   "$SHARED_UV_REAL" \
   -s \
@@ -363,6 +369,8 @@ expected_slot=$(printf '%s\n' \
   exec \
   -m \
   gpt-6-astra \
+  -c \
+  'service_tier="default"' \
   --add-dir \
   "$SLOT_REAL" \
   -s \
@@ -386,6 +394,8 @@ expected_roots=$(printf '%s\n' \
   exec \
   -m \
   gpt-6-astra \
+  -c \
+  'service_tier="default"' \
   --add-dir \
   "$ROOT_A" \
   --add-dir \
@@ -408,6 +418,7 @@ FULL_PROMPT="Do the fake task.
 Git state belongs to the parent: edit files and run checks, but do not stage, commit, merge, stash or switch branches. Do not stop or kill processes you did not start. End by listing every path you changed."
 HOOKS="$LANE_HOME/codex-git-hooks"
 expected_full=$(printf '%s\n' exec -m gpt-6-astra \
+  -c 'service_tier="default"' \
   -c 'shell_environment_policy.set.GIT_CONFIG_COUNT="1"' \
   -c 'shell_environment_policy.set.GIT_CONFIG_KEY_0="core.hooksPath"' \
   -c "shell_environment_policy.set.GIT_CONFIG_VALUE_0=\"$HOOKS\"" \
@@ -495,11 +506,31 @@ def count(total, rate_limits):
             "info": {"last_token_usage": usage, "total_token_usage": {"total_tokens": total}}}}
 records = [{"timestamp": stamp, "type": "session_meta", "payload": {"cwd": "/work/apicap-fixture"}},
            {"timestamp": stamp, "type": "turn_context", "payload": {"model": "gpt-6.1-sol"}},
+           {"timestamp": stamp, "type": "event_msg", "payload": {"type": "thread_settings_applied",
+            "thread_settings": {"service_tier": "default"}}},
            count(1_000_000, None), count(1_000_000, None),
            count(2_000_000, {"limit_id": "codex", "primary": {"used_percent": 50.0}})]
 (folder / "rollout-apicap.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
 PY
 assert_eq "2.00" "$("$ROOT/bin/lane-api-spend" --total)" "API spend counts the API call once and no plan call"
+for case in "ultrafast 12.00" "fast 4.00" "flex 1.00"; do
+  tier=${case% *}; tier_dir="$TEST_TMP/tier-$tier"; mkdir -p "$tier_dir"
+  cp -R "$LANE_CODEX_SESSIONS/." "$tier_dir/"
+  find "$tier_dir" -name 'rollout-*.jsonl' -exec sed -i.bak "s/\"service_tier\": \"default\"/\"service_tier\": \"$tier\"/" {} +
+  find "$tier_dir" -name '*.bak' -delete
+  assert_eq "${case#* }" "$(LANE_CODEX_SESSIONS="$tier_dir" "$ROOT/bin/lane-api-spend" --total)" "API spend prices the $tier tier"
+done
+for tier in priority none; do
+  tier_dir="$TEST_TMP/tier-$tier"; mkdir -p "$tier_dir"; cp -R "$LANE_CODEX_SESSIONS/." "$tier_dir/"
+  if [ "$tier" = none ]; then
+    find "$tier_dir" -name 'rollout-*.jsonl' -exec sed -i.bak '/thread_settings_applied/d' {} +
+  else
+    find "$tier_dir" -name 'rollout-*.jsonl' -exec sed -i.bak 's/"service_tier": "default"/"service_tier": "priority"/' {} +
+  fi
+  find "$tier_dir" -name '*.bak' -delete
+  rc=0; LANE_CODEX_SESSIONS="$tier_dir" "$ROOT/bin/lane-api-spend" --total >/dev/null 2>&1 || rc=$?
+  assert_eq "3" "$rc" "an API call at tier $tier has no price, so the cap refuses"
+done
 if cap_output=$(CODEX_API_KEY=test-key LANE_CODEX_API_DAILY_USD=2 "$LANE" run apicap --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree 2>&1); then
   fail "run started a codex worker billed to CODEX_API_KEY at the day's cap"
 fi
