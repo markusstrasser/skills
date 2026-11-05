@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """codex-tier-audit [--hours N]: headless Codex runs (originator codex_exec) in the last N hours (default 48) at a tier
 other than Standard, from ~/.codex/sessions. Exit 1 names them: each one got past codex-tier-shim or asked for that tier
-on its command line. The Desktop app's own threads are its speed setting and are not counted."""
+on its command line. The Desktop app's own threads are its speed setting and are not counted. A rollout naming no tier ran
+with none set, which is Standard. Runs before the shim's install (SHIM_INSTALLED) are history and not counted."""
 import argparse
 import json
 import os
@@ -11,6 +12,7 @@ import time
 from pathlib import Path
 
 TIER = re.compile(r'"service_tier":"([a-z_]+)"')
+SHIM_INSTALLED = 1793848560  # 2026-11-05 12:16 KST
 
 
 def run_info(path: Path) -> tuple[str | None, str | None, str]:
@@ -34,7 +36,7 @@ def main() -> int:
     parser.add_argument("--hours", type=float, default=48)
     args = parser.parse_args()
     root = Path(os.environ.get("LANE_CODEX_SESSIONS") or Path.home() / ".codex/sessions")
-    since = time.time() - args.hours * 3600
+    since = max(time.time() - args.hours * 3600, SHIM_INSTALLED)
     found, checked = [], 0
     for path in root.glob("*/*/*/rollout-*.jsonl"):
         if path.stat().st_mtime < since:
@@ -43,7 +45,7 @@ def main() -> int:
         if originator != "codex_exec":
             continue
         checked += 1
-        if tier != "default":
+        if tier not in (None, "default"):
             found.append(f"{tier} {Path(cwd).name} {path.name}")
     if found:
         print(f"codex-tier-audit: {len(found)} of {checked} headless runs in {args.hours:g} h not at the Standard tier:")
