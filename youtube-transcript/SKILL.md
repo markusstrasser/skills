@@ -69,7 +69,14 @@ At ~01:23:45, [speaker] claims X [SOURCE: <VID> transcript, line N]
 
 - **Auto-captions unavailable** — some channels disable them. yt-dlp errors out; download the audio and run `transcribe <file>`.
 - **Age-restricted / members-only** — requires `--cookies-from-browser chrome`.
-- **"Sign in to confirm you're not a bot"** — YouTube answered this without cookies from this machine on 2026-11-05, and to a burst of calls even with cookies. Stop and report it. Do not add cookies on your own: they run as Markus's Chrome login, and the yt-dlp wiki warns that account use risks a temporary or permanent ban.
+- **"Sign in to confirm you're not a bot"** — YouTube answered this without cookies from this machine on 2026-11-05. Do not add cookies: they run as Markus's Chrome login, the yt-dlp wiki warns that account use risks a temporary or permanent ban, and he declined an agent YouTube account that day. Get the 360p file with the `mweb` client and transcribe it on-device, one video at a time:
+
+  ```bash
+  yt-dlp --extractor-args 'youtube:player_client=mweb' -f 18 -o "${OUT_DIR}/${VID}.%(ext)s" "https://www.youtube.com/watch?v=${VID}"
+  transcribe "${OUT_DIR}/${VID}.mp4"   # writes ${VID}.json beside the input
+  ```
+
+  A 5-minute video took 52 s in total. This is speech recognition, not captions, so names and technical terms can come out wrong; check any quote against the audio before citing it. Delete the video file afterwards.
 - **Live streams** — transcript not finalized until stream ends.
 - **Very long videos (>6h)** — .vtt can be 2-5MB. Strip before committing to git.
 
