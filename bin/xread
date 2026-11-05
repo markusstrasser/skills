@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+"""xread: read public X posts and threads without a login, through FxTwitter.
+
+    xread https://x.com/user/status/1962922020704027040
+    xread 1962922020704027040 --json
+
+Prints author, date, stats, text, media, quoted post, community note and the
+author's thread. Exit 1 means the post is unavailable (deleted, protected or
+suspended), so ask for pasted text. Exit 2 means the transport failed, which
+says nothing about the post.
+
+Covers single posts and threads only. FxTwitter's search and profile-timeline
+endpoints returned 404 on 2026-11-05. Private data (bookmarks, likes) stays in
+ext/tools/twitter, and paid monitoring in the x-api skill.
+"""
+
+import argparse
+from datetime import datetime, timezone
+import json
+import re
+import sys
+import time
+import urllib.error
+import urllib.request
+
+API = "https://api.fxtwitter.com/2/thread/"
+USER_AGENT = "xread/1.0"
+STATUS_ID = re.compile(r"/status(?:es)?/(\d+)")
+BARE_ID = re.compile(r"\d+")
+TRANSPORT_ATTEMPTS = 3
+
+
+class Unavailable(Exception):
+    """FxTwitter answered and has no such public post."""
+
+
+class Transport(Exception):
+    """The request failed before FxTwitter gave an answer about the post."""
+
+
+def post_id(target: str) -> str:
+    target = target.strip()
+    if BARE_ID.fullmatch(target):
+        return target
+    match = STATUS_ID.search(target)
+    if match:
+        return match.group(1)
+    raise ValueError(f"no post id in {target!r}")
+
+
+def fetch(identifier: str) -> dict:
+    request = urllib.request.Request(API + identifier, headers={"User-Agent": USER_AGENT})
+    failure = None
+    for attempt in range(TRANSPORT_ATTEMPTS):
+        if attempt:
+            time.sleep(2 * attempt)
+        try:
+            with urllib.request.urlopen(request, timeout=25) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as exc:
+            if exc.code < 500 and exc.code != 429:
+                raise Unavailable(f"HTTP {exc.code}") from exc
+            failure = f"HTTP {exc.code}"
+        except (OSError, ValueError) as exc:
+            failure = str(exc)
+    raise Transport(failure)
+
+
+def header(post: dict) -> str:
+    author = post.get("author") or {}
+    parts = [f"@{author.get('screen_name', '?')} ({author.get('name', '?')})"]
+    stamp = post.get("created_timestamp")
+    if stamp:
+        parts.append(datetime.fromtimestamp(stamp, timezone.utc).strftime("%Y-%m-%d"))
+    for field in ("views", "likes", "reposts", "replies"):
+        if post.get(field) is not None:
+            parts.append(f"{post[field]:,} {field}")
+    return " · ".join(parts)
+
+
+def media_lines(post: dict) -> list[str]:
+    items = (post.get("media") or {}).get("all") or []
+    return [f"[{item.get('type', 'media')}] {item.get('url')}" for item in items]
+
+
+def note_text(note) -> str:
+    if isinstance(note, dict):
+        return str(note.get("text") or json.dumps(note))
+    return str(note)
+
+
+def render_post(post: dict, indent: str = "") -> list[str]:
+    lines = [header(post), post.get("url", ""), post.get("text", "")]
+    lines += media_lines(post)
+    if post.get("community_note"):
+        lines.append(f"Community note: {note_text(post['community_note'])}")
+    quote = post.get("quote")
+    if quote:
+        lines.append("Quoted post:")
+        lines += render_post(quote, indent="> ")
+    return [f"{indent}{text}" for line in lines for text in str(line).splitlines()]
+
+
+def render(payload: dict) -> str:
+    status = payload.get("status")
+    if not status:
+        raise Unavailable(f"response had no post (code {payload.get('code')})")
+    thread = payload.get("thread") or []
+    if len(thread) < 2:
+        return "\n".join(render_post(status))
+    blocks = [f"Thread of {len(thread)} posts"]
+    for number, post in enumerate(thread, 1):
+        marker = " (requested)" if post.get("id") == status.get("id") else ""
+        blocks.append(f"--- {number}/{len(thread)}{marker}")
+        blocks += render_post(post)
+    return "\n".join(blocks)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Read public X posts and threads without a login.")
+    parser.add_argument("targets", nargs="+", help="post URL or numeric id")
+    parser.add_argument("--json", action="store_true", help="print the raw FxTwitter response")
+    args = parser.parse_args(argv)
+
+    worst = 0
+    for target in args.targets:
+        try:
+            payload = fetch(post_id(target))
+            print(json.dumps(payload) if args.json else render(payload))
+        except ValueError as exc:
+            print(f"xread: {exc}", file=sys.stderr)
+            worst = 2
+        except Unavailable as exc:
+            print(f"xread: {target}: unavailable ({exc}); ask for pasted text", file=sys.stderr)
+            worst = max(worst, 1)
+        except Transport as exc:
+            print(f"xread: {target}: transport failure ({exc}); this says nothing about the post", file=sys.stderr)
+            worst = 2
+    return worst
+
+
+if __name__ == "__main__":
+    sys.exit(main())

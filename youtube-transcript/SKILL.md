@@ -48,7 +48,7 @@ awk '
   /-->/ { next }
   /^$/ { next }
   { gsub(/<[^>]*>/, ""); print }
-' "${OUT_DIR}/${VID}-*.en.vtt" | awk '!seen[$0]++' > "${OUT_DIR}/${VID}.txt"
+' "${OUT_DIR}/${VID}"-*.en.vtt | awk '!seen[$0]++' > "${OUT_DIR}/${VID}.txt"
 ```
 
 The `!seen[$0]++` dedupes the rolling-captions pattern (same line repeated with growing cue).
@@ -67,8 +67,9 @@ At ~01:23:45, [speaker] claims X [SOURCE: <VID> transcript, line N]
 
 ## Known failures
 
-- **Auto-captions unavailable** — some channels disable them. yt-dlp errors out; fall back to manual transcript request or Whisper (not covered here).
+- **Auto-captions unavailable** — some channels disable them. yt-dlp errors out; download the audio and run `transcribe <file>`.
 - **Age-restricted / members-only** — requires `--cookies-from-browser chrome`.
+- **"Sign in to confirm you're not a bot"** — YouTube answered this without cookies from this machine on 2026-11-05, and to a burst of calls even with cookies. Stop and report it. Do not add cookies on your own: they run as Markus's Chrome login, and the yt-dlp wiki warns that account use risks a temporary or permanent ban.
 - **Live streams** — transcript not finalized until stream ends.
 - **Very long videos (>6h)** — .vtt can be 2-5MB. Strip before committing to git.
 

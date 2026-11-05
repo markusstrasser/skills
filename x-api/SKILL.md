@@ -12,6 +12,8 @@ effort: low
 Generic, project-agnostic interface to the X (Twitter) API v2 pay-per-use
 developer tier. Built for daily-batch monitoring of a curated account list.
 
+To read one public post or thread, use `xread <url>`: it needs no login and costs nothing.
+
 **Authentication:** Bearer token from `X_API_BEARER_TOKEN` env var. Caller is
 responsible for loading the token (e.g., from `.env.local`, `~/.env`, or
 launchd plist EnvironmentVariables).
