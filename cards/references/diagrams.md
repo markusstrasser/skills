@@ -79,10 +79,20 @@ the theme rules again on every card that shows an SVG.
 
 ## Putting it on a card
 
-- Agents cannot write to `~/cards`. Render into your scratch directory and hand the file to the
-  session that files your edits, to be placed in the deck's `media/` directory.
-- The edit then references it on the answer side: `![alt](media/<file>.svg)`. Spaced inlines an SVG
-  file, so its CSS variables follow the theme. A referenced file that is missing is an error.
+- Render into your scratch directory, then add the file to the deck's `media/` through the agent
+  API (`POST /api/agent/media`, or `add_media` in `spaced mcp` with a local `path`):
+  ```sh
+  base64 -i sin-double-angle.png |
+    jq -Rs '{agent: "card-qa", deck: "biology", name: "sin-double-angle.png", data: .,
+             why: "diagram for card 7wb1g2: sin 2x as one triangle area counted two ways"}' |
+    curl -s -X POST http://127.0.0.1:4100/api/agent/media -H 'Content-Type: application/json' --data-binary @-
+  ```
+  The reply's `ref` is the name to write (`media/sin-double-angle.avif`: raster stills become AVIF,
+  animations H.264 MP4). An SVG must be one `<svg>` the card sanitizer keeps whole and must pass
+  `svg-theme`, else it is refused with each rule and fix. A name that holds other bytes is never
+  replaced (409: other cards may use it); the same bytes again are a no-op. Limit 15 MiB.
+- The edit then references it on the answer side: `![alt](<ref>)`. Spaced inlines an SVG file, so its
+  CSS variables follow the theme. A proposal that references a file not in the collection is refused.
 - Formats: SVG stays as it is; raster stills are kept as AVIF and animations as H.264 MP4
   (`docs/PLAN.md`, Media policy).
 - Tag the card `.ai-visual` (and `.ai-modified`) in its attribute block.

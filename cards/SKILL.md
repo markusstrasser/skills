@@ -136,9 +136,12 @@ uv run --project lab python lab/diagrams/validate_card_svg.py <file.svg | ->
 ```
 
 SVG colours go in `style="fill:var(--color-highlight)"`, never in `fill=` attributes; the root is
-`<svg class="vis" viewBox="0 0 500 105">`. Agents cannot write to `~/cards`: render the file
-elsewhere, hand it over to be placed in the deck's `media/`, then file the edit that references it
-as `![alt](media/<file>)`. Check the picture for scientific accuracy, not only that it renders.
+`<svg class="vis" viewBox="0 0 500 105">`. Render it in your scratch directory, add it with
+`POST /api/agent/media {agent, deck, name, data (base64), why}` (MCP `add_media`, which takes a
+`path`), then file the edit that references the reply's `ref` as `![alt](<ref>)`: a PNG is stored as
+`.avif`. An SVG with fixed colours or a `<style>` block is refused with the rule and fix; a name that
+holds other bytes is never replaced (409). Check the picture for scientific accuracy, not only
+that it renders.
 Details: `references/diagrams.md` (workflow), `references/svg-rules.md`,
 `references/domain-tools.md` (chemistry, physics, biology, math packages).
 
