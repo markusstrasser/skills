@@ -2200,7 +2200,7 @@ def gate_git_stash_guard(raw_payload: str) -> GateResult:
 # The gate replays the selection instead. Every pkill and killall, and every pgrep whose output
 # feeds a kill (`pgrep … | xargs kill`, `kill $(pgrep …)`, `for p in $(pgrep …)`, a variable
 # holding pgrep output), runs again as `pgrep` with the same selection options (killall as
-# `killall -s`). The command is refused when a match lies outside the caller's own tree: the
+# `killall -s`), after the shell's tilde expansion. The command is refused when a match lies outside the caller's own tree: the
 # nearest Claude or Codex ancestor of this hook and its descendants (the hook's parent without
 # one). pkill and pgrep skip their own ancestors, and the replay inherits that; killall and
 # `-a` do not, so a match on an ancestor above the agent blocks too. Other users' processes
@@ -2222,6 +2222,7 @@ _XARGS_VALUE_OPTS = frozenset("EIJLPRSns")
 _PKILL_SHELLS = frozenset({"bash", "sh", "zsh", "dash", "ksh"})
 _AGENT_VERSION_COMM = re.compile(r"\d+\.\d+\.\d+")
 _PKILL_LISTED_VICTIMS = 15
+_TILDE_PREFIX_RE = re.compile(r"~(?:[A-Za-z0-9_][A-Za-z0-9_.\-]*)?(?=/|$)")
 
 
 class _DryRunError(Exception):
@@ -2285,6 +2286,18 @@ def _raw_expands(raw: str) -> bool:
             return True
         i += 1
     return False
+
+
+def _tilde_expanded(raw: str, value: str) -> str:
+    """`value` as the shell passes it on: an unquoted leading `~` or `~user` becomes that home."""
+    match = _TILDE_PREFIX_RE.match(raw)
+    if match is None:
+        prefix = raw.split("/", 1)[0]
+        if raw.startswith("~") and not any(ch in prefix for ch in "'\"\\$`"):
+            raise _DryRunError(f"the shell expands {prefix} to a directory the guard cannot know")
+        return value
+    home = os.path.expanduser(match.group(0))
+    return value if home == match.group(0) else home + value[len(match.group(0)) :]
 
 
 def _substitution_bodies(raw: str) -> list[str]:
@@ -2500,7 +2513,7 @@ def _pgrep_replay(tool: str, argv: list[str] | None, raw_argv: list[str]) -> lis
     None when the call cannot reach outside the caller's tree: it sends signal 0, prints a list,
     is itself a dry run, or is pinned to recorded PIDs as `kill <pid>` and `kill -- -<pgid>` are
     (`-F`, a numeric `-P` or `-g` other than 1, the caller's own children `-P $$`) without `-v`,
-    which turns a pin into every other process.
+    which turns a pin into every other process. Patterns get the shell's tilde expansion.
     """
     if argv is None:
         raise _DryRunError("a kill takes its pids from ps output, which only pgrep could replay")
@@ -2511,7 +2524,7 @@ def _pgrep_replay(tool: str, argv: list[str] | None, raw_argv: list[str]) -> lis
             return None
         if any(_raw_expands(r) for r in raw_argv):
             raise _DryRunError("a killall argument holds a shell expansion")
-        return ["-s"] + [a for a in argv if a != "-I"]
+        return ["-s"] + [_tilde_expanded(r, a) for r, a in zip(raw_argv, argv) if a != "-I"]
     i = 0
     if tool == "pkill" and argv:
         sig = _pkill_signal(argv[0])
@@ -2571,6 +2584,7 @@ def _pgrep_replay(tool: str, argv: list[str] | None, raw_argv: list[str]) -> lis
     patterns, raw_patterns = argv[i:], raw_argv[i:]
     if any(_raw_expands(r) for r in raw_patterns):
         raise _DryRunError(f"a {tool} pattern holds a shell expansion")
+    patterns = [_tilde_expanded(r, p) for r, p in zip(raw_patterns, patterns)]
     return out + (["--"] + patterns if patterns else [])
 
 
@@ -2704,7 +2718,7 @@ def gate_pkill_guard(raw_payload: str) -> GateResult:
             try:
                 replay = _pgrep_replay(tool, argv, raw_argv)
                 if replay is not None and argv is not None:
-                    matched.append((tool, argv, _pkill_matches(tool, replay)))
+                    matched.append((tool, raw_argv, _pkill_matches(tool, replay)))
             except _DryRunError as exc:
                 unreplayable.append(str(exc))
         if any(pids for _tool, _argv, pids in matched):
@@ -2716,12 +2730,12 @@ def gate_pkill_guard(raw_payload: str) -> GateResult:
         return _pkill_degraded(f"{type(exc).__name__}: {exc}", cmd)
     uid = os.getuid()
     victims: dict[int, str] = {}
-    for tool, argv, pids in matched:
+    for tool, raw_argv, pids in matched:
         for pid in sorted(pids):
             row = table.get(pid)
             if row is None or pid in tree or (row[1] != uid and not scan.sudo):
                 continue  # gone already, the caller's own, or not signalable without sudo
-            victims.setdefault(pid, shlex.join([tool, *argv]))
+            victims.setdefault(pid, " ".join([tool, *raw_argv]))  # as the agent wrote it
     if not victims:
         if unreplayable:
             return _pkill_degraded("; ".join(dict.fromkeys(unreplayable)), cmd)

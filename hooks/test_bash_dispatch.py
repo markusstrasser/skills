@@ -1291,6 +1291,41 @@ def test_pkill_guard_spawns_nothing_for_a_recorded_parent_or_group(monkeypatch, 
     assert tuple(_PKILL_GATE(json.dumps(_bash(command)))) == (0, "", "")
 
 
+def test_pkill_tilde_pattern_blocks_a_detached_decoy(sandbox, decoys):
+    """The shell expands an unquoted `~` before pkill runs; a replay of the literal `~/…` matched
+    nothing, so `pkill -f ~/Projects/skills` passed while its spelled-out path was blocked."""
+    tok = f"pkd{uuid.uuid4().hex[:10]}"
+    decoy = decoys.detached("perl", "-e", "sleep 60", os.path.join(sandbox["env"]["HOME"], tok, "run"))
+    disp = run_dispatcher(_bash(f"pkill -f ~/{tok}"), sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 2
+    assert re.search(rf"pid {decoy}\s", disp["block_msg"])
+    assert f"`pkill -f ~/{tok}`" in disp["block_msg"], "the block names the selection as written"
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        ("pkill -f ~/x", [("pkill", ["-f", "--", os.path.expanduser("~/x")])]),
+        ("pgrep -f ~/x/y | xargs kill", [("pgrep", ["-f", "--", os.path.expanduser("~/x/y")])]),
+        ("pkill -f ~", [("pkill", ["-f", "--", os.path.expanduser("~")])]),
+        ("pkill -f '~/x'", [("pkill", ["-f", "--", "~/x"])]),
+        ("pkill -f \\~/x", [("pkill", ["-f", "--", "~/x"])]),
+        ("pkill -f a~/x", [("pkill", ["-f", "--", "a~/x"])]),
+    ],
+)
+def test_kill_patterns_get_the_shells_tilde_expansion(command, expected):
+    assert _kill_replays(command) == expected
+
+
+def test_kill_pattern_with_a_directory_stack_tilde_cannot_replay():
+    scan = _DISPATCHER_NAMESPACE["_KillScan"]()
+    _DISPATCHER_NAMESPACE["_scan_kill_text"]("pkill -f ~+/x", scan)
+    scan.resolve()
+    ((tool, argv, raw),) = scan.selections
+    with pytest.raises(_DISPATCHER_NAMESPACE["_DryRunError"], match="~\\+"):
+        _DISPATCHER_NAMESPACE["_pgrep_replay"](tool, argv, raw)
+
+
 def _fake_pgrep_bin(tmp_path, n_lines):
     p = tmp_path / f"fake_pgrep_{n_lines}.sh"
     body = "\n".join(f"echo '{1000+i} line{i}'" for i in range(n_lines))
