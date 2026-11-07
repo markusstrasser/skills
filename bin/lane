@@ -553,6 +553,30 @@ process_started_epoch() {
   esac
 }
 
+# The process groups that commands under the worker lead, other than the worker's own: one pgid a line. timeout(1)
+# setpgid()s to time out its command's whole tree, so a bounded command leaves the worker's group, and a kill of
+# -$pid misses it. On 2026-11-07 a lane's `timeout 2400 ... ratchet.py sweep` kept running arena-scenario
+# processes on the Mac after `lane stop`, in the quiet time before a playtest. macOS's ps and pgrep give no session
+# id, so the tree is read before the kill, while the worker still parents it. /bin/ps: the tests fake `ps`.
+escaped_groups() {
+  local pid="$1"
+  /bin/ps -Ao pid=,ppid=,pgid= | awk -v root="$pid" '
+    { parent[$1] = $2; group[$1] = $3; order[NR] = $1 }
+    END {
+      for (i = 1; i <= NR; i++) {
+        p = order[i]
+        q = parent[p]
+        for (depth = 0; q > 1 && depth < 64; depth++) {
+          if (q == root) {
+            if (group[p] != root && group[p] > 1) print group[p]
+            break
+          }
+          q = parent[q]
+        }
+      }
+    }' | sort -u
+}
+
 wait_for_group_exit() {
   local pid="$1"
   local started_epoch="$2"
@@ -1097,6 +1121,11 @@ A provider capacity error stopped your previous attempt. The checkout keeps its 
       fake-hang)
         # Long enough to outlast the stall checks on a loaded host (at load ~20 a 30 s hang
         # finished first and the test read DONE:0); every test stops it with `lane stop`.
+        # LANE_FAKE_ESCAPE: also start a child that leads a group of its own, as timeout(1) does, and write its pid there.
+        if [ -n "${LANE_FAKE_ESCAPE:-}" ]; then
+          /usr/bin/perl -e "setpgrp(0, 0) or die; exec @ARGV or die" sleep 600 &
+          echo "$!" >"$LANE_FAKE_ESCAPE"
+        fi
         sleep 600
         ;;
       *)
@@ -2048,6 +2077,8 @@ archive_log() {
 stop_lane() {
   local name="$1"
   local metadata
+  local escaped
+  local group
   local pid
   local started_epoch
   local marker
@@ -2059,8 +2090,14 @@ stop_lane() {
   if [ -f "$marker" ]; then
     echo "lane: $name already completed; no process signalled"
   elif lane_group_is_alive "$pid" "$started_epoch"; then
+    escaped=$(escaped_groups "$pid")
     kill -TERM -- "-$pid"
     echo "lane: signalled process group $pid"
+    for group in $escaped; do
+      if kill -TERM -- "-$group" 2>/dev/null; then
+        echo "lane: signalled process group $group, which a command under the worker leads"
+      fi
+    done
     wait_for_group_exit "$pid" "$started_epoch" 50 || die "process group $pid did not stop after SIGTERM"
   else
     echo "lane: process group $pid is not running"

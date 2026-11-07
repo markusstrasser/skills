@@ -30,6 +30,7 @@ export LANE_CAPTURE
 export LANE_NICE=0
 UNRELATED_PID=""
 CAP_WAIT_PID=""
+ESCAPED_PID=""
 
 cleanup() {
   local name
@@ -39,13 +40,17 @@ cleanup() {
   fi
   # The live-lane test gives a running lane a fake marker, and lane stop signals no lane that has one.
   rm -f "$LANE_HOME/archlive.done"
-  for name in first rvcommit rvnobase hang inline codexargs codexoverride codexuvcache apicap2 claudeargs claudeoverride claudedirs ocargs ocquota ocquotalate failure rvcache rvown rvnone retire1 retirefail retirebusy retireread hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit capa capb capfree nice0; do
+  for name in first rvcommit rvnobase hang inline codexargs codexoverride codexuvcache apicap2 claudeargs claudeoverride claudedirs ocargs ocquota ocquotalate failure rvcache rvown rvnone retire1 retirefail retirebusy retireread hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit capa capb capfree nice0 escape; do
     if [ -f "$LANE_HOME/$name.json" ]; then
       "$LANE" stop "$name" >/dev/null 2>&1 || true
     fi
   done
   if [ -n "$UNRELATED_PID" ]; then
     kill "$UNRELATED_PID" >/dev/null 2>&1 || true
+  fi
+  # The escape test's child leads its own group, so a stop that misses it leaves it to this.
+  if [ -n "$ESCAPED_PID" ]; then
+    kill "$ESCAPED_PID" >/dev/null 2>&1 || true
   fi
   chmod -R u+rwX "$TEST_TMP" 2>/dev/null || true
   rm -rf "$TEST_TMP"
@@ -1102,6 +1107,31 @@ UNRELATED_PID=""
 assert_file "$LANE_HOME/hang.stalled-1.log"
 assert_no_file "$LANE_HOME/hang.done"
 assert_eq "DEAD" "$(state_for hang)" "stopped state"
+
+echo "test: stop reaches a group that a command under the worker leads"
+# 2026-11-07: a lane's `timeout 2400 ... ratchet.py sweep` led its own group (timeout(1) setpgid()s) and ran on
+# after `lane stop`.
+LANE_FAKE_ESCAPE="$TEST_TMP/escaped.pid" "$LANE" run escape --repo "$REPO" --brief "$BRIEF" --worker fake-hang --no-worktree >/dev/null
+wait_for_file "$TEST_TMP/escaped.pid" 300
+escaped_pid=$(<"$TEST_TMP/escaped.pid")
+ESCAPED_PID=$escaped_pid
+attempts=0
+while [ "$(/bin/ps -o pgid= -p "$escaped_pid" | tr -d ' ')" != "$escaped_pid" ] && [ "$attempts" -lt 100 ]; do
+  sleep 0.1
+  attempts=$((attempts + 1))
+done
+assert_eq "$escaped_pid" "$(/bin/ps -o pgid= -p "$escaped_pid" | tr -d ' ')" "the fake command leads its own group"
+[ "$escaped_pid" != "$(json_value "$LANE_HOME/escape.json" pid)" ] || fail "the fake command is the worker itself"
+"$LANE" stop escape >"$TEST_TMP/escape-stop.out"
+grep -Fq "lane: signalled process group $escaped_pid, which a command under the worker leads" "$TEST_TMP/escape-stop.out" ||
+  fail "stop did not name the escaped group"
+attempts=0
+while kill -0 "$escaped_pid" 2>/dev/null && [ "$attempts" -lt 50 ]; do
+  sleep 0.1
+  attempts=$((attempts + 1))
+done
+kill -0 "$escaped_pid" 2>/dev/null && fail "stop left running the group that a command under the worker leads"
+ESCAPED_PID=""
 
 echo "test: resume --note prepends and consumes a per-lane note"
 printf '%s\n' 'Inspect the review findings before editing.' >"$TEST_TMP/resume.txt"
