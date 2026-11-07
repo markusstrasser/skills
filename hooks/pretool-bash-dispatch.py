@@ -2709,7 +2709,8 @@ def gate_pkill_guard(raw_payload: str) -> GateResult:
         "every lane and bgrun supervisor here. Kill what you started by its recorded PID: "
         "`kill <pid>` (`$!` after a launch, a .pid file), `kill -TERM -- -<pgid>` for a job's "
         "group, `lane stop <name>`, or TaskStop for your own background task. Or narrow the "
-        "pattern until `pgrep -f '<pattern>'` lists only processes you started.\n"
+        "pattern until `pgrep -f '<pattern>'` lists only processes you started. To stop a "
+        "program the user named, read what `pgrep -lx <name>` lists and kill those PIDs.\n"
     )
     return GateResult(2, msg, "")
 
