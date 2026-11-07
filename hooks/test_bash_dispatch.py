@@ -1040,6 +1040,9 @@ def test_pkill_without_any_match_passes_silently(sandbox):
         "kill $(pgrep -f {pat})",
         "for p in $(pgrep -f {pat}); do kill -9 $p; done",
         "bash -c 'pkill -f {pat}'",
+        # A selection the guard cannot replay must not hide one that blocks.
+        'pkill -f {pat}; kill $(pgrep -f "$X")',
+        "kill $(ps -axo pid=,comm= | grep x | awk '{{print $1}}'); pkill -f {pat}",
     ],
 )
 def test_pattern_kills_block_a_detached_decoy(sandbox, decoys, template):
@@ -1173,6 +1176,30 @@ def test_pkill_guard_degrades_loudly_when_it_cannot_replay(monkeypatch, command)
     assert result.code == 0
     context = json.loads(result.stdout)["additionalContext"]
     assert context.startswith("[DEGRADED] pkill guard could not dry-run: ")
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "ps -axo pid=,comm= | grep foo | grep -v grep | awk '{print $1}' | xargs kill",
+        "kill -9 $(ps aux | ~/Projects/skills/bin/redact-env | grep 'a|b' | awk '{print $2}')",
+        "pids=$(ps -axo pid=,comm= | grep foo | awk '{print $1}'); kill $pids",
+        "ps -axo pid=,comm= | grep foo | while read p c; do kill $p; done",
+    ],
+)
+def test_kills_fed_by_ps_degrade_loudly_without_a_replay(monkeypatch, command):
+    """grep over ps output selects by text as pkill -f does; no pgrep can replay what it keeps.
+    The secret-output gate already blocks `ps aux` and `ps -ef` unless redact-env reads them."""
+    monkeypatch.setenv("HOOK_TRIGGER_LOG", os.devnull)
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("the pkill guard spawned a process")
+
+    monkeypatch.setattr(subprocess, "run", refuse)
+    result = _PKILL_GATE(json.dumps(_bash(command)))
+    assert result.code == 0
+    context = json.loads(result.stdout)["additionalContext"]
+    assert context.startswith("[DEGRADED] pkill guard could not dry-run: a kill takes its pids from ps output")
 
 
 @pytest.mark.parametrize("comm", ["claude", "/Users/alien/.local/bin/claude", "2.1.319"])

@@ -2231,7 +2231,8 @@ class _KillScan:
     """What one command line would kill, read from its text."""
 
     def __init__(self) -> None:
-        self.selections: list[tuple[str, list[str], list[str]]] = []  # (tool, argv, raw argv)
+        # (tool, argv, raw argv); argv None: the pids come from ps output, which no replay reproduces
+        self.selections: list[tuple[str, list[str] | None, list[str]]] = []
         self.pgreps: list[tuple[list[str], list[str]]] = []  # pgreps whose output use is unknown
         self.var_pgreps: dict[str, list[tuple[list[str], list[str]]]] = {}
         self.loop_pgreps: list[tuple[list[str], list[str]]] = []
@@ -2465,6 +2466,8 @@ def _scan_kill_stage(
         return None, produced
     if prog == "pgrep":
         return None, produced + [(argv[1:], raw_argv[1:])]
+    if prog == "ps":  # `ps aux | grep … | xargs kill` selects by text, as pkill -f does
+        return None, produced + [(None, raw_argv[1:])]
     if words[0] in ("while", "until") or prog == "read":
         return "loop", produced
     if prog != "kill" or not sends:
@@ -2485,12 +2488,14 @@ def _scan_kill_stage(
     return None, produced
 
 
-def _pgrep_replay(tool: str, argv: list[str], raw_argv: list[str]) -> list[str] | None:
+def _pgrep_replay(tool: str, argv: list[str] | None, raw_argv: list[str]) -> list[str] | None:
     """The pgrep (killall: killall) arguments that select what this call signals.
 
     None when the call cannot reach outside the caller's tree: it sends signal 0, prints a
     list, is itself a dry run, or is pinned to a recorded PID or to the caller's children.
     """
+    if argv is None:
+        raise _DryRunError("a kill takes its pids from ps output, which only pgrep could replay")
     if any(a is None for a in argv) or len(argv) != len(raw_argv):
         raise _DryRunError(f"a {tool} argument holds a command substitution")
     if tool == "killall":
@@ -2663,19 +2668,22 @@ def gate_pkill_guard(raw_payload: str) -> GateResult:
         )
     if not scan.selections:
         return GateResult(0, "", "")
+    # A selection the guard cannot replay degrades to an advisory only when no other one blocks.
+    unreplayable: list[str] = []
+    matched: list[tuple[str, list[str], set[int]]] = []
+    table: dict[int, tuple[int, int, str, str]] = {}
+    tree: set[int] = set()
     try:
-        replays = []
         for tool, argv, raw_argv in scan.selections:
-            replay = _pgrep_replay(tool, argv, raw_argv)
-            if replay is not None:
-                replays.append((tool, argv, replay))
-        if not replays:
-            return GateResult(0, "", "")
-        matched = [(tool, argv, _pkill_matches(tool, replay)) for tool, argv, replay in replays]
-        if not any(pids for _tool, _argv, pids in matched):
-            return GateResult(0, "", "")
-        table = _pkill_process_table()
-        tree = _pkill_caller_tree(table)
+            try:
+                replay = _pgrep_replay(tool, argv, raw_argv)
+                if replay is not None and argv is not None:
+                    matched.append((tool, argv, _pkill_matches(tool, replay)))
+            except _DryRunError as exc:
+                unreplayable.append(str(exc))
+        if any(pids for _tool, _argv, pids in matched):
+            table = _pkill_process_table()
+            tree = _pkill_caller_tree(table)
     except _DryRunError as exc:
         return _pkill_degraded(str(exc), cmd)
     except Exception as exc:  # fail loud, never silent: the gate's own bug is an advisory
@@ -2689,6 +2697,8 @@ def gate_pkill_guard(raw_payload: str) -> GateResult:
                 continue  # gone already, the caller's own, or not signalable without sudo
             victims.setdefault(pid, shlex.join([tool, *argv]))
     if not victims:
+        if unreplayable:
+            return _pkill_degraded("; ".join(dict.fromkeys(unreplayable)), cmd)
         return GateResult(0, "", "")
     _log_trigger("pkill-guard", "block", f"{len(victims)} outside the caller's tree", cmd)
     lines = []
