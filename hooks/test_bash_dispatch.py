@@ -1233,6 +1233,35 @@ def test_pkill_caller_tree_is_the_nearest_claude_and_its_descendants(monkeypatch
     assert _DISPATCHER_NAMESPACE["_pkill_caller_tree"](table) == {shell, hook}
 
 
+@pytest.mark.parametrize(
+    "comm",
+    [
+        "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",
+        "/opt/homebrew/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64"
+        "/vendor/aarch64-apple-darwin/bin/codex",
+    ],
+)
+def test_pkill_caller_tree_roots_at_a_codex_agent(monkeypatch, comm):
+    """~/.codex/hooks.json runs this dispatcher through agent-infra's codex_hook_shim.py, so under
+    Codex the chain is hook -> bash -> shim -> codex, with no Claude process above it. The agent's
+    own tool shells and what they started hang off the codex process."""
+    hook, bash, shim, codex, app = 60001, 60002, 60003, 60004, 60005
+    tool_shell, dev_server, other_lane = 60006, 60007, 60008
+    table = {
+        hook: (bash, 501, "00:00", "python3"),
+        bash: (shim, 501, "00:00", "/bin/bash"),
+        shim: (codex, 501, "00:00", "python3"),
+        codex: (app, 501, "30:00", comm),
+        app: (1, 501, "40:00", "/Applications/ChatGPT.app/Contents/MacOS/ChatGPT"),
+        tool_shell: (codex, 501, "05:00", "/bin/zsh"),
+        dev_server: (tool_shell, 501, "04:00", "python3"),
+        other_lane: (1, 501, "20:00", "bash"),
+    }
+    monkeypatch.setattr(os, "getppid", lambda: bash)
+    tree = _DISPATCHER_NAMESPACE["_pkill_caller_tree"](table)
+    assert tree == {codex, hook, bash, shim, tool_shell, dev_server}
+
+
 def _fake_pgrep_bin(tmp_path, n_lines):
     p = tmp_path / f"fake_pgrep_{n_lines}.sh"
     body = "\n".join(f"echo '{1000+i} line{i}'" for i in range(n_lines))

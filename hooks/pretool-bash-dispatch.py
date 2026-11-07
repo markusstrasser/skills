@@ -2201,9 +2201,9 @@ def gate_git_stash_guard(raw_payload: str) -> GateResult:
 # feeds a kill (`pgrep … | xargs kill`, `kill $(pgrep …)`, `for p in $(pgrep …)`, a variable
 # holding pgrep output), runs again as `pgrep` with the same selection options (killall as
 # `killall -s`). The command is refused when a match lies outside the caller's own tree: the
-# nearest Claude ancestor of this hook and its descendants (the hook's parent without one).
-# pkill and pgrep skip their own ancestors, and the replay inherits that; killall and `-a` do
-# not, so a match on an ancestor above the Claude process blocks too. Other users' processes
+# nearest Claude or Codex ancestor of this hook and its descendants (the hook's parent without
+# one). pkill and pgrep skip their own ancestors, and the replay inherits that; killall and
+# `-a` do not, so a match on an ancestor above the agent blocks too. Other users' processes
 # count only under sudo (pkill cannot signal them). A selection pinned to a recorded PID (`-F`)
 # or to the caller's own children (`-P $$`) is not replayed. A replay that cannot run degrades
 # to an advisory marked [DEGRADED], never to a silent pass. Commands without "kill" in them
@@ -2219,7 +2219,7 @@ _PGREP_OUTPUT_OPTS = frozenset("DIdlq")
 _PGREP_OWN_CHILDREN = frozenset({"$$", "${$}", "$BASHPID", "${BASHPID}", "$!", "${!}"})
 _XARGS_VALUE_OPTS = frozenset("EIJLPRSns")
 _PKILL_SHELLS = frozenset({"bash", "sh", "zsh", "dash", "ksh"})
-_CLAUDE_VERSION_COMM = re.compile(r"\d+\.\d+\.\d+")
+_AGENT_VERSION_COMM = re.compile(r"\d+\.\d+\.\d+")
 _PKILL_LISTED_VICTIMS = 15
 
 
@@ -2575,24 +2575,29 @@ def _pkill_process_table() -> dict[int, tuple[int, int, str, str]]:
     return table
 
 
-def _is_claude_process(pid: int, comm: str) -> bool:
-    """A Claude Code CLI: `claude`, a versioned binary (`2.1.319`), or node/bun running one."""
+def _is_agent_process(pid: int, comm: str) -> bool:
+    """An agent CLI whose Bash calls run this hook.
+
+    Claude Code: `claude`, a versioned binary (`2.1.319`), or node/bun running one. Codex: its
+    native `codex` binary, or node running codex.js; ~/.codex/hooks.json sends Codex's Bash calls
+    through agent-infra's codex_hook_shim.py to this dispatcher.
+    """
     base = comm.rsplit("/", 1)[-1]
-    if base == "claude" or _CLAUDE_VERSION_COMM.fullmatch(base):
+    if base in ("claude", "codex") or _AGENT_VERSION_COMM.fullmatch(base):
         return True
     if base not in ("node", "bun"):
         return False
     proc = subprocess.run(["/bin/ps", "-o", "args=", "-p", str(pid)], capture_output=True, text=True, timeout=10)
     script = proc.stdout.split()[1:2]
-    return bool(script) and "claude" in script[0]
+    return bool(script) and ("claude" in script[0] or script[0].rsplit("/", 1)[-1] in ("codex", "codex.js"))
 
 
 def _pkill_caller_tree(table: dict[int, tuple[int, int, str, str]]) -> set[int]:
-    """The nearest Claude ancestor of this hook and its descendants (the hook's parent without one)."""
+    """The nearest Claude or Codex ancestor of this hook and its descendants (the hook's parent without one)."""
     root, pid, seen = os.getppid(), os.getppid(), set()
     while pid in table and pid > 1 and pid not in seen:
         seen.add(pid)
-        if _is_claude_process(pid, table[pid][3]):
+        if _is_agent_process(pid, table[pid][3]):
             root = pid
             break
         pid = table[pid][0]
