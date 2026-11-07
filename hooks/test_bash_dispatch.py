@@ -1421,6 +1421,8 @@ _KILL_AT_COMMAND = _DISPATCHER_NAMESPACE.get("_kill_word_at_command_position")
         "cmd=x\nkill $p",
         "$SUDO kill $p",
         "s\\udo pkill -f x",
+        "echo pkill -f x | sh",  # a shell reads what echo and printf print
+        "printf pkill | sh",
     ],
 )
 def test_kill_words_a_shell_could_run_are_parsed(command):
@@ -1493,6 +1495,8 @@ def test_pkill_guard_degrades_loudly_when_its_scan_fails(monkeypatch):
         "pgrep -f {pat} > f; kill $(< f)",
         "pgrep -f {pat} | tee f >/dev/null; xargs kill < f",
         'set -- $(pgrep -f {pat}); kill "$@"',
+        "echo pkill -f {pat} | sh",
+        "printf 'pkill -f {pat}\\n' | sh",
     ],
 )
 def test_traced_kills_block_a_detached_decoy(sandbox, decoys, template):
@@ -1551,6 +1555,12 @@ _PKILL_X = [("pkill", ["-f", "--", "x"])]
         ('cmd="pkill -f x"; eval $cmd', _PKILL_X),
         ('cmd="pkill -f x"; $cmd', _PKILL_X),
         ("bash -s <<EOF\nfor p in \\$(pgrep -f x); do kill \\$p; done\nEOF", _X),
+        # text a shell reads with its escapes decoded (the old scan replayed `xn`) and `$'…'` text
+        ("printf 'pkill -f x\\n' | sh", _PKILL_X),
+        ("echo -e 'pkill -f x\\n' | sh", _PKILL_X),
+        ("echo $'pkill -f x\\n' | sh", _PKILL_X),
+        ("sh -c $'pkill -f x\\n'", _PKILL_X),
+        ('d=x; sh -c "pkill -f $d"', _PKILL_X),
         # wrappers
         ("/usr/bin/time pkill -f x", _PKILL_X),
         ("taskpolicy -c utility pkill -f x", _PKILL_X),
@@ -1569,6 +1579,15 @@ _PKILL_X = [("pkill", ["-f", "--", "x"])]
 )
 def test_kill_selections_the_scan_follows(command, expected):
     assert _kill_replays(command) == expected
+
+
+def test_echo_text_a_shell_reads_is_taken_both_ways():
+    """bash's echo prints `\\n` as written unless -e; zsh's decodes it unless -E."""
+    assert _kill_replays("echo 'pkill -f x\\n' | sh") == [
+        ("pkill", ["-f", "--", "xn"]),
+        ("pkill", ["-f", "--", "x"]),
+    ]
+    assert _kill_replays("echo -E 'pkill -f x\\n' | sh") == [("pkill", ["-f", "--", "xn"])]
 
 
 @pytest.mark.parametrize(

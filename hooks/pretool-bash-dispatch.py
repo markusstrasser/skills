@@ -2299,8 +2299,8 @@ def _kill_word_at_command_position(cmd: str) -> bool:
         first = _KILL_FIRST_WORD_RE.match(cmd, starts[index] if index >= 0 else 0, start).group(1)
         if not first or not _KILL_PLAIN_WORD_RE.fullmatch(first):
             return True
-        if first.rsplit("/", 1)[-1] in _KILL_COMMAND_PREFIXES:
-            return True
+        if first.rsplit("/", 1)[-1] in _KILL_COMMAND_PREFIXES or first in ("echo", "printf"):
+            return True  # a wrapper runs it; a shell may read what echo or printf prints
     return False
 
 
@@ -2491,8 +2491,12 @@ class _KillScan:
         self.selections = list(unique.values())
 
 
-def _ansi_c_text(body: str) -> str:
-    """The text of a `$'…'` body: its backslash escapes decoded as bash and zsh decode them."""
+def _ansi_c_text(body: str, echo: bool = False) -> str:
+    """Text with its backslash escapes decoded: a `$'…'` body, or (`echo`) `echo -e` and printf `%b` text.
+
+    `echo` reads `\\0NNN` as octal and stops the output at `\\c`; `$'…'` reads `\\cX` as control-X.
+    A printf format decodes as a `$'…'` body does for every escape a command line can carry.
+    """
     out: list[str] = []
     i = 0
     while i < len(body):
@@ -2506,20 +2510,66 @@ def _ansi_c_text(body: str) -> str:
         if nxt in _ANSI_C_ESCAPES:
             out.append(_ANSI_C_ESCAPES[nxt])
         elif nxt in "01234567":
-            digits = re.match(r"[0-7]{1,3}", body[i - 1 :]).group(0)
-            out.append(chr(int(digits, 8) & 0xFF))
-            i += len(digits) - 1
+            start = i if echo and nxt == "0" else i - 1
+            digits = re.match(r"[0-7]{0,3}", body[start:]).group(0)
+            out.append(chr(int(digits or "0", 8) & 0xFF))
+            i = start + len(digits)
         elif nxt in "xuU" and re.match(r"[0-9A-Fa-f]", body[i : i + 1]):
             width = {"x": 2, "u": 4, "U": 8}[nxt]
             digits = re.match(f"[0-9A-Fa-f]{{1,{width}}}", body[i:]).group(0)
             out.append(chr(min(int(digits, 16), 0x10FFFF)))
             i += len(digits)
+        elif nxt == "c" and echo:
+            break  # `\c`: nothing after it is printed
         elif nxt == "c" and i < len(body):
             out.append(chr(ord(body[i]) & 0x1F))
             i += 1
         else:
             out.append(nxt if nxt in "\\'\"?" else "\\" + nxt)
     return "".join(out)
+
+
+_PRINTF_DIRECTIVE_RE = re.compile(r"%(?:%|[-+ #0']*(?:\*|\d+)?(?:\.(?:\*|\d+))?[A-Za-z])")
+
+
+def _printf_text(args: list[str]) -> str:
+    """What `printf FORMAT ARGS` prints, for the shell text it may carry.
+
+    The format's escapes decode; each directive takes the next argument (`%b` with its escapes
+    decoded, `%%` a percent sign), and the format repeats while arguments remain.
+    """
+    if not args:
+        return ""
+    fmt, rest = args[0], list(args[1:])
+    parts: list[str] = []
+    while True:
+        used, pos = 0, 0
+        for match in _PRINTF_DIRECTIVE_RE.finditer(fmt):
+            parts.append(_ansi_c_text(fmt[pos : match.start()]))
+            pos = match.end()
+            if match.group(0) == "%%":
+                parts.append("%")
+                continue
+            arg = rest.pop(0) if rest else ""
+            used += 1
+            parts.append(_ansi_c_text(arg, echo=True) if match.group(0).endswith("b") else arg)
+        parts.append(_ansi_c_text(fmt[pos:]))
+        if not rest or not used:
+            return "".join(parts)
+
+
+def _echo_texts(args: list[str]) -> list[str]:
+    """What `echo ARGS` may print: bash leaves escapes alone unless -e, zsh decodes them unless -E."""
+    decode: bool | None = None
+    while args and re.fullmatch(r"-[neE]+", args[0]):
+        for letter in args[0][1:]:
+            decode = True if letter == "e" else False if letter == "E" else decode
+        args = args[1:]
+    text = " ".join(args)
+    decoded = _ansi_c_text(text, echo=True)
+    if decode is None:
+        return list(dict.fromkeys([text, decoded]))
+    return [decoded if decode else text]
 
 
 def _word_value(raw: str, scan: _KillScan, assignment: bool = False) -> str | None:
@@ -2808,9 +2858,11 @@ def _set_operands(argv: list[str | None]) -> tuple[int | None, str]:
     return None, "@"
 
 
-def _file_name(raw: str, scan: _KillScan) -> str | None:
-    """A file a word names, spelled as the shell passes it when the guard knows that (`~/x`, `$HOME/x`)."""
-    return _word_value(raw, scan) or _shlex_unquote_word(raw)
+def _word_text(raw: str, scan: _KillScan) -> str | None:
+    """A word's text as the shell passes it when the guard knows that (`~/x`, `$HOME/x`, `$'…'`),
+    else as written without its quotes: a file it names, text it prints or a shell runs."""
+    value = _word_value(raw, scan)
+    return value if value is not None else _shlex_unquote_word(raw)
 
 
 def _read_targets(prog: str, args: list[str | None]) -> set[str]:
@@ -2864,7 +2916,7 @@ def _stage_output(stage: _KillStage, out: _KillFeed, scan: _KillScan) -> _KillFe
     """What a stage hands the next one: nothing when its stdout goes to a file or to stderr."""
     for fd, op, target in stage.redirects:
         if op.startswith("&>") or (fd in ("", "1") and op in (">", ">>", ">|")):
-            name = _file_name(target, scan)
+            name = _word_text(target, scan)
             if name:
                 scan.write(name, out)
             return _KillFeed()
@@ -3022,9 +3074,9 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
     for fd, op, target in stage.redirects:
         if op == "<<<":
             inp.merge(_word_feed(target, scan, depth))
-            inp.texts.append(_shlex_unquote_word(target) or "")
+            inp.texts.append(_word_text(target, scan) or "")
         elif op in ("<", "<>") and fd in ("", "0"):
-            name = _file_name(target, scan)
+            name = _word_text(target, scan)
             if name:
                 inp.files.append(name)
     inp.texts += stage.heredocs
@@ -3077,6 +3129,8 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
     elif prog in _PKILL_SHELLS:
         shell_text, shell_reads_stdin, after_text = _shell_script_source(argv)
         positional_at = program_at + after_text + 1
+        if shell_text is not None:  # the text as this shell passes it: `sh -c "pkill -f $d"`, `$'…'`
+            shell_text = _word_text(raw_words[program_at + after_text - 1], scan) or shell_text
     child_args = _KillFeed()
     out = _KillFeed()
     for index, raw in enumerate(raw_words):
@@ -3135,7 +3189,8 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
                 scan.unknown.append(f"`{prog}` runs what {_kill_programs(inp.other)} prints")
         return _stage_output(stage, out, scan)
     if prog == "eval":
-        out.merge(_scan_inner(" ".join(a for a in argv[1:] if a is not None), scan, depth).output)
+        text = " ".join(word for raw in raw_argv[1:] if (word := _word_text(raw, scan)) is not None)
+        out.merge(_scan_inner(text, scan, depth).output)
         if any("$" in raw or "`" in raw for raw in raw_argv[1:]):
             scan.opaque = True  # text known only when it runs may set any variable
         return _stage_output(stage, out, scan)
@@ -3165,19 +3220,17 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
             if stripped is not None:
                 scan.consume(inp, "`xargs kill`")
         return _stage_output(stage, out, scan)
-    if printed:
-        args = [a for a in argv[1:] if a is not None]
+    if printed:  # text a shell may read: `printf 'pkill -f x\n' | sh`, `echo $'…' | sh`
+        args = [word for raw in raw_argv[1:] if (word := _word_text(raw, scan)) is not None]
         if prog == "echo":
-            while args and re.fullmatch(r"-[neE]+", args[0]):
-                args = args[1:]
-        elif args and "%" in args[0]:
-            args = args[1:]
-        out.texts.append(("\n" if prog == "printf" else " ").join(args))
+            out.texts += _echo_texts(args)
+        else:
+            out.texts.append(_printf_text(args[1:] if args[:1] == ["--"] else args))
         if stripped is not None:
             out.merge(inp)
         return _stage_output(stage, out, scan)
     if prog in _PID_FILE_READERS:
-        operands = [name for raw in _file_operands(prog, raw_argv[1:]) if (name := _file_name(raw, scan))]
+        operands = [name for raw in _file_operands(prog, raw_argv[1:]) if (name := _word_text(raw, scan))]
         if operands:
             out.files += operands
         else:
@@ -3187,7 +3240,7 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
         return _stage_output(stage, out, scan)
     if prog == "tee":  # `pgrep … | tee pids.txt`: each file holds what tee reads
         for raw in _file_operands(prog, raw_argv[1:]):
-            name = _file_name(raw, scan)
+            name = _word_text(raw, scan)
             if name:
                 scan.write(name, inp)
     if prog in _PID_FILTERS:
