@@ -1440,6 +1440,21 @@ def test_kill_words_a_shell_could_run_are_parsed(command):
     assert _KILL_AT_COMMAND(command)
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "rg " + ",kill" * 6000,  # each kill word walked back to the word's start: 5.5 s at 30 KiB
+        "rg" + "x" * 30000 + " ,kill" * 3000,  # each matched the long first word again: 0.5 s
+    ],
+    ids=["one-long-word", "long-first-word"],
+)
+def test_pkill_prefilter_takes_linear_time(command):
+    """Every Bash call runs the prefilter, so its cost may grow only with the command's length."""
+    started = time.perf_counter()
+    assert not _KILL_AT_COMMAND(command)
+    assert time.perf_counter() - started < 0.25
+
+
 _BIG_PROSE = "\n".join(
     f"Line {i}: we kill nothing here; see ~/Projects/skills/hooks and skills/bin/lane." for i in range(1500)
 )

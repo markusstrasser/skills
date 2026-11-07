@@ -2238,6 +2238,7 @@ _PKILL_LISTED_VICTIMS = 15
 # The test before any parse: a kill-family word where a shell could run it (see below).
 _KILL_WORD_RE = re.compile(r"(?<![\w.\-])(?:p?kill|killall)(?![\w.\-/])")
 _KILL_SEGMENT_START_RE = re.compile(r"[\n;(){}`'\"!]|(?<!>)\||(?<![<>])&(?!>)")
+_KILL_LAST_BREAK_RE = re.compile(r"(?s:.*)[ \t\n;&|(){}`'\"!<>]")  # matched up to a point
 _KILL_FIRST_WORD_RE = re.compile(r"\s*(\S*)")
 _KILL_PLAIN_WORD_RE = re.compile(r"[A-Za-z_./~][\w./~+:@%,-]*")
 _KILL_COMMAND_PREFIXES = frozenset(
@@ -2288,20 +2289,30 @@ def _kill_word_at_command_position(cmd: str) -> bool:
     assignment, a redirection or anything else that is not a plain word. Only a kill word after a
     plain first word (`docker kill`, `rg -n kill`, prose such as `we kill`) or inside a longer word
     (`skills`, `kill-session`, `os.kill`) is skipped.
+
+    It takes linear time. Each kill word's own word start comes from the last break between it
+    and the kill word before it, and a segment's first word is judged once: a plain first word
+    ends at a blank before the segment's first kill word, so later kill words share it.
     """
     starts: list[int] | None = None
+    word_start = scanned = 0
+    judged = -2  # the segment whose first word was judged plain
     for match in _KILL_WORD_RE.finditer(cmd):
-        start = match.start()
-        while start > 0 and cmd[start - 1] not in " \t\n;&|(){}`'\"!<>":
-            start -= 1  # a path such as /usr/bin/pkill
+        found = _KILL_LAST_BREAK_RE.match(cmd, scanned, match.start())
+        if found:
+            word_start = found.end()  # the word may be longer, as in /usr/bin/pkill
+        scanned = match.start()
         if starts is None:
-            starts = [found.end() for found in _KILL_SEGMENT_START_RE.finditer(cmd)]
-        index = bisect.bisect_right(starts, start) - 1
-        first = _KILL_FIRST_WORD_RE.match(cmd, starts[index] if index >= 0 else 0, start).group(1)
+            starts = [segment.end() for segment in _KILL_SEGMENT_START_RE.finditer(cmd)]
+        index = bisect.bisect_right(starts, word_start) - 1
+        if index == judged:
+            continue
+        first = _KILL_FIRST_WORD_RE.match(cmd, starts[index] if index >= 0 else 0, word_start).group(1)
         if not first or not _KILL_PLAIN_WORD_RE.fullmatch(first):
             return True
         if first.rsplit("/", 1)[-1] in _KILL_COMMAND_PREFIXES or first in ("echo", "printf"):
             return True  # a wrapper runs it; a shell may read what echo or printf prints
+        judged = index
     return False
 
 
