@@ -44,7 +44,8 @@ background option, and set its timeout above the command's expected time (the de
 queued behind other lanes can take 30 minutes, so give builds and test runs 3600000). Nobody answers a prompt: give \
 every command that can ask for input </dev/null, and run a debugger as \
 \`lldb -b -o run -k 'thread backtrace -c 40' -k 'quit 1' -- <program> </dev/null\`, since -b alone stops at lldb's \
-prompt when the program crashes."
+prompt when the program crashes. Stop a process you started with \`kill \$!\` in the command that started it, or by \
+its literal PID: the guard refuses pkill, killall, xargs kill and a kill of a variable or command substitution."
 prompt="$prompt
 
 $headless_note"
@@ -94,16 +95,26 @@ git_verbs = ("add", "commit", "push", "pull", "fetch", "stash", "switch", "check
              "merge", "cherry-pick", "revert", "am ", "rm ", "mv ", "branch", "tag", "worktree", "remote",
              "update-ref", "update-index", "symbolic-ref", "gc", "prune", "reflog", "clean", "config", "notes",
              "filter-", "replace", "-C", "-c ", "--git-dir", "--work-tree")
-patterns = [f"*git {verb}*" for verb in git_verbs]
+shell_rules = [(f"*git {verb}*", "deny") for verb in git_verbs]
 # Kills that select processes by text reach every process on the Mac, other lanes' supervisors included: on
-# 2026-11-07 one `pkill -f` alternation killed them all. A lane kills what it started by recorded PID. The pgrep
-# rules want `kill` followed by a space or the end, so `pgrep -fl x | ~/Projects/skills/bin/redact-env`, which
-# process-check lanes run, stays allowed.
-patterns += ["*xargs*kill*", "*kill *pgrep*", "*pgrep*kill *", "*pgrep*kill"]
-patterns += ["*pkill*", "*killall*", "*sudo *", "*launchctl*", "*security find-*", "*security dump-*",
-             "*security export*", "*security add-*", "*security delete-*", "*Keychains*", "*/.ssh*", "*/.config/*",
-             f"*{home}/.claude/*", "*~/.claude/*", "*/.codex/*", "*/.local/share/opencode*", "*auth.json*",
-             "*opencode.db*", "*API_KEY*", "*/.netrc*", "*.modal.toml*", "*/.aws/*", "*.opencode*"]
+# 2026-11-07 one `pkill -f` alternation killed them all. A lane kills what it started by recorded PID. OpenCode 2.2.5
+# judges each simple command, and each command substitution, as a resource of its own, and the last rule that
+# matches a resource decides it: `for p in $(pgrep x); do kill -9 $p; done` reaches these rules as `pgrep x` and
+# `kill -9 $p`, so a kill whose targets are a variable or a command substitution is refused whatever fed it, and the
+# allow rules after it let `kill $!` and the signal-0 probe `kill -0 $pid` through. The pgrep and xargs rules catch a
+# resource that holds the whole pipeline, as `sh -c '...'` or a heredoc read by a shell does. Their `kill` ends at a
+# space, a quote or the resource's end, so the `skills` in `pgrep -fl x | ~/Projects/skills/bin/redact-env`, which
+# process checks run, and in `xargs grep -l skills` matches no rule.
+kill_deny = ["*pkill*", "*killall*", "*xargs*kill", "*xargs*kill *", "*xargs*kill'*", '*xargs*kill"*',
+             "*kill *pgrep*", "*pgrep*kill *", "*pgrep*kill", "kill *$*", "kill *`*", "*/kill *$*", "*/kill *`*",
+             "kill * -1 *", "*/kill * -1 *"]
+signals = ("", "-TERM ", "-KILL ", "-INT ", "-HUP ", "-9 ", "-15 ", "-2 ", "-1 ", "-s TERM ", "-s KILL ", "-s INT ")
+kill_allow = [f"kill {signal}{pid}" for signal in signals for pid in ("$!", '"$!"')] + ["kill -0 $*", 'kill -0 "$*']
+shell_rules += [(pattern, "deny") for pattern in kill_deny] + [(pattern, "allow") for pattern in kill_allow]
+patterns = ["*sudo *", "*launchctl*", "*security find-*", "*security dump-*", "*security export*",
+            "*security add-*", "*security delete-*", "*Keychains*", "*/.ssh*", "*/.config/*", f"*{home}/.claude/*",
+            "*~/.claude/*", "*/.codex/*", "*/.local/share/opencode*", "*auth.json*", "*opencode.db*", "*API_KEY*",
+            "*/.netrc*", "*.modal.toml*", "*/.aws/*", "*.opencode*"]
 if worktree != repo:
     # Shell commands that name the main checkout's tracked tree; the entry holding the worktree stays reachable.
     own = worktree.relative_to(repo).parts[0] if worktree.is_relative_to(repo) else None
@@ -111,10 +122,11 @@ if worktree != repo:
                              capture_output=True, text=True, check=True).stdout.split("\n")
     patterns += [f"*{repo}/{entry}*" for entry in entries if entry and entry != own]
     patterns += [f"*cd {repo}", f"*cd {repo} *", f"*cd {repo};*", f"*cd {repo}&*", f"*cd {repo}/ *"]
-for pattern in patterns + local.get("shell_deny", []):
+shell_rules += [(pattern, "deny") for pattern in patterns + local.get("shell_deny", [])]
+for pattern, effect in shell_rules:
     # v2 names its shell tool `shell`; `bash` covers v1 configs.
     for action in ("shell", "bash"):
-        rules.append({"action": action, "resource": pattern, "effect": "deny"})
+        rules.append({"action": action, "resource": pattern, "effect": effect})
 # Nobody answers a question in a headless run, and a doom loop only burns tokens.
 rules.append({"action": "doom_loop", "resource": "*", "effect": "deny"})
 rules.append({"action": "question", "resource": "*", "effect": "deny"})

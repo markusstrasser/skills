@@ -642,22 +642,66 @@ required = [
     {"action": "question", "resource": "*", "effect": "deny"},
 ]
 required += [{"action": "shell", "resource": kill, "effect": "deny"}
-             for kill in ("*pkill*", "*killall*", "*xargs*kill*", "*kill *pgrep*", "*pgrep*kill *", "*pgrep*kill")]
+             for kill in ("*pkill*", "*killall*", "*xargs*kill", "kill *$*", "kill *`*")]
+required.append({"action": "shell", "resource": "kill $!", "effect": "allow"})
 sys.exit(0 if all(rule in rules for rule in required) else 1)
 PY
-python3 - "$oc_guard" <<'PY' || fail "opencode guard misjudges a kill by pattern or a redacted listing"
+python3 - "$oc_guard" <<'PY' || fail "opencode guard misjudges a kill by pattern, a recorded-PID kill or a listing"
 import json
+import re
 import sys
-from fnmatch import fnmatchcase
 
-# fnmatch stands in for opencode's wildcard match, which these patterns use only as `*`.
-denied = [rule["resource"] for rule in json.load(open(sys.argv[1]))["permissions"]
-          if rule["action"] == "shell" and rule["effect"] == "deny"]
-kills = ("pgrep -f x | xargs kill", "kill $(pgrep -f x)", "for p in $(pgrep x); do kill -9 $p; done",
-         "pkill -f 'a|b'", "killall sleep")
-listing = "pgrep -fl 'takes2' | ~/Projects/skills/bin/redact-env | cut -c1-180"
-ok = all(any(fnmatchcase(kill, pattern) for pattern in denied) for kill in kills)
-sys.exit(0 if ok and not any(fnmatchcase(listing, pattern) for pattern in denied) else 1)
+# OpenCode 2.2.5's shell check, read from its binary: each simple command and each command substitution is a resource
+# of its own (each list below is what its scanner returns for the command), the last rule whose action and resource
+# match decides a resource, and one denied resource refuses the call. Its matcher reads backslashes as `/`, turns `*`
+# into `.*` and `?` into `.`, makes a trailing ` *` optional and matches across newlines.
+def matches(text, pattern):
+    regex = re.sub(r"[.+^${}()|[\]\\]", lambda m: "\\" + m.group(0), pattern.replace("\\", "/"))
+    regex = regex.replace("*", ".*").replace("?", ".")
+    if regex.endswith(" .*"):
+        regex = regex[:-3] + "( .*)?"
+    return re.fullmatch(regex, text.replace("\\", "/"), re.S) is not None
+
+
+rules = json.load(open(sys.argv[1]))["permissions"]
+
+
+def refused(resources):
+    decided = [[rule for rule in rules if matches("shell", rule["action"]) and matches(resource, rule["resource"])]
+               for resource in resources]
+    return any(found and found[-1]["effect"] == "deny" for found in decided)
+
+
+kills = {
+    "pgrep -f x | xargs kill": ["pgrep -f x", "xargs kill"],
+    "kill $(pgrep -f x)": ["kill $(pgrep -f x)", "pgrep -f x"],
+    "kill `pgrep -f x`": ["kill `pgrep -f x`", "pgrep -f x"],
+    "for p in $(pgrep x); do kill -9 $p; done": ["pgrep x", "kill -9 $p"],
+    "pids=$(pgrep -f x); kill $pids": ["pgrep -f x", "kill $pids"],
+    "kill ${=pids}": ["kill ${=pids}"],
+    "pgrep -f x | while read p; do kill $p; done": ["pgrep -f x", "read p", "kill $p"],
+    "kill $(ps aux | grep '[s]erver' | awk '{print $2}')":
+        ["kill $(ps aux | grep '[s]erver' | awk '{print $2}')", "ps aux", "grep '[s]erver'", "awk '{print $2}'"],
+    "sh -c 'pgrep x | xargs kill'": ["sh -c 'pgrep x | xargs kill'"],
+    "pkill -f 'a|b'": ["pkill -f 'a|b'"],
+    "killall sleep": ["killall sleep"],
+    "kill -9 -1": ["kill -9 -1"],
+}
+allowed = {
+    "pgrep -fl 'takes2' | ~/Projects/skills/bin/redact-env | cut -c1-180":
+        ["pgrep -fl 'takes2'", "~/Projects/skills/bin/redact-env", "cut -c1-180"],
+    "sleep 30 & kill $!": ["sleep 30", "kill $!"],
+    'kill -TERM "$!"': ['kill -TERM "$!"'],
+    'kill -0 "$pid" 2>/dev/null': ['kill -0 "$pid" 2>/dev/null'],
+    "kill -TERM -- -4425": ["kill -TERM -- -4425"],
+    "rg -l kill src | xargs grep -l skills": ["rg -l kill src", "xargs grep -l skills"],
+    "python3 - <<'EOF'\n# a kill proc fires after $x\nEOF": ["python3 - <<'EOF'\n# a kill proc fires after $x\nEOF"],
+}
+wrong = [command for command, resources in kills.items() if not refused(resources)]
+wrong += [command for command, resources in allowed.items() if refused(resources)]
+for command in wrong:
+    print(f"misjudged: {command!r}", file=sys.stderr)
+sys.exit(1 if wrong else 0)
 PY
 assert_eq "" "$(git -C "$OC_WORKTREE" status --porcelain)" "opencode guard is excluded from git status"
 grep -Fxq "lane-opencode: usage steps=1 input=100 output=20 reasoning=7 cache_read=50 cache_write=0 cost_list=0.0100" \
