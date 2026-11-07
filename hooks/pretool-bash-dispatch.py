@@ -107,6 +107,7 @@ from __future__ import annotations
 
 import ast
 import bisect
+import collections
 import fnmatch
 import importlib.util
 import io
@@ -2259,6 +2260,7 @@ _PLAIN_RAW_WORD_RE = re.compile(r"[^\s'\"\\]+")  # shlex returns such a word unc
 _TILDE_PREFIX_RE = re.compile(r"~(?:[A-Za-z0-9_][A-Za-z0-9_.\-]*)?(?=/|$)")
 _KILL_SELECTING_WORDS_RE = re.compile(r"\b(?:pkill|killall|pgrep|ps|lsof|xargs)\b")
 _KILL_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_KILL_BARE_NAME_RE = re.compile(r"(?<![\w$])[A-Za-z_][A-Za-z0-9_]*")  # matches run to the name's end
 # Characters that make an unquoted expansion split or glob (bash splits, zsh does not), so its
 # words are not known.
 _KILL_SPLIT_CHARS = frozenset(" \t\n*?[")
@@ -2266,6 +2268,8 @@ _KILL_SPLIT_CHARS = frozenset(" \t\n*?[")
 _KILL_OPENERS = frozenset({"if", "while", "until", "for", "select", "case", "{"})
 _KILL_CLOSERS = frozenset({"fi", "done", "esac", "}"})
 _KILL_SETTING_DECLARERS = frozenset({"declare", "typeset", "local", "export", "readonly"})
+# Positional parameters a word reads: `"$@"`, `$*`, `$1`, `${2}`, `"${@:2}"`.
+_KILL_POSITIONAL_RE = re.compile(r"\$\{?(?:[@*]|[1-9])")
 # Reserved words a simple command's assignments may follow.
 _KILL_RESERVED_LEAD = frozenset({"!", "{", "if", "then", "else", "elif", "do", "while", "until", "time"})
 _ANSI_C_ESCAPES = {"a": "\a", "b": "\b", "e": "\x1b", "E": "\x1b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v"}
@@ -2345,16 +2349,15 @@ def _kill_programs(names: list[str]) -> str:
 class _KillShell:
     """What every scan of one command line shares: its text and the variables holding kill commands."""
 
-    __slots__ = ("_counts", "_reads_removed", "kill_texts", "text")
+    __slots__ = ("_counts", "kill_texts", "text")
 
     def __init__(self) -> None:
         self.text: str | None = None  # the whole command line
         self.kill_texts: dict[str, str] = {}  # variables holding a kill command
-        self._reads_removed: str | None = None
-        self._counts: dict[str, int] = {}
+        self._counts: collections.Counter[str] | None = None
 
     def set_text(self, text: str) -> None:
-        self.text, self._reads_removed, self._counts = text, None, {}
+        self.text, self._counts = text, None
 
     def bare_count(self, name: str) -> int:
         """How often the line names `name` other than to read it (`$name`, `${name}`).
@@ -2365,10 +2368,9 @@ class _KillShell:
         """
         if self.text is None:
             return 1 << 30
-        if self._reads_removed is None:
-            self._reads_removed = _KILL_VAR_REF_RE.sub(" ", self.text)
-        if name not in self._counts:
-            self._counts[name] = len(re.findall(rf"(?<![\w$]){name}(?!\w)", self._reads_removed))
+        if self._counts is None:  # one pass over the line, whatever the number of names asked
+            reads_removed = _KILL_VAR_REF_RE.sub(" ", self.text)
+            self._counts = collections.Counter(_KILL_BARE_NAME_RE.findall(reads_removed))
         return self._counts[name]
 
 
@@ -2394,7 +2396,7 @@ class _KillScan:
         self.var_feeds: dict[str, _KillFeed] = {}  # what each variable the command sets holds
         self.loop_vars: set[str] = set()  # variables `while read` loops set from their input
         self.loop_feed = _KillFeed()  # what those loops read
-        self.file_pgreps: dict[str, list[tuple[list[str | None] | None, list[str]]]] = {}  # pgrep output saved
+        self.file_feeds: dict[str, _KillFeed] = {}  # what each file the command writes holds
         self.kill_feed = _KillFeed()  # the variables and files kills read their pids from
         self.unknown: list[str] = []  # kills whose pids come from where no replay reaches
         self.kills = 0
@@ -2422,8 +2424,8 @@ class _KillScan:
             self.assign(name, held)
         self.loop_vars |= inner.loop_vars
         self.loop_feed.merge(inner.loop_feed)
-        for name, saved in inner.file_pgreps.items():
-            self.file_pgreps.setdefault(name, []).extend(saved)
+        for name, held in inner.file_feeds.items():
+            self.write(name, held)
         self.kill_feed.merge(inner.kill_feed)
         self.unknown += inner.unknown
         self.kills += inner.kills
@@ -2433,6 +2435,10 @@ class _KillScan:
     def assign(self, name: str, feed: _KillFeed) -> None:
         """A variable the command sets now holds the pids `feed` carries."""
         self.var_feeds.setdefault(name, _KillFeed()).merge(feed)
+
+    def write(self, name: str, feed: _KillFeed) -> None:
+        """A file the command writes now holds the pids `feed` carries."""
+        self.file_feeds.setdefault(name, _KillFeed()).merge(feed)
 
     def consume(self, feed: _KillFeed, form: str) -> None:
         """A kill signals the pids `feed` carries."""
@@ -2455,25 +2461,31 @@ class _KillScan:
                 self.unknown.append(
                     f"a `while read` loop that kills takes its pids from {_kill_programs(loop.other)} output"
                 )
-        seen: set[str] = set()
-        pending = sorted(names - self.loop_vars - _KILL_PINNED_NAMES, reverse=True)
+        # The variables and files a kill reads, followed through what each one holds.
+        def sources(refs: set[str], read: list[str]) -> list[tuple[str, str]]:
+            named = sorted(refs - self.loop_vars - _KILL_PINNED_NAMES)
+            return [("file", name) for name in reversed(read)] + [("$", name) for name in reversed(named)]
+
+        pending = sources(names, files)
+        seen: set[tuple[str, str]] = set()
         while pending:
-            name = pending.pop()
-            if name in seen:
+            kind, name = source = pending.pop()
+            if source in seen:
                 continue
-            seen.add(name)
-            held = self.var_feeds.get(name)
+            seen.add(source)
+            held = (self.var_feeds if kind == "$" else self.file_feeds).get(name)
             if held is None:
-                self.unknown.append(f"a kill reads ${name}, which this command does not set")
+                # A pid file no command here wrote holds recorded PIDs, and positional parameters
+                # no `set` here assigned are the shell's own.
+                if kind == "$" and name != "@":
+                    self.unknown.append(f"a kill reads ${name}, which this command does not set")
                 continue
             self.selections += [("pgrep", argv, raw) for argv, raw in held.pgreps]
-            files += held.files
-            pending += sorted(held.refs - seen - self.loop_vars - _KILL_PINNED_NAMES)
+            pending += sources(held.refs, held.files)
             if held.other and not (held.pgreps or held.refs or held.files):
-                self.unknown.append(f"a kill reads ${name}, which holds {_kill_programs(held.other)} output")
-        for name in files:
-            self.selections += [("pgrep", argv, raw) for argv, raw in self.file_pgreps.get(name, [])]
-        unique: dict[tuple, tuple[str, list[str] | None, list[str]]] = {}
+                what = f"${name}" if kind == "$" else name
+                self.unknown.append(f"a kill reads {what}, which holds {_kill_programs(held.other)} output")
+        unique: dict[tuple, tuple[str, list[str | None] | None, list[str]]] = {}
         for tool, argv, raw in self.selections:
             unique.setdefault((tool, None if argv is None else tuple(argv), tuple(raw)), (tool, argv, raw))
         self.selections = list(unique.values())
@@ -2713,15 +2725,20 @@ def _heredoc_texts(command: str, start: int, delimiters: list[tuple[str, bool]])
     return texts
 
 
-def _scan_inner(text: str, scan: _KillScan, depth: int, child: bool = False) -> _KillScan:
+def _scan_inner(
+    text: str, scan: _KillScan, depth: int, child: bool = False, positional: _KillFeed | None = None
+) -> _KillScan:
     """Scan text the command runs as a nested command line; return the nested scan.
 
     A subshell (`$( … )`, `<( … )`, `eval`) starts with the variables this shell holds; a child
-    shell (`sh -c`, a shell reading stdin) with the environment only.
+    shell (`sh -c`, a shell reading stdin) with the environment only, and with `positional` as its
+    positional parameters (`sh -c TEXT _ ARGS`).
     """
     inner = _KillScan(scan.shell)
     if not child:
         inner.values, inner.opaque = dict(scan.values), scan.opaque
+    if positional is not None:
+        inner.assign("@", positional)
     _scan_kill_text(text, inner, depth + 1)
     scan.merge(inner)
     return inner
@@ -2739,16 +2756,18 @@ def _word_feed(raw: str, scan: _KillScan, depth: int) -> _KillFeed:
             outside = outside[:start] + outside[end:]
     if "$" in outside:
         feed.refs |= set(_KILL_VAR_REF_RE.findall(outside)) - _KILL_PINNED_NAMES
+        if _KILL_POSITIONAL_RE.search(outside):
+            feed.refs.add("@")  # `"$@"`, `$*`, `$1`: what `set --` or `sh -c TEXT _ ARGS` assigned
     return feed
 
 
-def _shell_script_source(argv: list[str | None]) -> tuple[str | None, bool]:
-    """(its `-c` text, reads its commands from stdin) for one shell invocation."""
+def _shell_script_source(argv: list[str | None]) -> tuple[str | None, bool, int]:
+    """(its `-c` text, reads its commands from stdin, index of the word after the text) for one shell."""
     i = 1
     while i < len(argv):
         word = argv[i]
         if word is None:
-            return None, False
+            return None, False, len(argv)
         if word in ("-o", "+o", "-O", "+O"):
             i += 2
             continue
@@ -2758,12 +2777,40 @@ def _shell_script_source(argv: list[str | None]) -> tuple[str | None, bool]:
         if not word.startswith(("-", "+")) or word in ("-", "+"):
             break
         if re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", word):
-            return (argv[i + 1] if i + 1 < len(argv) else None), False
+            return (argv[i + 1] if i + 1 < len(argv) else None), False, i + 2
         if re.fullmatch(r"-[A-Za-z]*s[A-Za-z]*", word):
-            return None, True
+            return None, True, len(argv)
         i += 1
     operand = argv[i] if i < len(argv) else None
-    return None, operand is None or operand in ("-", "/dev/stdin")
+    return None, operand is None or operand in ("-", "/dev/stdin"), len(argv)
+
+
+def _set_operands(argv: list[str | None]) -> tuple[int | None, str]:
+    """Where a `set`'s new positional parameters start in argv, and the array `set -A` fills ("@" else).
+
+    (None, "@") when it sets options only (`set -e`, `set -o pipefail`), which leaves them.
+    """
+    i = 1
+    while i < len(argv):
+        word = argv[i]
+        if word is None:
+            return None, "@"
+        if word in ("--", "-"):
+            return i + 1, "@"
+        if word in ("-o", "+o"):
+            i += 2
+            continue
+        if word in ("-A", "+A") and i + 1 < len(argv) and argv[i + 1]:  # zsh and ksh: `set -A name …`
+            return i + 2, argv[i + 1] or "@"
+        if not word.startswith(("-", "+")):
+            return i, "@"
+        i += 1
+    return None, "@"
+
+
+def _file_name(raw: str, scan: _KillScan) -> str | None:
+    """A file a word names, spelled as the shell passes it when the guard knows that (`~/x`, `$HOME/x`)."""
+    return _word_value(raw, scan) or _shlex_unquote_word(raw)
 
 
 def _read_targets(prog: str, args: list[str | None]) -> set[str]:
@@ -2794,16 +2841,17 @@ def _read_targets(prog: str, args: list[str | None]) -> set[str]:
     return {names[-1]} if names else {"MAPFILE"}
 
 
-def _file_operands(prog: str, args: list[str | None]) -> list[str]:
-    """The files a `cat`, `head` or `tail` reads; none means it reads its stdin."""
+def _file_operands(prog: str, raw_args: list[str]) -> list[str]:
+    """The raw words naming the files a `cat`, `head`, `tail` or `tee` reads or writes.
+
+    None for cat, head and tail means it reads its stdin.
+    """
     operands: list[str] = []
     i = 0
-    while i < len(args):
-        word = args[i]
+    while i < len(raw_args):
+        word = raw_args[i]
         i += 1
-        if word is None:
-            continue
-        if prog != "cat" and word in ("-n", "-c", "-b"):
+        if prog in ("head", "tail") and word in ("-n", "-c", "-b"):
             i += 1
         elif len(word) > 1 and word[0] in "-+":
             continue
@@ -2816,9 +2864,9 @@ def _stage_output(stage: _KillStage, out: _KillFeed, scan: _KillScan) -> _KillFe
     """What a stage hands the next one: nothing when its stdout goes to a file or to stderr."""
     for fd, op, target in stage.redirects:
         if op.startswith("&>") or (fd in ("", "1") and op in (">", ">>", ">|")):
-            name = _shlex_unquote_word(target)
+            name = _file_name(target, scan)
             if name:
-                scan.file_pgreps.setdefault(name, []).extend(out.pgreps)
+                scan.write(name, out)
             return _KillFeed()
         if fd in ("", "1") and op == ">&" and target != "1":
             return _KillFeed()
@@ -2976,10 +3024,14 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
             inp.merge(_word_feed(target, scan, depth))
             inp.texts.append(_shlex_unquote_word(target) or "")
         elif op in ("<", "<>") and fd in ("", "0"):
-            name = _shlex_unquote_word(target)
+            name = _file_name(target, scan)
             if name:
                 inp.files.append(name)
     inp.texts += stage.heredocs
+    if not raw_words:  # `$(< pids.txt)` reads the file as `$(cat pids.txt)` does (zsh: any `< f`)
+        out = _KillFeed()
+        out.files += inp.files
+        return _stage_output(stage, out, scan)
     if raw_words and raw_words[0] in ("}", "done"):  # a group or loop body closes: its output flows on
         group = _KillFeed()
         if scan.groups:
@@ -3014,6 +3066,18 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
         and prog in _KILL_SETTING_DECLARERS
         and not any(word is None or word.startswith(("-", "+")) for word in words[1:])
     )
+    # Words that become positional parameters: a `set`'s operands (or a `set -A` array's), and the
+    # arguments after `sh -c TEXT NAME`, which the child shell reads as $1, $2, ….
+    positional_at, positional_name = len(raw_words), "@"
+    shell_text, shell_reads_stdin, after_text = None, False, len(argv)
+    if prog == "set":
+        operands_at, positional_name = _set_operands(argv)
+        if operands_at is not None:
+            positional_at = program_at + operands_at
+    elif prog in _PKILL_SHELLS:
+        shell_text, shell_reads_stdin, after_text = _shell_script_source(argv)
+        positional_at = program_at + after_text + 1
+    child_args = _KillFeed()
     out = _KillFeed()
     for index, raw in enumerate(raw_words):
         assigned = None
@@ -3021,9 +3085,16 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
             assigned = _KILL_ASSIGNMENT_RE.match(raw)
         is_target = sends and index >= first_target
         listed = for_list is not None and index >= for_list
-        if not (assigned or is_target or listed or printed) and "$(" not in raw and "`" not in raw:
+        positional = index >= positional_at
+        if not (assigned or is_target or listed or printed or positional) and "$(" not in raw and "`" not in raw:
             continue  # runs nothing and hands no pids on
         value = _word_feed(raw, scan, depth)
+        if positional:
+            if prog == "set":
+                scan.assign(positional_name, value)  # `set -- $(pgrep …); kill "$@"`
+            else:
+                child_args.merge(value)
+            continue
         if assigned:
             name = assigned.group(1)
             scan.assign(name, value)
@@ -3052,13 +3123,12 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
     if prog in ("source", "."):
         scan.opaque = True  # the file may set any variable
     if prog in _PKILL_SHELLS:
-        text, reads_stdin = _shell_script_source(argv)
-        if text is not None:
-            inner = _scan_inner(text, scan, depth, child=True)
+        if shell_text is not None:
+            inner = _scan_inner(shell_text, scan, depth, child=True, positional=child_args)
             out.merge(inner.output)
             if stripped is not None and inner.kills:  # `xargs sh -c 'kill …'` kills what xargs reads
                 scan.consume(inp, f"`xargs {prog} -c`")
-        elif reads_stdin:
+        elif shell_reads_stdin:
             for body in inp.texts:
                 out.merge(_scan_inner(body, scan, depth, child=True).output)
             if inp.other and not inp.texts:
@@ -3107,7 +3177,7 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
             out.merge(inp)
         return _stage_output(stage, out, scan)
     if prog in _PID_FILE_READERS:
-        operands = _file_operands(prog, argv[1:])
+        operands = [name for raw in _file_operands(prog, raw_argv[1:]) if (name := _file_name(raw, scan))]
         if operands:
             out.files += operands
         else:
@@ -3115,6 +3185,11 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
         return _stage_output(stage, out, scan)
     if prog == "jobs":
         return _stage_output(stage, out, scan)
+    if prog == "tee":  # `pgrep … | tee pids.txt`: each file holds what tee reads
+        for raw in _file_operands(prog, raw_argv[1:]):
+            name = _file_name(raw, scan)
+            if name:
+                scan.write(name, inp)
     if prog in _PID_FILTERS:
         out.merge(inp)
         return _stage_output(stage, out, scan)

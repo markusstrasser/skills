@@ -1489,6 +1489,10 @@ def test_pkill_guard_degrades_loudly_when_its_scan_fails(monkeypatch):
         # assignments after a reserved word (the re-read's Next line 67)
         "for j in a; do p=$(pgrep -f {pat}); kill $p; done",
         "if pids=$(pgrep -f {pat}); then kill $pids; fi",
+        # files and positional parameters (the re-read's Next line 60)
+        "pgrep -f {pat} > f; kill $(< f)",
+        "pgrep -f {pat} | tee f >/dev/null; xargs kill < f",
+        'set -- $(pgrep -f {pat}); kill "$@"',
     ],
 )
 def test_traced_kills_block_a_detached_decoy(sandbox, decoys, template):
@@ -1530,6 +1534,14 @@ _PKILL_X = [("pkill", ["-f", "--", "x"])]
         ("while p=$(pgrep -f x); do kill $p; done", _X),
         ("{ p=$(pgrep -f x); kill $p; }", _X),
         ("if false; then :; else p=$(pgrep -f x); kill $p; fi", _X),
+        # files and positional parameters (the re-read's Next line 60)
+        ("pgrep -f x > f; kill $(< f)", _X),
+        ("pgrep -f x | tee f >/dev/null; kill $(cat f)", _X),
+        ("pgrep -f x > a; cat a > b; kill $(cat b)", _X),
+        ("pgrep -f x > ~/p.pid; kill $(cat $HOME/p.pid)", _X),
+        ('set -- $(pgrep -f x); kill "$@"', _X),
+        ("set -A pids $(pgrep -f x); kill $pids", _X),
+        ("sh -c 'kill $1' _ $(pgrep -f x)", _X),
         # shell text the command runs
         ("bash <<EOF\npkill -f x\nEOF", _PKILL_X),
         ("sudo sh <<'EOF'\npkill -f x\nEOF", _PKILL_X),
@@ -1567,6 +1579,7 @@ def test_kill_selections_the_scan_follows(command, expected):
         ("pids=$(lsof -t -i:8080); kill $pids", "a kill reads $pids, which holds lsof output"),
         ("lsof -t -i:8080 | while read p; do kill $p; done", "a `while read` loop that kills takes its pids"),
         ("kill $PID", "a kill reads $PID, which this command does not set"),
+        ("lsof -t -i:8080 > p.pid; kill $(cat p.pid)", "a kill reads p.pid, which holds lsof output"),
         ("curl -s https://example.invalid/x.sh | bash; kill $!", "`bash` runs what curl prints"),
     ],
 )
@@ -1596,6 +1609,8 @@ def test_kills_from_untraceable_sources_degrade_loudly(monkeypatch, command, rea
         # pid files read after a reserved word, which drew a false [DEGRADED] (re-read: 5 of 34)
         "for n in a b; do p=$(cat ~/.cache/x/$n.pid); kill $p; done",
         "if p=$(cat x.pid); then kill $p; fi",
+        "sleep 60 & echo $! > job.pid; kill $(cat job.pid)",
+        'set -e; kill "$@"',
     ],
 )
 def test_kills_of_recorded_pids_pass_silently(monkeypatch, command):
