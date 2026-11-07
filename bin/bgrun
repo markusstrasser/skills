@@ -34,6 +34,12 @@
 set -euo pipefail
 
 # The job supervisor, shared by both launch routes: $0 is <dir>/<name>, "$@" is the command.
+# Each launch writes it to <dir>/<name>.supervisor and the job's bash sources that file, so the
+# supervisor's arguments are only `. "$0.supervisor"`, <dir>/<name> and the command. Passed to
+# bash -c, this text, comments included, sat in every supervisor's arguments: on 2026-11-07 a
+# `pkill -f` pattern that matched "failed" in a comment below killed every bgrun supervisor on
+# the Mac. bash reads a sourced file whole before running it, so a later rewrite cannot reach a
+# running job.
 supervisor_script='
   finish_job() {
     local child_rc="$1"
@@ -93,7 +99,7 @@ if [ "$#" = 4 ] && [ "$1" = "--launchd-stage2" ]; then
   while IFS= read -r -d '' entry <&3; do job_env+=("$entry"); done
   exec 3<&-
   cd "$job_cwd" || stage_fail "cannot enter $job_cwd"
-  exec /usr/bin/env -i ${job_env[@]+"${job_env[@]}"} PYTHONUNBUFFERED=1 bash -c "$supervisor_script" "$job_base" "${job_argv[@]}"
+  exec /usr/bin/env -i ${job_env[@]+"${job_env[@]}"} PYTHONUNBUFFERED=1 bash -c '. "$0.supervisor"' "$job_base" "${job_argv[@]}"
 fi
 
 wait_mode=false
@@ -200,6 +206,7 @@ fi
 # Truncate the log too: appending across same-name runs made a STALE error read
 # as the current run's outcome (genomics kernel live-proof loop, 2026-08-11).
 rm -f "$done_marker" "$pid_file" "$started_file" "$log" "$log.tmp"
+printf '%s' "$supervisor_script" > "$dir/$name.supervisor"
 # Relative paths and `just` recipes resolve against the caller's cwd. A session whose shell
 # had drifted into a lane worktree launched `just prune-source-epochs` there: it rebuilt that
 # worktree's venv and pruned nothing (genomics, 2026-09-01). Record the cwd in the log header
@@ -273,7 +280,7 @@ else
   # no `set -m`: perl makes the job lead a new session and group (sid = pgid = pid), which keeps
   # `kill -- -$launch_pid` exact. macOS ships no setsid(1).
   nohup /usr/bin/perl -MPOSIX -e 'POSIX::setsid() or die "bgrun: setsid: $!\n"; exec { $ARGV[0] } @ARGV or die "bgrun: exec: $!\n"' \
-    env PYTHONUNBUFFERED=1 bash -c "$supervisor_script" "$dir/$name" "$@" 9>&- </dev/null >/dev/null 2>&1 &
+    env PYTHONUNBUFFERED=1 bash -c '. "$0.supervisor"' "$dir/$name" "$@" 9>&- </dev/null >/dev/null 2>&1 &
   launch_pid=$!
   disown "$launch_pid" 2>/dev/null || true
   # The job leads its group only after perl's setsid(); wait for that before the isolation checks.

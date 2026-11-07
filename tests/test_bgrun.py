@@ -14,7 +14,19 @@ from pathlib import Path
 
 import pytest
 
-BGRUN = Path(__file__).resolve().parents[1] / "bin/bgrun"
+# Running jobs and sessions call the live bin/bgrun: test an edit in a copy (BGRUN_UNDER_TEST=<copy>)
+# and move it over the live file once this passes.
+BGRUN = Path(os.environ.get("BGRUN_UNDER_TEST") or Path(__file__).resolve().parents[1] / "bin/bgrun")
+# Words of the supervisor script, comments included, that its arguments must not carry: on
+# 2026-11-07 a `pkill -f` pattern matched "failed" in a comment and killed every supervisor.
+SCRIPT_WORDS = ("finish_job", "cancel_job", "caffeinate", "failed")
+
+
+def script_words_in_arguments(pid: int) -> list[str]:
+    """Which script words the process's arguments carry (the arguments themselves stay unprinted)."""
+    args = subprocess.run(["ps", "-o", "args=", "-p", str(pid)], capture_output=True, text=True).stdout
+    assert args.strip(), f"no process {pid}"
+    return [word for word in SCRIPT_WORDS if word in args]
 
 
 def wait_file(path: Path) -> str:
@@ -120,6 +132,26 @@ def test_launch_names_live_output_before_completion(job) -> None:
     assert "LIVE_OUTPUT" in (directory / "case.log").read_text()
     assert "FINAL_OUTPUT" in (directory / "case.log").read_text()
     assert not live.exists()
+
+
+@pytest.mark.parametrize("job", ["exec", "native"], indirect=True)
+def test_supervisor_arguments_carry_no_script_text(job) -> None:
+    directory, _, run = job
+    release = directory / "release"
+    launched = run(
+        "case", "--", sys.executable, "-c",
+        "import pathlib, sys, time\nwhile not pathlib.Path(sys.argv[1]).exists(): time.sleep(0.02)",
+        str(release),
+    )
+    try:
+        assert launched.returncode == 0, launched.stderr
+        supervisor = int(wait_file(directory / "case.pid"))
+        assert script_words_in_arguments(supervisor) == []
+        assert "cancel_job" in (directory / "case.supervisor").read_text()
+    finally:
+        release.touch()
+        waited = run("--wait", "case")
+    assert waited.returncode == 0, waited.stderr
 
 
 def test_child_stdin_is_closed(job) -> None:
@@ -640,6 +672,7 @@ def test_launchd_job_runs_under_launchd_with_the_callers_environment(launchd_job
         ready = json.loads(wait_file(directory / "child-ready"))
         supervisor = int((directory / "case.pid").read_text())
         assert ready["supervisor"] == supervisor
+        assert script_words_in_arguments(supervisor) == []
         printed = subprocess.run(
             ["launchctl", "print", services[0]], capture_output=True, text=True, check=True
         ).stdout
