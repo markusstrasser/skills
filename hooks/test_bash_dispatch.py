@@ -1376,6 +1376,7 @@ def test_kill_patterns_get_known_variables(command, expected):
         'd=~/x; d=~/y; pkill -f "$d"',  # set twice
         '[ -n "$x" ] && d=a; pkill -f "$d"',  # may not run
         'if true; then d=a; fi; pkill -f "$d"',
+        'while true; do d=a; pkill -f "$d"; done',
         'for d in a b; do pkill -f "$d"; done',
         'd=a; for i in 1 2; do pkill -f "$d"; d=b; done',
         'd=a pkill -f "$d"',  # pkill's environment, not the shell's
@@ -1485,6 +1486,9 @@ def test_pkill_guard_degrades_loudly_when_its_scan_fails(monkeypatch):
         "bash <<EOF\npkill -f {pat}\nEOF",
         "/usr/bin/time pkill -f {pat}",
         "pgrep -f {pat} | xargs -I% sh -c 'kill %'",
+        # assignments after a reserved word (the re-read's Next line 67)
+        "for j in a; do p=$(pgrep -f {pat}); kill $p; done",
+        "if pids=$(pgrep -f {pat}); then kill $pids; fi",
     ],
 )
 def test_traced_kills_block_a_detached_decoy(sandbox, decoys, template):
@@ -1520,6 +1524,12 @@ _PKILL_X = [("pkill", ["-f", "--", "x"])]
         ("pgrep -f x | read p; kill $p", _X),
         ("pgrep -f x | xargs -I% sh -c 'kill %'", _X),
         ("pgrep -f x | python3 pick.py | xargs kill", _X),
+        # assignments after reserved words
+        ("for j in a b; do p=$(pgrep -f x); kill $p; done", _X),
+        ("if pids=$(pgrep -f x); then kill $pids; fi", _X),
+        ("while p=$(pgrep -f x); do kill $p; done", _X),
+        ("{ p=$(pgrep -f x); kill $p; }", _X),
+        ("if false; then :; else p=$(pgrep -f x); kill $p; fi", _X),
         # shell text the command runs
         ("bash <<EOF\npkill -f x\nEOF", _PKILL_X),
         ("sudo sh <<'EOF'\npkill -f x\nEOF", _PKILL_X),
@@ -1583,6 +1593,9 @@ def test_kills_from_untraceable_sources_degrade_loudly(monkeypatch, command, rea
         "jobs -p | xargs kill",
         "kill %1; kill -TERM -- -4425; kill $!",
         "pgrep -f foo | while read p; do ps -o etime= -p $p; done; kill $(cat x.pid)",
+        # pid files read after a reserved word, which drew a false [DEGRADED] (re-read: 5 of 34)
+        "for n in a b; do p=$(cat ~/.cache/x/$n.pid); kill $p; done",
+        "if p=$(cat x.pid); then kill $p; fi",
     ],
 )
 def test_kills_of_recorded_pids_pass_silently(monkeypatch, command):

@@ -2266,6 +2266,8 @@ _KILL_SPLIT_CHARS = frozenset(" \t\n*?[")
 _KILL_OPENERS = frozenset({"if", "while", "until", "for", "select", "case", "{"})
 _KILL_CLOSERS = frozenset({"fi", "done", "esac", "}"})
 _KILL_SETTING_DECLARERS = frozenset({"declare", "typeset", "local", "export", "readonly"})
+# Reserved words a simple command's assignments may follow.
+_KILL_RESERVED_LEAD = frozenset({"!", "{", "if", "then", "else", "elif", "do", "while", "until", "time"})
 _ANSI_C_ESCAPES = {"a": "\a", "b": "\b", "e": "\x1b", "E": "\x1b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v"}
 
 
@@ -2985,7 +2987,10 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
         if raw_words[0] == "done":
             scan.loop_feed.merge(inp)  # `done < <(pgrep …)`, `done < pids.txt`
         return _stage_output(stage, group, scan)
-    n_assign = 0
+    lead = 0  # reserved words before the assignments: `do p=$(pgrep …)`, `if pids=$(pgrep …); then`
+    while lead < len(raw_words) and raw_words[lead] in _KILL_RESERVED_LEAD:
+        lead += 1
+    n_assign = lead
     while n_assign < len(raw_words) and _KILL_ASSIGNMENT_RE.match(raw_words[n_assign]):
         n_assign += 1
     _assigns, argv = _split_command_prefix(words)
@@ -3002,7 +3007,7 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
     # Where an assignment's value is known from here on: a stage of assignments alone (with a
     # command after them, they set its environment only) or a declarer without options, that
     # always runs in this shell (`stage.certain`). Anywhere else the value is unknown.
-    shell_sets = stage.certain and n_assign == len(raw_words)
+    shell_sets = stage.certain and lead == 0 and n_assign == len(raw_words)
     declarer_sets = (
         stage.certain
         and program_at == 0
@@ -3012,7 +3017,7 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
     out = _KillFeed()
     for index, raw in enumerate(raw_words):
         assigned = None
-        if index < n_assign or (prog in _KILL_DECLARERS and index > program_at):
+        if lead <= index < n_assign or (prog in _KILL_DECLARERS and index > program_at):
             assigned = _KILL_ASSIGNMENT_RE.match(raw)
         is_target = sends and index >= first_target
         listed = for_list is not None and index >= for_list
