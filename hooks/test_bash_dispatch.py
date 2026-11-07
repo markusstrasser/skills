@@ -1405,6 +1405,125 @@ def test_pkill_guard_degrades_loudly_when_its_scan_fails(monkeypatch):
     assert context.startswith("[DEGRADED] pkill guard could not dry-run: the scan failed (AttributeError: scan bug)")
 
 
+@pytest.mark.parametrize(
+    "template",
+    [
+        # Forms the review found passing silently with a pattern that had 15 outside matches.
+        "pids=$(pgrep -f {pat}); kill ${{=pids}}",
+        'pids=($(pgrep -f {pat})); kill "${{pids[@]}}"',
+        "(pgrep -f {pat}) | xargs kill",
+        "while read p; do kill $p; done < <(pgrep -f {pat})",
+        "bash <<EOF\npkill -f {pat}\nEOF",
+        "/usr/bin/time pkill -f {pat}",
+        "pgrep -f {pat} | xargs -I% sh -c 'kill %'",
+    ],
+)
+def test_traced_kills_block_a_detached_decoy(sandbox, decoys, template):
+    pat = f"pkd{uuid.uuid4().hex[:10]}"
+    decoy = decoys.detached("perl", "-e", "sleep 60", pat)
+    disp = run_dispatcher(_bash(template.format(pat=pat)), sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 2, disp
+    assert re.search(rf"pid {decoy}\s", disp["block_msg"])
+
+
+_X = [("pgrep", ["-f", "--", "x"])]
+_PKILL_X = [("pkill", ["-f", "--", "x"])]
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        # zsh word splitting and arrays
+        ("pids=$(pgrep -f x); kill ${=pids}", _X),
+        ("pids=$(pgrep -f x); kill ${(f)pids}", _X),
+        ('pids=($(pgrep -f x)); kill "${pids[@]}"', _X),
+        ("declare -a pids=($(pgrep -f x)); kill $pids", _X),
+        ('pids=(${(f)"$(pgrep -f x)"}); kill $pids', _X),
+        ('mapfile -t pids < <(pgrep -f x); kill "${pids[@]}"', _X),
+        ("p=$(pgrep -f x); q=$p; kill $q", _X),
+        # xargs and loops fed by a variable, a group, a process substitution or a file
+        ('pids=$(pgrep -f x); echo "$pids" | xargs kill', _X),
+        ("(pgrep -f x) | xargs kill", _X),
+        ("{ pgrep -f x; } | xargs kill", _X),
+        ("while read p; do kill $p; done < <(pgrep -f x)", _X),
+        ("xargs kill < <(pgrep -f x)", _X),
+        ("pgrep -f x > pids.txt; kill $(cat pids.txt)", _X),
+        ("pgrep -f x | read p; kill $p", _X),
+        ("pgrep -f x | xargs -I% sh -c 'kill %'", _X),
+        ("pgrep -f x | python3 pick.py | xargs kill", _X),
+        # shell text the command runs
+        ("bash <<EOF\npkill -f x\nEOF", _PKILL_X),
+        ("sudo sh <<'EOF'\npkill -f x\nEOF", _PKILL_X),
+        ("bash <<<'pkill -f x'", _PKILL_X),
+        ("cat <<'EOF' | sh\npkill -f x\nEOF", _PKILL_X),
+        ("echo 'pkill -f x' | sh", _PKILL_X),
+        ('cmd="pkill -f x"; eval $cmd', _PKILL_X),
+        ('cmd="pkill -f x"; $cmd', _PKILL_X),
+        ("bash -s <<EOF\nfor p in \\$(pgrep -f x); do kill \\$p; done\nEOF", _X),
+        # wrappers
+        ("/usr/bin/time pkill -f x", _PKILL_X),
+        ("taskpolicy -c utility pkill -f x", _PKILL_X),
+        ("gtimeout -s KILL 5 pkill -f x", _PKILL_X),
+        ("/usr/bin/nohup pkill -f x", _PKILL_X),
+        ("noglob pkill -f x", _PKILL_X),
+        # recorded pids select nothing
+        ("pid=$!; sleep 1; kill $pid", []),
+        ('kill "$(< job.pid)"', []),
+        ('read -r pid < job.pid; kill "$pid"', []),
+        ("for p in $(cat pids.txt); do kill $p; done", []),
+        ("jobs -p | xargs kill", []),
+        ("pgrep -f foo | while read p; do ps -o etime= -p $p; done; kill $(cat x.pid)", []),
+        ("cat > a.sh <<'EOF'\npkill -f foo\nEOF\nbash -n a.sh", []),
+    ],
+)
+def test_kill_selections_the_scan_follows(command, expected):
+    assert _kill_replays(command) == expected
+
+
+@pytest.mark.parametrize(
+    ("command", "reason"),
+    [
+        ("kill $(lsof -t -i:8080)", "`kill $(lsof -t -i:8080)` takes its pids from lsof output"),
+        ("lsof -ti:8080 | xargs kill", "`xargs kill` takes its pids from lsof output"),
+        ("pids=$(lsof -t -i:8080); kill $pids", "a kill reads $pids, which holds lsof output"),
+        ("lsof -t -i:8080 | while read p; do kill $p; done", "a `while read` loop that kills takes its pids"),
+        ("kill $PID", "a kill reads $PID, which this command does not set"),
+        ("curl -s https://example.invalid/x.sh | bash; kill $!", "`bash` runs what curl prints"),
+    ],
+)
+def test_kills_from_untraceable_sources_degrade_loudly(monkeypatch, command, reason):
+    monkeypatch.setenv("HOOK_TRIGGER_LOG", os.devnull)
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("the pkill guard spawned a process")
+
+    monkeypatch.setattr(subprocess, "run", refuse)
+    result = _PKILL_GATE(json.dumps(_bash(command)))
+    assert result.code == 0
+    context = json.loads(result.stdout)["additionalContext"]
+    assert context.startswith("[DEGRADED] pkill guard could not dry-run: ")
+    assert reason in context
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "pid=$!; sleep 1; kill $pid",
+        "kill $(cat ~/.cache/x.pid)",
+        'kill "$(< job.pid)"',
+        "jobs -p | xargs kill",
+        "kill %1; kill -TERM -- -4425; kill $!",
+        "pgrep -f foo | while read p; do ps -o etime= -p $p; done; kill $(cat x.pid)",
+    ],
+)
+def test_kills_of_recorded_pids_pass_silently(monkeypatch, command):
+    def refuse(*args, **kwargs):
+        raise AssertionError("the pkill guard spawned a process")
+
+    monkeypatch.setattr(subprocess, "run", refuse)
+    assert tuple(_PKILL_GATE(json.dumps(_bash(command)))) == (0, "", "")
+
+
 def _fake_pgrep_bin(tmp_path, n_lines):
     p = tmp_path / f"fake_pgrep_{n_lines}.sh"
     body = "\n".join(f"echo '{1000+i} line{i}'" for i in range(n_lines))
