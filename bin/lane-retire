@@ -7,7 +7,8 @@ lane runs this when a worker exits, and `lane reap --force` runs it by hand. The
   commits.patch  format-patch <base>..HEAD, written only when the lane committed
   cache/         .claude/cache/ (results, messages, exported patches), minus derived trees
   ignored/       other ignored files, minus derived caches (.venv, .uv-cache, __pycache__, ..., and every directory a
-                 CACHEDIR.TAG marks, such as cargo's target/) and the inputs a checkout hook copied in and declared in
+                 CACHEDIR.TAG marks, such as cargo's target/, or that holds cargo's .rustc_info.json) and the inputs a
+                 checkout hook copied in and declared in
                  .git/lane-checkout.json ("provided": {path: sha256}) while their bytes are unchanged; MANIFEST.json
                  names the skipped tagged directories and those inputs instead
   run.log.gz, brief.md, head.txt, status.txt, MANIFEST.json (sha256 and size of every file above)
@@ -56,6 +57,10 @@ DERIVED_CACHE_DIRS = {"source-epochs", "index-trees"}
 # A directory holding a CACHEDIR.TAG (https://bford.info/cachedir/) declares itself rederivable: cargo's target/,
 # ccache, Bazel. An arena Rust lane's target/ held 20,505 MiB on 2026-10-24, over the cap, so reap refused it.
 CACHEDIR_TAG_SIGNATURE = b"Signature: 8a477f597d28d172789f06886806bc55"
+# Cargo writes .rustc_info.json at a target dir's top before its first build, and CACHEDIR.TAG only when it creates
+# the dir itself: on 2026-11-07 maturin made an arena lane's target/ first, cargo never tagged it, and reap refused a
+# 2,220 MiB harvest. The marker file declares the dir rederivable as the tag does.
+CARGO_TARGET_MARKER = ".rustc_info.json"
 CACHE_DIR = ".claude/cache"
 HARVEST_CAP_BYTES = 1024 * 1024 * 1024
 # `git status --porcelain=v1` codes of an unmerged path.
@@ -102,7 +107,8 @@ def is_derived(relative):
 
 
 def is_tagged_cache(checkout, relative):
-    """A real directory whose CACHEDIR.TAG is a regular file that starts with the spec's signature.
+    """A real directory whose CACHEDIR.TAG is a regular file that starts with the spec's signature, or that holds
+    cargo's CARGO_TARGET_MARKER as a regular file.
 
     .claude/cache and the directories above it never count: a tag there would drop the lane's deliverables.
     """
@@ -110,7 +116,14 @@ def is_tagged_cache(checkout, relative):
         return False
     directory = checkout / relative
     try:
-        if os.path.islink(directory) or not stat.S_ISREG(os.lstat(directory / "CACHEDIR.TAG").st_mode):
+        if os.path.islink(directory):
+            return False
+        try:
+            if stat.S_ISREG(os.lstat(directory / CARGO_TARGET_MARKER).st_mode):
+                return True
+        except FileNotFoundError:
+            pass
+        if not stat.S_ISREG(os.lstat(directory / "CACHEDIR.TAG").st_mode):
             return False
         with open(directory / "CACHEDIR.TAG", "rb") as reader:
             return reader.read(len(CACHEDIR_TAG_SIGNATURE)) == CACHEDIR_TAG_SIGNATURE

@@ -1339,6 +1339,12 @@ printf '%s\n' "Signature: 8a477f597d28d172789f06886806bc55" "# cargo" >"$RETIRE_
 printf '%s\n' "build output" >"$RETIRE_WT/target/debug/app"
 printf '%s\n' "Signature: 00000000000000000000000000000000" >"$RETIRE_WT/wrongtag/CACHEDIR.TAG"
 printf '%s\n' "lane notes" >"$RETIRE_WT/wrongtag/notes.txt"
+# A target dir cargo built into without tagging it (it existed before cargo ran) still holds cargo's
+# .rustc_info.json; arena's env-waste-rb1 refused at the 1 GiB cap on such a 2 GiB target/ (2026-11-07).
+mkdir -p "$RETIRE_WT/untagged-target/debug"
+printf '%s\n' "/untagged-target/" >>"$REPO_REAL/.git/info/exclude"
+printf '%s\n' '{"rustc_fingerprint":1,"outputs":{}}' >"$RETIRE_WT/untagged-target/.rustc_info.json"
+printf '%s\n' "build output" >"$RETIRE_WT/untagged-target/debug/app"
 touch "$TEST_TMP/release-retire1"
 wait_for_file "$LANE_HOME/retire1.done"
 assert_eq "EXIT=0" "$(<"$LANE_HOME/retire1.done")" "retired lane marker"
@@ -1351,12 +1357,13 @@ assert_eq "**Verdict:** DONE" "$(<"$RETIRE_HARVEST/cache/retire1-result.md")" "h
 gzip -dc "$RETIRE_HARVEST/run.log.gz" | grep -Fxq hi || fail "harvest lacks the lane log"
 assert_file "$RETIRE_HARVEST/brief.md"
 [ ! -e "$RETIRE_HARVEST/ignored/target" ] || fail "harvest copied a CACHEDIR.TAG cache"
+[ ! -e "$RETIRE_HARVEST/ignored/untagged-target" ] || fail "harvest copied an untagged cargo target dir"
 assert_eq "lane notes" "$(<"$RETIRE_HARVEST/ignored/wrongtag/notes.txt")" "a wrong-signature tag is harvested"
 python3 - "$RETIRE_HARVEST/MANIFEST.json" <<'PY'
 import json
 import sys
 manifest = json.load(open(sys.argv[1], encoding="utf-8"))
-assert manifest["tagged_caches_skipped"] == ["target"], manifest["tagged_caches_skipped"]
+assert sorted(manifest["tagged_caches_skipped"]) == ["target", "untagged-target"], manifest["tagged_caches_skipped"]
 # The harvest says what ran and how it ended once a reap removes the ledger and the marker.
 assert manifest["exit_code"] == 0, manifest["exit_code"]
 assert "lane.json" in manifest["files"], sorted(manifest["files"])
