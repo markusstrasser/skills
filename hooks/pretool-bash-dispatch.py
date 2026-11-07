@@ -2228,7 +2228,12 @@ class _DryRunError(Exception):
 
 
 class _KillScan:
-    """What one command line would kill, read from its text."""
+    """What one command line would kill, read from its text.
+
+    genomics' .claude/hooks/pretool-bash-process-kill-guard.py loads this class and
+    `_scan_kill_text` by name and reads `selections` after `resolve()`; its
+    test_the_quote_aware_scan_loads fails if either is renamed.
+    """
 
     def __init__(self) -> None:
         # (tool, argv, raw argv); argv None: the pids come from ps output, which no replay reproduces
