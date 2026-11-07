@@ -838,6 +838,52 @@ wait_for_file "$LANE_HOME/failure.done"
 assert_eq "EXIT=7" "$(<"$LANE_HOME/failure.done")" "failure marker"
 assert_eq "DONE:7" "$(state_for failure)" "failed worker state"
 
+echo "test: a launch refuses while another launch of its name holds the lock, and takes a stale lock"
+# On 2026-11-07 two launches of one name raced: the first supervisor deleted the prompt file the second needed, the
+# second exited 125 with no marker and an empty log, and the metadata named the dead one.
+mkdir "$LANE_HOME/.launch-locked.lock"
+printf '%s\n' "$$" >"$LANE_HOME/.launch-locked.lock/pid"
+if locked_output=$("$LANE" run locked --repo "$REPO" --brief "$BRIEF" --worker fake --no-worktree 2>&1); then
+  fail "a launch ran while another launch of its name held the lock"
+fi
+grep -Fq "another launch of locked holds $LANE_HOME/.launch-locked.lock (pid $$)" <<<"$locked_output" ||
+  fail "the refused launch did not name the lock and its holder: $locked_output"
+for leftover in locked.json locked.log locked.prompt locked.supervisor; do
+  [ ! -e "$LANE_HOME/$leftover" ] || fail "the refused launch wrote $leftover"
+done
+(exit 0) &
+dead_pid=$!
+wait "$dead_pid"
+printf '%s\n' "$dead_pid" >"$LANE_HOME/.launch-locked.lock/pid"
+"$LANE" run locked --repo "$REPO" --brief "$BRIEF" --worker fake --no-worktree >/dev/null
+wait_for_file "$LANE_HOME/locked.done"
+assert_eq "EXIT=0" "$(<"$LANE_HOME/locked.done")" "launch that took a stale lock"
+[ ! -e "$LANE_HOME/.launch-locked.lock" ] || fail "the launch kept its name's lock after it recorded the lane"
+
+echo "test: a supervisor that cannot read its prompt or enter its checkout logs why and writes EXIT=125"
+# Its stdout and stderr go nowhere until the worker starts, so both exits left an empty log and no marker.
+awk "/^  supervisor_script='\$/{body=1; next} body && /^  '\$/{exit} body" "$LANE" >"$TEST_TMP/supervisor.sh"
+[ -s "$TEST_TMP/supervisor.sh" ] || fail "could not cut the supervisor script out of $LANE"
+printf 'prompt' >"$TEST_TMP/start.prompt"
+for start_case in prompt checkout; do
+  cp "$TEST_TMP/supervisor.sh" "$TEST_TMP/start-$start_case.sh"
+  start_prompt="$TEST_TMP/start.prompt"
+  start_dir="$TEST_TMP"
+  if [ "$start_case" = prompt ]; then start_prompt="$TEST_TMP/no-such.prompt"; else start_dir="$TEST_TMP/no-such-dir"; fi
+  start_rc=0
+  bash -c '. "$0"' "$TEST_TMP/start-$start_case.sh" "$TEST_TMP/start-$start_case.log" "$TEST_TMP/start-$start_case.done" \
+    fake "$start_prompt" "$BRIEF" "$start_dir" false "$TEST_TMP/start-$start_case.state" </dev/null >/dev/null 2>&1 ||
+    start_rc=$?
+  assert_eq "125" "$start_rc" "supervisor exit when it cannot start ($start_case)"
+  assert_file "$TEST_TMP/start-$start_case.done"
+  assert_eq "EXIT=125" "$(<"$TEST_TMP/start-$start_case.done")" "supervisor marker when it cannot start ($start_case)"
+  [ ! -e "$TEST_TMP/start-$start_case.sh" ] || fail "the supervisor left its script file ($start_case)"
+done
+grep -Fq "lane: the supervisor could not read its prompt file $TEST_TMP/no-such.prompt; exit 125" \
+  "$TEST_TMP/start-prompt.log" || fail "the supervisor did not log its unreadable prompt"
+grep -Fq "lane: the supervisor could not enter $TEST_TMP/no-such-dir; exit 125" "$TEST_TMP/start-checkout.log" ||
+  fail "the supervisor did not log its missing checkout"
+
 echo "test: a codex model at capacity is waited out, then codex continues"
 rm -f "$LANE_CAPTURE/codex.calls"
 CODEX_FAKE_CAPACITY=1 LANE_CODEX_CAPACITY_RETRY_S=0 "$LANE" run capacity --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null

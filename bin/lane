@@ -20,6 +20,7 @@ LANE_BIN_DIR=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd -P)
 DEFAULT_STALL_MIN=20
 WORKER_SETTINGS=""
 SLOT_LOCK=""
+LAUNCH_LOCK=""
 
 usage() {
   cat >&2 <<'EOF'
@@ -940,6 +941,7 @@ launch_worker() {
   log=$(log_path "$name")
   marker=$(done_path "$name")
   checkout_state=$(checkout_state_path "$name")
+  lock_lane_launch "$name"
   if [ -f "$metadata" ]; then
     local old_pid
     local old_started_epoch
@@ -989,14 +991,21 @@ launch_worker() {
     log=$1
     marker=$2
     worker=$3
-    prompt=$(cat "$4" && printf x) || exit 125
+    # Until the case below redirects them, stdout and stderr go nowhere: a supervisor that cannot start says why in
+    # its log and marker, or the lane shows DEAD with an empty log.
+    fail_start() {
+      printf "lane: the supervisor %s; exit 125\n" "$1" >> "$log"
+      printf "EXIT=125\n" > "$marker"
+      exit 125
+    }
+    prompt=$(cat "$4" && printf x) || { rm -f "$0"; fail_start "could not read its prompt file $4"; }
     prompt=${prompt%x}
     rm -f "$0" "$4"
     brief=$5
     worktree=$6
     resume_mode=$7
     checkout_state=$8
-    cd "$worktree" || exit 125
+    cd "$worktree" || fail_start "could not enter $worktree"
     case "$worker" in
       codex)
         # Defaults and resume overrides are resolved in the parent before launch.
@@ -1177,6 +1186,7 @@ A provider capacity error stopped your previous attempt. The checkout keeps its 
     kill -TERM -- "-$launch_pid" 2>/dev/null || true
     die "could not write metadata: $metadata"
   fi
+  release_launch_lock
 
   echo "lane: $name pid=$launch_pid worker=$worker"
   echo "  worktree: $worktree"
@@ -1255,9 +1265,9 @@ live_lanes_of() {
   return 0
 }
 
-# A slot lock is stale when its holder died, or when it has no pid and is over a minute old (its holder died
+# A slot or launch lock is stale when its holder died, or when it has no pid and is over a minute old (its holder died
 # between mkdir and writing the pid).
-stale_slot_lock() {
+stale_lock() {
   local holder
   holder=$(cat "$1/pid" 2>/dev/null || true)
   case "$holder" in
@@ -1273,6 +1283,45 @@ release_slot() {
     rmdir "$SLOT_LOCK" 2>/dev/null || true
   fi
   SLOT_LOCK=""
+}
+
+release_launch_lock() {
+  [ -n "$LAUNCH_LOCK" ] || return 0
+  if [ "$(cat "$LAUNCH_LOCK/pid" 2>/dev/null || true)" = "$$" ]; then
+    rm -f "$LAUNCH_LOCK/pid"
+    rmdir "$LAUNCH_LOCK" 2>/dev/null || true
+  fi
+  LAUNCH_LOCK=""
+}
+
+# One EXIT trap releases both locks: each helper is a no-op for a lock this run does not hold.
+release_locks() {
+  release_launch_lock
+  release_slot
+}
+
+# One launch per lane name at a time. launch_worker checks that the lane is not running, starts its supervisor and only
+# then writes the metadata that names the supervisor's process group, so a second launch of the name between those
+# steps saw no live lane. On 2026-11-07 two launches of one name raced: the first supervisor deleted the prompt file
+# the second needed, the second exited 125 with no marker and an empty log, and the metadata named the dead one. The
+# lock spans the check to the metadata write; a launch that finds it held is refused, not queued.
+lock_lane_launch() {
+  local name="$1"
+  local lock="$LANE_HOME/.launch-$name.lock"
+  local holder
+  mkdir -p "$LANE_HOME"
+  if ! mkdir "$lock" 2>/dev/null; then
+    stale_lock "$lock" || {
+      holder=$(cat "$lock/pid" 2>/dev/null || true)
+      die "another launch of $name holds $lock (pid ${holder:-not yet written}); this launch is refused"
+    }
+    rm -f "$lock/pid"
+    rmdir "$lock" 2>/dev/null || true
+    mkdir "$lock" 2>/dev/null || die "another launch of $name took $lock first; this launch is refused"
+  fi
+  LAUNCH_LOCK="$lock"
+  trap release_locks EXIT
+  printf '%s\n' "$$" >"$lock/pid"
 }
 
 # Waits until the repo runs fewer live lanes than its cap (max_running_for, reread on every pass), then holds the
@@ -1297,7 +1346,7 @@ acquire_slot() {
     cap=$(max_running_for "$repo_root") || exit 2
     [ "$cap" != none ] || return 0
     if ! mkdir "$lock" 2>/dev/null; then
-      if stale_slot_lock "$lock"; then
+      if stale_lock "$lock"; then
         rm -f "$lock/pid"
         rmdir "$lock" 2>/dev/null || true
       else
@@ -1307,7 +1356,7 @@ acquire_slot() {
       continue
     fi
     SLOT_LOCK="$lock"
-    trap release_slot EXIT
+    trap release_locks EXIT
     printf '%s\n' "$$" >"$lock/pid"
     live=$(live_lanes_of "$repo_root") || exit 2
     count=$(printf '%s' "$live" | grep -c . || true)
