@@ -2204,8 +2204,9 @@ def gate_git_stash_guard(raw_payload: str) -> GateResult:
 # nearest Claude or Codex ancestor of this hook and its descendants (the hook's parent without
 # one). pkill and pgrep skip their own ancestors, and the replay inherits that; killall and
 # `-a` do not, so a match on an ancestor above the agent blocks too. Other users' processes
-# count only under sudo (pkill cannot signal them). A selection pinned to a recorded PID (`-F`)
-# or to the caller's own children (`-P $$`) is not replayed. A replay that cannot run degrades
+# count only under sudo (pkill cannot signal them). A selection pinned to recorded PIDs is not
+# replayed, as `kill <pid>` is not: `-F`, a numeric `-P` or `-g` other than 1, or the caller's
+# own children (`-P $$`), unless `-v` inverts it. A replay that cannot run degrades
 # to an advisory marked [DEGRADED], never to a silent pass. Commands without "kill" in them
 # return before any parsing, and nothing spawns a process unless a kill selection is found.
 _PKILL_SIGNAL_NAMES = frozenset(
@@ -2496,8 +2497,10 @@ def _scan_kill_stage(
 def _pgrep_replay(tool: str, argv: list[str] | None, raw_argv: list[str]) -> list[str] | None:
     """The pgrep (killall: killall) arguments that select what this call signals.
 
-    None when the call cannot reach outside the caller's tree: it sends signal 0, prints a
-    list, is itself a dry run, or is pinned to a recorded PID or to the caller's children.
+    None when the call cannot reach outside the caller's tree: it sends signal 0, prints a list,
+    is itself a dry run, or is pinned to recorded PIDs as `kill <pid>` and `kill -- -<pgid>` are
+    (`-F`, a numeric `-P` or `-g` other than 1, the caller's own children `-P $$`) without `-v`,
+    which turns a pin into every other process.
     """
     if argv is None:
         raise _DryRunError("a kill takes its pids from ps output, which only pgrep could replay")
@@ -2516,6 +2519,8 @@ def _pgrep_replay(tool: str, argv: list[str] | None, raw_argv: list[str]) -> lis
             return None
         i = 1 if sig is not None else 0
     out: list[str] = []
+    pins: list[str] = []  # raw values of the options that pin the selection to recorded PIDs
+    inverted = False
     while i < len(argv):
         word = argv[i]
         if word == "--":
@@ -2530,6 +2535,7 @@ def _pgrep_replay(tool: str, argv: list[str] | None, raw_argv: list[str]) -> lis
         for pos in range(1, len(word)):
             letter = word[pos]
             if letter not in _PGREP_VALUE_OPTS:
+                inverted |= letter == "v"
                 if letter not in _PGREP_OUTPUT_OPTS:
                     kept += letter
                 continue
@@ -2541,8 +2547,14 @@ def _pgrep_replay(tool: str, argv: list[str] | None, raw_argv: list[str]) -> lis
                 value, raw_value = argv[i], raw_argv[i]
                 i += 1
             if letter == "F" or (letter == "P" and raw_value.strip("'\"") in _PGREP_OWN_CHILDREN):
-                return None
-            if _raw_expands(raw_value):
+                pins.append(raw_value)
+            elif (
+                letter in "Pg"
+                and re.fullmatch(r"\d+(?:,\d+)*", value)
+                and 1 not in {int(v) for v in value.split(",")}
+            ):
+                pins.append(raw_value)  # a recorded parent or group; -P 1 is every orphan on the Mac
+            elif _raw_expands(raw_value):
                 raise _DryRunError(f"the {tool} -{letter} value {raw_value} holds a shell expansion")
             if letter not in _PGREP_OUTPUT_OPTS:
                 if kept:
@@ -2552,6 +2564,10 @@ def _pgrep_replay(tool: str, argv: list[str] | None, raw_argv: list[str]) -> lis
             break
         if kept:
             out.append("-" + kept)
+    if pins and not inverted:
+        return None
+    if any(_raw_expands(pin) or pin.strip("'\"") in _PGREP_OWN_CHILDREN for pin in pins):
+        raise _DryRunError(f"{tool} -v inverts a pin the guard cannot replay")
     patterns, raw_patterns = argv[i:], raw_argv[i:]
     if any(_raw_expands(r) for r in raw_patterns):
         raise _DryRunError(f"a {tool} pattern holds a shell expansion")

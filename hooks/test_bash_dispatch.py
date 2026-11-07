@@ -1262,6 +1262,35 @@ def test_pkill_caller_tree_roots_at_a_codex_agent(monkeypatch, comm):
     assert tree == {codex, hook, bash, shim, tool_shell, dev_server}
 
 
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        # A numeric parent or group is a recorded PID, as `kill 4489` and `kill -TERM -- -4425` are.
+        ("pkill -TERM -P 4425", [("pkill", None)]),
+        ("kill -TERM $(pgrep -P 4425)", [("pgrep", None)]),
+        ("pkill -g 4425 -f worker", [("pkill", None)]),
+        ("pkill -P4425,4426", [("pkill", None)]),
+        # -P 1 is every process launchd adopted: lane and bgrun supervisors among them.
+        ("pkill -P 1", [("pkill", ["-P", "1"])]),
+        ("pkill -P 4425,1", [("pkill", ["-P", "4425,1"])]),
+        # -v turns a pin into every other process.
+        ("pkill -v -P 4425", [("pkill", ["-v", "-P", "4425"])]),
+        ("pkill -F job.pid -v", [("pkill", ["-F", "job.pid", "-v"])]),
+    ],
+)
+def test_kill_selections_pinned_to_recorded_pids(command, expected):
+    assert _kill_replays(command) == expected
+
+
+@pytest.mark.parametrize("command", ["pkill -TERM -P 4425", "kill -TERM $(pgrep -P 4425)", "pkill -g 4425"])
+def test_pkill_guard_spawns_nothing_for_a_recorded_parent_or_group(monkeypatch, command):
+    def refuse(*args, **kwargs):
+        raise AssertionError("the pkill guard spawned a process")
+
+    monkeypatch.setattr(subprocess, "run", refuse)
+    assert tuple(_PKILL_GATE(json.dumps(_bash(command)))) == (0, "", "")
+
+
 def _fake_pgrep_bin(tmp_path, n_lines):
     p = tmp_path / f"fake_pgrep_{n_lines}.sh"
     body = "\n".join(f"echo '{1000+i} line{i}'" for i in range(n_lines))
