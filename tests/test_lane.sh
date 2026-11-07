@@ -641,7 +641,23 @@ required = [
     {"action": "edit", "resource": ".opencode/**", "effect": "deny"},
     {"action": "question", "resource": "*", "effect": "deny"},
 ]
+required += [{"action": "shell", "resource": kill, "effect": "deny"}
+             for kill in ("*pkill*", "*killall*", "*xargs*kill*", "*kill *pgrep*", "*pgrep*kill *", "*pgrep*kill")]
 sys.exit(0 if all(rule in rules for rule in required) else 1)
+PY
+python3 - "$oc_guard" <<'PY' || fail "opencode guard misjudges a kill by pattern or a redacted listing"
+import json
+import sys
+from fnmatch import fnmatchcase
+
+# fnmatch stands in for opencode's wildcard match, which these patterns use only as `*`.
+denied = [rule["resource"] for rule in json.load(open(sys.argv[1]))["permissions"]
+          if rule["action"] == "shell" and rule["effect"] == "deny"]
+kills = ("pgrep -f x | xargs kill", "kill $(pgrep -f x)", "for p in $(pgrep x); do kill -9 $p; done",
+         "pkill -f 'a|b'", "killall sleep")
+listing = "pgrep -fl 'takes2' | ~/Projects/skills/bin/redact-env | cut -c1-180"
+ok = all(any(fnmatchcase(kill, pattern) for pattern in denied) for kill in kills)
+sys.exit(0 if ok and not any(fnmatchcase(listing, pattern) for pattern in denied) else 1)
 PY
 assert_eq "" "$(git -C "$OC_WORKTREE" status --porcelain)" "opencode guard is excluded from git status"
 grep -Fxq "lane-opencode: usage steps=1 input=100 output=20 reasoning=7 cache_read=50 cache_write=0 cost_list=0.0100" \

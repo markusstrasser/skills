@@ -95,6 +95,11 @@ git_verbs = ("add", "commit", "push", "pull", "fetch", "stash", "switch", "check
              "update-ref", "update-index", "symbolic-ref", "gc", "prune", "reflog", "clean", "config", "notes",
              "filter-", "replace", "-C", "-c ", "--git-dir", "--work-tree")
 patterns = [f"*git {verb}*" for verb in git_verbs]
+# Kills that select processes by text reach every process on the Mac, other lanes' supervisors included: on
+# 2026-11-07 one `pkill -f` alternation killed them all. A lane kills what it started by recorded PID. The pgrep
+# rules want `kill` followed by a space or the end, so `pgrep -fl x | ~/Projects/skills/bin/redact-env`, which
+# process-check lanes run, stays allowed.
+patterns += ["*xargs*kill*", "*kill *pgrep*", "*pgrep*kill *", "*pgrep*kill"]
 patterns += ["*pkill*", "*killall*", "*sudo *", "*launchctl*", "*security find-*", "*security dump-*",
              "*security export*", "*security add-*", "*security delete-*", "*Keychains*", "*/.ssh*", "*/.config/*",
              f"*{home}/.claude/*", "*~/.claude/*", "*/.codex/*", "*/.local/share/opencode*", "*auth.json*",
