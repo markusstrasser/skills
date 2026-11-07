@@ -2242,7 +2242,8 @@ _KILL_FIRST_WORD_RE = re.compile(r"\s*(\S*)")
 _KILL_PLAIN_WORD_RE = re.compile(r"[A-Za-z_./~][\w./~+:@%,-]*")
 _KILL_COMMAND_PREFIXES = frozenset(
     "sudo doas nice nohup env exec command builtin time timeout gtimeout caffeinate lockf arch "
-    "taskpolicy xargs eval noglob nocorrect coproc stdbuf setsid if then else elif do while until".split()
+    "taskpolicy xargs eval noglob nocorrect coproc stdbuf gstdbuf setsid if then else elif do while "
+    "until".split()
 )
 # Variables a word reads: `$p`, `${p}`, zsh `${=p}` and `${(f)p}`, arrays `${p[@]}`.
 _KILL_VAR_REF_RE = re.compile(r"\$(?:\{(?:\([^)]*\)|[=~^#!+])*)?([A-Za-z_][A-Za-z0-9_]*)")
@@ -3064,7 +3065,7 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
     """Scan one simple command that reads `feed` on its pipe; return what it prints."""
     raw_words = stage.words
     words = [raw if _PLAIN_RAW_WORD_RE.fullmatch(raw) else _shlex_unquote_word(raw) for raw in raw_words]
-    scan.sudo |= "sudo" in words
+    scan.sudo |= any(word is not None and word.rsplit("/", 1)[-1] in ("sudo", "doas") for word in words)
     inp = _KillFeed()  # what it reads: its pipe, process substitutions, here-strings, heredocs, files
     inp.merge(feed)
     for direction, body in stage.psubs:
@@ -3820,6 +3821,11 @@ _CMD_WRAPPER_VALUE_OPTS = {
     "taskpolicy": {"-c", "-d", "-g", "-G", "-t", "-l", "-p"},
     "gtimeout": {"-k", "--kill-after", "-s", "--signal"},
     "time": {"-o"},
+    # GNU stdbuf (coreutils' gstdbuf on macOS), util-linux setsid, and doas, sudo's OpenBSD peer.
+    "stdbuf": {"-i", "-o", "-e", "--input", "--output", "--error"},
+    "gstdbuf": {"-i", "-o", "-e", "--input", "--output", "--error"},
+    "setsid": set(),
+    "doas": {"-a", "-C", "-u"},
 }
 _CMD_WRAPPER_OPERANDS = {"timeout": 1, "gtimeout": 1, "lockf": 1}  # DURATION, FILE
 _CMD_TRANSPARENT_WORDS = {

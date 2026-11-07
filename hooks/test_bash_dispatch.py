@@ -1117,6 +1117,10 @@ def test_pkill_quoted_alternation_parses():
         ("lockf -k -t 0 /tmp/x.lock pkill -f foo", [("pkill", ["-f", "--", "foo"])]),
         ("arch -arch arm64 bash -c 'pkill -f foo'", [("pkill", ["-f", "--", "foo"])]),
         ("/usr/bin/env FOO=1 pkill -f foo", [("pkill", ["-f", "--", "foo"])]),
+        ("stdbuf -oL pkill -f foo", [("pkill", ["-f", "--", "foo"])]),
+        ("gstdbuf -o L -e 0 pkill -f foo", [("pkill", ["-f", "--", "foo"])]),
+        ("setsid -f pkill -f foo", [("pkill", ["-f", "--", "foo"])]),
+        ("doas -u root pkill -f foo", [("pkill", ["-f", "--", "foo"])]),
         # Pinned to a recorded PID or the caller's own children, signal 0, or a dry run itself.
         ("pkill -F ~/.cache/x.pid", [("pkill", None)]),
         ("pkill -P $$ -f foo", [("pkill", None)]),
@@ -1135,6 +1139,13 @@ def test_pkill_quoted_alternation_parses():
 )
 def test_kill_selection_forms(command, expected):
     assert _kill_replays(command) == expected
+
+
+@pytest.mark.parametrize("command", ["doas pkill -f x", "/usr/bin/doas -u root pkill -f x", "sudo pkill -f x"])
+def test_kills_as_root_count_other_users_processes(command):
+    scan = _DISPATCHER_NAMESPACE["_KillScan"]()
+    _DISPATCHER_NAMESPACE["_scan_kill_text"](command, scan)
+    assert scan.sudo
 
 
 @pytest.mark.parametrize(
@@ -2202,6 +2213,9 @@ def _ops(command, base="/base", environ=None):
         "command git commit -q --amend",
         "if git commit --amend --no-edit; then echo ok; fi",
         "git commit --amend -m -h",  # `-h` is the message here, not a help request
+        "setsid git commit --amend --no-edit",  # wrappers the shared prefix splitter strips
+        "stdbuf -oL git commit --amend --no-edit",
+        "doas -u alien git commit --amend",
     ],
 )
 def test_git_history_parse_finds_amend(command):
