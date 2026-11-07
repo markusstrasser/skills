@@ -860,6 +860,18 @@ wait_for_file "$LANE_HOME/locked.done"
 assert_eq "EXIT=0" "$(<"$LANE_HOME/locked.done")" "launch that took a stale lock"
 [ ! -e "$LANE_HOME/.launch-locked.lock" ] || fail "the launch kept its name's lock after it recorded the lane"
 
+echo "test: a launch takes a lock whose holder's pid now names a later process"
+# A live pid kept a dead launcher's lock while the process that reused the pid lived. FAKE_BIN's ps dates every process
+# to 2026-08-27, so the live pid below started after this pid file was written and cannot have written it.
+mkdir "$LANE_HOME/.launch-reused.lock"
+printf '%s\n' "$$" >"$LANE_HOME/.launch-reused.lock/pid"
+touch -t 202601010000 "$LANE_HOME/.launch-reused.lock/pid"
+"$LANE" run reused --repo "$REPO" --brief "$BRIEF" --worker fake --no-worktree >/dev/null ||
+  fail "a launch refused a lock whose pid a later process reused"
+wait_for_file "$LANE_HOME/reused.done"
+assert_eq "EXIT=0" "$(<"$LANE_HOME/reused.done")" "launch that took a lock from a reused pid"
+[ ! -e "$LANE_HOME/.launch-reused.lock" ] || fail "the launch kept the reused lock after it recorded the lane"
+
 echo "test: a supervisor that cannot read its prompt or enter its checkout logs why and writes EXIT=125"
 # Its stdout and stderr go nowhere until the worker starts, so both exits left an empty log and no marker.
 awk "/^  supervisor_script='\$/{body=1; next} body && /^  '\$/{exit} body" "$LANE" >"$TEST_TMP/supervisor.sh"
