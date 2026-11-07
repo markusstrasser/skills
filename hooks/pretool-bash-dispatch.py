@@ -106,6 +106,7 @@ crashing the dispatcher or blocking the tool call.
 from __future__ import annotations
 
 import ast
+import bisect
 import fnmatch
 import importlib.util
 import io
@@ -2207,8 +2208,9 @@ def gate_git_stash_guard(raw_payload: str) -> GateResult:
 # count only under sudo (pkill cannot signal them). A selection pinned to recorded PIDs is not
 # replayed, as `kill <pid>` is not: `-F`, a numeric `-P` or `-g` other than 1, or the caller's
 # own children (`-P $$`), unless `-v` inverts it. A replay that cannot run degrades
-# to an advisory marked [DEGRADED], never to a silent pass. Commands without "kill" in them
-# return before any parsing, and nothing spawns a process unless a kill selection is found.
+# to an advisory marked [DEGRADED], never to a silent pass. Commands with no kill-family word at a
+# command position return before any parsing, and nothing spawns a process unless a kill
+# selection is found.
 _PKILL_SIGNAL_NAMES = frozenset(
     "HUP INT QUIT ILL TRAP ABRT EMT FPE KILL BUS SEGV SYS PIPE ALRM TERM URG STOP TSTP CONT "
     "CHLD TTIN TTOU IO XCPU XFSZ VTALRM PROF WINCH INFO USR1 USR2".split()
@@ -2223,10 +2225,45 @@ _PKILL_SHELLS = frozenset({"bash", "sh", "zsh", "dash", "ksh"})
 _AGENT_VERSION_COMM = re.compile(r"\d+\.\d+\.\d+")
 _PKILL_LISTED_VICTIMS = 15
 _TILDE_PREFIX_RE = re.compile(r"~(?:[A-Za-z0-9_][A-Za-z0-9_.\-]*)?(?=/|$)")
+# The test before any parse: a kill-family word where a shell could run it (see below).
+_KILL_WORD_RE = re.compile(r"(?<![\w.\-])(?:p?kill|killall)(?![\w.\-/])")
+_KILL_SEGMENT_START_RE = re.compile(r"[\n;(){}`'\"!]|(?<!>)\||(?<![<>])&(?!>)")
+_KILL_FIRST_WORD_RE = re.compile(r"\s*(\S*)")
+_KILL_PLAIN_WORD_RE = re.compile(r"[A-Za-z_./~][\w./~+:@%,-]*")
+_KILL_COMMAND_PREFIXES = frozenset(
+    "sudo doas nice nohup env exec command builtin time timeout gtimeout caffeinate lockf arch "
+    "taskpolicy xargs eval noglob nocorrect coproc stdbuf setsid if then else elif do while until".split()
+)
+_KILL_SELECTING_WORDS_RE = re.compile(r"\b(?:pkill|killall|pgrep|ps|lsof|xargs)\b")
 
 
 class _DryRunError(Exception):
     """The selection could not be replayed; the gate degrades to an advisory."""
+
+
+def _kill_word_at_command_position(cmd: str) -> bool:
+    """Whether a kill-family word stands where a shell could run it, decided before any parse.
+
+    It over-approximates. A word counts when it opens its segment (after a separator, a bracket,
+    a quote, a backtick or `!`), or when the segment's first word is a wrapper, a keyword, an
+    assignment, a redirection or anything else that is not a plain word. Only a kill word after a
+    plain first word (`docker kill`, `rg -n kill`, prose such as `we kill`) or inside a longer word
+    (`skills`, `kill-session`, `os.kill`) is skipped.
+    """
+    starts: list[int] | None = None
+    for match in _KILL_WORD_RE.finditer(cmd):
+        start = match.start()
+        while start > 0 and cmd[start - 1] not in " \t\n;&|(){}`'\"!<>":
+            start -= 1  # a path such as /usr/bin/pkill
+        if starts is None:
+            starts = [found.end() for found in _KILL_SEGMENT_START_RE.finditer(cmd)]
+        index = bisect.bisect_right(starts, start) - 1
+        first = _KILL_FIRST_WORD_RE.match(cmd, starts[index] if index >= 0 else 0, start).group(1)
+        if not first or not _KILL_PLAIN_WORD_RE.fullmatch(first):
+            return True
+        if first.rsplit("/", 1)[-1] in _KILL_COMMAND_PREFIXES:
+            return True
+    return False
 
 
 class _KillScan:
@@ -2683,20 +2720,21 @@ def _pkill_degraded(reason: str, cmd: str) -> GateResult:
 def gate_pkill_guard(raw_payload: str) -> GateResult:
     try:
         data = json.loads(raw_payload)
+        cmd = (data.get("tool_input") or {}).get("command", "") or ""
     except Exception:
         return GateResult(0, "", "")
-    cmd = (data.get("tool_input") or {}).get("command", "") or ""
-    if "kill" not in cmd:
+    if not isinstance(cmd, str) or not _kill_word_at_command_position(cmd):
         return GateResult(0, "", "")
     scan = _KillScan()
     try:
         _scan_kill_text(cmd, scan)
         scan.resolve()
-    except ValueError as exc:
-        verbs = re.search(r"\b(?:pkill|killall)\b", cmd) or (
-            re.search(r"\bpgrep\b", cmd) and re.search(r"\bkill\b", cmd)
-        )
-        return _pkill_degraded(f"the command did not parse ({exc})", cmd) if verbs else GateResult(0, "", "")
+    except ValueError as exc:  # the lexer refused the text; a pid kill needs no advisory
+        if not _KILL_SELECTING_WORDS_RE.search(cmd):
+            return GateResult(0, "", "")
+        return _pkill_degraded(f"the command did not parse ({exc})", cmd)
+    except Exception as exc:  # fail loud, never silent: the gate's own bug is an advisory
+        return _pkill_degraded(f"the scan failed ({type(exc).__name__}: {exc})", cmd)
     if scan.kill_all:
         _log_trigger("pkill-guard", "block", "kill -1", cmd)
         return GateResult(

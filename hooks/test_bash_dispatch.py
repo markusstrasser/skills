@@ -1326,6 +1326,85 @@ def test_kill_pattern_with_a_directory_stack_tilde_cannot_replay():
         _DISPATCHER_NAMESPACE["_pgrep_replay"](tool, argv, raw)
 
 
+_KILL_AT_COMMAND = _DISPATCHER_NAMESPACE.get("_kill_word_at_command_position")
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "pkill -f x",
+        "cd /tmp && pkill -f x",
+        "sudo -u root /usr/bin/pkill -f x",
+        "nice -n 5 pkill -f x",
+        "timeout 5 killall foo",
+        "X=1 kill $p",
+        "2>&1 kill $p",
+        ">|out kill $p",
+        ">/dev/null 2>&1 kill $p",
+        "if kill -0 $p; then echo up; fi",
+        "for p in $(pgrep -f x); do kill $p; done",
+        "pgrep -f x | xargs -r kill -9",
+        "bash -c 'pkill -f x'",
+        'eval "pkill -f x"',
+        "echo $(kill -9 $p)",
+        "`kill $p`",
+        "cmd=x\nkill $p",
+        "$SUDO kill $p",
+        "s\\udo pkill -f x",
+    ],
+)
+def test_kill_words_a_shell_could_run_are_parsed(command):
+    assert _KILL_AT_COMMAND(command)
+
+
+_BIG_PROSE = "\n".join(
+    f"Line {i}: we kill nothing here; see ~/Projects/skills/hooks and skills/bin/lane." for i in range(1500)
+)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cat ~/Projects/skills/bin/lane | head -5",
+        "uv run pytest ~/Projects/skills/hooks/test_bash_dispatch.py -q",
+        "tmux kill-session -t x",
+        "docker kill abc",
+        "rg -n killall src/",
+        "git log --grep killall",
+        "ssh host pkill -f foo",
+        "python3 -c 'import os; os.kill(1234, 15)'",
+        f"git commit -F - -- skills/x <<'EOF'\nSummary line\n\n{_BIG_PROSE}\nEOF",
+        f"rg -n skills {'~/Projects/skills/hooks/x.py ' * 2000}",
+    ],
+)
+def test_pkill_guard_parses_nothing_without_a_kill_word_a_shell_could_run(monkeypatch, command):
+    """Every Bash call runs this gate. A command that only mentions kill (a `skills` path, prose, a
+    subcommand of another program) costs a regex, not a parse: the parse grew past 0.4 s on a
+    100 KiB argument."""
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("the pkill guard parsed a command with no kill to run")
+
+    monkeypatch.setitem(_PKILL_GATE.__globals__, "_scan_kill_text", refuse)
+    assert not _KILL_AT_COMMAND(command)
+    assert tuple(_PKILL_GATE(json.dumps(_bash(command)))) == (0, "", "")
+
+
+def test_pkill_guard_degrades_loudly_when_its_scan_fails(monkeypatch):
+    """Any exception in the scan is an advisory, not only the lexer's ValueError: an AttributeError
+    used to reach the dispatcher's per-gate `except Exception: continue` and pass silently."""
+    monkeypatch.setenv("HOOK_TRIGGER_LOG", os.devnull)
+
+    def broken(*args, **kwargs):
+        raise AttributeError("scan bug")
+
+    monkeypatch.setitem(_PKILL_GATE.__globals__, "_scan_kill_text", broken)
+    result = _PKILL_GATE(json.dumps(_bash("pgrep -f x | xargs kill")))
+    assert result.code == 0
+    context = json.loads(result.stdout)["additionalContext"]
+    assert context.startswith("[DEGRADED] pkill guard could not dry-run: the scan failed (AttributeError: scan bug)")
+
+
 def _fake_pgrep_bin(tmp_path, n_lines):
     p = tmp_path / f"fake_pgrep_{n_lines}.sh"
     body = "\n".join(f"echo '{1000+i} line{i}'" for i in range(n_lines))
