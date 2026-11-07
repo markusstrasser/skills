@@ -2200,7 +2200,10 @@ def gate_git_stash_guard(raw_payload: str) -> GateResult:
 #
 # The gate replays the selection instead. Every pkill and killall, and every pgrep whose output
 # feeds a kill, runs again as `pgrep` with the same selection options (killall as
-# `killall -s`), after the shell's tilde expansion. A pgrep feeds a kill through `xargs kill` or
+# `killall -s`) and the words the shell would pass it: quotes removed, `~` expanded, and `$HOME`
+# and `${HOME}` expanded, as is a variable the command sets once, unconditionally, before the kill
+# (`d=$HOME/x; pkill -f "$d/y"`); any other expansion cannot be replayed. A pgrep feeds a kill
+# through `xargs kill` or
 # a `while read` loop (a pipe, a process substitution, a `( … )` or `{ …; }` group), through a
 # `$( … )` in the kill's arguments, or through a variable, array, `for` list or file that a kill
 # reads back (zsh `${=pids}` too). Shell `-c` text, a heredoc or here-string a shell reads, `eval`,
@@ -2255,6 +2258,15 @@ _PID_FILE_READERS = frozenset({"cat", "head", "tail"})
 _PLAIN_RAW_WORD_RE = re.compile(r"[^\s'\"\\]+")  # shlex returns such a word unchanged
 _TILDE_PREFIX_RE = re.compile(r"~(?:[A-Za-z0-9_][A-Za-z0-9_.\-]*)?(?=/|$)")
 _KILL_SELECTING_WORDS_RE = re.compile(r"\b(?:pkill|killall|pgrep|ps|lsof|xargs)\b")
+_KILL_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+# Characters that make an unquoted expansion split or glob (bash splits, zsh does not), so its
+# words are not known.
+_KILL_SPLIT_CHARS = frozenset(" \t\n*?[")
+# Reserved words that open and close a compound command, and declarers that set a known value.
+_KILL_OPENERS = frozenset({"if", "while", "until", "for", "select", "case", "{"})
+_KILL_CLOSERS = frozenset({"fi", "done", "esac", "}"})
+_KILL_SETTING_DECLARERS = frozenset({"declare", "typeset", "local", "export", "readonly"})
+_ANSI_C_ESCAPES = {"a": "\a", "b": "\b", "e": "\x1b", "E": "\x1b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v"}
 
 
 class _DryRunError(Exception):
@@ -2295,7 +2307,7 @@ class _KillFeed:
     __slots__ = ("files", "other", "pgreps", "refs", "texts")
 
     def __init__(self) -> None:
-        self.pgreps: list[tuple[list[str] | None, list[str]]] = []  # pgrep output (argv None: ps)
+        self.pgreps: list[tuple[list[str | None] | None, list[str]]] = []  # pgrep output (argv None: ps)
         self.refs: set[str] = set()  # variables it carries
         self.files: list[str] = []  # files it carries
         self.other: list[str] = []  # programs whose output it is, which no replay reproduces
@@ -2312,17 +2324,50 @@ class _KillFeed:
 class _KillStage:
     """One simple command: its raw words and what it reads besides its pipe."""
 
-    __slots__ = ("heredocs", "psubs", "redirects", "words")
+    __slots__ = ("certain", "heredocs", "psubs", "redirects", "words")
 
     def __init__(self) -> None:
         self.words: list[str] = []
         self.redirects: list[tuple[str, str, str]] = []  # (fd, operator, raw target)
         self.psubs: list[tuple[str, str]] = []  # process substitutions: (`<` or `>`, body)
         self.heredocs: list[str] = []  # heredoc bodies it reads on stdin
+        # It runs whenever the command line gets this far, in the shell that reads the line: alone in
+        # its pipeline, after `;`, a newline or `&` and not backgrounded, outside any compound command.
+        self.certain = False
 
 
 def _kill_programs(names: list[str]) -> str:
     return ", ".join(dict.fromkeys(names))
+
+
+class _KillShell:
+    """What every scan of one command line shares: its text and the variables holding kill commands."""
+
+    __slots__ = ("_counts", "_reads_removed", "kill_texts", "text")
+
+    def __init__(self) -> None:
+        self.text: str | None = None  # the whole command line
+        self.kill_texts: dict[str, str] = {}  # variables holding a kill command
+        self._reads_removed: str | None = None
+        self._counts: dict[str, int] = {}
+
+    def set_text(self, text: str) -> None:
+        self.text, self._reads_removed, self._counts = text, None, {}
+
+    def bare_count(self, name: str) -> int:
+        """How often the line names `name` other than to read it (`$name`, `${name}`).
+
+        Every way to set a variable names it so (`name=`, `read name`, `for name in`, `unset name`,
+        `printf -v name`), so a count of 1 means the one assignment the scan saw is the only one.
+        Any other mention counts too, which only ever makes a value unknown.
+        """
+        if self.text is None:
+            return 1 << 30
+        if self._reads_removed is None:
+            self._reads_removed = _KILL_VAR_REF_RE.sub(" ", self.text)
+        if name not in self._counts:
+            self._counts[name] = len(re.findall(rf"(?<![\w$]){name}(?!\w)", self._reads_removed))
+        return self._counts[name]
 
 
 class _KillScan:
@@ -2333,21 +2378,40 @@ class _KillScan:
     test_the_quote_aware_scan_loads fails if either is renamed.
     """
 
-    def __init__(self, kill_texts: dict[str, str] | None = None) -> None:
-        # (tool, argv, raw argv); argv None: the pids come from ps output, which no replay reproduces
-        self.selections: list[tuple[str, list[str] | None, list[str]]] = []
+    def __init__(self, shell: _KillShell | None = None) -> None:
+        self.shell = _KillShell() if shell is None else shell
+        # What a variable holds, as `_word_value` reads it; None: set to what the guard cannot know.
+        self.values: dict[str, str | None] = {}
+        self.opaque = False  # a sourced file or runtime `eval` text may have set any variable
+        # (tool, argv, raw argv): argv holds the words the shell passes, None for a word that
+        # depends on what the guard cannot know; argv None: the pids come from ps output, which no
+        # replay reproduces.
+        self.selections: list[tuple[str, list[str | None] | None, list[str]]] = []
         self.output = _KillFeed()  # what the command prints
         self.groups: list[_KillFeed] = []  # outputs outside the open `( … )`, `{ …; }` or loop body
         self.var_feeds: dict[str, _KillFeed] = {}  # what each variable the command sets holds
         self.loop_vars: set[str] = set()  # variables `while read` loops set from their input
         self.loop_feed = _KillFeed()  # what those loops read
-        self.file_pgreps: dict[str, list[tuple[list[str] | None, list[str]]]] = {}  # pgrep output saved
+        self.file_pgreps: dict[str, list[tuple[list[str | None] | None, list[str]]]] = {}  # pgrep output saved
         self.kill_feed = _KillFeed()  # the variables and files kills read their pids from
-        self.kill_texts = {} if kill_texts is None else kill_texts  # variables holding a kill command
         self.unknown: list[str] = []  # kills whose pids come from where no replay reaches
         self.kills = 0
         self.kill_all = False
         self.sudo = False
+
+    def known(self, name: str) -> str | None:
+        """What `$name` expands to here, or None when the guard cannot know it.
+
+        Known: the value of the line's only assignment to `name`, made where it always runs before
+        this point; `HOME` from the environment when the line never sets it.
+        """
+        if self.opaque:
+            return None
+        if name in self.values:
+            return self.values[name] if self.shell.bare_count(name) == 1 else None
+        if name == "HOME" and self.shell.bare_count(name) == 0:
+            return os.environ.get("HOME") or None
+        return None
 
     def merge(self, inner: "_KillScan") -> None:
         """Take in what a nested command (a substitution, `sh -c` text, a heredoc) recorded."""
@@ -2413,38 +2477,130 @@ class _KillScan:
         self.selections = list(unique.values())
 
 
-def _raw_expands(raw: str) -> bool:
-    """Whether the shell expands a parameter or command substitution in this raw word."""
-    quote, i = None, 0
-    while i < len(raw):
+def _ansi_c_text(body: str) -> str:
+    """The text of a `$'…'` body: its backslash escapes decoded as bash and zsh decode them."""
+    out: list[str] = []
+    i = 0
+    while i < len(body):
+        ch = body[i]
+        if ch != "\\" or i + 1 >= len(body):
+            out.append(ch)
+            i += 1
+            continue
+        nxt = body[i + 1]
+        i += 2
+        if nxt in _ANSI_C_ESCAPES:
+            out.append(_ANSI_C_ESCAPES[nxt])
+        elif nxt in "01234567":
+            digits = re.match(r"[0-7]{1,3}", body[i - 1 :]).group(0)
+            out.append(chr(int(digits, 8) & 0xFF))
+            i += len(digits) - 1
+        elif nxt in "xuU" and re.match(r"[0-9A-Fa-f]", body[i : i + 1]):
+            width = {"x": 2, "u": 4, "U": 8}[nxt]
+            digits = re.match(f"[0-9A-Fa-f]{{1,{width}}}", body[i:]).group(0)
+            out.append(chr(min(int(digits, 16), 0x10FFFF)))
+            i += len(digits)
+        elif nxt == "c" and i < len(body):
+            out.append(chr(ord(body[i]) & 0x1F))
+            i += 1
+        else:
+            out.append(nxt if nxt in "\\'\"?" else "\\" + nxt)
+    return "".join(out)
+
+
+def _word_value(raw: str, scan: _KillScan, assignment: bool = False) -> str | None:
+    """The text the shell passes on for one raw word, or None when it depends on what the guard cannot know.
+
+    Quotes, backslashes, `$'…'` and a leading `~` resolve as the shell resolves them; `$NAME` and
+    `${NAME}` resolve to what `scan.known` knows. A command substitution, any other parameter
+    form, and an unquoted expansion that would split, glob or vanish are unknown. An assignment's
+    value (`assignment`) is neither split nor globbed.
+    """
+    if "$" not in raw and "`" not in raw and not raw.startswith("~") and _PLAIN_RAW_WORD_RE.fullmatch(raw):
+        return raw
+    out: list[str] = []
+    i, n, quote = 0, len(raw), None
+    if raw.startswith("~"):
+        match = _TILDE_PREFIX_RE.match(raw)
+        if match is not None:
+            prefix = match.group(0)
+            home = scan.known("HOME") if prefix == "~" else os.path.expanduser(prefix)
+            if home is None:
+                return None
+            out.append(home)
+            i = match.end()
+        elif not any(ch in raw.split("/", 1)[0] for ch in "'\"\\$`"):
+            return None  # `~+`, `~-`, `~2`: a directory the guard cannot know
+    while i < n:
         ch = raw[i]
         if quote == "'":
-            if ch == "'":
-                quote = None
-        elif ch == "\\":
-            i += 1
-        elif ch == "'" and quote is None:
-            quote = "'"
-        elif ch == '"':
+            end = raw.find("'", i)
+            if end < 0:
+                return None
+            out.append(raw[i:end])
+            i, quote = end + 1, None
+            continue
+        if ch == "\\":
+            nxt = raw[i + 1 : i + 2]
+            if nxt != "\n":  # a backslash-newline joins lines and leaves nothing
+                out.append(nxt if quote is None or nxt in '$`"\\' else "\\" + nxt)
+            i += 2
+            continue
+        if ch == '"':
             quote = None if quote == '"' else '"'
-        elif ch == "`":
-            return True
-        elif ch == "$" and i + 1 < len(raw) and (raw[i + 1].isalnum() or raw[i + 1] in "_{(@*#?$!-"):
-            return True
+            i += 1
+            continue
+        if ch == "'" and quote is None:
+            quote = "'"
+            i += 1
+            continue
+        if ch == "`":
+            return None
+        if ch == "$" and i + 1 < n:
+            nxt = raw[i + 1]
+            if nxt == "'" and quote is None:
+                end = i + 2
+                while end < n and raw[end] != "'":
+                    end += 2 if raw[end] == "\\" else 1
+                if end >= n:
+                    return None
+                out.append(_ansi_c_text(raw[i + 2 : end]))
+                i = end + 1
+                continue
+            if nxt == '"' and quote is None:  # `$"…"`: a translated string, the same text here
+                quote = '"'
+                i += 2
+                continue
+            if nxt == "{":
+                close = raw.find("}", i + 2)
+                name = raw[i + 2 : close] if close > 0 else ""
+                if not _KILL_NAME_RE.fullmatch(name):
+                    return None  # `${p:-x}`, `${#p}`, `${p[@]}`, zsh flags
+                i = close + 1
+            elif nxt.isalpha() or nxt == "_":
+                name = _KILL_NAME_RE.match(raw, i + 1).group(0)
+                i += 1 + len(name)
+                if raw[i : i + 1] in ("[", ":"):
+                    return None  # zsh reads `$p[1]` and `$p:h` as a subscript and a modifier
+            elif nxt.isdigit() or nxt in "@*#?$!-([":
+                return None  # positional and special parameters, `$( )`, `$(( ))`, `$[ ]`
+            else:
+                out.append(ch)
+                i += 1
+                continue
+            value = scan.known(name)
+            if value is None:
+                return None
+            splits = not value or _KILL_SPLIT_CHARS.intersection(value) or scan.shell.bare_count("IFS")
+            if quote is None and not assignment and splits:
+                return None
+            out.append(value)
+            continue
+        if assignment and quote is None and ch == ":" and raw.startswith("~", i + 1):
+            return None  # bash expands a `~` after `:` in an assignment, zsh does not
+        out.append(ch)
         i += 1
-    return False
-
-
-def _tilde_expanded(raw: str, value: str) -> str:
-    """`value` as the shell passes it on: an unquoted leading `~` or `~user` becomes that home."""
-    match = _TILDE_PREFIX_RE.match(raw)
-    if match is None:
-        prefix = raw.split("/", 1)[0]
-        if raw.startswith("~") and not any(ch in prefix for ch in "'\"\\$`"):
-            raise _DryRunError(f"the shell expands {prefix} to a directory the guard cannot know")
-        return value
-    home = os.path.expanduser(match.group(0))
-    return value if home == match.group(0) else home + value[len(match.group(0)) :]
+    return None if quote is not None else "".join(out)
 
 
 def _substitution_parts(raw: str) -> list[tuple[int, int, str]]:
@@ -2555,9 +2711,15 @@ def _heredoc_texts(command: str, start: int, delimiters: list[tuple[str, bool]])
     return texts
 
 
-def _scan_inner(text: str, scan: _KillScan, depth: int) -> _KillScan:
-    """Scan text the command runs as a nested command line; return the nested scan."""
-    inner = _KillScan(scan.kill_texts)
+def _scan_inner(text: str, scan: _KillScan, depth: int, child: bool = False) -> _KillScan:
+    """Scan text the command runs as a nested command line; return the nested scan.
+
+    A subshell (`$( … )`, `<( … )`, `eval`) starts with the variables this shell holds; a child
+    shell (`sh -c`, a shell reading stdin) with the environment only.
+    """
+    inner = _KillScan(scan.shell)
+    if not child:
+        inner.values, inner.opaque = dict(scan.values), scan.opaque
     _scan_kill_text(text, inner, depth + 1)
     scan.merge(inner)
     return inner
@@ -2665,6 +2827,8 @@ def _scan_kill_text(cmd: str, scan: _KillScan, depth: int = 0) -> None:
     """Record every kill selection in one command line, its substitutions and the shell text it runs."""
     if depth > 6:
         raise ValueError("command nests too deeply to scan")
+    if depth == 0:
+        scan.shell.set_text(cmd)
     pipeline: list[_KillStage] = []
     stage = _KillStage()
     upstream: _KillFeed | None = None  # a closed `( … )` group's output, when a pipe follows it
@@ -2674,8 +2838,23 @@ def _scan_kill_text(cmd: str, scan: _KillScan, depth: int = 0) -> None:
     array: list[str] | None = None  # the elements of `name=( … )`
     op: str | None = None
     op_fd, op_end, skip_until, prev_end = "", -1, -1, -1
+    before = ";"  # the separator before the open pipeline
+    compound = groups = 0  # open compound commands; open `( … )` groups
 
-    def run(stages: list[_KillStage], feed: _KillFeed | None) -> None:
+    def add(finished: _KillStage) -> None:
+        nonlocal compound
+        pipeline.append(finished)
+        for word in finished.words:
+            if word in _KILL_OPENERS:
+                compound += 1
+            elif word in _KILL_CLOSERS:
+                compound = max(0, compound - 1)
+            elif word not in _CMD_TRANSPARENT_WORDS:
+                break
+
+    def run(stages: list[_KillStage], feed: _KillFeed | None, after: str = ";") -> None:
+        if len(stages) == 1 and before in (";", "&") and after not in ("&", "|", "|&"):
+            stages[0].certain = compound == 0 and groups == 0
         if heredocs:
             waiting.append((stages, feed))
         else:
@@ -2729,13 +2908,16 @@ def _scan_kill_text(cmd: str, scan: _KillScan, depth: int = 0) -> None:
                 continue
         op, op_fd = None, ""
         if stage.words or stage.redirects or stage.psubs:
-            pipeline.append(stage)
+            add(stage)
             stage = _KillStage()
         if kind == "separator" and raw in ("|", "|&"):
             continue
+        after = raw if kind == "separator" and raw in ("&&", "||", "&") else ";"
         if pipeline:
-            run(pipeline, upstream)
+            run(pipeline, upstream, after)
             pipeline, upstream = [], None
+        if kind == "separator":
+            before = after
         if kind == "separator" and heredocs and raw.startswith("\n"):
             bodies = _heredoc_texts(cmd, start + 1, [(name, strip) for _owner, name, strip, _q in heredocs])
             for (owner, _name, _strip, quoted), body in zip(heredocs, bodies):
@@ -2746,6 +2928,7 @@ def _scan_kill_text(cmd: str, scan: _KillScan, depth: int = 0) -> None:
                 _scan_kill_pipeline(stages, scan, depth, feed)
             waiting.clear()
         if kind == "structure":
+            groups = groups + 1 if raw == "(" else max(0, groups - 1)
             if raw == "(":
                 scan.groups.append(scan.output)
                 scan.output = _KillFeed()
@@ -2754,7 +2937,7 @@ def _scan_kill_text(cmd: str, scan: _KillScan, depth: int = 0) -> None:
     if array is not None:
         raise ValueError("unbalanced array assignment")
     if stage.words or stage.redirects or stage.psubs:
-        pipeline.append(stage)
+        add(stage)
     if pipeline:
         run(pipeline, upstream)
     if closed is not None:
@@ -2816,6 +2999,16 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
     first_target = len(raw_words) - len(targets)
     for_list = 3 if len(words) > 2 and words[0] == "for" and words[2] == "in" else None
     printed = prog in ("echo", "printf")
+    # Where an assignment's value is known from here on: a stage of assignments alone (with a
+    # command after them, they set its environment only) or a declarer without options, that
+    # always runs in this shell (`stage.certain`). Anywhere else the value is unknown.
+    shell_sets = stage.certain and n_assign == len(raw_words)
+    declarer_sets = (
+        stage.certain
+        and program_at == 0
+        and prog in _KILL_SETTING_DECLARERS
+        and not any(word is None or word.startswith(("-", "+")) for word in words[1:])
+    )
     out = _KillFeed()
     for index, raw in enumerate(raw_words):
         assigned = None
@@ -2831,7 +3024,11 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
             scan.assign(name, value)
             text = (words[index] or "").split("=", 1)[-1]
             if _kill_word_at_command_position(text):
-                scan.kill_texts[name] = text  # `cmd="pkill -f x"; $cmd`
+                scan.shell.kill_texts[name] = text  # `cmd="pkill -f x"; $cmd`
+            rest = raw[assigned.end() :]
+            sets = (shell_sets if index < n_assign else declarer_sets) and not assigned.group(0).endswith("+=")
+            known = sets and not rest.startswith("(")  # `p=( … )` is an array
+            scan.values[name] = _word_value(rest, scan, assignment=True) if known else None
         elif listed:
             scan.assign(words[1] or "", value)  # `for p in $(pgrep …)`
         elif is_target:
@@ -2842,35 +3039,40 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
             out.pgreps += value.pgreps  # pids handed to another program may come out of it
     if argv and argv[0] is not None and argv[0].startswith("$"):  # a command named by a variable
         named = re.fullmatch(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?", argv[0])
-        if named and named.group(1) in scan.kill_texts:
-            out.merge(_scan_inner(scan.kill_texts[named.group(1)], scan, depth).output)
+        if named and named.group(1) in scan.shell.kill_texts:
+            out.merge(_scan_inner(scan.shell.kill_texts[named.group(1)], scan, depth).output)
         return _stage_output(stage, out, scan)
     if not prog or prog in _KILL_KEYWORDS:
         return _stage_output(stage, out, scan)
+    if prog in ("source", "."):
+        scan.opaque = True  # the file may set any variable
     if prog in _PKILL_SHELLS:
         text, reads_stdin = _shell_script_source(argv)
         if text is not None:
-            inner = _scan_inner(text, scan, depth)
+            inner = _scan_inner(text, scan, depth, child=True)
             out.merge(inner.output)
             if stripped is not None and inner.kills:  # `xargs sh -c 'kill …'` kills what xargs reads
                 scan.consume(inp, f"`xargs {prog} -c`")
         elif reads_stdin:
             for body in inp.texts:
-                out.merge(_scan_inner(body, scan, depth).output)
+                out.merge(_scan_inner(body, scan, depth, child=True).output)
             if inp.other and not inp.texts:
                 scan.unknown.append(f"`{prog}` runs what {_kill_programs(inp.other)} prints")
         return _stage_output(stage, out, scan)
     if prog == "eval":
         out.merge(_scan_inner(" ".join(a for a in argv[1:] if a is not None), scan, depth).output)
+        if any("$" in raw or "`" in raw for raw in raw_argv[1:]):
+            scan.opaque = True  # text known only when it runs may set any variable
         return _stage_output(stage, out, scan)
     if prog in ("pkill", "killall"):
-        scan.selections.append((prog, argv[1:], raw_argv[1:]))
+        scan.selections.append((prog, [_word_value(raw, scan) for raw in raw_argv[1:]], raw_argv[1:]))
         scan.kills += 1
         return _stage_output(stage, out, scan)
     if prog in ("pgrep", "ps"):  # `ps aux | grep … | xargs kill` selects by text, as pkill -f does
         if stripped is not None:
             out.merge(inp)  # `pgrep … | xargs ps -p` prints what the upstream pgrep found
-        out.pgreps.append((argv[1:] if prog == "pgrep" else None, raw_argv[1:]))
+        selected = [_word_value(raw, scan) for raw in raw_argv[1:]] if prog == "pgrep" else None
+        out.pgreps.append((selected, raw_argv[1:]))
         return _stage_output(stage, out, scan)
     if prog in _KILL_READERS:
         names = _read_targets(prog, argv[1:])
@@ -2918,42 +3120,44 @@ def _scan_kill_stage(stage: _KillStage, feed: _KillFeed, scan: _KillScan, depth:
     return _stage_output(stage, out, scan)
 
 
-def _pgrep_replay(tool: str, argv: list[str] | None, raw_argv: list[str]) -> list[str] | None:
+def _pgrep_replay(tool: str, argv: list[str | None] | None, raw_argv: list[str]) -> list[str] | None:
     """The pgrep (killall: killall) arguments that select what this call signals.
 
     None when the call cannot reach outside the caller's tree: it sends signal 0, prints a list,
     is itself a dry run, or is pinned to recorded PIDs as `kill <pid>` and `kill -- -<pgid>` are
     (`-F`, a numeric `-P` or `-g` other than 1, the caller's own children `-P $$`) without `-v`,
-    which turns a pin into every other process. Patterns get the shell's tilde expansion.
+    which turns a pin into every other process. `argv` holds the words as the shell passes them
+    (`_word_value`); a word it could not know (None) cannot be replayed.
     """
     if argv is None:
         raise _DryRunError("a kill takes its pids from ps output, which only pgrep could replay")
-    if any(a is None for a in argv) or len(argv) != len(raw_argv):
+    if len(argv) != len(raw_argv):
         raise _DryRunError(f"a {tool} argument holds a command substitution")
     if tool == "killall":
         if any(a in ("-l", "-help", "-s", "-d") for a in argv):
             return None
-        if any(_raw_expands(r) for r in raw_argv):
-            raise _DryRunError("a killall argument holds a shell expansion")
-        return ["-s"] + [_tilde_expanded(r, a) for r, a in zip(raw_argv, argv) if a != "-I"]
+        unknown = [r for r, a in zip(raw_argv, argv) if a is None]
+        if unknown:
+            raise _DryRunError(f"the killall argument {unknown[0]} holds a shell expansion")
+        return ["-s"] + [a for a in argv if a is not None and a != "-I"]
     i = 0
-    if tool == "pkill" and argv:
+    if tool == "pkill" and argv and argv[0] is not None:
         sig = _pkill_signal(argv[0])
         if sig == "0":
             return None
         i = 1 if sig is not None else 0
     out: list[str] = []
-    pins: list[str] = []  # raw values of the options that pin the selection to recorded PIDs
+    pins: list[tuple[str, str | None]] = []  # (raw, value) of the options that pin to recorded PIDs
     inverted = False
     while i < len(argv):
         word = argv[i]
+        if word is None:  # an option or a pattern: the guard cannot tell
+            raise _DryRunError(f"the {tool} argument {raw_argv[i]} holds a shell expansion")
         if word == "--":
             i += 1
             break
         if not word.startswith("-") or word == "-":
             break  # pgrep(1) parses with getopt: options end at the first pattern
-        if _raw_expands(raw_argv[i]):
-            raise _DryRunError(f"the {tool} option {raw_argv[i]} holds a shell expansion")
         i += 1
         kept = ""
         for pos in range(1, len(word)):
@@ -2963,39 +3167,41 @@ def _pgrep_replay(tool: str, argv: list[str] | None, raw_argv: list[str]) -> lis
                 if letter not in _PGREP_OUTPUT_OPTS:
                     kept += letter
                 continue
-            value = word[pos + 1 :]
-            raw_value = value
+            value: str | None = word[pos + 1 :]
+            raw_value = value or ""
             if not value:
                 if i >= len(argv):
                     raise _DryRunError(f"{tool} -{letter} has no value")
                 value, raw_value = argv[i], raw_argv[i]
                 i += 1
             if letter == "F" or (letter == "P" and raw_value.strip("'\"") in _PGREP_OWN_CHILDREN):
-                pins.append(raw_value)
+                pins.append((raw_value, value))
             elif (
                 letter in "Pg"
+                and value is not None
                 and re.fullmatch(r"\d+(?:,\d+)*", value)
                 and 1 not in {int(v) for v in value.split(",")}
             ):
-                pins.append(raw_value)  # a recorded parent or group; -P 1 is every orphan on the Mac
-            elif _raw_expands(raw_value):
+                pins.append((raw_value, value))  # a recorded parent or group; -P 1 is every orphan on the Mac
+            elif value is None:
                 raise _DryRunError(f"the {tool} -{letter} value {raw_value} holds a shell expansion")
             if letter not in _PGREP_OUTPUT_OPTS:
                 if kept:
                     out.append("-" + kept)
                     kept = ""
-                out += ["-" + letter, value]
+                out += ["-" + letter, value or ""]
             break
         if kept:
             out.append("-" + kept)
     if pins and not inverted:
         return None
-    if any(_raw_expands(pin) or pin.strip("'\"") in _PGREP_OWN_CHILDREN for pin in pins):
+    if any(value is None or raw.strip("'\"") in _PGREP_OWN_CHILDREN for raw, value in pins):
         raise _DryRunError(f"{tool} -v inverts a pin the guard cannot replay")
-    patterns, raw_patterns = argv[i:], raw_argv[i:]
-    if any(_raw_expands(r) for r in raw_patterns):
-        raise _DryRunError(f"a {tool} pattern holds a shell expansion")
-    patterns = [_tilde_expanded(r, p) for r, p in zip(raw_patterns, patterns)]
+    patterns: list[str] = []
+    for raw, pattern in zip(raw_argv[i:], argv[i:]):
+        if pattern is None:
+            raise _DryRunError(f"the {tool} pattern {raw} holds a shell expansion")
+        patterns.append(pattern)
     return out + (["--"] + patterns if patterns else [])
 
 

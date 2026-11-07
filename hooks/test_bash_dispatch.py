@@ -1326,6 +1326,75 @@ def test_kill_pattern_with_a_directory_stack_tilde_cannot_replay():
         _DISPATCHER_NAMESPACE["_pgrep_replay"](tool, argv, raw)
 
 
+@pytest.mark.parametrize(
+    "template",
+    [
+        'pkill -f "$HOME/{tok}"',
+        "pkill -f ${{HOME}}/{tok}",
+        'd=$HOME/{tok}; pkill -f "$d"',
+        'd=~/{tok} && kill $(pgrep -f "$d")',
+    ],
+)
+def test_pkill_home_pattern_blocks_a_detached_decoy(sandbox, decoys, template):
+    """The re-read's probe: `pkill -f "$HOME/Projects/arena/.claude/worktrees"` matched 17 live lane
+    processes and got only an advisory, while its `~` spelling was blocked."""
+    tok = f"pkd{uuid.uuid4().hex[:10]}"
+    decoy = decoys.detached("perl", "-e", "sleep 60", os.path.join(sandbox["env"]["HOME"], tok, "run"))
+    command = template.format(tok=tok)
+    disp = run_dispatcher(_bash(command), sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 2, disp
+    assert re.search(rf"pid {decoy}\s", disp["block_msg"])
+    assert "$" in disp["block_msg"].split("would also", 1)[0], "the block names the selection as written"
+
+
+_HOME = os.environ["HOME"]
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        ('pkill -f "$HOME/x"', [("pkill", ["-f", "--", f"{_HOME}/x"])]),
+        ("pkill -f ${HOME}/x", [("pkill", ["-f", "--", f"{_HOME}/x"])]),
+        ('d=$HOME/x; pkill -f "$d/y"', [("pkill", ["-f", "--", f"{_HOME}/x/y"])]),
+        ('export d=~/x; pkill -f "$d"', [("pkill", ["-f", "--", f"{_HOME}/x"])]),
+        ('d=a; kill $(pgrep -f "$d")', [("pgrep", ["-f", "--", "a"])]),
+        ('HOME=/x; pkill -f "$HOME/y"', [("pkill", ["-f", "--", "/x/y"])]),
+        ('d="a b"; pkill -f "$d"', [("pkill", ["-f", "--", "a b"])]),
+        ("pkill -f $'a\\tb'", [("pkill", ["-f", "--", "a\tb"])]),
+        ("sh -c 'pkill -f \"$HOME/x\"'", [("pkill", ["-f", "--", f"{_HOME}/x"])]),
+        ('pkill -v -F "$HOME/x.pid"', [("pkill", ["-v", "-F", f"{_HOME}/x.pid"])]),
+        ('killall "$HOME/x"', [("killall", ["-s", f"{_HOME}/x"])]),
+    ],
+)
+def test_kill_patterns_get_known_variables(command, expected):
+    assert _kill_replays(command) == expected
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'd=~/x; d=~/y; pkill -f "$d"',  # set twice
+        '[ -n "$x" ] && d=a; pkill -f "$d"',  # may not run
+        'if true; then d=a; fi; pkill -f "$d"',
+        'for d in a b; do pkill -f "$d"; done',
+        'd=a; for i in 1 2; do pkill -f "$d"; d=b; done',
+        'd=a pkill -f "$d"',  # pkill's environment, not the shell's
+        'HOME=/x pkill -f "$HOME/y"',
+        'pkill -f "$d"; d=a',  # set after the kill
+        'd=a & pkill -f "$d"',  # in a background subshell
+        "(d=a); pkill -f \"$d\"",
+        "d=a; sh -c 'pkill -f \"$d\"'",  # a child shell sees the environment only
+        'd=a; source x.sh; pkill -f "$d"',
+        'd="a b"; pkill -f $d',  # bash splits it, zsh does not
+        "IFS=/; pkill -f $HOME",
+        'pkill -f "$PATTERN"',
+    ],
+)
+def test_kill_patterns_with_values_the_guard_cannot_know(command):
+    with pytest.raises(_DISPATCHER_NAMESPACE["_DryRunError"], match="holds a shell expansion"):
+        _kill_replays(command)
+
+
 _KILL_AT_COMMAND = _DISPATCHER_NAMESPACE.get("_kill_word_at_command_position")
 
 
