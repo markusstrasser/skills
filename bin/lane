@@ -980,28 +980,18 @@ launch_worker() {
   prompt=$(build_prompt "$worker" "$brief" "$resume_note")
   started_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
-  # perl makes the worker lead a new SESSION and group (sid = pgid = pid; macOS ships no
-  # setsid(1)), so stop can target exactly -$launch_pid and closing the launching session
-  # cannot reach it: on 2026-09-29 a session close SIGTERMed a `set -m` bgrun job that led its
-  # own group but shared the tool shell's session. setsid() refuses a group leader: no `set -m`.
-  # UV_CACHE_DIR + --add-dir: the codex sandbox cannot write ~/.cache/uv by default, so uv
-  # silently fell back to a per-worktree .uv-cache and re-downloaded the world per lane
-  # (13G + 9.7G in two lanes; .claude hit 60G, 2026-09-01). One shared, writable cache.
-  # LANE_CHECKOUT_ENV names the hook's settings, which lane-opencode passes through its scrubbed environment.
-  # The worker and everything it starts run LANE_NICE (default 10) above the launcher's nice value: on 2026-11-02
-  # ten lanes' builds and tests held the Mac at load 60-160 while the landing gate, the one serial step, and a
-  # playtest client competed with them as equals.
-  nohup /usr/bin/nice -n "$(lane_nice)" /usr/bin/perl -MPOSIX -e 'POSIX::setsid() or die "lane: setsid: $!\n"; exec { $ARGV[0] } @ARGV or die "lane: exec: $!\n"' \
-    env PYTHONUNBUFFERED=1 LANE_WORKER=1 UV_CACHE_DIR="$HOME/.cache/uv" LANE_NAME="$name" LANE_REPO="$repo" LANE_LOG="$log" \
-    LANE_OPENCODE_HELPER="$LANE_BIN_DIR/lane-opencode" LANE_RETIRE="$LANE_BIN_DIR/lane-retire" LANE_HOME="$LANE_HOME" \
-    LANE_ARCHIVE="$LANE_BIN_DIR/lane-archive" \
-    LANE_CHECKOUT_MODE="$checkout_mode" LANE_CHECKOUT_BASE="$checkout_base" LANE_BRANCH="$branch" \
-    LANE_KEEP_CHECKOUT="$keep_checkout" LANE_CHECKOUT_ENV="$checkout_env_names" \
-    ${checkout_env[@]+"${checkout_env[@]}"} bash -c '
+  # The supervisor's script and the prompt go to <name>.supervisor and <name>.prompt, which the supervisor reads
+  # and deletes, so its arguments hold only paths and settings. Passed to bash -c, the script, comments included,
+  # and the whole prompt sat in every supervisor's arguments: on 2026-11-07 a `pkill -f` pattern that matched
+  # "failed" in a comment below killed every lane supervisor on the Mac. bash reads a sourced file whole before
+  # running it. No apostrophes in the script: it is a single-quoted literal.
+  supervisor_script='
     log=$1
     marker=$2
     worker=$3
-    prompt=$4
+    prompt=$(cat "$4" && printf x) || exit 125
+    prompt=${prompt%x}
+    rm -f "$0" "$4"
     brief=$5
     worktree=$6
     resume_mode=$7
@@ -1138,7 +1128,31 @@ A provider capacity error stopped your previous attempt. The checkout keeps its 
       "CHECKOUT=retired "*) "$LANE_ARCHIVE" --home "$LANE_HOME" --apply --bounded >> "$LANE_HOME/.archive.log" 2>&1 || true ;;
     esac
     exit "$rc"
-  ' lane-worker "$log" "$marker" "$worker" "$prompt" "$brief" "$worktree" "$resume_mode" "$checkout_state" </dev/null >/dev/null 2>&1 &
+  '
+  supervisor_file="$LANE_HOME/$name.supervisor"
+  prompt_file="$LANE_HOME/$name.prompt"
+  printf '%s' "$supervisor_script" >"$supervisor_file"
+  printf '%s' "$prompt" >"$prompt_file"
+
+  # perl makes the worker lead a new SESSION and group (sid = pgid = pid; macOS ships no
+  # setsid(1)), so stop can target exactly -$launch_pid and closing the launching session
+  # cannot reach it: on 2026-09-29 a session close SIGTERMed a `set -m` bgrun job that led its
+  # own group but shared the tool shell's session. setsid() refuses a group leader: no `set -m`.
+  # UV_CACHE_DIR + --add-dir: the codex sandbox cannot write ~/.cache/uv by default, so uv
+  # silently fell back to a per-worktree .uv-cache and re-downloaded the world per lane
+  # (13G + 9.7G in two lanes; .claude hit 60G, 2026-09-01). One shared, writable cache.
+  # LANE_CHECKOUT_ENV names the hook's settings, which lane-opencode passes through its scrubbed environment.
+  # The worker and everything it starts run LANE_NICE (default 10) above the launcher's nice value: on 2026-11-02
+  # ten lanes' builds and tests held the Mac at load 60-160 while the landing gate, the one serial step, and a
+  # playtest client competed with them as equals.
+  nohup /usr/bin/nice -n "$(lane_nice)" /usr/bin/perl -MPOSIX -e 'POSIX::setsid() or die "lane: setsid: $!\n"; exec { $ARGV[0] } @ARGV or die "lane: exec: $!\n"' \
+    env PYTHONUNBUFFERED=1 LANE_WORKER=1 UV_CACHE_DIR="$HOME/.cache/uv" LANE_NAME="$name" LANE_REPO="$repo" LANE_LOG="$log" \
+    LANE_OPENCODE_HELPER="$LANE_BIN_DIR/lane-opencode" LANE_RETIRE="$LANE_BIN_DIR/lane-retire" LANE_HOME="$LANE_HOME" \
+    LANE_ARCHIVE="$LANE_BIN_DIR/lane-archive" \
+    LANE_CHECKOUT_MODE="$checkout_mode" LANE_CHECKOUT_BASE="$checkout_base" LANE_BRANCH="$branch" \
+    LANE_KEEP_CHECKOUT="$keep_checkout" LANE_CHECKOUT_ENV="$checkout_env_names" \
+    ${checkout_env[@]+"${checkout_env[@]}"} bash -c '. "$0"' "$supervisor_file" \
+    "$log" "$marker" "$worker" "$prompt_file" "$brief" "$worktree" "$resume_mode" "$checkout_state" </dev/null >/dev/null 2>&1 &
   launch_pid=$!
   disown "$launch_pid" 2>/dev/null || true
   # The worker leads its group only after perl's setsid(); wait for that before the check. The builtin kill sees the

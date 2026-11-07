@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
-LANE="$ROOT/bin/lane"
+# Every lane call on the machine runs the live bin/lane: test an edit in a copy beside it (LANE_UNDER_TEST=<copy>).
+LANE="${LANE_UNDER_TEST:-$ROOT/bin/lane}"
 TEST_TMP=$(mktemp -d "${TMPDIR:-/tmp}/lane-test.XXXXXX")
 mkdir -p "$TEST_TMP/lanes"
 LANE_HOME=$(cd "$TEST_TMP/lanes" && pwd -P)
@@ -942,6 +943,15 @@ kill -0 -- "-$hang_pid" 2>/dev/null || fail "real worker process group is not al
 own_nice=$(/bin/ps -o nice= -p $$ | tr -d ' ')
 assert_eq "$((own_nice + 10 > 20 ? 20 : own_nice + 10))" "$(/bin/ps -o nice= -p "$hang_pid" | tr -d ' ')" \
   "a worker runs 10 nicer than lane by default"
+# 2026-11-07: a `pkill -f` pattern matched "failed" in a comment of the supervisor script, which bash -c carried in
+# every supervisor's arguments with the whole prompt, and killed every lane supervisor on the Mac.
+wait_for_absent "$LANE_HOME/hang.supervisor"
+wait_for_absent "$LANE_HOME/hang.prompt"
+hang_args=$(/bin/ps -o args= -p "$hang_pid" | "$ROOT/bin/redact-env")
+[ -n "$hang_args" ] || fail "no arguments for supervisor $hang_pid"
+for word in retire_out capacity_delay failed "Do the fake task"; do
+  case "$hang_args" in *"$word"*) fail "the supervisor's arguments carry script or prompt text: $word" ;; esac
+done
 set_started_epoch "$hang_metadata" "$((hang_started_epoch + 1))"
 assert_eq "DEAD" "$(state_for hang)" "forged worker identity"
 assert_eq "\"DEAD\"" "$("$LANE" state hang | python3 -c 'import json, sys; print(json.dumps(json.load(sys.stdin)["state"]))')" \
