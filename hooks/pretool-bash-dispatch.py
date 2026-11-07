@@ -2187,86 +2187,531 @@ def gate_git_stash_guard(raw_payload: str) -> GateResult:
     return GateResult(2, msg, "")
 
 
-# --- 30. pretool-pkill-anchor-guard.sh (ADVISORY, no if) --------------------
+# --- 30. pkill-guard (BLOCKER, no if) -----------------------------------------
+# A kill that selects processes by text reaches every process on the Mac. On 2026-11-07
+# 13:12:25 CST a lane worker ran `pkill -f "grep -qE \"passed|failed|error\""` to stop its own
+# watcher. pkill reads its pattern as an extended regex, so `|` matched every process whose
+# arguments held `failed`, and every lane and bgrun supervisor died: both passed their whole
+# script, comments included, to `bash -c`. The advisory this gate replaces split the command on
+# `|` before shlex, so the quoted `|` broke its parse and it said nothing; it guessed safety
+# from the pattern's shape (`^`, `/`, `-x`) in any case. Two pkills on 2026-07-12 killed a
+# training client and a canary the same way.
+#
+# The gate replays the selection instead. Every pkill and killall, and every pgrep whose output
+# feeds a kill (`pgrep … | xargs kill`, `kill $(pgrep …)`, `for p in $(pgrep …)`, a variable
+# holding pgrep output), runs again as `pgrep` with the same selection options (killall as
+# `killall -s`). The command is refused when a match lies outside the caller's own tree: the
+# nearest Claude ancestor of this hook and its descendants (the hook's parent without one).
+# pkill and pgrep skip their own ancestors, and the replay inherits that; killall and `-a` do
+# not, so a match on an ancestor above the Claude process blocks too. Other users' processes
+# count only under sudo (pkill cannot signal them). A selection pinned to a recorded PID (`-F`)
+# or to the caller's own children (`-P $$`) is not replayed. A replay that cannot run degrades
+# to an advisory marked [DEGRADED], never to a silent pass. Commands without "kill" in them
+# return before any parsing, and nothing spawns a process unless a kill selection is found.
+_PKILL_SIGNAL_NAMES = frozenset(
+    "HUP INT QUIT ILL TRAP ABRT EMT FPE KILL BUS SEGV SYS PIPE ALRM TERM URG STOP TSTP CONT "
+    "CHLD TTIN TTOU IO XCPU XFSZ VTALRM PROF WINCH INFO USR1 USR2".split()
+)
+# macOS pgrep/pkill options that take a value (pgrep(1); -c is FreeBSD's login class).
+_PGREP_VALUE_OPTS = frozenset("FGPUcdgtu")
+# Options that change only what gets printed or asked, never what is selected.
+_PGREP_OUTPUT_OPTS = frozenset("DIdlq")
+_PGREP_OWN_CHILDREN = frozenset({"$$", "${$}", "$BASHPID", "${BASHPID}", "$!", "${!}"})
+_XARGS_VALUE_OPTS = frozenset("EIJLPRSns")
+_PKILL_SHELLS = frozenset({"bash", "sh", "zsh", "dash", "ksh"})
+_CLAUDE_VERSION_COMM = re.compile(r"\d+\.\d+\.\d+")
+_PKILL_LISTED_VICTIMS = 15
 
 
-def _pkill_f_patterns(seg: str):
-    """Mirrors pretool-pkill-anchor-guard.sh's find_pkill_f_patterns():
-    yields (pattern, has_dash_x) for a `pkill ... -f <pattern>` call."""
-    seg = seg.strip()
-    try:
-        parts = shlex.split(seg)
-    except ValueError:
-        return
-    i = 0
-    while i < len(parts):
-        tok = parts[i].rsplit("/", 1)[-1]
-        if tok != "pkill":
+class _DryRunError(Exception):
+    """The selection could not be replayed; the gate degrades to an advisory."""
+
+
+class _KillScan:
+    """What one command line would kill, read from its text."""
+
+    def __init__(self) -> None:
+        self.selections: list[tuple[str, list[str], list[str]]] = []  # (tool, argv, raw argv)
+        self.pgreps: list[tuple[list[str], list[str]]] = []  # pgreps whose output use is unknown
+        self.var_pgreps: dict[str, list[tuple[list[str], list[str]]]] = {}
+        self.loop_pgreps: list[tuple[list[str], list[str]]] = []
+        self.kill_refs: set[str] = set()
+        self.kill_dynamic = False
+        self.kill_all = False
+        self.sudo = False
+
+    def merge(self, inner: "_KillScan") -> None:
+        self.selections += inner.selections
+        for name, found in inner.var_pgreps.items():
+            self.var_pgreps.setdefault(name, []).extend(found)
+        self.loop_pgreps += inner.loop_pgreps
+        self.kill_refs |= inner.kill_refs
+        self.kill_dynamic |= inner.kill_dynamic
+        self.kill_all |= inner.kill_all
+        self.sudo |= inner.sudo
+
+    def resolve(self) -> None:
+        """Turn pgreps captured into variables or loops into selections when a kill reads them."""
+        for name in sorted(self.kill_refs):
+            self.selections += [("pgrep", argv, raw) for argv, raw in self.var_pgreps.get(name, [])]
+        if self.kill_dynamic:
+            self.selections += [("pgrep", argv, raw) for argv, raw in self.loop_pgreps]
+
+
+def _raw_expands(raw: str) -> bool:
+    """Whether the shell expands a parameter or command substitution in this raw word."""
+    quote, i = None, 0
+    while i < len(raw):
+        ch = raw[i]
+        if quote == "'":
+            if ch == "'":
+                quote = None
+        elif ch == "\\":
             i += 1
-            continue
-        args = parts[i + 1 :]
-        has_dash_x = "-x" in args
-        pattern = None
-        j = 0
-        while j < len(args):
-            a = args[j]
-            if a == "-f":
-                if j + 1 < len(args) and not args[j + 1].startswith("-"):
-                    pattern = args[j + 1]
-                j += 2
-                continue
-            if a.startswith("-f") and len(a) > 2 and not a.startswith("--"):
-                pattern = a[2:]
-                j += 1
-                continue
-            if a == "--full":
-                if j + 1 < len(args) and not args[j + 1].startswith("-"):
-                    pattern = args[j + 1]
-                j += 2
-                continue
-            j += 1
-        if pattern is not None:
-            yield pattern, has_dash_x
-        break
-
-
-def _pkill_is_anchored(pattern: str, has_dash_x: bool) -> bool:
-    if has_dash_x:
-        return True
-    if pattern.startswith("^"):
-        return True
-    if "/" in pattern:
-        return True
+        elif ch == "'" and quote is None:
+            quote = "'"
+        elif ch == '"':
+            quote = None if quote == '"' else '"'
+        elif ch == "`":
+            return True
+        elif ch == "$" and i + 1 < len(raw) and (raw[i + 1].isalnum() or raw[i + 1] in "_{(@*#?$!-"):
+            return True
+        i += 1
     return False
 
 
-def gate_pkill_anchor_guard(raw_payload: str) -> GateResult:
+def _substitution_bodies(raw: str) -> list[str]:
+    """Bodies of the `$( … )` and backtick substitutions the shell runs for one raw word."""
+    bodies: list[str] = []
+    quote, i = None, 0
+    while i < len(raw):
+        ch = raw[i]
+        if quote == "'":
+            if ch == "'":
+                quote = None
+            i += 1
+            continue
+        if ch == "\\":
+            i += 2
+            continue
+        if ch == "'" and quote is None:
+            quote = "'"
+            i += 1
+            continue
+        if ch == '"':
+            quote = None if quote == '"' else '"'
+            i += 1
+            continue
+        if raw.startswith("$((", i) or raw.startswith("${", i):
+            i = _shell_expansion_end(raw, i)
+            continue
+        if raw.startswith("$(", i) or ch == "`":
+            end = _shell_expansion_end(raw, i)
+            bodies.append(raw[i + (2 if ch == "$" else 1) : end - 1])
+            i = end
+            continue
+        i += 1
+    return bodies
+
+
+def _strip_xargs(argv: list[str | None]) -> list[str | None] | None:
+    """The command `xargs [options]` runs, or None when argv is not an xargs call."""
+    if not argv or argv[0] is None or argv[0].rsplit("/", 1)[-1] != "xargs":
+        return None
+    i = 1
+    while i < len(argv):
+        word = argv[i]
+        if word is None or not word.startswith("-") or word == "-":
+            break
+        i += 1
+        if word == "--":
+            break
+        if word.startswith("--"):
+            continue
+        for pos, letter in enumerate(word[1:], start=1):
+            if letter in _XARGS_VALUE_OPTS:
+                i += 1 if pos == len(word) - 1 else 0
+                break
+    return argv[i:]
+
+
+def _kill_signal_and_targets(args: list[str | None]) -> tuple[bool, list[str | None]]:
+    """(sends a real signal, targets) for the arguments of one `kill`."""
+    i, sig = 0, "TERM"
+    first = args[0] if args else None
+    if first in ("-l", "-L"):
+        return False, []
+    if first in ("-s", "-n"):
+        sig, i = (args[1] if len(args) > 1 and args[1] else ""), 2
+    elif first and first != "--" and re.fullmatch(r"-(?:\d+|[A-Za-z][A-Za-z0-9]*)", first):
+        sig, i = first[1:], 1
+    if i < len(args) and args[i] == "--":
+        i += 1
+    return sig.upper() not in ("0", "SIG0", "ZERO"), args[i:]
+
+
+def _pkill_signal(arg: str) -> str | None:
+    """The signal a pkill's first argument names (pkill(1) `-signal`), or None for an option."""
+    if not arg.startswith("-") or len(arg) < 2:
+        return None
+    body = arg[1:]
+    if body.isdigit():
+        return str(int(body))
+    name = body.upper()
+    name = name[3:] if name.startswith("SIG") else name
+    return name if name in _PKILL_SIGNAL_NAMES else None
+
+
+def _scan_kill_text(cmd: str, scan: _KillScan, depth: int = 0) -> None:
+    """Record every kill selection in one command line, its substitutions and `sh -c` bodies."""
+    if depth > 6:
+        raise ValueError("command nests too deeply to scan")
+    pipeline: list[list[str]] = []
+    words: list[str] = []
+    for kind, raw, _start, _end in _iter_shell_syntax(cmd):
+        if kind == "word":
+            words.append(raw)
+            continue
+        if kind not in ("separator", "structure"):
+            continue  # redirections and their targets select nothing
+        if words:
+            pipeline.append(words)
+            words = []
+        if kind == "separator" and raw in ("|", "|&"):
+            continue
+        if pipeline:
+            _scan_kill_pipeline(pipeline, scan, depth)
+        pipeline = []
+    if words:
+        pipeline.append(words)
+    if pipeline:
+        _scan_kill_pipeline(pipeline, scan, depth)
+
+
+def _scan_kill_pipeline(stages: list[list[str]], scan: _KillScan, depth: int) -> None:
+    upstream: list[tuple[list[str], list[str]]] = []
+    for raw_words in stages:
+        kind, produced = _scan_kill_stage(raw_words, scan, depth)
+        if kind == "xargs-kill":
+            scan.selections += [("pgrep", argv, raw) for argv, raw in upstream]
+            upstream = []
+        elif kind == "loop":
+            scan.loop_pgreps += upstream
+            upstream = []
+        upstream += produced
+    scan.pgreps += upstream
+
+
+def _scan_kill_stage(
+    raw_words: list[str], scan: _KillScan, depth: int
+) -> tuple[str | None, list[tuple[list[str], list[str]]]]:
+    """Scan one simple command; return how it consumes piped input and the pgreps it prints."""
+    words = [_shlex_unquote_word(raw) for raw in raw_words]
+    scan.sudo |= "sudo" in words
+    _assigns, argv = _split_command_prefix(words)
+    stripped = _strip_xargs(argv)
+    if stripped is not None:
+        _assigns, argv = _split_command_prefix(stripped)
+    raw_argv = raw_words[len(raw_words) - len(argv) :] if argv else []
+    prog = argv[0].rsplit("/", 1)[-1] if argv and argv[0] else ""
+    sends, targets = _kill_signal_and_targets(argv[1:]) if prog == "kill" else (False, [])
+    loop_var = words[1] if words[0] == "for" and len(words) > 1 else None
+    produced: list[tuple[list[str], list[str]]] = []
+    for raw in raw_words:
+        if "$(" not in raw and "`" not in raw:
+            continue
+        for body in _substitution_bodies(raw):
+            inner = _KillScan()
+            _scan_kill_text(body, inner, depth + 1)
+            scan.merge(inner)
+            if not inner.pgreps:
+                continue
+            assigned = re.match(r"([A-Za-z_][A-Za-z0-9_]*)\+?=", raw)
+            if assigned or loop_var:
+                name = assigned.group(1) if assigned else loop_var
+                scan.var_pgreps.setdefault(name, []).extend(inner.pgreps)
+            elif prog == "kill":
+                if sends:  # `kill -0 $(pgrep …)` only probes
+                    scan.selections += [("pgrep", a, r) for a, r in inner.pgreps]
+            else:
+                produced += inner.pgreps  # e.g. `echo $(pgrep …)` prints them onward
+    if not prog:
+        return None, produced
+    if prog in _PKILL_SHELLS:
+        i = 1
+        while i < len(argv):
+            word = argv[i]
+            if word in ("-o", "+o", "-O", "+O"):
+                i += 2
+                continue
+            if word is None or not word.startswith(("-", "+")):
+                break
+            if re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", word):
+                if i + 1 < len(argv) and argv[i + 1] is not None:
+                    inner = _KillScan()
+                    _scan_kill_text(argv[i + 1], inner, depth + 1)
+                    scan.merge(inner)
+                    produced += inner.pgreps
+                break
+            i += 1
+        return None, produced
+    if prog == "eval":
+        inner = _KillScan()
+        _scan_kill_text(" ".join(a for a in argv[1:] if a is not None), inner, depth + 1)
+        scan.merge(inner)
+        return None, produced + inner.pgreps
+    if prog in ("pkill", "killall"):
+        scan.selections.append((prog, argv[1:], raw_argv[1:]))
+        return None, produced
+    if prog == "pgrep":
+        return None, produced + [(argv[1:], raw_argv[1:])]
+    if words[0] in ("while", "until") or prog == "read":
+        return "loop", produced
+    if prog != "kill" or not sends:
+        return None, produced
+    for target in targets:
+        if target is None:
+            scan.kill_dynamic = True
+            continue
+        if target == "-1":
+            scan.kill_all = True
+        refs = re.findall(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)", target)
+        scan.kill_refs.update(refs)
+        if refs or not re.fullmatch(r"-?\d+|%\S*", target):
+            scan.kill_dynamic = True
+    if stripped is not None:
+        scan.kill_dynamic = True
+        return "xargs-kill", produced
+    return None, produced
+
+
+def _pgrep_replay(tool: str, argv: list[str], raw_argv: list[str]) -> list[str] | None:
+    """The pgrep (killall: killall) arguments that select what this call signals.
+
+    None when the call cannot reach outside the caller's tree: it sends signal 0, prints a
+    list, is itself a dry run, or is pinned to a recorded PID or to the caller's children.
+    """
+    if any(a is None for a in argv) or len(argv) != len(raw_argv):
+        raise _DryRunError(f"a {tool} argument holds a command substitution")
+    if tool == "killall":
+        if any(a in ("-l", "-help", "-s", "-d") for a in argv):
+            return None
+        if any(_raw_expands(r) for r in raw_argv):
+            raise _DryRunError("a killall argument holds a shell expansion")
+        return ["-s"] + [a for a in argv if a != "-I"]
+    i = 0
+    if tool == "pkill" and argv:
+        sig = _pkill_signal(argv[0])
+        if sig == "0":
+            return None
+        i = 1 if sig is not None else 0
+    out: list[str] = []
+    while i < len(argv):
+        word = argv[i]
+        if word == "--":
+            i += 1
+            break
+        if not word.startswith("-") or word == "-":
+            break  # pgrep(1) parses with getopt: options end at the first pattern
+        if _raw_expands(raw_argv[i]):
+            raise _DryRunError(f"the {tool} option {raw_argv[i]} holds a shell expansion")
+        i += 1
+        kept = ""
+        for pos in range(1, len(word)):
+            letter = word[pos]
+            if letter not in _PGREP_VALUE_OPTS:
+                if letter not in _PGREP_OUTPUT_OPTS:
+                    kept += letter
+                continue
+            value = word[pos + 1 :]
+            raw_value = value
+            if not value:
+                if i >= len(argv):
+                    raise _DryRunError(f"{tool} -{letter} has no value")
+                value, raw_value = argv[i], raw_argv[i]
+                i += 1
+            if letter == "F" or (letter == "P" and raw_value.strip("'\"") in _PGREP_OWN_CHILDREN):
+                return None
+            if _raw_expands(raw_value):
+                raise _DryRunError(f"the {tool} -{letter} value {raw_value} holds a shell expansion")
+            if letter not in _PGREP_OUTPUT_OPTS:
+                if kept:
+                    out.append("-" + kept)
+                    kept = ""
+                out += ["-" + letter, value]
+            break
+        if kept:
+            out.append("-" + kept)
+    patterns, raw_patterns = argv[i:], raw_argv[i:]
+    if any(_raw_expands(r) for r in raw_patterns):
+        raise _DryRunError(f"a {tool} pattern holds a shell expansion")
+    return out + (["--"] + patterns if patterns else [])
+
+
+def _pkill_process_table() -> dict[int, tuple[int, int, str, str]]:
+    """pid -> (ppid, uid, etime, comm): one ps call, no argument vectors."""
+    proc = subprocess.run(
+        ["/bin/ps", "-axo", "pid=,ppid=,uid=,etime=,comm="], capture_output=True, text=True, timeout=10
+    )
+    if proc.returncode != 0:
+        raise _DryRunError(f"ps exited {proc.returncode}")
+    table: dict[int, tuple[int, int, str, str]] = {}
+    for line in proc.stdout.splitlines():
+        parts = line.split(None, 4)
+        if len(parts) == 5 and parts[0].isdigit() and parts[1].isdigit():
+            table[int(parts[0])] = (int(parts[1]), int(parts[2]), parts[3], parts[4])
+    if os.getpid() not in table:
+        raise _DryRunError("ps did not list this hook")
+    return table
+
+
+def _is_claude_process(pid: int, comm: str) -> bool:
+    """A Claude Code CLI: `claude`, a versioned binary (`2.1.319`), or node/bun running one."""
+    base = comm.rsplit("/", 1)[-1]
+    if base == "claude" or _CLAUDE_VERSION_COMM.fullmatch(base):
+        return True
+    if base not in ("node", "bun"):
+        return False
+    proc = subprocess.run(["/bin/ps", "-o", "args=", "-p", str(pid)], capture_output=True, text=True, timeout=10)
+    script = proc.stdout.split()[1:2]
+    return bool(script) and "claude" in script[0]
+
+
+def _pkill_caller_tree(table: dict[int, tuple[int, int, str, str]]) -> set[int]:
+    """The nearest Claude ancestor of this hook and its descendants (the hook's parent without one)."""
+    root, pid, seen = os.getppid(), os.getppid(), set()
+    while pid in table and pid > 1 and pid not in seen:
+        seen.add(pid)
+        if _is_claude_process(pid, table[pid][3]):
+            root = pid
+            break
+        pid = table[pid][0]
+    children: dict[int, list[int]] = {}
+    for child, (parent, _uid, _etime, _comm) in table.items():
+        children.setdefault(parent, []).append(child)
+    tree, stack = {root}, [root]
+    while stack:
+        for child in children.get(stack.pop(), []):
+            if child not in tree:
+                tree.add(child)
+                stack.append(child)
+    return tree
+
+
+def _pkill_matches(tool: str, replay: list[str]) -> set[int]:
+    if sys.platform != "darwin":
+        raise _DryRunError(f"the replay knows macOS {tool} only, not {sys.platform}")
+    binary = "/usr/bin/killall" if tool == "killall" else "/usr/bin/pgrep"
+    proc = subprocess.run([binary, *replay], capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL)
+    if tool == "killall":
+        pids = {int(m) for m in re.findall(r"^kill -\S+ (\d+)$", proc.stdout, re.M)}
+        if proc.returncode == 0 or (proc.returncode == 1 and "No matching processes" in proc.stdout + proc.stderr):
+            return pids
+    else:
+        if proc.returncode in (0, 1):
+            return {int(tok) for tok in proc.stdout.split() if tok.isdigit()}
+    reason = (proc.stderr.strip().splitlines() or [""])[0][:160]
+    raise _DryRunError(f"{binary} exited {proc.returncode}: {reason}")
+
+
+def _etime_seconds(etime: str) -> int:
+    """ps etime `[[dd-]hh:]mm:ss` in seconds; unreadable values sort last."""
+    try:
+        days, _sep, clock = etime.rpartition("-")
+        parts = [int(p) for p in clock.split(":")]
+        parts = [0] * (3 - len(parts)) + parts
+        return int(days or 0) * 86400 + parts[0] * 3600 + parts[1] * 60 + parts[2]
+    except ValueError:
+        return 1 << 62
+
+
+def _pkill_degraded(reason: str, cmd: str) -> GateResult:
+    _log_trigger("pkill-guard", "warn", f"degraded: {reason}"[:200], cmd)
+    msg = (
+        f"[DEGRADED] pkill guard could not dry-run: {reason}. Nothing checked what this kill "
+        "selects. Run its selection as `pgrep -f '<pattern>'` (or `killall -s`) first, and kill "
+        "what you started by its recorded PID."
+    )
+    return GateResult(0, "", json.dumps({"additionalContext": msg}))
+
+
+def gate_pkill_guard(raw_payload: str) -> GateResult:
     try:
         data = json.loads(raw_payload)
     except Exception:
         return GateResult(0, "", "")
     cmd = (data.get("tool_input") or {}).get("command", "") or ""
-    if not cmd or "pkill" not in cmd:
+    if "kill" not in cmd:
         return GateResult(0, "", "")
-    segments = re.split(r"&&|\|\||;|\||\n", cmd)
-    hits: list[str] = []
-    for seg in segments:
-        for pattern, has_dash_x in _pkill_f_patterns(seg):
-            if not _pkill_is_anchored(pattern, has_dash_x):
-                hits.append(pattern)
-    if not hits:
+    scan = _KillScan()
+    try:
+        _scan_kill_text(cmd, scan)
+        scan.resolve()
+    except ValueError as exc:
+        verbs = re.search(r"\b(?:pkill|killall)\b", cmd) or (
+            re.search(r"\bpgrep\b", cmd) and re.search(r"\bkill\b", cmd)
+        )
+        return _pkill_degraded(f"the command did not parse ({exc})", cmd) if verbs else GateResult(0, "", "")
+    if scan.kill_all:
+        _log_trigger("pkill-guard", "block", "kill -1", cmd)
+        return GateResult(
+            2,
+            "BLOCKED by the pkill guard: `kill` with target -1 signals every process you own, "
+            "this agent's terminal and every other session included. Kill what you started by "
+            "its recorded PID (or its process group, `kill -TERM -- -<pgid>`).\n",
+            "",
+        )
+    if not scan.selections:
         return GateResult(0, "", "")
-    pat_list = ", ".join(f"'{p}'" for p in hits)
+    try:
+        replays = []
+        for tool, argv, raw_argv in scan.selections:
+            replay = _pgrep_replay(tool, argv, raw_argv)
+            if replay is not None:
+                replays.append((tool, argv, replay))
+        if not replays:
+            return GateResult(0, "", "")
+        matched = [(tool, argv, _pkill_matches(tool, replay)) for tool, argv, replay in replays]
+        if not any(pids for _tool, _argv, pids in matched):
+            return GateResult(0, "", "")
+        table = _pkill_process_table()
+        tree = _pkill_caller_tree(table)
+    except _DryRunError as exc:
+        return _pkill_degraded(str(exc), cmd)
+    except Exception as exc:  # fail loud, never silent: the gate's own bug is an advisory
+        return _pkill_degraded(f"{type(exc).__name__}: {exc}", cmd)
+    uid = os.getuid()
+    victims: dict[int, str] = {}
+    for tool, argv, pids in matched:
+        for pid in sorted(pids):
+            row = table.get(pid)
+            if row is None or pid in tree or (row[1] != uid and not scan.sudo):
+                continue  # gone already, the caller's own, or not signalable without sudo
+            victims.setdefault(pid, shlex.join([tool, *argv]))
+    if not victims:
+        return GateResult(0, "", "")
+    _log_trigger("pkill-guard", "block", f"{len(victims)} outside the caller's tree", cmd)
+    lines = []
+    newest_first = sorted(victims, key=lambda pid: (_etime_seconds(table[pid][2]), pid))
+    for pid in newest_first[:_PKILL_LISTED_VICTIMS]:
+        _ppid, _uid, etime, comm = table[pid]
+        lines.append(f"  pid {pid:<7} etime {etime:<12} {comm.rsplit('/', 1)[-1]}")
+    if len(victims) > _PKILL_LISTED_VICTIMS:
+        lines.append(f"  … and {len(victims) - _PKILL_LISTED_VICTIMS} more")
+    selections = sorted(set(victims.values()))
     msg = (
-        f"ADVISORY: pkill -f pattern(s) [{pat_list}] look unanchored (no `/` path segment, "
-        "no leading `^`, no paired `-x`) — `-f` matches by SUBSTRING against the full command "
-        "line. Run `pgrep -fl '<pattern>' | redact-env` FIRST and read every match before killing anything; "
-        "anchor to a unique token (full path, `^`, or `-x`) once you've confirmed the match set. "
-        "(wakeup-cadence.md pkill discipline — 2 same-day incidents 2026-07-12, one killed a "
-        "healthy training client via `*forkDC*` matching the unrelated `forkDCH`.)"
+        f"BLOCKED by the pkill guard: {' and '.join(f'`{s}`' for s in selections)} would also "
+        f"signal {len(victims)} process(es) outside this agent's own process tree:\n"
+        + "\n".join(lines)
+        + "\n\npgrep, pkill and killall -m patterns are extended regular expressions (`|` is "
+        "alternation) matched against every process on this Mac; with -f they match the whole "
+        "argument list. On 2026-11-07 `pkill -f \"grep -qE \\\"passed|failed|error\\\"\"` killed "
+        "every lane and bgrun supervisor here. Kill what you started by its recorded PID: "
+        "`kill <pid>` (`$!` after a launch, a .pid file), `kill -TERM -- -<pgid>` for a job's "
+        "group, `lane stop <name>`, or TaskStop for your own background task. Or narrow the "
+        "pattern until `pgrep -f '<pattern>'` lists only processes you started.\n"
     )
-    out = json.dumps({"additionalContext": msg})
-    return GateResult(0, "", out)
+    return GateResult(2, msg, "")
 
 
 # --- 31. opus-concurrency-advisory (ADVISORY, no if) -------------------------
@@ -2966,7 +3411,7 @@ MANIFEST: list[dict] = [
     },
     # --- post-consolidation additions (2026-07-18), see section above ------
     {"name": "git-stash-guard", "if": None, "run": gate_git_stash_guard},
-    {"name": "pkill-anchor-guard", "if": None, "run": gate_pkill_anchor_guard},
+    {"name": "pkill-guard", "if": None, "run": gate_pkill_guard},
     {"name": "opus-concurrency-advisory", "if": None, "run": gate_opus_concurrency_advisory},
     # --- 2026-09-02: persistent cd into a lane worktree (genomics M122 recurrence) ---
     {"name": "worktree-cd-guard", "if": None, "run": gate_worktree_cd_guard},

@@ -17,14 +17,20 @@ from __future__ import annotations
 import fnmatch
 import json
 import os
+import re
 import runpy
+import signal
 import subprocess
 import sys
+import time
+import uuid
 
 import pytest
 
 HOOKS_DIR = os.path.dirname(os.path.abspath(__file__))
-DISPATCHER = os.path.join(HOOKS_DIR, "pretool-bash-dispatch.py")
+# Every Bash call on this machine runs the live dispatcher, so an edit is tested in a copy next
+# to it first (BASH_DISPATCH_PATH=<copy>) and moved over the live file only once this passes.
+DISPATCHER = os.environ.get("BASH_DISPATCH_PATH") or os.path.join(HOOKS_DIR, "pretool-bash-dispatch.py")
 SNAPSHOT = os.path.join(HOOKS_DIR, "_bash_gates_pre_dispatch_snapshot.json")
 _DISPATCHER_NAMESPACE = runpy.run_path(DISPATCHER)
 _GIT_NOEXT_VERDICT = _DISPATCHER_NAMESPACE["_git_noext_inject_verdict"]
@@ -914,34 +920,280 @@ def test_git_stash_block_row_carries_cmd_fingerprint(sandbox, tmp_path):
     assert "cmd" not in blocks[0]
 
 
-def test_pkill_unanchored_advises(sandbox):
-    envelope = {"tool_name": "Bash", "tool_input": {"command": "pkill -f forkDC"}}
-    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
+# --- pkill guard (gate 30): every kill selection is replayed with pgrep -------------
+# On 2026-11-07 13:12:25 CST a lane worker sent this command, verbatim from its transcript. pkill
+# read the quoted `|` as regex alternation and killed every lane and bgrun supervisor on the Mac;
+# the old advisory split the command on that `|` before shlex and said nothing.
+_KILL_1312 = (
+    'pkill -f "grep -qE \\"passed|failed|error\\"" ; '
+    "cd /Users/alien/Projects/arena/.claude/worktrees/codex-bots-rogue-imitation && "
+    "cat > ~/.cache/arena/bots-rogue-imitation/run.sh <<'EOF'\n"
+    "set -x\n"
+    "cd /Users/alien/Projects/arena/.claude/worktrees/codex-bots-rogue-imitation\n"
+    "uv sync --project bots || exit 10\n"
+    "uv run --no-sync --project bots pytest bots/tests -q || exit 11\n"
+    "cd bots && uv run --no-sync python -m arena_bots.imitate --episodes 24 --epochs 15 "
+    "--eval-episodes 24 --workers 4 --out /Users/alien/.cache/arena/bots-rogue-imitation/run || exit 12\n"
+    "EOF\n"
+    "BGRUN_DIR=~/.cache/arena/bgrun ~/Projects/skills/bin/bgrun imitate-run -- bash "
+    "~/.cache/arena/bots-rogue-imitation/run.sh; ls ~/.cache/arena/bgrun | grep imitate"
+)
+_PKILL_GATE = _DISPATCHER_NAMESPACE["gate_pkill_guard"]
+
+
+class _Decoys:
+    def __init__(self) -> None:
+        self.pids: list[int] = []
+        self.procs: list[subprocess.Popen] = []
+
+    def detached(self, *argv: str) -> int:
+        """Start argv reparented to launchd, as lane and bgrun supervisors are; return its pid.
+
+        A Popen child stays this test's descendant even in its own session, and so inside the
+        caller's tree; only a process launchd adopted lies outside it."""
+        script = (
+            'my $pid = fork(); die "fork: $!" unless defined $pid; if ($pid) { print $pid; exit 0 }'
+            ' POSIX::setsid(); open STDOUT, ">", "/dev/null"; open STDERR, ">", "/dev/null";'
+            " exec @ARGV or die"
+        )
+        out = subprocess.run(
+            ["perl", "-MPOSIX", "-e", script, *argv], capture_output=True, text=True, timeout=10, check=True
+        )
+        pid = int(out.stdout)
+        self.pids.append(pid)
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            ppid = subprocess.run(["ps", "-o", "ppid=", "-p", str(pid)], capture_output=True, text=True).stdout
+            if ppid.strip() == "1":
+                return pid
+            assert ppid.strip(), f"decoy {pid} exited before launchd adopted it"
+            time.sleep(0.05)
+        raise AssertionError(f"launchd never adopted decoy {pid}")
+
+    def child(self, *argv: str) -> subprocess.Popen:
+        proc = subprocess.Popen(list(argv), start_new_session=True)
+        self.procs.append(proc)
+        return proc
+
+
+@pytest.fixture
+def decoys():
+    started = _Decoys()
+    yield started
+    for pid in started.pids:  # by recorded PID only
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+    for proc in started.procs:
+        proc.kill()
+        proc.wait(timeout=10)
+
+
+def _wait_for_pgrep(args: list[str], pid: int) -> None:
+    """Positive control: the replay's own pgrep must see the decoy before a pass means anything."""
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        out = subprocess.run(["/usr/bin/pgrep", *args], capture_output=True, text=True).stdout.split()
+        if str(pid) in out:
+            return
+        time.sleep(0.05)
+    raise AssertionError(f"pgrep {args} never listed decoy {pid}")
+
+
+def _bash(command: str) -> dict:
+    return {"tool_name": "Bash", "tool_input": {"command": command}}
+
+
+def test_pkill_1312_command_blocks_with_a_decoy_outside_the_tree(sandbox, decoys):
+    decoy = decoys.detached("perl", "-e", "sleep 60", "failed")
+    disp = run_dispatcher(_bash(_KILL_1312), sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 2
+    assert "BLOCKED by the pkill guard" in disp["block_msg"]
+    assert re.search(rf"pid {decoy}\s", disp["block_msg"]), "the decoy is not among the named victims"
+    assert "failed" not in disp["block_msg"].split("\n\n")[0].split("\n", 1)[1], "argv leaked"
+
+
+def test_pkill_alternation_passes_when_only_the_callers_child_matches(sandbox, decoys):
+    """The 13:12 shape (quoted alternation under pkill -f) with a token no other process on a
+    busy Mac carries, so the only match is this test's own child."""
+    tok = uuid.uuid4().hex[:10]
+    child = decoys.child("perl", "-e", "sleep 60", f"failed{tok}")
+    _wait_for_pgrep(["-f", f"failed{tok}"], child.pid)
+    command = f'pkill -f "grep -qE \\"passed{tok}|failed{tok}|error{tok}\\""'
+    disp = run_dispatcher(_bash(command), sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0, disp["block_msg"]
+    assert "pkill guard" not in (disp.get("additionalContext") or "")
+
+
+def test_pkill_without_any_match_passes_silently(sandbox):
+    disp = run_dispatcher(_bash(f"pkill -f 'nothing-runs-{uuid.uuid4().hex}'"), sandbox["env"], sandbox["cwd"])
     assert disp["exit_code"] == 0
-    assert disp.get("additionalContext") and "unanchored" in disp["additionalContext"]
+    assert "pkill guard" not in (disp.get("additionalContext") or "")
 
 
-def test_pkill_anchored_by_path_silent(sandbox):
-    envelope = {"tool_name": "Bash", "tool_input": {"command": "pkill -f /usr/bin/foo"}}
-    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
-    assert disp["exit_code"] == 0
-    assert not disp.get("additionalContext")
+@pytest.mark.parametrize(
+    "template",
+    [
+        "pkill -f {pat}",
+        "pgrep -f {pat} | xargs kill",
+        "kill $(pgrep -f {pat})",
+        "for p in $(pgrep -f {pat}); do kill -9 $p; done",
+        "bash -c 'pkill -f {pat}'",
+    ],
+)
+def test_pattern_kills_block_a_detached_decoy(sandbox, decoys, template):
+    pat = f"pkd{uuid.uuid4().hex[:10]}"
+    decoy = decoys.detached("perl", "-e", "sleep 60", pat)
+    disp = run_dispatcher(_bash(template.format(pat=pat)), sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 2
+    assert re.search(rf"pid {decoy}\s", disp["block_msg"])
 
 
-def test_pkill_anchored_by_dash_x_silent(sandbox):
-    envelope = {"tool_name": "Bash", "tool_input": {"command": "pkill -x -f process_name"}}
-    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
-    assert disp["exit_code"] == 0
-    assert not disp.get("additionalContext")
+def test_killall_blocks_a_detached_decoy_and_passes_a_child(sandbox, decoys, tmp_path):
+    """killall selects by process name; a symlink gives the decoy a unique one (a copied
+    /bin/sleep dies under code signing). killall skips no ancestors, unlike pkill."""
+    outside, inside = (f"pkd{uuid.uuid4().hex[:8]}" for _ in range(2))
+    for name in (outside, inside):
+        (tmp_path / name).symlink_to("/bin/sleep")
+    decoy = decoys.detached(str(tmp_path / outside), "60")
+    disp = run_dispatcher(_bash(f"killall {outside}"), sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 2
+    assert re.search(rf"pid {decoy}\s", disp["block_msg"])
+    child = decoys.child(str(tmp_path / inside), "60")
+    _wait_for_pgrep(["-x", inside], child.pid)
+    disp = run_dispatcher(_bash(f"killall -m '^{inside}$'"), sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 0, disp["block_msg"]
 
 
-def test_pkill_bare_name_no_dash_f_not_flagged(sandbox):
-    """Not the -f substring-danger case the rule targets — bare `pkill name`
-    matches by process name only, a different (less risky) mode."""
-    envelope = {"tool_name": "Bash", "tool_input": {"command": "pkill forkDCH"}}
-    disp = run_dispatcher(envelope, sandbox["env"], sandbox["cwd"])
-    assert disp["exit_code"] == 0
-    assert not disp.get("additionalContext")
+@pytest.mark.parametrize("command", ["kill -9 -1", "kill -- -1", "kill -TERM -- -1", "sudo kill -s KILL -1"])
+def test_kill_of_every_process_blocks(sandbox, command):
+    disp = run_dispatcher(_bash(command), sandbox["env"], sandbox["cwd"])
+    assert disp["exit_code"] == 2
+    assert "target -1" in disp["block_msg"]
+
+
+def _kill_replays(command: str) -> list[tuple[str, list[str] | None]]:
+    scan = _DISPATCHER_NAMESPACE["_KillScan"]()
+    _DISPATCHER_NAMESPACE["_scan_kill_text"](command, scan)
+    scan.resolve()
+    replay = _DISPATCHER_NAMESPACE["_pgrep_replay"]
+    return [(tool, replay(tool, argv, raw)) for tool, argv, raw in scan.selections]
+
+
+def test_pkill_quoted_alternation_parses():
+    """The old gate cut `pkill -f "a|b"` at the quoted `|`, shlex failed, and it saw nothing."""
+    assert _kill_replays('pkill -f "a|b"') == [("pkill", ["-f", "--", "a|b"])]
+    assert _kill_replays(_KILL_1312) == [("pkill", ["-f", "--", 'grep -qE "passed|failed|error"'])]
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        ("pkill -9 -fl 'sleep 999'", [("pkill", ["-f", "--", "sleep 999"])]),
+        ("sudo /usr/bin/pkill -KILL -x -f foo", [("pkill", ["-x", "-f", "--", "foo"])]),
+        ("timeout 5 pkill -u501 -fd, foo", [("pkill", ["-u", "501", "-f", "--", "foo"])]),
+        ("pkill foo -f", [("pkill", ["--", "foo", "-f"])]),
+        ("killall -m 'lane.*'", [("killall", ["-s", "-m", "lane.*"])]),
+        ("killall -9 -I caffeinate", [("killall", ["-s", "-9", "caffeinate"])]),
+        ("pgrep -f x | xargs kill", [("pgrep", ["-f", "--", "x"])]),
+        ("pgrep -f x | head -1 | xargs -r kill -9", [("pgrep", ["-f", "--", "x"])]),
+        ("pgrep -f x | xargs -I{} kill -TERM {}", [("pgrep", ["-f", "--", "x"])]),
+        ("kill $(pgrep -f x)", [("pgrep", ["-f", "--", "x"])]),
+        ("kill -9 `pgrep -f 'y|z'`", [("pgrep", ["-f", "--", "y|z"])]),
+        ("for p in $(pgrep -f x); do kill $p; done", [("pgrep", ["-f", "--", "x"])]),
+        ('pids=$(pgrep -f "a|b"); [ -n "$pids" ] && kill $pids', [("pgrep", ["-f", "--", "a|b"])]),
+        ("pgrep -f x | while read p; do kill $p; done", [("pgrep", ["-f", "--", "x"])]),
+        ('bash -c "pkill -f foo"', [("pkill", ["-f", "--", "foo"])]),
+        ("bash -o pipefail -c 'pgrep -f x | xargs kill'", [("pgrep", ["-f", "--", "x"])]),
+        ('eval "pkill -f foo"', [("pkill", ["-f", "--", "foo"])]),
+        # Pinned to a recorded PID or the caller's own children, signal 0, or a dry run itself.
+        ("pkill -F ~/.cache/x.pid", [("pkill", None)]),
+        ("pkill -P $$ -f foo", [("pkill", None)]),
+        ("pkill -0 -f foo", [("pkill", None)]),
+        ("killall -s caffeinate", [("killall", None)]),
+        # pgrep output that feeds no kill, a probe, data and remote commands select nothing.
+        ("pgrep -f autoland; kill 4567", []),
+        ("kill $(cat ~/.cache/x.pid); sleep 1; pgrep -f myjob || echo gone", []),
+        ("kill -0 $(pgrep -f x)", []),
+        ("kill -1 1234", []),
+        ('echo "pkill -f x"; git log --grep kill', []),
+        ("# pkill -f x", []),
+        ("cat > a.sh <<'EOF'\npkill -f foo\nEOF", []),
+        ("ssh host pkill -f foo", []),
+    ],
+)
+def test_kill_selection_forms(command, expected):
+    assert _kill_replays(command) == expected
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "ls -la",
+        "git status",
+        'git commit -m "kill the old path"',
+        "rg -n killall src/",
+        "echo pkill is dangerous",
+        "pgrep -f autoland",
+        "pgrep -f autoland; kill 4567",
+        "cat <<'EOF'\npkill -f x\nEOF",
+        "kill -0 $(pgrep -f x)",
+        "kill -1 1234",
+        "pkill -0 -f x",
+        "pkill -F job.pid",
+        "pkill -P $$ -f x",
+    ],
+)
+def test_pkill_guard_spawns_nothing_without_a_kill_selection(monkeypatch, command):
+    calls: list = []
+
+    def refuse(*args, **kwargs):
+        calls.append(args[0] if args else kwargs.get("args"))
+        raise AssertionError("the pkill guard spawned a process")
+
+    for name in ("run", "Popen", "check_output", "check_call", "call"):
+        monkeypatch.setattr(subprocess, name, refuse)
+    assert tuple(_PKILL_GATE(json.dumps(_bash(command)))) == (0, "", "")
+    assert calls == []
+
+
+@pytest.mark.parametrize("command", ["pkill -f 'a|b'", 'pkill -f "unbalanced', 'pkill -f "$PATTERN"'])
+def test_pkill_guard_degrades_loudly_when_it_cannot_replay(monkeypatch, command):
+    monkeypatch.setenv("HOOK_TRIGGER_LOG", os.devnull)
+    real_run = subprocess.run
+
+    def no_pgrep(argv, *args, **kwargs):
+        if str(argv[0]).endswith("pgrep"):
+            raise FileNotFoundError(argv[0])
+        return real_run(argv, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", no_pgrep)
+    result = _PKILL_GATE(json.dumps(_bash(command)))
+    assert result.code == 0
+    context = json.loads(result.stdout)["additionalContext"]
+    assert context.startswith("[DEGRADED] pkill guard could not dry-run: ")
+
+
+@pytest.mark.parametrize("comm", ["claude", "/Users/alien/.local/bin/claude", "2.1.319"])
+def test_pkill_caller_tree_is_the_nearest_claude_and_its_descendants(monkeypatch, comm):
+    """Process shapes seen on 2026-11-07: an interactive session's comm is the symlink path it
+    was started by, a lane's `claude -p` worker shows `claude`, a versioned binary its version."""
+    hook, shell, agent, supervisor = 50001, 50002, 50003, 50004
+    sibling, agent_tool, other_lane = 50005, 50006, 50007
+    table = {
+        hook: (shell, 501, "00:00", "python3"),
+        shell: (agent, 501, "00:00", "/bin/sh"),
+        agent: (supervisor, 501, "10:00", comm),
+        supervisor: (1, 501, "10:01", "bash"),
+        agent_tool: (agent, 501, "05:00", "/opt/homebrew/bin/zsh"),
+        sibling: (supervisor, 501, "10:00", "caffeinate"),
+        other_lane: (1, 501, "20:00", "bash"),
+    }
+    monkeypatch.setattr(os, "getppid", lambda: shell)
+    assert _DISPATCHER_NAMESPACE["_pkill_caller_tree"](table) == {agent, shell, hook, agent_tool}
+    table[agent] = (supervisor, 501, "10:00", "python3")  # no Claude ancestor: the hook's parent
+    assert _DISPATCHER_NAMESPACE["_pkill_caller_tree"](table) == {shell, hook}
 
 
 def _fake_pgrep_bin(tmp_path, n_lines):
