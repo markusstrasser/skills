@@ -1642,6 +1642,20 @@ def test_kills_from_untraceable_sources_degrade_loudly(monkeypatch, command, rea
     assert reason in context
 
 
+def test_degraded_reasons_are_capped(monkeypatch):
+    """A script of 3,000 `kill $pidN` lines put 167 KB of reasons into one additionalContext."""
+    monkeypatch.setenv("HOOK_TRIGGER_LOG", os.devnull)
+    long_pattern = "x$y" * 2000  # a reason quotes the argument it could not replay
+    command = f'kill $(pgrep -f "{long_pattern}")\n' + "\n".join(f"kill $pid{n}" for n in range(3000))
+    result = _PKILL_GATE(json.dumps(_bash(command)))
+    assert result.code == 0
+    context = json.loads(result.stdout)["additionalContext"]
+    assert context.startswith('[DEGRADED] pkill guard could not dry-run: the pgrep argument "x$yx$y')
+    assert "a kill reads $pid0, which this command does not set; " in context
+    assert "; and 2996 more. Nothing checked" in context
+    assert len(context) < 2500
+
+
 @pytest.mark.parametrize(
     "command",
     [

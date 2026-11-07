@@ -2235,6 +2235,8 @@ _XARGS_VALUE_OPTS = frozenset("EIJLPRSns")
 _PKILL_SHELLS = frozenset({"bash", "sh", "zsh", "dash", "ksh"})
 _AGENT_VERSION_COMM = re.compile(r"\d+\.\d+\.\d+")
 _PKILL_LISTED_VICTIMS = 15
+_PKILL_LISTED_REASONS = 5
+_PKILL_REASON_CHARS = 300
 # The test before any parse: a kill-family word where a shell could run it (see below).
 _KILL_WORD_RE = re.compile(r"(?<![\w.\-])(?:p?kill|killall)(?![\w.\-/])")
 _KILL_SEGMENT_START_RE = re.compile(r"[\n;(){}`'\"!]|(?<!>)\||(?<![<>])&(?!>)")
@@ -3432,7 +3434,15 @@ def _etime_seconds(etime: str) -> int:
         return 1 << 62
 
 
-def _pkill_degraded(reason: str, cmd: str) -> GateResult:
+def _pkill_degraded(reasons: list[str], cmd: str) -> GateResult:
+    """The advisory for kills the guard could not replay, naming the first few reasons, each cut
+    short: a script of 3,000 `kill $pidN` lines put 167 KB into one additionalContext."""
+    unique = list(dict.fromkeys(reasons))
+    cap = _PKILL_REASON_CHARS
+    shown = [r if len(r) <= cap else r[: cap - 1] + "…" for r in unique[:_PKILL_LISTED_REASONS]]
+    if len(unique) > len(shown):
+        shown.append(f"and {len(unique) - len(shown)} more")
+    reason = "; ".join(shown)
     _log_trigger("pkill-guard", "warn", f"degraded: {reason}"[:200], cmd)
     msg = (
         f"[DEGRADED] pkill guard could not dry-run: {reason}. Nothing checked what this kill "
@@ -3457,9 +3467,9 @@ def gate_pkill_guard(raw_payload: str) -> GateResult:
     except ValueError as exc:  # the lexer refused the text; a pid kill needs no advisory
         if not _KILL_SELECTING_WORDS_RE.search(cmd):
             return GateResult(0, "", "")
-        return _pkill_degraded(f"the command did not parse ({exc})", cmd)
+        return _pkill_degraded([f"the command did not parse ({exc})"], cmd)
     except Exception as exc:  # fail loud, never silent: the gate's own bug is an advisory
-        return _pkill_degraded(f"the scan failed ({type(exc).__name__}: {exc})", cmd)
+        return _pkill_degraded([f"the scan failed ({type(exc).__name__}: {exc})"], cmd)
     if scan.kill_all:
         _log_trigger("pkill-guard", "block", "kill -1", cmd)
         return GateResult(
@@ -3488,9 +3498,9 @@ def gate_pkill_guard(raw_payload: str) -> GateResult:
             table = _pkill_process_table()
             tree = _pkill_caller_tree(table)
     except _DryRunError as exc:
-        return _pkill_degraded(str(exc), cmd)
+        return _pkill_degraded([str(exc)], cmd)
     except Exception as exc:  # fail loud, never silent: the gate's own bug is an advisory
-        return _pkill_degraded(f"{type(exc).__name__}: {exc}", cmd)
+        return _pkill_degraded([f"{type(exc).__name__}: {exc}"], cmd)
     uid = os.getuid()
     victims: dict[int, str] = {}
     for tool, raw_argv, pids in matched:
@@ -3502,7 +3512,7 @@ def gate_pkill_guard(raw_payload: str) -> GateResult:
     if not victims:
         reasons = unreplayable + scan.unknown
         if reasons:
-            return _pkill_degraded("; ".join(dict.fromkeys(reasons)), cmd)
+            return _pkill_degraded(reasons, cmd)
         return GateResult(0, "", "")
     _log_trigger("pkill-guard", "block", f"{len(victims)} outside the caller's tree", cmd)
     lines = []
