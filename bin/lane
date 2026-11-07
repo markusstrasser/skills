@@ -1304,11 +1304,15 @@ release_locks() {
 # then writes the metadata that names the supervisor's process group, so a second launch of the name between those
 # steps saw no live lane. On 2026-11-07 two launches of one name raced: the first supervisor deleted the prompt file
 # the second needed, the second exited 125 with no marker and an empty log, and the metadata named the dead one. The
-# lock spans the check to the metadata write; a launch that finds it held is refused, not queued.
+# lock spans the check to the metadata write; a launch that finds it held is refused, not queued. cmd_resume takes it
+# before it stops the lane, and launch_worker then keeps the lock this run holds.
 lock_lane_launch() {
   local name="$1"
   local lock="$LANE_HOME/.launch-$name.lock"
   local holder
+  if [ "$LAUNCH_LOCK" = "$lock" ] && [ "$(cat "$lock/pid" 2>/dev/null || true)" = "$$" ]; then
+    return 0
+  fi
   mkdir -p "$LANE_HOME"
   if ! mkdir "$lock" 2>/dev/null; then
     stale_lock "$lock" || {
@@ -2137,6 +2141,9 @@ cmd_resume() {
       *) die "unknown resume option: $1" ;;
     esac
   done
+  # Before the metadata read, the note claim and stop_lane: when launch_worker took the lock after them, a resume
+  # refused because another launch of the name held it had already stopped the lane and claimed its note.
+  lock_lane_launch "$name"
   metadata=$(metadata_path "$name")
   [ -f "$metadata" ] || unknown_lane "$name"
   repo=$(json_get "$metadata" repo) || die "invalid metadata: $metadata"

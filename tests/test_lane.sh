@@ -1138,6 +1138,28 @@ grep -Fq "lane: re-sending the interrupted run's note: $LANE_HOME/first.resume-n
 wait_for_file "$LANE_HOME/first.done"
 assert_eq "Revision note for the stopped run." "$(head -1 "$LANE_HOME/first.log")" "stopped-run note re-sent"
 
+echo "test: a resume refused by its name's launch lock leaves the lane running and its note unclaimed"
+# The resume claimed its note and stopped the lane before launch_worker took the lock, so the refusal left it DEAD.
+LANE_FAKE_HOLD="$TEST_TMP/release-lockedresume" "$LANE" resume first --no-note >/dev/null
+lockedresume_pid=$(json_value "$LANE_HOME/first.json" pid)
+mkdir "$LANE_HOME/.launch-first.lock"
+printf '%s\n' "$$" >"$LANE_HOME/.launch-first.lock/pid"
+printf '%s\n' 'Note for the refused resume.' >"$TEST_TMP/lockednote.txt"
+if lockedresume_output=$("$LANE" resume first --note "$TEST_TMP/lockednote.txt" 2>&1); then
+  fail "a resume ran while another launch of its name held the lock"
+fi
+grep -Fq "another launch of first holds $LANE_HOME/.launch-first.lock (pid $$)" <<<"$lockedresume_output" ||
+  fail "the refused resume did not name the lock and its holder: $lockedresume_output"
+assert_eq "RUNNING" "$(state_for first)" "a lane whose resume was refused"
+assert_eq "$lockedresume_pid" "$(json_value "$LANE_HOME/first.json" pid)" "the refused resume's lane pid"
+assert_no_file "$LANE_HOME/first.resume-note.md"
+assert_no_file "$LANE_HOME/first.resume-note.consumed-4.md"
+rm "$LANE_HOME/.launch-first.lock/pid"
+rmdir "$LANE_HOME/.launch-first.lock"
+touch "$TEST_TMP/release-lockedresume"
+wait_for_file "$LANE_HOME/first.done"
+assert_eq "EXIT=0" "$(<"$LANE_HOME/first.done")" "the held lane after the refused resume"
+
 echo "test: --no-note re-sends the note of a failed run, then drops it after success"
 "$LANE" run notefail --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null
 wait_for_file "$LANE_HOME/notefail.done"
