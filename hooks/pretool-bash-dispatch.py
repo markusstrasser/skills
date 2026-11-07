@@ -3017,7 +3017,14 @@ _CMD_WRAPPER_VALUE_OPTS = {
     "env": {"-u", "--unset", "-C", "--chdir", "-S", "--split-string"},
     "timeout": {"-k", "--kill-after", "-s", "--signal"},
     "sudo": {"-u", "-g", "-h", "-p", "-C", "-D", "-R", "-T", "-U"},
+    # macOS wrappers that run their operand: lane workers run under /usr/bin/nice, bgrun jobs
+    # under caffeinate; `lockf [-t s] FILE cmd`, `arch -arch x86_64 cmd`.
+    "nice": {"-n"},
+    "caffeinate": {"-t", "-w"},
+    "lockf": {"-t"},
+    "arch": {"-arch", "-d", "-e"},
 }
+_CMD_WRAPPER_OPERANDS = {"timeout": 1, "lockf": 1}  # DURATION, FILE
 _CMD_TRANSPARENT_WORDS = {"!", "{", "if", "then", "else", "elif", "do", "while", "until", "nohup", "builtin"}
 _ASSIGNMENT_WORD_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$", re.S)
 
@@ -3042,13 +3049,13 @@ def _split_command_prefix(words: list[str | None]) -> tuple[dict[str, str], list
                 i += 1
             if i < n and words[i] in ("-v", "-V"):
                 return assigns, []
-        elif word in _CMD_WRAPPER_VALUE_OPTS:
-            value_opts = _CMD_WRAPPER_VALUE_OPTS[word]
+        elif word.rsplit("/", 1)[-1] in _CMD_WRAPPER_VALUE_OPTS:  # `/usr/bin/nice` too
+            wrapper = word.rsplit("/", 1)[-1]
+            value_opts = _CMD_WRAPPER_VALUE_OPTS[wrapper]
             i += 1
             while i < n and words[i] is not None and words[i].startswith("-") and words[i] != "-":
                 i += 2 if words[i] in value_opts else 1
-            if word == "timeout":
-                i += 1  # DURATION
+            i += _CMD_WRAPPER_OPERANDS.get(wrapper, 0)
         else:
             break
     return assigns, list(words[i:])

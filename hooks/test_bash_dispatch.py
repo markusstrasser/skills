@@ -1110,6 +1110,13 @@ def test_pkill_quoted_alternation_parses():
         ('bash -c "pkill -f foo"', [("pkill", ["-f", "--", "foo"])]),
         ("bash -o pipefail -c 'pgrep -f x | xargs kill'", [("pgrep", ["-f", "--", "x"])]),
         ('eval "pkill -f foo"', [("pkill", ["-f", "--", "foo"])]),
+        # Wrappers that run their operand, by name or by path.
+        ("nice -n 10 pkill -f foo", [("pkill", ["-f", "--", "foo"])]),
+        ("/usr/bin/nice -5 pkill -f foo", [("pkill", ["-f", "--", "foo"])]),
+        ("caffeinate -i -t 60 pkill -f foo", [("pkill", ["-f", "--", "foo"])]),
+        ("lockf -k -t 0 /tmp/x.lock pkill -f foo", [("pkill", ["-f", "--", "foo"])]),
+        ("arch -arch arm64 bash -c 'pkill -f foo'", [("pkill", ["-f", "--", "foo"])]),
+        ("/usr/bin/env FOO=1 pkill -f foo", [("pkill", ["-f", "--", "foo"])]),
         # Pinned to a recorded PID or the caller's own children, signal 0, or a dry run itself.
         ("pkill -F ~/.cache/x.pid", [("pkill", None)]),
         ("pkill -P $$ -f foo", [("pkill", None)]),
