@@ -2,7 +2,8 @@
 """lane-retire — harvest a finished lane's checkout, then remove it.
 
 lane runs this when a worker exits, and `lane reap --force` runs it by hand. The harvest goes to
-<harvest-root>/<name>.harvest/<UTC stamp>/ and is never overwritten:
+<harvest-root>/<name>.harvest/<UTC stamp>/ and is never overwritten. A harvest whose diffs, head, cache and
+ignored files equal the lane's newest one is not written twice: the checkout retires into that one. Each harvest:
   lane.patch     every change against HEAD: tracked edits, then each untracked file as an add (--binary --full-index)
   commits.patch  format-patch <base>..HEAD, written only when the lane committed
   cache/         .claude/cache/ (results, messages, exported patches), minus derived trees
@@ -500,11 +501,34 @@ def harvest(args, checkout):
     partial.mkdir(parents=True)
     try:
         write_harvest(args, checkout, statuses, copy_list, watched, unchanged, sorted(tagged), before, partial)
+        earlier = same_deliverables(lane_dir, partial)
     except BaseException:
         shutil.rmtree(partial, ignore_errors=True)
         raise
+    if earlier:
+        shutil.rmtree(partial)
+        return earlier, head
     partial.rename(final)
     return final, head
+
+
+def deliverables(harvest):
+    """What a harvest hands its intake, by label and hash: the diffs, the head, the cache and the ignored files. The
+    log, ledger, brief and status are the run's record, not its work."""
+    files = json.loads((harvest / "MANIFEST.json").read_text(encoding="utf-8"))["files"]
+    return {label: entry for label, entry in files.items()
+            if label in ("lane.patch", "commits.patch", "head.txt") or label.startswith(("cache/", "ignored/"))}
+
+
+def same_deliverables(lane_dir, partial):
+    """The lane's newest earlier harvest when the new one hands over exactly its work, else None. A reap of a checkout
+    kept after its harvest wrote a second, byte-identical stamp, and arena's autoland took each new stamp for new
+    work: on 2026-11-08 three reaped superseded lanes restarted two finished rebase lanes and handed back a read
+    that had passed (client-first-cast-warm-rb1, env-schema-contract-rb1, core-mount-packets-fix)."""
+    stamps = sorted(path for path in lane_dir.glob("*Z") if path.is_dir() and path != partial)
+    if not stamps or not (stamps[-1] / "MANIFEST.json").is_file():
+        return None
+    return stamps[-1] if deliverables(stamps[-1]) == deliverables(partial) else None
 
 
 def write_harvest(args, checkout, statuses, copy_list, watched, unchanged, tagged, before, partial):

@@ -40,7 +40,7 @@ cleanup() {
   fi
   # The live-lane test gives a running lane a fake marker, and lane stop signals no lane that has one.
   rm -f "$LANE_HOME/archlive.done"
-  for name in first rvcommit rvnobase hang inline codexargs codexoverride codexuvcache apicap2 claudeargs claudeoverride claudedirs ocargs ocquota ocquotalate failure rvcache rvown rvnone retire1 retirefail retirebusy retireread hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit capa capb capfree nice0 escape; do
+  for name in first rvcommit rvnobase hang inline codexargs codexoverride codexuvcache apicap2 claudeargs claudeoverride claudedirs ocargs ocquota ocquotalate failure rvcache rvown rvnone retire1 retirefail retirebusy retiresnap retireread hook1 hook2 ochook arch1 arch1.b archkeep archco archbound archlive archexit capa capb capfree nice0 escape; do
     if [ -f "$LANE_HOME/$name.json" ]; then
       "$LANE" stop "$name" >/dev/null 2>&1 || true
     fi
@@ -1448,6 +1448,48 @@ harvest = Path(sys.argv[1])
 assert json.loads((harvest / "MANIFEST.json").read_text())["exit_code"] == 0, "a reaped DONE:0 lane says exit 0"
 assert json.loads((harvest / "lane.json").read_text())["name"] == "retirebusy"
 PY
+
+echo "test: a reap of a kept checkout its newest harvest already holds writes no second harvest"
+# arena's autoland snapshots a --keep-checkout lane with lane-retire's harvest function and keeps the
+# checkout; a later reap of the unchanged checkout wrote a byte-identical second stamp, which autoland
+# took for new work (three reaped superseded lanes restarted two rebase lanes, 2026-11-08).
+LANE_FAKE_HOLD="$TEST_TMP/release-retiresnap" "$LANE" run retiresnap --repo "$REPO" --brief "$BRIEF" --worker fake \
+  --keep-checkout >/dev/null
+SNAP_WT="$REPO_REAL/.claude/worktrees/codex-retiresnap"
+printf '%s\n' "snapshot edit" >>"$SNAP_WT/tracked.txt"
+mkdir -p "$SNAP_WT/.claude/cache"
+printf '%s\n' "**Verdict:** done" >"$SNAP_WT/.claude/cache/retiresnap-result.md"
+touch "$TEST_TMP/release-retiresnap"
+wait_for_file "$LANE_HOME/retiresnap.done"
+grep -q '^CHECKOUT=kept launched with --keep-checkout' "$LANE_HOME/retiresnap.checkout-state" ||
+  fail "the kept lane was not kept: $(<"$LANE_HOME/retiresnap.checkout-state")"
+snapshot_kept() {
+  python3 - "$(dirname "$LANE")/lane-retire" "$1" "$SNAP_WT" "$REPO_REAL" "$LANE_HOME" <<'PY'
+import json
+import runpy
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+api = runpy.run_path(sys.argv[1], run_name="lane_retire_snapshot")
+# As arena's autoland.snapshot_kept builds them, from the lane's ledger.
+meta = json.loads((Path(sys.argv[5]) / f"{sys.argv[2]}.json").read_text())
+args = SimpleNamespace(name=sys.argv[2], mode="worktree", checkout=sys.argv[3], repo=sys.argv[4],
+                       base=meta.get("checkout_base") or meta.get("base", ""), branch=meta.get("branch", ""),
+                       harvest_root=sys.argv[5], allow_root=[], log="", brief="", exit_code=0,
+                       keep="snapshot", reap=False, meta="", done="")
+print(api["harvest"](args, Path(sys.argv[3]))[0])
+PY
+}
+SNAP_FIRST=$(snapshot_kept retiresnap)
+[ -d "$SNAP_FIRST" ] || fail "the snapshot wrote no harvest: $SNAP_FIRST"
+assert_eq "$SNAP_FIRST" "$(snapshot_kept retiresnap)" "an unchanged checkout's second snapshot"
+printf '%s\n' "**Verdict:** done, rewritten" >"$SNAP_WT/.claude/cache/retiresnap-result.md"
+SNAP_SECOND=$(snapshot_kept retiresnap)
+[ "$SNAP_SECOND" != "$SNAP_FIRST" ] || fail "a changed result file reused the earlier harvest"
+reap_output=$("$LANE" reap retiresnap --force 2>&1)
+grep -Fxq "CHECKOUT=retired $SNAP_SECOND" <<<"$reap_output" || fail "the reap did not retire into the newest harvest: $reap_output"
+assert_eq "2" "$(find "$LANE_HOME/retiresnap.harvest" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" "harvests after the reap"
+[ ! -e "$SNAP_WT" ] || fail "the reaped checkout still exists"
 
 echo "test: a reader of a moment inside the checkout does not keep it"
 LANE_RETIRE_SETTLE_S=60 LANE_FAKE_HOLD="$TEST_TMP/release-retireread" \
