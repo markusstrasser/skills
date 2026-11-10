@@ -21,6 +21,7 @@ typeCheckingMode = "basic"
 
 [tool.pytest.ini_options]
 # Root on sys.path so tests import `shared.*`. Hook tests shell out per case and run in
-# parallel: 189s -> 39s for test_bash_dispatch.py; loadfile keeps a file's tests on one worker.
+# parallel: 189s -> 39s for test_bash_dispatch.py. loadgroup + conftest.py keeps loadfile
+# semantics (one group per module) except for modules in conftest.PER_TEST_MODULES.
 pythonpath = ["."]
-addopts = "-n auto --dist loadfile"
+addopts = "-n auto --dist loadgroup"
