@@ -20,9 +20,10 @@ Ids, prices and context windows below come from llmx (`usage_report.PRICING`, `C
 | Model | llmx name | $/MTok in/out | Notes |
 |---|---|---|---|
 | GPT-6 Luna | `gpt-6-luna` | $0.10 / $0.50 | Cheapest GPT; effort `none`…`max` |
-| Claude Fable 5.1 | `claude-fable-5-1` | $10 / $50 | `--subscription` only; never fall back to paid API |
+| Claude Fable 5.2 | `claude-fable-5-2` | $8 / $40 | `--subscription` only; never fall back to paid API. Fable 5.1 retired 2026-11-10 |
 | Claude Opus 5 | `claude-opus-5` | $5 / $25 | Exact id for cyber / dual-use biology work (Opus 5.5 classifier niches) |
-| Claude Sonnet 5 / Haiku 4.5 | `claude-sonnet-5`, `claude-haiku-4-5` | | Not on the subscription allowlist; `anthropic-direct` (metered) or the Agent tool |
+| Claude Sonnet 5.5 | `claude-sonnet-5-5` | $2 / $10 | `--subscription` (claude-cli) since 2026-11-10; replaces Sonnet 5 |
+| Claude Haiku 5.5 | `claude-haiku-5-5` | $0.10 / $0.50 (≤100K prompt), $0.50 / $2.50 above | `--subscription` since 2026-11-10; replaces Haiku 4.5 (the dated `claude-haiku-4-5-20251001` stays routable as claude-cli's helper id) |
 | Grok 4.7 (Cursor pool) | `grok-4.7-{low,medium,high,xhigh}[-fast]` | subscription | **No `cursor-` prefix**; effort is in the slug, `-e` is ignored. Rederive with `cursor-agent models` |
 | Grok 4.7 (Grok Build / xAI) | `grok-4.7` | $2 / $6 | `llmx chat -p grok -m grok-4.7 -e low\|medium\|high\|xhigh`; 500K context. xAI API 403 "key blocked" = key status |
 | Kimi K3 | `kimi-k3` | $3 / $15 | `-p kimi`, metered; max-thinking server-side; temperature 1.0 |
@@ -52,7 +53,7 @@ Ids, prices and context windows below come from llmx (`usage_report.PRICING`, `C
 
 `gemini-3.8-flash` ($0.75/$3.75 intro; still the `-p google`/vision/batch default), `gemini-3.1-pro-preview` (explicit `-m` one-offs only; retired from routing 2026-06-13), `gemini-3.5-flash-lite` / `gemini-3.1-flash-lite` (priced, not routed), `deepseek-flash` on the DeepSeek platform (`-p deepseek`, peak-rate priced $0.30/$1.20).
 
-**Refused by llmx (exit 2 `retired_model`, successor named):** every `gpt-5*` id, `gemini-3-flash-preview`, `gemini-3.5/3.6/3.7-flash`, `gemini-3-pro-preview`, `grok-4`, `grok-4.5`, `grok-4.6` / `cursor-grok-4.6-*`, `grok-4.20-*`, `grok-4-1-fast-*`, `claude-fable-5`, `claude-opus-4-8`, `composer-2.5(-fast)`. Full map: `llmx/model_ids.py` `RETIRED_API_MODELS`.
+**Refused by llmx (exit 2 `retired_model`, successor named):** every `gpt-5*` id, `gemini-3-flash-preview`, `gemini-3.5/3.6/3.7-flash`, `gemini-3-pro-preview`, `grok-4`, `grok-4.5`, `grok-4.6` / `cursor-grok-4.6-*`, `grok-4.20-*`, `grok-4-1-fast-*`, `claude-fable-5`, `claude-fable-5-1`, `claude-sonnet-5`, `claude-haiku-4-5` (2026-11-10), `claude-opus-4-8`, `composer-2.5(-fast)`. Full map: `llmx/model_ids.py` `RETIRED_API_MODELS`.
 
 ## Image models
 
