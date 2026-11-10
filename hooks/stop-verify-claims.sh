@@ -174,7 +174,7 @@ for m in FILE_CLAIMS.finditer(msg):
     # Skip prose placeholders ("file X", "wrote file Y") — require a real
     # filename shape (.ext or a path separator). This lexical false-positive
     # class (witnessed 2026-06-15 on a summary explaining the concept) is what
-    # the semantic stop-smart-judge.sh replaces; tighten the regex so it stops
+    # a semantic judge was tried for (retired 2026-11-10); the regex stops
     # nagging on prose that merely discusses file-creation claims.
     if not re.search(r"\.[A-Za-z0-9]{1,6}$|/", filepath):
         continue
