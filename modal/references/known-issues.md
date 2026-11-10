@@ -33,4 +33,12 @@ Append-only incident history. Consult for a matching failure; dated entries may 
 
 - **[2026-10-15] Modal 1.6.1 FunctionCreate refuses (server-side, no client check): serialized=True fn on a different Python minor than the image; nonpreemptible=True on GPU fns; scaledown_window<2. Volume mounts are symlinks to /__modal/volumes/<id> — resolve() before O_NOFOLLOW-style authenticated readers. genomics 2026-10-15 p15 probe.**
 
+- **[2026-10-26] Function.starmap([]) (empty iterable) inside a remote function never returns on SDK 1.6.1: probe driver hit its 300 s timeout, genomics hifi-dv-probe driver stuck 25 min (ap-TreMymADq9tN6hOo8yz5Rs, 2026-10-26). Guard: `... if items else []`.**
+
+- **[2026-10-28] ephemeral_disk requests must be 524288-3145728 MiB (Modal 1.6.1, 2026-10-28: "Function disk request out of bounds: 65536 MiB"); references/resources.md examples 10240 and 51200 are now refused at launch — omit the param for <512 GiB needs**
+
 - **[2026-11-02] [2026-11-02] Network address change (en0 192.168.0.71 -> .99, ~16:20 KST) left two Modal clients (genomics stage_image_import_probe, Python 3.12 clients) on half-open TCP to api/blob endpoints; function.remote() has no deadline, so 9 calls hung 37 min with 0 containers and 0 app logs while a fresh probe scheduled in seconds. Tell: lsof shows ESTABLISHED sockets from a local IP that ifconfig no longer lists. Fix: kill the client; guard: bound the client wall (subprocess timeout) and treat expiry as transport failure.**
+
+- **[2026-11-05] Path(__file__).parents[N] raises IndexError inside a container, where the script sits near the root: resolve the repo root another way**
+
+- **[2026-11-05] Function.with_options(gpu=[...]) refuses a GPU fallback list with InvalidError; pass one string or set the list on the decorator**

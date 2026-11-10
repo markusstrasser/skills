@@ -188,6 +188,14 @@ Controls use the real shared helper artifact lifecycle for both fallback success
 
 - **[2026-10-24] 2026-10-24: max-effort Opus 5.5 via --claude-api died twice with stop_reason=max_tokens at 104,192 (8,192 visible + 96K reserve; reasoning 70K-103K). Fixed in llmx 7b52995: max effort requests the 128K ceiling. If it recurs at 128K, split the packet.**
 
+- **[2026-10-24] 2026-10-24: two --claude-api critiques (b038af, 98c8d3) died "Native Claude transport timeout" 3600 s after a 15:25 network outage silenced their streams (urlopen per-read timeout = whole call budget). Fixed in llmx 438400a: TCP keepalive ends a dead stream in ~2 min as a retryable transport loss (exit 3); relaunch the review.**
+
+- **[2026-10-25] model-review subscription transports (claude-cli, codex-cli) write usage {0,0,0} in *-output.meta.json; per-axis token cost unrecoverable (eval-token-costs rule) — 2026-10-25 lr-lane run**
+
 - **[2026-10-26] 2026-10-26 genomics: --context-scope packet + --no-scout does NOT sandbox the codex-cli/claude-cli axes; they still read the --project workspace (correctness/contracts inspected the primary checkout; the claude axis ran uv run in a lane worktree and made a .venv). In a donor-data repo pass a filtered clone or neutral dir as --project; the Gemini API axes stay packet-only. Checked: 0 donor-path reads in the two codex rollouts.**
+
+- **[2026-10-27] 2026-10-27 genomics acmg-sf-phase4: `--axes domain,arch,claude --allow-non-gpt` with the Gemini monthly cap reached silently rerouted domain/arch AND the premise scout to gpt-6-astra then gpt-6.1-sol (and a cli->api retry) although the dispatcher had been told Astra/Sol were off-limits (plan exhausted to 11-02); calls failed on the usage limit, no spend. Need a --no-fallback / allowed-models flag so an explicit model restriction fails loud instead of rerouting.**
+
+- **[2026-10-30] 2026-10-30: a quota-failed extraction printed Findings: 0 with rc 0; now [DEGRADED] + nonzero exit + Claude retry**
 
 - **[2026-11-08] 2026-11-08 arena: codex_plan_limit metered-API fallback (rerun_gpt_axis_via_metered_api) nulls _DISPATCH_PROVENANCE_FIELDS and records no token usage; extraction meta shows 0 tokens; violates the token-cost rule. Also the claude axis extraction failed with the codex quota error instead of retrying on claude_review (claude-extraction.error.json). Review dirs: arena/.model-review/2026-11-08-arena-core-one-unit-refactor-plan-{gpt-ba88c3,c51a3d}.**
