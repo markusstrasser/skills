@@ -38,8 +38,8 @@ doc, once. `hooks/test_provenance_tags.py` fails if any enforcer drifts from it.
 `[ClinGen]` `[CPIC]` `[gnomAD]` `[OMIM]`
 
 ## Consumers (the enforcers that load this, not re-state it)
-- `hooks/pretool-source-remind.sh`, `hooks/postwrite-source-check-semantic.sh`,
-  `hooks/subagent-source-check-stop.sh` — bash gates
+- `hooks/pretool-source-remind.sh`, `hooks/subagent-source-check-stop.sh` — bash gates
+  (`postwrite-source-check-semantic.sh` was retired 2026-11-10: never wired)
 - `~/Projects/agent-infra/scripts/epistemic-lint.py` — cross-repo static lint (reads this regex)
 - (`hooks/source-check-validator.py` is NOT a consumer — it parses `[SOURCE:]` payloads, a
   different job than tag-presence; it stays independent.)

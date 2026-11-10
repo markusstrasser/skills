@@ -9,7 +9,7 @@ import importlib.util
 import re
 from pathlib import Path
 
-# precommit-trigger: provenance_tags.re provenance_tags.json gen_provenance_re.py provenance-tags.md pretool-source-remind.sh postwrite-source-check-semantic.sh subagent-source-check-stop.sh pretool-research-provenance-warn.sh stop-research-gate.sh postwrite-knowledge-index.py test_provenance_tags.py
+# precommit-trigger: provenance_tags.re provenance_tags.json gen_provenance_re.py provenance-tags.md pretool-source-remind.sh subagent-source-check-stop.sh pretool-research-provenance-warn.sh stop-research-gate.sh postwrite-knowledge-index.py test_provenance_tags.py
 # ^ validate-changed-hooks.sh runs this test when any of these is staged (so re-inlining the
 #   taxonomy can't land). Opt-in: a test with no trigger line is never run by the pre-commit gate.
 
@@ -21,11 +21,8 @@ CANON = (HOOKS / "provenance_tags.re").read_text(encoding="utf-8").strip()
 # citation forms: URLs, markdown links, colon/comma-qualified tags). DELIBERATELY EXCLUDED:
 #   - source-check-validator.py — parses [SOURCE:] payload STRUCTURE (URL present etc.), not presence.
 #   - postwrite-source-check.sh — tag list is only in comments; gating delegates to the validator.
-#   - postwrite-source-check-semantic.sh's density-count subset — a narrower "substantive-citation
-#     density" heuristic that intentionally omits hedge tags; not the presence taxonomy.
 ENFORCERS = [
     HOOKS / "pretool-source-remind.sh",
-    HOOKS / "postwrite-source-check-semantic.sh",
     HOOKS / "subagent-source-check-stop.sh",
     HOOKS / "pretool-research-provenance-warn.sh",
     HOOKS / "stop-research-gate.sh",
