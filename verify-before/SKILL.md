@@ -158,7 +158,7 @@ fills: *"agents have no natural access to their own pre-action expected outcome
 ... narrative defaults to present-tense outcome framing without the temporal
 structure needed to separate prediction from result."* Pre-registration IS that
 temporal structure. The existing FM25 surfaces (`stop-unsupported-completion.sh`
-shadow hook + session-analyst) detect the *symptom* (a claim with no cited
+shadow hook + `/observe sessions`) detect the *symptom* (a claim with no cited
 prediction); this mode prevents the *cause*.
 
 The other two modes act *before spending* and *before claiming*. This one acts

@@ -235,8 +235,8 @@ For a consequential-but-smaller decision that SURVIVED framing: Phase 0 → 1 (i
 disagree-self-check and the completeness check — those are never optional.
 
 ## Honest limitation
-This skill encodes one operator's process (n=1 origin). After 2-3 real uses, run `/observe` or
-session-analyst over its transcripts and tune the checklists against what actually recurs — not what
+This skill encodes one operator's process (n=1 origin). After 2-3 real uses, run `/observe` over its
+transcripts and tune the checklists against what actually recurs — not what
 the author guessed would. If an arc hits a skill defect or fresh friction, log it in the moment:
 `~/Projects/skills/hooks/append-skill-memento.sh decide '<one-line issue>'`.
 
