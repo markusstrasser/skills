@@ -94,7 +94,7 @@ Commit with message like:
 [research] Register <DATASET_ID> — <brief why>
 ```
 
-Body (per commit-conventions.md for `research/` paths):
+Body (agent-infra CLAUDE.md, commits touching `research/`):
 > Names the concept (dataset) and what changed directionally (added / updated / moved to acquired).
 
 ## Evidence
