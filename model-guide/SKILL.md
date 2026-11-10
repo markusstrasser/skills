@@ -23,17 +23,17 @@ Choose a model and effort from the principles below, then read the model's refer
 9. **Route classifier niches by exact id.** Opus 5.5 re-routes most cyber work to Opus 4.8 and declines dual-use biology: send that work to `claude-opus-5` by exact id.
 10. **Work the principal verifies (taste, voice, conviction) stays with the operator.** Models draft and critique; a model judge does not make taste verifiable.
 
-## Roster (Pareto frontier, 2026-10-26; why each is on the frontier: [roster.md](references/roster.md))
+## Roster (Pareto frontier, 2026-11-10; why each is on the frontier: [roster.md](references/roster.md))
 
-**Newest picks (operator 2026-10-26: "newest models always"):** `gpt-6.1-sol`, `gpt-6-astra`, `claude-opus-5-5`, `gemini-4-argon`. Pin an older id only when an eval or a classifier niche (principle 9) requires it.
+**Newest picks (operator 2026-10-26: "newest models always"):** `gpt-6.1-sol`, `gpt-6-astra`, `claude-opus-5-5`, `gemini-4-argon`; Claude tiers `claude-fable-5-2`, `claude-sonnet-5-5`, `claude-haiku-5-5` (2026-11-10). Pin an older id only when an eval or a classifier niche (principle 9) requires it.
 
 | Model | Role | Transport |
 |---|---|---|
 | [claude-opus-5-5](references/models/claude-opus-5-5.md) | Default Claude: coding (`medium`), hard work (`xhigh`), architecture (`max`), research (`high`+) | Subscription: `opus` alias, Agent tool, `llmx --subscription` |
-| [claude-fable-5-1](references/models/claude-fable-5-1.md) | Named-edge lane; the operator's interactive choice | Subscription (Max allowance), claude-cli |
+| [claude-fable-5-2](references/models/claude-fable-5-2.md) | Named-edge lane: knowledge/table/workflow work, long agentic coding at `high`/`xhigh` (not `max`), orchestrator; vendor claims unmeasured locally | Subscription (`fable` alias, `llmx --subscription`), Fable allowance |
 | [claude-opus-5](references/models/claude-opus-5.md) | Cyber and dual-use biology work; lanes pinned to it | Subscription, exact id only |
-| [claude-sonnet-5](references/models/claude-sonnet-5.md) | Cost tier: gated coding, no-gate mechanical work, injection-heavy input | Agent tool / `claude -p`; not on the llmx subscription allowlist |
-| claude-haiku-4-5 | Cheapest Claude for mechanical no-gate work | Agent tool; llmx anthropic-direct |
+| [claude-sonnet-5-5](references/models/claude-sonnet-5-5.md) | Cost tier: gated coding, no-gate mechanical work, injection-heavy input | Subscription: `sonnet` alias, Agent tool, `llmx --subscription` |
+| claude-haiku-5-5 | Cheapest Claude: classification, routing, extraction, hook judges ($0.10/$0.50 under 100K prompt tokens, $0.50/$2.50 above; adaptive thinking, default `medium`) | Subscription: `haiku` alias, `llmx --subscription` |
 | [gpt-6-astra](references/models/gpt-6-astra.md) | Default GPT: headless cheap lane at `low` (incl. the `/critique` premise scout and `/diff-review` scout), Codex implementation, cross-lab reviewer, quantitative work (pro mode) | codex-cli subscription (`llmx --subscription`, `codex exec`) |
 | [gpt-6.1-sol](references/models/gpt-6.1-sol-luna.md) | Metered mid tier; fallback when Astra's plan limit binds | Codex subscription + API |
 | [gpt-6-luna](references/models/gpt-6.1-sol-luna.md) | Metered bulk extraction and mechanical work | Codex subscription + API |
@@ -45,17 +45,17 @@ Choose a model and effort from the principles below, then read the model's refer
 
 Older / pinned only: `gemini-3.8-flash` (still llmx's default for `-p google`, vision and batch: pass `-m gemini-4-argon`), `gemini-3.1-pro-preview`, `gemini-3.5/3.1-flash-lite` (priced, not routed). llmx refuses `-p deepinfra` (retired 2026-10-26).
 
-Retired 2026-09-25 (operator: allowlists hold the Pareto frontier only): every model not in this table; git history keeps their old guidance. Retired 2026-10-07 (operator: "outdated"): composer-2.5 and composer-2.5-fast; successor gpt-6-astra at `low` effort, with gpt-6.1-sol at `high` when Astra's plan limit binds.
+Retired 2026-09-25 (operator: allowlists hold the Pareto frontier only): every model not in this table; git history keeps their old guidance. Retired 2026-10-07 (operator: "outdated"): composer-2.5 and composer-2.5-fast; successor gpt-6-astra at `low` effort, with gpt-6.1-sol at `high` when Astra's plan limit binds. Retired 2026-11-10 (dominated: successor is cheaper or same price): `claude-fable-5-1` → `claude-fable-5-2`, `claude-sonnet-5` → `claude-sonnet-5-5`, `claude-haiku-4-5` → `claude-haiku-5-5`.
 
 ## Settled operator decisions
 
 - Claude runs on the subscription only; the metered API requires an explicit request.
-- Architecture, design and high-reasoning critique use Opus `max` plus GPT-6 Astra, never Sonnet (2026-06-20). **Open:** whether Sonnet 5 changes that verdict is the operator's call ([details](references/models/claude-sonnet-5.md)).
+- Architecture, design and high-reasoning critique use Opus `max` plus GPT-6 Astra, never Sonnet (2026-06-20). **Open:** whether Sonnet 5.5 changes that verdict is the operator's call ([details](references/models/claude-sonnet-5-5.md)).
 - Allowlists hold the Pareto frontier only (2026-09-25). llmx refuses retired ids with the successor named.
 - Gemini is an ordinary metered provider (critique-only gate lifted 2026-10-14).
 - DeepSeek runs on LithosAI only (2026-10-26); DeepInfra is retired.
 - GLM-5.2 is an opt-in cosigner, not an extractor (2026-06-19).
-- Moving the interactive setting off Fable 5.1 is the operator's call.
+- The interactive model is the operator's call: Opus 5.5 since 2026-11-10 (`/model`), Fable 5.1 before.
 - `opus-low` is licensed for briefed, gated execution only; research and synthesis run at `medium` or higher.
 
 ## References
@@ -63,13 +63,13 @@ Retired 2026-09-25 (operator: allowlists hold the Pareto frontier only): every m
 - Per-model specs, prompting and watch-items: [references/models/](references/models/). Prompting guides: [Claude](references/PROMPTING_CLAUDE.md), [GPT](references/PROMPTING_GPT.md).
 - Choosing an executor tier (the "Dispatch Economics" section other skills cite): [dispatch-economics.md](references/dispatch-economics.md). Cosigner defaults: [cosigner-defaults.md](references/cosigner-defaults.md).
 - Verified lanes and llmx facts: [transport.md](references/transport.md).
-- Scores: [BENCHMARKS.md](references/BENCHMARKS.md). System-card digests: [Opus 5.5](references/opus-5-5-system-card.md), [Opus 5](references/opus-5-system-card.md), [Sonnet 5](references/sonnet-5-system-card.md).
+- Scores: [BENCHMARKS.md](references/BENCHMARKS.md). System-card digests: [Fable 5.2](references/fable-5-2-system-card.md), [Opus 5.5](references/opus-5-5-system-card.md), [Opus 5](references/opus-5-system-card.md), [Sonnet 5](references/sonnet-5-system-card.md).
 - Checks after output: [validation-checklists.md](references/validation-checklists.md). Sources: [source-notes.md](references/source-notes.md). History: [CHANGELOG](references/CHANGELOG.md).
 
 ## When to Update This Skill
 
 When a model is released or a system card is materially revised (full wording: end of [CHANGELOG.md](references/CHANGELOG.md)):
-1. Read the model card; update `references/models/<slug>.md`, `references/BENCHMARKS.md` and the prompting guide.
+1. Read the model card and the platform models overview (it lists every current tier, so it catches sibling releases); update `references/models/<slug>.md`, `references/BENCHMARKS.md` and the prompting guide.
 2. Update the roster row here and in [roster.md](references/roster.md); register the id in llmx (`llmx info` must show it).
 3. Prune dominated ids from llmx allowlists and the roster and migrate every caller; inventory first (`rg -c`, then page through all matches).
 4. Update [transport.md](references/transport.md) when a lane starts or stops serving its claimed model; re-probe, don't assume.

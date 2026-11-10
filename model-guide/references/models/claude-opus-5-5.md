@@ -4,6 +4,8 @@
 
 **Opus 5.5** (`claude-opus-5-5`, 2026-09-22) is the recommended Claude default for headless, review and analysis work: it matches or beats Fable 5.1 on most of its card at 40% of Fable's token price (§ Claude Opus 5.5). The `opus` alias already serves it. Lanes pinned to `claude-opus-5` stay on Opus 5 until re-pinned, and cyber or dual-use biology work belongs there. Moving the interactive setting off Fable 5.1 is the operator's call. Preserve explicit task and fallback selections; a fallback example does not redefine the general routing role.
 
+**Against Fable 5.2 (2026-11-09, vendor):** Opus 5.5 stays the vendor-recommended daily driver at half Fable 5.2's token price. It keeps the lead on long context (ProgramBench 91.2 vs 85.6) and both Elo rows, and trails on knowledge work, workflows and `xhigh` coding (models/claude-fable-5-2.md). Its comparison with Fable 5.1 below is history; Fable 5.1 is retired.
+
 ## Claude Opus 5.5 — recommended Claude default (2026-09-22)
 
 **Operational specs:** `claude-opus-5-5`. $4/$20 per MTok, cache reads $0.20, batch $2/$10; Fast mode $8/$40 (Claude API and Claude Code). 1M context, 128K output, Opus 5 tokenizer, knowledge cutoff June 2026. Thinking is always on; effort runs `low` to `max` with an API default of **`medium`**. Output is more than 30% faster than Opus 5. Digest with system-card section numbers: [references/opus-5-5-system-card.md](../opus-5-5-system-card.md).

@@ -1,14 +1,15 @@
-# Claude Opus 5.5, Opus 5 & Fable 5.1 Prompting Guide
+# Claude Opus 5.5, Fable 5.2, Opus 5 & Sonnet/Haiku 5.5 Prompting Guide
 
-**Last updated:** 2026-09-28
-**Scope:** Claude Opus 5.5 (recommended default since 2026-09-22), Opus 5 (exact-ID lanes; cyber and dual-use biology), Fable 5.1 (named-edge lane). Opus 5.5 re-routes most cyber work to Opus 4.8 server-side; route cyber to Opus 5 by exact id.
+**Last updated:** 2026-11-10
+**Scope:** Claude Opus 5.5 (recommended default since 2026-09-22), Opus 5 (exact-ID lanes; cyber and dual-use biology), Fable 5.2 (named-edge lane, replaced 5.1 on 2026-11-10), Sonnet 5.5 and Haiku 5.5 (cost tiers). Opus 5.5 re-routes most cyber work to Opus 4.8 server-side; route cyber to Opus 5 by exact id.
 
 
-## Opus 5.5 vs Opus 5 vs Fable 5.1 — when to reach for which
+## Opus 5.5 vs Fable 5.2 vs Opus 5 — when to reach for which
 
 - **Opus 5.5** (`claude-opus-5-5`, 2026-09-22): **default Claude.** Matches or beats Fable 5.1 on most rows of its system card at $4/$20. Set effort explicitly (API default `medium`) and keep research at `medium` or above. Digest: [opus-5-5-system-card.md](opus-5-5-system-card.md).
 - **Opus 5** (`claude-opus-5`): exact-ID lane since 2026-09-22; the `opus` alias now serves 5.5. Near-Fable capability at $5/$25. Long-horizon agentic coding, architecture, review, professional work, bio (Fable bio blocks route here). Prefer over Fable for daily work; re-sweep effort — `low`/`medium` often enough.
-- **Fable 5.1** (`claude-fable-5-1`): named-edge lane (see [claude-fable-5-1.md](models/claude-fable-5-1.md)); on the Max subscription allowance.
+- **Fable 5.2** (`claude-fable-5-2`, 2026-11-09): named-edge lane at $8/$40 (see [claude-fable-5-2.md](models/claude-fable-5-2.md)); counts against the plan's Fable allowance.
+- **Sonnet 5.5 / Haiku 5.5** (`claude-sonnet-5-5`, `claude-haiku-5-5`): cost tiers; both run adaptive thinking by default, so size `max_tokens` for thinking and set effort explicitly.
 
 ## Opus 5.5 prompting deltas (vs Opus 5)
 
@@ -44,13 +45,29 @@ Source: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering
 - Coding/agentic start: effort **`xhigh`**; architecture **`max`**; gated mechanical **`low`**.
 - Full vendor guide: https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5
 
-## Fable specifics (carried from Fable 5; re-verify on 5.1)
+## Fable 5.2 prompting deltas (vendor guide, read 2026-11-10)
+
+Source: [Prompting Claude Fable 5.2](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-2). Vendor-run testing; re-check on our verifiers.
+
+- **Re-sweep effort; start at `high`.** Names do not carry over from 5.1 or Opus 5.5. `low` scored near Fable 5.1 at higher effort; most of the gain is at `high`; `xhigh` adds a little at many more tokens; `max` is for ceiling measurement (and scores below `xhigh` on FrontierCode).
+- **"Don't deliberate" lines no longer work.** At `medium`+ it thinks before almost every reply, even a greeting. Lower effort for easy turns instead of instructing brevity of thought.
+- **It stops early at `low`/`medium`.** For unattended agentic work, add the vendor "Finishing work" block (diagnose ordinary obstacles and work through them; leave deliberate blockers alone and report them). It cost about 30% more output tokens and halved sessions ending with doable work left.
+- **Name approval scopes exactly.** It applies approval rules as written: one rule naming "messages to people outside this conversation" made it hold back half of its routine requests. Reply with the concrete go-ahead ("yes, run the migration on staging"), not "continue".
+- **Ownership sentence changes refactoring.** "This codebase is yours…" made it merge repeated code in about half of tries vs under a tenth without, at ~1.5× output tokens and occasional unrequested behavior changes; review the diff, not the summary. Omit it where the user wants minimal change.
+- **Caution piles up.** Accumulated "never" notes, reviewer conditions and memory cautions are followed closely, especially in multi-agent setups. Write the exception into the rule itself and name steps that need no approval (e.g. safe retries).
+- **Delegation lines get followed.** Review standing "use subagents" text in skills and agent files; at `xhigh`/`max` it also spawns self-review subagents.
+- **Prompt token budgets raise spend.** Removing a large in-prompt budget cut cost at equal quality (`high`/`xhigh`). The card's ProgramBench result cuts the other way for long single-agent runs (a remaining-token counter lifted 85.6 → 91.6); test both on the workload.
+- **Never edit earlier turns.** The preserved-thinking prefix check returns 400 when `system`, `tools` or an earlier message changed; put new instructions in the newest turn.
+- **Asking it to write out its reasoning trips the `reasoning_extraction` classifier.** Read `thinking` blocks with `display: "summarized"` instead.
+- **Style rules are followed literally** (hard sentence-length caps make prose choppy); trim them before adding report-format text.
+
+## Fable specifics (carried from Fable 5; still apply to 5.2 per its docs)
 
 - Adaptive thinking is **always on and the only mode** — no `disabled`, no thinking budgets.
 - **Raw CoT is never returned.** `thinking.display` defaults to `"omitted"`; use `"summarized"` for readable summaries. Never instruct the model to recite/echo/explain its reasoning as response text — it trips the `reasoning_extraction` classifier and silently falls back to Opus 4.8. Read the structured `thinking` blocks instead.
 - **Steer with brief instructions, not enumerations.** Instruction-following is strong enough that one short instruction beats listing each behavior. Prior-model skills are often *too* prescriptive and can degrade Fable output — trim them.
 - **Longer turns by default** at higher effort (minutes per request, hours for autonomous runs). Raise client timeouts; check in asynchronously rather than blocking.
-- **Don't surface context/token countdowns** — they trigger premature handoff/summarize behavior.
+- **Context/token countdowns: test per workload.** Fable 5 handed off early when shown one; the Fable 5.2 card shows a remaining-token counter *helping* on ProgramBench (85.6 → 91.6).
 - Lower effort on Fable often exceeds prior-model `xhigh`. Default `high`; `xhigh` for capability-sensitive work.
 
 ## Use these models for

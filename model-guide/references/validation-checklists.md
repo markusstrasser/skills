@@ -12,12 +12,18 @@
 - [ ] Treat reasoning traces as diagnostics, not proof.
 - [ ] For "nothing found" or "done" claims, prefer deterministic null checks over model confidence.
 
-### After Claude Sonnet 5
+### After Claude Sonnet 5.5 (items carried from Sonnet 5; re-measure)
 - [ ] Bind completion to parsed evidence — disclosed training-health issue + highest abstention rate of compared models on closed-book recall (AA-Omniscience) are reasons for slightly less trust in self-report than usual.
 - [ ] Watch for prefill/system-prompt-susceptibility — numerically the weakest of the compared models on this axis (absolute rates still low).
-- [ ] If the dispatch is architecture/design/high-reasoning critique, don't route here — that verdict hasn't been revisited for Sonnet 5 (see OPEN QUESTION).
-- [ ] On long agentic loops, check actual turn/token count against Opus 5.5 before assuming the lower $/token wins on $/task — Sonnet 5 runs more turns on long-horizon work in its own benchmarks.
-- [ ] Keep prompt-injection boundaries around tool outputs (though Sonnet 5 measures strongest-in-class here).
+- [ ] If the dispatch is architecture/design/high-reasoning critique, don't route here — that verdict hasn't been revisited for Sonnet 5.5 (see OPEN QUESTION).
+- [ ] On long agentic loops, check actual turn/token count against Opus 5.5 before assuming the lower $/token wins on $/task — Sonnet 5 ran more turns on long-horizon work in its own card; 5.5 is unmeasured.
+- [ ] Keep prompt-injection boundaries around tool outputs (Sonnet 5.5: 3.0% adaptive-attacker success in the Fable 5.2 card §5.2.2).
+
+### After Claude Fable 5.2
+- [ ] Check the method, not only the answer: its new reward-hack mode is guessing the answer key and skipping required tool use (card §6.2.1).
+- [ ] On unattended runs at `low`/`medium`, check for an early stop with doable work left (6–13% of coding sessions; 63% of open-ended research sessions at `medium`).
+- [ ] On long single-agent runs, check whether it exhausted context before finishing (68% of ProgramBench tasks).
+- [ ] If the work was cyber, bio or injection-heavy, check which model actually answered: blocked requests fall back to Opus 4.8 (cyber) or Opus 5 (bio).
 
 ### After Claude Opus 5.5
 - [ ] Confirm the served model when it matters: the `opus` alias moved to `claude-opus-5-5` on 2026-09-22; exact-ID lanes still serve Opus 5.

@@ -1,7 +1,31 @@
 # Frontier Model Benchmarks
 
-**Last updated:** 2026-10-14
-**Active scope:** Claude Opus 5.5 (primary since 2026-09-22), Fable 5.1, Claude Opus 5 (exact-ID lanes), GPT-6 Astra, Grok 4.7 (vendor launch table in [grok-4-7.md](models/grok-4-7.md)). Retired models' tables were removed 2026-09-25; git history keeps them. Comparisons to retired models remain only where a vendor used them as a baseline for a current model.
+**Last updated:** 2026-11-10
+**Active scope:** Claude Opus 5.5 (primary since 2026-09-22), Fable 5.2 (replaced 5.1 on 2026-11-10; 5.1 columns stay as vendor baselines), Claude Opus 5 (exact-ID lanes), GPT-6 Astra, Grok 4.7 (vendor launch table in [grok-4-7.md](models/grok-4-7.md)). Retired models' tables were removed 2026-09-25; git history keeps them. Comparisons to retired models remain only where a vendor used them as a baseline for a current model.
+
+## Claude Fable 5.2 launch (2026-11-09) — vendor table
+
+Vendor-run; Fable 5.2, Fable 5.1 and Opus 5.5 include safeguards unless noted. Effort as published (max unless marked). Card digest with section numbers and effort curves: [fable-5-2-system-card.md](fable-5-2-system-card.md).
+
+| Evaluation | Fable 5.2 | Fable 5.1 | Opus 5.5 | GPT-6 Astra | Gemini 4 Carbon | Routing read |
+|---|---:|---:|---:|---:|---:|---|
+| FrontierCode 2.0 | **49.1** (xhigh) | 32.4 | 45.5 | 42.8 | 41.1 | `high` = 45.3 at $6.72/task vs Opus 5.5 $12.82; `max` 45.7 at $44.70 |
+| FrontierSWE v2 | **69.9** | 56.3 | 62.3 | 65.5 | 61.2 | |
+| AutomationBench | 51.4 | 31.4 | 42.5 | 41.4 | **53.9** | |
+| Terminal-Bench-Science 0.1 | **74.6** | 52.6 | 58.7 | 68.1 | 64.8 | Opus 5.5 was 63.3 on its own card |
+| WANDR (relaxed) | **82.1** | 68.7 | 72.3 | – | – | `medium` ≈ Opus 5.5 best at ~40% cost |
+| OSWorld 2.1 offline (partial) | **89.3** | 83.5 | 87.2 | 79.5 | 81.5 | |
+| AA-Briefcase v1.1 (rubric) | **66.1** | 61.5 | 61.2 | 52.0 | 61.8 | |
+| Elo (unlabeled row) | 1785 | 1669 | **1800** | 1569 | 1611 | Opus 5.5 leads |
+| Remote Labor Index (high) | **41.3** | 17.9 | 21.3 | 20.8 | – | |
+| HLE with tools | **74.2** | 65.6 | 67.7 | 57.2 | – | `low` ≈ Opus 5.5 best at <1/10 cost |
+| Chartography (no tools) | **73.4** | 44.8 | 64.4 | 71.0 | 72.5 | |
+| RoboDojo Sim | **64.9** | 27.6 | 39.4 | 29.8 | – | |
+| BenchCAD 2.1 (max) | **83.5** | 44.4 | 65.3 | – | – | |
+| OfficeQA (card) | **83.4** | 80.2 | 78.9 | – | – | |
+| ProgramBench (card) | 85.6 | 87.6 | **91.2** | – | – | context exhausted on 68%; 91.6 with token counter |
+
+Cyber and protein rows (CyScenarioBench, CVE Rediscovery, binder design) are Mythos-only; we have no Mythos access. Gemini 4 Carbon is not routed here.
 
 ## Gemini 4 Argon launch (2026-10-13) — Google table, sources split
 
@@ -70,7 +94,11 @@ Of not-fully-correct answers, the share that were abstentions rather than confid
 
 | Model | Input/MTok | Cached input/MTok | Output/MTok | Context | Max output | Knowledge cutoff | Notes |
 |---|---:|---:|---:|---:|---:|---|---|
-| Claude Opus 5 | $5.00 | - | $25.00 | 1M | 128K | May 2026 | Primary default 2026-07-24. Fast mode $10/$50 ~2.5×. |
+| Claude Fable 5.2 | $8.00 | $0.20 | $40.00 | 1M | 128K | Jun 2026 | Fast mode $16/$80, up to 2.5×. API default effort `high`. |
+| Claude Opus 5.5 | $4.00 | $0.20 | $20.00 | 1M | 128K | Jun 2026 | Default Claude. API default effort `medium`. |
+| Claude Sonnet 5.5 | $2.00 | $0.10 | $10.00 | 1M | 128K | Jun 2026 | Released 2026-09-28. |
+| Claude Haiku 5.5 | $0.10 / $0.50 | $0.01 / $0.05 | $0.50 / $2.50 | 1M | 128K | Jun 2026 | Prompt ≤100K / >100K tiers. Released 2026-10-07. |
+| Claude Opus 5 | $5.00 | $0.50 | $25.00 | 1M | 128K | May 2026 | Exact-id lane (cyber/bio). Fast mode $10/$50 ~2.5×. |
 
 ## Sources
 

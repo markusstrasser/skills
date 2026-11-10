@@ -22,6 +22,6 @@ That verdict, calibrated: the cross-lab-vs-same-lab MARGIN is **≈0** — a sec
 
 ## Validation Checklists
 
-Post-output verification lists — All Outputs + per-model (Opus 5.5, Sonnet 5, GPT-6 Astra pro mode,
+Post-output verification lists — All Outputs + per-model (Opus 5.5, Fable 5.2, Sonnet 5.5, GPT-6 Astra pro mode,
 GLM-5.2, Grok 4.7): [references/validation-checklists.md](validation-checklists.md).
 Consult after receiving output from a routed model, not at routing time.
