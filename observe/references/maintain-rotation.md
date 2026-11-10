@@ -30,7 +30,6 @@ unlogged run stays "due" forever.
 | Code quality scan | weekly | `/observe audit --quick` |
 | Database freshness · research-memo staleness | daily · weekly | check timestamps, flag >30d stale · ACTIVE memos vs recent file changes |
 | Deferred probe · cross-check outputs | after revisit date · daily | HTTP-probe URLs, check release pages · pick a T1/T2 variant, query the biomedical MCP, compare |
-| Calibration canary | weekly | `calibration-canary.py --mode sampling --difficulty hard --runs 10 --backend llmx` |
 | Genomics canary | after classification changes | `just canary` in genomics |
 | Doctor health · session cost | daily | `uv run python3 scripts/doctor.py` · flag sessions >$5 or no-commit anomalies |
 | Infra coverage · doc currency | monthly · fallback | `git log` → categorize fixes by detection source · `just check-codebase-map && just check-claude-md` |

@@ -86,6 +86,10 @@ Anthropic did **not** publish a full fixed-score table like prior system cards f
 
 **Price:** $5/$25 (same as 4.8). Fast mode $10/$50. Model ID `claude-opus-5`.
 
+## Local calibration canary (2026-11-10, final run)
+
+Our own 12 hard boolean canaries × 10 runs, `llmx --subscription`, agent-infra 9227a9a8 (script retired right after: the hard set saturated). Accuracy / Brier / output tok / reasoning tok: **Opus 5.5** 100% / 0.000 / 4.8K / 3.8K; **Fable 5.2** 100% / 0.000 / 5.3K / 4.2K; **Haiku 5.5** 91.7% / 0.083 / 9.5K / 8.4K (wrong on `double-negation` in all 10 runs). It no longer separates frontier models; use AA-Omniscience or a harder set.
+
 ## Calibration (AA-Omniscience non-hallucination, 2026-06-18 read)
 
 Of not-fully-correct answers, the share that were abstentions rather than confident fabrications. Current routed models: **GLM-5.2 72%**, Haiku 4.5 74%. **DeepSeek V4 Pro ~6%** — never use for unsourced facts or epistemic guardrails. Current Claude/GPT-6 remeasure pending; see [selection-trilemma.md](selection-trilemma.md).

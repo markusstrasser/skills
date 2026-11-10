@@ -267,4 +267,3 @@ When `--sweep` encounters a 404 for a previously-verified entity:
 Bio-verify checks **data correctness** (are biological constants accurate?). Two complementary systems check **logic correctness**:
 
 - **Canary gate** (`just canary` in genomics) — 55 sentinel variants through `auto_classify()`. Catches classification logic regressions. Runs as pre-commit hook on classification file changes.
-- **Calibration canaries** (`meta/scripts/calibration-canary.py`) — 47 boolean questions testing model calibration. Weekly via `/maintain`. Not genomics-specific but measures the trustworthiness of LLM judgments used elsewhere in the pipeline.

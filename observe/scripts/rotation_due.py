@@ -49,7 +49,6 @@ ROTATION: dict[str, tuple[int, str]] = {
     "leverage-scan": (7, "/observe lever"),
     "memo-staleness": (7, "ACTIVE research memos vs recent file changes"),
     "code-quality": (7, "/observe audit --quick"),
-    "calibration-canary": (7, "calibration-canary.py --mode sampling --difficulty hard"),
     "infra-coverage": (30, "git log -> categorize fixes by detection source"),
 }
 
