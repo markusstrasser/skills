@@ -14,8 +14,9 @@
 #
 # Transport: $0 OAuth subscription (`claude -p`) FIRST — the metered ANTHROPIC_API_KEY
 # path returns "credit balance too low" and was silently dead (steward-proposals/
-# 2026-06-15-llm-hooks-dead-metered-api.md). Falls back to the metered API only if
-# subscription fails; logs [DEGRADED] when NO transport works, so death is visible.
+# 2026-06-15-llm-hooks-dead-metered-api.md). The subscription is the only transport
+# (the metered fallback was removed 2026-11-10: shells never export ANTHROPIC_API_KEY,
+# so it could not run); logs [DEGRADED] when it fails, so death is visible.
 
 set -u
 trap 'exit 0' ERR
@@ -38,7 +39,7 @@ esac
 grep -q '// reception-payload-llm:skip' "$FILE_PATH" 2>/dev/null && exit 0
 
 # No hard API-key gate: the primary transport is the $0 subscription (claude -p),
-# which does not need ANTHROPIC_API_KEY. The API is only a fallback.
+# which does not need ANTHROPIC_API_KEY.
 
 # Diff against HEAD: get added/modified lines that look like `note:` / `body:` strings.
 CHANGED=$(python3 - "$FILE_PATH" <<'PY' 2>/dev/null
@@ -107,32 +108,11 @@ def via_subscription(p):
         pass
     return None
 
-def via_api(p):
-    import urllib.request
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
-        return None
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages",
-        data=json.dumps({"model": MODEL, "max_tokens": 4096,  # covers adaptive thinking
-                         "messages": [{"role": "user", "content": p}]}).encode(),
-        headers={"x-api-key": key, "anthropic-version": "2023-06-01",
-                 "content-type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=12) as resp:
-            body = json.loads(resp.read())
-        return "".join(b.get("text", "") for b in body.get("content", [])
-                       if b.get("type") == "text")
-    except Exception:
-        return None
-
 text = via_subscription(prompt)
-if text is None:
-    text = via_api(prompt)
 if text is None:
     # Both transports dead — fail LOUD so this doesn't rot silently again.
     sys.stderr.write("[DEGRADED] reception-payload-llm: no working LLM transport "
-                     "(subscription + metered API both failed) — check `claude -p` auth\n")
+                     "(claude -p subscription failed) — check `claude -p` auth\n")
     sys.exit(0)
 
 # Extract the JSON array — model sometimes wraps in prose.
