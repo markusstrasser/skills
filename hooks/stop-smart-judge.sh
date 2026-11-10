@@ -122,7 +122,10 @@ def load_context(path, max_tools=14):
                     if isinstance(inp, dict):
                         arg = (inp.get("command") or inp.get("file_path") or inp.get("path")
                                or inp.get("pattern") or inp.get("description") or inp.get("query") or "")
-                    tools.append("[%s %s]" % (name, str(arg)[:80]))
+                    arg = str(arg)
+                    if len(arg) > 200:  # keep both ends: "cmd ... && git commit" sits at the tail
+                        arg = arg[:120] + " … " + arg[-80:]
+                    tools.append("[%s %s]" % (name, arg))
         elif t == "user" and not user_req:
             if isinstance(content, str):
                 s = content.strip()
