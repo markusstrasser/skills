@@ -25,6 +25,7 @@
 #   SMART_JUDGE_TRANSPORT   claude-sub (default,$0) | haiku-api (fast,metered)
 #   SMART_JUDGE_ENFORCE_VECTORS  comma list (default: verify_before_claim)
 #   SMART_JUDGE_MODEL       model id (default: claude-haiku-5-5)
+#   SMART_JUDGE_LOG         verdict log path (default: ~/.claude/smart-judge-shadow.jsonl)
 #   SMART_JUDGE_OFF=1       hard disable
 #
 # Fail-open EVERYWHERE: a judge hook must never break or stall a session.
@@ -38,7 +39,7 @@ OUTPUT=$(printf '%s' "$INPUT" | python3 -c '
 import sys, json, os, re, subprocess, time
 from datetime import datetime, timezone
 
-SHADOW_LOG = os.path.expanduser("~/.claude/smart-judge-shadow.jsonl")
+SHADOW_LOG = os.path.expanduser(os.environ.get("SMART_JUDGE_LOG") or "~/.claude/smart-judge-shadow.jsonl")
 MODEL = os.environ.get("SMART_JUDGE_MODEL", "claude-haiku-5-5")
 MODE = os.environ.get("SMART_JUDGE_MODE", "shadow")
 TRANSPORT = os.environ.get("SMART_JUDGE_TRANSPORT", "claude-sub")
@@ -223,7 +224,7 @@ entry = {
     "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     "session": session_id,
     "project": os.path.basename(cwd) if cwd else "unknown",
-    "mode": MODE, "transport": TRANSPORT, "latency_s": latency,
+    "mode": MODE, "transport": TRANSPORT, "model": MODEL, "latency_s": latency,
     "prefilter": "claim" if has_claim else "ask",
     "fired": [f[0] for f in fired],
     "why": {f[0]: f[1] for f in fired},
