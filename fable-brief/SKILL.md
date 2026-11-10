@@ -120,10 +120,10 @@ claude --model claude-fable-5-2 --effort high -n <slug> \
   "$(cat .claude/plans/<session8>-<slug>.brief.md)"
 ```
 
-`--append-system-prompt`, `--effort`, `--model` and `-n` are in `claude --help` (CLI 2.1.322,
-checked 2026-11-10). No launch with this command line has been run yet: on the first use, check
-in the new session that the system text arrived (ask it to quote its "# Approvals" section)
-before the work starts.
+This line's headless form (`-p --output-format json`) was run on CLI 2.1.322 on 2026-11-10: the
+session ran on `claude-fable-5-2` and quoted the appended "# Approvals" section word for word.
+The interactive form has not been run. On its first use, ask the new session to quote its
+"# Approvals" section before the work starts.
 
 That is the interactive form, which Markus watches. For a headless run, add `-p` and
 `--output-format stream-json --verbose`, write the output to a log, and drop the updates text
