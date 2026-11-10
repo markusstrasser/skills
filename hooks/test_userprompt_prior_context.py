@@ -159,8 +159,8 @@ def main() -> None:
     (infra_base / "scripts/session_probe.py").write_text(
         "# uses v_session_commits and agentlogs.db\n"
     )
-    (infra_base / ".claude/rules").mkdir(parents=True)
-    (infra_base / ".claude/rules/session-forensics.md").write_text("# agentlogs schema\n")
+    (infra_base / "docs").mkdir(parents=True)
+    (infra_base / "docs/session-forensics.md").write_text("# agentlogs schema\n")
     out = run({
         "user_message": "should we design a schema to join session_commits with git_commits?",
         "cwd": str(infra_base),

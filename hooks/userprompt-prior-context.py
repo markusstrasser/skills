@@ -519,9 +519,9 @@ def _infra_design_lines(base: Path, prompt: str, kw: list[str]) -> list[str]:
         lines.append("Recent git-touched paths:\n" + "\n".join(f"  {p}" for p in git_paths))
     if recent:
         lines.append("Recent commits (infra prompt — read before proposing):\n" + "\n".join(f"  {c}" for c in recent))
-    forensics = base / ".claude/rules/session-forensics.md"
+    forensics = base / "docs/session-forensics.md"
     if forensics.is_file():
-        lines.append("  .claude/rules/session-forensics.md")
+        lines.append("  docs/session-forensics.md")
     return lines
 
 
