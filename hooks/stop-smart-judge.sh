@@ -24,7 +24,7 @@
 #   SMART_JUDGE_MODE        shadow (default) | enforce
 #   SMART_JUDGE_TRANSPORT   claude-sub (default,$0) | haiku-api (fast,metered)
 #   SMART_JUDGE_ENFORCE_VECTORS  comma list (default: verify_before_claim)
-#   SMART_JUDGE_MODEL       model id (default: claude-haiku-4-5-20251001)
+#   SMART_JUDGE_MODEL       model id (default: claude-haiku-5-5)
 #   SMART_JUDGE_OFF=1       hard disable
 #
 # Fail-open EVERYWHERE: a judge hook must never break or stall a session.
@@ -39,7 +39,7 @@ import sys, json, os, re, subprocess, time
 from datetime import datetime, timezone
 
 SHADOW_LOG = os.path.expanduser("~/.claude/smart-judge-shadow.jsonl")
-MODEL = os.environ.get("SMART_JUDGE_MODEL", "claude-haiku-4-5-20251001")
+MODEL = os.environ.get("SMART_JUDGE_MODEL", "claude-haiku-5-5")
 MODE = os.environ.get("SMART_JUDGE_MODE", "shadow")
 TRANSPORT = os.environ.get("SMART_JUDGE_TRANSPORT", "claude-sub")
 ENFORCE_VECTORS = {v.strip() for v in os.environ.get("SMART_JUDGE_ENFORCE_VECTORS", "verify_before_claim").split(",") if v.strip()}
@@ -188,7 +188,7 @@ def via_haiku_api(prompt):
     if not key: return ""
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/messages",
-        data=json.dumps({"model": MODEL, "max_tokens": 400,
+        data=json.dumps({"model": MODEL, "max_tokens": 4096,  # covers adaptive thinking
                          "messages": [{"role":"user","content": prompt}]}).encode(),
         headers={"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"})
     with urllib.request.urlopen(req, timeout=20) as r:

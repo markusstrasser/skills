@@ -38,8 +38,9 @@ def main():
     fname = sys.argv[1] if len(sys.argv) > 1 else "unknown"
 
     payload = json.dumps({
-        "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 256,
+        "model": "claude-haiku-5-5",
+        # Haiku 5.5 thinks adaptively by default; the budget covers thinking + answer.
+        "max_tokens": 4096,
         "messages": [{"role": "user", "content": PROMPT + content}],
     }).encode()
 

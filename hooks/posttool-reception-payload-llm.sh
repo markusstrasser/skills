@@ -80,7 +80,7 @@ n_changed=$(echo "$CHANGED" | grep -c '^.\+$' 2>/dev/null || echo 0)
 RESPONSE=$(python3 - <<PY 2>/dev/null
 import os, json, subprocess, sys
 
-MODEL = "claude-haiku-4-5-20251001"
+MODEL = "claude-haiku-5-5"
 entries = """$CHANGED"""
 
 prompt = f"""You are reviewing reception notes for a primary-text reader (Shakespeare, Bible, etc.). Each entry sits next to a painting or video clip. A good note adds payload the reader cannot see — date, artist, source-text moment depicted, staging history, technical detail. A bad note is restatement — it describes what's in the image or says something abstract about the work.
@@ -114,7 +114,7 @@ def via_api(p):
         return None
     req = urllib.request.Request(
         "https://api.anthropic.com/v1/messages",
-        data=json.dumps({"model": MODEL, "max_tokens": 800,
+        data=json.dumps({"model": MODEL, "max_tokens": 4096,  # covers adaptive thinking
                          "messages": [{"role": "user", "content": p}]}).encode(),
         headers={"x-api-key": key, "anthropic-version": "2023-06-01",
                  "content-type": "application/json"})
