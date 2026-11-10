@@ -1688,7 +1688,7 @@ def _fake_pgrep_bin(tmp_path, n_lines):
     return str(p)
 
 
-@pytest.mark.parametrize("model", ["claude-opus-4-8", "claude-opus-5-5", "claude-fable-5-1"])
+@pytest.mark.parametrize("model", ["claude-opus-4-8", "claude-opus-5-5", "claude-fable-5-2"])
 def test_opus_concurrency_advises_at_three_or_more(sandbox, tmp_path, model):
     envelope = {"tool_name": "Bash", "tool_input": {"command": f"llmx chat -m {model} -e max hi"}}
     env = dict(sandbox["env"])

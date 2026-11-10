@@ -291,20 +291,24 @@ SEARCH_TOOL_RE = re.compile(
 )
 
 # llmx subscription-eligible allowlist (llmx-routing.md, pruned to the Pareto
-# frontier 2026-09-25, composer-2.5 retired 2026-10-07 — retired ids are refused by llmx itself;
+# frontier 2026-09-25, composer-2.5 retired 2026-10-07, Claude 5.2/5.5 tiers swapped in
+# 2026-11-10 (llmx 37f7d08) — retired ids are refused by llmx itself;
 # rederive by tripping the transport error or `llmx info`). A call naming one
 # of these WITHOUT --subscription/--lite/-p/--provider silently routes
 # API-direct and BILLS per-token — "the --subscription flag IS the $0"
 # (llmx-routing.md). Caught live once already: a scout's flagless gpt-5.6
 # dispatch billed API rate, 2026-07-15, ~$1.
 _LLMX_SUBSCRIPTION_MODELS = {
-    "claude-fable-5-1",
+    "claude-fable-5-2",
+    "claude-sonnet-5-5",
+    "claude-haiku-5-5",
     "claude-opus-5",
     "claude-opus-5-5",
     "gpt-6-astra",
     "gpt-6",
     "gpt-6.1-sol",
     "gpt-6-sol",
+    "gpt-6.1-terra",
     "gpt-6-luna",
     "grok-4.7",
 }
@@ -428,7 +432,7 @@ def run_companion_remind(envelope, tool_name, tool_input):
     # -> this call will bill API per-token instead of routing $0. GPT-side
     # mirror of the claude-cli check above, generalized to the FULL
     # allowlist (llmx-routing.md) since the gap is the missing FLAG, not the
-    # model family — a claude-opus-5-5/claude-fable-5-1 call with the flag
+    # model family — a claude-opus-5-5/claude-fable-5-2 call with the flag
     # genuinely missing is caught here too, in addition to the coarser
     # always-fires-once Claude reminder above.
     if cmd and "llmx" in cmd:

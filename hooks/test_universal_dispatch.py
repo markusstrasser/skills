@@ -209,7 +209,7 @@ def test_llmx_model_not_in_allowlist_logs_nothing_for_subscription_flag(tmp_path
 
 
 def test_llmx_claude_opus_no_flag_fires_both_claude_and_subscription_reminders(tmp_path):
-    """claude-opus-5-5/claude-fable-5-1 are in BOTH the coarse Claude-cli check
+    """claude-opus-5-5/claude-fable-5-2 are in BOTH the coarse Claude-cli check
     (fires regardless of --subscription presence) and the precise
     subscription-flag check (fires only when the flag is actually missing) —
     both firing here is intended, not a duplicate bug (see the gate's own
