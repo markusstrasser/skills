@@ -86,3 +86,5 @@ critique/scripts/.model-review/
 
 # personal health reference — local only, purged from history 2026-10-07
 bio-verify/references/selve-claim-patterns.md
+.claude/current-session-id
+.claude/sessions/
