@@ -1,6 +1,8 @@
 # Skills — Claude Code Instructions
 
-18 active skills + 33 hooks for Claude Code agent infrastructure.
+Shared skills and hooks for Claude Code agent infrastructure.
+
+This codebase is yours: how it's built is your call, and you'll keep building on it. What it's for stays with Markus.
 
 ## Structure
 
@@ -8,7 +10,7 @@
 skills/
 ├── Claude.md              # This file
 ├── README.md              # Public docs
-├── hooks/                 # 33 shared hooks (referenced by path from settings.json)
+├── hooks/                 # Shared hooks (referenced by path from settings.json)
 ├── archive/               # Superseded skill versions
 └── [skill-name]/          # Each skill: SKILL.md + optional companion files
     └── SKILL.md           # Frontmatter (name, description, triggers) + instructions
