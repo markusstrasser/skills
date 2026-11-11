@@ -96,7 +96,10 @@ PROFILES: dict[str, DispatchProfile] = {
         # Argon replaces 3.8 Flash on the critique Gemini axes. On its first two
         # packets (23 KB, 83 KB) at high effort it took about 6-7 min, so the
         # bound is 1500 s. Critique-only policy unchanged; search_grounded keeps Flash.
-        model="gemini-4-argon",
+        # 2026-11-11 (operator: "gemini 4 carbon is out ... better than argon ... we can
+        # update"): Carbon replaces Argon at the same price. The 1500 s bound is Argon's
+        # measurement and has not been re-measured on Carbon.
+        model="gemini-4-carbon",
         timeout=1500,
         reasoning_effort="high",
         input_token_limit=900000,
@@ -177,7 +180,7 @@ PROFILES: dict[str, DispatchProfile] = {
         # Pre-2026-05-24 default for deep_review. Kept available for
         # tasks where Pro's specific strengths (ARC-AGI-2, GPQA Diamond,
         # video understanding) actually dominate. For general adversarial
-        # critique/synthesis, prefer deep_review (gemini-4-argon since 2026-10-14).
+        # critique/synthesis, prefer deep_review (gemini-4-carbon since 2026-11-11).
         name="legacy_pro_review",
         intent="Pre-2026-05-24 Gemini Pro fallback for cases needing Pro-specific strengths",
         provider="google",
@@ -303,7 +306,7 @@ RETIRED_PROFILES = {
 
 MODEL_TO_PROFILE = {
     "gemini-3.1-flash-lite-preview": "observe_bulk",
-    "gemini-4-argon": "deep_review",  # 2026-10-14: deep_review runs Argon; a Flash pin must not map here silently
+    "gemini-4-carbon": "deep_review",  # 2026-11-11: deep_review runs Carbon; an Argon or Flash pin must not map here silently
     "gemini-3.1-pro-preview": "legacy_pro_review",  # demoted 2026-05-24
     "gpt-6-astra": "formal_review",
     "gpt-6": "formal_review",
