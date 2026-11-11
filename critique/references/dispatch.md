@@ -9,18 +9,18 @@ The maintained authorities are `critique/scripts/model-review.py` (`AXES`, `PRES
 | Preset | Axes | Selection |
 |---|---|---|
 | `cross2` / `lens2` | `arch,correctness,claude` | Triage recommendation for routine design |
-| `cross4` / `lens4` | `arch,gaps,correctness,contracts,claude` | Triage escalates for governance, multiple repos, ≥3 inconclusive findings, or contradictory anchors |
-| `standard` | Same five axes as cross4 | CLI fallback without a manifest; also declared by the plan-close packet builder |
-| `deep` | standard + `domain,mechanical` | Explicit structural/domain-dense review |
-| `full` | deep + `alternatives` | Explicit review plus divergent alternatives; keep the two outputs separate |
+| `cross4` / `lens4` | `arch,correctness,contracts,claude` | Triage escalates for governance, multiple repos, ≥3 inconclusive findings, or contradictory anchors |
+| `standard` | Same four axes as cross4 | CLI fallback without a manifest; also declared by the plan-close packet builder |
+| `deep` | standard + `mechanical` | Explicit structural review with the mechanical audit |
 
-Since 2026-10-14 (operator) every preset carries `claude` (Opus 5.5 max, subscription; "high taste ... still opus 5.5 likely best") and the Gemini axes `arch`/`gaps` run `gemini-4-argon` ("critique should use argon from now on"); the slowest axis is now Opus at 3600 s, so a `--budget-seconds` cap must be at least that. The four Gemini/GPT axes have overlapping full-review mandates: their lenses differ, their territories do not. `arch` and `correctness` include folded gaps/contracts checks so cross2 remains a meaningful smaller panel. Read the manifest's `preset_reasons`; its explicit design axes override triage's recommendation.
+Since 2026-10-14 (operator) every preset carries `claude` (Opus 5.5 max, subscription; "high taste ... still opus 5.5 likely best") and the Gemini axes run `gemini-4-carbon` since 2026-11-11 (operator: "gemini 4 carbon is out ... better than argon"; Argon from 2026-10-14). Every preset makes one Gemini call, `arch`, since 2026-11-11 (operator: the metered API is expensive, "should not be that much in critique ... maybe once here and there"); `full` was removed because without its Gemini axes it equalled `deep`; the slowest axis is now Opus at 3600 s, so a `--budget-seconds` cap must be at least that. The four Gemini/GPT axes have overlapping full-review mandates: their lenses differ, their territories do not. `arch` and `correctness` include folded gaps/contracts checks so cross2 remains a meaningful smaller panel. Read the manifest's `preset_reasons`; its explicit design axes override triage's recommendation.
 
 Optional axes are outside the presets:
 
 | Axis | Use and contract |
 |---|---|
 | `formal` | Math, Bayes/stats, proofs or formal invariants; `formal_review` profile at high effort |
+| `gaps`, `domain`, `alternatives` | Extra Gemini calls (mechanism pass, domain-fact check, alternative approaches); each adds a metered call, so name one only when its lens is the point, e.g. `--axes deep,domain` |
 | `glm` | Explicit additional model family; metered profile |
 | `grok` | Off since 2026-10-30 (Markus: reviews run on Astra or Opus, no Cursor/Grok). Was: repo-grounded premise falsification; exact Cursor registry and repo canary required |
 

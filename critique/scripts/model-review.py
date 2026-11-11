@@ -586,25 +586,32 @@ RETIRED_AXES = {
         "For a third lineage on a packet use `claude`, `glm` or `grok`; the repo-grounded "
         "premise scout now runs on gpt-6-astra (low effort) via `codex exec`."
     ),
+    "full": (
+        "the `full` preset was removed 2026-11-11 when presets were capped at one Gemini "
+        "call (operator decision). Use `deep`, and add `domain` or `alternatives` by name "
+        "when that lens is the point, e.g. --axes deep,alternatives."
+    ),
 }
 
 PRESETS = {
     # Every preset carries the `claude` axis (Opus 5.5 max, subscription) since
     # 2026-10-14: operator "opus is fine for critiques ... we're not THAT limited";
-    # "high taste ... still opus 5.5 likely best". The Gemini axes run Gemini 4 Argon.
-    # Legacy default: 2× Gemini + 2× GPT-medium (4 lenses) + Opus.
-    "standard": ["arch", "gaps", "correctness", "contracts", "claude"],
+    # "high taste ... still opus 5.5 likely best". The Gemini axes run Gemini 4 Carbon.
+    # One Gemini call per preset since 2026-11-11 (operator: metered API is expensive,
+    # "should not be that much in critique ... maybe once here and there"). `arch` is that
+    # call; it already folds the gaps checklist. The other Gemini axes (`gaps`, `domain`,
+    # `alternatives`) are opt-in by name, e.g. --axes deep,domain. The `full` preset
+    # (deep + alternatives) is gone: without its Gemini axes it equalled `deep`.
+    # Default: Gemini structure + 2× GPT-medium + Opus.
+    "standard": ["arch", "correctness", "contracts", "claude"],
     # Diagonal cross-lab: Gemini structure + GPT mechanism (folded checklists in arch/correctness) + Opus.
     "cross2": ["arch", "correctness", "claude"],
     "lens2": ["arch", "correctness", "claude"],
-    # Full 2×2 grid (4 cells) + Opus.
-    "cross4": ["arch", "gaps", "correctness", "contracts", "claude"],
-    "lens4": ["arch", "gaps", "correctness", "contracts", "claude"],
+    # Escalation panel: cross2 plus the GPT structure pass.
+    "cross4": ["arch", "correctness", "contracts", "claude"],
+    "lens4": ["arch", "correctness", "contracts", "claude"],
     # Math/formal-dense reviews: add `formal` explicitly, e.g. --axes standard,formal
-    "deep": ["arch", "gaps", "correctness", "contracts", "claude", "domain", "mechanical"],
-    "full": [
-        "arch", "gaps", "correctness", "contracts", "claude", "domain", "mechanical", "alternatives",
-    ],
+    "deep": ["arch", "correctness", "contracts", "claude", "mechanical"],
 }
 
 # Premise scout runs before packet-only axes (VOI-sequenced review ADR).
@@ -937,7 +944,7 @@ def build_effective_policy(args: argparse.Namespace) -> dict:
 # Primary Gemini critique axis
 GEMINI_PRIMARY_MODEL = dispatch_core.PROFILES["deep_review"].model
 # Rate-limit fallback target for the Gemini (arch) axis. When the Gemini primary
-# (gemini-4-argon since 2026-10-14; gemini-3.8-flash before) rate-limits, retry the axis on gpt-6-astra — the rule-sanctioned move ("after a
+# (gemini-4-carbon since 2026-11-11; gemini-4-argon and gemini-3.8-flash before) rate-limits, retry the axis on gpt-6-astra — the rule-sanctioned move ("after a
 # Gemini rate-limit, switch to GPT or Flash"; llmx transport-routing) and an
 # adversarial-grade model. Tradeoff: this collapses the arch+formal pair to GPT
 # for that one review (degraded cross-model diversity), accepted because it is
