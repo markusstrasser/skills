@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import fnmatch
 import json
 import os
@@ -4112,6 +4113,60 @@ def run_preflight(
     return 0 if oks and all(oks) else 1
 
 
+def _parse_axis_assignments(values: list[str] | None, flag: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for item in values or []:
+        axis, sep, value = item.partition("=")
+        if not sep or not value or axis not in AXES:
+            raise ValueError(f"{flag} takes AXIS=VALUE with a known axis, got '{item}'")
+        out[axis] = value
+    return out
+
+
+def apply_axis_overrides(
+    models: dict[str, str], efforts: dict[str, str], requested_axes: list[str]
+) -> list[str]:
+    """Let the caller choose the model and effort of an axis for this run.
+
+    The caller knows what is being reviewed; the script's profiles are defaults, not
+    locks (operator 2026-11-11: "the caller should have the power, not the callee").
+    The axis's profile is replaced in the registry before anything reads it, so labels,
+    receipts, fingerprints and timeouts all describe the model that actually runs. A
+    profile can serve several axes (`correctness` and `contracts` share one): the
+    override then applies to every requested axis on that profile, and conflicting
+    values for one profile are refused. llmx validates the model and effort at call time.
+    """
+    global GEMINI_PRIMARY_MODEL, GEMINI_FALLBACK_MODEL
+    notes: list[str] = []
+    by_profile: dict[str, dict[str, str]] = {}
+    for kind, table in (("model", models), ("reasoning_effort", efforts)):
+        for axis, value in table.items():
+            if axis not in requested_axes:
+                raise ValueError(f"override names axis '{axis}', which this run does not request")
+            profile_name = str(AXES[axis]["profile"])
+            slot = by_profile.setdefault(profile_name, {})
+            if slot.get(kind, value) != value:
+                raise ValueError(
+                    f"conflicting {kind} overrides for profile '{profile_name}' "
+                    f"({slot[kind]} and {value}): its axes share one model call setup"
+                )
+            slot[kind] = value
+    for profile_name, changes in by_profile.items():
+        base = dispatch_core.PROFILES[profile_name]
+        dispatch_core.PROFILES[profile_name] = dataclasses.replace(base, **changes)
+        new = dispatch_core.PROFILES[profile_name]
+        for axis in requested_axes:
+            if str(AXES[axis]["profile"]) != profile_name:
+                continue
+            AXES[axis]["label"] = f"{AXES[axis]['label']} [caller override: {new.model}, effort {new.reasoning_effort}]"
+            notes.append(
+                f"axis {axis}: {base.model}/{base.reasoning_effort} -> {new.model}/{new.reasoning_effort}"
+            )
+    GEMINI_PRIMARY_MODEL = dispatch_core.PROFILES["deep_review"].model
+    GEMINI_FALLBACK_MODEL = dispatch_core.PROFILES["gpt_general"].model
+    return notes
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Model-review dispatch: context assembly + parallel llmx + output collection",
@@ -4173,6 +4228,16 @@ def main() -> int:
             "allow an explicit specialized axis set with no GPT-backed cosigner; "
             "the default still requires at least one GPT axis"
         ),
+    )
+    parser.add_argument(
+        "--model", action="append", metavar="AXIS=MODEL",
+        help="Caller's model for one axis this run, e.g. --model claude=claude-fable-5-2 "
+        "(repeatable). The profile's model is the default.",
+    )
+    parser.add_argument(
+        "--effort", action="append", metavar="AXIS=LEVEL",
+        help="Caller's reasoning effort for one axis this run, e.g. --effort claude=high "
+        "(repeatable). The profile's effort is the default.",
     )
     parser.add_argument(
         "--claude-api", action="store_true",
@@ -4266,6 +4331,18 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+    if args.model or args.effort:
+        try:
+            if not args.axes:
+                raise ValueError("--model/--effort need an explicit --axes")
+            for note in apply_axis_overrides(
+                _parse_axis_assignments(args.model, "--model"),
+                _parse_axis_assignments(args.effort, "--effort"),
+                resolve_axes(args.axes, allow_non_gpt=args.allow_non_gpt),
+            ):
+                print(f"[model-review] caller override — {note}", file=sys.stderr)
+        except ValueError as exc:
+            parser.error(str(exc))
 
     if args.preflight:
         if args.claude_api and args.preflight_subscription_model == "claude-opus-5-5":

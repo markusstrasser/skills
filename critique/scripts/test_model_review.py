@@ -878,6 +878,33 @@ class AxisResolutionTest(unittest.TestCase):
         self.assertEqual(model_review.AXIS_CELLS["arch"]["cell"], "S_G")
         self.assertEqual(model_review.AXIS_CELLS["correctness"]["cell"], "M_P")
 
+    def test_caller_overrides_an_axis_model_and_effort(self) -> None:
+        core = model_review.dispatch_core
+        saved_profiles = dict(core.PROFILES)
+        saved_label = model_review.AXES["claude"]["label"]
+        try:
+            notes = model_review.apply_axis_overrides(
+                {"claude": "claude-fable-5-2"}, {"claude": "high"},
+                ["arch", "correctness", "claude"],
+            )
+            profile = core.PROFILES["claude_review"]
+            self.assertEqual((profile.model, profile.reasoning_effort), ("claude-fable-5-2", "high"))
+            self.assertEqual(profile.auth, "subscription")
+            self.assertNotEqual(profile.fingerprint(), saved_profiles["claude_review"].fingerprint())
+            self.assertIn("claude-fable-5-2", model_review.AXES["claude"]["label"])
+            self.assertEqual(notes, ["axis claude: claude-opus-5-5/max -> claude-fable-5-2/high"])
+            with self.assertRaisesRegex(ValueError, "does not request"):
+                model_review.apply_axis_overrides({"formal": "gpt-6.1-sol"}, {}, ["arch", "claude"])
+            with self.assertRaisesRegex(ValueError, "conflicting"):
+                model_review.apply_axis_overrides(
+                    {}, {"correctness": "high", "contracts": "low"},
+                    ["arch", "correctness", "contracts"],
+                )
+        finally:
+            core.PROFILES.clear()
+            core.PROFILES.update(saved_profiles)
+            model_review.AXES["claude"]["label"] = saved_label
+
     def test_every_preset_makes_one_gemini_call(self) -> None:
         # Operator cost cap, 2026-11-11: Gemini is metered API, one call per critique.
         for name, axes in model_review.PRESETS.items():

@@ -30,6 +30,7 @@ Actual diff review always routes to diff-review. For other artifacts, explicit m
 - Skip the close workflow for trivial plans (<30 lines, one function, obvious correctness), research/analysis that produces no code, and config/data-only changes with no logic changes. Use the checks appropriate to the artifact.
 - Audit-plan is the repo-inventory workflow: fresh same-session lane evidence can be reused; otherwise its first audit pass requires repo lanes before critics. It is not the default for an ordinary plan.
 - Model review is convergent. Use `/brainstorm` for divergent ideation. Extra cosigners, formal review, and broader presets are conditional choices in the selected workflow, not automatic additions.
+- You choose each axis's model and effort: `--model AXIS=MODEL`, `--effort AXIS=LEVEL`. For a non-code packet run the Claude axis on Fable 5.2 (`--model claude=claude-fable-5-2 --effort claude=high`); details in [Dispatch](references/dispatch.md).
 
 ## Shared review contracts
 
