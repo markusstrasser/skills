@@ -76,10 +76,6 @@
     },
     {
       "type": "command",
-      "command": "/Users/alien/Projects/skills/hooks/pretool-cost-guard.sh"
-    },
-    {
-      "type": "command",
       "command": "/Users/alien/Projects/skills/hooks/pretool-cost-awareness.sh"
     },
     {

@@ -71,11 +71,11 @@ PORTED  (bash driver + embedded logic transcribed into Python; sidecar .py
   pretool-heavy-load-guard.sh, pretool-no-background-commit.sh (imports
   pretool_no_background_commit), pretool-duckdb-quote-guard.sh,
   ~/.claude/hooks/pretool-modal-cost-guard.sh,
-  ~/.claude/hooks/pretool-modal-script-audit.sh, pretool-cost-guard.sh,
+  ~/.claude/hooks/pretool-modal-script-audit.sh,
   pretool-cost-awareness.sh, pretool-ast-precommit.sh,
   pretool-commit-check.sh (imports commit-check-parse),
   pretool-modal-run-guard.sh, pretool-timeout-modal-guard.sh,
-  pretool-plan-protect.sh                                        (18 gates)
+  pretool-plan-protect.sh                                        (17 gates)
 
 SUBPROCESS-KEPT  (complex bash-native control flow, external sidecar-process
   dependencies, or git-mutating side effects — porting risked drift; kept as
@@ -1406,56 +1406,9 @@ def gate_modal_script_audit(raw_payload: str) -> GateResult:
     return GateResult(0, "\n".join(warnings) + "\n", "")
 
 
-# --- 18. pretool-cost-guard.sh (BLOCKER $25 / ADVISORY $10, no if) ---------
-
-
-def gate_cost_guard(raw_payload: str) -> GateResult:
-    try:
-        data = json.loads(raw_payload)
-    except Exception:
-        return GateResult(0, "", "")
-    cmd = _jqlike_cmd(data)
-    if not cmd or not re.search(r"llmx|modal run|curl.*api|python.*openai|python.*anthropic", cmd):
-        return GateResult(0, "", "")
-    receipts = os.path.expanduser("~/.claude/session-receipts.jsonl")
-    if not os.path.isfile(receipts):
-        return GateResult(0, "", "")
-    today = time.strftime("%Y-%m-%d")
-    total = 0.0
-    try:
-        with open(receipts) as f:
-            for line in f:
-                try:
-                    r = json.loads(line)
-                except Exception:
-                    continue
-                if not r.get("ts", "").startswith(today):
-                    continue
-                if "transcript_lines" in r or "harness_hash" in r:
-                    continue
-                total += float(r.get("cost_usd", 0))
-    except Exception:
-        return GateResult(0, "", "")
-    spend_int = int(total)
-    if spend_int >= 25:
-        _log_trigger("cost-guard", "block", f"daily_spend=${total:.2f} cmd={cmd[:80]}", cmd)
-        out = json.dumps(
-            {
-                "decision": "block",
-                "reason": f"Daily API spend ${total:.2f} exceeds the $25 constitutional cap. Defer non-essential API calls, or set LLMX_SPEND_OVERRIDE=1 for an intended llmx job / get human approval.",
-            }
-        )
-        return GateResult(2, "", out)
-    if spend_int >= 10:
-        _log_trigger("cost-guard", "warn", f"daily_spend=${total:.2f} cmd={cmd[:80]}", cmd)
-        out = json.dumps(
-            {
-                "decision": "allow",
-                "additionalContext": f"Cost warning: daily spend at ${total:.2f} (warn at $10, block at $25). Consider batching or deferring.",
-            }
-        )
-        return GateResult(0, "", out)
-    return GateResult(0, "", "")
+# --- 18. pretool-cost-guard.sh: removed 2026-11-11. It summed billable rows of
+# ~/.claude/session-receipts.jsonl, a ledger that holds none (0 of 20,570 rows), so it
+# could not fire. Metered llmx spend is capped in llmx spend_guard.
 
 
 # --- 19. pretool-cost-awareness.sh (ADVISORY, every 50 calls, no if) -------
@@ -4224,7 +4177,6 @@ MANIFEST: list[dict] = [
     {"name": "duckdb-quote-guard", "if": None, "run": gate_duckdb_quote_guard},
     {"name": "modal-cost-guard", "if": None, "run": gate_modal_cost_guard},
     {"name": "modal-script-audit", "if": None, "run": gate_modal_script_audit},
-    {"name": "cost-guard", "if": None, "run": gate_cost_guard},
     {"name": "cost-awareness", "if": None, "run": gate_cost_awareness},
     {"name": "ast-precommit", "if": "Bash(git commit*)", "run": gate_ast_precommit},
     {"name": "commit-check", "if": "Bash(git commit*)", "run": gate_commit_check},
