@@ -11,7 +11,7 @@ Ids, prices and context windows below come from llmx (`usage_report.PRICING`, `C
 | GPT-6.1 Sol | `gpt-6.1-sol` | $2 / $10 | `low`…`max` (`none`/`minimal` → low) | `-p codex-cli --subscription` ($0) or API. `gpt-6-sol` aliases to it; needs codex-cli ≥ 0.162 |
 | GPT-6 Astra | `gpt-6-astra` (alias `gpt-6`) | $10 / $50 | `low`…`max` (`none`/`minimal` → low) | **Default OpenAI / Codex model.** `--subscription` codex-cli ($0). Pro = `reasoning.mode=pro` (same rates) |
 | Claude Opus 5.5 | `claude-opus-5-5` | $4 / $20 (metered only on explicit request) | `low`…`max`; per-task levels in `/model-guide` | `--subscription` (default); never `anthropic-direct` unasked |
-| Gemini 4 Carbon | `gemini-4-carbon` | $2 / $10 intro through 2026-11-30, then $4/$20 | `low`/`medium`/`high` in llmx (the API also takes `xhigh`/`max`, which llmx does not pass; `minimal`/`none` → 400). Probed 2026-11-11 | Metered API (`GEMINI_API_KEY_METERED`). Temperature fixed at 1.0. Default Gemini pick |
+| Gemini 4 Carbon | `gemini-4-carbon` | $2 / $10 intro through 2026-11-30, then $4/$20 | `low`/`medium`/`high` only. The API accepts `xhigh`/`max` but they think about 8x less than `high` (measured 2026-11-11), so llmx rejects them; `minimal`/`none` → 400 | Metered API (`GEMINI_API_KEY_METERED`). Temperature fixed at 1.0. Default Gemini pick |
 | Gemini 4 Argon | `gemini-4-argon` | $2 / $10 intro through 2026-11-30, then $4/$20 | `low`/`medium`/`high` only (`minimal` → 400; `none`/`xhigh`/`max` → 400) | Metered API (`GEMINI_API_KEY_METERED`), `--flex` for 50% off. Temperature fixed at 1.0 |
 
 `-p google` with no `-m` (and `llmx vision`, `llmx batch`) still defaults to `gemini-3.8-flash`: pass `-m gemini-4-carbon` explicitly.
