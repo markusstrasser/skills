@@ -307,6 +307,8 @@ expected_codex=$(printf '%s\n' \
   -m \
   gpt-6-astra \
   -c \
+  'model_reasoning_effort="high"' \
+  -c \
   'service_tier="default"' \
   -s \
   workspace-write \
@@ -352,6 +354,8 @@ expected_uvcache=$(printf '%s\n' \
   -m \
   gpt-6-astra \
   -c \
+  'model_reasoning_effort="high"' \
+  -c \
   'service_tier="default"' \
   --add-dir \
   "$SHARED_UV_REAL" \
@@ -375,6 +379,8 @@ expected_slot=$(printf '%s\n' \
   exec \
   -m \
   gpt-6-astra \
+  -c \
+  'model_reasoning_effort="high"' \
   -c \
   'service_tier="default"' \
   --add-dir \
@@ -401,6 +407,8 @@ expected_roots=$(printf '%s\n' \
   -m \
   gpt-6-astra \
   -c \
+  'model_reasoning_effort="high"' \
+  -c \
   'service_tier="default"' \
   --add-dir \
   "$ROOT_A" \
@@ -424,6 +432,7 @@ FULL_PROMPT="Do the fake task.
 Git state belongs to the parent: edit files and run checks, but do not stage, commit, merge, stash or switch branches. Do not stop or kill processes you did not start. End by listing every path you changed."
 HOOKS="$LANE_HOME/codex-git-hooks"
 expected_full=$(printf '%s\n' exec -m gpt-6-astra \
+  -c 'model_reasoning_effort="high"' \
   -c 'service_tier="default"' \
   -c 'shell_environment_policy.set.GIT_CONFIG_COUNT="1"' \
   -c 'shell_environment_policy.set.GIT_CONFIG_KEY_0="core.hooksPath"' \
@@ -485,7 +494,7 @@ assert_eq "high" "$(worker_setting "$LANE_HOME/codexoverride.json" codex_effort)
 assert_eq "$TEST_TMP/slots:$TEST_TMP/extra root" "$(worker_setting "$LANE_HOME/codexoverride.json" codex_add_dirs)" "recorded writable roots"
 assert_eq "1" "$(worker_setting "$LANE_HOME/codexoverride.json" codex_network)" "recorded network"
 assert_eq "gpt-6-astra" "$(worker_setting "$LANE_HOME/codexargs.json" codex_model)" "recorded default codex model"
-assert_eq "" "$(worker_setting "$LANE_HOME/codexargs.json" codex_effort)" "recorded config effort"
+assert_eq "high" "$(worker_setting "$LANE_HOME/codexargs.json" codex_effort)" "recorded default codex effort"
 assert_eq "0" "$(worker_setting "$LANE_HOME/codexargs.json" codex_network)" "recorded default network"
 
 echo "test: resume effort override wins and becomes the recorded setting"
@@ -584,11 +593,11 @@ export ANTHROPIC_API_KEY="must-be-removed"
 "$LANE" run claudeargs --repo "$REPO" --brief "$BRIEF" --worker claude --no-worktree >/dev/null
 wait_for_file "$LANE_HOME/claudeargs.done"
 unset ANTHROPIC_API_KEY
-expected_claude=$(printf '%s\n' -p --model opus --output-format stream-json --verbose "Do the fake task.")
+expected_claude=$(printf '%s\n' -p --model opus --effort high --output-format stream-json --verbose "Do the fake task.")
 assert_eq "$expected_claude" "$(<"$LANE_CAPTURE/claude.args")" "claude arguments"
 assert_eq "$REPO_REAL" "$(<"$LANE_CAPTURE/claude.cwd")" "claude cwd"
 assert_eq "opus" "$(worker_setting "$LANE_HOME/claudeargs.json" claude_model)" "recorded default claude model"
-assert_eq "" "$(worker_setting "$LANE_HOME/claudeargs.json" claude_effort)" "recorded default claude effort"
+assert_eq "high" "$(worker_setting "$LANE_HOME/claudeargs.json" claude_effort)" "recorded default claude effort"
 
 echo "test: claude resume retains model and effort without caller exports"
 claude_output=$(LANE_CLAUDE_MODEL=sonnet LANE_CLAUDE_EFFORT=high "$LANE" run claudeoverride --repo "$REPO" --brief "$BRIEF" --worker claude --no-worktree)
@@ -622,9 +631,9 @@ grep -Fxq -- --continue "$LANE_CAPTURE/claude.args" && fail "a first run has no 
 echo "test: claude worker passes LANE_CLAUDE_ADD_DIRS as --add-dir and keeps them on resume"
 claudedirs_output=$(LANE_CLAUDE_ADD_DIRS="$TEST_TMP/reviews:$TEST_TMP/extra root:" "$LANE" run claudedirs --repo "$REPO" --brief "$BRIEF" --worker claude --no-worktree)
 wait_for_file "$LANE_HOME/claudedirs.done"
-expected_claude_dirs=$(printf '%s\n' -p --model opus --add-dir "$TEST_TMP/reviews" --add-dir "$TEST_TMP/extra root" --output-format stream-json --verbose "Do the fake task.")
+expected_claude_dirs=$(printf '%s\n' -p --model opus --effort high --add-dir "$TEST_TMP/reviews" --add-dir "$TEST_TMP/extra root" --output-format stream-json --verbose "Do the fake task.")
 assert_eq "$expected_claude_dirs" "$(<"$LANE_CAPTURE/claude.args")" "claude add-dir arguments"
-grep -Fxq "lane: settings claude_model=opus claude_effort=default add_dirs=$TEST_TMP/reviews:$TEST_TMP/extra root" <<<"$claudedirs_output" || fail "run omitted claude add_dirs"
+grep -Fxq "lane: settings claude_model=opus claude_effort=high add_dirs=$TEST_TMP/reviews:$TEST_TMP/extra root" <<<"$claudedirs_output" || fail "run omitted claude add_dirs"
 assert_eq "$TEST_TMP/reviews:$TEST_TMP/extra root" "$(worker_setting "$LANE_HOME/claudedirs.json" claude_add_dirs)" "recorded claude add dirs"
 "$LANE" resume claudedirs --no-note >/dev/null
 wait_for_file "$LANE_HOME/claudedirs.done"

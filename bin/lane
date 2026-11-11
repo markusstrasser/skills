@@ -39,13 +39,13 @@ usage:
        `<hook> --verify <dest> <base-oid>`, env LANE_NAME LANE_REPO LANE_BRIEF LANE_SEED_PATCH LANE_SEED_FILES; the
        seeds go only to a new checkout; <dest>/.git/lane-checkout.json may name {"env": {...}} for the worker and
        {"provided": {<path>: <sha256>}} for inputs the hook copied in, which a harvest skips while unchanged)
-      (claude worker: LANE_CLAUDE_MODEL=<m> LANE_CLAUDE_EFFORT=<e> env override the default opus/default effort)
+      (claude worker: LANE_CLAUDE_MODEL=<m> LANE_CLAUDE_EFFORT=<e> env override the defaults, opus at high effort)
       (claude worker: LANE_CLAUDE_ADD_DIRS=<a:b> passes each directory as --add-dir, for writes outside the checkout)
       (claude worker: LANE_CLAUDE_CONTINUE=1 makes lane resume continue the lane's conversation, not start a new session)
       (opencode worker: bin/lane-opencode's default model, DeepSeek V4.1 Flash with thinking on; LANE_OPENCODE_MODEL=<provider/model> overrides it)
       (opencode worker: no sandbox; a scrubbed env and a deny-list guard it, see bin/lane-opencode; exit 86 = balance exhausted)
       (opencode worker: a provider at capacity (429) is retried in the lane's session for ~20 min, then exit 85; lane resume continues it)
-      (codex worker: LANE_CODEX_MODEL=<m> LANE_CODEX_EFFORT=<e> env override the default gpt-6-astra/config effort)
+      (codex worker: LANE_CODEX_MODEL=<m> LANE_CODEX_EFFORT=<e> env override the defaults, gpt-6-astra at high effort)
       (codex worker: LANE_CODEX_ADD_DIRS=<a:b> adds writable roots; LANE_CODEX_NETWORK=1 enables network; git metadata stays read-only, so the parent merges and commits)
       (codex worker: LANE_CODEX_SANDBOX=<mode>, else `git config lane.codexSandbox <mode>` in the repo, picks codex's sandbox: workspace-write (default), read-only or danger-full-access)
       (codex worker: each `git config --add lane.codexAddDir <absolute dir>` in the repo adds a writable root to every codex lane)
@@ -187,16 +187,17 @@ import json
 import os
 import sys
 
-# Empty effort means no CLI override: use the worker's configured/default effort.
+# Model and effort always reach the worker's command line. An empty effort used to mean "whatever the CLI has
+# saved", and that value is written by interactive sessions (Claude Code /effort, the Codex app's pickers).
 defaults = {
     "codex_model": "gpt-6-astra",
-    "codex_effort": "",
+    "codex_effort": "high",
     "codex_add_dirs": "",
     "codex_network": "0",
     # Empty: the repo's lane.codexSandbox, else workspace-write, resolved at launch (resolve_codex_sandbox).
     "codex_sandbox": "",
     "claude_model": "opus",
-    "claude_effort": "",
+    "claude_effort": "high",
     "claude_add_dirs": "",
     # Empty: bin/lane-opencode's own default applies, so the model is defined once (a copy here overrode it).
     "opencode_model": "",
@@ -221,7 +222,7 @@ for key, default in defaults.items():
     value = os.environ.get(env_key, recorded.get(key, default))
     if any(char in value for char in "\t\r\n"):
         sys.exit(f"lane: {env_key} must not contain tabs or newlines")
-    if key.endswith("_model"):
+    if key.endswith(("_model", "_effort")):
         value = value or default
     elif key in ("codex_add_dirs", "claude_add_dirs"):
         value = ":".join(directory for directory in value.split(":") if directory)
@@ -246,13 +247,13 @@ PY
 print_worker_settings() {
   case "$1" in
     claude)
-      echo "lane: settings claude_model=$LANE_CLAUDE_MODEL claude_effort=${LANE_CLAUDE_EFFORT:-default}${LANE_CLAUDE_ADD_DIRS:+ add_dirs=$LANE_CLAUDE_ADD_DIRS}"
+      echo "lane: settings claude_model=$LANE_CLAUDE_MODEL claude_effort=$LANE_CLAUDE_EFFORT${LANE_CLAUDE_ADD_DIRS:+ add_dirs=$LANE_CLAUDE_ADD_DIRS}"
       ;;
     opencode)
       echo "lane: settings opencode_model=${LANE_OPENCODE_MODEL:-default}"
       ;;
     *)
-      echo "lane: settings codex_model=$LANE_CODEX_MODEL codex_effort=${LANE_CODEX_EFFORT:-config} add_dirs=$LANE_CODEX_ADD_DIRS network=$LANE_CODEX_NETWORK sandbox=$LANE_CODEX_SANDBOX"
+      echo "lane: settings codex_model=$LANE_CODEX_MODEL codex_effort=$LANE_CODEX_EFFORT add_dirs=$LANE_CODEX_ADD_DIRS network=$LANE_CODEX_NETWORK sandbox=$LANE_CODEX_SANDBOX"
       ;;
   esac
 }
@@ -1048,10 +1049,7 @@ launch_worker() {
       codex)
         # Defaults and resume overrides are resolved in the parent before launch.
         # No apostrophes in this block: it is the body of a single-quoted bash -c script.
-        codex_args=(-m "$LANE_CODEX_MODEL")
-        if [ -n "$LANE_CODEX_EFFORT" ]; then
-          codex_args+=(-c "model_reasoning_effort=\"$LANE_CODEX_EFFORT\"")
-        fi
+        codex_args=(-m "$LANE_CODEX_MODEL" -c "model_reasoning_effort=\"$LANE_CODEX_EFFORT\"")
         # Standard tier, whatever config.toml says: a service_tier of ultrafast there billed every API lane at 6x on 2026-11-04.
         codex_args+=(-c "service_tier=\"default\"")
         # Extra writable roots, colon-separated (e.g. a host cpu-slot directory).
@@ -1103,8 +1101,7 @@ A provider capacity error stopped your previous attempt. The checkout keeps its 
       # Retry watchdog (CC 2.1.199+): wait out 429/529 and usage-limit resets in place instead of
       # dying. Both caps default to unlimited in CC 2.1.309, so cap them: 6 h covers a 5 h session
       # reset, a weekly limit fails out; 2 h for capacity; recheck every 15 min for a lifted limit.
-        claude_args=(--model "$LANE_CLAUDE_MODEL")
-        if [ -n "$LANE_CLAUDE_EFFORT" ]; then claude_args+=(--effort "$LANE_CLAUDE_EFFORT"); fi
+        claude_args=(--model "$LANE_CLAUDE_MODEL" --effort "$LANE_CLAUDE_EFFORT")
         # A resume is a new session on the same checkout unless asked: 1 continues the same conversation.
         if [ "$resume_mode" = true ] && [ "${LANE_CLAUDE_CONTINUE:-}" = 1 ]; then claude_args+=(--continue); fi
         # Directories outside the checkout the worker may write, colon-separated (e.g. a reviews
