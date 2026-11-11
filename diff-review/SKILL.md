@@ -35,14 +35,18 @@ Focuses: `refactoring`, `dead-code`, `optimization`, `patterns`, `silent-failure
 
 ## Step 2: Run Scout
 
-Restrict the scout to the changed files — one `--file` call per file, or `--module` when the
-changed files fill one directory. Select the depth preset below from the requested coverage and
+Restrict the scout to the changed files: one call that repeats `--file` once per changed file,
+or `--module` when the changed files fill one directory. Select the depth preset below from the requested coverage and
 concrete risk.
 
 ```bash
 cd ~/Projects/agent-infra && uv run python3 "$SCOUT" <repo path> \
-  --file <repo-relative file> --focus $FOCUS --provider openai --workers 2
+  --file <changed file 1> --file <changed file 2> --focus $FOCUS --provider openai --workers 2
 ```
+
+Read the stdout line `Coverage: reviewed N of M selected files`; M must equal the changed-file
+count. Exit 2 names selected paths it refused before dispatch (missing, not source, oversized);
+exit 3 lists files whose batch failed or timed out. Neither is a clean review.
 
 **Provider order (local-first; full wording in [background.md](references/background.md)):**
 1. **`openai`** (default) — `gpt-6-astra` low effort, codex-cli subscription ($0).
@@ -145,7 +149,7 @@ When a diff claims a score, speedup or pass-rate gain, flag any same-diff edit t
 | `low` | patterns | openai | Per-phase gate; ≤4 findings target |
 | `high` | security + patterns | openai + `--both` on diff scope | Slice closeout; recall mode |
 
-Pass only changed files (`--file`, `--module`, or a hand-built context packet) — don't scan the
+Pass only changed files (repeated `--file`, `--module`, or a hand-built context packet) — don't scan the
 whole repo.
 
 ## Usage Examples
@@ -171,3 +175,4 @@ $ARGUMENTS
 - **[2026-10-26] The openai provider's fixed `--timeout 180` killed a 65 KB file (arena tools/wow-logger/src/bin/hudcheck.rs, llmx exit 4), and `--file` refuses a file over 100,000 bytes without chunking (hud.rs, 110,901 bytes): both stayed unreviewed until the parent ran `llmx chat --subscription -m gpt-6-astra --timeout 1200 -f <file>` by hand. The timeout should scale with batch bytes and `--file` should chunk.**
 - **[2026-10-27] Sol does not survive Astra's account limit. Astra exited 6 with "You've hit your usage limit. Visit https://chatgpt.com/settings/usage to purchase more credits or try again at Nov 2nd, 2026 5:00 PM", and `gpt-6.1-sol` exited 6 a minute later with the identical text (genomics negatives-panels review, llmx logs 06:56/06:57 JST). That message is the ChatGPT account's usage limit, which both codex-cli models draw on; when it appears, skip step 2 and go to google (`gemini-4-argon`).**
 - **[2026-10-27] Codex plan exhausted until 11-02 for both Codex models; Gemini monthly spending cap hit the same day; added `--provider sol-api` (metered gpt-6.1-sol) as step 3.**
+- **[2026-11-11] A caller passed 13 `--file` flags in one scout call; `--file` was a plain store option, so argparse kept only the last and the scout printed `1 files` and "No new findings" with exit 0 while twelve changed files went unreviewed (genomics attribution-floor review). Fixed agent-infra b2ce0e84: `--file` repeats, bad paths refuse before dispatch, failed batches exit 3, and every run prints `Coverage: reviewed N of M selected files`. Check M against the changed-file count.**
