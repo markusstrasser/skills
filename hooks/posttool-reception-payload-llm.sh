@@ -99,7 +99,7 @@ def via_subscription(p):
     env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
     try:
         r = subprocess.run(
-            ["claude", "-p", "--model", MODEL, "--strict-mcp-config",
+            ["claude", "-p", "--model", MODEL, "--effort", "medium", "--strict-mcp-config",
              "--mcp-config", json.dumps({"mcpServers": {}}), "--setting-sources", ""],
             input=p, capture_output=True, text=True, timeout=45, env=env)
         if r.returncode == 0 and r.stdout.strip():

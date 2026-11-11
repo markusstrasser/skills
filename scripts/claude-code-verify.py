@@ -48,6 +48,8 @@ def main() -> int:
     parser.add_argument("--repo", type=Path, required=True, help="Repository to allow Claude to read")
     parser.add_argument("--prompt-file", type=Path, help="Prompt file. Defaults to stdin")
     parser.add_argument("--output", type=Path, required=True, help="Write Claude output here")
+    parser.add_argument("--model", default="opus", help="Claude model; always sent, so a saved default never picks it")
+    parser.add_argument("--effort", default="high", help="Claude effort; always sent, for the same reason")
     parser.add_argument("--budget-usd", default="5.00", help="Claude Code --max-budget-usd value")
     parser.add_argument("--timeout", type=int, default=420, help="Subprocess timeout seconds")
     parser.add_argument(
@@ -77,6 +79,10 @@ def main() -> int:
     command = [
         "claude",
         "-p",
+        "--model",
+        args.model,
+        "--effort",
+        args.effort,
         "--no-session-persistence",
         "--output-format",
         args.output_format,
