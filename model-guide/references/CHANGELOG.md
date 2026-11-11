@@ -1,5 +1,11 @@
 # Model Guide Changelog
 
+## 2026-11-11 - Gemini 4 Carbon is the default Gemini; one Gemini call per critique
+
+Operator: "gemini 4 carbon is out ... which is better than argon ... we can update". `gemini-4-carbon` is on the paid key's model list and priced like Argon ($2/$10 intro through 2026-11-30, then $4/$20). Live probe: `thinkingLevel` takes `low` through `max` and rejects `minimal` and `none`. llmx 1c10c26 registers it with `low|medium|high`. The `deep_review` profile now runs Carbon. No benchmark or launch post has been read and no cosigner probe has run: Carbon's edge over Argon is the operator's statement.
+
+Same day, operator on cost ("it's via api so it's expensive ... should not be that much in critique ... maybe once here and there"): every critique preset now makes one Gemini call, `arch`. `gaps`, `domain` and `alternatives` are opt-in by name, and the `full` preset is removed. `standard` went from two Gemini calls to one, `deep` from three to one.
+
 ## 2026-11-10 - Fable 5.2 replaces 5.1; Sonnet 5.5 and Haiku 5.5 added late
 
 Fable 5.2 and Mythos 5.2 launched 2026-11-09 (announcement, platform docs, system card read 2026-11-10). `claude-fable-5-2` costs $8/$40 against 5.1's $10/$50, with the same 1M/128K limits and 2.5% cache reads, so 5.2 dominates and 5.1 is retired. Reading the platform overview surfaced two releases this guide had missed: Sonnet 5.5 (2026-09-28, same $2/$10 as Sonnet 5, cache reads 5%) and Haiku 5.5 (2026-10-07, $0.10/$0.50 under 100K prompt tokens, ten times below Haiku 4.5). Both dominate their predecessors, so `claude-sonnet-5` and `claude-haiku-4-5` are retired too. The `sonnet` and `haiku` aliases had served the new models since their release days, so alias-pinned agents ran Sonnet 5.5 while this guide still described Sonnet 5.

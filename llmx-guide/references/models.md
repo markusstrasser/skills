@@ -11,9 +11,10 @@ Ids, prices and context windows below come from llmx (`usage_report.PRICING`, `C
 | GPT-6.1 Sol | `gpt-6.1-sol` | $2 / $10 | `low`…`max` (`none`/`minimal` → low) | `-p codex-cli --subscription` ($0) or API. `gpt-6-sol` aliases to it; needs codex-cli ≥ 0.162 |
 | GPT-6 Astra | `gpt-6-astra` (alias `gpt-6`) | $10 / $50 | `low`…`max` (`none`/`minimal` → low) | **Default OpenAI / Codex model.** `--subscription` codex-cli ($0). Pro = `reasoning.mode=pro` (same rates) |
 | Claude Opus 5.5 | `claude-opus-5-5` | $4 / $20 (metered only on explicit request) | `low`…`max`; per-task levels in `/model-guide` | `--subscription` (default); never `anthropic-direct` unasked |
+| Gemini 4 Carbon | `gemini-4-carbon` | $2 / $10 intro through 2026-11-30, then $4/$20 | `low`/`medium`/`high` in llmx (the API also takes `xhigh`/`max`, which llmx does not pass; `minimal`/`none` → 400). Probed 2026-11-11 | Metered API (`GEMINI_API_KEY_METERED`). Temperature fixed at 1.0. Default Gemini pick |
 | Gemini 4 Argon | `gemini-4-argon` | $2 / $10 intro through 2026-11-30, then $4/$20 | `low`/`medium`/`high` only (`minimal` → 400; `none`/`xhigh`/`max` → 400) | Metered API (`GEMINI_API_KEY_METERED`), `--flex` for 50% off. Temperature fixed at 1.0 |
 
-`-p google` with no `-m` (and `llmx vision`, `llmx batch`) still defaults to `gemini-3.8-flash`: pass `-m gemini-4-argon` explicitly.
+`-p google` with no `-m` (and `llmx vision`, `llmx batch`) still defaults to `gemini-3.8-flash`: pass `-m gemini-4-carbon` explicitly.
 
 ## Other current models
 
@@ -66,7 +67,7 @@ Ids, prices and context windows below come from llmx (`usage_report.PRICING`, `C
 
 ## Name format and 404 traps
 
-- No provider prefixes needed (`gemini-4-argon`, not `gemini/gemini-4-argon`); LiteLLM-style prefixes still parse with a deprecation warning.
+- No provider prefixes needed (`gemini-4-carbon`, not `gemini/gemini-4-carbon`); LiteLLM-style prefixes still parse with a deprecation warning.
 - Hyphens, not dots, for Claude (`claude-opus-5-5`); dots for GPT (`gpt-6.1-sol`).
 - A typo gets a closest-match suggestion ("did you mean …?").
 - Grok 4.7 Cursor slugs have no `cursor-` prefix; `cursor-grok-4.7-*` does not exist.
@@ -77,6 +78,7 @@ Ids, prices and context windows below come from llmx (`usage_report.PRICING`, `C
 |---|---|---|---|
 | GPT-6.1 Sol / Astra / Luna | 1,050,000 | 128,000 | 2× input / 1.5× output price above 272K input |
 | Claude Opus 5.5 / Fable 5.1 | 1,000,000 | | Subscription: omit `--max-tokens` (the CLI rejects it) |
+| Gemini 4 Carbon | 1,048,576 | 32,768 | Limits from the API model list, 2026-11-11 |
 | Gemini 4 Argon | 1,048,576 | | No prompt-length price tiers |
 | Gemini 3.x | 1,000,000 | 65,536 | Server default output is 8K: pass `--max-tokens 65536` for long outputs |
 | DeepSeek V4.1 Flash (LithosAI) | 1,048,576 | | |

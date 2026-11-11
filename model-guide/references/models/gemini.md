@@ -11,7 +11,15 @@
 
 - **`gemini-3.1-pro-preview` is RETIRED as a routing option (2026-06-13, operator).** Do not route here for critique/synthesis/review — the cosigner is `gemini-4-argon` since 2026-10-14 (`gemini-3.8-flash` before). (Benchmark records in `references/BENCHMARKS.md` are kept as evidence; this is a routing retirement, not a data scrub. Callable via explicit `-m` if a one-off ever needs ARC-AGI-2/GPQA/video, but it is not a default anywhere.)
 
-## Gemini 4 Argon (`gemini-4-argon`, stable 2026-10-13)
+## Gemini 4 Carbon (`gemini-4-carbon`, on the public API 2026-11-11)
+
+The default Gemini pick since 2026-11-11 (operator: "gemini 4 carbon is out ... which is better than argon ... we can update"). It runs the `deep_review` profile, which is the one Gemini call per critique (`arch`). Registered in llmx the same day.
+
+- **Live facts (probed 2026-11-11):** on the paid key's model list with 1,048,576 input and 32,768 output tokens. `thinkingLevel` accepts `low|medium|high|xhigh|max`; `minimal` → 400 "not supported", `none` → 400 invalid enum. llmx offers `low|medium|high` only, because its Google level map folds `xhigh` into `high`.
+- **Price:** the same schedule as Argon, intro $2/$10 per MTok through 2026-11-30 and $4/$20 from 2026-12-01 (aistudio.google.com/docs/pricing, read 2026-11-11).
+- **Not yet read or measured:** the launch post, third-party benchmarks and any in-house cosigner probe. "Better than Argon" is the operator's statement. The only number on file is AutomationBench 53.9, from the Fable 5.2 card. The `deep_review` 1500 s bound is Argon's measurement.
+
+## Gemini 4 Argon (`gemini-4-argon`, stable 2026-10-13; superseded as the default by Carbon 2026-11-11)
 
 Registered in llmx 2026-10-14 (llmx `7aba790`). The default Gemini pick since 2026-10-26 (operator: "newest models always"); llmx's own `-p google`, vision and batch defaults are still `gemini-3.8-flash`, so pass `-m gemini-4-argon`.
 

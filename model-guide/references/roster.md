@@ -7,7 +7,7 @@
 
 ## Roster (Pareto frontier, 2026-11-10)
 
-Newest picks (operator 2026-10-26: "newest models always"): `gpt-6.1-sol`, `gpt-6-astra`, `claude-opus-5-5`, `gemini-4-argon`.
+Newest picks (operator 2026-10-26: "newest models always"): `gpt-6.1-sol`, `gpt-6-astra`, `claude-opus-5-5`, `gemini-4-carbon` (replaced `gemini-4-argon` 2026-11-11, operator).
 
 | Model | Role | Why it is on the frontier | Transport |
 |---|---|---|---|
@@ -20,7 +20,7 @@ Newest picks (operator 2026-10-26: "newest models always"): `gpt-6.1-sol`, `gpt-
 | [gpt-6.1-sol](references/models/gpt-6.1-sol-luna.md) | Metered mid tier; fallback when Astra's plan limit binds | Astra training at a lower serving cost | Codex subscription + API |
 | [gpt-6-luna](references/models/gpt-6.1-sol-luna.md) | Metered bulk extraction and mechanical work | Cheapest GPT ("6 luna wins") | Codex subscription + API |
 | [grok-4.7](references/models/grok-4-7.md) | Opt-in read-only repo critique axis; Grok Build headless | Separate lab with workspace access; cost and speed edge | cursor-agent `grok-4.7-<effort>[-fast]`; `grok` CLI; xAI API unverified |
-| [gemini-4-argon](references/models/gemini.md) | Default Gemini: critique Gemini axes (`arch`, `gaps`) since 2026-10-14 (operator), never the sole reviewer | Third-party knowledge-work lead (Vals Index #1) at about half Opus 5.5's cost; weak agentic coder; Google's own long-context numbers unreplicated | Metered API (`GEMINI_API_KEY_METERED`) |
+| [gemini-4-carbon](references/models/gemini.md) | Default Gemini since 2026-11-11 (operator: "better than argon"): the one Gemini call per critique (`arch`), never the sole reviewer | Same price as Argon; no benchmark read yet beyond AutomationBench 53.9 (Fable 5.2 card). Argon's measured profile (knowledge-work lead, weak agentic coder) is the prior until Carbon is measured | Metered API (`GEMINI_API_KEY_METERED`) |
 | DeepSeek V4.1 Flash on LithosAI | Metered bulk and opencode `lane` work where price or wall time beats quality | Cheapest metered reasoning lane; same weights at three speeds (measured 2026-10-24, effort high: base 92 t/s, fast 123, ultra 288). Calibration unread for V4.1 Flash; DeepSeek V4 Pro abstained on only ~6% of misses (BENCHMARKS.md), so facts come from tools | `llmx -p lithosai -m deepseek-flash` / `-fast` / `-ultra` ($0.15/$0.60, $0.25/$1.00, $0.35/$1.40 early-access); opencode lanes |
 | [GLM-5.2](references/models/glm-5-2.md) | Opt-in review cosigner and epistemic guardrail; not an extractor | Separate training lab; best measured calibration among routed models | OpenRouter/zai metered, `--axes …,glm` |
 | [kimi-k3](references/models/kimi-k3.md) | Opt-in long-horizon coding probe | Open-weight model from a separate lab; cache-cheap repeated context | `llmx -p kimi` metered; Kimi Code CLI |
