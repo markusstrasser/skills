@@ -59,6 +59,12 @@ disagrees with them.
 `http://127.0.0.1:4100` (or `spaced mcp`), as JSON naming the agent: `{"agent": "<name>", …}`.
 Agents propose; he decides.
 
+**Scope (the operator, 2026-11-11).** Work the cards he flagged or annotated, and his replies to
+agents (`GET /api/agent/search?awaiting=agent`, `?flag=<NAME>`). Run no proofreading, lint, leech,
+duplicate or fact-check pass over a deck unless he asks for one: he is about to prune the deck and
+rethink its principles, and by that day he had made 108 decisions on agents' edits against 65
+reviews.
+
 1. **Read.** `GET /api/agent/source?id=<id>` gives the block exactly as in the deck file, its lints
    and its open threads. `spaced cards --json <id>…` (or `--suggestions open`) gives parsed fields
    and the hash a verdict is filed against.
