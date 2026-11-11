@@ -199,3 +199,5 @@ Controls use the real shared helper artifact lifecycle for both fallback success
 - **[2026-10-30] 2026-10-30: a quota-failed extraction printed Findings: 0 with rc 0; now [DEGRADED] + nonzero exit + Claude retry**
 
 - **[2026-11-08] 2026-11-08 arena: codex_plan_limit metered-API fallback (rerun_gpt_axis_via_metered_api) nulls _DISPATCH_PROVENANCE_FIELDS and records no token usage; extraction meta shows 0 tokens; violates the token-cost rule. Also the claude axis extraction failed with the codex quota error instead of retrying on claude_review (claude-extraction.error.json). Review dirs: arena/.model-review/2026-11-08-arena-core-one-unit-refactor-plan-{gpt-ba88c3,c51a3d}.**
+
+- **[2026-11-11] 2026-11-11 genomics: finding extraction timed out ("codex timed out after 300s") on 3 of 5 axes (claude, correctness, contracts) with a 77 KB shared context; rc 4 as documented; axis outputs were complete and read by hand; subscription axes recorded zero token usage in *-output.meta.json**
