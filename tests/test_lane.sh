@@ -436,11 +436,32 @@ git init -q "$HOOKREPO"
 git -C "$HOOKREPO" -c user.email=t@t -c user.name=t commit -q --allow-empty -m base
 git init -q --bare "$TEST_TMP/hookremote.git"
 hooked() { GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0="$HOOKS" git -C "$HOOKREPO" "$@"; }
-if hooked -c user.email=t@t -c user.name=t commit -q --allow-empty -m refused 2>/dev/null; then
-  fail "a full-access codex lane's hooks let a commit through"
+# A scratch repository under a temporary directory is a test's fixture: its commits and pushes pass, through its
+# own hook (arena's tools suite failed every fixture in a full-access lane on 2026-11-11).
+hooked -c user.email=t@t -c user.name=t commit -q --allow-empty -m fixture ||
+  fail "a full-access codex lane's hooks refused a temporary fixture repository's commit"
+hooked push -q "$TEST_TMP/hookremote.git" HEAD:refs/heads/fixture ||
+  fail "a full-access codex lane's hooks refused a temporary fixture repository's push"
+printf '%s\n' '#!/bin/sh' 'echo own hook >&2' 'exit 1' > "$HOOKREPO/.git/hooks/pre-commit"
+chmod +x "$HOOKREPO/.git/hooks/pre-commit"
+if hooked -c user.email=t@t -c user.name=t commit -q --allow-empty -m own 2>"$TEST_TMP/own-hook.err"; then
+  fail "a fixture repository's own pre-commit hook did not run under the lane's hooks"
 fi
-if hooked push -q "$TEST_TMP/hookremote.git" HEAD:refs/heads/refused 2>/dev/null; then
-  fail "a full-access codex lane's hooks let a push through"
+grep -Fxq "own hook" "$TEST_TMP/own-hook.err" || fail "the fixture's own hook was not the one that refused"
+rm -f "$HOOKREPO/.git/hooks/pre-commit"
+# Any other repository, the lane's own worktree's included, refuses: a fake git puts its common dir outside them.
+mkdir -p "$TEST_TMP/realgit"
+printf '%s\n' '#!/bin/sh' 'echo /Users/lane-test/project/.git' > "$TEST_TMP/realgit/git"
+chmod +x "$TEST_TMP/realgit/git"
+for hook in pre-commit pre-push pre-rebase pre-merge-commit pre-applypatch; do
+  if PATH="$TEST_TMP/realgit:$PATH" "$HOOKS/$hook" 2>"$TEST_TMP/real-hook.err" </dev/null; then
+    fail "a full-access codex lane's $hook let a write through outside a temporary directory"
+  fi
+  grep -Fq "git writes belong to the parent" "$TEST_TMP/real-hook.err" || fail "$hook refused without its reason"
+done
+printf '%s\n' '#!/bin/sh' 'exit 128' > "$TEST_TMP/realgit/git"
+if PATH="$TEST_TMP/realgit:$PATH" "$HOOKS/pre-commit" 2>/dev/null; then
+  fail "a full-access codex lane's hook let a write through when git could not name the repository"
 fi
 hooked status --short >/dev/null || fail "a full-access codex lane's hooks broke git status"
 LANE_CODEX_SANDBOX=workspace-write "$LANE" run codexpinned --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null

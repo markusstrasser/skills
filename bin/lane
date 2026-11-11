@@ -820,13 +820,27 @@ resolve_codex_sandbox() {
 # `inherit = "core"` in ~/.codex/config.toml, codex passed none of the exported GIT_CONFIG_* variables to its commands,
 # and a real probe's commit and push went through (2026-11-03); through the policy's set table both were refused and
 # `git status` still ran. That stops mistakes, as lane-opencode's deny-list does; `--no-verify` still passes.
+# A repository under a temporary directory is a test's fixture, not the parent's: its writes pass, through its own
+# hook when it has one, since core.hooksPath replaces a repository's hooks. On 2026-11-11 refusing those writes
+# failed every fixture of arena's tools suite in a full-access lane (autoland-term), so it could not check its patch.
 codex_git_hooks() {
   local hooks="$LANE_HOME/codex-git-hooks"
   local hook
   mkdir -p "$hooks" || die "cannot create $hooks"
   for hook in pre-commit pre-merge-commit pre-rebase pre-push pre-applypatch; do
-    printf '%s\n' '#!/bin/sh' 'echo "lane: git writes belong to the parent: edit files and leave staging and commits to it" >&2' \
-      'exit 1' >"$hooks/.$hook.$$" && chmod +x "$hooks/.$hook.$$" && mv -f "$hooks/.$hook.$$" "$hooks/$hook" ||
+    cat >"$hooks/.$hook.$$" <<'HOOK' && chmod +x "$hooks/.$hook.$$" && mv -f "$hooks/.$hook.$$" "$hooks/$hook" ||
+#!/bin/sh
+# lane's codex_git_hooks: a full-access codex lane makes no git writes outside a test's scratch repository.
+common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || common=
+case "$common" in
+  /tmp/?*|/private/tmp/?*|/var/folders/?*|/private/var/folders/?*)
+    own="$common/hooks/${0##*/}"
+    if [ -x "$own" ]; then exec "$own" "$@"; fi
+    exit 0 ;;
+esac
+echo "lane: git writes belong to the parent: edit files and leave staging and commits to it" >&2
+exit 1
+HOOK
       die "cannot write $hooks/$hook"
   done
   printf '%s\n' "$hooks"
