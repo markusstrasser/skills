@@ -63,7 +63,9 @@ Agents propose; he decides.
 agents (`GET /api/agent/search?awaiting=agent`, `?flag=<NAME>`). Run no proofreading, lint, leech,
 duplicate or fact-check pass over a deck unless he asks for one: he is about to prune the deck and
 rethink its principles, and by that day he had made 108 decisions on agents' edits against 65
-reviews.
+reviews. Elsewhere, file an edit only when you are sure the card gets better (his words that day:
+"agent edits are fine if they think it's better for sure"): a wrong fact, a question with several
+valid answers. Not wording or taste (that reading is an agent's, not his).
 
 1. **Read.** `GET /api/agent/source?id=<id>` gives the block exactly as in the deck file, its lints
    and its open threads. `spaced cards --json <id>…` (or `--suggestions open`) gives parsed fields
