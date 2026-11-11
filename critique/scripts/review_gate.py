@@ -442,10 +442,12 @@ def _infer_preset_from_review_dir(review_dir: Path) -> str | None:
     if not isinstance(axes, list) or not axes:
         return None
     axis_set = set(axes)
-    if axis_set == {"arch", "correctness"}:
-        return "cross2"
-    if axis_set == {"arch", "gaps", "correctness", "contracts"}:
+    # Subset match, larger panel first: every preset also carries `claude`, callers add
+    # opt-in axes, and review dirs from before 2026-11-11 carry `gaps`.
+    if {"arch", "correctness", "contracts"} <= axis_set:
         return "cross4"
+    if {"arch", "correctness"} <= axis_set:
+        return "cross2"
     return ",".join(axes)
 
 

@@ -451,6 +451,22 @@ class ReviewGateTest(unittest.TestCase):
         self.assertEqual(esc["current_preset"], "cross2")
         self.assertFalse(esc["escalation_executed"])
 
+    def test_preset_inference_ignores_claude_and_opt_in_axes(self) -> None:
+        cases = {
+            ("arch", "correctness", "claude"): "cross2",
+            ("arch", "correctness", "contracts", "claude"): "cross4",
+            ("arch", "correctness", "contracts", "claude", "mechanical"): "cross4",
+            ("arch", "gaps", "correctness", "contracts", "claude"): "cross4",
+            ("correctness", "formal"): "correctness,formal",
+        }
+        for index, (axes, expected) in enumerate(cases.items()):
+            rd = self.repo / ".model-review" / f"infer{index}"
+            rd.mkdir(parents=True)
+            (rd / "coverage.json").write_text(
+                json.dumps({"dispatch": {"requested_axes": list(axes)}})
+            )
+            self.assertEqual(rg._infer_preset_from_review_dir(rd), expected, axes)
+
     def test_contradictions_subcommand(self) -> None:
         rd = self.repo / ".model-review" / "csub"
         rd.mkdir(parents=True)
