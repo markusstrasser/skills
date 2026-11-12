@@ -179,11 +179,27 @@ def overdue_unread(
     return sorted(stamps)
 
 
+def lane_spellings(agent: str) -> set[str]:
+    """The names one transcript answers to: its lane name, and its agent id with and without the leading "a"
+    (SendMessage's pin id is "a<lane>-<hex>"; the transcript file is agent-a<lane>-<hex>.jsonl)."""
+    return {agent.rsplit("-", 1)[0], agent, f"a{agent}"}
+
+
+def unmatched_lanes(directory: Path, lanes: list[str]) -> list[str]:
+    """Named lanes with no transcript: a watcher over them would stay silent forever (11-13: four agent-id
+    arguments matched nothing and the watch printed nothing)."""
+    spellings: set[str] = set()
+    for path in directory.glob("agent-a*.jsonl"):
+        spellings |= lane_spellings(path.stem.removeprefix("agent-a"))
+    return [lane for lane in lanes if lane not in spellings]
+
+
 def lane_transcripts(directory: Path, lanes: list[str], now: datetime) -> dict[str, Path]:
     found: dict[str, Path] = {}
     for path in sorted(directory.glob("agent-a*.jsonl"), key=lambda item: item.stat().st_mtime):
-        lane = path.stem.removeprefix("agent-a").rsplit("-", 1)[0]
-        if lanes and lane not in lanes:
+        agent = path.stem.removeprefix("agent-a")
+        lane = agent.rsplit("-", 1)[0]
+        if lanes and not lane_spellings(agent) & set(lanes):
             continue
         if not lanes and now - datetime.fromtimestamp(path.stat().st_mtime, timezone.utc) > RECENT:
             continue
@@ -234,6 +250,13 @@ def selftest() -> None:
             os.utime(inbox, (stamp, stamp))
         assert inbox_rows("lane", teams) == [{"read": False}]  # the newest team's inbox
         assert inbox_rows("absent", teams) == []
+        transcripts = teams / "subagents"
+        transcripts.mkdir()
+        (transcripts / "agent-afoo-bar-0123abcd.jsonl").write_text("")
+        for spelling in ("foo-bar", "foo-bar-0123abcd", "afoo-bar-0123abcd"):
+            assert list(lane_transcripts(transcripts, [spelling], now)) == ["foo-bar"], spelling
+        assert unmatched_lanes(transcripts, ["foo-bar", "afoo-bar-0123abcd", "baz"]) == ["baz"]
+        assert main([str(transcripts), "--once", "baz"]) == 2  # fails loud, never watches nothing
     assert len(overdue_unread([message(15)], None, now)) == 1
     assert overdue_unread([message(15, read=True)], None, now) == []
     assert overdue_unread([message(5)], None, now) == []  # inside the grace
@@ -261,6 +284,11 @@ def main(argv: list[str]) -> int:
     directory, lanes = Path(positional[0]).expanduser(), positional[1:]
     if not directory.is_dir():
         print(f"lane-stall-watch: no such directory {directory}", file=sys.stderr)
+        return 2
+    missing = unmatched_lanes(directory, lanes)
+    if missing:
+        print(f"lane-stall-watch: no transcript agent-a<lane>-<id>.jsonl in {directory} for {', '.join(missing)}; "
+              "name a lane by its name or agent id", file=sys.stderr)
         return 2
     previous: dict[str, str] = {}
     while True:
