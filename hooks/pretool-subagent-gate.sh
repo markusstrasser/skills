@@ -506,6 +506,21 @@ fi
 # ignores an injected `model` → the advisory still fires; a python error → no stdout → the
 # original dispatch proceeds unchanged (no-op, can never BREAK the call).
 MODEL_UNSET=$(printf '%s' "$INPUT" | jq -r 'if ((.tool_input.model // "") | tostring) == "" then "1" else "" end' 2>/dev/null || true)
+# A definition that pins its own model (frontmatter `model:`) is not the unpinned default this guard exists for,
+# and the tool's `model` argument outranks the definition, so injecting opus replaced the pin. 2026-11-12 genomics:
+# an operator-requested Fable 5.2 check dispatched as fable-low (model: fable) ran on claude-opus-5-5 (its
+# meta.json read "model":"opus"). The project definition shadows the user one, as in the harness.
+if [ -n "$MODEL_UNSET" ] && [ -n "$STYPE" ]; then
+    for _adef in "$PWD/.claude/agents/$STYPE.md" "$HOME/.claude/agents/$STYPE.md"; do
+        [ -f "$_adef" ] || continue
+        if awk 'NR == 1 && $0 != "---" { exit 1 } NR > 1 && $0 == "---" { exit 1 }
+                NR > 1 && /^model:[[:space:]]*[^[:space:]]/ { found = 1; exit 0 }
+                END { exit found ? 0 : 1 }' "$_adef"; then
+            MODEL_UNSET=""
+        fi
+        break
+    done
+fi
 
 # BACKGROUND-GUARD (2026-10-27, genomics): a lane that passes run_in_background as the STRING
 # "true" gets a FOREGROUND child and blocks until it returns (lr-dv 48 min; donor-authority and

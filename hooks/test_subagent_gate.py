@@ -128,12 +128,12 @@ def test_an_ordinary_result_name_is_not_flagged(tmp_path):
     assert "BLOCKED FILENAME" not in context
 
 
-def gate_output(tool_input):
+def gate_output(tool_input, cwd=None):
     envelope = {"tool_name": "Agent", "session_id": "s", "tool_input": tool_input}
     env = dict(os.environ, HOOK_TRIGGER_LOG=os.devnull,
                SUBAGENT_MEMORY_BLOCK_MB="0", SUBAGENT_MEMORY_WARN_MB="0")
     proc = subprocess.run(["bash", str(GATE)], input=json.dumps(envelope), capture_output=True,
-                          text=True, env=env)
+                          text=True, env=env, cwd=cwd)
     if proc.returncode == 2:
         pytest.skip(f"machine-state block, not under test: {proc.stdout[:80]}")
     assert proc.returncode == 0, proc.stderr
@@ -157,3 +157,28 @@ def test_a_boolean_background_flag_is_left_alone():
     out = gate_output(dict(LANE_CHILD, run_in_background=True))
     assert out.get("updatedInput", {}).get("run_in_background", True) is True
     assert "BACKGROUND-GUARD" not in out.get("additionalContext", "")
+
+
+UNPINNED_CHILD = {key: value for key, value in LANE_CHILD.items() if key != "model"}
+
+
+def test_an_agent_definition_model_pin_is_not_overridden(tmp_path):
+    # 2026-11-12 genomics: a Fable 5.2 check dispatched as fable-low (frontmatter model: fable) with no
+    # `model` argument ran on claude-opus-5-5, because the guard injected opus over the definition's pin.
+    agents = tmp_path / ".claude/agents"
+    agents.mkdir(parents=True)
+    (agents / "pinned-check.md").write_text("---\nname: pinned-check\nmodel: fable\neffort: low\n---\n\nBody.\n")
+    out = gate_output(dict(UNPINNED_CHILD, subagent_type="pinned-check"), cwd=tmp_path)
+    assert "model" not in out.get("updatedInput", {})
+    assert "MODEL-GUARD" not in out.get("additionalContext", "")
+
+
+@pytest.mark.parametrize("definition", [None, "---\nname: plain\n---\n\nmodel: fable is only body text.\n"])
+def test_a_dispatch_with_no_model_pin_still_gets_opus(tmp_path, definition):
+    if definition is not None:
+        agents = tmp_path / ".claude/agents"
+        agents.mkdir(parents=True)
+        (agents / "plain.md").write_text(definition)
+    out = gate_output(dict(UNPINNED_CHILD, subagent_type="plain"), cwd=tmp_path)
+    assert out["updatedInput"]["model"] == "opus"
+    assert "MODEL-GUARD" in out["additionalContext"]
