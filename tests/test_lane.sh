@@ -310,6 +310,12 @@ expected_codex=$(printf '%s\n' \
   'model_reasoning_effort="high"' \
   -c \
   'service_tier="default"' \
+  -c \
+  'shell_environment_policy.set.LANE_WORKER="1"' \
+  -c \
+  'shell_environment_policy.set.LANE_NAME="codexargs"' \
+  -c \
+  "shell_environment_policy.set.LANE_HOME=\"$LANE_HOME\"" \
   -s \
   workspace-write \
   --add-dir \
@@ -328,6 +334,12 @@ expected_override=$(printf '%s\n' \
   'model_reasoning_effort="high"' \
   -c \
   'service_tier="default"' \
+  -c \
+  'shell_environment_policy.set.LANE_WORKER="1"' \
+  -c \
+  'shell_environment_policy.set.LANE_NAME="codexoverride"' \
+  -c \
+  "shell_environment_policy.set.LANE_HOME=\"$LANE_HOME\"" \
   --add-dir \
   "$TEST_TMP/slots" \
   --add-dir \
@@ -357,6 +369,12 @@ expected_uvcache=$(printf '%s\n' \
   'model_reasoning_effort="high"' \
   -c \
   'service_tier="default"' \
+  -c \
+  'shell_environment_policy.set.LANE_WORKER="1"' \
+  -c \
+  'shell_environment_policy.set.LANE_NAME="codexuvcache"' \
+  -c \
+  "shell_environment_policy.set.LANE_HOME=\"$LANE_HOME\"" \
   --add-dir \
   "$SHARED_UV_REAL" \
   -s \
@@ -383,6 +401,12 @@ expected_slot=$(printf '%s\n' \
   'model_reasoning_effort="high"' \
   -c \
   'service_tier="default"' \
+  -c \
+  'shell_environment_policy.set.LANE_WORKER="1"' \
+  -c \
+  'shell_environment_policy.set.LANE_NAME="codexcpuslot"' \
+  -c \
+  "shell_environment_policy.set.LANE_HOME=\"$LANE_HOME\"" \
   --add-dir \
   "$SLOT_REAL" \
   -s \
@@ -410,6 +434,12 @@ expected_roots=$(printf '%s\n' \
   'model_reasoning_effort="high"' \
   -c \
   'service_tier="default"' \
+  -c \
+  'shell_environment_policy.set.LANE_WORKER="1"' \
+  -c \
+  'shell_environment_policy.set.LANE_NAME="codexreporoots"' \
+  -c \
+  "shell_environment_policy.set.LANE_HOME=\"$LANE_HOME\"" \
   --add-dir \
   "$ROOT_A" \
   --add-dir \
@@ -434,6 +464,9 @@ HOOKS="$LANE_HOME/codex-git-hooks"
 expected_full=$(printf '%s\n' exec -m gpt-6-astra \
   -c 'model_reasoning_effort="high"' \
   -c 'service_tier="default"' \
+  -c 'shell_environment_policy.set.LANE_WORKER="1"' \
+  -c 'shell_environment_policy.set.LANE_NAME="codexfull"' \
+  -c "shell_environment_policy.set.LANE_HOME=\"$LANE_HOME\"" \
   -c 'shell_environment_policy.set.GIT_CONFIG_COUNT="1"' \
   -c 'shell_environment_policy.set.GIT_CONFIG_KEY_0="core.hooksPath"' \
   -c "shell_environment_policy.set.GIT_CONFIG_VALUE_0=\"$HOOKS\"" \
@@ -475,7 +508,7 @@ fi
 hooked status --short >/dev/null || fail "a full-access codex lane's hooks broke git status"
 LANE_CODEX_SANDBOX=workspace-write "$LANE" run codexpinned --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null
 wait_for_file "$LANE_HOME/codexpinned.done"
-assert_eq "$expected_codex" "$(<"$LANE_CAPTURE/codex.args")" "caller's sandbox over the repo's"
+assert_eq "${expected_codex//LANE_NAME=\"codexargs\"/LANE_NAME=\"codexpinned\"}" "$(<"$LANE_CAPTURE/codex.args")" "caller's sandbox over the repo's"
 git -C "$REPO" config lane.codexSandbox bogus
 if "$LANE" run codexbogus --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree >/dev/null 2>&1; then
   fail "an invalid lane.codexSandbox started a lane"
@@ -509,7 +542,7 @@ assert_eq 'model_reasoning_effort="xhigh"' "$(arg_after -c "$LANE_CAPTURE/codex.
 echo "test: exported empty settings clear recorded overrides"
 LANE_CODEX_MODEL= LANE_CODEX_EFFORT= LANE_CODEX_ADD_DIRS= LANE_CODEX_NETWORK=0 "$LANE" resume codexoverride --no-note >/dev/null
 wait_for_file "$LANE_HOME/codexoverride.done"
-assert_eq "$expected_codex" "$(<"$LANE_CAPTURE/codex.args")" "empty exports restore default codex arguments"
+assert_eq "${expected_codex//LANE_NAME=\"codexargs\"/LANE_NAME=\"codexoverride\"}" "$(<"$LANE_CAPTURE/codex.args")" "empty exports restore default codex arguments"
 
 echo "test: legacy resume warns and uses caller environment"
 python3 -c 'import json, sys; path = sys.argv[1]; data = json.load(open(path, encoding="utf-8")); del data["worker_settings"]; open(path, "w", encoding="utf-8").write(json.dumps(data) + "\n")' "$LANE_HOME/codexoverride.json"
