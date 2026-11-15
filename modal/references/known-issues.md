@@ -42,3 +42,5 @@ Append-only incident history. Consult for a matching failure; dated entries may 
 - **[2026-11-05] Path(__file__).parents[N] raises IndexError inside a container, where the script sits near the root: resolve the repo root another way**
 
 - **[2026-11-05] Function.with_options(gpu=[...]) refuses a GPU fallback list with InvalidError; pass one string or set the list on the decorator**
+
+- **[2026-11-16] L4 requests sat unscheduled ~10 min (0 containers, no log line) while an L40S came in 5 s; for clock-bound GPU runs use gpu=["L4","L40S"] and record torch.cuda.get_device_name per run. An app stopped before any container showed still billed USD 0.026.**
