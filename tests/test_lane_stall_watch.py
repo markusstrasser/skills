@@ -71,3 +71,29 @@ def test_missing_directory_fails_loud(tmp_path: Path) -> None:
     result = run("--once", str(tmp_path / "absent"))
     assert result.returncode == 2
     assert "no such directory" in result.stderr
+
+
+def test_worktree_agent_is_named_by_its_meta_file(tmp_path: Path) -> None:
+    # An agent started in its own worktree writes agent-a<id>.jsonl: the file name carries no
+    # lane name, the sibling meta file does (2026-11-17: `trainer-2` was refused by name twice
+    # in one night and had to be watched by its id).
+    row = {"type": "user", "timestamp": stamp(20), "message": {}}
+    (tmp_path / "agent-aacc71e64470e255e.jsonl").write_text(json.dumps(row) + "\n")
+    (tmp_path / "agent-aacc71e64470e255e.meta.json").write_text(json.dumps({"name": "trainer-2"}))
+    transcript(tmp_path, "other", row)
+    for spelling in ("trainer-2", "acc71e64470e255e", "aacc71e64470e255e"):
+        result = run("--once", str(tmp_path), spelling)
+        assert result.returncode == 0, (spelling, result.stderr)
+        assert [line.split(" ", 1)[1] for line in result.stdout.splitlines()] == [
+            "trainer-2: BUSY -> STALLED_MODEL"
+        ], spelling
+    # With no lane named, the watch over recent transcripts labels it by its name too.
+    result = run("--once", str(tmp_path))
+    assert sorted(line.split(" ", 1)[1] for line in result.stdout.splitlines()) == [
+        "other: BUSY -> STALLED_MODEL",
+        "trainer-2: BUSY -> STALLED_MODEL",
+    ]
+    # A name that neither a file name nor a meta file gives still fails loud.
+    result = run("--once", str(tmp_path), "trainer-3")
+    assert result.returncode == 2
+    assert "trainer-3" in result.stderr

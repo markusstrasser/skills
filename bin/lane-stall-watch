@@ -7,7 +7,9 @@
 An in-process teammate that dies keeps reading "running" or "idle" in ListAgents.
 This reads each lane's transcript tail (<subagents-dir>/agent-a<lane>-*.jsonl, or
 every transcript written in the last 6 h when no lane is named) and prints one
-line per state change:
+line per state change. A lane is named by its name or its agent id; an agent in
+its own worktree writes agent-a<id>.jsonl and is found by the name in its
+agent-a<id>.meta.json:
 
   STALLED_TOOL   the last event is a tool call whose result is overdue: a Bash call
                  past its declared timeout (default 120 s) plus 3 min, a background
@@ -180,9 +182,20 @@ def overdue_unread(
 
 
 def lane_spellings(agent: str) -> set[str]:
-    """The names one transcript answers to: its lane name, and its agent id with and without the leading "a"
-    (SendMessage's pin id is "a<lane>-<hex>"; the transcript file is agent-a<lane>-<hex>.jsonl)."""
+    """The names one transcript's file name answers to: its lane name, and its agent id with and without the
+    leading "a" (SendMessage's pin id is "a<lane>-<hex>"; the transcript file is agent-a<lane>-<hex>.jsonl)."""
     return {agent.rsplit("-", 1)[0], agent, f"a{agent}"}
+
+
+def meta_name(path: Path) -> str | None:
+    """The `name` in a transcript's sibling .meta.json, or None. An agent started in its own worktree writes
+    agent-a<hex>.jsonl, a file name without its lane name (11-17: `trainer-2` wrote agent-aacc71e6....jsonl
+    and the watch refused the name twice in one night); its meta file still names it."""
+    try:
+        name = json.loads(path.with_suffix(".meta.json").read_text()).get("name")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return name if isinstance(name, str) and name else None
 
 
 def unmatched_lanes(directory: Path, lanes: list[str]) -> list[str]:
@@ -191,15 +204,24 @@ def unmatched_lanes(directory: Path, lanes: list[str]) -> list[str]:
     spellings: set[str] = set()
     for path in directory.glob("agent-a*.jsonl"):
         spellings |= lane_spellings(path.stem.removeprefix("agent-a"))
-    return [lane for lane in lanes if lane not in spellings]
+    missing = [lane for lane in lanes if lane not in spellings]
+    if missing:  # read the meta files only for names the file names do not settle
+        names = {meta_name(path) for path in directory.glob("agent-a*.jsonl")}
+        missing = [lane for lane in missing if lane not in names]
+    return missing
 
 
 def lane_transcripts(directory: Path, lanes: list[str], now: datetime) -> dict[str, Path]:
+    """Each watched lane's transcript, keyed by the label its lines carry: the lane name its file name
+    gives, or the meta file's name when the file name holds only an agent id."""
     found: dict[str, Path] = {}
+    wanted = set(lanes)
     for path in sorted(directory.glob("agent-a*.jsonl"), key=lambda item: item.stat().st_mtime):
         agent = path.stem.removeprefix("agent-a")
         lane = agent.rsplit("-", 1)[0]
-        if lanes and not lane_spellings(agent) & set(lanes):
+        if "-" not in agent:  # an id alone: the meta file may hold the lane's name
+            lane = meta_name(path) or lane
+        if lanes and not (lane_spellings(agent) | {lane}) & wanted:
             continue
         if not lanes and now - datetime.fromtimestamp(path.stat().st_mtime, timezone.utc) > RECENT:
             continue
@@ -257,6 +279,17 @@ def selftest() -> None:
             assert list(lane_transcripts(transcripts, [spelling], now)) == ["foo-bar"], spelling
         assert unmatched_lanes(transcripts, ["foo-bar", "afoo-bar-0123abcd", "baz"]) == ["baz"]
         assert main([str(transcripts), "--once", "baz"]) == 2  # fails loud, never watches nothing
+        # A worktree agent's transcript carries only its id; its meta file names the lane.
+        (transcripts / "agent-a0123456789abcdef.jsonl").write_text("")
+        (transcripts / "agent-a0123456789abcdef.meta.json").write_text(json.dumps({"name": "wt-lane"}))
+        for spelling in ("wt-lane", "0123456789abcdef", "a0123456789abcdef"):
+            assert list(lane_transcripts(transcripts, [spelling], now)) == ["wt-lane"], spelling
+        assert unmatched_lanes(transcripts, ["wt-lane", "foo-bar", "baz"]) == ["baz"]
+        (transcripts / "agent-afedcba9876543210.jsonl").write_text("")  # an id with no meta file
+        assert list(lane_transcripts(transcripts, ["fedcba9876543210"], now)) == ["fedcba9876543210"]
+        (transcripts / "agent-a00000000000000ff.jsonl").write_text("")
+        (transcripts / "agent-a00000000000000ff.meta.json").write_text("not json")
+        assert meta_name(transcripts / "agent-a00000000000000ff.jsonl") is None
     assert len(overdue_unread([message(15)], None, now)) == 1
     assert overdue_unread([message(15, read=True)], None, now) == []
     assert overdue_unread([message(5)], None, now) == []  # inside the grace
