@@ -44,3 +44,5 @@ Append-only incident history. Consult for a matching failure; dated entries may 
 - **[2026-11-05] Function.with_options(gpu=[...]) refuses a GPU fallback list with InvalidError; pass one string or set the list on the decorator**
 
 - **[2026-11-16] L4 requests sat unscheduled ~10 min (0 containers, no log line) while an L40S came in 5 s; for clock-bound GPU runs use gpu=["L4","L40S"] and record torch.cuda.get_device_name per run. An app stopped before any container showed still billed USD 0.026.**
+
+- **[2026-11-16] NeMo 2.4 ASR image: pin datasets==3.6.0 pyarrow==17.0.0 (unpinned pip takes datasets 5 + pyarrow 21, which refuse NeMo numpy<2); set CC=gcc CXX=g++ for texterrors under add_python; Parakeet TDT long-form on L4 OOMs and fragments across files: local attention for every file + bf16 autocast + gc/empty_cache per file, L40S (24 files of 13-21 min ok, WER 2.9% vs 3.4% fp32 full)**
