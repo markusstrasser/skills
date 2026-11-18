@@ -49,7 +49,11 @@ def main() -> int:
             found.append(f"{tier} {Path(cwd).name} {path.name}")
     if found:
         print(f"codex-tier-audit: {len(found)} of {checked} headless runs in {args.hours:g} h not at the Standard tier:")
-        print("\n".join(sorted(found)[:20]))
+        tiers: dict[str, int] = {}
+        for row in found:
+            tiers[row.split()[0]] = tiers.get(row.split()[0], 0) + 1
+        print("by tier: " + ", ".join(f"{name} {count}" for name, count in sorted(tiers.items())))
+        print("\n".join(sorted(found)))
         return 1
     print(f"codex-tier-audit: {checked} headless runs in {args.hours:g} h, all at the Standard tier")
     return 0

@@ -11,7 +11,12 @@ check "exec is pinned" "$pin exec hello" "$(shim exec hello)"
 check "the alias e is pinned" "$pin e hello" "$(shim e hello)"
 check "root options before exec" "$pin -m gpt-6.1-sol exec hello" "$(shim -m gpt-6.1-sol exec hello)"
 check "root -c before exec" "$pin -c a=1 exec hello" "$(shim -c a=1 exec hello)"
-check "a named tier comes later and wins" "$pin exec -c service_tier=\"ultrafast\" hello" "$(shim exec -c 'service_tier="ultrafast"' hello)"
+rc=0; CODEX_REAL="$T/real" "$ROOT/bin/codex-tier-shim" exec -c 'service_tier="priority"' hello >/dev/null 2>&1 || rc=$?
+check "a named faster tier is refused" "2" "$rc"
+rc=0; CODEX_REAL="$T/real" "$ROOT/bin/codex-tier-shim" -c service_tier=ultrafast exec hello >/dev/null 2>&1 || rc=$?
+check "a root -c tier before exec is refused" "2" "$rc"
+check "a tier Markus allows passes" "$pin exec -c service_tier=\"ultrafast\" hello" "$(CODEX_TIER_ALLOW=ultrafast shim exec -c 'service_tier="ultrafast"' hello)"
+check "an explicit default passes" "$pin exec -c service_tier=\"default\" hello" "$(shim exec -c 'service_tier="default"' hello)"
 check "the client passes through" "" "$(shim)"
 check "resume passes through" "resume --last" "$(shim resume --last)"
 check "exec as an option's value is not exec" "-m exec" "$(shim -m exec)"
