@@ -136,14 +136,14 @@ Verify every claim that changes **sequencing, deletion, unification, or blast ra
 not "top 10 by severity." At least one repo-access pass:
 
 ```bash
-codex exec -s read-only -C "$REPO" -m gpt-6-astra -c model_reasoning_effort=low \
+codex exec -s read-only -C "$REPO" -m gpt-6.2-astra -c model_reasoning_effort=low \
   -o "$REPO/.model-review/<topic>-verify.md" \
   "Fact-check decision-dependent claims with file:line. Mark feasible one-session vs multi-session." \
   < "$REPO/.model-review/<topic>-critique-combined.md"
 ```
 
 (Composer 2.5, the old verify lane, was retired 2026-10-07; on a Codex plan-limit error rerun with
-`-m gpt-6.1-sol -c model_reasoning_effort=high`.)
+`-m gpt-6.2-sol -c model_reasoning_effort=high`.)
 
 Or orchestrator Read/Grep on load-bearing claims. **Critics receive the verified subset**
 plus full inventory summary — not unverified bulk.
@@ -158,7 +158,7 @@ Claude/Codex disagree.
 | Critic | Lens | Dispatch |
 |--------|------|----------|
 | Claude Opus | Sequencing / unification | `llmx chat --subscription -m claude-opus-5-5` |
-| Codex | Premise-soundness / false-positive risk | `llmx chat -p codex-cli -m gpt-6-astra` |
+| Codex | Premise-soundness / false-positive risk | `llmx chat -p codex-cli -m gpt-6.2-astra` |
 
 ```bash
 cd "$REPO"
@@ -171,7 +171,7 @@ llmx chat --subscription -m claude-opus-5-5 \
   -o .model-review/critique-claude-opus-subscription.md \
   "Adversarial. UNIFIED root-cause fixes. Label claims lane-backed|verify-backed|speculative. Return: Findings | Top 3 | DELETE | Disagreements"
 
-llmx chat -p codex-cli -m gpt-6-astra \
+llmx chat -p codex-cli -m gpt-6.2-astra \
   -f .model-review/<topic>-critique-combined.md \
   -e high \
   -o .model-review/critique-codex-cli.md \

@@ -49,16 +49,16 @@ For each phase in the slice, in order:
    consumers against them. If a probe fails, that's a divergence → step 5.
 
    **Repo premise probe (default at every phase boundary):** before building, dispatch a read-only
-   falsification pass on the phase's load-bearing premises — GPT-6 Astra at low effort in a read-only
+   falsification pass on the phase's load-bearing premises — GPT-6.2 Astra at low effort in a read-only
    codex sandbox rooted at the repo (Composer 2.5, the old lane, was retired 2026-10-07; on a Codex
-   plan-limit error rerun with `-m gpt-6.1-sol -c model_reasoning_effort=high`). Pattern:
+   plan-limit error rerun with `-m gpt-6.2-sol -c model_reasoning_effort=high`). Pattern:
 
    ```bash
    # /tmp/phase-premises.md: the numbered premises from the plan phase (callers exist? join keys on
    # both sides? helper already exists?) followed by: "For each numbered premise: PASS|FAIL|UNKNOWN +
    # file:line evidence or MISSING. Commit — no hedge-only lists. FAIL on any load-bearing premise
    # blocks the phase."
-   codex exec -s read-only -C "$REPO" -m gpt-6-astra -c model_reasoning_effort=low \
+   codex exec -s read-only -C "$REPO" -m gpt-6.2-astra -c model_reasoning_effort=low \
      -o /tmp/phase-premises-verdict.md - < /tmp/phase-premises.md
    ```
 
@@ -152,7 +152,7 @@ For each phase in the slice, in order:
 4. **Commit.** Granular semantic commits, one logical change each. **Never `git add -A`/`.`** — stage
    specific paths. Foreground commits only (a hook-blocked commit returns exit 0 from a backgrounded call).
 5. **Gate.** Do not advance to the next phase until this phase's end-state holds and is committed.
-   Then run **`/diff-review low`** (Skill tool — local scout, GPT-6 Astra via codex) on the phase's commits:
+   Then run **`/diff-review low`** (Skill tool — local scout, GPT-6.2 Astra via codex) on the phase's commits:
    a precision-only pass (≤4 findings) that catches the dropped-guard / inverted-condition class while
    the phase is hot and cheap to fix. Bugs compound across phases — this is the same logic as the
    multi-phase checkpoint rule. Pass the path-scoped `.claude/rules/` files covering the diff as review
@@ -178,7 +178,7 @@ that contradicts what you see, and don't silently abandon it either. Research / 
 ## Done
 1. **Completeness check** (`../decide/references/checklists.md`): every phase in the slice landed AND its
    end-state was verified AND committed. Mechanically verify; don't assert.
-2. **Two-layer slice review:** **`/diff-review high`** (local skill — GPT-6 Astra scout + optional
+2. **Two-layer slice review:** **`/diff-review high`** (local skill — GPT-6.2 Astra scout + optional
    `--both`) over the WHOLE slice — recall mode ("a missed bug ships"), where cross-cutting
    issues invisible to the per-phase low passes surface — then **`/critique close`** for the
    design/architecture layer (diff layer is the local `/diff-review` pass — don't run it twice). Dispatch WITHOUT auto-fix; this session owns commits.

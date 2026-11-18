@@ -17,7 +17,7 @@ Formalizes the genomics bug-hunt pattern: **scouts write, orchestrator model jud
 |------|-----|
 | **Operator** | Human — goals, approval, irreversible apply |
 | **Orchestrator model** | Frontier parent (Opus, etc.) — dispatch, triage, propose fixes |
-| **Scout** | GPT-6 Astra low in a read-only codex sandbox (`--backend codex --effort low`) — audit files only |
+| **Scout** | GPT-6.2 Astra low in a read-only codex sandbox (`--backend codex --effort low`) — audit files only |
 
 ## Flow
 

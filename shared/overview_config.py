@@ -8,7 +8,7 @@ from pathlib import Path
 # cheap, high-volume job, so the cheap tier is correct). Single source of truth
 # for both the live path (per-project config) and the cross-project batch path.
 # Subscription GPT via codex-cli ($0); chosen 2026-07-14 when Gemini was critique-only.
-DEFAULT_OVERVIEW_MODEL = "gpt-6-astra"
+DEFAULT_OVERVIEW_MODEL = "gpt-6.2-astra"
 
 
 @dataclass(frozen=True)

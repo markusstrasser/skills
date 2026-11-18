@@ -44,7 +44,7 @@ class DispatchCoreTest(unittest.TestCase):
 
             def mock_chat(**kwargs):
                 self.assertEqual(kwargs["provider"], "openai")
-                self.assertEqual(kwargs["model"], "gpt-6-astra")
+                self.assertEqual(kwargs["model"], "gpt-6.2-astra")
                 response = MagicMock()
                 response.content = "hello"
                 response.latency = 0.25
@@ -69,7 +69,7 @@ class DispatchCoreTest(unittest.TestCase):
             self.assertEqual(output_path.read_text(), "hello")
             meta = json.loads((root / "out.meta.json").read_text())
             self.assertEqual(meta["status"], "ok")
-            self.assertEqual(meta["resolved_model"], "gpt-6-astra")
+            self.assertEqual(meta["resolved_model"], "gpt-6.2-astra")
             self.assertEqual(meta["usage"]["prompt_tokens"], 12)
             telemetry = [
                 json.loads(line) for line in (root / "telemetry.jsonl").read_text().splitlines()

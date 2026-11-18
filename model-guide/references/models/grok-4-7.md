@@ -28,7 +28,7 @@ access. Any failure blocks the axis before reviewer dispatch.
 
 **Use less / never alone:**
 1. **Unsourced facts / "should we even do this?"** — no independent 4.7 calibration read; tools + Opus/GLM for epistemic guardrails.
-2. **Hard quantitative / CritPt physics**; use GPT-6 Astra pro mode.
+2. **Hard quantitative / CritPt physics**; use GPT-6.2 Astra at high effort.
 3. **Sole architecture judge** — still Opus `max` + GPT cross-lab; Grok is the *repo* axis, not the taste axis.
 4. **Contexts >500k** — API window is 500k; Opus/GPT are 1M-class.
 5. **CursorBench scores** — Cursor blog: training contamination; excluded from their table.

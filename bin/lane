@@ -45,7 +45,7 @@ usage:
       (opencode worker: bin/lane-opencode's default model, DeepSeek V4.1 Flash with thinking on; LANE_OPENCODE_MODEL=<provider/model> overrides it)
       (opencode worker: no sandbox; a scrubbed env and a deny-list guard it, see bin/lane-opencode; exit 86 = balance exhausted)
       (opencode worker: a provider at capacity (429) is retried in the lane's session for ~20 min, then exit 85; lane resume continues it)
-      (codex worker: LANE_CODEX_MODEL=<m> LANE_CODEX_EFFORT=<e> env override the defaults, gpt-6-astra at high effort)
+      (codex worker: LANE_CODEX_MODEL=<m> LANE_CODEX_EFFORT=<e> env override the defaults, gpt-6.2-astra at high effort)
       (codex worker: LANE_CODEX_ADD_DIRS=<a:b> adds writable roots; LANE_CODEX_NETWORK=1 enables network; git metadata stays read-only, so the parent merges and commits)
       (codex worker: LANE_CODEX_SANDBOX=<mode>, else `git config lane.codexSandbox <mode>` in the repo, picks codex's sandbox: workspace-write (default), read-only or danger-full-access)
       (codex worker: each `git config --add lane.codexAddDir <absolute dir>` in the repo adds a writable root to every codex lane)
@@ -190,7 +190,7 @@ import sys
 # Model and effort always reach the worker's command line. An empty effort used to mean "whatever the CLI has
 # saved", and that value is written by interactive sessions (Claude Code /effort, the Codex app's pickers).
 defaults = {
-    "codex_model": "gpt-6-astra",
+    "codex_model": "gpt-6.2-astra",
     "codex_effort": "high",
     "codex_add_dirs": "",
     "codex_network": "0",
@@ -1788,7 +1788,7 @@ cmd_review() {
   [ "$#" -ge 1 ] || die "review requires a name"
   local name="$1"
   shift
-  local model="gpt-6-astra"
+  local model="gpt-6.2-astra"
   local effort="high"
   local focus=""
   local out="$LANE_HOME/$name.review.md"

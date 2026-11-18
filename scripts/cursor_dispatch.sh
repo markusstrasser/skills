@@ -10,8 +10,8 @@
 # Verified CLI surface (cursor-agent 2026.06.15): --mode {plan,ask}, ask=read-only;
 # NO native --timeout (wrap with shell timeout); -f/--force auto-approves read commands;
 # --workspace roots it. 2026-10-07: Composer 2.5 (this script's old default and only model)
-# was retired as outdated; its successor is gpt-6-astra at low effort via
-# `codex exec -s read-only -C <dir> -m gpt-6-astra -c model_reasoning_effort=low -o <out> -`,
+# was retired as outdated; its successor is gpt-6.2-astra at low effort via
+# `codex exec -s read-only -C <dir> -m gpt-6.2-astra -c model_reasoning_effort=low -o <out> -`,
 # which is now the default read-only repo lane. This script has NO default model any more:
 # --model must be an exact admitted Cursor Grok slug (grok-4.7-{low,medium,high,xhigh}[-fast]).
 # opus/gpt/claude pins are off-policy AND hook-blocked by pretool-cursor-model-guard.py:
@@ -49,8 +49,8 @@ done
 case "$MODEL" in
   grok-4.7-low|grok-4.7-medium|grok-4.7-high|grok-4.7-xhigh) ;;
   grok-4.7-low-fast|grok-4.7-medium-fast|grok-4.7-high-fast|grok-4.7-xhigh-fast) ;;
-  composer*) echo "usage: $MODEL retired 2026-10-07; use codex exec -s read-only -m gpt-6-astra -c model_reasoning_effort=low, or --model grok-4.7-low" >&2; exit 2;;
-  *) echo "usage: --model must be an exact grok-4.7-{low,medium,high,xhigh}[-fast] slug (Composer retired 2026-10-07; default lane is codex exec gpt-6-astra low)" >&2; exit 2;;
+  composer*) echo "usage: $MODEL retired 2026-10-07; use codex exec -s read-only -m gpt-6.2-astra -c model_reasoning_effort=low, or --model grok-4.7-low" >&2; exit 2;;
+  *) echo "usage: --model must be an exact grok-4.7-{low,medium,high,xhigh}[-fast] slug (Composer retired 2026-10-07; default lane is codex exec gpt-6.2-astra low)" >&2; exit 2;;
 esac
 
 # Preflight 1 — binary present (bare runners / Docker may lack it).

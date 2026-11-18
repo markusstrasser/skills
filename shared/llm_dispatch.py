@@ -79,10 +79,7 @@ PROFILES: dict[str, DispatchProfile] = {
         name="fast_extract",
         intent="Low-cost extraction, triage, and short synthesis",
         provider="openai",
-        # 2026-09-05: Astra-low on subscription. Luna does not beat Astra-low
-        # on quality (AA Intelligence Index: Astra-low 57 vs Luna-max 43).
-        # Keep `-m gpt-6-luna` for metered API bulk where $/tok and speed win.
-        model="gpt-6-astra",
+        model="gpt-6.2-astra",
         timeout=300,
         reasoning_effort="low",
         auth="subscription",
@@ -108,9 +105,7 @@ PROFILES: dict[str, DispatchProfile] = {
         name="formal_review",
         intent="Formal or quantitative GPT-backed review",
         provider="openai",
-        # 2026-09-05: GPT-6 Astra is the flagship GPT / Codex default.
-        # gpt-6.1-sol / gpt-6-luna are the cheaper named cost tiers.
-        model="gpt-6-astra",
+        model="gpt-6.2-astra",
         timeout=600,
         # 2026-06-10: formal is the GPT reasoning axis for reviews — operator
         # policy is "medium most cases, high for deep/formal". `gpt_general`
@@ -124,7 +119,7 @@ PROFILES: dict[str, DispatchProfile] = {
         intent="General-purpose GPT-backed dispatch",
         provider="openai",
         # 2026-09-05: everyday GPT follows the operator Codex default (Astra).
-        model="gpt-6-astra",
+        model="gpt-6.2-astra",
         timeout=600,
         reasoning_effort="medium",
         # Subscription via codex-cli ($0 on the ChatGPT plan); API metering is opt-in.
@@ -138,7 +133,7 @@ PROFILES: dict[str, DispatchProfile] = {
         name="mechanical_review",
         intent="Low-effort GPT mechanical/lint audit",
         provider="openai",
-        model="gpt-6-astra",
+        model="gpt-6.2-astra",
         timeout=300,
         reasoning_effort="low",
         # 2026-07-14: subscription lane (codex-cli, $0) — see gpt_general.
@@ -158,7 +153,7 @@ PROFILES: dict[str, DispatchProfile] = {
         name="cheap_tick",
         intent="Low-cost maintenance or cycle tick synthesis",
         provider="openai",
-        model="gpt-6-astra",
+        model="gpt-6.2-astra",
         timeout=300,
         reasoning_effort="low",
         auth="subscription",
@@ -170,7 +165,7 @@ PROFILES: dict[str, DispatchProfile] = {
         provider="openai",
         # NOTE the context drop 900K→120K: callers already size-cap via
         # `just observe-context`; chunk rather than stuff.
-        model="gpt-6-astra",
+        model="gpt-6.2-astra",
         timeout=300,
         reasoning_effort="low",
         auth="subscription",
@@ -251,7 +246,7 @@ PROFILES: dict[str, DispatchProfile] = {
         name="premise_scout",
         intent="VOI premise scout: grep/read repo to falsify design premises",
         provider="openai",
-        model="gpt-6-astra",
+        model="gpt-6.2-astra",
         timeout=300,
         reasoning_effort="low",
         auth="subscription",
@@ -261,13 +256,11 @@ PROFILES: dict[str, DispatchProfile] = {
     ),
     "premise_scout_fallback": DispatchProfile(
         # Served only when the Astra scout fails on a Codex plan/usage limit
-        # (llmx exit-6 class). Operator 2026-10-07: "gpt 6.1 sol high"; the
-        # slug is gpt-6.1-sol since 2026-10-09; model-guide names Sol as
-        # Astra's plan-limit fallback.
+        # (llmx exit-6 class). The fallback stays on the Codex subscription.
         name="premise_scout_fallback",
         intent="Premise scout fallback when the Astra plan limit is exhausted",
         provider="openai",
-        model="gpt-6.1-sol",
+        model="gpt-6.2-sol",
         timeout=300,
         reasoning_effort="high",
         auth="subscription",
@@ -295,8 +288,8 @@ PROFILES: dict[str, DispatchProfile] = {
 # Retired profile names refuse with a successor instead of "unknown profile".
 _COMPOSER_RETIRED = (
     "Cursor Composer 2.5 retired 2026-10-07 as outdated; use `fast_extract` "
-    "(gpt-6-astra, low effort, codex-cli subscription) for packet screens; repo-grounded "
-    "premise checks run as `codex exec -s read-only -C <repo> -m gpt-6-astra` (the /critique "
+    "(gpt-6.2-astra, low effort, codex-cli subscription) for packet screens; repo-grounded "
+    "premise checks run as `codex exec -s read-only -C <repo> -m gpt-6.2-astra` (the /critique "
     "premise scout)"
 )
 RETIRED_PROFILES = {
@@ -308,11 +301,8 @@ MODEL_TO_PROFILE = {
     "gemini-3.1-flash-lite-preview": "observe_bulk",
     "gemini-4-carbon": "deep_review",  # 2026-11-11: deep_review runs Carbon; an Argon or Flash pin must not map here silently
     "gemini-3.1-pro-preview": "legacy_pro_review",  # demoted 2026-05-24
-    "gpt-6-astra": "formal_review",
-    "gpt-6": "formal_review",
-    "gpt-6.1-sol": "formal_review",
-    "gpt-6-sol": "formal_review",  # llmx alias → gpt-6.1-sol; kept for old pins
-    "gpt-6-luna": "gpt_general",  # explicit Luna pin; effort is the cheap/mechanical dial
+    "gpt-6.2-astra": "formal_review",
+    "gpt-6.2-sol": "formal_review",
     "claude-opus-5": "claude_review",
     "glm-5.2": "glm_review",
     "grok-4.7-high": "grok_review",

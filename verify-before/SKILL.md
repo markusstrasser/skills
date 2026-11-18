@@ -118,7 +118,7 @@ Example:
 
 After fetching structured ground truth, you may need to **interpret** ambiguous signals
 (stack traces, partial logs, conflicting fields). Do NOT paraphrase from memory — pass the
-raw structured payload to GPT-6 Astra at low effort (`fast_extract`; it replaced Composer 2.5,
+raw structured payload to GPT-6.2 Astra at low effort (`fast_extract`; it replaced Composer 2.5,
 retired 2026-10-07) with a tight output contract:
 
 ```bash

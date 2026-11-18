@@ -1,3 +1,5 @@
+> Historical reference. Current routing uses [GPT-6.2 Astra](gpt-6.2-astra.md).
+
 # GPT-6 Astra — default GPT
 
 > Moved from model-guide/SKILL.md on 2026-09-25 (principle-first rewrite; skills HEAD before the rewrite). Retired-model content pruned 2026-09-25 (git history keeps it). Source lines: L13-19.

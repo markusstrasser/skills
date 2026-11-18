@@ -1,5 +1,13 @@
 # Model Guide Changelog
 
+## 2026-11-18 - GPT-6.2 Astra and Sol replace the earlier OpenAI routes
+
+Astra remains the flagship and repository scout. Sol covers everyday GPT work,
+the Astra subscription fallback and former Luna/Terra callers. Sol costs 20×
+Luna per API token at standard short-context rates. llmx refuses the previous
+IDs with a successor and retains historical usage rates. The ChatGPT-bundled
+Codex CLI completed both subscription probes. Standalone 0.164.0 refused both.
+
 ## 2026-11-11 - Gemini 4 Carbon is the default Gemini; one Gemini call per critique
 
 Operator: "gemini 4 carbon is out ... which is better than argon ... we can update". `gemini-4-carbon` is on the paid key's model list and priced like Argon ($2/$10 intro through 2026-11-30, then $4/$20). Live probe: `thinkingLevel` takes `low` through `max` and rejects `minimal` and `none`. llmx 1c10c26 registers it with `low|medium|high`. The `deep_review` profile now runs Carbon. No benchmark or launch post has been read and no cosigner probe has run: Carbon's edge over Argon is the operator's statement.

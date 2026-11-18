@@ -305,7 +305,7 @@ wait_for_file "$LANE_HOME/codexargs.done"
 expected_codex=$(printf '%s\n' \
   exec \
   -m \
-  gpt-6-astra \
+  gpt-6.2-astra \
   -c \
   'model_reasoning_effort="high"' \
   -c \
@@ -324,12 +324,12 @@ expected_codex=$(printf '%s\n' \
   "$CODEX_PROMPT")
 assert_eq "$expected_codex" "$(<"$LANE_CAPTURE/codex.args")" "codex arguments"
 assert_eq "$REPO_REAL" "$(<"$LANE_CAPTURE/codex.cwd")" "codex cwd"
-override_output=$(LANE_CODEX_MODEL=gpt-6.1-sol LANE_CODEX_EFFORT=high LANE_CODEX_ADD_DIRS="$TEST_TMP/slots:$TEST_TMP/extra root:" LANE_CODEX_NETWORK=1 "$LANE" run codexoverride --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree)
+override_output=$(LANE_CODEX_MODEL=gpt-6.2-sol LANE_CODEX_EFFORT=high LANE_CODEX_ADD_DIRS="$TEST_TMP/slots:$TEST_TMP/extra root:" LANE_CODEX_NETWORK=1 "$LANE" run codexoverride --repo "$REPO" --brief "$BRIEF" --worker codex --no-worktree)
 wait_for_file "$LANE_HOME/codexoverride.done"
 expected_override=$(printf '%s\n' \
   exec \
   -m \
-  gpt-6.1-sol \
+  gpt-6.2-sol \
   -c \
   'model_reasoning_effort="high"' \
   -c \
@@ -364,7 +364,7 @@ rm "$REPO/.uv-cache"
 expected_uvcache=$(printf '%s\n' \
   exec \
   -m \
-  gpt-6-astra \
+  gpt-6.2-astra \
   -c \
   'model_reasoning_effort="high"' \
   -c \
@@ -396,7 +396,7 @@ SLOT_REAL=$(cd "$TEST_TMP/cpu-slots" && pwd -P)
 expected_slot=$(printf '%s\n' \
   exec \
   -m \
-  gpt-6-astra \
+  gpt-6.2-astra \
   -c \
   'model_reasoning_effort="high"' \
   -c \
@@ -429,7 +429,7 @@ ROOT_B=$(cd "$TEST_TMP/repo-roots/b" && pwd -P)
 expected_roots=$(printf '%s\n' \
   exec \
   -m \
-  gpt-6-astra \
+  gpt-6.2-astra \
   -c \
   'model_reasoning_effort="high"' \
   -c \
@@ -461,7 +461,7 @@ FULL_PROMPT="Do the fake task.
 
 Git state belongs to the parent: edit files and run checks, but do not stage, commit, merge, stash or switch branches. Do not stop or kill processes you did not start. End by listing every path you changed."
 HOOKS="$LANE_HOME/codex-git-hooks"
-expected_full=$(printf '%s\n' exec -m gpt-6-astra \
+expected_full=$(printf '%s\n' exec -m gpt-6.2-astra \
   -c 'model_reasoning_effort="high"' \
   -c 'service_tier="default"' \
   -c 'shell_environment_policy.set.LANE_WORKER="1"' \
@@ -519,21 +519,21 @@ echo "test: codex resume retains settings without caller exports"
 resume_output=$("$LANE" resume codexoverride --no-note)
 wait_for_file "$LANE_HOME/codexoverride.done"
 assert_eq "$expected_override" "$(<"$LANE_CAPTURE/codex.args")" "resumed codex settings"
-settings_line="lane: settings codex_model=gpt-6.1-sol codex_effort=high add_dirs=$TEST_TMP/slots:$TEST_TMP/extra root network=1 sandbox=workspace-write"
+settings_line="lane: settings codex_model=gpt-6.2-sol codex_effort=high add_dirs=$TEST_TMP/slots:$TEST_TMP/extra root network=1 sandbox=workspace-write"
 grep -Fxq "$settings_line" <<<"$override_output" || fail "run omitted effective codex settings"
 grep -Fxq "$settings_line" <<<"$resume_output" || fail "resume omitted effective codex settings"
-assert_eq "gpt-6.1-sol" "$(worker_setting "$LANE_HOME/codexoverride.json" codex_model)" "recorded codex model"
+assert_eq "gpt-6.2-sol" "$(worker_setting "$LANE_HOME/codexoverride.json" codex_model)" "recorded codex model"
 assert_eq "high" "$(worker_setting "$LANE_HOME/codexoverride.json" codex_effort)" "recorded codex effort"
 assert_eq "$TEST_TMP/slots:$TEST_TMP/extra root" "$(worker_setting "$LANE_HOME/codexoverride.json" codex_add_dirs)" "recorded writable roots"
 assert_eq "1" "$(worker_setting "$LANE_HOME/codexoverride.json" codex_network)" "recorded network"
-assert_eq "gpt-6-astra" "$(worker_setting "$LANE_HOME/codexargs.json" codex_model)" "recorded default codex model"
+assert_eq "gpt-6.2-astra" "$(worker_setting "$LANE_HOME/codexargs.json" codex_model)" "recorded default codex model"
 assert_eq "high" "$(worker_setting "$LANE_HOME/codexargs.json" codex_effort)" "recorded default codex effort"
 assert_eq "0" "$(worker_setting "$LANE_HOME/codexargs.json" codex_network)" "recorded default network"
 
 echo "test: resume effort override wins and becomes the recorded setting"
 LANE_CODEX_EFFORT=xhigh "$LANE" resume codexoverride --no-note >/dev/null
 wait_for_file "$LANE_HOME/codexoverride.done"
-assert_eq "gpt-6.1-sol" "$(arg_after -m "$LANE_CAPTURE/codex.args")" "override retained model"
+assert_eq "gpt-6.2-sol" "$(arg_after -m "$LANE_CAPTURE/codex.args")" "override retained model"
 assert_eq 'model_reasoning_effort="xhigh"' "$(arg_after -c "$LANE_CAPTURE/codex.args")" "resumed effort override"
 "$LANE" resume codexoverride --no-note >/dev/null
 wait_for_file "$LANE_HOME/codexoverride.done"
@@ -546,7 +546,7 @@ assert_eq "${expected_codex//LANE_NAME=\"codexargs\"/LANE_NAME=\"codexoverride\"
 
 echo "test: legacy resume warns and uses caller environment"
 python3 -c 'import json, sys; path = sys.argv[1]; data = json.load(open(path, encoding="utf-8")); del data["worker_settings"]; open(path, "w", encoding="utf-8").write(json.dumps(data) + "\n")' "$LANE_HOME/codexoverride.json"
-legacy_output=$(LANE_CODEX_MODEL=gpt-6.1-sol LANE_CODEX_EFFORT=high LANE_CODEX_ADD_DIRS="$TEST_TMP/slots:$TEST_TMP/extra root" LANE_CODEX_NETWORK=1 "$LANE" resume codexoverride --no-note 2>&1)
+legacy_output=$(LANE_CODEX_MODEL=gpt-6.2-sol LANE_CODEX_EFFORT=high LANE_CODEX_ADD_DIRS="$TEST_TMP/slots:$TEST_TMP/extra root" LANE_CODEX_NETWORK=1 "$LANE" resume codexoverride --no-note 2>&1)
 wait_for_file "$LANE_HOME/codexoverride.done"
 grep -Fq 'original worker settings are unknown; using caller environment' <<<"$legacy_output" || fail "legacy resume omitted settings warning"
 assert_eq "$expected_override" "$(<"$LANE_CAPTURE/codex.args")" "legacy codex environment fallback"
@@ -574,7 +574,7 @@ def count(total, rate_limits):
     return {"timestamp": stamp, "type": "event_msg", "payload": {"type": "token_count", "rate_limits": rate_limits,
             "info": {"last_token_usage": usage, "total_token_usage": {"total_tokens": total}}}}
 records = [{"timestamp": stamp, "type": "session_meta", "payload": {"cwd": "/work/apicap-fixture"}},
-           {"timestamp": stamp, "type": "turn_context", "payload": {"model": "gpt-6.1-sol"}},
+           {"timestamp": stamp, "type": "turn_context", "payload": {"model": "gpt-6.2-sol"}},
            {"timestamp": stamp, "type": "event_msg", "payload": {"type": "thread_settings_applied",
             "thread_settings": {"service_tier": "default"}}},
            count(1_000_000, None), count(1_000_000, None),
@@ -582,7 +582,8 @@ records = [{"timestamp": stamp, "type": "session_meta", "payload": {"cwd": "/wor
 (folder / "rollout-apicap.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
 PY
 assert_eq "2.00" "$("$ROOT/bin/lane-api-spend" --total)" "API spend counts the API call once and no plan call"
-for case in "ultrafast 12.00" "fast 4.00" "flex 1.00"; do
+ultrafast_cost=$(TZ=America/Los_Angeles python3 -c 'from datetime import date; print("6.00" if date.today() < date(2027, 3, 1) else "12.00")')
+for case in "ultrafast $ultrafast_cost" "fast 4.00" "flex 1.00"; do
   tier=${case% *}; tier_dir="$TEST_TMP/tier-$tier"; mkdir -p "$tier_dir"
   cp -R "$LANE_CODEX_SESSIONS/." "$tier_dir/"
   find "$tier_dir" -name 'rollout-*.jsonl' -exec sed -i.bak "s/\"service_tier\": \"default\"/\"service_tier\": \"$tier\"/" {} +
@@ -1100,7 +1101,7 @@ wait_for_absent "$LANE_HOME/first.review.lock"
 assert_eq "EXIT=0" "$(<"$LANE_HOME/first.review.done")" "background review marker"
 assert_eq "DONE:0" "$(review_for first)" "completed review state"
 background_args="$LANE_CAPTURE/background.args"
-assert_eq "gpt-6-astra" "$(arg_after -m "$background_args")" "default review model"
+assert_eq "gpt-6.2-astra" "$(arg_after -m "$background_args")" "default review model"
 assert_eq "high" "$(arg_after -e "$background_args")" "default review effort"
 assert_eq "$LANE_HOME/first.review.md" "$(arg_after -o "$background_args")" "default review output"
 

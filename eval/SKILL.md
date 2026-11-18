@@ -348,7 +348,7 @@ first bug). The analyzer is the front-end; the five checks below are the judgmen
 catches contaminated gold, broken-arm-scored-as-result, confounds, and saturation (validated
 2026-06-14: Composer, fed the traces blind, caught diekstra + corroborated the saturation finding).
 `~/Projects/skills/analyze/scripts/spirit_audit.sh <PREREGISTRATION.md|EXPERIMENT.md> <trace_files>…`
-fans GPT-6 Astra (low effort; Composer's successor since its 2026-10-07 retirement) over the
+fans GPT-6.2 Astra (low effort; Composer's successor since its 2026-10-07 retirement) over the
 artifacts; or `/critique` with a cross-lab axis (`glm`, `grok`). Lens: `analyze/lenses/spirit-audit.md`.
 
 Run these five checks; record the result in EXPERIMENT.md §5 (or a `*_RESULTS.md § Spot-check`):

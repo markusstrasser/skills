@@ -1,6 +1,6 @@
 ---
 name: diff-review
-description: "Use when: /diff-review, review our diff/commit range/changed files, plan/phase closeout diff layer. GPT-6 Astra (codex) scout; parent validates against code. NOT plan/findings review (/critique); NOT Anthropic's built-in /code-review."
+description: "Use when: /diff-review, review our diff/commit range/changed files, plan/phase closeout diff layer. GPT-6.2 Astra (codex) scout; parent validates against code. NOT plan/findings review (/critique); NOT Anthropic's built-in /code-review."
 user-invocable: true
 argument-hint: '<ref range | files> [low|high] — e.g., "HEAD~3..HEAD", "abc123..def456 high"'
 allowed-tools:
@@ -16,7 +16,7 @@ effort: medium
 
 # Diff Review
 
-Run the code-review scout (local CLI — **GPT-6 Astra** via codex-cli subscription by default)
+Run the code-review scout (local CLI — **GPT-6.2 Astra** via codex-cli subscription by default)
 over a diff's changed files, validate findings against actual source code, implement safe fixes.
 
 **Not Anthropic's built-in `/code-review`** (`/code-review ultra` is the paid multi-agent cloud review). Critique/execute closeouts call this skill for the diff layer. No timer rotation; a whole-project pass is `"$SCOUT" <project> --focus <focus>`. Naming/rotation history: [background.md](references/background.md).
@@ -49,9 +49,9 @@ count. Exit 2 names selected paths it refused before dispatch (missing, not sour
 exit 3 lists files whose batch failed or timed out. Neither is a clean review.
 
 **Provider order (local-first; full wording in [background.md](references/background.md)):**
-1. **`openai`** (default) — `gpt-6-astra` low effort, codex-cli subscription ($0).
-2. **`sol`** — `gpt-6.1-sol` high effort; rerun with `--provider sol` on an Astra plan-limit error (llmx exit 6).
-3. **`sol-api`** — `gpt-6.1-sol` high on the metered OpenAI API (`--auth api`, ~$0.1–0.3 per review) when Astra and Sol both return exit 6.
+1. **`openai`** (default) — `gpt-6.2-astra` low effort, codex-cli subscription ($0).
+2. **`sol`** — `gpt-6.2-sol` high effort; rerun with `--provider sol` on an Astra plan-limit error (llmx exit 6).
+3. **`sol-api`** — `gpt-6.2-sol` high on the metered OpenAI API (`--auth api`, ~$0.1–0.3 per review) when Astra and Sol both return exit 6.
 4. **`google`** — Gemini via llmx (paid API); last resort. It may also be capped (exit 6 "SPENDING CAP REACHED").
 
 No `cursor` provider (retired 2026-10-07). `--both` (google + openai; `--all-providers` is the same set) only for an explicitly requested high-recall review or a concrete unresolved risk needing another model; module size alone does not justify it.
@@ -172,7 +172,7 @@ $ARGUMENTS
 <!-- Append-only. Session-analyst may suggest additions. -->
 - **[2026-07-14] Diff-scoped module dry-run silently omitted oversized changed files direct_table_online.py and test_direct_table_online.py while reporting success; scout must list/fail-loud on skipped files or chunk them.**
 - **[2026-10-24] Module mode silently skipped every `.swift` file and extensionless script (suffix allowlist) and printed "No new findings" (arena tools/wow-run, 2,087 Swift lines). Fixed agent-infra ab4d70bd: more suffixes, shebang scripts, and a `Not reviewed (not source by suffix): …` stderr line. Read that line before reporting coverage.**
-- **[2026-10-26] The openai provider's fixed `--timeout 180` killed a 65 KB file (arena tools/wow-logger/src/bin/hudcheck.rs, llmx exit 4), and `--file` refuses a file over 100,000 bytes without chunking (hud.rs, 110,901 bytes): both stayed unreviewed until the parent ran `llmx chat --subscription -m gpt-6-astra --timeout 1200 -f <file>` by hand. The timeout should scale with batch bytes and `--file` should chunk.**
-- **[2026-10-27] Sol does not survive Astra's account limit. Astra exited 6 with "You've hit your usage limit. Visit https://chatgpt.com/settings/usage to purchase more credits or try again at Nov 2nd, 2026 5:00 PM", and `gpt-6.1-sol` exited 6 a minute later with the identical text (genomics negatives-panels review, llmx logs 06:56/06:57 JST). That message is the ChatGPT account's usage limit, which both codex-cli models draw on; when it appears, skip step 2 and go to google (`gemini-4-argon`).**
-- **[2026-10-27] Codex plan exhausted until 11-02 for both Codex models; Gemini monthly spending cap hit the same day; added `--provider sol-api` (metered gpt-6.1-sol) as step 3.**
+- **[2026-10-26] The openai provider's fixed `--timeout 180` killed a 65 KB file (arena tools/wow-logger/src/bin/hudcheck.rs, llmx exit 4), and `--file` refuses a file over 100,000 bytes without chunking (hud.rs, 110,901 bytes): both stayed unreviewed until the parent ran `llmx chat --subscription -m gpt-6.2-astra --timeout 1200 -f <file>` by hand. The timeout should scale with batch bytes and `--file` should chunk.**
+- **[2026-10-27] Sol does not survive Astra's account limit. Astra exited 6 with "You've hit your usage limit. Visit https://chatgpt.com/settings/usage to purchase more credits or try again at Nov 2nd, 2026 5:00 PM", and `gpt-6.2-sol` exited 6 a minute later with the identical text (genomics negatives-panels review, llmx logs 06:56/06:57 JST). That message is the ChatGPT account's usage limit, which both codex-cli models draw on; when it appears, skip step 2 and go to google (`gemini-4-argon`).**
+- **[2026-10-27] Codex plan exhausted until 11-02 for both Codex models; Gemini monthly spending cap hit the same day; added `--provider sol-api` (then metered GPT-6.1 Sol) as step 3.**
 - **[2026-11-11] A caller passed 13 `--file` flags in one scout call; `--file` was a plain store option, so argparse kept only the last and the scout printed `1 files` and "No new findings" with exit 0 while twelve changed files went unreviewed (genomics attribution-floor review). Fixed agent-infra b2ce0e84: `--file` repeats, bad paths refuse before dispatch, failed batches exit 3, and every run prints `Coverage: reviewed N of M selected files`. Check M against the changed-file count.**

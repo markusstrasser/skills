@@ -7,6 +7,7 @@
 Primary sources consulted for this update:
 - Anthropic: `https://www.anthropic.com/news/claude-opus-5`
 - Anthropic Opus 5.5 (read 2026-09-22): `https://www.anthropic.com/claude-opus-5-5`; system card `https://anthropic.com/claude-opus-5-5-system-card` (230-page PDF)
+- GPT-6.2 launch and API migration (read 2026-11-18): [OpenAI announcement](https://openai.com/index/introducing-gpt-6-2-astra-sol/), [Astra](https://developers.openai.com/api/docs/models/gpt-6.2-astra), [Sol](https://developers.openai.com/api/docs/models/gpt-6.2-sol), [API migration](https://developers.openai.com/api/docs/guides/latest-model).
 - OpenAI GPT-6 Sol/Luna (read 2026-09-25): `https://openai.com/index/introducing-gpt-6-sol-and-luna/`, model pages on developers.openai.com
 - OpenAI GPT-6.1 Sol model page (read 2026-10-09): `https://developers.openai.com/api/docs/models/gpt-6.1-sol` — $2/$10, cached $0.10, 1.05M ctx, 128K out, effort low…max (no none/minimal), Chat Completions without tools; Codex CLI ≥0.162 for subscription
 - Independent benchmarks: artificialanalysis.ai (2026-06-11) with instrument-validity reads of AA-Omniscience/IFBench/GDPval/τ² — `agent-infra/research/2026-06-11-aa-benchmark-instrument-validity.md`

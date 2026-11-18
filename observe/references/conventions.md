@@ -16,7 +16,7 @@ residue. `audit` asks *is this correct*; `conventions` asks *does this match the
    all before dispatching anything.
 3. **Classify the ambiguous residue (~1 min).** Default Flash (`fast_extract`) with the prompts in
    [flash-prompts.md](flash-prompts.md); **repo-grounded ambiguous cases → a read-only codex scout**
-   (`codex exec -s read-only -C <repo> -m gpt-6-astra -c model_reasoning_effort=low`; it replaced
+   (`codex exec -s read-only -C <repo> -m gpt-6.2-astra -c model_reasoning_effort=low`; it replaced
    Composer 2.5, retired 2026-10-07), which reads the workspace on structural "does this actually
    match?" questions. **One combined context file per axis**
    (`awk 'FNR==1{print "\n=== FILE: " FILENAME " ===\n"}1' …`), not multiple `-f` flags. Full files

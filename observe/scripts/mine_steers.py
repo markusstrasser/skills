@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Steer / interaction miner — full-corpus transcript mining via GPT-6 Astra low (codex exec, parallel).
+"""Steer / interaction miner — full-corpus transcript mining via GPT-6.2 Astra low (codex exec, parallel).
 
 The full-coverage, multi-signal counterpart to /observe's recent-window analysis. Mines Claude Code
 session transcripts for human-agent interaction signals:
@@ -8,11 +8,11 @@ session transcripts for human-agent interaction signals:
   - agent_miss   : a concrete agent mistake / violated discipline            -> /observe + which-hook-to-build
 
 Pipeline: agentlogs.db universe -> extract (collapse tool noise) -> FREE human-turn pre-filter (skip
-autonomous sessions) -> `codex exec` gpt-6-astra low, read-only sandbox, transcript on stdin
+autonomous sessions) -> `codex exec` gpt-6.2-astra low, read-only sandbox, transcript on stdin
 (parallel) -> JSONL -> scanned-ledger keyed by (vendor, session) for idempotent / incremental re-runs.
 
 2026-10-07: Cursor Composer 2.5 (the old lane, ~$0.085/session metered) was retired as outdated;
-the operator's successor is GPT-6 Astra at low effort on the codex-cli subscription ($0 marginal).
+the operator's successor is GPT-6.2 Astra at low effort on the codex-cli subscription ($0 marginal).
 The cap is therefore a TOKEN budget (input + output + reasoning), and the run reports all three.
 In-flight calls finish past the cut, so >3 workers overshoots the cap slightly.
 
@@ -87,7 +87,7 @@ def extract(path):
     return out, n_prose
 
 
-MODEL = "gpt-6-astra"
+MODEL = "gpt-6.2-astra"
 EFFORT = "low"
 
 

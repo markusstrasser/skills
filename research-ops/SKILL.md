@@ -336,7 +336,7 @@ Before extracting, establish what you actually know vs. don't:
 - Claude Opus 5.5: June 2026
 - Claude Opus 5: May 2026
 - GPT-5.6 Sol, Terra and Luna: 16 February 2026
-- GPT-6 Astra and Fable 5.1: not recorded in model-guide; check the model card before relying on a date.
+- GPT-6.2 Astra and Fable 5.1: not recorded in model-guide; check the model card before relying on a date.
 
 (The March 2026 list named Claude 4.6 at ~May 2025, GPT-5.4 at ~April 2025 and Gemini 3.1 Pro at ~March 2025, all since superseded.)
 

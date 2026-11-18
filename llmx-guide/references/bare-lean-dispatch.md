@@ -50,7 +50,7 @@ Reach for an agent only when the task genuinely needs tools/multi-step.
 
 ## Subscription routing gotchas (llmx)
 - Verify the billing route with `llmx chat --dry-run --subscription -m <requested-model> "<task>"`; expect the intended subscription CLI transport before a live call. The earlier silent-fallback report is retained in [dispatch history](codex-dispatch-history.md), not treated as the current contract.
-- `composer-2.5` / `composer-2.5-fast` were **retired 2026-10-07**; llmx refuses them with exit 2 and names the successor, `gpt-6-astra` at low effort (`llmx chat --subscription -m gpt-6-astra -e low`).
+- `composer-2.5` / `composer-2.5-fast` were **retired 2026-10-07**; llmx refuses them with exit 2 and names the successor, `gpt-6.2-astra` at low effort (`llmx chat --subscription -m gpt-6.2-astra -e low`).
 - **gemini has NO sub route** (free CLI retired 2026-05-31) — always paid API (cheap with `-e low`/`--flex`).
 - **Subsidy map:** ChatGPT (codex) + Claude (OAuth) subs are *subsidized* (~$0 marginal). **Cursor's pool is METERED** at each model's rate — "sub" but not free.
 

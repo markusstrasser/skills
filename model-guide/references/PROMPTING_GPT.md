@@ -1,10 +1,10 @@
 # GPT prompting and Astra migration
 
-Verified 2026-09-05 against [official model guidance](https://developers.openai.com/api/docs/guides/latest-model). Preserve the requested model and workload: a migration does not collapse a cost-tier router, replace an evaluation baseline or authorize API spending.
+Verified 2026-11-18 against [official model guidance](https://developers.openai.com/api/docs/guides/latest-model). Preserve the requested model and workload: a migration does not collapse a cost-tier router, replace an evaluation baseline or authorize API spending.
 
-## GPT-6 Astra behavior
+## GPT-6.2 Astra and Sol behavior
 
-The shared global instructions own the general defaults. Apply them when writing an Astra brief:
+The shared global instructions own the general defaults. Apply them when writing a GPT-6.2 brief:
 
 - State the task, relevant inputs, success criteria and action boundaries. Tell the worker to finish authorized work and make routine assumptions; keep genuine missing decisions visible. A side question or new requirement steers the active task.
 - Carry existing authorization forward. Prepare the reviewable result before an outstanding approval. User instructions outrank skill guidelines; a skill-driven pause must identify the exact file, instruction and reason.
@@ -14,14 +14,14 @@ The shared global instructions own the general defaults. Apply them when writing
 
 These are vendor-recommended starting points, not local performance measurements. Validate a changed brief on representative tasks, including an authorized continuation, a genuinely gated action and a small edit that should stay small.
 
-## When migrating an actual Astra caller
+## When migrating an Astra or Sol caller
 
-1. Preserve the effective reasoning effort. Map `none`/`minimal` to `low`; Astra supports `low`, `medium`, `high`, `xhigh` and `max` in the documented API. Check the specific CLI/runtime's supported settings separately.
+1. Preserve the effective reasoning effort. Map `none`/`minimal` to `low`; both models support `low`, `medium`, `high`, `xhigh` and `max` in the documented API. Check the specific CLI/runtime's supported settings separately.
 2. Use Responses for tool calling. Plain-text Chat Completions remains supported; a text-only caller does not need a new tool loop.
 3. Omit unsupported sampling/logprob parameters: `temperature`, `top_p`, `top_logprobs`; also Chat Completions `logprobs` and Responses `message.output_text.logprobs` in `include`.
-4. If a caller actually changes effort across responses, inspect `configuration_update` compatibility before adopting it. Preserve a stable prompt prefix; do not add state machinery to independent one-shot calls.
+4. Keep the Responses conversation prefix unchanged and append new instructions. Prefix edits can drop reasoning items and reduce cache reuse.
 5. If migrating an existing older-GPT cache-retention caller, use the documented `prompt_cache_options.ttl` replacement. No existing cache parameter means no migration is needed there.
-6. For a configured EU data-residency endpoint, use Standard processing; Astra fast/priority is unsupported there. User geography alone is not endpoint residency.
+6. Standard, Fast and Batch are available for US and EU data residency. Ultrafast is US-only.
 
 Verify request construction and command parsing offline first. Keep pricing/admission and authorization controls; a mocked request is not a successful live API call. Optional async tools, WebSocket steering and pro mode need an actual caller and their specific documentation.
 

@@ -20,7 +20,7 @@ Interaction mode is independent from billing and from the legacy lite profile:
 llmx -p google "question"       # paid Gemini API (free CLI retired 2026-05-31); add --flex for 50% off
 llmx -p openai "question"       # uses OpenAI API
 llmx chat --subscription -m claude-opus-5-5 "question"  # Claude CLI subscription route (canonical)
-llmx -p codex-cli --subscription -m gpt-6.1-sol "question"  # Codex CLI subscription
+llmx -p codex-cli --subscription -m gpt-6.2-sol "question"  # Codex CLI subscription
 llmx -p claude-cli "question"   # force Claude CLI transport (prefer --subscription on logical anthropic)
 llmx -p xai "question"          # xAI API (OpenAI-compatible at https://api.x.ai/v1)
 ```
@@ -87,10 +87,10 @@ Both approaches work:
 
 ```bash
 # Using -s flag with the API transport
-llmx -p openai -m gpt-6-astra --timeout 600 -s "You are reviewing code. Be concrete." "Review this design"
+llmx -p openai -m gpt-6.2-astra --timeout 600 -s "You are reviewing code. Be concrete." "Review this design"
 
 # Inline system tags (equivalent prompt text)
-cat <<'EOF' | llmx chat -p openai -m gpt-6-astra --timeout 600
+cat <<'EOF' | llmx chat -p openai -m gpt-6.2-astra --timeout 600
 <system>
 You are reviewing code. Be concrete. Reference specific files and tradeoffs.
 </system>
@@ -111,7 +111,7 @@ Neither CLI truncates user input (verified from source code). Input goes directl
 | Gemini CLI | 1M tokens (~4MB) | ~200KB before slowdown | No — 400 error if exceeded |
 | Codex CLI | 272K-848K tokens | ~200KB+ | No — auto-compacts history |
 | API (Gemini) | 1M tokens | Full window | No |
-| API (GPT-6.1 Sol / Astra) | 1.05M tokens | Full window | No |
+| API (GPT-6.2 Sol / Astra) | 1.05M tokens | Full window | No |
 
 **Tested:** 80KB code batches via both CLIs work reliably. 200KB causes timeouts on thinking models.
 
@@ -162,7 +162,7 @@ When dispatching from an agent context:
 llmx -p google -f .claude/overviews/source-overview.md "What files handle authentication?"
 
 # Code review with inline system prompt (API by default)
-cat <<'EOF' | llmx -p openai -m gpt-6-astra -o review.md
+cat <<'EOF' | llmx -p openai -m gpt-6.2-astra -o review.md
 <system>You are reviewing code. Be concrete. Reference specific files.</system>
 
 $(cat src/main.py)
@@ -185,7 +185,7 @@ done
 Set the Codex CLI default in `~/.codex/config.toml`:
 
 ```toml
-model = "gpt-6-astra"
+model = "gpt-6.2-astra"
 model_reasoning_effort = "xhigh"
 ```
 

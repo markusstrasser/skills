@@ -304,12 +304,8 @@ _LLMX_SUBSCRIPTION_MODELS = {
     "claude-haiku-5-5",
     "claude-opus-5",
     "claude-opus-5-5",
-    "gpt-6-astra",
-    "gpt-6",
-    "gpt-6.1-sol",
-    "gpt-6-sol",
-    "gpt-6.1-terra",
-    "gpt-6-luna",
+    "gpt-6.2-astra",
+    "gpt-6.2-sol",
     "grok-4.7",
 }
 _LLMX_MODEL_FLAG_RE = re.compile(r"(?:^|\s)-m[=\s]+([A-Za-z0-9._-]+)")

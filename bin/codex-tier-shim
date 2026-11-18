@@ -7,7 +7,16 @@
 # agent's own -c 'service_tier="priority"' ran 70 headless runs in 48 h past the old "a later -c wins" rule. Every
 # other subcommand (the interactive client, resume, login) passes through untouched. CODEX_REAL names the real
 # binary in tests.
-real=${CODEX_REAL:-/opt/homebrew/bin/codex}
+# Use the same client build as Desktop when installed. An older standalone
+# client can omit newly released models from its subscription catalog.
+app_codex='/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex'
+if [ -n "${CODEX_REAL:-}" ]; then
+  real=$CODEX_REAL
+elif [ -x "$app_codex" ]; then
+  real=$app_codex
+else
+  real=/opt/homebrew/bin/codex
+fi
 [ -x "$real" ] || { echo "codex-tier-shim: no codex at $real" >&2; exit 127; }
 skip=
 for arg in "$@"; do

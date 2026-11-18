@@ -1,7 +1,16 @@
 # Frontier Model Benchmarks
 
-**Last updated:** 2026-11-10
-**Active scope:** Claude Opus 5.5 (primary since 2026-09-22), Fable 5.2 (replaced 5.1 on 2026-11-10; 5.1 columns stay as vendor baselines), Claude Opus 5 (exact-ID lanes), GPT-6 Astra, Grok 4.7 (vendor launch table in [grok-4-7.md](models/grok-4-7.md)). Retired models' tables were removed 2026-09-25; git history keeps them. Comparisons to retired models remain only where a vendor used them as a baseline for a current model.
+**Last updated:** 2026-11-18
+**Active scope:** Claude Opus 5.5 (primary since 2026-09-22), Fable 5.2 (replaced 5.1 on 2026-11-10; 5.1 columns stay as vendor baselines), Claude Opus 5 (exact-ID lanes), GPT-6.2 Astra and Sol, Grok 4.7 (vendor launch table in [grok-4-7.md](models/grok-4-7.md)). Retired models' tables were removed 2026-09-25; git history keeps them. Comparisons to retired models remain only where a vendor used them as a baseline for a current model.
+
+## GPT-6.2 Astra and Sol launch (2026-11-17)
+
+OpenAI reports Astra gained 5.2 points on Agents' Last Exam versus GPT-6 Astra.
+On FrontierCode 2.0 at max effort, OpenAI reports Sol within 0.5 points of
+Astra at about one-fifth the cost. The Codex subscription smoke tests establish
+access. Local workload comparisons are pending. Vendor comparisons below retain
+the model labels used in those runs.
+[OpenAI release benchmark tables](https://openai.com/index/introducing-gpt-6-2-astra-sol/)
 
 ## Claude Fable 5.2 launch (2026-11-09) — vendor table
 

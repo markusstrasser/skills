@@ -19,9 +19,9 @@ closeouts ran near daily. A whole-project pass is still `"$SCOUT" <project> --fo
 > Moved verbatim from diff-review/SKILL.md (2026-10-26, context-cost reduction; SKILL.md keeps a one-line rule for each actionable item).
 
 **Provider order (local-first):**
-1. **`openai`** (default) — `gpt-6-astra` at low effort via codex-cli subscription ($0).
+1. **`openai`** (default) — `gpt-6.2-astra` at low effort via codex-cli subscription ($0).
    Operator decision 2026-10-07: Astra low replaces Composer 2.5.
-2. **`sol`** — `gpt-6.1-sol` at high effort, subscription. Rerun with `--provider sol` on a Codex
+2. **`sol`** — `gpt-6.2-sol` at high effort, subscription. Rerun with `--provider sol` on a Codex
    plan-limit error for Astra (llmx exit 6).
 3. **`google`** — Gemini via llmx (paid API path since 2026-05-31). Use when both Codex models
    are exhausted.

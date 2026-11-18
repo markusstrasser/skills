@@ -8,7 +8,7 @@
 
 Cursor's CLI can proxy frontier models (opus, gpt, claude, …) at their own
 metered rates. Composer 2.5 / 2.5-fast were retired 2026-10-07 (operator:
-outdated; successor gpt-6-astra low via `codex exec`), so a composer pin blocks,
+outdated; successor gpt-6.2-astra low via `codex exec`), so a composer pin blocks,
 and so does a prompt run (`-p`/`--print`) with no `--model`, because the account
 default is Composer. Verified live 2026-09-23
 with `cursor-agent` signed in: the registry admits exact `grok-4.7-{low,medium,
@@ -58,15 +58,15 @@ _CURSOR_GROK_MODELS = frozenset(
 
 _RETIRED_MSG = (
     "BLOCKED: cursor-agent model '{model}' is retired (Composer 2.5, retired 2026-10-07 as "
-    "outdated). Successor: gpt-6-astra at low effort via "
-    "`codex exec -s read-only -C <repo> -m gpt-6-astra -c model_reasoning_effort=low` "
-    "(or `llmx chat -m gpt-6-astra --reasoning-effort low`). For a Cursor-native read-only "
+    "outdated). Successor: gpt-6.2-astra at low effort via "
+    "`codex exec -s read-only -C <repo> -m gpt-6.2-astra -c model_reasoning_effort=low` "
+    "(or `llmx chat -m gpt-6.2-astra --reasoning-effort low`). For a Cursor-native read-only "
     "lane pin an exact grok-4.7-{{low,medium,high,xhigh}} slug."
 )
 _NO_MODEL_MSG = (
     "BLOCKED: cursor-agent prompt run without --model uses the account default, which is "
     "Composer (retired 2026-10-07). Pin an exact grok-4.7-{low,medium,high,xhigh} slug, or "
-    "use `codex exec -m gpt-6-astra -c model_reasoning_effort=low` (Composer's successor)."
+    "use `codex exec -m gpt-6.2-astra -c model_reasoning_effort=low` (Composer's successor)."
 )
 _MSG = (
     "BLOCKED: cursor-agent model '{model}' is not admitted. Use an exact live Cursor Grok slug "

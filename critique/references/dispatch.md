@@ -85,7 +85,7 @@ The diff layer belongs to `/diff-review`. Neither a broader preset nor another l
 
 ## Repo scope and premise scout
 
-The scout runs `codex exec -s read-only -C <project>` on `premise_scout` (gpt-6-astra, low effort, codex-cli subscription). On a Codex plan/usage-limit failure only, it retries once on `premise_scout_fallback` (gpt-6.1-sol, high effort). `voi-scout.json` records `served_model`, `reasoning_effort`, token `usage` and every attempt. A missing `codex` binary or any other failure is a recorded skip.
+The scout runs `codex exec -s read-only -C <project>` on `premise_scout` (gpt-6.2-astra, low effort, codex-cli subscription). On a Codex plan/usage-limit failure only, it retries once on `premise_scout_fallback` (gpt-6.2-sol, high effort). `voi-scout.json` records `served_model`, `reasoning_effort`, token `usage` and every attempt. A missing `codex` binary or any other failure is a recorded skip.
 
 `--context-scope` accepts only `repo` and `packet`.
 
@@ -108,7 +108,7 @@ Use the shared script for normal model/close design dispatch. The audit-plan len
 - General and mechanical GPT profiles use subscription transport. Subscription extraction uses a strict JSON prompt and local parsing because that transport cannot enforce JSON Schema. Do not add API-only `max_tokens` or search controls.
 - The Grok axis pins `grok-4.7-high` (no `cursor-` prefix, verified live 2026-09-23) in a read-only repo workspace and fails closed on exact-registry or unrevealed HEAD-canary drift. Bare `grok-4.7` means xAI / Grok Build; llmx Cursor is packet-only. Probe the intended repo with `model-review.py --preflight --axes grok --project "$(pwd)"`.
 - Plain `--preflight` performs import/routing checks plus a cached live subscription entitlement call; it makes no Grok call unless `--axes grok` is supplied.
-- For an explicitly Gemini/GPT-only panel, use `--preflight --axes arch,correctness --preflight-subscription-model gpt-6-astra` to check its actual subscription route. The default subscription probe is Claude; a failed selected route still blocks.
+- For an explicitly Gemini/GPT-only panel, use `--preflight --axes arch,correctness --preflight-subscription-model gpt-6.2-astra` to check its actual subscription route. The default subscription probe is Claude; a failed selected route still blocks.
 - Fable is not a script axis. Historical `fable-subagent` instructions are superseded. A Fable-specific request needs the current [model guide](../../model-guide/SKILL.md) and its verified transport/billing procedure; do not treat an Agent model pin as proof of the served model.
 
 The executor derives its internal collection wait from the longest selected profile. Set the outer tool timeout above it: `660000` ms for standard, `1230000` ms with Grok, `3630000` ms with Opus Max. When the tool cannot wait that long, launch asynchronously and inspect the running task/output. A zero-byte artifact or timeout is transport failure, not reviewer evidence.

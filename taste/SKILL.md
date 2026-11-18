@@ -36,7 +36,7 @@ order 10/35/60/85% of the clip; `--json` also gives the original video `path`.
 
 ## Limits
 
-- Descriptions are written by a model (gpt-6-luna) and are unverified. They
+- Descriptions are written by a model (gpt-6.2-sol) and are unverified. They
   never record why Markus saved something.
 - Saved items are all positives: the library knows what he kept, not what he
   rejects. Do not infer dislikes from absence.

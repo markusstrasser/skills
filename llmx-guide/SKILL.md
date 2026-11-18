@@ -26,7 +26,7 @@ Profile-based dispatch with a context manifest: `~/Projects/skills/scripts/llm-d
 
 ## Canonical patterns
 
-**Newest picks (operator 2026-10-26):** `gpt-6.1-sol`, `gpt-6-astra`, `claude-opus-5-5`, `gemini-4-carbon`. DeepSeek V4.1 Flash runs on LithosAI only (`-p lithosai`, tiers `deepseek-flash`/`-fast`/`-ultra`); DeepInfra is retired. Ids, prices, effort: [models.md](references/models.md).
+**Current picks:** `gpt-6.2-sol`, `gpt-6.2-astra`, `claude-opus-5-5`, `gemini-4-carbon`. DeepSeek V4.1 Flash runs on LithosAI only (`-p lithosai`, tiers `deepseek-flash`/`-fast`/`-ultra`); DeepInfra is retired. Ids, prices, effort: [models.md](references/models.md).
 
 ### Probe (before subscription dispatch or critique batches)
 
@@ -49,8 +49,8 @@ uv run python3 ~/Projects/skills/critique/scripts/model-review.py --preflight
 llmx chat --subscription -m claude-opus-5-5 -f ctx.md -o out.md "query"
 llmx chat --subscription -m claude-fable-5-2 -f ctx.md -o out.md "query"
 llmx chat --subscription -m claude-sonnet-5-5 -f ctx.md -o out.md "query"   # also claude-haiku-5-5
-llmx chat -p codex-cli --subscription -m gpt-6-astra -f ctx.md -o out.md "query"
-llmx chat -p codex-cli --subscription -m gpt-6.1-sol -f ctx.md -o out.md "query"   # codex-cli >= 0.162
+llmx chat -p codex-cli --subscription -m gpt-6.2-astra -f ctx.md -o out.md "query"
+llmx chat -p codex-cli --subscription -m gpt-6.2-sol -f ctx.md -o out.md "query"   # current Codex CLI
 llmx chat --subscription -m grok-4.7-high -f ctx.md -o out.md "query"       # no cursor- prefix; re-list with cursor-agent models
 llmx chat -p grok -m grok-4.7 -e high -f ctx.md -o out.md "query"           # Grok Build CLI lane (subscription-only; grok CLI 1.0.41 lists 4.7 as default)
 # Neither Grok line is for reviews (Markus 2026-10-30): reviews run on Astra or Opus.

@@ -5,7 +5,7 @@
 **Policy:** Gemini is an ordinary metered provider; the key arrives as `GEMINI_API_KEY_METERED` like other paid keys. It was critique-only from 2026-07-14 (`agent-infra/decisions/2026-07-14-gemini-critique-only-policy.md`) until the operator lifted it on 2026-10-14 (llmx 2a6e46f removed the `LLMX_GEMINI_OK` gate). Frontier ids (2026-09-25; cosigner updated 2026-10-14): `gemini-4-argon` (critique cosigner since 2026-10-14), `gemini-3.8-flash` (cosigner until 2026-10-14; search-grounded and vision dispatch), `gemini-3.1-pro-preview` (explicit `-m` one-offs only), `gemini-3.5-flash-lite` / `gemini-3.1-flash-lite` (registered for pricing, not routed).
 
 - **Flash-Lite pair is REGISTERED, NOT ROUTED.** `gemini-3.5-flash-lite` and `gemini-3.1-flash-lite` are in llmx only so the spend guard can price them. Prices (ai.google.dev pricing, 2026-07-22): 3.5 Flash-Lite **$0.30/$2.50**, 3.1 Flash-Lite **$0.25/$1.50**. Effort ladders probed live: 3.5-Flash-Lite accepts `minimal`, 3.1-Flash-Lite **rejects** it.
-- **Do NOT reach for Flash-Lite as the cheap extraction lane — Astra-low on subscription (or `gpt-6-luna` metered) stays it.** GPT tiers are
+- **Do NOT reach for Flash-Lite as the cheap extraction lane — Astra or Sol at low effort on the subscription is the current route. Compare API prices before metered bulk work.** GPT tiers are
   **$0 on the ChatGPT subscription**; Flash-Lite is metered. A metered lane cannot beat a $0 lane on cost, so Flash-Lite would have to win big on
   quality, and our own screening probe says it does not (see below).
 

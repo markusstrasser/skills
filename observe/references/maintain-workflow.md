@@ -69,7 +69,7 @@ table, and freshness `DUE` rows need triage even if the listing command itself s
 listing is not a health verdict. Treat a `DUE` row as an actionable pick before considering a noop.
 
 Optionally add a parallel per-repo drift screen (`git diff HEAD~1 --stat` →
-`llm-dispatch.py --profile fast_extract` (gpt-6-astra low) asking for `RISK high|medium` + one line + a suggested
+`llm-dispatch.py --profile fast_extract` (gpt-6.2-astra low) asking for `RISK high|medium` + one line + a suggested
 check, else `OK`). Surface `RISK` lines — **triage only**; deterministic `doctor`/`drift-sentinel`
 own ground truth. A **red sweep is the tick's priority**: if the fix is agent-infra-local and
 obvious, do it this tick instead of the rotation. Full `doctor.py` stays in the daily rotation.
@@ -113,9 +113,9 @@ drain) come first — they are why this runs on a loop.
 **Tier 2 dispatch — max 1 per tick.** Pick the lane by task shape:
 
 - **Repo-coupled critique/analysis → the read-only codex lane (default).**
-  `timeout 600 codex exec -s read-only -C <dir> -m gpt-6-astra -c model_reasoning_effort=low -o <artifact> "<task>"`
-  (GPT-6 Astra low replaced Cursor Composer 2.5, retired 2026-10-07; on a Codex plan-limit error
-  rerun with `-m gpt-6.1-sol -c model_reasoning_effort=high`). Read-only, repo-aware (it flags
+  `timeout 600 codex exec -s read-only -C <dir> -m gpt-6.2-astra -c model_reasoning_effort=low -o <artifact> "<task>"`
+  (GPT-6.2 Astra low replaced Cursor Composer 2.5, retired 2026-10-07; on a Codex plan-limit error
+  rerun with `-m gpt-6.2-sol -c model_reasoning_effort=high`). Read-only, repo-aware (it flags
   "already handled at file:line" a cold API model cannot), not gated by `CLAUDE_PROCS`.
   `scripts/cursor_dispatch.sh` remains only for an explicit `--model grok-4.7-*` Cursor lane.
   **Mandatory fallback:** any non-zero exit or empty artifact → re-dispatch the SAME task to the

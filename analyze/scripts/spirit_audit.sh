@@ -1,6 +1,6 @@
 #!/bin/bash
 # spirit_audit.sh — run the spirit-audit lens (lenses/spirit-audit.md) adversarially over a
-# work-product, using a DIFFERENT-lineage model (GPT-6 Astra at low effort, codex-cli subscription;
+# work-product, using a DIFFERENT-lineage model (GPT-6.2 Astra at low effort, codex-cli subscription;
 # Cursor Composer 2.5 held this slot until its 2026-10-07 retirement) so the auditor doesn't share
 # the Claude author's blind spots. General: works on any artifact
 # judged against a contract — eval traces, a backtest, a pipeline gate, a benchmark, a research memo.
@@ -39,8 +39,8 @@ for f in "$@"; do
 done
 
 if [ -n "$OUT" ]; then
-  timeout 600 llmx chat --subscription -m gpt-6-astra -e low -f "$CTX" -o "$OUT" "$PROMPT"
+  timeout 600 llmx chat --subscription -m gpt-6.2-astra -e low -f "$CTX" -o "$OUT" "$PROMPT"
   echo "spirit-audit -> $OUT"
 else
-  timeout 600 llmx chat --subscription -m gpt-6-astra -e low -f "$CTX" "$PROMPT"
+  timeout 600 llmx chat --subscription -m gpt-6.2-astra -e low -f "$CTX" "$PROMPT"
 fi

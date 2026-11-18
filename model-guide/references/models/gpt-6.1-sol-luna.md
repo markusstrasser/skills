@@ -1,3 +1,5 @@
+> Historical reference. Current routing uses [GPT-6.2 Sol](gpt-6.2-sol.md).
+
 # GPT-6.1 Sol / GPT-6 Luna — OpenAI cost tiers
 
 > Moved from model-guide/SKILL.md on 2026-09-25 (principle-first rewrite; skills HEAD before the rewrite). Retired-model content pruned 2026-09-25 (git history keeps it). Source lines: L276-289.

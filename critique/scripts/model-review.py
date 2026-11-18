@@ -222,11 +222,11 @@ Callers exist? Join keys on both sides? Schema matches reality?
 Load-bearing premises the design depends on. One per line, each starting with "- ".""",
     },
     "correctness": {
-        "label": "GPT-6 Astra medium A (full review — bugs + structure)",
+        "label": "GPT-6.2 Astra medium A (full review — bugs + structure)",
         "profile": "gpt_general",
         "prompt": """\
 <system>
-Full adversarial review of THIS subpart. GPT-6 Astra medium effort.
+Full adversarial review of THIS subpart. GPT-6.2 Astra medium effort.
 Lens A: bugs, boundaries, silent failures — AND whether the architecture supports correctness.
 Budget: ~1200 words.
 </system>
@@ -253,13 +253,13 @@ Unchecked return codes, fail-open paths, missing guards.
 Interface breaks, dual paths, orphaned consumers, fail-open error semantics.""",
     },
     "contracts": {
-        "label": "GPT-6 Astra medium B (full review — migration + interfaces)",
+        "label": "GPT-6.2 Astra medium B (full review — migration + interfaces)",
         "profile": "gpt_general",
         "prompt": """\
 <system>
 Second GPT pass — SAME full mandate (bugs + architecture), different lens.
 Lens B: interfaces, contracts, migration completeness — but still flag real bugs you see.
-Do NOT defer bugs to the other GPT pass. GPT-6 Astra medium. Budget: ~1200 words.
+Do NOT defer bugs to the other GPT pass. GPT-6.2 Astra medium. Budget: ~1200 words.
 </system>
 
 {question}
@@ -281,12 +281,12 @@ Dual paths, orphaned consumers, unnamed removal conditions.
 ## 5. Where I'm Likely Wrong""",
     },
     "formal": {
-        "label": "GPT-6 Astra high (quantitative/formal — opt-in)",
+        "label": "GPT-6.2 Astra high (quantitative/formal — opt-in)",
         "profile": "formal_review",
         "prompt": """\
 <system>
 You are performing QUANTITATIVE and FORMAL analysis. Other reviewers handle qualitative pattern review. Focus on what they can't do well. Be precise. Show your reasoning. No hand-waving.
-Use ONLY when the subpart involves math, proofs, Bayes/stats, or formal invariants. GPT-6 Astra at HIGH effort.
+Use ONLY when the subpart involves math, proofs, Bayes/stats, or formal invariants. GPT-6.2 Astra at HIGH effort.
 Budget: ~1500 words. Tables over prose. Source-grade claims.
 </system>
 
@@ -310,7 +310,7 @@ Convert vague claims into falsifiable predictions with success criteria. If a cl
 Ranked by measurable impact. Each must have: (a) what, (b) why with quantitative justification, (c) how to verify with specific metrics.
 
 ## 6. Where I'm Likely Wrong
-What am I (GPT-6) probably getting wrong? Known biases to flag: overconfidence in fabricated specifics, overcautious scope-limiting, production-grade recommendations for personal projects.""",
+What am I (GPT-6.2) probably getting wrong? Known biases to flag: overconfidence in fabricated specifics, overcautious scope-limiting, production-grade recommendations for personal projects.""",
     },
     "domain": {
         "label": "Gemini (domain correctness)",
@@ -334,7 +334,7 @@ For each domain-specific claim in the reviewed material:
 Flag any URLs, API endpoints, or version numbers that should be probed before implementation.""",
     },
     "mechanical": {
-        "label": "GPT-6 Astra (mechanical audit)",
+        "label": "GPT-6.2 Astra (mechanical audit)",
         "profile": "mechanical_review",
         "prompt": """\
 <system>
@@ -585,7 +585,7 @@ RETIRED_AXES = {
     "composer": (
         "Cursor Composer 2.5 was retired 2026-10-07 as outdated (operator decision). "
         "For a third lineage on a packet use `claude`, `glm` or `grok`; the repo-grounded "
-        "premise scout now runs on gpt-6-astra (low effort) via `codex exec`."
+        "premise scout now runs on gpt-6.2-astra (low effort) via `codex exec`."
     ),
     "full": (
         "the `full` preset was removed 2026-11-11 when presets were capped at one Gemini "
@@ -619,7 +619,7 @@ PRESETS = {
 # 90s was too tight: 21/22 runs Jun 1-20 timed out and failed open, making the
 # premise gate vacuous. A real arc-agi repo packet measured 229.5s for cursor-agent
 # ask-mode to complete (2026-06-20), so 360s gives genuine headroom over the observed
-# latency. Since 2026-10-07 the scout runs `codex exec` (gpt-6-astra low); the
+# latency. Since 2026-10-07 the scout runs `codex exec` (gpt-6.2-astra low); the
 # bound is unchanged and covers a fallback attempt on its own fresh timeout. Cost: serial latency before axes (still well under the 900s overall budget);
 # scout has its own timeout and does not consume axis budget.
 PREMISE_SCOUT_TIMEOUT = 360
@@ -945,7 +945,7 @@ def build_effective_policy(args: argparse.Namespace) -> dict:
 # Primary Gemini critique axis
 GEMINI_PRIMARY_MODEL = dispatch_core.PROFILES["deep_review"].model
 # Rate-limit fallback target for the Gemini (arch) axis. When the Gemini primary
-# (gemini-4-carbon since 2026-11-11; gemini-4-argon and gemini-3.8-flash before) rate-limits, retry the axis on gpt-6-astra — the rule-sanctioned move ("after a
+# (gemini-4-carbon since 2026-11-11; gemini-4-argon and gemini-3.8-flash before) rate-limits, retry the axis on gpt-6.2-astra — the rule-sanctioned move ("after a
 # Gemini rate-limit, switch to GPT or Flash"; llmx transport-routing) and an
 # adversarial-grade model. Tradeoff: this collapses the arch+formal pair to GPT
 # for that one review (degraded cross-model diversity), accepted because it is
@@ -1351,9 +1351,9 @@ def run_premise_scout(
 ) -> PremiseScoutResult:
     """Repo-grounded premise falsifier via `codex exec` in a read-only sandbox.
 
-    Default model: profile `premise_scout` (gpt-6-astra, low effort, codex-cli
+    Default model: profile `premise_scout` (gpt-6.2-astra, low effort, codex-cli
     subscription). On a Codex plan/usage-limit failure only, retries once on
-    `premise_scout_fallback` (gpt-6.1-sol, high effort). voi-scout.json records the
+    `premise_scout_fallback` (gpt-6.2-sol, high effort). voi-scout.json records the
     model that served the run, its effort, every attempt and the token usage.
 
     Scout runs outside the axis dispatch budget — it has its own fixed timeout and
@@ -1895,7 +1895,7 @@ def rerun_axis_with_fallback(
     reason: str = "gemini_rate_limit",
 ) -> dict:
     """Retry the rate-limited primary Gemini (arch) axis on the cross-provider
-    adversarial fallback (gpt-6-astra since 2026-09-05; 3.1-pro retired from
+    adversarial fallback (gpt-6.2-astra since 2026-09-05; 3.1-pro retired from
     automation). Collapses the pair to GPT for this review, but rare + reliable."""
     out_path = review_dir / f"{axis}-output.md"
     if reason == "gemini_spend_cap":
@@ -1997,7 +1997,7 @@ def rerun_gpt_axis_via_subscription(
 
 # Metered fallback when the Codex plan is exhausted (llmx exit 6) on a subscription GPT
 # route. Named and recorded, never silent; Sol is $2/$10 per M tokens on the API.
-METERED_GPT_FALLBACK_MODEL = "gpt-6.1-sol"
+METERED_GPT_FALLBACK_MODEL = "gpt-6.2-sol"
 
 
 def rerun_gpt_axis_via_metered_api(
@@ -3955,11 +3955,11 @@ def run_preflight(
     import shutil
     import subprocess
 
-    providers = {"claude-opus-5-5": "anthropic", "gpt-6-astra": "openai"}
+    providers = {"claude-opus-5-5": "anthropic", "gpt-6.2-astra": "openai"}
     if subscription_model not in providers:
         raise ValueError(f"unsupported preflight subscription model: {subscription_model}")
     if claude_api:
-        subscription_model = "gpt-6-astra"
+        subscription_model = "gpt-6.2-astra"
     checks: dict = {"subscription_model": subscription_model}
     llmx_bin = shutil.which("llmx")
     checks["llmx_cli"] = {"ok": bool(llmx_bin), "path": llmx_bin}
@@ -4277,7 +4277,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--preflight-subscription-model",
-        choices=["claude-opus-5-5", "gpt-6-astra"],
+        choices=["claude-opus-5-5", "gpt-6.2-astra"],
         help="Subscription route to probe; select Astra for a Gemini/GPT-only panel.",
     )
     parser.add_argument(

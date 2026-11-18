@@ -40,7 +40,7 @@ Measured 2026-11-05, where the live API differs from the guide or the guide is s
 - `--frame-count` stops at 16 (HTTP 400 above it; the guide says 64).
 - GIF frames are laid out on one sprite sheet: 1024x1024 frames failed at 2, 3 and 4 frames
   ("No supported sheet fits"), `auto` and 512x512 returned 512px frames.
-- SVG needs `svg.model` on this account; llmx sends `gpt-6.1-sol` unless `--svg-model` is set.
+- SVG needs `svg.model` on this account; llmx sends `gpt-6.2-sol` unless `--svg-model` is set.
 - 2.6 rejects `--input-fidelity`; 2.5 rejects `--complexity` and SVG.
 - 4 frames at low quality cost 555 output tokens, a 1024x1024 low image 824, xhigh 3122.
 

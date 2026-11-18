@@ -35,7 +35,7 @@
 - [ ] After a stance change under pushback, check that new evidence was named (MASK honesty 87.4% vs Opus 5 94.8%).
 - [ ] Cyber or dual-use biology refusals: re-run on `claude-opus-5` by exact ID; `reasoning_extraction` refusals do not fall back.
 
-### After GPT-6 Astra (pro mode)
+### After GPT-6.2 Astra
 - [ ] Verify every intermediate quantitative step.
 - [ ] Re-run decisive calculations with code or a second model.
 - [ ] Make sure the task justified pro-mode token spend.
@@ -50,5 +50,5 @@
 - [ ] Confirm transport was `cursor-agent --mode ask --workspace` for critique (receipt `transport: cursor-agent-workspace`) — not llmx packet-only cursor.
 - [ ] Re-run 1–2 of its load-bearing greps yourself; weight reasoning, not asserted facts.
 - [ ] Do not treat CursorBench / vendor coding scores as decisive (Cursor blog: training contamination).
-- [ ] Hard physics / CritPt-shaped claims: distrust — AA CritPt 15%; escalate to GPT-6 Astra pro mode.
+- [ ] Hard physics / CritPt-shaped claims: distrust — AA CritPt 15%; escalate to GPT-6.2 Astra.
 - [ ] If xAI API path was attempted: 403 `API key is currently blocked` is a **key** problem, not EU geo.

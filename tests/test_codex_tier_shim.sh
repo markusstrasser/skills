@@ -9,7 +9,7 @@ shim() { CODEX_REAL="$T/real" "$ROOT/bin/codex-tier-shim" "$@" | tr '\n' ' ' | s
 pin='-c service_tier="default"'
 check "exec is pinned" "$pin exec hello" "$(shim exec hello)"
 check "the alias e is pinned" "$pin e hello" "$(shim e hello)"
-check "root options before exec" "$pin -m gpt-6.1-sol exec hello" "$(shim -m gpt-6.1-sol exec hello)"
+check "root options before exec" "$pin -m gpt-6.2-sol exec hello" "$(shim -m gpt-6.2-sol exec hello)"
 check "root -c before exec" "$pin -c a=1 exec hello" "$(shim -c a=1 exec hello)"
 rc=0; CODEX_REAL="$T/real" "$ROOT/bin/codex-tier-shim" exec -c 'service_tier="priority"' hello >/dev/null 2>&1 || rc=$?
 check "a named faster tier is refused" "2" "$rc"

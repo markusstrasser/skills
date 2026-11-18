@@ -134,7 +134,7 @@ same-model (FM11 peer-review theater).
 **For codebase-coupled decisions, ALSO run REPO-GROUNDED agents — not only cold API models.** A cold
 reviewer (Gemini/GPT over a pasted spec) produces good *generic* failure modes but cannot tell which
 are *already handled by existing code*. Run repo-grounded agents with real read access:
-`codex exec -s read-only -C <repo> -m gpt-6-astra -c model_reasoning_effort=low - <<< "verify the
+`codex exec -s read-only -C <repo> -m gpt-6.2-astra -c model_reasoning_effort=low - <<< "verify the
 design against the ACTUAL code, cite file:line — which findings are already-handled vs
 genuinely-open"` (Composer 2.5, the old lane, was retired 2026-10-07). They routinely
 **overturn the cold round's "must-build" list** (lived 2026-06-16: a cold round flagged the release
@@ -149,7 +149,7 @@ a "HALT, reverse the spine" conclusion on a search-error false premise.
 
 **Scale to a PANEL of 3–6 repo-grounded agents for a codebase-coupled arch decision** (operator
 directive 2026-06-16, "whatever it takes for good design") — read-only `codex exec` lanes on
-gpt-6-astra (low effort; `gpt-6.1-sol` high on a plan limit), or Claude subagents; add the opt-in
+gpt-6.2-astra (low effort; `gpt-6.2-sol` high on a plan limit), or Claude subagents; add the opt-in
 Cursor `grok-4.7-*` lane for a second repo-grounded lab. Model diversity also comes from a SEPARATE
 cold cross-lab pass (llmx gemini/gpt) scoped to generic, non-repo-specific design critique. The
 repo-grounded panel is ROLE-diverse: **≥1 dedicated FACT-CHECKER** tasked to resolve EVERY `file:line` / count / zero-consumer

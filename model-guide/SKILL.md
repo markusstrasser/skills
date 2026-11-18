@@ -1,6 +1,6 @@
 ---
 name: model-guide
-description: "Choose a model and effort by principle: the cheapest frontier model that passes the task's verifier, cross-lab review for consequential judgment, facts from tools. Pareto-frontier roster (Opus 5.5, GPT-6.1 Sol, GPT-6 Astra/Luna, Gemini 4 Carbon, Fable 5.2, Grok 4.7, DeepSeek on LithosAI, opt-in lanes); per-model prompting in references. Transport flags: /llmx-guide."
+description: "Choose a model and effort by principle: the cheapest frontier model that passes the task's verifier, cross-lab review for consequential judgment, facts from tools. Pareto-frontier roster (Opus 5.5, GPT-6.2 Sol, GPT-6.2 Astra/Luna, Gemini 4 Carbon, Fable 5.2, Grok 4.7, DeepSeek on LithosAI, opt-in lanes); per-model prompting in references. Transport flags: /llmx-guide."
 user-invocable: true
 argument-hint: '[task description or model name]'
 effort: low
@@ -23,9 +23,9 @@ Choose a model and effort from the principles below, then read the model's refer
 9. **Route classifier niches by exact id.** Opus 5.5 re-routes most cyber work to Opus 4.8 and declines dual-use biology: send that work to `claude-opus-5` by exact id.
 10. **Work the principal verifies (taste, voice, conviction) stays with the operator.** Models draft and critique; a model judge does not make taste verifiable.
 
-## Roster (Pareto frontier, 2026-11-10; why each is on the frontier: [roster.md](references/roster.md))
+## Roster (Pareto frontier, 2026-11-18; why each is on the frontier: [roster.md](references/roster.md))
 
-**Newest picks (operator 2026-10-26: "newest models always"):** `gpt-6.1-sol`, `gpt-6-astra`, `claude-opus-5-5`, `gemini-4-carbon` (2026-11-11); Claude tiers `claude-fable-5-2`, `claude-sonnet-5-5`, `claude-haiku-5-5` (2026-11-10). Pin an older id only when an eval or a classifier niche (principle 9) requires it.
+**Newest picks:** `gpt-6.2-sol`, `gpt-6.2-astra`, `claude-opus-5-5`, `gemini-4-carbon` (OpenAI picks updated 2026-11-18); Claude tiers `claude-fable-5-2`, `claude-sonnet-5-5`, `claude-haiku-5-5` (2026-11-10). Pin an older id only when an eval or a classifier niche (principle 9) requires it.
 
 | Model | Role | Transport |
 |---|---|---|
@@ -34,9 +34,8 @@ Choose a model and effort from the principles below, then read the model's refer
 | [claude-opus-5](references/models/claude-opus-5.md) | Cyber and dual-use biology work; lanes pinned to it | Subscription, exact id only |
 | [claude-sonnet-5-5](references/models/claude-sonnet-5-5.md) | Cost tier: gated coding, no-gate mechanical work, injection-heavy input | Subscription: `sonnet` alias, Agent tool, `llmx --subscription` |
 | claude-haiku-5-5 | Cheapest Claude: classification, routing, extraction, hook judges ($0.10/$0.50 under 100K prompt tokens, $0.50/$2.50 above; adaptive thinking, default `medium`) | Subscription: `haiku` alias, `llmx --subscription` |
-| [gpt-6-astra](references/models/gpt-6-astra.md) | Default GPT: headless cheap lane at `low` (incl. the `/critique` premise scout and `/diff-review` scout), Codex implementation, cross-lab reviewer, quantitative work (pro mode) | codex-cli subscription (`llmx --subscription`, `codex exec`) |
-| [gpt-6.1-sol](references/models/gpt-6.1-sol-luna.md) | Metered mid tier; fallback when Astra's plan limit binds | Codex subscription + API |
-| [gpt-6-luna](references/models/gpt-6.1-sol-luna.md) | Metered bulk extraction and mechanical work | Codex subscription + API |
+| [gpt-6.2-astra](references/models/gpt-6.2-astra.md) | Default GPT: headless cheap lane at `low` (incl. the `/critique` premise scout and `/diff-review` scout), Codex implementation, cross-lab reviewer, quantitative work | codex-cli subscription (`llmx --subscription`, `codex exec`) |
+| [gpt-6.2-sol](references/models/gpt-6.2-sol.md) | Everyday coding, extraction and Astra's subscription fallback | Codex subscription + API |
 | [grok-4.7](references/models/grok-4-7.md) | Not a reviewer since 2026-10-30 (Markus: reviews run on Astra or Opus; Cursor subscription unverified). Was: opt-in read-only repo critique axis; Grok Build headless | cursor-agent `grok-4.7-<effort>[-fast]`; `grok` CLI; xAI API unverified |
 | [gemini-4-carbon](references/models/gemini.md) | Default Gemini since 2026-11-11 (operator): the one Gemini call per critique (`arch`), never the sole reviewer; unmeasured here, Argon was a weak agentic coder | Metered API (`GEMINI_API_KEY_METERED`) |
 | DeepSeek V4.1 Flash on LithosAI | Metered bulk and opencode `lane` work where price or wall time beats quality; facts from tools (V4 Pro calibrated badly) | `llmx -p lithosai -m deepseek-flash` (base, $0.15/$0.60) / `deepseek-flash-fast` ($0.25/$1.00) / `deepseek-flash-ultra` ($0.35/$1.40, 429s under concurrency) |
@@ -45,12 +44,12 @@ Choose a model and effort from the principles below, then read the model's refer
 
 Older / pinned only: `gemini-3.8-flash` (still llmx's default for `-p google`, vision and batch: pass `-m gemini-4-carbon`), `gemini-4-argon` (superseded by Carbon), `gemini-3.1-pro-preview`, `gemini-3.5/3.1-flash-lite` (priced, not routed). llmx refuses `-p deepinfra` (retired 2026-10-26).
 
-Retired 2026-09-25 (operator: allowlists hold the Pareto frontier only): every model not in this table; git history keeps their old guidance. Retired 2026-10-07 (operator: "outdated"): composer-2.5 and composer-2.5-fast; successor gpt-6-astra at `low` effort, with gpt-6.1-sol at `high` when Astra's plan limit binds. Retired 2026-11-10 (dominated: successor is cheaper or same price): `claude-fable-5-1` → `claude-fable-5-2`, `claude-sonnet-5` → `claude-sonnet-5-5`, `claude-haiku-4-5` → `claude-haiku-5-5`.
+Retired 2026-09-25 (operator: allowlists hold the Pareto frontier only): every model not in this table; git history keeps their old guidance. Retired 2026-10-07 (operator: "outdated"): composer-2.5 and composer-2.5-fast; successor gpt-6.2-astra at `low` effort, with gpt-6.2-sol at `high` when Astra's plan limit binds. Retired 2026-11-10 (dominated: successor is cheaper or same price): `claude-fable-5-1` → `claude-fable-5-2`, `claude-sonnet-5` → `claude-sonnet-5-5`, `claude-haiku-4-5` → `claude-haiku-5-5`.
 
 ## Settled operator decisions
 
 - Claude runs on the subscription only; the metered API requires an explicit request.
-- Architecture, design and high-reasoning critique use Opus `max` plus GPT-6 Astra, never Sonnet (2026-06-20). **Open:** whether Sonnet 5.5 changes that verdict is the operator's call ([details](references/models/claude-sonnet-5-5.md)).
+- Architecture, design and high-reasoning critique use Opus `max` plus GPT-6.2 Astra, with the current Astra version tracking the release. **Open:** whether Sonnet 5.5 changes that verdict is the operator's call ([details](references/models/claude-sonnet-5-5.md)).
 - Allowlists hold the Pareto frontier only (2026-09-25). llmx refuses retired ids with the successor named.
 - Gemini is an ordinary metered provider (critique-only gate lifted 2026-10-14).
 - DeepSeek runs on LithosAI only (2026-10-26); DeepInfra is retired.

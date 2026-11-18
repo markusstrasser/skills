@@ -50,14 +50,14 @@ class ModelReviewDispatchTest(unittest.TestCase):
             if args[1] == 'info':
                 payload = {}
             elif args[1] == 'probe':
-                self.assertIn('gpt-6-astra', args)
+                self.assertIn('gpt-6.2-astra', args)
                 payload = {'verdict': 'available'}
             elif '--auth' in args:
                 self.assertIn('--dry-run', args)
                 self.assertIn('anthropic-direct', args)
                 payload = {'auth': 'api', 'provider': 'anthropic-direct', 'transport': 'anthropic-direct-api', 'model': 'claude-opus-5-5'}
             else:
-                self.assertIn('gpt-6-astra', args)
+                self.assertIn('gpt-6.2-astra', args)
                 payload = {'auth': 'subscription', 'transport': 'codex-cli'}
             return subprocess.CompletedProcess(args, 0, json.dumps(payload), '')
         with patch('shutil.which', return_value='/fake/llmx'), patch.object(subprocess, 'run', side_effect=fake_run):
@@ -143,7 +143,7 @@ class ModelReviewDispatchTest(unittest.TestCase):
         # Both models called
         models_called = {c["model"] for c in call_log}
         self.assertIn(model_review.GEMINI_PRIMARY_MODEL, models_called)
-        self.assertTrue(any("gpt-6-astra" in m for m in models_called), models_called)
+        self.assertTrue(any("gpt-6.2-astra" in m for m in models_called), models_called)
 
     def test_dispatch_preserves_same_model_profiles(self) -> None:
         """Astra correctness must not inherit formal's API billing and high effort."""
@@ -163,7 +163,7 @@ class ModelReviewDispatchTest(unittest.TestCase):
             )
 
         self.assertEqual(len(calls), 2)
-        self.assertEqual({c["model"] for c in calls}, {"gpt-6-astra"})
+        self.assertEqual({c["model"] for c in calls}, {"gpt-6.2-astra"})
         self.assertEqual(
             {(c["auth"], c["reasoning_effort"]) for c in calls},
             {("subscription", "medium"), ("api", "high")},
@@ -303,8 +303,8 @@ class ModelReviewDispatchTest(unittest.TestCase):
             "elapsed_seconds": 1.0,
             "formal": {
                 "label": "Formal",
-                "model": "gpt-6-luna",
-                "requested_model": "gpt-6-luna",
+                "model": "gpt-6.2-sol",
+                "requested_model": "gpt-6.2-sol",
                 "exit_code": 0,
                 "size": 0,
                 "output": str(self.review_dir / "formal-output.md"),
@@ -572,11 +572,11 @@ class StructuredDispatchFailureTest(unittest.TestCase):
         self.assertEqual(len(api_calls),1)
         cmd = api_calls[0]
         self.assertEqual(cmd[cmd.index("--auth") + 1],"api")
-        self.assertEqual(cmd[cmd.index("-m") + 1],"gpt-6.1-sol")
+        self.assertEqual(cmd[cmd.index("-m") + 1],"gpt-6.2-sol")
         entry = result["arch"]
         self.assertEqual(entry["fallback_reason"],"codex_plan_limit")
         self.assertEqual(entry["fallback_from"],model_review.GEMINI_FALLBACK_MODEL)
-        self.assertEqual(entry["model"],"gpt-6.1-sol (metered api)")
+        self.assertEqual(entry["model"],"gpt-6.2-sol (metered api)")
         self.assertEqual(entry["exit_code"],0)
         self.assertNotIn("failure_reason",entry)
 
@@ -894,7 +894,7 @@ class AxisResolutionTest(unittest.TestCase):
             self.assertIn("claude-fable-5-2", model_review.AXES["claude"]["label"])
             self.assertEqual(notes, ["axis claude: claude-opus-5-5/max -> claude-fable-5-2/high"])
             with self.assertRaisesRegex(ValueError, "does not request"):
-                model_review.apply_axis_overrides({"formal": "gpt-6.1-sol"}, {}, ["arch", "claude"])
+                model_review.apply_axis_overrides({"formal": "gpt-6.2-sol"}, {}, ["arch", "claude"])
             with self.assertRaisesRegex(ValueError, "conflicting"):
                 model_review.apply_axis_overrides(
                     {}, {"correctness": "high", "contracts": "low"},
@@ -929,7 +929,7 @@ class AxisResolutionTest(unittest.TestCase):
 
     def test_non_gpt_axis_sets_are_rejected(self) -> None:
         # arch/domain/alternatives are the Gemini-backed axes (mechanical is now
-        # GPT-backed, gpt-6-luna @ low effort).
+        # GPT-backed, gpt-6.2-sol @ low effort).
         with self.assertRaisesRegex(ValueError, "--allow-non-gpt"):
             model_review.resolve_axes("arch,domain,alternatives")
 
@@ -1193,8 +1193,8 @@ class ExtractionCoverageTest(unittest.TestCase):
                 },
                 "formal": {
                     "label": "GPT-5.5 (quantitative/formal)",
-                    "model": "gpt-6-luna",
-                    "requested_model": "gpt-6-luna",
+                    "model": "gpt-6.2-sol",
+                    "requested_model": "gpt-6.2-sol",
                     "exit_code": 0,
                     "size": 12,
                     "output": str(formal_output),
@@ -1470,13 +1470,13 @@ class ModelReviewMainTest(unittest.TestCase):
             patch.object(model_review, "run_preflight", return_value=1) as preflight,
             patch.object(model_review.sys, "argv", [
                 "model-review.py", "--preflight", "--axes", "arch,correctness",
-                "--preflight-subscription-model", "gpt-6-astra",
+                "--preflight-subscription-model", "gpt-6.2-astra",
             ]),
         ):
             self.assertEqual(model_review.main(), 1)
         preflight.assert_called_once_with(
             Path.cwd().resolve(), include_grok=False, include_gemini=True,
-            subscription_model="gpt-6-astra",
+            subscription_model="gpt-6.2-astra",
         )
 
     def test_grok_preflight_failure_blocks_before_review_dispatch(self) -> None:
@@ -1522,8 +1522,8 @@ class ModelReviewMainTest(unittest.TestCase):
                 "elapsed_seconds": 1.0,
                 "formal": {
                     "label": "Formal",
-                    "model": "gpt-6-luna",
-                    "requested_model": "gpt-6-luna",
+                    "model": "gpt-6.2-sol",
+                    "requested_model": "gpt-6.2-sol",
                     "exit_code": 0,
                     "size": 10,
                     "output": str(review_dir / "formal-output.md"),
@@ -1592,8 +1592,8 @@ class ModelReviewMainTest(unittest.TestCase):
                 "elapsed_seconds": 1.0,
                 "formal": {
                     "label": "Formal",
-                    "model": "gpt-6-luna",
-                    "requested_model": "gpt-6-luna",
+                    "model": "gpt-6.2-sol",
+                    "requested_model": "gpt-6.2-sol",
                     "exit_code": 0,
                     "size": 10,
                     "output": str(review_dir / "formal-output.md"),
@@ -1659,8 +1659,8 @@ class ModelReviewMainTest(unittest.TestCase):
                 "elapsed_seconds": 1.0,
                 "formal": {
                     "label": "Formal",
-                    "model": "gpt-6-luna",
-                    "requested_model": "gpt-6-luna",
+                    "model": "gpt-6.2-sol",
+                    "requested_model": "gpt-6.2-sol",
                     "exit_code": 0,
                     "size": 0,
                     "output": str(project_dir / "formal-output.md"),
@@ -2005,10 +2005,10 @@ class PremiseScoutTest(unittest.TestCase):
             self.assertEqual(cmd[:2], ["/usr/bin/codex", "exec"])
             self.assertEqual(cmd[cmd.index("-s") + 1], "read-only")
             self.assertEqual(cmd[cmd.index("-C") + 1], str(project.resolve()))
-            self.assertEqual(cmd[cmd.index("-m") + 1], "gpt-6-astra")
+            self.assertEqual(cmd[cmd.index("-m") + 1], "gpt-6.2-astra")
             self.assertIn("model_reasoning_effort=low", cmd)
             data = json.loads(result.json_path.read_text())
-            self.assertEqual(data["served_model"], "gpt-6-astra")
+            self.assertEqual(data["served_model"], "gpt-6.2-astra")
             self.assertEqual(data["reasoning_effort"], "low")
             self.assertEqual(data["usage"], usage)
             self.assertIn("Premises checked", result.markdown_path.read_text())
@@ -2038,11 +2038,11 @@ class PremiseScoutTest(unittest.TestCase):
                 )
             self.assertFalse(result.skipped)
             self.assertEqual(len(calls), 2)
-            self.assertEqual(calls[1][calls[1].index("-m") + 1], "gpt-6.1-sol")
+            self.assertEqual(calls[1][calls[1].index("-m") + 1], "gpt-6.2-sol")
             self.assertIn("model_reasoning_effort=high", calls[1])
             data = json.loads(result.json_path.read_text())
-            self.assertEqual(data["served_model"], "gpt-6.1-sol")
-            self.assertEqual([a["model"] for a in data["attempts"]], ["gpt-6-astra", "gpt-6.1-sol"])
+            self.assertEqual(data["served_model"], "gpt-6.2-sol")
+            self.assertEqual([a["model"] for a in data["attempts"]], ["gpt-6.2-astra", "gpt-6.2-sol"])
 
     def test_premise_scout_does_not_fall_back_on_other_failures(self) -> None:
         calls: list[list[str]] = []
@@ -2324,12 +2324,12 @@ class PreflightTest(unittest.TestCase):
                 patch("shutil.which", return_value="/usr/bin/llmx"),
                 patch.object(subprocess, "run", side_effect=fake_run),
             ):
-                rc = model_review.run_preflight(Path(temp_dir), subscription_model="gpt-6-astra")
+                rc = model_review.run_preflight(Path(temp_dir), subscription_model="gpt-6.2-astra")
             self.assertEqual(rc, 0 if exit_code == 0 else 1)
             dry = next(args for args in calls if args[1] == "chat")
             live = next(args for args in calls if args[1] == "probe")
-            self.assertEqual(dry[dry.index("-m") + 1], "gpt-6-astra")
-            self.assertEqual(live[live.index("--model") + 1], "gpt-6-astra")
+            self.assertEqual(dry[dry.index("-m") + 1], "gpt-6.2-astra")
+            self.assertEqual(live[live.index("--model") + 1], "gpt-6.2-astra")
             self.assertEqual(live[live.index("--provider") + 1], "openai")
             self.assertNotIn("claude-opus-5-5", [item for args in calls for item in args])
 

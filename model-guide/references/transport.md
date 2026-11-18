@@ -6,7 +6,7 @@
 
 | Lane | Verified state | Practical limit |
 |---|---|---|
-| Codex / `llmx chat --subscription -m gpt-6-astra` | Global model is Astra; llmx accepts the canonical ID and effort | Configuration and offline checks do not prove a new live request or workload result. |
+| Codex / `llmx chat --subscription` | Both 6.2 IDs completed a Standard subscription smoke on 2026-11-18 with the ChatGPT-bundled Codex CLI 0.169.0-alpha.11.1. The local shim selects that binary. | Standalone Codex CLI 0.164.0 rejected both IDs on the subscription. |
 | `claude -p --model <id or alias>` for the 2026-11 Claude tiers | **Live 2026-11-10**, CLI 2.1.321, key stripped: `claude-fable-5-2`, `claude-sonnet-5-5`, `claude-haiku-5-5` and the aliases `fable`, `sonnet`, `haiku`, `opus` each answered; JSON `modelUsage` named `claude-fable-5-2`, `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-opus-5-5` respectively | The aliases moved on each release day, so every alias-pinned agent already served the new model before this guide knew it existed. Subscription never permits silent API fallback. |
 | Interactive Claude Code | 2026-11-10: operator set Opus 5.5 as the saved default via `/model`. Earlier: `claude-fable-5-1[1m]` (2026-09-01 to 2026-09-22) | Existing September 2 local billing evidence is recorded in agent-infra’s Fable memo §10. Plan allowance and current remaining usage are separate. |
 | Claude Agent-tool model pins | Opus pins recovered in the July 29 observations; Fable pins have no later verification here | Treat old failures as dated evidence. For model-sensitive evaluations inspect the provider run record; self-report alone is not independent proof. |
@@ -35,7 +35,7 @@ Mechanics and footguns: `/llmx-guide`.
 
 - **`llmx vision` is multi-provider as of 2026-07-22 (llmx `2b12289`) — it used to be Gemini-only
   and off-ledger.** It now routes through the normal dispatch path, so `-m` takes any
-  vision-capable model id (`gemini-3.8-flash`, `gpt-6-astra`, `gpt-6-luna`, `claude-opus-5`),
+  vision-capable model id (`gemini-3.8-flash`, `gpt-6.2-astra`, `gpt-6.2-sol`, `claude-opus-5`),
   provider is inferred, and `-e` effort works. Three consequences worth knowing:
   (1) it is **spend-guarded** like everything else (the Gemini `LLMX_GEMINI_OK=1` gate it
   also enforced was removed on 2026-10-14);
@@ -48,4 +48,4 @@ Mechanics and footguns: `/llmx-guide`.
   PROMPT, not `--provider` (use `--provider` to override the inferred one).
   **This unblocks a cross-family vision judge**, which the figure-vision eval previously could not
   have — its qualitative judge was Gemini-flash grading a Gemini-flash candidate, a same-family
-  COI it documented as forced by the tool. Pass `--judge gpt-6-astra` there now.
+  COI it documented as forced by the tool. Pass `--judge gpt-6.2-astra` there now.
