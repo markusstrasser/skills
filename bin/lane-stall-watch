@@ -18,7 +18,10 @@ agent-a<id>.meta.json:
   STALLED_MODEL  the last event is a tool result, prompt or in-flight api-request,
                  and nothing followed for 12 min (an API 529/overload death)
   IDLE           the lane ended its turn and waits for a message (an inbox write
-                 does not wake it; TaskStop + SendMessage does)
+                 does not wake it; TaskStop + SendMessage does). A turn the harness
+                 ended with a synthetic API-error row (isApiErrorMessage: a connection
+                 failure, overload or auth error) is IDLE too, and the line names the
+                 error: read its death class before resuming the lane
   UNREAD         the lane is busy, but a message sent after the last one it received
                  has sat unread in its inbox for 10 min: a busy lane reads its inbox only
                  when its turn ends (TaskStop, then one SendMessage that restates them)
@@ -37,7 +40,10 @@ unread for 84, 43 and 12 min before anyone looked; on 2026-10-31 vcep-l80 ran on
 a 15:14 ruling sat unread for two hours (the lane asked again at 16:52), and a message
 that reached eh-pstop-science 16 s after it went idle was never delivered. The watcher
 missed both: it read session-e5c8db34's stale inbox while the lanes' team was
-session-1e6b2b97, and it checked unread messages only for busy lanes.
+session-1e6b2b97, and it checked unread messages only for busy lanes. On 2026-11-19 a
+DNS failure ended two genomics lanes' turns at 09:19 CST with a synthetic API-error
+row (stop_reason "stop_sequence", model "<synthetic>"); the watcher read both as BUSY,
+and they sat dead for 93 min.
 """
 
 from __future__ import annotations
@@ -86,7 +92,7 @@ def classify(rows: list[dict], now: datetime) -> str:
     kind = last.get("type")
     message = last.get("message") or {}
     if kind == "assistant":
-        if message.get("stop_reason") == "end_turn":
+        if message.get("stop_reason") == "end_turn" or last.get("isApiErrorMessage"):
             return "IDLE"
         content = message.get("content") or []
         calls = [block for block in content if isinstance(block, dict) and block.get("type") == "tool_use"]
@@ -96,6 +102,14 @@ def classify(rows: list[dict], now: datetime) -> str:
     if kind in ("user", "api-request") and age > MODEL_GRACE:
         return "STALLED_MODEL"
     return "BUSY"
+
+
+def api_error(rows: list[dict]) -> str | None:
+    """The error that ended the turn, when the harness ended it with a synthetic API-error row."""
+    last = rows[-1] if rows else {}
+    if last.get("type") != "assistant" or not last.get("isApiErrorMessage"):
+        return None
+    return "/".join(str(part) for part in (last.get("error"), last.get("apiError")) if part) or "unnamed"
 
 
 def tail_rows(path: Path) -> list[dict]:
@@ -250,6 +264,14 @@ def selftest() -> None:
     assert classify([{"type": "api-request", "timestamp": "2026-10-26T14:55:00Z"}], now) == "BUSY"
     ended = {"type": "assistant", "timestamp": old, "message": {"stop_reason": "end_turn"}}
     assert classify([ended], now) == "IDLE"
+    assert api_error([ended]) is None
+    # the harness ends a turn on a connection failure with this row (genomics lanes, 2026-11-19)
+    died = {"type": "assistant", "timestamp": "2026-10-26T14:59:00Z", "isApiErrorMessage": True,
+            "error": "server_error", "apiError": "connection_failed",
+            "message": {"model": "<synthetic>", "stop_reason": "stop_sequence", "content": [
+                {"type": "text", "text": "API Error: Can't reach the API server (ENOTFOUND)"}]}}
+    assert classify([died], now) == "IDLE"
+    assert api_error([died]) == "server_error/connection_failed"
 
     prompt = {"type": "user", "timestamp": old,
               "message": {"content": '<teammate-message teammate_id="team-lead">go</teammate-message>'}}
@@ -329,6 +351,9 @@ def main(argv: list[str]) -> int:
         for lane, path in lane_transcripts(directory, lanes, now).items():
             rows = tail_rows(path)
             state, detail = classify(rows, now), ""
+            error = api_error(rows)
+            if error:
+                detail = f" (turn ended on an API error: {error}; check its death class before resuming)"
             if state in ("BUSY", "IDLE"):
                 inbox = inbox_rows(lane)
                 grace = UNREAD_GRACE if state == "BUSY" else IDLE_UNREAD_GRACE
@@ -337,7 +362,7 @@ def main(argv: list[str]) -> int:
                 if overdue:
                     oldest = int((now - overdue[0]).total_seconds() // 60)
                     label = "UNREAD" if state == "BUSY" else "IDLE_UNREAD"
-                    state, detail = label, f" ({len(overdue)} queued, oldest {oldest} min)"
+                    state, detail = label, f" ({len(overdue)} queued, oldest {oldest} min)" + detail
             if previous.get(lane, "BUSY") != state:
                 stamp = datetime.now().strftime("%H:%M")
                 print(f"{stamp} {lane}: {previous.get(lane, 'BUSY')} -> {state}{detail}", flush=True)
