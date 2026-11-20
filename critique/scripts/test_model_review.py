@@ -2485,6 +2485,25 @@ class GeminiPreflightTest(unittest.TestCase):
         ):
             return model_review.run_gemini_preflight()
 
+    def test_probe_uses_the_overridden_gemini_model(self) -> None:
+        # 2026-11-20: `--model arch=gemini-4-neon` moved the axis, but the probe's default
+        # argument, bound at definition, still sent Carbon.
+        core = model_review.dispatch_core
+        saved_profiles = dict(core.PROFILES)
+        saved_label = model_review.AXES["arch"]["label"]
+        saved_primary = model_review.GEMINI_PRIMARY_MODEL
+        saved_fallback = model_review.GEMINI_FALLBACK_MODEL
+        try:
+            model_review.apply_axis_overrides({"arch": "gemini-4-neon"}, {}, ["arch", "correctness"])
+            self.assertEqual(model_review.GEMINI_PRIMARY_MODEL, "gemini-4-neon")
+            self.assertTrue(self._probe(exit_code=0, reply="OK")["ok"])
+        finally:
+            core.PROFILES.clear()
+            core.PROFILES.update(saved_profiles)
+            model_review.AXES["arch"]["label"] = saved_label
+            model_review.GEMINI_PRIMARY_MODEL = saved_primary
+            model_review.GEMINI_FALLBACK_MODEL = saved_fallback
+
     def test_invalid_key_fails_the_probe(self) -> None:
         check = self._probe(exit_code=1, reply=None, stderr="400 API_KEY_INVALID: key not valid")
         self.assertFalse(check["ok"])

@@ -1576,14 +1576,17 @@ def preflight_needs_gemini(tokens: set[str]) -> bool:
     return any(name in AXES and axis_uses_gemini(name) for name in names)
 
 
-def run_gemini_preflight(model: str = GEMINI_PRIMARY_MODEL) -> dict:
+def run_gemini_preflight(model: str | None = None) -> dict:
     """One bounded live Gemini call, so an invalid or revoked API key fails before any axis.
 
     The Anthropic probe covers only the subscription lane. On 2026-10-11 an invalid Gemini
     key (API_KEY_INVALID) passed preflight and failed the arch and gaps axes mid-critique.
+    The model is read at call time: a default bound at definition kept probing Carbon after
+    `--model arch=gemini-4-neon` had moved the axis (2026-11-20).
     """
     import tempfile
 
+    model = model or GEMINI_PRIMARY_MODEL
     llmx_bin = shutil.which("llmx")
     if not llmx_bin:
         return {"ok": False, "model": model, "error": "llmx not on PATH"}
