@@ -31,7 +31,32 @@ the paired measurement below is read. Hydrogen is registered and priced, not rou
   through 2026-11-30 ($2/$10) and dearer from 2026-12-01 ($4/$20). Thinking is billed as output, and Neon at high
   spent 22k thought tokens (about $0.33) on a one-line arithmetic question.
 - **Paired measurement (2026-11-20):** five donor-free policy-critique packets (genomics), each reviewed by Carbon
-  high on the normal panel and by Neon high alone, with the same axis prompt and question. Result: pending.
+  high on the normal panel and by Neon high alone, with the same axis prompt and question. One run per model per
+  packet; packets were short (1.4k to 2.2k input tokens).
+
+  | | Carbon high | Neon high |
+  |---|---|---|
+  | wall per packet | 234 to 477 s | 78 to 133 s |
+  | thinking tokens, 5 packets | 114,424 | 35,258 |
+  | output tokens, 5 packets | 18,003 | 16,353 |
+  | cost, 5 packets | $1.41 ($2.82 at the December price) | $0.80 |
+
+  The two agreed on every verdict but one: on the SMN `one_or_more` state Carbon rejected the unconditional form,
+  while Neon, Fable and Sol accepted it with changes, and the disposition followed them. The parent checked the
+  claims at source. Carbon cited two MONDO
+  IDs that name other diseases (MONDO:0007943, Nager acrofacial dysostosis, for malignant hyperthermia;
+  MONDO:0012548, Kostmann syndrome, for Fanconi anemia). Both models argued one case that fails at ClinVar's
+  conflict gate (a P/LP aggregate that also holds a VUS for another condition). Each added points the others missed
+  that held up at source. One Carbon call (smn) reported 37,118 input tokens for a 2.2k-token packet; the usage log
+  does not show why. `findings=0` for Carbon on two packets was a failed panel extraction (exit 2), not an empty
+  review; the axis files were read directly.
+
+  **Decision:** on short packets Neon equals Carbon at about 0.3x the thinking tokens, 3x the speed and 57% of the
+  cost. Carbon keeps the `arch` axis and the `deep_review` profile until one long packet (10k+ tokens, for example a
+  plan close) runs a Neon arm beside Carbon, because Google positions Carbon for long, hard work and these packets
+  did not test that. Decide before 2026-12-01, when Carbon's price rises to $4/$20. Source: genomics
+  `docs/audit/2026-11-18-science-assumptions/policy-decisions.md` (2026-11-20 section) and the run directories
+  under genomics `.model-review/2026-11-20-*`.
 
 Sources: blog.google/innovation-and-ai/models-and-research/gemini-models/introducing-gemini-4-neon/ ·
 aistudio.google.com/docs/pricing · the Gemini API model list (v1beta/models), 2026-11-20.
