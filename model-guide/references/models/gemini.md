@@ -11,6 +11,31 @@
 
 - **`gemini-3.1-pro-preview` is RETIRED as a routing option (2026-06-13, operator).** Do not route here for critique/synthesis/review — the cosigner is `gemini-4-argon` since 2026-10-14 (`gemini-3.8-flash` before). (Benchmark records in `references/BENCHMARKS.md` are kept as evidence; this is a routing retirement, not a data scrub. Callable via explicit `-m` if a one-off ever needs ARC-AGI-2/GPQA/video, but it is not a default anywhere.)
 
+## Gemini 4 Neon (`gemini-4-neon`, launched 2026-11-18) and Hydrogen (`gemini-4-hydrogen`, 2026-11-12)
+
+Registered in llmx 2026-11-20 (llmx `9eb291e`). Neon is on trial for the critique `arch` axis; Carbon keeps it until
+the paired measurement below is read. Hydrogen is registered and priced, not routed.
+
+- **Google's positioning (launch post, read 2026-11-20):** "While Carbon tackles your hardest, long-horizon projects
+  and Hydrogen handles fast everyday execution, Neon balances depth and efficiency." Four thinking levels, default
+  high; "32% lower cost per task than Carbon" at high; CWE-bench v2 70.7%, "a 3.4% uplift over Carbon"; more secure
+  code than Carbon on AutoBaxBench; matched Carbon's 0.0% cheating on Terminal-Bench 4.0. Press reports of wins over
+  Opus 5.5 and GPT-6.2 Sol come from Google's model card and are not independently measured.
+- **Live facts (probed 2026-11-20, one problem, one run per level):** both on the paid key's model list with
+  1,048,576 input and 65,536 output tokens. `thinkingLevel` accepts `low|medium|high|xhigh|max`; `minimal` → 400.
+  Neon thought tokens: low 6,797 (49 s), medium 13,481 (102 s), high 22,063 (168 s), xhigh 42,077 (281 s), max 20,837
+  (130 s); unset matched high. Hydrogen: low 8,484, medium 12,235, high 13,212, xhigh 33,306, max 14,756. `max`
+  thinks less than `xhigh` on both, as on Carbon, so llmx offers `low` to `xhigh`, default `high`.
+- **Price (aistudio.google.com/docs/pricing, read 2026-11-20):** Neon $3/$15 Standard, $1.50/$7.50 Batch and Flex,
+  cache $0.15, no dated change, no free tier. Hydrogen $1.50/$7.50 with a free tier. Carbon is cheaper per token
+  through 2026-11-30 ($2/$10) and dearer from 2026-12-01 ($4/$20). Thinking is billed as output, and Neon at high
+  spent 22k thought tokens (about $0.33) on a one-line arithmetic question.
+- **Paired measurement (2026-11-20):** five donor-free policy-critique packets (genomics), each reviewed by Carbon
+  high on the normal panel and by Neon high alone, with the same axis prompt and question. Result: pending.
+
+Sources: blog.google/innovation-and-ai/models-and-research/gemini-models/introducing-gemini-4-neon/ ·
+aistudio.google.com/docs/pricing · the Gemini API model list (v1beta/models), 2026-11-20.
+
 ## Gemini 4 Carbon (`gemini-4-carbon`, on the public API 2026-11-11)
 
 The default Gemini pick since 2026-11-11 (operator: "gemini 4 carbon is out ... which is better than argon ... we can update"). It runs the `deep_review` profile, which is the one Gemini call per critique (`arch`). Registered in llmx the same day.

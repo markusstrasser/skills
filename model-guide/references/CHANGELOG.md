@@ -1,5 +1,13 @@
 # Model Guide Changelog
 
+## 2026-11-20 - Gemini 4 Neon and Hydrogen registered; Neon on trial for the critique arch axis
+
+Google released Neon on 2026-11-18 and Hydrogen on 2026-11-12. llmx registers both
+(llmx 9eb291e) with probed thinking ladders (low to xhigh; max thinks less than
+xhigh) and their prices. Carbon stays the critique default until a paired run of
+five packets is read; select Neon with `--model arch=gemini-4-neon`. The critique
+preflight now probes an overridden Gemini model (skills 8e47306).
+
 ## 2026-11-18 - GPT-6.2 Astra and Sol replace the earlier OpenAI routes
 
 Astra remains the flagship and repository scout. Sol covers everyday GPT work,

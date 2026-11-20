@@ -12,6 +12,8 @@ Ids, prices and context windows below come from llmx (`usage_report.PRICING`, `C
 | GPT-6.2 Astra | `gpt-6.2-astra` | $8 / $40 | `low`…`max` (`none`/`minimal` → low) | **Default OpenAI model in llmx.** `--subscription` uses Codex ($0). |
 | Claude Opus 5.5 | `claude-opus-5-5` | $4 / $20 (metered only on explicit request) | `low`…`max`; per-task levels in `/model-guide` | `--subscription` (default); never `anthropic-direct` unasked |
 | Gemini 4 Carbon | `gemini-4-carbon` | $2 / $10 intro through 2026-11-30, then $4/$20 | `low`/`medium`/`high` only. The API accepts `xhigh`/`max` but they think about 8x less than `high` (measured 2026-11-11), so llmx rejects them; `minimal`/`none` → 400 | Metered API (`GEMINI_API_KEY_METERED`). Temperature fixed at 1.0. Default Gemini pick |
+| Gemini 4 Neon | `gemini-4-neon` | $3 / $15, no dated change (Carbon and Argon rise to $4/$20 on 2026-12-01) | `low`…`xhigh`, default `high`. The API accepts `max` but it thinks less than `xhigh` (probed 2026-11-20), so llmx rejects it; `minimal` → 400 | Metered API (`GEMINI_API_KEY_METERED`), `--flex` for 50% off. Released 2026-11-18; Google places it between Hydrogen and Carbon. On trial against Carbon for the critique `arch` axis |
+| Gemini 4 Hydrogen | `gemini-4-hydrogen` | $1.50 / $7.50; free tier | `low`…`xhigh`, default `high`; `max` not offered; `minimal` → 400 | Google's fast everyday model (2026-11-12). Registered and priced, not routed |
 | Gemini 4 Argon | `gemini-4-argon` | $2 / $10 intro through 2026-11-30, then $4/$20 | `low`/`medium`/`high` only (`minimal` → 400; `none`/`xhigh`/`max` → 400) | Metered API (`GEMINI_API_KEY_METERED`), `--flex` for 50% off. Temperature fixed at 1.0 |
 
 `-p google` with no `-m` (and `llmx vision`, `llmx batch`) still defaults to `gemini-3.8-flash`: pass `-m gemini-4-carbon` explicitly.
@@ -78,6 +80,7 @@ Ids, prices and context windows below come from llmx (`usage_report.PRICING`, `C
 | GPT-6.2 Sol / Astra | 1,050,000 | 128,000 | 2× input / 1.5× output price above 272K input |
 | Claude Opus 5.5 / Fable 5.1 | 1,000,000 | | Subscription: omit `--max-tokens` (the CLI rejects it) |
 | Gemini 4 Carbon | 1,048,576 | 32,768 | Limits from the API model list, 2026-11-11 |
+| Gemini 4 Neon / Hydrogen | 1,048,576 | 65,536 | Limits from the API model list, 2026-11-20. Thinking counts against the output ceiling |
 | Gemini 4 Argon | 1,048,576 | | No prompt-length price tiers |
 | Gemini 3.x | 1,000,000 | 65,536 | Server default output is 8K: pass `--max-tokens 65536` for long outputs |
 | DeepSeek V4.1 Flash (LithosAI) | 1,048,576 | | |

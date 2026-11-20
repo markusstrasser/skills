@@ -4,7 +4,7 @@
 
 ## llmx Cosigner / Dispatch Defaults (judgment — transport in mirror)
 
-- **Cosigner / critique / synthesis:** `gemini-4-carbon` since 2026-11-11 (operator: "gemini 4 carbon is out ... better than argon"; Argon held the slot from 2026-10-14), one Gemini call per critique (`arch`; operator: "should not be that much in critique ... maybe once here and there"), with Opus 5.5 max (`claude` axis) in every preset ("high taste ... still opus 5.5 likely best"). `gemini-3.8-flash` stays for search-grounded and vision work. **Always beside the GPT axes — never the only reviewer.** Probe flags invention on clean packets; orchestrator dispositions via `--extract --verify`.
+- **Cosigner / critique / synthesis:** `gemini-4-carbon` since 2026-11-11 (operator: "gemini 4 carbon is out ... better than argon"; Argon held the slot from 2026-10-14), one Gemini call per critique (`arch`; operator: "should not be that much in critique ... maybe once here and there"), with Opus 5.5 max (`claude` axis) in every preset ("high taste ... still opus 5.5 likely best"). `gemini-3.8-flash` stays for search-grounded and vision work. Gemini 4 Neon (released 2026-11-18) is on trial against Carbon on the `arch` axis; see `models/gemini.md`. **Always beside the GPT axes — never the only reviewer.** Probe flags invention on clean packets; orchestrator dispositions via `--extract --verify`.
 - **Cheap classification / mechanical audits:** `gpt-6.2-sol` at `low` on the Codex subscription. The mechanical repo scout uses `gpt-6.2-astra` at `low`.
 - **GPT-6.2 Astra default effort:** preserve the requested effort; `none`/`minimal` map to `low`. Suite supports `max`. Pass `-e high`/`xhigh`/`max` for depth; reasoning bills as output.
 
