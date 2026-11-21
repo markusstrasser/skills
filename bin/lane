@@ -2279,6 +2279,11 @@ cmd_resume() {
 
 cmd_reap() {
   [ "$#" -ge 1 ] || die "reap requires a name"
+  # --force may come before the name too: `lane reap --force <name>` read --force as the name and died with
+  # "name must start with an alphanumeric" (2026-11-21).
+  if [ "$1" = "--force" ] && [ "$#" -ge 2 ]; then
+    set -- "$2" "$1" "${@:3}"
+  fi
   local name="$1"
   shift
   local force="false"

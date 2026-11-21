@@ -1300,7 +1300,8 @@ readonly_tree="$REPO/.claude/worktrees/codex-first/.claude/cache/index-trees/abc
 mkdir -p "$readonly_tree/scripts"
 printf 'x\n' >"$readonly_tree/scripts/a.py"
 chmod -R a-w "$readonly_tree"
-"$LANE" reap first --force >/dev/null
+# Flag before the name (2026-11-21: this order died with "name must start with an alphanumeric").
+"$LANE" reap --force first >/dev/null
 assert_no_file "$REPO/.claude/worktrees/codex-first"
 assert_no_file "$LANE_HOME/first.json"
 git -C "$REPO" show-ref --verify --quiet refs/heads/codex/first && fail "reap left branch behind"
