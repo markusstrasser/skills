@@ -28,8 +28,12 @@ already skipped Tier 1 when goal is still active.
 ```bash
 uv run --project ~/Projects/agent-infra python3 \
   ~/Projects/agent-infra/scripts/reflect_session_close.py \
-  --latest-digest "$(cat .claude/current-session-id 2>/dev/null)"
+  --latest-digest "${CLAUDE_SESSION_ID:-$(cat .claude/current-session-id 2>/dev/null)}"
 ```
+
+`CLAUDE_SESSION_ID` is this session's own id. `.claude/current-session-id` is shared by every
+session in the checkout and holds whichever wrote last, so with a peer session it can name the
+peer: never ack from it.
 
 Selects this session's last `reflect.close-digest.v1` row — never a `close-ack.v1`
 (acks share the file and dominate the tail; blind `tail -1` returns an ack). A full id or
