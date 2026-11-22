@@ -118,6 +118,7 @@ Routing table: `critique/lenses/repo-audit-plan-review.md`. Preflight via `model
 12. Usage rows before 2026-10-12 under-report claude-cli/grok-cli input; a `[DEGRADED]` usage note means unknown or missing token fields.
 13. `--mode agent` implies `--auth subscription`; explicit api auth + agent, or a model with no subscription CLI (Gemini), exits 2.
 14. DeepSeek: short tier aliases (`deepseek-flash-fast`) need `-p lithosai` (bare `deepseek-flash` goes to the DeepSeek platform); `-ultra` 429s "at capacity" under concurrent calls, so fan out on base or `-fast`; never send `promptCacheKey` (400). `-p deepinfra` and `deepinfra/…` ids exit 2 (retired 2026-10-26).
+15. Gemini `--max-tokens` caps thinking and visible output together; llmx adds no headroom there. Neon at `xhigh` thinks about 57K tokens even on a 2K-token prompt: at 32000 it returns nothing (exit 5, still billed) and at 65536 the answer is cut at the ceiling. Pass `--max-tokens 65536` and use `-e high` for long answers; keep `xhigh` for short ones.
 
 `--lite bare` still works; `--subscription --mode chat` is canonical.
 
