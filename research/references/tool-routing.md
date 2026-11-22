@@ -16,6 +16,9 @@ Use this reference when the source route is unclear or retrieval fails. Discover
 | Citation stance | scite `search_literature` if available; inspect the supporting/contrasting source papers |
 | Patents / grants / trial or device records | The authoritative register; configured scite tools can assist discovery |
 | What is new in an ML/CS area (last days) | `frontier scan --lens <name>` (arXiv, HF, HN, lab feeds, citations of exemplar papers; ranked top 12) and `frontier feed --lens <name>` (repos the lens's people starred); `frontier lenses` lists lenses, `~/Projects/frontier/README.md` explains them |
+| Is there ML/CS work on this problem since December 2025, and did we already see it | `frontier find "<the problem as a paragraph>"` first: an index of arXiv, Hugging Face, Hacker News, alphaXiv, the Alignment Forum and the operator's X bookmarks, searched by meaning, with what was said about each paper and the ledger's row. No model call, seconds. Phrase it two or three ways. Its header names the first day covered; older work needs `search_papers` |
+| What an ML/CS field did in the months the model's training covers thinly | `frontier survey --lens <name>` (the index since 2025-12-01 plus papers citing the lens's exemplars, screened and ranked; minutes, run it under `bgrun`) |
+| What the operator bookmarked on X lately | `frontier bookmarks [--lens <name>]` screens the newest sync; read the store itself when recall matters |
 | News or events | Date-anchored news search and the original source; distinguish publication date from event date |
 | Structured entity enrichment | Exa deep search and `outputSchema` if supported; retain per-field source pointers |
 | Broad, multi-hop question | A configured Parallel/deep-research tool can help; exact-source questions usually start with targeted search |
@@ -33,6 +36,7 @@ The retained Perplexity precise-number niche came from a small biomedical benchm
 
 A failed or hanging backend says nothing about whether the paper exists or what its results mean. Switch early after repeated transport failure; do not perform multiple rounds of the same unsuccessful route. Keep the evidence-access limit visible.
 
+- A page that refuses the fetch (403, an anti-bot wall, a login) is a missing copy of a secondary source, not an unread work. Before reporting anything as unread, search for the work the page is about by its name, method or authors (`search_papers`, with `backend:"alphaxiv"` for ML; `frontier find`). On 2026-11-23 two Zhihu posts on an RL method returned 403 and it was reported unread; one alphaXiv search for the method's name then found the ICML paper.
 - If S2 is failing, try an available alternate academic backend such as OpenAlex, or a primary PubMed/publisher/arXiv record. Verify the accepted argument with the current schema.
 - Read `fetch_paper`'s `text_source`, `metadata_warning` and `quality_status` fields. Full text came from a parse when `text_source` starts with `parsed.`; `pymupdf_raw:` is the degraded last resort. A `quality_status` of `failed` or `degraded`, or a `retraction_check` other than `complete`, means the retraction status is unknown, not clean.
 - A download error lists every source tried and why it failed. If every source fails the same way, or the error names a missing module or parser, the tool is broken: report it as a tool defect and do not record the paper as paywalled. From 2026-09-23 to 2026-10-14 a missing dependency made every fetch fail as "Could not download PDF", and no agent noticed (see [known issues](known-issues.md)).
