@@ -21,8 +21,7 @@
 Emits summarizer customInstructions (binary-verified: PreCompact stdout ->
 newCustomInstructions). Several PreCompact hooks' outputs are joined with
 newlines (CC 2.1.300 binary: `newCustomInstructions: M.join("\\n")`), so this
-hook runs in goal runs too; precompact-goal-guard.py adds only the goal-specific
-lines. Idle compaction (CC 2.1.299) reaches hooks as trigger "auto".
+hook's text is added to any other PreCompact hook's. Idle compaction (CC 2.1.299) reaches hooks as trigger "auto".
 
 Fail open on any error; no output means default summarizer behavior.
 """

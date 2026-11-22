@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Behavior tests for stop-context-wrapup.py — the generic pre-compact
-loose-ends nudge (once per fill cycle, self-re-arming, goal-owner-aware)."""
+loose-ends nudge (once per fill cycle, self-re-arming)."""
 import json
 import os
 import subprocess
@@ -158,17 +158,6 @@ class TestContextWrapup(Base):
         with open(f"/tmp/claude-ctxpct-{SID}", "w") as f:
             f.write("not|a|window")
         self.assertEqual(self.fire(160_000), "block")  # default 200K path
-
-    def test_goal_owner_skipped_peer_covered(self):
-        with open(os.path.join(self.claude, "goal-run"), "w") as f:
-            f.write(f"420000 {OWNER} 500000\n")
-        self.assertIsNone(self.fire(160_000, sid=OWNER))   # goal ritual owns it
-        self.assertEqual(self.fire(160_000, sid=SID), "block")  # peer still nudged
-
-    def test_ownerless_goal_marker_skips_all(self):
-        with open(os.path.join(self.claude, "goal-run"), "w") as f:
-            f.write("420000\n")
-        self.assertIsNone(self.fire(160_000))
 
     def test_opt_out_file(self):
         open(os.path.join(self.claude, "ctx-wrapup-off"), "w").close()

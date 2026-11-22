@@ -1,6 +1,5 @@
-"""Shared context-size measurement for Stop hooks (one definition — the
-goal-night controller and the generic pre-compact wrap-up must agree on
-what "current context" means, or their thresholds silently diverge).
+"""Shared context-size measurement for Stop hooks (one definition of
+"current context", so hooks that threshold on it cannot diverge).
 
 Context = last assistant usage entry in the transcript:
 input_tokens + cache_read + cache_creation. Fail-open: 0 on any error.

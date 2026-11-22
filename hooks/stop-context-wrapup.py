@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Stop hook: pre-compact loose-ends wrap-up for ORDINARY sessions (always-on).
+"""Stop hook: pre-compact loose-ends wrap-up (always-on).
 
-The goal-night controller (stop-goal-wrapup.py) covers marker-armed overnight
-runs; every other session used to hit native auto-compact with ZERO wrap-up —
+Sessions used to hit native auto-compact with ZERO wrap-up —
 uncommitted work risks being hallucinated-as-done after the summary, and the
 global CLAUDE.md "save progress before compaction" contract had no enforcing
 hook (verified 2026-07-06: genomics be0657a9, 14 compactions, 0 wrap-ups).
@@ -15,8 +14,8 @@ and manual /compact re-arms too.
 
 Window resolution (the value auto-compact actually triggers against), in
 priority order — every source capped by the model window when known:
-1. CLAUDE_CODE_AUTO_COMPACT_WINDOW env (explicit lever; goal-night/goal-loop
-   set it — it MOVES the native trigger, so it wins when present).
+1. CLAUDE_CODE_AUTO_COMPACT_WINDOW env (explicit lever — it MOVES the native
+   trigger, so it wins when present).
 2. autoCompactWindow settings key (project settings.local > project > global)
    — the same binary lever in settings form. Within one file,
    modelSettings.<model>.autoCompactWindow (what /autocompact writes since CC
@@ -46,8 +45,7 @@ Cycles whose final turn runs unbroken past any threshold (~1/3, even at
 350K) are unreachable from Stop. Re-measure on CC bumps:
 ~/Projects/agent-infra/scripts/ctx_wrapup_replay.py.
 
-Skips: goal-run-owned sessions (the goal ritual is richer), repos with a
-.claude/ctx-wrapup-off file (opt-out). State: ~/.claude/ctx-wrapup/<session>.
+Skips: repos with a .claude/ctx-wrapup-off file (opt-out). State: ~/.claude/ctx-wrapup/<session>.
 Fail-open everywhere (P10).
 """
 import json
@@ -154,18 +152,6 @@ def main() -> int:
     claude_dir = cwd / ".claude"
     if (claude_dir / "ctx-wrapup-off").exists():
         return 0
-    # Goal-controlled session? The goal-night ritual supersedes this nudge.
-    marker = claude_dir / "goal-run"
-    if marker.is_file():
-        try:
-            words = marker.read_text().split()
-        except Exception:
-            words = []
-        owner = words[1] if len(words) > 1 else ""
-        # Ownerless (legacy manual arming) controls every session in the repo.
-        if not owner or owner == sid:
-            return 0
-
     transcript = payload.get("transcript_path", "")
     ctx = context_tokens(transcript)
     if ctx <= 0:

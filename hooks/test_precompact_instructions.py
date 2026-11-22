@@ -19,7 +19,6 @@ def contract_only(out: str) -> bool:
 def run_hook(
     payload: dict,
     log_lines: Sequence[dict | str],
-    goal_run: bool = False,
     brief_name: str = "",
 ) -> str:
     with tempfile.TemporaryDirectory() as td:
@@ -31,8 +30,6 @@ def run_hook(
         )
         cwd = home / "proj"
         (cwd / ".claude").mkdir(parents=True)
-        if goal_run:
-            (cwd / ".claude" / "goal-run").write_text("1")
         if brief_name:
             (cwd / ".claude" / brief_name).write_text("# hand-written brief\n")
         payload = {**payload, "cwd": str(cwd)}
@@ -75,10 +72,6 @@ def main() -> int:
     out = run_hook({"session_id": "s1"}, [])
     assert contract_only(out), out
     ok += 1
-    # 4. goal-run marker -> still emits contract + arc (binary joins hook outputs)
-    out = run_hook({"session_id": "s1"}, [row("decide", "s1")], goal_run=True)
-    assert "/decide" in out and "Re-read before relying on details" in out, out
-    ok += 1
     # 5. stale invocation (>12h) -> contract only
     out = run_hook({"session_id": "s1"}, [row("decide", "s1", hours_ago=20)])
     assert contract_only(out), out
@@ -117,7 +110,7 @@ def main() -> int:
     out = run_hook({"session_id": ""}, [])
     assert contract_only(out) and "checkpoint" not in out, out
     ok += 1
-    print(f"OK — {ok}/11 cases pass")
+    print(f"OK — {ok}/10 cases pass")
     return 0
 
 
