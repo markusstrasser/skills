@@ -178,7 +178,8 @@ def main() -> int:
         print(json.dumps({"decision": "block", "reason": msg}))
         return 0
     if MODE == "advisory":
-        print(json.dumps({"additionalContext": msg}))
+        event = data.get("hook_event_name") or "SubagentStop"
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": msg}}))
         return 0
     # shadow: silent to the model
     return 0

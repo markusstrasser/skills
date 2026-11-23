@@ -295,7 +295,7 @@ def _emit(mode: str, fpath: str, issues: list[str]):
         )
     else:
         msg = f"PROVENANCE: {os.path.basename(fpath)}: {issue_text}"
-        print(json.dumps({"additionalContext": msg}))
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": msg}}))
 
 
 def log_hook(mode: str, fpath: str):

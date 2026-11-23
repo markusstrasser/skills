@@ -98,7 +98,9 @@ esac
 
 # Advisory warning for non-blocking cases (claims without tags, 500-2000 chars)
 if [ "$HAS_CLAIMS" = "true" ] && [ "$HAS_TAGS" = "false" ]; then
-    echo "{\"additionalContext\": \"RESEARCHER CITATION: Output contains factual claims without source tags. Add provenance tags before incorporating into analysis.\"}"
+    # Delivered context on a stop event continues the turn once (STOP_ACTIVE ends the second attempt above).
+    EVENT=$(printf '%s' "$INPUT" | jq -r '.hook_event_name // "SubagentStop"' 2>/dev/null || echo SubagentStop)
+    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"${EVENT:-SubagentStop}\", \"additionalContext\": \"RESEARCHER CITATION: Output contains factual claims without source tags. Add provenance tags before incorporating into analysis.\"}}"
 fi
 
 exit 0
