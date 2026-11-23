@@ -55,6 +55,7 @@ def sandbox(tmp_path):
     cwd.mkdir()
     env = dict(os.environ)
     env["HOME"] = str(home)
+    env.pop("HOOK_TRIGGER_LOG", None)  # conftest's redirect; an isolated HOME has its own log
     env.pop("CLAUDE_SESSION_ID", None)
     return {"env": env, "cwd": str(cwd), "home": str(home), "tmp_path": tmp_path}
 

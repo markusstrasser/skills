@@ -22,6 +22,7 @@ def run_dispatch(envelope, env_extra=None, tmp_dir=None, home_dir=None, state_di
         env["TMPDIR"] = str(tmp_dir)
     if home_dir:
         env["HOME"] = str(home_dir)
+        env.pop("HOOK_TRIGGER_LOG", None)  # conftest's redirect; an isolated HOME has its own log
     if state_dir:
         env["CLAUDE_HOOK_STATE_DIR"] = str(state_dir)
     if env_extra:
