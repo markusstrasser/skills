@@ -225,3 +225,14 @@ The following former entrypoint paragraphs are retained as dated rationale, not 
 > **Mark every quotation; reword the rest.** Organize the write-up around where sources agree and differ, in your own indirect speech, one or two sentences per source. A source's exact wording appears only inside quotation marks with its citation; unmarked reproduction of source passages is a provenance defect (Fable 5.1 reproduces source text unmarked more often than Fable 5 — prompting guide, 2026-09).
 
 > - **Named-entity scoping:** Researched only the people/tools/things named in the prompt when the task is governed by a whole DISCIPLINE + product-category you never went and got. If research feeds an application on a standing surface (editor, tool, pipeline, UI), name the governing field first, pull its canonical heuristics + category conventions, and apply them — the named entities are a subset, not the field. (`#f` 2026-06-18: researched Victor/Matuschak to improve an editor, skipped HCI/UX entirely.)
+
+## Perplexity removed from the toolbelt (2026-11-23)
+
+Operator decision ("i think we can remove perplexity from our toolbelt for now"). The MCP server is unregistered in genomics, intel and personal (`.mcp.json`), in the Codex mirror (`codex_parity_sync.py`) and in Gemini's settings; live guidance no longer routes to it. The Perplexity rows and benchmark above are history, and the line saying user-scope MCPs include perplexity is stale. Use in the five weeks before removal: 93 calls (`perplexity_search` 46, `perplexity_ask` 47; agentlogs `tool_calls`, 2026-10-19 to 2026-11-23).
+
+Still present, on purpose: `llmx research --provider perplexity-agent` (opt-in CLI backend, parity-only per the SaC eval), the API key, and `mcp__perplexity__.*` in hook matchers and search-tool lists, so the burst, research-gate and backtest guards apply at once if the server returns.
+
+Gotchas moved here from `~/.claude/rules/research-tool-gotchas.md`, for a return:
+
+- **Perplexity needs specific trial names for clinical data** — broad queries lack exact numbers. Two rounds: broad first, then narrow with exact trial/journal names.
+- **Perplexity batch ceiling: N ≤ 10 safe; N ≥ 25 risky** (rubber-stamps user-supplied numerical specifics at scale).

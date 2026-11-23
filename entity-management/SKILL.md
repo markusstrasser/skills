@@ -294,7 +294,7 @@ clears the gauntlet. See `docs/entity-write-gauntlet.md`.
 | "ROW / international" claim without axis-definition quote | HLIT 2026-05-23 | `pretool-taxonomy-axis-gate.py` | inline-quote of filer's actual axis definition |
 | Third-party analyst forecast cited as `[A1]` | Patel IltB 2026-05-18 | `pretool-claim-propagation-gate.py` | `research/iltb/claim_resolution/<source>.md` first; two-axis citation form |
 | `[B2]` aggregator in primary-source-mechanism evidence box | (2026-05-10 finding #5) | `pretool-aggregator-in-load-bearing-section.py` | `[A1]` SEC / foreign-regulator filing for load-bearing claims |
-| Stale entity vs recent news | META 2026-05-15 layoff miss | `pretool-recent-news-scan-gate.py` | `## Recent News Scan` section with 30d WebSearch/Perplexity output — never copy a prior scan section verbatim; always write a fresh scan dated today (NVDA 2026-05-24 stale-date recurrence) |
+| Stale entity vs recent news | META 2026-05-15 layoff miss | `pretool-recent-news-scan-gate.py` | `## Recent News Scan` section with 30d WebSearch/Exa output — never copy a prior scan section verbatim; always write a fresh scan dated today (NVDA 2026-05-24 stale-date recurrence) |
 | Missing source-grade tag on factual claim line | (recurring) | `pretool-source-grade-line-linter.py` (shadow, 51 fires/14d) | inline `[A1]`-`[F6]` or `[DATA]` on factual claims |
 | Live blocker (Form 4 / CFPB / dilution / covenant) gone stale | (recurring) | `pretool-live-blocker-freshness-gate.py` | refresh evidence or remove the "live blocker" framing |
 | Falsifier trigger HIT without disposition | (recurring) | `pretool-falsifier-disposition-gate.py` | same-file `## Disposition` section explaining hold/flip/exit |
@@ -397,8 +397,8 @@ they handle path discovery, frontmatter, and provenance correctly.
   `record_verdict` + `corpus_attest` two-call flow is retired.)
 - **`research`** — Semantic Scholar paper discovery, claim verification,
   preprint surveillance, deep research.
-- **`brave-search` / `exa` / `perplexity`** — web search tiers. Default to
-  Brave/Exa for cheap recency; Perplexity for multi-source synthesis.
+- **`brave-search` / `exa`** — web search tiers. Default to Brave/Exa for
+  cheap recency; `deep_research` (research MCP) for multi-source synthesis.
 
 ### Live data discipline
 

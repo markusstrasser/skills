@@ -30,9 +30,9 @@ The operator's established web preference is Exa then Brave. Using two engines d
 
 ## Cost and breadth
 
-Prefer a targeted source search for a focused question. Large autonomous research calls can fan out far beyond the visible request; inspect current pricing and effort options before selecting one. For a justified `perplexity_research` call that accepts `reasoning_effort`, use `medium` or `low` unless the question specifically needs more. Do not invoke a paid service merely to fill a workflow slot; follow the user's existing spend authorization.
+Prefer a targeted source search for a focused question. Large autonomous research calls can fan out far beyond the visible request; inspect current pricing and effort options before selecting one. For a justified deep-research call that accepts a reasoning-effort setting, use `medium` or `low` unless the question specifically needs more. Do not invoke a paid service merely to fill a workflow slot; follow the user's existing spend authorization.
 
-The retained Perplexity precise-number niche came from a small biomedical benchmark. Use it as an optional fallback after source discovery misses, not as authority for an answer. Verify the actual number against a primary source. Full old tool tables, costs, and benchmark limitations remain in the historical reference.
+Perplexity left the toolbelt on 2026-11-23 (operator decision; its MCP server is unregistered in every project). For a precise number, read the primary database or the paper's table; `verify_claim` checks a number you already have. Full old tool tables, costs, the precise-number benchmark and Perplexity's gotchas remain in the historical reference.
 
 ## Retrieval recovery
 

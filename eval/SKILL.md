@@ -107,7 +107,7 @@ panels...), the answer is the DECISIONS.md row — don't re-run it. New evidence
 verdict is stale → re-open via a new run, never by editing the old verdict.
 
 **Also check the external prior art — for the DESIGN, even when the rates are stale.** A 2-minute
-search (Exa/Perplexity for the named bias/benchmark + arXiv) tells you (a) whether a benchmark
+search (Exa for the named bias/benchmark + arXiv) tells you (a) whether a benchmark
 already exists (don't reinvent — `JudgeBiasBench`, the SPB PIR/Null-PIR framework, etc. existed and
 we nearly rebuilt them) and (b) **the controls the field already knows you need**. "Measure the live
 model, papers lag the frontier" (frontier-timeliness rule) licenses re-measuring the *rate* on

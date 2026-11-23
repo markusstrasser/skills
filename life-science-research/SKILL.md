@@ -159,7 +159,7 @@ available everywhere.
 | Variant public annotation | BioMCP or biomedical MCP variant lookup | MyVariant.info, ClinVar, gnomAD web/API |
 | PGx | PharmGKB/CPIC via MCP or BioMCP | PharmGKB, CPIC guideline/API, FDA labels |
 | Literature | research MCP, scite, PubMed/PMC, paperclip where configured | PubMed + PMC + DOI landing pages |
-| Broad web-grounded biomedical search | Exa, Perplexity, Brave | ordinary web search with primary-source preference |
+| Broad web-grounded biomedical search | Exa, Brave | ordinary web search with primary-source preference |
 | Cross-project agent patterns | agent-infra MCP `search` | read `~/Projects/agent-infra/research/*.md` |
 
 When no MCP is exposed, use local CLIs or direct APIs. State the fallback in the

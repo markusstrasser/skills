@@ -23,9 +23,6 @@ For each idea being researched:
   - pass multiple titles as repeated calls, not one array payload
 - Brave search tools:
   - keep the query focused, then open/crawl selected URLs
-- Perplexity:
-  - set `search_context_size` explicitly
-  - use recency filters only when they matter
 
 ## Research Dispatch Patterns
 
