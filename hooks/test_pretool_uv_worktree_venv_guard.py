@@ -150,7 +150,7 @@ def test_dispatcher_runs_the_gate_after_the_bare_python_rewrite() -> None:
         main, wt = _repo(Path(tmp))
         out = _run("python3 x.py", wt, hook=DISPATCH)
         assert _command(out) == _prefix(main) + "uv run python3 x.py"
-        assert "uv-worktree-venv-guard" in out.get("additionalContext", "")
+        assert "uv-worktree-venv-guard" in out["hookSpecificOutput"]["additionalContext"]
 
 
 if __name__ == "__main__":

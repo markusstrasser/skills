@@ -60,5 +60,5 @@ def test_dispatch_emits_the_note_for_sendmessage(tmp_path):
         timeout=30,
     )
     assert proc.returncode == 0
-    notes = [json.loads(line)["additionalContext"] for line in proc.stdout.splitlines() if line.startswith("{")]
+    notes = [json.loads(line)["hookSpecificOutput"]["additionalContext"] for line in proc.stdout.splitlines() if line.startswith("{")]
     assert any("worktree the harness removed" in note for note in notes)

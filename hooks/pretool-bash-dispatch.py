@@ -133,6 +133,12 @@ class GateResult(NamedTuple):
     stdout: str
 
 
+def _advisory(text: str) -> str:
+    """Advisory stdout in the one shape Claude Code delivers. A top-level additionalContext is
+    dropped without an error: every advisory of this dispatcher was mute until 2026-11-23."""
+    return json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": text}})
+
+
 def _log_trigger(hook: str, action: str, detail: str, cmd: str = "") -> None:
     """Fire-and-forget telemetry — mirrors each gate's own
     `~/Projects/skills/hooks/hook-trigger-log.sh "$name" "$action" "$detail" "$cmd"`
@@ -1261,7 +1267,7 @@ def gate_heavy_load_guard(raw_payload: str) -> GateResult:
         _log_trigger(
             "heavy-load-guard", "warn", f"load={load1} cores={cores} claudes={claudes}", cmd
         )
-        out = json.dumps({"additionalContext": warn})
+        out = _advisory(warn)
         return GateResult(0, "", out)
     except Exception:
         return GateResult(0, "", "")
@@ -1477,7 +1483,7 @@ def gate_cost_awareness(raw_payload: str) -> GateResult:
             "Consider whether this session should continue or checkpoint."
         )
         _log_trigger("cost-awareness", "warn", f"project={project}")
-        out = json.dumps({"additionalContext": advisory})
+        out = _advisory(advisory)
         return GateResult(0, "", out)
     except Exception:
         return GateResult(0, "", "")
@@ -1655,7 +1661,7 @@ def gate_commit_check(raw_payload: str) -> GateResult:
     if not warn_text.strip():
         return GateResult(0, "", "")
     _log_trigger("commit-check", "warn", warn_text[:100], cmd)
-    out = json.dumps({"additionalContext": f"COMMIT CHECK: {warn_text}"})
+    out = _advisory(f"COMMIT CHECK: {warn_text}")
     return GateResult(0, "", out)
 
 
@@ -2121,7 +2127,7 @@ def gate_git_stash_guard(raw_payload: str) -> GateResult:
             "`git stash push -- <paths>` so it stays safe if a peer joins this checkout "
             "later (global <git_rules>, CLAUDE.md 2026-07-16 entry)."
         )
-        return GateResult(0, "", json.dumps({"additionalContext": advisory}))
+        return GateResult(0, "", _advisory(advisory))
 
     _log_trigger("git-stash-guard", "block", f"peers={peer_count} cmd={cmd[:80]}", cmd)
     msg = (
@@ -3402,7 +3408,7 @@ def _pkill_degraded(reasons: list[str], cmd: str) -> GateResult:
         "selects. Run its selection as `pgrep -f '<pattern>'` (or `killall -s`) first, and kill "
         "what you started by its recorded PID."
     )
-    return GateResult(0, "", json.dumps({"additionalContext": msg}))
+    return GateResult(0, "", _advisory(msg))
 
 
 def gate_pkill_guard(raw_payload: str) -> GateResult:
@@ -3538,7 +3544,7 @@ def gate_opus_concurrency_advisory(raw_payload: str) -> GateResult:
         "under contention). Stagger or throttle this launch (throttle: keep <=2-3 concurrent; "
         "feedback_concurrency_throttle)."
     )
-    out_json = json.dumps({"additionalContext": msg})
+    out_json = _advisory(msg)
     return GateResult(0, "", out_json)
 
 
@@ -3963,7 +3969,7 @@ def gate_rg_replace_flag_guard(raw_payload: str) -> GateResult:
                 f"rg is recursive by default; `-r` is `--replace` — `{cluster}` rewrites every "
                 f"match to `{cluster[2:]}`. Drop the `r`."
             )
-            return GateResult(0, "", json.dumps({"additionalContext": msg}))
+            return GateResult(0, "", _advisory(msg))
         return GateResult(0, "", "")
     except Exception:
         return GateResult(0, "", "")
@@ -4090,7 +4096,7 @@ def gate_zsh_modifier_guard(raw_payload: str) -> GateResult:
             "extension, `:s` substitute, `:a` absolute, `:l`/`:u` case), inside double quotes "
             "and unquoted heredocs too. Write `${name}:…`, or run the loop under `bash -c '…'`."
         )
-        return GateResult(0, "", json.dumps({"additionalContext": msg}))
+        return GateResult(0, "", _advisory(msg))
     except Exception:
         return GateResult(0, "", "")
 
@@ -4333,13 +4339,13 @@ def main() -> None:
         elif kind == "advise" and val:
             advisories.append(val if isinstance(val, str) else json.dumps(val))
 
-    out: dict = {}
+    hso: dict = {}
     if current_ti != original_ti:
-        out["hookSpecificOutput"] = {"hookEventName": "PreToolUse", "updatedInput": current_ti}
+        hso["updatedInput"] = current_ti
     if advisories:
-        out["additionalContext"] = "\n\n".join(advisories)
-    if out:
-        sys.stdout.write(json.dumps(out))
+        hso["additionalContext"] = "\n\n".join(advisories)
+    if hso:
+        sys.stdout.write(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", **hso}}))
     sys.exit(0)
 
 

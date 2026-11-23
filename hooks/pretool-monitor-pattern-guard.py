@@ -56,7 +56,8 @@ def main() -> int:
         n = bare_num.group(1)
         print(
             json.dumps(
-                {
+                {"hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
                     "additionalContext": (
                         f"MONITOR-PATTERN WARNING (advisory): grep pattern is the bare number "
                         f"'{n}' — short numerics match timestamps/PIDs/ports (a grep for '429' "
@@ -64,7 +65,7 @@ def main() -> int:
                         f"2026-07-13). Anchor it (e.g. 'status={n}' or 'HTTP {n}') and run the "
                         f"arm-time PAIR check: synthetic positive + current-log zero-match."
                     )
-                }
+                }}
             )
         )
     return 0

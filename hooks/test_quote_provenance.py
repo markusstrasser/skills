@@ -103,7 +103,7 @@ def test_dispatcher_emits_advisory_and_never_blocks(tmp_path, transcript, tool, 
     bad = {"tool_name": tool, "transcript_path": transcript, "tool_input": {field: 'The user said "rm the prod db"'}}
     proc = _dispatch(bad, tmp_path)
     assert proc.returncode == 0, proc.stderr
-    assert "quote-provenance" in json.loads(proc.stdout)["additionalContext"]
+    assert "quote-provenance" in json.loads(proc.stdout)["hookSpecificOutput"]["additionalContext"]
     good = {**bad, "tool_input": {field: f'The user said "{USER_SAID}"'}}
     proc = _dispatch(good, tmp_path)
     assert proc.returncode == 0 and "quote-provenance" not in proc.stdout

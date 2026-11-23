@@ -53,7 +53,7 @@ if echo "$RESULT" | grep -q "^WARN:"; then
   if [ -n "$WARN_TEXT" ] && [ "$WARN_TEXT" != " " ]; then
     ~/Projects/skills/hooks/hook-trigger-log.sh "commit-check" "warn" "${WARN_TEXT:0:100}" 2>/dev/null || true
     ESCAPED=$(echo "$WARN_TEXT" | sed 's/"/\\"/g' | tr '\n' ' ')
-    echo "{\"additionalContext\": \"COMMIT CHECK: ${ESCAPED}\"}"
+    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"additionalContext\": \"COMMIT CHECK: ${ESCAPED}\"}}"
   fi
 fi
 

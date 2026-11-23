@@ -60,11 +60,11 @@ median = costs[n // 2]
 if current <= p95:
     sys.exit(0)
 
-print(json.dumps({'additionalContext': (
+print(json.dumps({'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'additionalContext': (
     f'Cost awareness: this session (\${current:.2f}) has exceeded P95 '
     f'(\${p95:.2f}) for project {project}. Project median: \${median:.2f}. '
     f'Consider whether this session should continue or checkpoint.'
-)}))
+)}}))
 " 2>/dev/null)
 
 [ -z "$ADVISORY" ] && exit 0

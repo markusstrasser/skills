@@ -63,5 +63,5 @@ fi
 if [ "$DIRECTORY_UNCERTAIN" = true ]; then
   ADVICE="[DEGRADED] the same-name wait's directory is unproven; $ADVICE"
 fi
-jq -cn --arg message "WATCHER-PAIRING: bgrun '$NAME' launched with no proved matching native watcher in this call. Before this turn ends, $ADVICE or state explicitly why tick sweeps suffice. A detached/remote job additionally needs its server-side liveness read named. (Evidence: 73-min blind training death, 2026-08-19.)" '{additionalContext: $message}'
+jq -cn --arg message "WATCHER-PAIRING: bgrun '$NAME' launched with no proved matching native watcher in this call. Before this turn ends, $ADVICE or state explicitly why tick sweeps suffice. A detached/remote job additionally needs its server-side liveness read named. (Evidence: 73-min blind training death, 2026-08-19.)" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $message}}'
 exit 0

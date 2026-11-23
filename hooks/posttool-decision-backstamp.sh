@@ -94,5 +94,5 @@ while IFS= read -r tgt; do
 done <<< "$targets"
 
 [ -z "$stamped" ] && exit 0
-printf '{"additionalContext": "🔗 Auto-back-stamp (supersession self-marks the target):%s"}\n' "$stamped"
+printf '{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "🔗 Auto-back-stamp (supersession self-marks the target):%s"}}\n' "$stamped"
 exit 0

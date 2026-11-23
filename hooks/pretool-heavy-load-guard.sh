@@ -73,7 +73,7 @@ if load > cores or n >= 4:
 warn="${MPS_NOTE}${warn}"
 [ -z "$warn" ] && exit 0
 
-python3 -c "import json,sys; print(json.dumps({'additionalContext': sys.argv[1]}))" "$warn"
+python3 -c "import json,sys; print(json.dumps({'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'additionalContext': sys.argv[1]}}))" "$warn"
 
 TRIG="$HOME/Projects/skills/hooks/hook-trigger-log.sh"
 [ -x "$TRIG" ] && "$TRIG" "heavy-load-guard" "warn" "load=$LOAD1 cores=$CORES claudes=$CLAUDES" 2>/dev/null || true

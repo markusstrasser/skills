@@ -125,7 +125,7 @@ msg_parts.extend(context_parts)
 msg_parts.append('')
 msg_parts.append('Check: do any CYCLE.md queue items or ACTIVE memos need updating?')
 advisory = '\n'.join(msg_parts)
-print(json.dumps({'additionalContext': 'DOC STALENESS CHECK:\n' + advisory}))
+print(json.dumps({'hookSpecificOutput': {'hookEventName': 'PostToolUse', 'additionalContext': 'DOC STALENESS CHECK:\n' + advisory}}))
 " 2>>"$HOME/.claude/hooks/session-init.log")
 
 # RESULT is either 'skip' or a JSON additionalContext object

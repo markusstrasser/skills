@@ -31,5 +31,5 @@ if [ -f "$MARKER" ]; then
 fi
 echo "$NOW" > "$MARKER"
 
-printf '{"additionalContext": "PORTFOLIO (background dispatch detected): before ending this turn waiting on it, advance another front in parallel — grind/heretic/dreamer/meta via subagents or llmx (open rows: `just backlog list --open`). Ending the turn with this dispatch as the only live front requires high-conviction \\"nothing to parallelize\\", stated explicitly."}'
+printf '{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "PORTFOLIO (background dispatch detected): before ending this turn waiting on it, advance another front in parallel — grind/heretic/dreamer/meta via subagents or llmx (open rows: `just backlog list --open`). Ending the turn with this dispatch as the only live front requires high-conviction \\"nothing to parallelize\\", stated explicitly."}}'
 exit 0

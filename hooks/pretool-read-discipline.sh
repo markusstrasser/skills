@@ -49,7 +49,7 @@ if [ "$PRIOR_FULL" -ge 1 ]; then
     BASENAME="${FPATH##*/}"
     MSG="Read discipline: $BASENAME was already read in full this session ($((PRIOR_FULL + 1))x). Consider using offset/limit to read specific sections, or Grep to find what you need."
     SAFE=$(echo "$MSG" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))' 2>/dev/null)
-    echo "{\"additionalContext\": ${SAFE}}"
+    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"additionalContext\": ${SAFE}}}"
     TRIGGER="$HOME/Projects/skills/hooks/hook-trigger-log.sh"
     [ -x "$TRIGGER" ] && "$TRIGGER" "read-discipline" "warn" "$BASENAME reads=$((PRIOR_FULL + 1))" 2>/dev/null || true
 fi

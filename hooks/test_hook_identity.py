@@ -178,7 +178,7 @@ def test_bgrun_nudge_preserves_the_native_watch_command(tmp_path, response_kind)
     }
     result = run_hook("posttool-bgrun-watcher-nudge.sh", envelope, tmp_path)
     assert result.returncode == 0, result.stderr
-    context = json.loads(result.stdout)["additionalContext"]
+    context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
     assert watch in context
     assert "until [ -f" not in context
     assert "$TMPDIR/bgrun" not in context
@@ -216,7 +216,7 @@ def test_bgrun_nudge_keeps_unproven_wait_directory_visible(tmp_path, command):
     result = run_hook("posttool-bgrun-watcher-nudge.sh", envelope, tmp_path)
     assert result.returncode == 0, result.stderr
     assert result.stdout, "same-name waiter has unproven directory scope; keep the nudge"
-    context = json.loads(result.stdout)["additionalContext"]
+    context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
     assert watch in context
     assert "[DEGRADED]" in context
 
@@ -244,7 +244,7 @@ def test_bgrun_nudge_does_not_confuse_other_waits_or_marker_reads(tmp_path, frag
     }
     result = run_hook("posttool-bgrun-watcher-nudge.sh", envelope, tmp_path)
     assert result.returncode == 0, result.stderr
-    context = json.loads(result.stdout)["additionalContext"]
+    context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
     assert "bgrun --wait case" in context
     assert "[DEGRADED]" in context
 

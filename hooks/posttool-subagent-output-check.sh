@@ -98,7 +98,7 @@ fi
 
 # Audit-bound check (filesystem scout dispatches must declare SEARCH_ROOT).
 AUDIT_MSG=$(printf '%s' "$INPUT" | python3 "$HOME/Projects/skills/hooks/subagent_audit_bound.py" posttool 2>/dev/null \
-    | python3 -c 'import sys,json; raw=sys.stdin.read().strip(); print(json.loads(raw).get("additionalContext","") if raw else "")' 2>/dev/null || true)
+    | python3 -c 'import sys,json; raw=sys.stdin.read().strip(); print(json.loads(raw).get("hookSpecificOutput",{}).get("additionalContext","") if raw else "")' 2>/dev/null || true)
 if [ -n "$AUDIT_MSG" ]; then
     ~/Projects/skills/hooks/hook-trigger-log.sh "subagent-audit-bound" "warn" "missing-bound" 2>/dev/null || true
     if [ -n "$MSG" ]; then
@@ -110,7 +110,7 @@ fi
 
 if [ -n "$MSG" ]; then
     SAFE_MSG=$(python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$MSG" 2>/dev/null)
-    echo "{\"additionalContext\": ${SAFE_MSG}}"
+    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": ${SAFE_MSG}}}"
 fi
 
 exit 0

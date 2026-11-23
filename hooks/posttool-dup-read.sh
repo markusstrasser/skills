@@ -27,6 +27,6 @@ if [ "$COUNT" -ge 6 ]; then
   exit 2
 elif [ "$COUNT" -ge 4 ]; then
   "$(dirname "$0")/hook-trigger-log.sh" "dup-read-region" "warn" "${COUNT}x ${FILE##*/}" 2>/dev/null || true
-  echo "{\"additionalContext\": \"Read ${FILE} (same region) ${COUNT}x this session. Use Grep to find specific content, or Read with offset/limit. Continued duplicate reads will be BLOCKED.\"}"
+  echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"Read ${FILE} (same region) ${COUNT}x this session. Use Grep to find specific content, or Read with offset/limit. Continued duplicate reads will be BLOCKED.\"}}"
 fi
 exit 0

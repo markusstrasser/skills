@@ -147,7 +147,7 @@ def main() -> int:
         return 0
     msg = posttool_warning(env)
     if msg:
-        print(json.dumps({"additionalContext": msg}))
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": msg}}))
     return 0
 
 

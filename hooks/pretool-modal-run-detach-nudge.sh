@@ -28,5 +28,5 @@ case "$CMD" in
   *"--detach"*|*"--dry-run"*|*"--help"*) exit 0;;
 esac
 
-printf '{"additionalContext": "MODAL-DETACH: this `modal run` has no --detach — if the remote wall exceeds minutes, a laptop sleep or network blip kills the healthy remote run (client heartbeat drop => server cancels; measured 2026-08-19, $3.5 training run killed at step 350). Add --detach for anything long (monitor via app logs + volume artifacts; client log then reflects CLIENT state, not job state), or state that this run is short/interactive on purpose."}'
+printf '{"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "MODAL-DETACH: this `modal run` has no --detach — if the remote wall exceeds minutes, a laptop sleep or network blip kills the healthy remote run (client heartbeat drop => server cancels; measured 2026-08-19, $3.5 training run killed at step 350). Add --detach for anything long (monitor via app logs + volume artifacts; client log then reflects CLIENT state, not job state), or state that this run is short/interactive on purpose."}}'
 exit 0

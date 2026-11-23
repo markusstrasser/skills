@@ -276,7 +276,7 @@ def run_tab_and_dupread(tool_name, tool_input, ppid, scope=""):
         except Exception:
             pass
 
-        print(json.dumps({"additionalContext": warn}))
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": warn}}))
         if block:
             # Exit 2 feeds only stderr back to the model: with the reason on stdout alone the
             # refusal read "No stderr output" (2026-11-23, session 42b2ce11).
@@ -709,7 +709,7 @@ def main():
                 except Exception:
                     pass
             if notes:
-                print(json.dumps({"additionalContext": "\n\n".join(notes)}))
+                print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "\n\n".join(notes)}}))
 
         try:
             probe_envelope(envelope, tool_name)

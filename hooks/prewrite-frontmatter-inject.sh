@@ -34,4 +34,4 @@ else
 fi
 
 ESCAPED=$(echo "$TEMPLATE" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))' 2>/dev/null)
-echo "{\"additionalContext\": ${ESCAPED}}"
+echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"additionalContext\": ${ESCAPED}}}"

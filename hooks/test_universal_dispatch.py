@@ -98,11 +98,12 @@ def test_repeated_read_sequence_matches_oracle(tmp_path):
 
     assert codes == [0, 0, 0, 0, 2], (codes, outs)
     assert outs[0] == ""
-    assert "DUPLICATE READ" in json.loads(outs[1])["additionalContext"]
-    assert "1 tool calls ago" in json.loads(outs[1])["additionalContext"]
-    assert "DUPLICATE READ" in json.loads(outs[2])["additionalContext"]
-    assert "REPEATED READ (3x)" in json.loads(outs[3])["additionalContext"]
-    blocked = json.loads(outs[4])["additionalContext"]
+    assert json.loads(outs[1])["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
+    assert "DUPLICATE READ" in json.loads(outs[1])["hookSpecificOutput"]["additionalContext"]
+    assert "1 tool calls ago" in json.loads(outs[1])["hookSpecificOutput"]["additionalContext"]
+    assert "DUPLICATE READ" in json.loads(outs[2])["hookSpecificOutput"]["additionalContext"]
+    assert "REPEATED READ (3x)" in json.loads(outs[3])["hookSpecificOutput"]["additionalContext"]
+    blocked = json.loads(outs[4])["hookSpecificOutput"]["additionalContext"]
     assert "BLOCKED" in blocked and "4x" in blocked
     # Exit 2 delivers stderr only, so the block must state its reason there.
     assert "BLOCKED" in errs[4] and "4x" in errs[4]
@@ -287,7 +288,7 @@ def test_one_agent_still_blocks_on_its_own_repeated_full_reads(tmp_path):
     envelope = _agent_read("/tmp/agent_own_dup_target.py", "a12bfef463b73db2f")
     procs = [run_dispatch(envelope, home_dir=home, state_dir=state) for _ in range(5)]
     assert [p.returncode for p in procs] == [0, 0, 0, 0, 2]
-    assert "BLOCKED" in json.loads(procs[4].stdout)["additionalContext"]
+    assert "BLOCKED" in json.loads(procs[4].stdout)["hookSpecificOutput"]["additionalContext"]
 
 
 def test_agent_tracker_names_stay_reapable_and_inside_the_state_dir(tmp_path):

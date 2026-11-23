@@ -33,7 +33,7 @@ case "$TOOL_NAME" in
         BASENAME=$(basename "$PREV")
         MSG="${BASENAME} was written but never run. Run and verify its output before writing more scripts."
         SAFE_MSG=$(printf '%s' "$MSG" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null)
-        [ -n "$SAFE_MSG" ] && echo "{\"additionalContext\": ${SAFE_MSG}}"
+        [ -n "$SAFE_MSG" ] && echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": ${SAFE_MSG}}}"
       fi
     fi
 

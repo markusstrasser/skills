@@ -41,6 +41,6 @@ fi
 
 ~/Projects/skills/hooks/hook-trigger-log.sh "source-remind" "remind" "$FPATH" 2>/dev/null || true
 cat <<'JSON'
-{"additionalContext": "PROVENANCE REQUIRED for research paths. Tag factual claims inline:\n\n  Bad:  Scrotal cooling raises testosterone by 20%.\n  Good: Scrotal cooling raises testosterone by 20% [SOURCE: https://doi.org/10.xxxx/yyyy]\n  Good: No RCT confirms magnitude beyond 5% [INFERENCE]\n  Good: gnomAD AF 0.03 for EUR [DATABASE: gnomAD v4.1]\n\nTags: [SOURCE: url], [DATABASE: name], [DATA], [INFERENCE], [SPEC], [TRAINING-DATA]. Post-write check flags untagged claims."}
+{"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "PROVENANCE REQUIRED for research paths. Tag factual claims inline:\n\n  Bad:  Scrotal cooling raises testosterone by 20%.\n  Good: Scrotal cooling raises testosterone by 20% [SOURCE: https://doi.org/10.xxxx/yyyy]\n  Good: No RCT confirms magnitude beyond 5% [INFERENCE]\n  Good: gnomAD AF 0.03 for EUR [DATABASE: gnomAD v4.1]\n\nTags: [SOURCE: url], [DATABASE: name], [DATA], [INFERENCE], [SPEC], [TRAINING-DATA]. Post-write check flags untagged claims."}}
 JSON
 exit 0

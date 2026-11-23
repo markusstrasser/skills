@@ -60,5 +60,5 @@ grep -qxF "$FILE" "$TRACKER" 2>/dev/null && exit 0
 printf '%s\n' "$FILE" >> "$TRACKER"
 
 base="${FILE##*/}"
-printf '{"additionalContext": "⚠ Decision currency: %s is %s (not accepted/current). Read/discuss freely, but do NOT execute its plan as a ratified decision without confirming it is the CURRENT decision on this spine — check for a superseding ADR or a REFRAMINGS entry. (agent-infra/decisions/2026-06-21-decision-currency-whitelist.md)"}\n' "$base" "$REASON"
+printf '{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "⚠ Decision currency: %s is %s (not accepted/current). Read/discuss freely, but do NOT execute its plan as a ratified decision without confirming it is the CURRENT decision on this spine — check for a superseding ADR or a REFRAMINGS entry. (agent-infra/decisions/2026-06-21-decision-currency-whitelist.md)"}}\n' "$base" "$REASON"
 exit 0

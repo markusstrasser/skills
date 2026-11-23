@@ -25,10 +25,10 @@ if not any(t in tool.lower() for t in search_tools):
 params = json.dumps(data.get('tool_input', {})).lower()
 keywords = r'biotech|drug|gene\b|clinical|supplement|aging|anti.?aging|neuroscience|medical|pharma|genomic|health|vitamin|peptide|hormone|longevity|nootropic|dosage|receptor|pathway|enzyme|protein|variant|allele|snp|gwas'
 if re.search(keywords, params):
-    output = {
-        'decision': 'allow',
+    output = {'hookSpecificOutput': {
+        'hookEventName': 'PreToolUse',
         'additionalContext': 'Bio/medical search detected. Load skills/references/epistemics (and /research or /life-science-research as needed) — there is no standalone /epistemics skill.'
-    }
+    }}
     print(json.dumps(output))
 " 2>/dev/null
 

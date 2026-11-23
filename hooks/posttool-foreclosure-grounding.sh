@@ -39,5 +39,5 @@ printf '%s' "$ADDED" | grep -qiE 'dead[ -]?end|infeasible|\bimpossible\b|tapped[
 
 MSG="⚠ FORECLOSURE VERDICT written to a decision surface (${FPATH##*/}). Before it drives a decision (pivot/abandon/stop): is it grounded in the PRINCIPAL check — source file:line or a measured ledger row — or a PROXY (projection/README/prior summary)? Does it CONTRADICT any recorded lever? Cite the principal source, or downgrade to a pre-registered probe. (proxy-as-truth #8; 2026-06-19 fx3 'dead end' was projection-grounded — a 5-min source read overturned it.) For a consequential verdict: route through /critique (repo premise-scout falsifies premises) or a fresh-eyes-review grounding pass."
 SAFE_MSG=$(printf '%s' "$MSG" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null)
-[ -n "$SAFE_MSG" ] && echo "{\"additionalContext\": ${SAFE_MSG}}"
+[ -n "$SAFE_MSG" ] && echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": ${SAFE_MSG}}}"
 exit 0

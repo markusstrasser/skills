@@ -39,7 +39,7 @@ def test_finished_agent_without_its_file_warns():
         home = pathlib.Path(t)
         r = run(event(home / "missing.md", {"status": "completed", "content": []}), home)
         assert r.returncode == 0
-        assert "SUBAGENT OUTPUT MISSING" in json.loads(r.stdout)["additionalContext"]
+        assert "SUBAGENT OUTPUT MISSING" in json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
 
 
 def test_finished_agent_with_its_file_is_silent():

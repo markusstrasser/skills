@@ -60,7 +60,7 @@ if warnings:
 if [ -n "$WARN" ]; then
     ~/Projects/skills/hooks/hook-trigger-log.sh "propagate-check" "warn" "${WARN:0:100}" 2>/dev/null || true
     SAFE=$(echo "$WARN" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read().strip()))' 2>/dev/null)
-    echo "{\"additionalContext\": ${SAFE}}"
+    echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": ${SAFE}}}"
 fi
 
 exit 0

@@ -27,4 +27,4 @@ fi
 
 MSG="Substantial plan written (${LINES} lines). Run /critique model now BEFORE asking for plan approval or execution. Do not prompt the user to approve the plan until after the review completes and findings are incorporated."
 SAFE_MSG=$(printf '%s' "$MSG" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null)
-[ -n "$SAFE_MSG" ] && echo "{\"additionalContext\": ${SAFE_MSG}}"
+[ -n "$SAFE_MSG" ] && echo "{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": ${SAFE_MSG}}}"

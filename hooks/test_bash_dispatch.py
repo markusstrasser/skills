@@ -107,7 +107,7 @@ def run_dispatcher(envelope: dict, env: dict, cwd: str) -> dict:
             hso = obj.get("hookSpecificOutput") or {}
             if isinstance(hso, dict) and "updatedInput" in hso:
                 result["final_command"] = hso["updatedInput"].get("command")
-            result["additionalContext"] = obj.get("additionalContext")
+            result["additionalContext"] = hso.get("additionalContext") if isinstance(hso, dict) else None
     return result
 
 
@@ -1195,7 +1195,7 @@ def test_pkill_guard_degrades_loudly_when_it_cannot_replay(monkeypatch, command)
     monkeypatch.setattr(subprocess, "run", no_pgrep)
     result = _PKILL_GATE(json.dumps(_bash(command)))
     assert result.code == 0
-    context = json.loads(result.stdout)["additionalContext"]
+    context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
     assert context.startswith("[DEGRADED] pkill guard could not dry-run: ")
 
 
@@ -1219,7 +1219,7 @@ def test_kills_fed_by_ps_degrade_loudly_without_a_replay(monkeypatch, command):
     monkeypatch.setattr(subprocess, "run", refuse)
     result = _PKILL_GATE(json.dumps(_bash(command)))
     assert result.code == 0
-    context = json.loads(result.stdout)["additionalContext"]
+    context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
     assert context.startswith("[DEGRADED] pkill guard could not dry-run: a kill takes its pids from ps output")
 
 
@@ -1499,7 +1499,7 @@ def test_pkill_guard_degrades_loudly_when_its_scan_fails(monkeypatch):
     monkeypatch.setitem(_PKILL_GATE.__globals__, "_scan_kill_text", broken)
     result = _PKILL_GATE(json.dumps(_bash("pgrep -f x | xargs kill")))
     assert result.code == 0
-    context = json.loads(result.stdout)["additionalContext"]
+    context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
     assert context.startswith("[DEGRADED] pkill guard could not dry-run: the scan failed (AttributeError: scan bug)")
 
 
@@ -1637,7 +1637,7 @@ def test_kills_from_untraceable_sources_degrade_loudly(monkeypatch, command, rea
     monkeypatch.setattr(subprocess, "run", refuse)
     result = _PKILL_GATE(json.dumps(_bash(command)))
     assert result.code == 0
-    context = json.loads(result.stdout)["additionalContext"]
+    context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
     assert context.startswith("[DEGRADED] pkill guard could not dry-run: ")
     assert reason in context
 
@@ -1649,7 +1649,7 @@ def test_degraded_reasons_are_capped(monkeypatch):
     command = f'kill $(pgrep -f "{long_pattern}")\n' + "\n".join(f"kill $pid{n}" for n in range(3000))
     result = _PKILL_GATE(json.dumps(_bash(command)))
     assert result.code == 0
-    context = json.loads(result.stdout)["additionalContext"]
+    context = json.loads(result.stdout)["hookSpecificOutput"]["additionalContext"]
     assert context.startswith('[DEGRADED] pkill guard could not dry-run: the pgrep argument "x$yx$y')
     assert "a kill reads $pid0, which this command does not set; " in context
     assert "; and 2996 more. Nothing checked" in context
