@@ -596,7 +596,7 @@ def run_companion_remind(envelope, tool_name, tool_input):
     # analyze dag + robustness: regression in code (case-sensitive)
     if content and re.search(
         r"statsmodels.*OLS|LinearRegression|sm\.OLS|lm\(.*~|regression_results|"
-        r"\.fit\(\).*summary|causal_effect|treatment_effect|ATE\b|ATT\b",
+        r"\.fit\(\).*summary|causal_effect|treatment_effect|\bATE\b|\bATT\b",
         content,
     ):
         remind(
