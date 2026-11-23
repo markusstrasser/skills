@@ -11,6 +11,9 @@ INPUT=$(cat)
 FILE=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // ""' 2>/dev/null || true)
 KEY=$(printf '%s' "$INPUT" | jq -r '(.tool_input // {}) | "\(.file_path // ""):\(.offset // ""):\(.limit // "")"' 2>/dev/null || true)
 [ -z "$FILE" ] && exit 0
+# A script's `file(p).exists()` is a Read with offset 0 and limit 1 (probed 2026-11-23): an
+# existence check, often polled in a wait loop, never content.
+[ "$KEY" = "$FILE:0:1" ] && exit 0
 
 . "$(dirname "$0")/lib_hook_identity.sh" 2>/dev/null || exit 0
 hook_identity "$INPUT"

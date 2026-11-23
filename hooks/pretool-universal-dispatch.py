@@ -209,15 +209,30 @@ def run_tab_and_dupread(tool_name, tool_input, ppid, scope=""):
             except OSError:
                 lines = []
 
-            # TOTAL_READS: exact match on first field (grep -cxF) — only
-            # full-file reads (no offset) count.
-            total_reads = sum(1 for ln in lines if ln.split("|", 1)[0] == fpath)
+            # TOTAL_READS: exact match on first field (grep -cxF) — only full-file reads
+            # (no offset) count, and only those since the file last changed: a read after an
+            # edit is not a duplicate, and edits made through Bash never reach the Write/Edit
+            # reset below. The third field is the read's time; a line without one counts.
+            try:
+                mtime = os.path.getmtime(fpath)
+            except OSError:
+                mtime = 0.0
+
+            def _since_change(ln: str) -> bool:
+                parts = ln.split("|")
+                try:
+                    return len(parts) < 3 or float(parts[2]) >= int(mtime)
+                except ValueError:
+                    return True
+
+            total_reads = sum(1 for ln in lines if ln.split("|", 1)[0] == fpath and _since_change(ln))
 
             if not has_offset and total_reads >= 4:
                 warn = (
                     f"BLOCKED: {os.path.basename(fpath)} read {total_reads}x this session "
-                    "(full file). Content is in context. Use offset/limit for a specific "
-                    "section, or explain why you need the full content again."
+                    "(full file, unchanged since). Content is in context, or a script can keep "
+                    "it in a variable. Use offset/limit for a specific section, or explain why "
+                    "you need the full content again."
                 )
                 block = True
             elif not has_offset and total_reads >= 3:
@@ -226,13 +241,18 @@ def run_tab_and_dupread(tool_name, tool_input, ppid, scope=""):
                     "likely still in context. Use offset/limit if you need a specific section."
                 )
             # A second read within 20 tool calls used to draw "DUPLICATE READ ... likely still in
-            # context" here. Removed 2026-11-23: it was 448 of 459 dup-read fires in a week, and
-            # under Code Mode a script's read lands in a variable, not in context, so a
-            # read-edit-verify script drew it on correct work. The 3x warning and 4x block stay.
-        if fpath:
+            # context" here. Removed 2026-11-23: under Code Mode a script's read lands in a
+            # variable, not in context, so a read-edit-verify script drew it on correct work, and
+            # every `file(p).exists()` in a wait loop drew it too (115 on one lane marker). The
+            # 3x warning and 4x block stay. (The share of fires this tier accounted for was not
+            # measured; 25 of 32 in one week's Claude transcripts.)
+        # `file(p).exists()` in a script is a Read with offset 0 and limit 1 (probed
+        # 2026-11-23): an existence check, often polled, never content. It is not tracked.
+        is_existence_probe = offset == 0 and tool_input.get("limit") == 1
+        if fpath and not is_existence_probe:
             try:
                 with open(reads_file, "a") as f:
-                    f.write(f"{dedup_key}|{tool_count}\n")
+                    f.write(f"{dedup_key}|{tool_count}|{int(time.time())}\n")
             except OSError:
                 pass
 

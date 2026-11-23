@@ -271,6 +271,26 @@ def _agent_read(fpath, agent_id=None):
     return envelope
 
 
+def test_reads_before_the_file_changed_and_existence_probes_do_not_count(tmp_path):
+    """Only full reads since the file's last change count; a script's exists() is not a read."""
+    home, state = _isolated(tmp_path)
+    target = tmp_path / "edited.py"
+    target.write_text("x = 1\n")
+    now = int(target.stat().st_mtime)
+    os.utime(target, (now - 100, now - 100))
+    read = {"tool_name": "Read", "tool_input": {"file_path": str(target)}}
+    probe = {"tool_name": "Read", "tool_input": {"file_path": str(target), "offset": 0, "limit": 1}}
+    for _ in range(3):
+        assert run_dispatch(read, home_dir=home, state_dir=state).stdout.strip() == ""
+    for _ in range(8):  # a wait loop polling the marker
+        polled = run_dispatch(probe, home_dir=home, state_dir=state)
+        assert (polled.returncode, polled.stdout.strip()) == (0, "")
+    assert "REPEATED READ (3x)" in run_dispatch(read, home_dir=home, state_dir=state).stdout
+    os.utime(target, (now + 3600, now + 3600))  # edited outside the Write/Edit tools
+    after_edit = run_dispatch(read, home_dir=home, state_dir=state)
+    assert (after_edit.returncode, after_edit.stdout.strip()) == (0, "")
+
+
 def test_sibling_agents_sharing_a_ppid_keep_separate_read_histories(tmp_path):
     """2026-09-21: seven reader agents dispatched with one shared BRIEF.md. In-process subagents
     share the CLI's PID, so the PPID-keyed tracker counted them as one reader: the second sibling

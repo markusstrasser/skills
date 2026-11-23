@@ -119,6 +119,15 @@ def test_region_dup_read_counts_only_reads_since_the_file_changed(tmp_path, own_
     assert (again.returncode, again.stdout) == (0, "")
 
 
+def test_region_dup_read_ignores_a_scripts_existence_probe(tmp_path, own_tmp_trackers):
+    """`file(p).exists()` in a wait loop is a Read with offset 0 and limit 1, polled many times."""
+    marker = tmp_path / "lane.done"
+    marker.write_text("0\n")
+    probe = as_agent({"tool_name": "Read", "tool_input": {"file_path": str(marker), "offset": 0, "limit": 1}}, "waiter")
+    polls = [run_hook("posttool-dup-read.sh", probe, tmp_path) for _ in range(8)]
+    assert [(p.returncode, p.stdout) for p in polls] == [(0, "")] * 8
+
+
 def test_search_burst_counts_each_sibling_separately(tmp_path, own_tmp_trackers):
     search = {"tool_name": "WebSearch", "tool_input": {"query": "q"}}
     for n in range(3):
