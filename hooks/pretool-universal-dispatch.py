@@ -668,6 +668,16 @@ def main():
         envelope, tool_name, tool_input = load_envelope()
         ppid = os.getppid()
 
+        # Reading or writing a local file is "reading results" for pretool-search-burst.sh,
+        # whose matcher group never sees these tools: clear its per-agent count here.
+        if tool_name in ("Read", "Grep", "Glob", "Write", "Edit"):
+            try:
+                burst = f"{STATE_DIR}/claude-search-burst-{hook_identity.owner(envelope, ppid)}"
+                if os.path.getsize(burst) > 0:
+                    open(burst, "w").close()
+            except OSError:
+                pass
+
         # Reap stale per-PPID trackers. Nothing reaped them before: 312,368 had piled up
         # in /tmp, and genomics' staged_ownership_guard globs that dir 4x per commit, so
         # every commit paid ~5.6s. Throttled to one scan per 10 min, so the hot-path cost

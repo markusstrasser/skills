@@ -110,9 +110,10 @@ def test_search_burst_counts_each_sibling_separately(tmp_path, own_tmp_trackers)
     for n in range(3):
         for _ in range(9):
             proc = run_hook("pretool-search-burst.sh", as_agent(search, f"sib{n}"), tmp_path)
-            assert (proc.returncode, proc.stderr) == (0, "")
+            assert (proc.returncode, proc.stdout) == (0, "")
     tenth = run_hook("pretool-search-burst.sh", as_agent(search, "sib0"), tmp_path)
-    assert tenth.returncode == 0 and "10 search queries" in tenth.stderr
+    assert tenth.returncode == 0
+    assert "10 search queries" in json.loads(tenth.stdout)["hookSpecificOutput"]["additionalContext"]
 
 
 def test_bash_poll_counts_each_sibling_separately(tmp_path, own_tmp_trackers):
