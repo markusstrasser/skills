@@ -3634,25 +3634,57 @@ def gate_worktree_cd_guard(raw_payload: str) -> GateResult:
     return _subshell_rewrite(data, cmd, match.group(1))
 
 
+_CD_NOTE_REPEAT_S = 1800
+
+
+def _cd_note_due(data: dict, target: str) -> bool:
+    """True when this session has not been told about this target in the last 30 minutes.
+
+    The rewrite protects on every call; the note only has to land once for the agent to
+    know its cd does not persist. Sessions that prefix each command with the same cd drew
+    the note on every call: 25,059 notes in 90 days against 1,494 blocks, flagged as noise
+    by hook-roi on 2026-11-23. It repeats after 30 minutes because a compaction can drop
+    it from context. An envelope without a session id is never throttled.
+    """
+    sid = re.sub(r"[^A-Za-z0-9_-]", "", str(data.get("session_id") or ""))
+    if not sid:
+        return True
+    state = Path(os.environ.get("CLAUDE_HOOK_STATE_DIR") or "/tmp") / f"claude-worktree-cd-note-{sid}.json"
+    now = time.time()
+    try:
+        seen = json.loads(state.read_text()) if state.exists() else {}
+        if not isinstance(seen, dict):
+            seen = {}
+        if now - float(seen.get(target, 0)) < _CD_NOTE_REPEAT_S:
+            return False
+        seen[target] = now
+        state.write_text(json.dumps(seen))
+    except (OSError, ValueError, TypeError):
+        return True
+    return True
+
+
 def _subshell_rewrite(data: dict, cmd: str, target: str) -> GateResult:
     """Run the command in a subshell so its cd cannot persist, and tell the agent so.
 
     Blocking cost a wasted round trip per fire (591 blocks in 7 days to 2026-10-26, each
     re-reading ~240K of context) for the same protection. The note matters: an agent that
-    believes it moved would run its next relative command in main.
+    believes it moved would run its next relative command in main. It is sent once per
+    session and target, then again after 30 minutes (see _cd_note_due).
     """
     ti = dict(data.get("tool_input") or {})
     ti["command"] = f"(\n{cmd}\n)"
     cwd = data.get("cwd") or "the session directory"
-    note = (
-        f"worktree-cd-guard ran this command in a subshell, so `cd {target}` did not persist: "
-        f"the next Bash call still starts in {cwd}. Keep using absolute paths or "
-        f"`git -C {target} ...` there (genomics catalog M122)."
-    )
-    _log_trigger("worktree-cd-guard", "rewrite", cmd[:80], cmd)
-    out = json.dumps({"hookSpecificOutput": {
-        "hookEventName": "PreToolUse", "updatedInput": ti, "additionalContext": note}})
-    return GateResult(0, "", out)
+    specific: dict = {"hookEventName": "PreToolUse", "updatedInput": ti}
+    noted = _cd_note_due(data, target)
+    if noted:
+        specific["additionalContext"] = (
+            f"worktree-cd-guard ran this command in a subshell, so `cd {target}` did not persist: "
+            f"the next Bash call still starts in {cwd}. Keep using absolute paths or "
+            f"`git -C {target} ...` there (genomics catalog M122)."
+        )
+    _log_trigger("worktree-cd-guard", "rewrite" if noted else "rewrite-quiet", cmd[:80], cmd)
+    return GateResult(0, "", json.dumps({"hookSpecificOutput": specific}))
 
 
 # --- remote-delete-guard (BLOCKER, no if) --------------------------------------

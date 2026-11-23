@@ -1744,6 +1744,27 @@ def test_worktree_cd_persistent_is_subshelled(sandbox):
     assert "git -C /repo/.claude/worktrees/codex-x" in disp["additionalContext"]
 
 
+def test_worktree_cd_note_is_sent_once_per_session_and_target(sandbox, tmp_path):
+    """The rewrite happens every call; the note lands once per session and target."""
+    env = dict(sandbox["env"], CLAUDE_HOOK_STATE_DIR=str(tmp_path))
+    command = "cd /repo/.claude/worktrees/codex-x && git log --oneline -3"
+
+    def call(session, cmd=command):
+        return run_dispatcher({"tool_name": "Bash", "session_id": session,
+                               "tool_input": {"command": cmd}}, env, sandbox["cwd"])
+
+    _assert_subshelled(call("s1"), command)
+    second = call("s1")
+    assert second["final_command"].startswith("(\n"), second
+    assert "did not persist" not in (second.get("additionalContext") or "")
+    other = "cd /repo/.claude/worktrees/codex-y && git status"
+    _assert_subshelled(call("s1", other), other)
+    _assert_subshelled(call("s2"), command)
+    state = tmp_path / "claude-worktree-cd-note-s1.json"
+    state.write_text(json.dumps({"/repo/.claude/worktrees/codex-x": 0}))
+    _assert_subshelled(call("s1"), command)
+
+
 def test_subshell_rewrite_keeps_later_git_gates(sandbox):
     """A later gate must still see `git add -A` inside the wrapped command."""
     envelope = {"tool_name": "Bash",
