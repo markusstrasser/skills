@@ -88,8 +88,8 @@ def test_fresh_read_exits_zero_and_writes_tab_file(tmp_path):
 
 def test_repeated_read_sequence_matches_oracle(tmp_path):
     """Verified against the real tool-tracker.sh oracle (5 sequential calls,
-    same PPID, same file, no offset): call1 silent; calls2-3 recency-window
-    'DUPLICATE READ ... 1 tool calls ago' (TOTAL_READS counts PRIOR entries
+    same PPID, same file, no offset): calls 1-3 silent (the second-read
+    'DUPLICATE READ' tier was removed 2026-11-23; TOTAL_READS counts PRIOR entries
     only, so it lags the call index by one); call4 'REPEATED READ (3x)';
     call5 BLOCKED (TOTAL_READS=4) with exit 2. TOTAL_READS is computed from
     entries written by PRIOR calls, so blocking needs 5 calls, not 4."""
@@ -105,11 +105,8 @@ def test_repeated_read_sequence_matches_oracle(tmp_path):
         errs.append(proc.stderr)
 
     assert codes == [0, 0, 0, 0, 2], (codes, outs)
-    assert outs[0] == ""
-    assert json.loads(outs[1])["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
-    assert "DUPLICATE READ" in json.loads(outs[1])["hookSpecificOutput"]["additionalContext"]
-    assert "1 tool calls ago" in json.loads(outs[1])["hookSpecificOutput"]["additionalContext"]
-    assert "DUPLICATE READ" in json.loads(outs[2])["hookSpecificOutput"]["additionalContext"]
+    assert outs[:3] == ["", "", ""]
+    assert json.loads(outs[3])["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
     assert "REPEATED READ (3x)" in json.loads(outs[3])["hookSpecificOutput"]["additionalContext"]
     blocked = json.loads(outs[4])["hookSpecificOutput"]["additionalContext"]
     assert "BLOCKED" in blocked and "4x" in blocked

@@ -178,7 +178,6 @@ def run_tab_and_dupread(tool_name, tool_input, ppid, scope=""):
     owner = f"{scope}-{ppid}" if scope else str(ppid)
     reads_file = f"{STATE_DIR}/claude-reads-{owner}"
     counter_file = f"{STATE_DIR}/claude-toolcount-{owner}"
-    recency_window = 20
 
     try:
         tool_count = int(open(counter_file).read().strip())
@@ -226,22 +225,10 @@ def run_tab_and_dupread(tool_name, tool_input, ppid, scope=""):
                     f"REPEATED READ ({total_reads}x): {os.path.basename(fpath)} — content is "
                     "likely still in context. Use offset/limit if you need a specific section."
                 )
-            else:
-                # recency-window check on the same dedup_key (last match wins)
-                prev_count = None
-                for ln in lines:
-                    parts = ln.split("|", 1)
-                    if len(parts) == 2 and parts[0] == dedup_key:
-                        try:
-                            prev_count = int(parts[1])
-                        except ValueError:
-                            prev_count = None
-                if prev_count is not None and (tool_count - prev_count) < recency_window:
-                    warn = (
-                        f"DUPLICATE READ: {os.path.basename(fpath)} was read "
-                        f"{tool_count - prev_count} tool calls ago. The content is likely "
-                        "still in context."
-                    )
+            # A second read within 20 tool calls used to draw "DUPLICATE READ ... likely still in
+            # context" here. Removed 2026-11-23: it was 448 of 459 dup-read fires in a week, and
+            # under Code Mode a script's read lands in a variable, not in context, so a
+            # read-edit-verify script drew it on correct work. The 3x warning and 4x block stay.
         if fpath:
             try:
                 with open(reads_file, "a") as f:
