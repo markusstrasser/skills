@@ -145,5 +145,82 @@ class ResearchSkillGateTests(unittest.TestCase):
             os.unlink(tx)
 
 
+    def _intent_transcript(self, *extra: dict) -> str:
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        rows = [*extra, {"type": "user", "message": "do /research on benchmark design"}]
+        Path(path).write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        return path
+
+    def _gate(self, tx: str, tool: str = "mcp__exa__web_search_exa", **more) -> int:
+        try:
+            return self._run(
+                {"tool_name": tool, "transcript_path": tx, "cwd": "/Users/alien/Projects/agent-infra", **more}
+            )
+        finally:
+            os.unlink(tx)
+
+    def test_connector_and_scite_search_tools_are_gated(self):
+        for tool in ("mcp__claude_ai_Exa__web_search_exa", "mcp__scite__search_literature"):
+            self.assertEqual(self._gate(self._intent_transcript(), tool), 2, tool)
+
+    def test_subagent_calls_pass(self):
+        # A researcher subagent has no Skill tool and the gate reads its parent's intent.
+        self.assertEqual(self._gate(self._intent_transcript(), agent_id="a1b2", agent_type="researcher"), 0)
+
+    def test_skill_called_inside_a_repl_script_counts(self):
+        # Code Mode writes the in-script Skill record only after the script ends.
+        repl = {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "REPL",
+                        "input": {"code": "await tools.Skill({skill: 'research'});\nawait tools.WebSearch({query: 'x'})"},
+                    }
+                ]
+            },
+        }
+        self.assertEqual(self._gate(self._intent_transcript(repl)), 0)
+        other = json.loads(json.dumps(repl).replace("'research'", "'modal'"))
+        self.assertEqual(self._gate(self._intent_transcript(other)), 2)
+
+    def test_reinvocation_notice_is_not_intent(self):
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        os.close(fd)
+        Path(path).write_text(
+            json.dumps(
+                {
+                    "type": "user",
+                    "message": "(Re-invocation of /research — the skill instructions were previously loaded; "
+                    "the arguments: find papers about benchmark design)",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(self._gate(path), 0)
+
+    def test_advisory_mode_prints_context_the_model_receives(self):
+        tx = self._intent_transcript()
+        try:
+            proc = subprocess.run(
+                [sys.executable, str(HOOK)],
+                input=json.dumps(
+                    {"tool_name": "WebSearch", "transcript_path": tx, "cwd": "/Users/alien/Projects/agent-infra"}
+                ),
+                text=True,
+                capture_output=True,
+                env={**os.environ, "RESEARCH_SKILL_GATE": "advisory"},
+            )
+        finally:
+            os.unlink(tx)
+        self.assertEqual(proc.returncode, 0)
+        out = json.loads(proc.stdout)["hookSpecificOutput"]
+        self.assertEqual(out["hookEventName"], "PreToolUse")
+        self.assertIn("Skill(research)", out["additionalContext"])
+
+
 if __name__ == "__main__":
     unittest.main()

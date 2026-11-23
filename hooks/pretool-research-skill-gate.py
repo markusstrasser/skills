@@ -7,8 +7,13 @@ product lookups — block search until Skill(research) has fired this session.
 
 Modes (RESEARCH_SKILL_GATE env):
   block (default) — exit 2 with fix instruction
-  advisory        — stderr nudge, exit 0
+  advisory        — additionalContext nudge, exit 0
   shadow          — JSONL log only, exit 0
+
+Subagent calls pass: the gate reads the parent's intent, and an agent type without the
+Skill tool (researcher) could never satisfy it. In Code Mode a Skill call made inside a
+REPL script reaches the transcript only after the script ends, so a REPL script whose
+code calls Skill research counts too.
 
 Fails open on parse/transcript errors. Measure: hook-trigger-log + shadow JSONL.
 """
@@ -31,6 +36,8 @@ NOISE = (
     "continued from a previous conversation",
     "<local-command-stdout>",
     "You review an AI coding agent",
+    # The harness's notice for a repeated slash command: the skill is already loaded.
+    "Re-invocation of /research",
 )
 
 DEPTH = re.compile(
@@ -76,6 +83,10 @@ SEARCH_TOOLS = {
     "mcp__exa__web_search_exa",
     "mcp__exa__web_search_advanced_exa",
     "mcp__exa__company_research_exa",
+    "mcp__exa__people_search_exa",
+    "mcp__claude_ai_Exa__web_search_exa",
+    "mcp__claude_ai_Exa__web_search_advanced_exa",
+    "mcp__scite__search_literature",
     "mcp__research__search_papers",
     "mcp__research__search_preprints",
     "mcp__paper-search__search_arxiv",
@@ -89,7 +100,11 @@ SEARCH_TOOLS = {
     "mcp__perplexity__perplexity_research",
 }
 
-SHADOW_LOG = Path.home() / ".claude" / "surface-gates" / "research-skill-gate-shadow.jsonl"
+SHADOW_LOG = Path(
+    os.environ.get("RESEARCH_SKILL_GATE_SHADOW_LOG")
+    or Path.home() / ".claude" / "surface-gates" / "research-skill-gate-shadow.jsonl"
+)
+REPL_SKILL_CALL = re.compile(r"""Skill\(\s*\{[^}]*?\bskill["']?\s*:\s*["']research["']""")
 SKIP_MARKER = "<!-- research-skill:skip -->"
 
 
@@ -176,10 +191,12 @@ def _research_skill_invoked(transcript_path: str) -> bool:
         for block in msg.get("content") or []:
             if not isinstance(block, dict) or block.get("type") != "tool_use":
                 continue
-            if block.get("name") != "Skill":
-                continue
             inp = block.get("input") or {}
-            if inp.get("skill") == "research":
+            if not isinstance(inp, dict):
+                continue
+            if block.get("name") == "Skill" and inp.get("skill") == "research":
+                return True
+            if block.get("name") == "REPL" and REPL_SKILL_CALL.search(str(inp.get("code") or "")):
                 return True
     return False
 
@@ -223,6 +240,8 @@ def main() -> int:
     tool = data.get("tool_name") or ""
     if tool not in SEARCH_TOOLS:
         return 0
+    if data.get("agent_id"):
+        return 0
 
     transcript = data.get("transcript_path") or ""
     cwd = data.get("cwd") or os.getcwd()
@@ -257,7 +276,7 @@ def main() -> int:
         _trigger_log("shadow", detail)
         return 0
     if mode == "advisory":
-        print(msg, file=sys.stderr)
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": msg}}))
         _trigger_log("advisory", detail)
         return 0
 
