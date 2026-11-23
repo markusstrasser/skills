@@ -76,6 +76,8 @@ def main() -> int:
     prompt = _read_prompt(args.prompt_file)
 
     env = os.environ.copy()
+    # --allowedTools names classic tools; Code Mode would swap them for a REPL.
+    env.pop("CLAUDE_CODE_EXPERIMENTAL_CODE_MODE", None)
     command = [
         "claude",
         "-p",

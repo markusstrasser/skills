@@ -96,11 +96,12 @@ Entries:
 
 def via_subscription(p):
     # $0 OAuth subscription — strip the metered key so billing can't intercept.
-    env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+    env = {k: v for k, v in os.environ.items() if k not in ("ANTHROPIC_API_KEY", "CLAUDE_CODE_EXPERIMENTAL_CODE_MODE")}
     try:
         r = subprocess.run(
             ["claude", "-p", "--model", MODEL, "--effort", "medium", "--strict-mcp-config",
              "--mcp-config", json.dumps({"mcpServers": {}}), "--setting-sources", ""],
+            # env: no metered key, and no CLAUDE_CODE_EXPERIMENTAL_CODE_MODE (same tool set whatever the shell exports)
             input=p, capture_output=True, text=True, timeout=45, env=env)
         if r.returncode == 0 and r.stdout.strip():
             return r.stdout
