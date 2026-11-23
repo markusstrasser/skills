@@ -89,10 +89,12 @@ def test_repeated_read_sequence_matches_oracle(tmp_path):
     envelope = {"tool_name": "Read", "tool_input": {"file_path": "/tmp/dup_target_test_file.py"}}
     codes = []
     outs = []
+    errs = []
     for _ in range(5):
         proc = run_dispatch(envelope, home_dir=home, state_dir=state)
         codes.append(proc.returncode)
         outs.append(proc.stdout.strip())
+        errs.append(proc.stderr)
 
     assert codes == [0, 0, 0, 0, 2], (codes, outs)
     assert outs[0] == ""
@@ -102,6 +104,8 @@ def test_repeated_read_sequence_matches_oracle(tmp_path):
     assert "REPEATED READ (3x)" in json.loads(outs[3])["additionalContext"]
     blocked = json.loads(outs[4])["additionalContext"]
     assert "BLOCKED" in blocked and "4x" in blocked
+    # Exit 2 delivers stderr only, so the block must state its reason there.
+    assert "BLOCKED" in errs[4] and "4x" in errs[4]
 
 
 def test_llmx_bash_command_reminds_once_then_dedups(tmp_path):

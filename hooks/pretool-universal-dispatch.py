@@ -277,6 +277,10 @@ def run_tab_and_dupread(tool_name, tool_input, ppid, scope=""):
             pass
 
         print(json.dumps({"additionalContext": warn}))
+        if block:
+            # Exit 2 feeds only stderr back to the model: with the reason on stdout alone the
+            # refusal read "No stderr output" (2026-11-23, session 42b2ce11).
+            print(warn, file=sys.stderr)
 
     return warn, block
 
