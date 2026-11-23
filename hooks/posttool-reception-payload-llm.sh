@@ -139,6 +139,8 @@ PY
 
 if [[ -n "$RESPONSE" ]]; then
   ~/Projects/skills/hooks/hook-trigger-log.sh reception-payload-llm advise "$FILE_PATH" > /dev/null 2>&1 || true
+  # Claude never sees stderr from a hook that exits 0: collect the lines and print them as context.
+  {
   echo "" >&2
   echo "Reception payload check ($(basename "$FILE_PATH")) — Haiku semantic review:" >&2
   while IFS= read -r line; do
@@ -146,6 +148,7 @@ if [[ -n "$RESPONSE" ]]; then
   done <<< "$RESPONSE"
   echo "  (Advisory. Quote sentence, propose concrete fix, author decides per feedback_slop_words_are_signals.md.)" >&2
   echo "  (silence per-file with // reception-payload-llm:skip)" >&2
+  } 2>&1 | jq -Rs '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: (. | gsub("^\\s+|\\s+$"; ""))}}'
 fi
 
 exit 0

@@ -10,7 +10,7 @@
 #   WRITING_LINT_OUTREACH_PATHS — default: outbox/|drafts/|correspondence/|messages/|email/|outreach/|docs/outreach/
 #   WRITING_LINT_LONGFORM_PATHS — default: src/routes/.+\.svx$|src/lib/content/|content/|essays/|archive/.+\.svx$
 #
-# Exits 0 always. Warnings to stderr.
+# Exits 0 always. Warnings go to the model as additionalContext.
 # Skips files containing the marker `<!-- writing-lint:skip -->`.
 
 set -u
@@ -377,12 +377,15 @@ if [[ ${#WARNINGS[@]} -gt 0 ]]; then
   # Trigger log if available
   ~/Projects/skills/hooks/hook-trigger-log.sh "writing-style-lint" "advise" "$FILE_PATH" 2>/dev/null || true
 
+  # Claude never sees stderr from a hook that exits 0: collect the lines and print them as context.
+  {
   echo "" >&2
   echo "Writing-style lint ($TIER) on $(basename "$FILE_PATH"):" >&2
   for w in "${WARNINGS[@]}"; do
     echo "  ! $w" >&2
   done
   echo "  (skill: writing-style. silence with <!-- writing-lint:skip --> in file.)" >&2
+  } 2>&1 | jq -Rs '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: (. | gsub("^\\s+|\\s+$"; ""))}}'
 fi
 
 exit 0

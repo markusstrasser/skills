@@ -22,6 +22,9 @@ CITE_RE='(10\.\d{4,}/|PMID:?\s*\d{5,}|doi\.org/|arxiv:|arxiv\.org/)'
 if grep -qiE "$CITE_RE" "$FILE_PATH" 2>/dev/null; then
   CITE_COUNT=$(grep -ciE "$CITE_RE" "$FILE_PATH" 2>/dev/null || echo 0)
   ~/Projects/skills/hooks/hook-trigger-log.sh "citation-remind" "advise" "$FILE_PATH" 2>/dev/null || true
+  # Claude never sees stderr from a hook that exits 0: collect the lines and print them as context.
+  {
   echo "Advisory: $CITE_COUNT citation(s) in $(basename "$FILE_PATH"). Confirm each is corpus-backed — the full text actually read/ingested, not a WebFetch summary or abstract. Untracked → read + ingest into the canonical corpus, or tag the claim [TRAINING-DATA]/[unverified]." >&2
+  } 2>&1 | jq -Rs '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: (. | gsub("^\\s+|\\s+$"; ""))}}'
 fi
 exit 0

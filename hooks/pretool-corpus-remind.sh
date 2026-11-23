@@ -112,6 +112,8 @@ case "$IDENT" in
     ;;
 esac
 
+# Claude never sees stderr from a hook that exits 0: collect the lines and print them as context.
+{
 if [ -d "$STORE_ROOT/$PID" ]; then
   echo "[corpus] Already in canonical store: ~/Projects/corpus/$PID/" >&2
   echo "[corpus]   Use: corpus show $PID  (or corpus_lookup MCP tool) instead of re-fetching." >&2
@@ -119,6 +121,7 @@ else
   echo "[corpus] About to fetch $IDENT — local store doesn't have it yet (corpus_lookup $IDENT)." >&2
   echo "[corpus]   After fetch, prefer: corpus ingest --pdf <path> --doi $IDENT  (canonical store)." >&2
 fi
+} 2>&1 | jq -Rs '{hookSpecificOutput: {hookEventName: "PreToolUse", additionalContext: (. | gsub("^\\s+|\\s+$"; ""))}}'
 
 # Telemetry — log the trigger for ROI measurement
 ~/Projects/skills/hooks/hook-trigger-log.sh "corpus-remind" "advise" "fetch" 2>/dev/null || true
