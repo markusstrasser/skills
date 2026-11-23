@@ -348,7 +348,7 @@ Before extracting, establish what you actually know vs. don't:
 
 **The fundamental honesty problem:** You cannot reliably introspect on your own knowledge boundaries (SimpleQA: ~72% accuracy across frontier models -- 28% of "confident" factual answers are wrong). This skill works best when the content is *obviously* outside your training (post-cutoff, private, niche domain). For borderline cases, state uncertainty rather than guessing.
 
-**Optional verification:** If `verify_claim` is available, spot-check 2-3 extracted "novel" claims. If Exa/Brave finds them in multiple pre-cutoff sources, they're probably not novel -- you just failed to recall them. Reclassify as `[IN TRAINING -- failed to recall]`.
+**Optional verification:** If `verify_claim` is available, spot-check 2-3 extracted "novel" claims. If Exa or WebSearch finds them in multiple pre-cutoff sources, they're probably not novel -- you just failed to recall them. Reclassify as `[IN TRAINING -- failed to recall]`.
 
 ## The Process
 

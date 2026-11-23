@@ -69,7 +69,7 @@ Looking for overlooked candidates. Include [dose/details/specs]."
 ```
 
 Tool routing: use the `/research` skill's tool table (S2 for papers, Exa for semantic web
-search and factual lookups, Brave for news). Budget ~3-5 queries per perspective;
+search and factual lookups, WebSearch for news). Budget ~3-5 queries per perspective;
 don't shotgun — each query is shaped by the perspective.
 
 ## Phase 3: Safety / feasibility gate (domain-specific)

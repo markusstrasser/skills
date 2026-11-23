@@ -7,7 +7,7 @@ Use this reference when the source route is unclear or retrieval fails. Discover
 | Need | Preferred route |
 |---|---|
 | Prior work or personal context | Relevant local files, configured knowledge search, or saved corpus; avoid redoing a completed pass |
-| Factual source discovery | Exa, then Brave if available and the first source is missing or contested |
+| Factual source discovery | Exa, then the built-in WebSearch if the first source is missing or contested |
 | A claim to verify | Primary source or official database; `verify_claim` can locate supporting evidence |
 | Academic literature | `search_papers`, verify metadata, then primary full text; [paper evidence checks](paper-evidence.md) |
 | Recent publications | `search_papers` with `published_after`/`published_before` (S2, OpenAlex and alphaXiv honour them; EuropePMC does not), then check dates in the primary record; Exa `category:"publication"` only when accepted by the current schema |
@@ -26,7 +26,7 @@ Use this reference when the source route is unclear or retrieval fails. Discover
 | Broad, multi-hop question | A configured Parallel/deep-research tool can help; exact-source questions usually start with targeted search |
 | API or framework details | Current official documentation or a configured documentation tool |
 
-The operator's established web preference is Exa then Brave. Using two engines does not establish independent evidence: trace whether their sources share an upstream source. Historical routing experiments and spending observations are in [tool-history.md](tool-history.md); they are not current performance guarantees.
+The web preference is Exa, then the built-in WebSearch. Using two engines does not establish independent evidence: trace whether their sources share an upstream source. Historical routing experiments and spending observations are in [tool-history.md](tool-history.md); they are not current performance guarantees.
 
 ## Cost and breadth
 

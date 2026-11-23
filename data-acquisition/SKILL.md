@@ -174,7 +174,7 @@ Symlink or copy — don't commit. `.env` is gitignored.
 ## When NOT to use
 
 - Paper PDFs — use `mcp__research__fetch_paper` (Sci-Hub + OpenAlex).
-- Academic search — use exa / brave-search / research-mcp.
+- Academic search — use exa / research-mcp.
 - General web scraping — use firecrawl or the Chrome MCP (`mcp__claude-in-chrome__*`).
 - Google Sheets / Drive — use `/google-workspace`.
 

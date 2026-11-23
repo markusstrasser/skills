@@ -44,7 +44,7 @@ Dispatch parallel searches across sources and categories. Use subagents for para
 
 ### Search Matrix
 
-| Category | Exa Query | Brave Query | Extras |
+| Category | Exa Query | WebSearch Query | Extras |
 |----------|-----------|-------------|--------|
 | **Anthropic** | "Anthropic Claude changelog" + date filter | "Claude Code release notes OR changelog" | WebFetch changelog + SDK releases (see Anthropic deep-check below) |
 | **OpenAI** | "OpenAI Codex CLI changelog" + date filter | "OpenAI API changelog OR SDK release" | Check github.com/openai releases |
@@ -82,12 +82,10 @@ web_search_advanced_exa:
   type: "auto"
 ```
 
-**Brave** (secondary — independent index, good for triangulation):
+**WebSearch** (secondary, a second index):
 ```
-brave_web_search:
-  query: "<category query>"
-  count: 10
-  freshness: "pw"  # past week
+WebSearch:
+  query: "<category query> <month year>"
 ```
 
 **arxiv** (for research papers):
@@ -117,15 +115,15 @@ web_search_advanced_exa:
 ### Parallel Dispatch Pattern
 
 When subagents are available, dispatch one per vendor category:
-- Agent 1: Anthropic (Exa + Brave + anthropic.com)
-- Agent 2: OpenAI (Exa + Brave)
-- Agent 3: Google (Exa + Brave)
-- Agent 4: Ecosystem (frameworks + MCP + tools via Exa + Brave + GitHub)
+- Agent 1: Anthropic (Exa + WebSearch + anthropic.com)
+- Agent 2: OpenAI (Exa + WebSearch)
+- Agent 3: Google (Exa + WebSearch)
+- Agent 4: Ecosystem (frameworks + MCP + tools via Exa + WebSearch + GitHub)
 - Agent 5: Research papers (alphaXiv trending + arxiv + S2)
 
 Each agent returns: `[{title, url, date, one_line_summary, why_relevant}]`
 
-When running without subagents, execute searches sequentially but batch by source (all Exa queries together, then all Brave queries).
+When running without subagents, execute searches sequentially but batch by source (all Exa queries together, then all WebSearch queries).
 
 ## Phase 2: Deduplicate and Filter
 
@@ -164,7 +162,7 @@ Write to `research/trending-scout-YYYY-MM-DD.md` in meta:
 
 **Date:** YYYY-MM-DD
 **Window:** [start] to [end]
-**Sources:** Exa, Brave, arxiv, GitHub
+**Sources:** Exa, WebSearch, arxiv, GitHub
 **Findings:** N new, M version bumps, K already known (filtered)
 
 ---
@@ -238,4 +236,4 @@ schedule it was retired 2026-06-12 — `/observe maintain` is the single conduct
 - **No new findings**: Write the memo anyway — "no new findings" is a valid data point that confirms the landscape is stable. List what was searched.
 - **Overwhelming volume**: Cap at 10 findings per scan. Rank aggressively. Link to sources for the rest.
 - **Stale baseline**: If no prior trending-scout memo exists, the first run is a broader landscape scan. Subsequent runs are diffs.
-- **Rate limits**: If Exa or Brave rate-limits mid-scan, note which categories were incomplete in the search log.
+- **Rate limits**: If Exa or WebSearch rate-limits mid-scan, note which categories were incomplete in the search log.

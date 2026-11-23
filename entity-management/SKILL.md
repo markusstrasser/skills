@@ -397,8 +397,8 @@ they handle path discovery, frontmatter, and provenance correctly.
   `record_verdict` + `corpus_attest` two-call flow is retired.)
 - **`research`** — Semantic Scholar paper discovery, claim verification,
   preprint surveillance, deep research.
-- **`brave-search` / `exa`** — web search tiers. Default to Brave/Exa for
-  cheap recency; `deep_research` (research MCP) for multi-source synthesis.
+- **`exa` / WebSearch** — web search tiers. Default to Exa for cheap
+  recency; `deep_research` (research MCP) for multi-source synthesis.
 
 ### Live data discipline
 
