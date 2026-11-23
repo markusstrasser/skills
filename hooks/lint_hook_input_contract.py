@@ -68,6 +68,13 @@ EMBEDDED_PY_DQ = re.compile(r'python3?\s+-c\s+"((?:[^"\\]|\\.)*)"', re.S)
 
 def _bash_dq_unescape(s: str) -> str:
     return re.sub(r"\\([$`\"\\\n])", lambda m: "" if m.group(1) == "\n" else m.group(1), s)
+# Output contract: Claude Code delivers additionalContext only inside hookSpecificOutput
+# (with hookEventName). An object that opens with the key, or pairs it with a top-level
+# decision "allow", exits 0 and is dropped without an error: 22 hooks and the Bash dispatcher
+# were mute this way until 2026-11-23 (probe: session 42b2ce11, modal-detach nudge).
+TOPLEVEL_CONTEXT = re.compile(
+    r"""\{\s*\\?["']?additionalContext\\?["']?\s*:"""
+    r"""|["']decision["']\s*:\s*["']allow["']\s*,\s*\\?["']additionalContext""")
 # jq top-level: .command / .file_path (not .tool_input.command)
 JQ_TOPLEVEL = re.compile(r"""jq[^\n]*['"][^'"]*(?<!tool_input)\.(%s)\b""" % "|".join(FIELDS))
 
@@ -165,6 +172,11 @@ def lint_code(name: str, src: str) -> list[str]:
             "reads .user_message but not .prompt — CC 2.1.x renamed the "
             "UserPromptSubmit field to .prompt (~2026-06-16); reading only the old "
             "name is a silent no-op (read .prompt, keep .user_message as fallback)")
+
+    if TOPLEVEL_CONTEXT.search(code):
+        viol.append(
+            "prints top-level additionalContext — Claude Code reads it only inside "
+            "hookSpecificOutput (with hookEventName); the top-level form is dropped silently")
 
     # Compile embedded python -c blocks (raw src — comment-stripping would
     # mangle python strings). Multi-line blocks only: one-liners with a
