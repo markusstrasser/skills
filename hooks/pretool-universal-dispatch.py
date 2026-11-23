@@ -295,7 +295,7 @@ def run_tab_and_dupread(tool_name, tool_input, ppid, scope=""):
 # ---------------------------------------------------------------------------
 
 SEARCH_TOOL_RE = re.compile(
-    r"mcp__exa|mcp__research|mcp__paper-search|mcp__brave-search|mcp__firecrawl|"
+    r"mcp__exa|mcp__research|mcp__paper-search|mcp__firecrawl|"
     r"WebSearch|WebFetch"
 )
 
@@ -409,7 +409,7 @@ def run_companion_remind(envelope, tool_name, tool_input):
                 "research",
                 "3+ search API calls this session. Load the research skill (/research) for "
                 "routing guidance: S2 for literature (free, structured), Exa for semantic "
-                "discovery, Brave for triangulation, verify_claim for spot-checks. Axis "
+                "discovery, WebSearch as a second index, verify_claim for spot-checks. Axis "
                 "diversity and phase separation prevent shallow convergence.",
             )
 
@@ -546,7 +546,7 @@ def run_companion_remind(envelope, tool_name, tool_input):
         )
 
     # s2-for-papers nudge
-    if query and re.search(r"mcp__exa|mcp__brave|WebSearch", tool_name):
+    if query and re.search(r"mcp__exa|WebSearch", tool_name):
         if re.search(
             r"paper|arxiv|preprint|et al\.?|icml|neurips|emnlp|acl |iclr|cvpr|aaai|naacl|colm |iccv",
             query,

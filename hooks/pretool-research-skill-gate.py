@@ -94,8 +94,6 @@ SEARCH_TOOLS = {
     "mcp__paper-search__search_biorxiv",
     "mcp__paper-search__search_medrxiv",
     "mcp__paper-search__search_google_scholar",
-    "mcp__brave-search__brave_web_search",
-    "mcp__brave-search__brave_news_search",
 }
 
 SHADOW_LOG = Path(

@@ -10,7 +10,7 @@ researcher stops before any advisory/block promotion (measure-before-enforcing, 
 The separable pathological invariant (distinguishable from a legitimate partial):
   research_calls >= N   AND   the episode wrote essentially NOTHING (only a stub)
     - research_calls: transcript tool_use in {Read, Grep, Glob, WebFetch, WebSearch,
-      mcp__research__*, mcp__exa__*, mcp__brave-search__*}
+      mcp__research__*, mcp__exa__*}
     - "wrote nothing": total Write/Edit/MultiEdit content this episode is stub-sized
       (< STUB_MAX chars) AND carries no provenance tag. A researcher who APPENDED real findings
       (bulk content, or any [DATA]/[SOURCE]/[DATABASE]/[INFERENCE]/[UNVERIFIED] tag) -> PASS.
@@ -40,7 +40,7 @@ SHADOW_LOG = os.path.expanduser("~/.claude/subagent-empty-research-shadow.jsonl"
 N_RESEARCH_CALLS = 6  # threshold; tune during the promotion review
 STUB_MAX = 400  # total Write/Edit content chars below which the episode wrote "only a stub"
 
-_RESEARCH_PREFIXES = ("mcp__research__", "mcp__exa__", "mcp__brave-search__")
+_RESEARCH_PREFIXES = ("mcp__research__", "mcp__exa__")
 _RESEARCH_NAMES = {"Read", "Grep", "Glob", "WebFetch", "WebSearch"}
 _PROV_TAG = re.compile(r"\[(?:DATA|SOURCE|DATABASE|INFERENCE|UNVERIFIED)\b")
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # pretool-search-burst.sh — Detect search query bursts without intermediate reads.
 # PreToolUse hook. Matcher (settings.json):
-#   mcp__exa__.*|mcp__claude_ai_Exa__.*|mcp__research__.*|mcp__brave-search__.*|
+#   mcp__exa__.*|mcp__claude_ai_Exa__.*|mcp__research__.*|
 #   mcp__firecrawl__.*|mcp__scite__.*|mcp__parallel__.*|WebSearch|WebFetch
 # A bare server prefix (mcp__exa) is read as an exact tool name and matches nothing: until
 # 2026-11-23 this hook saw WebSearch and WebFetch only.
@@ -42,7 +42,6 @@ case "$TOOL_NAME" in
     mcp__scite__search_literature|\
     mcp__parallel__*search*|\
     mcp__firecrawl__firecrawl_search|\
-    mcp__brave-search__brave_*_search|\
     WebSearch)
         echo "s" >> "$COUNTER_FILE" 2>/dev/null || exit 0
         COUNT=$(grep -c '^s' "$COUNTER_FILE" 2>/dev/null || echo 0)

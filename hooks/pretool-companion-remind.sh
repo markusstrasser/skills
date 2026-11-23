@@ -27,7 +27,7 @@ FPATH=""
 IS_SEARCH_TOOL=false
 if [ "$TOOL" = "Bash" ]; then
   CMD=$(echo "$INPUT" | jq -r '(.tool_input.command // .command // empty)' 2>/dev/null)
-elif echo "$TOOL" | grep -qE 'mcp__exa|mcp__research|mcp__paper-search|mcp__brave-search|mcp__firecrawl|WebSearch|WebFetch'; then
+elif echo "$TOOL" | grep -qE 'mcp__exa|mcp__research|mcp__paper-search|mcp__firecrawl|WebSearch|WebFetch'; then
   QUERY=$(echo "$INPUT" | jq -r '(.tool_input.query // .tool_input.search_query // .tool_input.prompt // .tool_input.url // .tool_input.claim // .query // .search_query // .prompt // .url // .claim // "") | ascii_downcase' 2>/dev/null)
   IS_SEARCH_TOOL=true
 elif [ "$TOOL" = "Write" ] || [ "$TOOL" = "Edit" ]; then
@@ -54,7 +54,7 @@ increment_counter() {
 if $IS_SEARCH_TOOL; then
   SEARCH_COUNT=$(increment_counter "search-api")
   if [ "$SEARCH_COUNT" -eq 3 ]; then
-    remind "research" "3+ search API calls this session. Load the research skill (/research) for routing guidance: S2 for literature (free, structured), Exa for semantic discovery, Brave for triangulation, verify_claim for spot-checks. Axis diversity and phase separation prevent shallow convergence."
+    remind "research" "3+ search API calls this session. Load the research skill (/research) for routing guidance: S2 for literature (free, structured), Exa for semantic discovery, WebSearch as a second index, verify_claim for spot-checks. Axis diversity and phase separation prevent shallow convergence."
   fi
 fi
 
@@ -129,7 +129,7 @@ fi
 
 
 # --- S2 nudge: paper-by-name queries should use Semantic Scholar first ---
-if [ -n "$QUERY" ] && echo "$TOOL" | grep -qE 'mcp__exa|mcp__brave|WebSearch'; then
+if [ -n "$QUERY" ] && echo "$TOOL" | grep -qE 'mcp__exa|WebSearch'; then
   if echo "$QUERY" | grep -qiE 'paper|arxiv|preprint|et al\.?|icml|neurips|emnlp|acl |iclr|cvpr|aaai|naacl|colm |iccv'; then
     remind "s2-for-papers" "Paper/venue name detected in web search. Use S2 (search_papers) first — free, structured metadata, citation counts, zero hallucinated citations. Fall back to Exa only if S2 misses."
   fi
