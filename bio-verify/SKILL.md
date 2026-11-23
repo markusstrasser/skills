@@ -239,7 +239,7 @@ show the remaining exact-subject backlog.
 - **Gene list composition** (#6): Count can match with wrong genes. Always verify composition.
 - **Config > script error rate** (#7): Config JSON files (especially with coordinates) have higher error rates.
 - **Effect allele AF convention** (#17): Some scripts track effect/archaic allele AF, not gnomAD alt AF. Check convention before flagging.
-- **CPIC API over web search** (#11): Use `api.cpicpgx.org` directly for PGx pairs. Perplexity is unreliable here.
+- **CPIC API over web search** (#11): Use `api.cpicpgx.org` directly for PGx pairs. Web search is unreliable here.
 - **GenCC via API only** (#12): Web search fabricates GenCC classifications. Use `curation_gene_validity` or `thegencc.org`.
 
 Full list with examples and workarounds: `references/known-issues.md`

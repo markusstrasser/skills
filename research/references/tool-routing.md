@@ -32,7 +32,7 @@ The operator's established web preference is Exa then Brave. Using two engines d
 
 Prefer a targeted source search for a focused question. Large autonomous research calls can fan out far beyond the visible request; inspect current pricing and effort options before selecting one. For a justified deep-research call that accepts a reasoning-effort setting, use `medium` or `low` unless the question specifically needs more. Do not invoke a paid service merely to fill a workflow slot; follow the user's existing spend authorization.
 
-Perplexity left the toolbelt on 2026-11-23 (operator decision; its MCP server is unregistered in every project). For a precise number, read the primary database or the paper's table; `verify_claim` checks a number you already have. Full old tool tables, costs, the precise-number benchmark and Perplexity's gotchas remain in the historical reference.
+For a precise number, read the primary database or the paper's table; `verify_claim` checks a number you already have. Old tool tables, costs and benchmarks are in the historical reference.
 
 ## Retrieval recovery
 

@@ -230,7 +230,7 @@ The following former entrypoint paragraphs are retained as dated rationale, not 
 
 Operator decision ("i think we can remove perplexity from our toolbelt for now"). The MCP server is unregistered in genomics, intel and personal (`.mcp.json`), in the Codex mirror (`codex_parity_sync.py`) and in Gemini's settings; live guidance no longer routes to it. The Perplexity rows and benchmark above are history, and the line saying user-scope MCPs include perplexity is stale. Use in the five weeks before removal: 93 calls (`perplexity_search` 46, `perplexity_ask` 47; agentlogs `tool_calls`, 2026-10-19 to 2026-11-23).
 
-Still present, on purpose: `llmx research --provider perplexity-agent` (opt-in CLI backend, parity-only per the SaC eval), the API key, and `mcp__perplexity__.*` in hook matchers and search-tool lists, so the burst, research-gate and backtest guards apply at once if the server returns.
+The same day the rest went too: the `llmx research --provider perplexity-agent` backend, and `mcp__perplexity__*` in hook matchers, search-tool lists and the demotion reminder. A return means re-registering the server and adding it back to the search-hook matcher in `~/.claude/settings.json` and to `pretool-search-burst.sh` and `pretool-research-skill-gate.py`. Re-running the SaC or WANDR Perplexity arms needs the llmx backend restored from git.
 
 Gotchas moved here from `~/.claude/rules/research-tool-gotchas.md`, for a return:
 
