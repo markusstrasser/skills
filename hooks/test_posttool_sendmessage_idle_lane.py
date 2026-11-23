@@ -3,8 +3,13 @@
 
 Pins the 2026-11-03 failure: SendMessage to an idle in-process teammate returned
 "Message sent to falsedup-row48's inbox" and the teammate never read it (24 min lost).
-A queued send to an idle lane must say UNDELIVERED; a queued send to a busy lane says
-QUEUED; a send that resumed the lane, a subagent's send and a send to main stay silent.
+A queued send to an idle lane that already holds an overdue unread message must say
+UNDELIVERED; a queued send to a busy lane says QUEUED; a send that resumed the lane, a
+subagent's send and a send to main stay silent.
+
+Pins the 2026-11-24 false alarm too: ten of ten sends to idle readers, five of them dead on
+a plan limit, arrived as the next prompt within a second while the hook said UNDELIVERED.
+A lane that is idle with nothing overdue must say UNCONFIRMED and ask for a delivery check.
 
 Run: python3 <thisfile>
 """
@@ -50,6 +55,8 @@ def main():
         (root / "session" / "subagents").mkdir(parents=True)
         idle = stub_watcher(root, "09:13 lane-x: BUSY -> IDLE_UNREAD (2 queued, oldest 14 min)\n")
         busy = stub_watcher(root, "")
+        plain = stub_watcher(root, "01:30 lane-x: BUSY -> IDLE\n")
+        died = stub_watcher(root, "00:41 lane-x: BUSY -> IDLE (turn ended on an API error: rate_limit)\n")
         queued = {
             "tool_input": {"to": "lane-x", "message": "ruling"},
             "tool_response": {"success": True, "message": "Message sent to lane-x's inbox"},
@@ -64,6 +71,8 @@ def main():
         from_subagent = dict(queued, agent_id="asubagent123")
 
         check("idle lane: UNDELIVERED", run(queued, idle).startswith("UNDELIVERED: lane-x is idle"))
+        check("idle lane, nothing overdue: UNCONFIRMED", run(queued, plain).startswith("UNCONFIRMED: lane-x is idle"))
+        check("lane dead on an API error: UNCONFIRMED", run(queued, died).startswith("UNCONFIRMED: lane-x is idle"))
         check("busy lane: QUEUED", run(queued, busy).startswith("QUEUED, not delivered: lane-x"))
         check("resumed lane: silent", run(resumed, idle) == "")
         check("send to main: silent", run(to_main, idle) == "")
