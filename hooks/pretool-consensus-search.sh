@@ -19,11 +19,6 @@ try:
     # Different tools use different field names
     # Different tools use different field names for the query
     q = inp.get("query", inp.get("instructions", inp.get("companyName", "")))
-    # Perplexity uses messages array
-    if not q and "messages" in inp:
-        msgs = inp["messages"]
-        if msgs and isinstance(msgs, list):
-            q = msgs[-1].get("content", "")
     print(q)
 except Exception:
     print("")

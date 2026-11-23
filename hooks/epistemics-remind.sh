@@ -17,7 +17,7 @@ except Exception:
 
 tool = data.get('tool_name', '')
 # Only fire on search tools
-search_tools = ('web_search', 'brave', 'perplexity', 'exa', 'search_papers', 'search_preprints')
+search_tools = ('web_search', 'brave', 'exa', 'search_papers', 'search_preprints')
 if not any(t in tool.lower() for t in search_tools):
     sys.exit(0)
 

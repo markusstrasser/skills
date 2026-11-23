@@ -27,7 +27,7 @@ FPATH=""
 IS_SEARCH_TOOL=false
 if [ "$TOOL" = "Bash" ]; then
   CMD=$(echo "$INPUT" | jq -r '(.tool_input.command // .command // empty)' 2>/dev/null)
-elif echo "$TOOL" | grep -qE 'mcp__exa|mcp__research|mcp__paper-search|mcp__brave-search|mcp__firecrawl|mcp__perplexity|WebSearch|WebFetch'; then
+elif echo "$TOOL" | grep -qE 'mcp__exa|mcp__research|mcp__paper-search|mcp__brave-search|mcp__firecrawl|WebSearch|WebFetch'; then
   QUERY=$(echo "$INPUT" | jq -r '(.tool_input.query // .tool_input.search_query // .tool_input.prompt // .tool_input.url // .tool_input.claim // .query // .search_query // .prompt // .url // .claim // "") | ascii_downcase' 2>/dev/null)
   IS_SEARCH_TOOL=true
 elif [ "$TOOL" = "Write" ] || [ "$TOOL" = "Edit" ]; then
@@ -127,10 +127,6 @@ if [ -n "$CMD" ] && echo "$CMD" | grep -qiE 'duckdb|\.sql|SELECT.*FROM.*WHERE' &
   remind "source-grading" "SQL query in intel context. Read ~/Projects/skills/references/source-grading/SKILL.md for data provenance — NATO Admiralty grades on source reliability."
 fi
 
-# --- perplexity demotion: nudge away from demoted endpoints ---
-if echo "$TOOL" | grep -qE 'perplexity_search|perplexity_ask'; then
-  remind "perplexity-demoted" "perplexity_search/ask are demoted (5x Exa cost). Use Exa or Brave for breadth queries. Reserve perplexity_reason (complex why) and perplexity_research (deep survey) for decisive use only."
-fi
 
 # --- S2 nudge: paper-by-name queries should use Semantic Scholar first ---
 if [ -n "$QUERY" ] && echo "$TOOL" | grep -qE 'mcp__exa|mcp__brave|WebSearch'; then

@@ -296,7 +296,7 @@ def run_tab_and_dupread(tool_name, tool_input, ppid, scope=""):
 
 SEARCH_TOOL_RE = re.compile(
     r"mcp__exa|mcp__research|mcp__paper-search|mcp__brave-search|mcp__firecrawl|"
-    r"mcp__perplexity|WebSearch|WebFetch"
+    r"WebSearch|WebFetch"
 )
 
 # llmx subscription-eligible allowlist (llmx-routing.md, pruned to the Pareto
@@ -543,15 +543,6 @@ def run_companion_remind(envelope, tool_name, tool_input):
             "source-grading",
             "SQL query in intel context. Read ~/Projects/skills/references/source-grading/"
             "SKILL.md for data provenance — NATO Admiralty grades on source reliability.",
-        )
-
-    # perplexity demotion (case-sensitive)
-    if re.search(r"perplexity_search|perplexity_ask", tool_name):
-        remind(
-            "perplexity-demoted",
-            "perplexity_search/ask are demoted (5x Exa cost). Use Exa or Brave for breadth "
-            "queries. Reserve perplexity_reason (complex why) and perplexity_research (deep "
-            "survey) for decisive use only.",
         )
 
     # s2-for-papers nudge

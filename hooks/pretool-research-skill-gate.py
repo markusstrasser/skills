@@ -96,8 +96,6 @@ SEARCH_TOOLS = {
     "mcp__paper-search__search_google_scholar",
     "mcp__brave-search__brave_web_search",
     "mcp__brave-search__brave_news_search",
-    "mcp__perplexity__perplexity_search",
-    "mcp__perplexity__perplexity_research",
 }
 
 SHADOW_LOG = Path(
