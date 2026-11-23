@@ -16,11 +16,15 @@ KEY=$(printf '%s' "$INPUT" | jq -r '(.tool_input // {}) | "\(.file_path // ""):\
 hook_identity "$INPUT"
 TRACKER="/tmp/claude-read-tracker-${HOOK_OWNER}"
 
-# Track unique read signatures (file:offset:limit)
-echo "$KEY" >> "$TRACKER"
+# Track read signatures (file:offset:limit) with the time of the read.
+printf '%s\t%s\n' "$KEY" "$(date +%s)" >> "$TRACKER"
 
-# Count reads of same file with same offset+limit (true duplicates)
-COUNT=$(grep -cF "$KEY" "$TRACKER" 2>/dev/null || echo 0)
+# Count reads of the same region since the file last changed. A read after an edit is not a
+# duplicate: a session that edits a file and re-reads it to check drew the warning, and
+# then the block, on correct work (2026-11-23, a script re-reading the hook it was editing).
+# A missing file has mtime 0, so every read of it counts.
+MTIME=$(stat -f %m "$FILE" 2>/dev/null || stat -c %Y "$FILE" 2>/dev/null || echo 0)
+COUNT=$(awk -F'\t' -v k="$KEY" -v m="$MTIME" '$1 == k && ($2 == "" || $2 + 0 >= m + 0) { c++ } END { print c + 0 }' "$TRACKER" 2>/dev/null || echo 0)
 if [ "$COUNT" -ge 6 ]; then
   "$(dirname "$0")/hook-trigger-log.sh" "dup-read-region" "block" "${COUNT}x ${FILE##*/}" 2>/dev/null || true
   echo "BLOCKED: Read ${FILE} (same region) ${COUNT}x this session. Use Grep to find specific content, or Read with offset/limit to target a different section." >&2

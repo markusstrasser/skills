@@ -105,6 +105,20 @@ def test_region_dup_read_counts_each_sibling_separately(tmp_path, own_tmp_tracke
     assert [p.returncode for p in one] == [0, 0, 0, 0, 0, 2]
 
 
+def test_region_dup_read_counts_only_reads_since_the_file_changed(tmp_path, own_tmp_trackers):
+    """A read after an edit is not a duplicate: only reads newer than the file's mtime count."""
+    target = tmp_path / "edited.py"
+    target.write_text("x = 1\n")
+    read = as_agent({"tool_name": "Read", "tool_input": {"file_path": str(target)}}, "editor")
+    now = int(os.path.getmtime(target))
+    os.utime(target, (now - 100, now - 100))
+    first = [run_hook("posttool-dup-read.sh", read, tmp_path) for _ in range(4)]
+    assert [bool(p.stdout) for p in first] == [False, False, False, True]  # 4th unchanged read warns
+    os.utime(target, (now + 3600, now + 3600))  # the file changed after every read so far
+    again = run_hook("posttool-dup-read.sh", read, tmp_path)
+    assert (again.returncode, again.stdout) == (0, "")
+
+
 def test_search_burst_counts_each_sibling_separately(tmp_path, own_tmp_trackers):
     search = {"tool_name": "WebSearch", "tool_input": {"query": "q"}}
     for n in range(3):
