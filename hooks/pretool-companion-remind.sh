@@ -27,7 +27,7 @@ FPATH=""
 IS_SEARCH_TOOL=false
 if [ "$TOOL" = "Bash" ]; then
   CMD=$(echo "$INPUT" | jq -r '(.tool_input.command // .command // empty)' 2>/dev/null)
-elif echo "$TOOL" | grep -qE 'mcp__exa|mcp__research|mcp__paper-search|mcp__firecrawl|WebSearch|WebFetch'; then
+elif echo "$TOOL" | grep -qE 'mcp__exa|mcp__research|mcp__firecrawl|WebSearch|WebFetch'; then
   QUERY=$(echo "$INPUT" | jq -r '(.tool_input.query // .tool_input.search_query // .tool_input.prompt // .tool_input.url // .tool_input.claim // .query // .search_query // .prompt // .url // .claim // "") | ascii_downcase' 2>/dev/null)
   IS_SEARCH_TOOL=true
 elif [ "$TOOL" = "Write" ] || [ "$TOOL" = "Edit" ]; then

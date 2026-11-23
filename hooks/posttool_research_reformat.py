@@ -19,7 +19,6 @@ SEARCH_TOOL_PREFIXES = (
     "mcp__exa__web_search_exa",
     "mcp__exa__web_search_advanced_exa",
     "mcp__exa__crawling_exa",
-    "mcp__paper-search__search_",
     "mcp__research__search_papers",
 )
 

@@ -295,7 +295,7 @@ def run_tab_and_dupread(tool_name, tool_input, ppid, scope=""):
 # ---------------------------------------------------------------------------
 
 SEARCH_TOOL_RE = re.compile(
-    r"mcp__exa|mcp__research|mcp__paper-search|mcp__firecrawl|"
+    r"mcp__exa|mcp__research|mcp__firecrawl|"
     r"WebSearch|WebFetch"
 )
 

@@ -89,11 +89,6 @@ SEARCH_TOOLS = {
     "mcp__scite__search_literature",
     "mcp__research__search_papers",
     "mcp__research__search_preprints",
-    "mcp__paper-search__search_arxiv",
-    "mcp__paper-search__search_pubmed",
-    "mcp__paper-search__search_biorxiv",
-    "mcp__paper-search__search_medrxiv",
-    "mcp__paper-search__search_google_scholar",
 }
 
 SHADOW_LOG = Path(
