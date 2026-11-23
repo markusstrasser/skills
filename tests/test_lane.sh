@@ -16,7 +16,7 @@ LANE_ARCHIVE_REQUIRE_MOUNT=0
 export LANE_ARCHIVE_VOLUME LANE_ARCHIVE_REQUIRE_MOUNT
 mkdir -p "$LANE_ARCHIVE_VOLUME"
 unset LANE_CODEX_MODEL LANE_CODEX_EFFORT LANE_CODEX_ADD_DIRS LANE_CODEX_NETWORK LANE_CODEX_SANDBOX
-unset LANE_CLAUDE_MODEL LANE_CLAUDE_EFFORT LANE_OPENCODE_MODEL CODEX_API_KEY LANE_CODEX_API_DAILY_USD
+unset LANE_CLAUDE_MODEL LANE_CLAUDE_EFFORT LANE_CLAUDE_CODE_MODE LANE_OPENCODE_MODEL CODEX_API_KEY LANE_CODEX_API_DAILY_USD
 # lane-api-spend prices with llmx; the fake llmx below shadows the real one, so its interpreter is read first.
 LANE_LLMX_PYTHON=$(sed -n '1s/^#!//p' "$(command -v llmx)")
 export LANE_LLMX_PYTHON
@@ -211,6 +211,7 @@ printf '%s\n' \
   'if [ "${ANTHROPIC_API_KEY+x}" = x ]; then exit 9; fi' \
   'printf "%s\n" "$@" > "$LANE_CAPTURE/claude.args"' \
   'pwd -P > "$LANE_CAPTURE/claude.cwd"' \
+  'printf "%s\n" "${CLAUDE_CODE_EXPERIMENTAL_CODE_MODE-unset}" > "$LANE_CAPTURE/claude.code_mode"' \
   'sleep 0.5' >"$FAKE_BIN/claude"
 printf '%s\n' \
   '#!/usr/bin/env bash' \
@@ -624,12 +625,28 @@ if "$LANE" run codexargs --repo "$OTHER_REPO" --brief "$BRIEF" --worker fake --n
 fi
 
 export ANTHROPIC_API_KEY="must-be-removed"
+export CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=1
 "$LANE" run claudeargs --repo "$REPO" --brief "$BRIEF" --worker claude --no-worktree >/dev/null
 wait_for_file "$LANE_HOME/claudeargs.done"
 unset ANTHROPIC_API_KEY
 expected_claude=$(printf '%s\n' -p --model opus --effort high --output-format stream-json --verbose "Do the fake task.")
 assert_eq "$expected_claude" "$(<"$LANE_CAPTURE/claude.args")" "claude arguments"
 assert_eq "$REPO_REAL" "$(<"$LANE_CAPTURE/claude.cwd")" "claude cwd"
+assert_eq "unset" "$(<"$LANE_CAPTURE/claude.code_mode")" "a caller in Code Mode must not put the worker in it"
+assert_eq "0" "$(worker_setting "$LANE_HOME/claudeargs.json" claude_code_mode)" "recorded default claude code mode"
+
+echo "test: claude worker runs in Code Mode only when the lane asks, and a resume keeps it"
+codemode_output=$(LANE_CLAUDE_CODE_MODE=1 "$LANE" run claudecodemode --repo "$REPO" --brief "$BRIEF" --worker claude --no-worktree)
+wait_for_file "$LANE_HOME/claudecodemode.done"
+assert_eq "1" "$(<"$LANE_CAPTURE/claude.code_mode")" "LANE_CLAUDE_CODE_MODE=1 sets Code Mode for the worker"
+grep -Fxq 'lane: settings claude_model=opus claude_effort=high code_mode=1' <<<"$codemode_output" || fail "run omitted code_mode from the settings line: $codemode_output"
+unset CLAUDE_CODE_EXPERIMENTAL_CODE_MODE
+"$LANE" resume claudecodemode --no-note >/dev/null
+wait_for_file "$LANE_HOME/claudecodemode.done"
+assert_eq "1" "$(<"$LANE_CAPTURE/claude.code_mode")" "resume keeps the recorded Code Mode setting"
+"$LANE" resume claudeargs --no-note >/dev/null
+wait_for_file "$LANE_HOME/claudeargs.done"
+assert_eq "unset" "$(<"$LANE_CAPTURE/claude.code_mode")" "a lane recorded without Code Mode resumes without it"
 assert_eq "opus" "$(worker_setting "$LANE_HOME/claudeargs.json" claude_model)" "recorded default claude model"
 assert_eq "high" "$(worker_setting "$LANE_HOME/claudeargs.json" claude_effort)" "recorded default claude effort"
 
