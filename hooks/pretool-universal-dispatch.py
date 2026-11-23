@@ -42,6 +42,11 @@ except Exception:  # fail open: a broken checkout must not block every tool call
 # nothing when unset.
 STATE_DIR = os.environ.get("CLAUDE_HOOK_STATE_DIR", "/tmp")
 
+# Every advisory this run produces, printed by main() as ONE hookSpecificOutput object. Claude
+# never sees stderr from a hook that exits 0, which is where the companion reminders went
+# until 2026-11-23, and two JSON objects on stdout parse as neither.
+ADVISORIES: list[str] = []
+
 
 # ---------------------------------------------------------------------------
 # Shared stdin parse (was ~18 separate jq subprocess calls across both hooks)
@@ -276,7 +281,7 @@ def run_tab_and_dupread(tool_name, tool_input, ppid, scope=""):
         except Exception:
             pass
 
-        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": warn}}))
+        ADVISORIES.append(warn)
         if block:
             # Exit 2 feeds only stderr back to the model: with the reason on stdout alone the
             # refusal read "No stderr output" (2026-11-23, session 42b2ce11).
@@ -361,7 +366,7 @@ def run_companion_remind(envelope, tool_name, tool_input):
     def remind(skill, msg):
         if not already_reminded(skill):
             mark_reminded(skill)
-            print(f"[companion] {msg}", file=sys.stderr)
+            ADVISORIES.append(f"[companion] {msg}")
 
     def increment_counter(name):
         path = os.path.join(counter_dir, name)
@@ -692,7 +697,7 @@ def main():
         except Exception:
             pass
 
-        # Companion reminders first (advisory, stderr-only, never blocks).
+        # Companion reminders first (advisory, never blocks).
         run_companion_remind(envelope, tool_name, tool_input)
 
         # Quote provenance for subagent briefs and peer messages, and resumes of agents whose
@@ -718,19 +723,21 @@ def main():
                         notes.append(note)
                 except Exception:
                     pass
-            if notes:
-                print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "\n\n".join(notes)}}))
+            ADVISORIES.extend(notes)
 
         try:
             probe_envelope(envelope, tool_name)
         except Exception:
             pass
 
-        # Tab-title + dup-read tracking (may set block=True; prints stdout JSON itself).
+        # Tab-title + dup-read tracking (may set block=True).
         block = run_tab_and_dupread(tool_name, tool_input, ppid, agent_scope(envelope))[1]
     except Exception:
         # Fail-open: never let an internal error block a tool call.
         sys.exit(0)
+
+    if ADVISORIES:
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "\n\n".join(ADVISORIES)}}))
 
     sys.exit(2 if block else 0)
 

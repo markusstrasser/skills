@@ -59,6 +59,13 @@ def isolated_tmp(tmp_path):
     return fake_tmp
 
 
+def advice(proc) -> str:
+    """The additionalContext the hook delivered ("" when it printed none). Companion reminders went
+    to stderr until 2026-11-23, where Claude never saw them."""
+    out = proc.stdout.strip()
+    return json.loads(out)["hookSpecificOutput"]["additionalContext"] if out else ""
+
+
 def _isolated(tmp_path):
     home = tmp_path / "home"
     home.mkdir()
@@ -117,8 +124,8 @@ def test_llmx_bash_command_reminds_once_then_dedups(tmp_path):
     p1 = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": session}, home_dir=home, state_dir=state)
     p2 = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": session}, home_dir=home, state_dir=state)
     assert p1.returncode == 0 and p2.returncode == 0
-    assert "[companion]" in p1.stderr and "llmx-guide" in p1.stderr
-    assert p2.stderr.strip() == ""  # deduped second call
+    assert "[companion]" in advice(p1) and "llmx-guide" in advice(p1)
+    assert advice(p2).strip() == ""  # deduped second call
 
 
 def test_llmx_gpt56_without_subscription_warns_once_then_dedups(tmp_path):
@@ -128,8 +135,8 @@ def test_llmx_gpt56_without_subscription_warns_once_then_dedups(tmp_path):
     p1 = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": session}, home_dir=home, state_dir=state)
     p2 = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": session}, home_dir=home, state_dir=state)
     assert p1.returncode == 0 and p2.returncode == 0
-    assert "BILLS per-token" in p1.stderr and "gpt-6.2-sol" in p1.stderr
-    assert "BILLS per-token" not in p2.stderr  # deduped second call
+    assert "BILLS per-token" in advice(p1) and "gpt-6.2-sol" in advice(p1)
+    assert "BILLS per-token" not in advice(p2)  # deduped second call
 
 
 def test_llmx_gpt56_with_subscription_flag_silent(tmp_path):
@@ -137,7 +144,7 @@ def test_llmx_gpt56_with_subscription_flag_silent(tmp_path):
     envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat --subscription -m gpt-6.2-sol -e xhigh 'hi'"}}
     proc = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": "test-subflag-safe"}, home_dir=home, state_dir=state)
     assert proc.returncode == 0
-    assert "BILLS per-token" not in proc.stderr
+    assert "BILLS per-token" not in advice(proc)
 
 
 def test_llmx_model_not_in_subscription_allowlist_silent(tmp_path):
@@ -145,7 +152,7 @@ def test_llmx_model_not_in_subscription_allowlist_silent(tmp_path):
     envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m gpt-5.5 'hi'"}}
     proc = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": "test-subflag-notlisted"}, home_dir=home, state_dir=state)
     assert proc.returncode == 0
-    assert "BILLS per-token" not in proc.stderr
+    assert "BILLS per-token" not in advice(proc)
 
 
 def test_llmx_explicit_provider_flag_silences_subscription_warning(tmp_path):
@@ -153,7 +160,7 @@ def test_llmx_explicit_provider_flag_silences_subscription_warning(tmp_path):
     envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat --provider openrouter -m gpt-6.2-sol 'hi'"}}
     proc = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": "test-subflag-provider"}, home_dir=home, state_dir=state)
     assert proc.returncode == 0
-    assert "BILLS per-token" not in proc.stderr
+    assert "BILLS per-token" not in advice(proc)
 
 
 def _read_trigger_log(home):
@@ -224,8 +231,8 @@ def test_llmx_claude_opus_no_flag_fires_both_claude_and_subscription_reminders(t
     envelope = {"tool_name": "Bash", "tool_input": {"command": "llmx chat -m claude-opus-5-5 'hi'"}}
     proc = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": "test-subflag-claude"}, home_dir=home, state_dir=state)
     assert proc.returncode == 0
-    assert "use --subscription (NEVER anthropic-direct" in proc.stderr
-    assert "BILLS per-token" in proc.stderr
+    assert "use --subscription (NEVER anthropic-direct" in advice(proc)
+    assert "BILLS per-token" in advice(proc)
 
 
 def test_benign_bash_no_block_no_remind(tmp_path):
@@ -234,7 +241,7 @@ def test_benign_bash_no_block_no_remind(tmp_path):
     proc = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": "test-benign"}, home_dir=home, state_dir=state)
     assert proc.returncode == 0
     assert proc.stdout.strip() == ""
-    assert proc.stderr.strip() == ""
+    assert advice(proc).strip() == ""
 
 
 def test_agent_tool_action_naming_matches_tab_convention(tmp_path):
@@ -331,12 +338,12 @@ def test_mcp_search_tool_triggers_research_reminder_at_third_call(tmp_path):
     stderrs = []
     for _ in range(3):
         p = run_dispatch(envelope, env_extra={"CLAUDE_SESSION_ID": session}, home_dir=home, state_dir=state)
-        stderrs.append(p.stderr)
+        stderrs.append(advice(p))
     assert "research" in stderrs[2] and "[companion]" in stderrs[2]
     assert "research" not in stderrs[0]
     assert "research" not in stderrs[1]
     # s2-for-papers should also fire (query matches "paper|arxiv"); the printed
-    # message text, not the internal skill slug, is what lands in stderr.
+    # message text, not the internal skill slug, is what lands in the delivered context.
     assert any("Paper/venue name detected" in s for s in stderrs)
 
 
