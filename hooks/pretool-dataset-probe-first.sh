@@ -25,7 +25,8 @@ DATA_HOSTS='(www2\.census\.gov|meps\.ahrq\.gov|psidonline\.isr\.umich\.edu|simba
 
 if echo "$CMD" | grep -qE "$DATA_EXTS|$DATA_HOSTS"; then
     # Check if a probe or local check appeared in recent history (best-effort)
-    cat <<EOF >&2
+    # Printed as context: Claude never sees stderr from a hook that exits 0.
+    jq -Rs '{hookSpecificOutput: {hookEventName: "PreToolUse", additionalContext: (. | gsub("^\\s+|\\s+$"; ""))}}' <<EOF
 [dataset-probe-first] Bulk data download detected.
 
 Before downloading, confirm:

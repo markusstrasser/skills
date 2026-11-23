@@ -28,7 +28,7 @@ case "$path" in
       echo "  explicit OR confidently inferred from the user's messages. An autonomous self-edit with"
       echo "  no human message to infer from is BARRED (the p-hack hole). This is ADVISORY, not a block:"
       echo "  proceeding. The edit is visible to the daily governance downstream-watch + git history."
-    } >&2
+    } | jq -Rs '{hookSpecificOutput: {hookEventName: "PreToolUse", additionalContext: .}}' 2>/dev/null || true  # stderr on exit 0 never reaches Claude
     ;;
 esac
 exit 0
