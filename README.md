@@ -48,6 +48,7 @@ All three tools discover skills via user-level symlinks pointing here:
 | `research` | 'find papers about', 'research X', 'what's known about'. One-shot research with source grading. /research-ops for cycles/compile/diff. |
 | `research-ops` | Use when: 'run research cycle', 'compile memos into article', 'what's not in training data', 'dispatch parallel audit'. Autonomous research loops, knowledge compilation, training-data diff. For one-shot research questions use /research. |
 | `scientific-drawing` | Use when: 'draw a diagram', 'scientific figure', 'visualize this', 'architecture diagram', 'plot this function'. Typst/CeTZ (fast, default), TikZ (math/circuits/chemistry), D2 (architecture/ERD), Asymptote (3D). |
+| `socratic-tutor` | Vendored verbatim from janestreet/agent_skills (pin in `UPSTREAM.json`; `scripts/sync_upstream_skills.py` checks or pulls upstream). Socratic tutoring to mastery: diagnostic, 0-5 skill map, one question at a time, strict levels. |
 | `sweep` | Codebase consistency scan (Flash classifier). Pattern/convention/config drift, function divergence. 'sweep', 'inconsistencies'. |
 | `trending-scout` | Scan for new agent/AI ecosystem developments, filtered against what we already know. Use for "what's new", vendor updates, trending repos, "check for updates", weekly landscape scans. |
 | `upgrade` | Full codebase audit, Gemini+GPT (inventory→plan→review→implement). 'audit codebase', 'find bugs'. Not /critique or /observe. |
