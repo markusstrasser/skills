@@ -136,7 +136,7 @@ Change the eval when the headline number lacks its control, when the noise floor
 Scale only after the small case succeeds and its curve still rises; launch a cheap run at once when it costs less than one more round of review.
 
 ### You are about to cite a 10^9-decision precedent for the next run
-- **Tempting:** arena, 2026-11-21 and 11-23. With no small result working, the agent quoted a 10^9-decision precedent of about 200 days as a yardstick. It was recorded as the third time; on 11-23 the operator said "again".
+- **Tempting:** arena, 2026-11-21 and 11-23. With no small result working, the agent quoted a 10^9-decision precedent of about 200 days as a yardstick. It was recorded as the third time, and it recurred on 11-23.
 - **Instead:** Any figure of 10^8 decisions or more names the small result that justifies it, with its curve. Without one, run the smallest version.
 - **Check:** the proposal's first line cites a small-case result row with success above 0 and a rising curve.
 
