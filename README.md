@@ -40,6 +40,7 @@ All three tools discover skills via user-level symlinks pointing here:
 | `life-science-research` | Biomedical source routing — ClinVar, gnomAD, Ensembl, GTEx, OpenTargets, ChEMBL, PharmGKB, UniProt, PDB, PubMed, bioRxiv. Source lookup + multi-lane synthesis. |
 | `llmx-guide` | llmx CLI gotchas (Python/Bash). Use when writing llmx calls, debugging llmx failures, or choosing model/provider options. |
 | `manim-animations` | Create mathematical animations using Manim. Use when the user mentions animations, mathematical visualizations, 3Blue1Brown-style videos, explaining math concepts visually, animating equations, or working with manim files. |
+| `ml-ladder` | Before and during training or evaluating a learner: a preflight block (the harness ran, trivial policies on the exact panel, the smallest version, held-out really held out, one episode watched) with a checker, and which lever to change when a run fails or stalls. Built from our own dated incidents. |
 | `modal` | Modal serverless Python. Writing/debugging Modal scripts, deploying, or choosing GPU/resource configs. |
 | `model-guide` | Frontier model selection and prompting for Claude Opus 5, GPT-5.6 Sol/Terra/Luna, Grok 4.5, Kimi K3. |
 | `neurokit2` | NeuroKit2 biosignal proc: ECG/PPG/EDA/EEG/RSP/EMG/EOG/HRV. HRV analysis, Oura data, sleep studies, wearables. |
