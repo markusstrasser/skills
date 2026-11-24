@@ -28,7 +28,8 @@ it was done.
 2. **Trivial policies on the exact panel.** Score a constant policy (stand still and fire, always
    class A, always-on output), an empty or blind one (the input's or opponent's information removed),
    a random one and the scripted opponent's own rule, on the same opponents, seeds and split, through
-   the same scorer. If one reaches the pass bar, the panel or metric cannot show skill: change it
+   the same scorer, in the pipeline the model will run in (streamed state, full episode length, the
+   deployed inputs). If one reaches the pass bar, the panel or metric cannot show skill: change it
    before training.
 3. **The pass is reachable, and so is the key event.** Name a measured policy that earns each verdict
    you could report. Compute the chance that the untrained policy completes the needed sequence once
