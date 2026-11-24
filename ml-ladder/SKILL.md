@@ -17,9 +17,11 @@ without a new measurement, launch.
 
 ## 1. Preflight: fill these rows, in order, before any trained arm is scored
 
-`scripts/preflight_check.py --template` prints `preflight.json`; keep it beside the run's outputs and
-run `scripts/preflight_check.py preflight.json --arm-score <k/n>`. Each row names the file that shows
-it was done.
+Scale it to the run. An experiment of minutes needs rows 1, 2 and 9, written as three lines in its
+result. Fill the rest before a paid run, a run of hours, or a result that goes to the operator.
+`scripts/preflight_check.py --template` prints `preflight.json` for those; keep it beside the run's
+outputs and run `scripts/preflight_check.py preflight.json --arm-score <k/n>`. It checks rows 1, 2
+and 4 to 9; row 3 is yours to write.
 
 1. **The thing ran.** A case known to be solvable scores above zero through this exact harness. Every
    action or tool the learner is offered changes state once. Each arm's effective config is printed,
@@ -31,23 +33,27 @@ it was done.
    the same scorer, in the pipeline the model will run in (streamed state, full episode length, the
    deployed inputs). If one reaches the pass bar, the panel or metric cannot show skill: change it
    before training.
-3. **The pass is reachable, and so is the key event.** Name a measured policy that earns each verdict
+3. **The objective is a choice.** Write the objective in one sentence and two alternatives (the
+   terminal result, a denser measure such as the health lead two seconds later, a comparison of two
+   actions from one forked state). For each, give the return of a stalling, an idle and a winning
+   episode: the win scores highest. Say which one the first run uses and what result would switch it.
+4. **The pass is reachable, and so is the key event.** Name a measured policy that earns each verdict
    you could report. Compute the chance that the untrained policy completes the needed sequence once
    (ten still ticks at 10% each is 1e-10). If nothing can pass, or the event cannot happen by chance,
    no reward or architecture change will help.
-4. **The smallest version.** List the sub-skills the task needs (hold still for one cast, walk to a
+5. **The smallest version.** List the sub-skills the task needs (hold still for one cast, walk to a
    point, break sight). Show the smallest one learned in minutes, or a probe with a known answer
    solved. If the small one fails, stay there. A full-length run follows a timed smoke of a few
    hundred steps.
-5. **Same seed twice, same code twice.** One seed replayed gives the same trajectory. Two runs of
+6. **Same seed twice, same code twice.** One seed replayed gives the same trajectory. Two runs of
    unchanged code at the current score level give the noise, as a ratio; a difference inside it is
    a draw.
-6. **Held out means held out.** Split by source (instrument, game, opponent, singer) and assert zero
+7. **Held out means held out.** Split by source (instrument, game, opponent, singer) and assert zero
    shared groups. Check the pretrained model's training data for your test set. Keep a reserve that
    is scored once, and a list of what each held-out item has already been used for.
-7. **The learner can see what the player sees.** Two states a player tells apart give different
+8. **The learner can see what the player sees.** Two states a player tells apart give different
    inputs; list zero-variance columns; the learner's own last action is in its input.
-8. **One episode watched.** Open one trace or replay before any table, and write what happened in
+9. **One episode watched.** Open one trace or replay before any table, and write what happened in
    the task's own words (casts started, casts finished, why they broke).
 
 ## 2. When it fails or stalls, pick the lever; a third run of the same thing is not one
@@ -56,12 +62,13 @@ it was done.
 |---|---|---|
 | Zero or near zero everywhere | The harness: rerun row 1 | Representation, reward |
 | A trivial policy matches the arm | The task, panel or opponent | More training |
-| Nothing ever wins; random play never shows the behaviour | Shrink the task or the action space until it does (rows 3, 4) | Reward and architecture variants |
+| Nothing ever wins; random play never shows the behaviour | Shrink the task or the action space until it does (rows 4, 5) | Reward and architecture variants |
 | Wins plateau against a fixed scripted opponent | The opponent or data: give the script the learned rule, add opponents that beat the trivial policy | Scale |
+| A denser objective improves its own score and play stays the same | Whatever the watched episode shows is missing (the action never completes, the panel is trivial) | Another objective |
 | High score, wrong behaviour in the watched episode | The reward or loss: does the objective score the better behaviour higher? If yes, the search; if no, the objective | The optimizer settings |
 | The proxy rises (loss, agreement, frame F1) and the goal does not | The eval: score what the user sees or plays, paired on the same starts | The proxy |
 | Validation good, deployed bad | The eval's regime: bench an early snapshot in the pipeline it will run in | More epochs |
-| Train good, held-out bad | The data or labels; the split if it leaked (row 6) | Model size |
+| Train good, held-out bad | The data or labels; the split if it leaked (row 7) | Model size |
 | Errors cluster at one label boundary | The labels | The model |
 | Two variants inside one frame tied within noise | The frame: representation, task, or the cheaper route (a written program, a copied recipe, shipping what exists) | A third variant |
 | Curve still rising at the step limit, preflight complete | Keep training or add compute | Everything else |
