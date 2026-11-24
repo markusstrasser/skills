@@ -1,128 +1,241 @@
 #!/usr/bin/env python3
-"""codex-thread — message a Codex agent running in ChatGPT.app's Codex tab, from outside the app.
+"""codex-thread — message and inspect a Codex agent running in ChatGPT.app's Codex tab.
 
-  codex-thread settings <thread>                         read-only probe: model, effort
-  codex-thread steer <thread> <file> [--cwd DIR]         add a user message to the running turn
-  codex-thread unqueue <thread> <queued item id>         drop an item from the thread's queue
+  codex-thread queue  <thread> (--message T | --file F | -) [--resume] [--confirm SECS]
+  codex-thread status <thread> [--grep TEXT]
 
-`steer` is what the app's "send now" does while a turn runs. It needs a turn in progress. For an
-idle thread, or to wait for the turn to end, use the app's bundled CLI instead:
-`/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex
-queue --thread <thread> --message <text>`.
+'queue' is the supported way to put a message into a Codex Desktop thread from outside the app. It
+shells the app's bundled CLI, which writes the message to ~/.codex/queue_1.sqlite; the app submits
+it when the thread's current turn ends. 'status' shows a thread's queued messages and whether its
+turn is running, and --grep checks whether text has reached the rollout.
 
-The commands use the app's internal IPC router at ~/.codex/ipc/ipc.sock, read from its app.asar on
-2026-10-30 (`IpcRouter`, `ml`/`hl`, the `Oe` version table):
-- Each frame is a 4-byte little-endian length, then UTF-8 JSON. A client registers with
-  `initialize`.
-- The router asks every other client whether it can handle a request. For `thread-follower-*`
-  methods, the window that owns the thread says yes.
-- That window runs `steerTurn` (`turn/steer` on its app-server) or `removeQueuedMessage`
-  (`thread/queue/delete`).
-- The versions below apply to requests sent without a hostId. If an app update changes them, the
-  window answers `request-version-mismatch`; re-read them with
-  `rg -a -o 'Oe=\\{"thread-stream-state-changed[^}]*\\}' /Applications/ChatGPT.app/Contents/Resources/app.asar`.
+There is NO supported programmatic "send now". The old route (this tool's 'steer', over the app's
+IPC router at ~/.codex/ipc/ipc.sock) was removed in the 2026-11-22 app build (26.1117.41037). The
+live channel is the app-tools socket /tmp/codex-app-tools/<uuid>.sock, which a peer authorizer
+(native browser-use-peer-authorization.node) restricts to the app's own code-signed process tree
+(reason codes untrusted-process-ancestry, untrusted-code-signing-identity). That boundary is
+deliberate; do not try to defeat it. To reach a running turn immediately, queue the message and
+click "Steer" on it in the app ("submit without interrupting the model"), or paste it.
 """
 
+from __future__ import annotations
+
 import argparse
+import glob
 import json
 import os
-import socket
-import struct
+import re
+import sqlite3
+import subprocess
 import sys
 import time
-import uuid
 
-SOCK = os.path.expanduser("~/.codex/ipc/ipc.sock")
-VERSIONS = {
-    "thread-follower-read-model-settings": 1,
-    "thread-follower-steer-turn": 1,
-    "thread-follower-remove-queued-message": 1,
-}
+BUNDLED_CLI = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"
+GREP = "/usr/bin/grep"
+REMOVED_ROUTER = "~/.codex/ipc/ipc.sock"
 
 
-def send(s: socket.socket, msg: dict) -> None:
-    data = json.dumps(msg).encode()
-    s.sendall(struct.pack("<I", len(data)) + data)
+def queue_db() -> str:
+    return os.path.expanduser("~/.codex/queue_1.sqlite")
 
 
-def recv_exact(s: socket.socket, n: int) -> bytes:
-    buf = b""
-    while len(buf) < n:
-        chunk = s.recv(n - len(buf))
-        if not chunk:
-            raise ConnectionError("the router closed the connection")
-        buf += chunk
-    return buf
+def sessions_dir() -> str:
+    return os.path.expanduser("~/.codex/sessions")
 
 
-def recv(s: socket.socket) -> dict:
-    (n,) = struct.unpack("<I", recv_exact(s, 4))
-    return json.loads(recv_exact(s, n))
+def newest_rollout(thread: str) -> str | None:
+    pat = os.path.join(sessions_dir(), "*", "*", "*", "rollout-*-" + thread + ".jsonl")
+    files = glob.glob(pat)
+    return max(files, key=os.path.getmtime) if files else None
 
 
-def call(s: socket.socket, client_id: str | None, method: str, params: dict, timeout: float) -> dict:
-    rid = str(uuid.uuid4())
-    msg = {"type": "request", "requestId": rid, "version": VERSIONS.get(method, 0),
-           "method": method, "params": params, "timeoutMs": int(timeout * 1000)}
-    if client_id is not None:
-        msg["sourceClientId"] = client_id
-    send(s, msg)
-    deadline = time.monotonic() + timeout
-    s.settimeout(timeout)
-    while time.monotonic() < deadline:
-        reply = recv(s)
-        if reply.get("type") == "client-discovery-request":
-            # Another client's request: this client handles nothing.
-            send(s, {"type": "client-discovery-response", "requestId": reply["requestId"],
-                     "response": {"canHandle": False}})
-        elif reply.get("type") == "response" and reply.get("requestId") == rid:
-            return reply
-    raise TimeoutError(method)
+def turn_state(rollout: str | None) -> tuple[str | None, str | None]:
+    """('running'|'idle', iso-ts) from the last task_started/task_complete event, else (None, None).
+
+    Mirrors the learner-watch delta parser: an event_msg line whose payload type is one of those.
+    Reads only the tail of what can be a very large file.
+    """
+    if not rollout:
+        return None, None
+    # The last turn marker can be far older than any fixed tail (a long turn emits megabytes after
+    # its task_started), so select the marker lines with grep (file order, bounded output) and parse
+    # the last valid one. Fall back to a tail scan if grep is unavailable.
+    lines: list[str] = []
+    try:
+        g = subprocess.run([GREP, "-E", "task_started|task_complete", rollout],
+                           capture_output=True, text=True)
+        if g.returncode == 0:
+            lines = g.stdout.splitlines()
+    except OSError:
+        lines = []
+    if not lines:
+        try:
+            with open(rollout, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                f.seek(max(0, size - 512 * 1024))
+                lines = f.read().decode("utf-8", "replace").splitlines()
+        except OSError:
+            return None, None
+    state = ts = None
+    for line in lines:
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        p = r.get("payload") or {}
+        if r.get("type") == "event_msg" and isinstance(p, dict) and p.get("type") in ("task_started", "task_complete"):
+            state = "running" if p["type"] == "task_started" else "idle"
+            ts = r.get("timestamp")
+    return state, ts
+
+
+def queued_rows(thread: str) -> list[dict]:
+    db = queue_db()
+    if not os.path.exists(db):
+        return []
+    try:
+        con = sqlite3.connect("file:" + db + "?mode=ro", uri=True, timeout=5)
+    except sqlite3.OperationalError:
+        return []
+    try:
+        cur = con.execute(
+            "select id, queue_order, created_at_ms, substr(payload_json,1,120) as preview "
+            "from queued_items where thread_id=? order by queue_order",
+            (thread,),
+        )
+        cols = [c[0] for c in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
+    except sqlite3.Error:
+        return []
+    finally:
+        con.close()
+
+
+def in_rollout(rollout: str | None, needle: str) -> bool:
+    if not rollout or not needle:
+        return False
+    r = subprocess.run([GREP, "-c", "-F", needle, rollout], capture_output=True, text=True)
+    return r.returncode == 0 and (r.stdout.strip() not in ("", "0"))
+
+
+def read_message(a: argparse.Namespace) -> str:
+    given = [x for x in (a.message is not None, a.file is not None, a.stdin) if x]
+    if len(given) != 1:
+        sys.exit("queue: give exactly one of --message, --file, or - (stdin)")
+    if a.message is not None:
+        return a.message
+    if a.file is not None:
+        with open(a.file) as f:
+            return f.read()
+    return sys.stdin.read()
+
+
+def describe_delivery(thread: str, resume: bool) -> str:
+    state, ts = turn_state(newest_rollout(thread))
+    when = (" (last event " + ts + ")") if ts else ""
+    if state == "running":
+        return ("a turn is running" + when + ": it lands when that turn ends. "
+                'To deliver now, click "Steer" on it in the app.')
+    if state == "idle":
+        if resume:
+            return "the thread is idle" + when + " and --resume was passed: the CLI tried to resume it to consume the queue."
+        return ("the thread is idle" + when + ": the app consumes the queue when the thread next runs. "
+                "Pass --resume, or open/Steer it in the app, to deliver now.")
+    return "could not read the thread's turn state: it lands when the thread next runs."
+
+
+def cmd_queue(a: argparse.Namespace) -> int:
+    text = read_message(a)
+    argv = [BUNDLED_CLI, "queue", "--thread", a.thread, "--message", text] + (["--resume"] if a.resume else [])
+    if a.dry_run:
+        print(json.dumps(argv))
+        return 0
+    if not os.path.exists(BUNDLED_CLI):
+        sys.exit("queue: bundled Codex CLI not found at " + BUNDLED_CLI + " (is ChatGPT.app installed?)")
+    r = subprocess.run(argv, capture_output=True, text=True)
+    sys.stdout.write(r.stdout)
+    if r.stderr:
+        sys.stderr.write(r.stderr)
+    if r.returncode != 0:
+        return r.returncode
+    m = re.search(r"Queued message (\S+)", r.stdout)
+    item = m.group(1) if m else None
+    print("delivery: " + describe_delivery(a.thread, a.resume))
+    if a.confirm:
+        rollout = newest_rollout(a.thread)
+        needle = text.strip()[:80]
+        deadline = time.monotonic() + a.confirm
+        while time.monotonic() < deadline:
+            if in_rollout(rollout, needle):
+                print("confirmed: text is in the rollout (" + os.path.basename(rollout) + ").")
+                return 0
+            time.sleep(3)
+            rollout = newest_rollout(a.thread)
+        still = "still queued" if (item and any(row["id"] == item for row in queued_rows(a.thread))) else "not yet in the rollout"
+        print("confirm: " + still + " after " + str(a.confirm) + "s (it lands at turn end).")
+    return 0
+
+
+def cmd_status(a: argparse.Namespace) -> int:
+    rows = queued_rows(a.thread)
+    rollout = newest_rollout(a.thread)
+    state, ts = turn_state(rollout)
+    print("thread " + a.thread)
+    print("  turn: " + (state or "unknown") + ((" (last event " + ts + ")") if ts else ""))
+    print("  rollout: " + (rollout or ("none found under " + sessions_dir())))
+    if rows:
+        print("  queued (" + str(len(rows)) + "):")
+        for row in rows:
+            when = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(row["created_at_ms"] / 1000))
+            print("    " + row["id"] + "  order=" + str(row["queue_order"]) + "  " + when + "  " + repr(row["preview"]))
+    else:
+        print("  queued: none")
+    if a.grep:
+        print("  grep " + repr(a.grep) + ": " + ("present" if in_rollout(rollout, a.grep) else "absent") + " in the rollout")
+    return 0
+
+
+def cmd_removed(a: argparse.Namespace) -> int:
+    print(
+        "codex-thread " + a.mode + ": removed. The app's IPC router (" + REMOVED_ROUTER + ") was dropped in the "
+        "2026-11-22 app build. There is no supported programmatic send-now or queue-edit: the live "
+        "app-tools socket is peer-authorized to the app's own signed process tree and must not be "
+        "bypassed.\n"
+        "  - to send into a thread: codex-thread queue <thread> --message ...\n"
+        '  - to send into a RUNNING turn now: click "Steer" on the queued message in the app\n'
+        "  - to drop a queued item: delete it in the app's composer",
+        file=sys.stderr,
+    )
+    return 3
 
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="mode", required=True)
-    sub.add_parser("settings").add_argument("thread")
-    steer = sub.add_parser("steer")
-    steer.add_argument("thread")
-    steer.add_argument("file", help="the message text; - reads stdin")
-    steer.add_argument("--cwd", default=os.getcwd(), help="the thread's workspace root")
-    unqueue = sub.add_parser("unqueue")
-    unqueue.add_argument("thread")
-    unqueue.add_argument("item")
+
+    q = sub.add_parser("queue", help="put a message in a thread's queue (lands at turn end)")
+    q.add_argument("thread")
+    q.add_argument("--message")
+    q.add_argument("--file")
+    q.add_argument("-", dest="stdin", action="store_true", help="read the message from stdin")
+    q.add_argument("--resume", action="store_true", help="ask the CLI to resume an idle thread so it consumes the queue")
+    q.add_argument("--confirm", type=int, metavar="SECS", help="after queueing, poll the rollout up to SECS for the text")
+    q.add_argument("--dry-run", action="store_true", help="print the argv that would run; do not shell out")
+    q.set_defaults(fn=cmd_queue)
+
+    s = sub.add_parser("status", help="show a thread's queued messages and turn state")
+    s.add_argument("thread")
+    s.add_argument("--grep", help="report whether this text is present in the rollout")
+    s.set_defaults(fn=cmd_status)
+
+    for name in ("steer", "settings", "unqueue"):
+        rp = sub.add_parser(name, help="REMOVED (app router dropped 2026-11-22)")
+        rp.add_argument("rest", nargs="*")
+        rp.set_defaults(fn=cmd_removed)
+
     a = p.parse_args()
-
-    if a.mode == "settings":
-        method, params = "thread-follower-read-model-settings", {"conversationId": a.thread}
-    elif a.mode == "steer":
-        text = sys.stdin.read() if a.file == "-" else open(a.file).read()
-        message_id = str(uuid.uuid4())
-        method = "thread-follower-steer-turn"
-        params = {
-            "conversationId": a.thread,
-            "input": [{"type": "text", "text": text, "text_elements": []}],
-            # The owner reads restoreMessage.context and .cwd before it steers (`Pke`, `Dr`).
-            "restoreMessage": {"id": message_id, "text": text, "cwd": a.cwd,
-                               "context": {"workspaceRoots": [a.cwd], "collaborationMode": None,
-                                           "commentAttachments": []}},
-            "clientUserMessageId": message_id,
-            "attachments": [],
-        }
-    else:
-        method = "thread-follower-remove-queued-message"
-        params = {"conversationId": a.thread, "messageId": a.item}
-
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-        s.connect(SOCK)
-        init = call(s, None, "initialize", {"clientType": "codex-thread"}, 10)
-        reply = call(s, init["result"]["clientId"], method, params, 60)
-    print(json.dumps({k: reply.get(k) for k in ("resultType", "error", "result")})[:2000])
-    if reply.get("error") == "no-client-found":
-        print("No open window owns this thread: open it in ChatGPT.app's Codex tab.", file=sys.stderr)
-    elif reply.get("error") == "request-version-mismatch":
-        print("The app changed its IPC versions: re-read them (see the docstring).", file=sys.stderr)
-    return 0 if reply.get("resultType") == "success" else 1
+    return a.fn(a)
 
 
 if __name__ == "__main__":
