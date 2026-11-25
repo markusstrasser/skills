@@ -266,10 +266,8 @@ one module with an EXHAUSTIVE property test over its enumerable state space (row
 all 3^k label states; guards proved as theorems) and the prose sections were stamped
 "documentation — module wins on divergence," module sha pinned in the launch descriptor. Default
 for every new prereg with a decision table. Corollary for multi-round attacks at PROBE tier
-(n=1/cell, $0): the arc-agi cycle took 12 rounds because each repair minted fresh attack surface
-— budget ~2 dual-lane rounds for probe-tier preregs and accept residual risk the executable
-tests carry, reserving convergence-to-clean cycles for decision-gating or spend-bearing designs.
-(Evidence: arc-agi freeze b5c69c06; dual-lane convergence measured 3× on same-defect rounds.)
+(n=1/cell, $0): for local screening probes run against an already-tested referee where mistakes fail loudly in seconds to minutes, skip pre-launch attack rounds entirely (0 rounds). When a $0 probe introduces a new decision table or unverified scorer (as in arc-agi, where the cycle took 12 rounds because each repair minted fresh attack surface), cap at ≤2 rounds and accept residual risk the executable tests carry, reserving convergence-to-clean cycles for decision-gating or spend-bearing designs.
+(Evidence: arc-agi freeze b5c69c06, dual-lane convergence measured 3× on same-defect rounds; arena Simple Caster 2026-11-25 runs, where pre-launch + post-result frontier reviews took 25–35 min per 70 s $0 local probe.)
 
 ## Scope the protocol to the spend — not every step earns its keep at every tier
 
@@ -290,9 +288,10 @@ written:
   the probe sits adjacent to a standing KILL — in which case step 10 becomes the single MOST
   important step (state explicitly how the probe's object differs from the killed one, and
   name the observable that would show it quietly becoming the killed thing).
-- **Step 11 (heretic-before-results)** downscales from a frontier-max dispatch to a cheap-lane
-  sanity pass when the design is "grading against frozen hand-graded bands" — the same
-  economics as "When NOT to spend Fable," applied to this skill's own step 11.
+- **Step 11 (heretic-before-results)** skips pre-launch attack rounds (0 rounds) for `$0` local
+  screening probes against an existing tested referee, and downscales to a single cheap-lane
+  sanity pass when introducing a new scorer or grading against unverified hand-graded bands — the
+  same economics as "When NOT to spend Fable," applied to this skill's own step 11.
 
 Steps 1 (construct), 4/4a (controls + dependency claims), and 7/7a (scorer validation +
 objective dry-run) are load-bearing at EVERY tier measured — never skip these.

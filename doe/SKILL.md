@@ -91,7 +91,7 @@ If the target effect size comes from a different venue/instrument, justify why i
 ### 11. Heretic-before-results
 - After 1-10, get the design attacked BEFORE results: the project's dispatch-protocol file if it has one (arc-agi: `.claude/rules/verified-fable-dispatch.md`), else the six-step mechanism in `references/house-rules.md`; grade findings with the project's verdict grammar (arc-agi: `eval-conventions-exhibits.md` §C). The design is a draft until it survives one adversarial pass.
 - Decision tables freeze as EXECUTABLE CODE: one module with an exhaustive property test over its enumerable state space, prose stamped "documentation — module wins on divergence", module sha pinned in the launch descriptor. Default for every prereg with a decision table.
-- Probe tier (n=1/cell, $0): budget ~2 dual-lane attack rounds and accept residual risk carried by the executable tests; reserve convergence-to-clean cycles for decision-gating or spend-bearing designs.
+- Probe tier (n=1/cell, $0): **0 pre-launch attack rounds (skip)** for local screening probes run against an already-tested referee where mistakes fail loudly in seconds to minutes; cap at ≤2 rounds only when introducing a brand-new decision table or unverified scorer, and reserve convergence-to-clean cycles for decision-gating or spend-bearing designs.
 
 ## Scope the protocol to the spend
 
@@ -100,7 +100,7 @@ Full weight at $18+ component designs (every step fired). At $0 screening probes
 - Steps 3 and 6 → N/A for single-instrument calibration (no episode boundary, no bundled treatment).
 - Step 8 → one hand-graded sample with a Wilson CI; full TOST/`seq_stop.py` is for $50+ decisions.
 - Steps 9 and 10 → usually N/A, UNLESS the probe sits next to a standing KILL: then step 10 is the most important step (state how the probe's object differs, name the observable that would show it becoming the killed thing).
-- Step 11 → a cheap-lane sanity pass when grading against frozen hand-graded bands.
+- Step 11 → **skip** for $0 local screening probes against an existing referee; keep a single cheap-lane sanity pass only when introducing a new scorer or grading against unverified bands.
 
 Steps 1, 4/4a and 7/7a are load-bearing at EVERY tier: never skip them.
 
