@@ -96,7 +96,12 @@ PROFILES: dict[str, DispatchProfile] = {
         # 2026-11-11 (operator: "gemini 4 carbon is out ... better than argon ... we can
         # update"): Carbon replaces Argon at the same price. The 1500 s bound is Argon's
         # measurement and has not been re-measured on Carbon.
-        model="gemini-4-carbon",
+        # 2026-11-25 (operator: "critique can use neon ... not argon, neon is cheaper"):
+        # Neon replaces Carbon. The 2026-11-20 paired run (model-guide gemini.md) had
+        # Neon equal on five short packets at ~0.3x thinking tokens and 57% of cost;
+        # Carbon rises to $4/$20 on 2026-12-01, Neon stays $3/$15. Keep effort high:
+        # xhigh doubles thinking (footgun-history #15).
+        model="gemini-4-neon",
         timeout=1500,
         reasoning_effort="high",
         input_token_limit=900000,
@@ -175,7 +180,7 @@ PROFILES: dict[str, DispatchProfile] = {
         # Pre-2026-05-24 default for deep_review. Kept available for
         # tasks where Pro's specific strengths (ARC-AGI-2, GPQA Diamond,
         # video understanding) actually dominate. For general adversarial
-        # critique/synthesis, prefer deep_review (gemini-4-carbon since 2026-11-11).
+        # critique/synthesis, prefer deep_review (gemini-4-neon since 2026-11-25).
         name="legacy_pro_review",
         intent="Pre-2026-05-24 Gemini Pro fallback for cases needing Pro-specific strengths",
         provider="google",
@@ -299,7 +304,7 @@ RETIRED_PROFILES = {
 
 MODEL_TO_PROFILE = {
     "gemini-3.1-flash-lite-preview": "observe_bulk",
-    "gemini-4-carbon": "deep_review",  # 2026-11-11: deep_review runs Carbon; an Argon or Flash pin must not map here silently
+    "gemini-4-neon": "deep_review",  # 2026-11-25: deep_review runs Neon; a Carbon, Argon or Flash pin must not map here silently
     "gemini-3.1-pro-preview": "legacy_pro_review",  # demoted 2026-05-24
     "gpt-6.2-astra": "formal_review",
     "gpt-6.2-sol": "formal_review",

@@ -58,6 +58,8 @@ the paired measurement below is read. Hydrogen is registered and priced, not rou
   `docs/audit/2026-11-18-science-assumptions/policy-decisions.md` (2026-11-20 section) and the run directories
   under genomics `.model-review/2026-11-20-*`.
 
+ **2026-11-25 (operator: "critique can use neon ... not argon, neon is cheaper"): Neon replaces Carbon on the `arch` axis and the `deep_review` profile (skills `shared/llm_dispatch.py`), at effort high.** The long-packet arm was not run first; the operator chose on the five-packet result and price.
+
 Sources: blog.google/innovation-and-ai/models-and-research/gemini-models/introducing-gemini-4-neon/ ·
 aistudio.google.com/docs/pricing · the Gemini API model list (v1beta/models), 2026-11-20.
 
