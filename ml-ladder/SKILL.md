@@ -1,6 +1,6 @@
 ---
 name: ml-ladder
-description: "Use when: a training, fine-tune, self-play or benchmark run of a learner or agent harness is about to launch, has just returned a score (zero, flat or high), or the question is what to run next (more runs, arms, hyperparameters, a bigger net, compute, a new reward). Load it BEFORE deciding or reporting. Preflight block with a checker, and which lever to change: harness, task, opponent/data, reward/loss, observation, eval, scale. NOT arm design (/doe), grader design (/eval) or causal why (/analyze)."
+description: "Use when: a training, fine-tune, self-play or benchmark run of a learner or agent harness is about to launch, has just returned a score (zero, flat or high), or the question is what to run next (more runs, arms, hyperparameters, a bigger net, compute, a new reward). Load it BEFORE deciding or reporting. Preflight block with a checker, and which lever to change: harness, task, action/temporal abstraction, opponent/data, reward/loss, observation, eval, scale. NOT arm design (/doe), grader design (/eval) or causal why (/analyze)."
 user-invocable: true
 argument-hint: "[what you are about to run or the result you are reading]"
 ---
@@ -13,7 +13,10 @@ response was more runs: brute force where an intervention or a smaller task woul
 
 Every check here is a run of seconds to minutes. None is a review round, and none blocks a run that
 costs less than the check: launch that run and fill the block from it. After two rounds of procedure
-without a new measurement, launch.
+without a new measurement, launch. Compile recurring checks (trivial policies, seed splits, scorer
+negative fixtures, trace recounts) into one immutable repo referee once — never rewrite bespoke
+scorers per run or pay a frontier model to recount raw logs. If ceremony, review, or artifact
+repacking exceeds compute by >2× on a local $0 run, fix the loop before launching another run.
 
 ## 1. Preflight: fill these rows, in order, before any trained arm is scored
 
@@ -53,8 +56,10 @@ and 4 to 9; row 3 is yours to write.
    is scored once, and a list of what each held-out item has already been used for.
 8. **The learner can see what the player sees.** Two states a player tells apart give different
    inputs; list zero-variance columns; the learner's own last action is in its input.
-9. **One episode watched.** Open one trace or replay before any table, and write what happened in
-   the task's own words (casts started, casts finished, why they broke).
+9. **One episode watched (or played).** Open one trace or replay before any table, and write what
+   happened in the task's own words (casts started, casts finished, why they broke). In an
+   interactive environment, step through 1–2 live episodes — or run a fast geometry/physics
+   reachability check — before theorizing from logs.
 
 ## 2. When it fails or stalls, pick the lever; a third run of the same thing is not one
 
@@ -62,7 +67,8 @@ and 4 to 9; row 3 is yours to write.
 |---|---|---|
 | Zero or near zero everywhere | The harness: rerun row 1 | Representation, reward |
 | A trivial policy matches the arm | The task, panel or opponent | More training |
-| Nothing ever wins; random play never shows the behaviour | Shrink the task or the action space until it does (rows 4, 5) | Reward and architecture variants |
+| Policy breaks multi-step actions or cannot hold commitment across ticks | Action / temporal abstraction (macro-skills, action chunking, duration head) | Reward tweaks, LR sweeps |
+| Nothing ever wins; random play never shows the behaviour | Establish one working positive control on the real task first (macro-actions, compact public features, imitation, or synthesized code), then ablate downward; or shrink the action space (rows 4, 5) | Reward variants, micro-slicing dead sub-tasks |
 | Wins plateau against a fixed scripted opponent | The opponent or data: give the script the learned rule, add opponents that beat the trivial policy | Scale |
 | A denser objective improves its own score and play stays the same | Whatever the watched episode shows is missing (the action never completes, the panel is trivial) | Another objective |
 | High score, wrong behaviour in the watched episode | The reward or loss: does the objective score the better behaviour higher? If yes, the search; if no, the objective | The optimizer settings |
@@ -75,6 +81,11 @@ and 4 to 9; row 3 is yours to write.
 
 The last row is the only one that buys scale. A figure of 1e8 steps or more names the small result
 that justifies it.
+
+**Freeze dead branches.** After two consecutive valid children of one mechanism fail to beat the
+strongest trivial policy on the real goal, freeze that branch and pivot the mechanism
+(representation, action/temporal abstraction, imitation/program synthesis, or algorithm). Do not
+keep micro-slicing a 0/N substrate into narrower sub-tasks that still lose the real game.
 
 **Intervene before explaining.** A cause read from code or a trace is a guess until one of these,
 each minutes long, has run: switch the suspected rule off; force the missing behaviour and count what
