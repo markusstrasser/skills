@@ -25,7 +25,7 @@ Choose a model and effort from the principles below, then read the model's refer
 
 ## Roster (Pareto frontier, 2026-11-18; why each is on the frontier: [roster.md](references/roster.md))
 
-**Newest picks:** `gpt-6.2-sol`, `gpt-6.2-astra`, `claude-opus-5-5`, `gemini-4-carbon` (OpenAI picks updated 2026-11-18); Claude tiers `claude-fable-5-2`, `claude-sonnet-5-5`, `claude-haiku-5-5` (2026-11-10). Pin an older id only when an eval or a classifier niche (principle 9) requires it.
+**Newest picks:** `gpt-6.2-sol`, `gpt-6.2-astra`, `claude-opus-5-5` (OpenAI picks updated 2026-11-18). Gemini is off the default menu since 2026-11-25 (operator: reduce Gemini calls "unless really necessary ... not as habit"): reach for it only for something the subscription lanes cannot do (Deep Research, multimodal embedding, video or audio input, or a Google-only result to check), plus the one Neon call on the critique `arch` axis. Claude tiers `claude-fable-5-2`, `claude-sonnet-5-5`, `claude-haiku-5-5` (2026-11-10). Pin an older id only when an eval or a classifier niche (principle 9) requires it.
 
 | Model | Role | Transport |
 |---|---|---|
