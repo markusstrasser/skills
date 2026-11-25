@@ -18,7 +18,7 @@ Run deterministic triage before choosing a larger model panel. Triage recommends
 
 ## Assemble and dispatch
 
-Read [Context assembly](../references/context-assembly.md) to build the actual packet. Include a `## Scope` block with target users, current and designed-for scale, and data rate of change. Include enough code/caller evidence to test the plan's premises. Curate governance only when current and relevant; blind adversarial review is the default.
+Read [Context assembly](../references/context-assembly.md) to build the actual packet. Include a `## Scope` block with target users, current and designed-for scale, and data rate of change. For an ongoing line of experiments, include the compact lineage digest and wall-clock/cost breakdown so critics can spot sunk-cost tunneling or ceremony drag; do not attach raw per-trial logs or hash manifests for models to recount (verify counts and custody in code first). Include enough code/caller evidence to test the plan's premises. Curate governance only when current and relevant; blind adversarial review is the default.
 
 For repo-backed subparts, the packet builder can select exact files:
 
@@ -59,7 +59,7 @@ Before adopting a fix, identify where you disagree with reviewers and what conte
 
 ## Act and hand off
 
-Apply verified convergent and single-source findings within the authorized task. Fix all confirmed/corrected items; defer only with a specific reason. The updated artifact is the deliverable when implementation is in scope. If every finding is rejected or deferred, deliver the disposition.
+Apply verified convergent and single-source findings within the authorized task. Fix all confirmed, decision-flipping items; defer only with a specific reason, and on exploratory `$0` work drop low-EV ceremony additions rather than entering a compliance ratchet. When a critic recommends `KILL / PIVOT` on expected value or identifies process to delete, address that strategic call directly before continuing the branch. The updated artifact is the deliverable when implementation is in scope. If every finding is rejected or deferred, deliver the disposition.
 
 State genuine divergent recommendations with both positions and their implications; do not silently blend them or implement one while the user's decision is pending. A factual contradiction is resolved by verification, not by a vote.
 
