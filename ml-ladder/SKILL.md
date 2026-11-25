@@ -97,7 +97,10 @@ large offline model on the same items and scorer. If the ceiling is near the cur
 losses are elsewhere.
 
 **One comparison before a campaign.** Write the single-comparison version of the question and run
-it. If the answer exists (a published recipe, a script that wins), copy it before measuring the gap.
+it, with an explicit branch for a null/zero result (what gets killed or pivoted if it scores 0/N).
+If the answer exists (a published recipe, a script that wins), copy it before measuring the gap.
+Probe any plan written right after a model reversal under pushback with a 5-minute test before
+building harness or fixture code around it.
 For a line of work older than three days, count the goal per route: minutes of the operator's play,
 the shipped product's metric.
 
