@@ -39,9 +39,9 @@ Identify new behavior from the plan commits and check its contracts. Use existin
 
 For a concrete bug found later, prove that its regression test fails on the pre-fix code and passes after the fix. Use an isolated worktree or saved pre-fix file snapshot; never bare `git stash` in a shared checkout.
 
-## Phase 2: Review each layer once
+## Phase 2: Review the risks that remain
 
-**Diff layer:** run `/diff-review high` over the plan's commits. GPT-6.2 Astra via codex is that skill's default provider. Do not also run a critique axis on the diff; `--both` recall mode belongs only to the diff scope. Verify scout findings against the code before applying them, and finish disposition before the closeout commit.
+For the diff, follow the global diff-review trigger. If the user asks for a review or a consequential failure mode remains after Phase 1, scope one `/diff-review` pass to the affected commits and callers. Verify scout findings against the code before applying them, and finish disposition before the closeout commit.
 
 Include an execution-grounded instruction to run the changed code paths where the reviewer has tools, or run them locally and provide the evidence. Record what actually ran; packet-only judgment is not execution.
 

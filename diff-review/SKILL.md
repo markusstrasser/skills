@@ -17,7 +17,9 @@ effort: medium
 # Diff Review
 
 Run the code-review scout (local CLI — **GPT-6.2 Astra** via codex-cli subscription by default)
-over a diff's changed files, validate findings against actual source code, implement safe fixes.
+when the user requests a diff review or local checks leave a consequential failure mode unresolved.
+Before dispatching on your own initiative, name the failure mode and affected caller or scenario.
+Review the changed files, validate findings against actual source code, and implement safe fixes.
 
 **Not Anthropic's built-in `/code-review`** (`/code-review ultra` is the paid multi-agent cloud review). Critique/execute closeouts call this skill for the diff layer. No timer rotation; a whole-project pass is `"$SCOUT" <project> --focus <focus>`. Naming/rotation history: [background.md](references/background.md).
 
@@ -146,7 +148,7 @@ When a diff claims a score, speedup or pass-rate gain, flag any same-diff edit t
 
 | Preset | Scout focus | Provider | Notes |
 |--------|-------------|----------|-------|
-| `low` | patterns | openai | Per-phase gate; ≤4 findings target |
+| `low` | patterns | openai | Targeted review with up to four findings |
 | `high` | security + patterns | openai + `--both` on diff scope | Slice closeout; recall mode |
 
 Pass only changed files (repeated `--file`, `--module`, or a hand-built context packet) — don't scan the
