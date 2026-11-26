@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""told-check: prove a chat message reached the operator before a record says it did.
+
+    told-check --transcript ~/.claude/projects/<project>/<session>.jsonl \
+        --since 2026-11-26T07:40:00Z "Correction first"
+
+Exit 0 and print each matching block (timestamp and its first 300 characters) when an assistant
+text block at or after --since contains every needle (case-sensitive substrings). Exit 1 when none
+does. Only text the operator could read counts: thinking blocks, tool calls and tool results never
+match, and neither do user turns. Exit 2 on a missing transcript or a --since that is not UTC ISO
+ending in Z (a local "15:07" compared as text would pass or fail at random).
+
+Why: on 2026-11-26 three "told the operator" rows in a run's launch note had no assistant text
+behind them; each record was written before the reply existed. Write a told row only after this
+exits 0, in a later step than the message itself.
+"""
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+SINCE_FORMAT = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?Z$")
+
+
+def assistant_texts(transcript: Path, since: str):
+    """Yield (timestamp, text) for each assistant text block at or after since."""
+    with transcript.open(encoding="utf-8") as handle:
+        for raw in handle:
+            try:
+                record = json.loads(raw)
+            except ValueError:
+                continue
+            if not isinstance(record, dict) or record.get("type") != "assistant":
+                continue
+            stamp = str(record.get("timestamp") or "")
+            if stamp < since:
+                continue
+            content = (record.get("message") or {}).get("content") or []
+            if isinstance(content, str):
+                content = [{"type": "text", "text": content}]
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    yield stamp, str(block.get("text") or "")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--transcript", type=Path, required=True)
+    parser.add_argument("--since", required=True, help="UTC ISO time ending in Z")
+    parser.add_argument("needles", nargs="+")
+    args = parser.parse_args(argv)
+    if not SINCE_FORMAT.match(args.since):
+        print(f"told-check: --since {args.since!r} is not UTC ISO ending in Z", file=sys.stderr)
+        return 2
+    if not args.transcript.is_file():
+        print(f"told-check: no transcript at {args.transcript}", file=sys.stderr)
+        return 2
+    found = [
+        (stamp, text)
+        for stamp, text in assistant_texts(args.transcript, args.since)
+        if all(needle in text for needle in args.needles)
+    ]
+    for stamp, text in found:
+        print(stamp, text[:300].replace("\n", " "))
+    if not found:
+        print(f"told-check: NOT TOLD: no assistant text since {args.since} contains {args.needles!r}")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
