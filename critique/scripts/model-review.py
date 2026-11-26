@@ -58,7 +58,10 @@ def _reexec_under_llmx_python_if_needed() -> None:
     if not llmx_py.exists():
         return
     try:
-        if Path(sys.executable).resolve() == llmx_py.resolve():
+        # Distinct uv environments can symlink their interpreters to the same
+        # executable while loading different packages. Only the prefix identifies
+        # the active tool environment and protects against an exec loop.
+        if Path(sys.prefix).resolve() == llmx_py.parent.parent.resolve():
             return
     except OSError:
         return

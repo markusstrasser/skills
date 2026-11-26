@@ -31,6 +31,33 @@ def patched_llmx_chat(mock_chat):
 
 
 class ModelReviewDispatchTest(unittest.TestCase):
+    def test_llmx_reexec_checks_the_environment_when_interpreters_share_a_binary(self):
+        import sys
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            tool_env = root / ".local/share/uv/tools/llmx"
+            caller_env = root / "research/.venv"
+            binary = root / "system-python"
+            binary.touch()
+            for env in (tool_env, caller_env):
+                (env / "bin").mkdir(parents=True)
+                (env / "bin/python3").symlink_to(binary)
+            for env in (caller_env, tool_env):
+                with (
+                    self.subTest(env=env.name), patch.dict(sys.modules, {"llmx": None}),
+                    patch.object(Path, "home", return_value=root),
+                    patch.object(sys, "prefix", str(env)),
+                    patch.object(sys, "executable", str(env / "bin/python3")),
+                    patch.object(os, "execv") as restart,
+                ):
+                    model_review._reexec_under_llmx_python_if_needed()
+                    if env == caller_env:
+                        self.assertEqual(restart.call_args.args[0] if restart.called else None,
+                                         str(tool_env / "bin/python3"))
+                    else:
+                        restart.assert_not_called()
+
     def test_cross_talk_forwards_explicit_claude_api(self):
         with patch.object(model_review, 'dispatch', return_value={}) as call:
             model_review.dispatch_cross_talk(self.review_dir, self.ctx_files, ['claude'], 'review', False, claude_api=True)
