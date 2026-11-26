@@ -931,6 +931,7 @@ def apply_dispatch_manifest(args: argparse.Namespace, manifest_path: Path) -> di
 def build_effective_policy(args: argparse.Namespace) -> dict:
     return {
         "claude_api": bool(getattr(args, "claude_api", False)),
+        "gemini_api": bool(getattr(args, "gemini_api", False)),
         "scout": bool(args.scout),
         "context_scope": args.context_scope,
         "budget_seconds": args.budget_seconds,
@@ -1564,8 +1565,7 @@ def axis_uses_gpt(axis_name: str) -> bool:
 
 
 def axis_uses_gemini(axis_name: str) -> bool:
-    model_name = dispatch_core.PROFILES[str(AXES[axis_name]["profile"])].model.lower()
-    return "gemini" in model_name
+    return AXES[axis_name]["profile"] == "deep_review"
 
 
 def preflight_needs_gemini(tokens: set[str]) -> bool:
@@ -1577,7 +1577,7 @@ def preflight_needs_gemini(tokens: set[str]) -> bool:
 
 
 def run_gemini_preflight(model: str | None = None) -> dict:
-    """One bounded live Gemini call, so an invalid or revoked API key fails before any axis.
+    """Check the selected Gemini route, using a zero-turn model probe on Antigravity.
 
     The Anthropic probe covers only the subscription lane. On 2026-10-11 an invalid Gemini
     key (API_KEY_INVALID) passed preflight and failed the arch and gaps axes mid-critique.
@@ -1586,7 +1586,19 @@ def run_gemini_preflight(model: str | None = None) -> dict:
     """
     import tempfile
 
-    model = model or GEMINI_PRIMARY_MODEL
+    profile = dispatch_core.PROFILES["deep_review"]
+    model = model or profile.model
+    if profile.provider == "agy":
+        try:
+            from llmx import agy
+            selected = agy.check_selection(model, profile.reasoning_effort)
+        except (ImportError, OSError, ValueError, subprocess.SubprocessError) as exc:
+            return {"ok": False, "model": model, "transport": "agy-cli",
+                    "effort": profile.reasoning_effort,
+                    "error": f"{exc}. Run 'agy models' to choose an available model and effort "
+                             "or explicitly select the metered Gemini API with --gemini-api."}
+        return {"ok": True, "model": model, "effort": profile.reasoning_effort,
+                "transport": "agy-cli", "selected": selected}
     llmx_bin = shutil.which("llmx")
     if not llmx_bin:
         return {"ok": False, "model": model, "error": "llmx not on PATH"}
@@ -1599,6 +1611,12 @@ def run_gemini_preflight(model: str | None = None) -> dict:
                     "chat",
                     "-m",
                     model,
+                    "-e",
+                    profile.reasoning_effort,
+                    "-p",
+                    "google",
+                    "--auth",
+                    "api",
                     "--timeout",
                     "60",
                     "-o",
@@ -1615,6 +1633,8 @@ def run_gemini_preflight(model: str | None = None) -> dict:
     check = {
         "ok": probe.returncode == 0 and reply.upper().startswith("OK"),
         "model": model,
+        "effort": profile.reasoning_effort,
+        "transport": "google-api",
         "exit_code": probe.returncode,
         "reply": reply[:40],
         "stderr": (probe.stderr or "").strip()[-400:],
@@ -2393,6 +2413,7 @@ def dispatch(
         # Primary Gemini axis rate-limited -> retry once with the declared fallback profile.
         if (
             not axis_needs_repo_workspace(axis)
+            and profile_def.provider == "google"
             and profile_def.model == GEMINI_PRIMARY_MODEL
             and result["exit_code"] != 0
             and result.get("error")
@@ -4243,6 +4264,11 @@ def main() -> int:
         "(repeatable). The profile's effort is the default.",
     )
     parser.add_argument(
+        "--gemini-api", action="store_true",
+        help="Use the metered Google API for the Gemini axes. Default: the selected "
+             "model and effort on the signed-in Antigravity CLI account.",
+    )
+    parser.add_argument(
         "--claude-api", action="store_true",
         help="Explicit metered direct-Anthropic authorization for the Claude axis only; never fallback.",
     )
@@ -4334,6 +4360,19 @@ def main() -> int:
     )
 
     args = parser.parse_args()
+    api_profile = dispatch_core.PROFILES["deep_review"]
+    try:
+        if not args.gemini_api:
+            # Leave room for the CLI context and reply in Antigravity Neon's 512K window.
+            dispatch_core.PROFILES["deep_review"] = replace(
+                api_profile, provider="agy", auth="subscription", input_token_limit=450_000,
+            )
+        return run_review(args, parser)
+    finally:
+        dispatch_core.PROFILES["deep_review"] = api_profile
+
+
+def run_review(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     if args.model or args.effort:
         try:
             if not args.axes:
@@ -4351,6 +4390,10 @@ def main() -> int:
         if args.claude_api and args.preflight_subscription_model == "claude-opus-5-5":
             parser.error("--claude-api conflicts with a Claude subscription entitlement probe")
         preflight_project = (args.project or Path.cwd()).expanduser().resolve()
+        if args.dispatch_manifest and args.axes is None:
+            if not args.dispatch_manifest.is_file():
+                parser.error(f"dispatch manifest {args.dispatch_manifest} not found")
+            apply_dispatch_manifest(args, args.dispatch_manifest)
         requested_preflight_axes = {
             token.strip() for token in (args.axes or "").split(",") if token.strip()
         }
@@ -4454,6 +4497,12 @@ def main() -> int:
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+
+    if any(axis_uses_gemini(axis) for axis in axis_names) and not args.gemini_api:
+        check = run_gemini_preflight()
+        if not check["ok"]:
+            print(f"[DEGRADED] Gemini review unavailable: {check['error']}", file=sys.stderr)
+            return 1
 
     if "grok" in axis_names:
         grok_exit, grok_checks = run_grok_preflight(project_dir)

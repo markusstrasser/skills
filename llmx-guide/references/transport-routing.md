@@ -4,7 +4,7 @@
 
 ## CLI vs API by Provider
 
-> **Gemini moved to the paid API on 2026-05-31** — the free Gemini CLI tier was retired (Antigravity migration). Gemini-CLI specifics in the sections below are **historical**; for Gemini, use the paid API with `--flex` (50% off non-interactive). The **Codex CLI** (GPT) and **Claude CLI** (`--subscription`) remain subscription/flat-priced — prefer those for routine GPT/Claude work. (The `agy` CLI is Gemini's interactive replacement but can't pin a model in headless `-p` mode, so it is not an llmx transport.)
+> The old Gemini CLI retired on 2026-05-31. Its flags below are historical. For packet reviews use `llmx chat -p agy -m gemini-4-neon -e high` if that variant appears in `agy models`. Antigravity pins both settings and uses consumer account quota. The metered Developer API remains `-p google` and accepts `--flex`. GPT and Claude continue to offer subscription CLI transports.
 
 > **Claude policy:** NEVER `anthropic-direct`/API by default. Use `--subscription` (claude-cli transport) unless the user explicitly requests metered API billing.
 
@@ -115,7 +115,7 @@ Neither CLI truncates user input (verified from source code). Input goes directl
 
 **Tested:** 80KB code batches via both CLIs work reliably. 200KB causes timeouts on thinking models.
 
-**What forces API transport** (Codex CLI): `--max-tokens`, `--stream`, `--search`. Gemini always uses the paid API now (no CLI), so those flags are native there — add `--flex` for 50% off non-interactive dispatch.
+**Features requiring the API** include `--max-tokens`, `--stream` and `--search` on the Codex CLI and the Antigravity packet route. Select Google's API and its optional `--flex` explicitly.
 
 ### Gemini API Service Tiers
 

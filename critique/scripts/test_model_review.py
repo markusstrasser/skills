@@ -176,6 +176,16 @@ class ModelReviewDispatchTest(unittest.TestCase):
             self.assertEqual(meta["auth"], profile.auth)
             self.assertEqual(meta["resolved_kwargs"]["reasoning_effort"], profile.reasoning_effort)
 
+    def test_agy_quota_failure_preserves_the_selected_reviewer(self) -> None:
+        profiles = model_review.dispatch_core.PROFILES
+        profile = model_review.replace(profiles["deep_review"], provider="agy", auth="subscription")
+        unavailable = MagicMock(side_effect=RuntimeError("429 RESOURCE_EXHAUSTED"))
+        with patch.dict(profiles, {"deep_review": profile}), patched_llmx_chat(unavailable):
+            result = model_review.dispatch(self.review_dir, self.ctx_files, ["arch"], "Review", False)
+        unavailable.assert_called_once()
+        self.assertNotEqual(result["arch"]["exit_code"], 0)
+        self.assertNotIn("fallback_reason", result["arch"])
+
     def test_dispatch_falls_back_after_gemini_rate_limit(self) -> None:
         call_count = {"arch": 0}
 
@@ -1391,6 +1401,9 @@ class ExtractionCoverageTest(unittest.TestCase):
 
 class ModelReviewMainTest(unittest.TestCase):
     def setUp(self) -> None:
+        selection = patch.object(model_review, "run_gemini_preflight", return_value={"ok": True})
+        self.gemini_selection = selection.start()
+        self.addCleanup(selection.stop)
         self._premise_scout_guard = patch.object(
             model_review,
             "run_premise_scout",
@@ -1400,6 +1413,33 @@ class ModelReviewMainTest(unittest.TestCase):
         )
         self.mock_run_premise_scout = self._premise_scout_guard.start()
         self.addCleanup(self._premise_scout_guard.stop)
+
+    def test_unavailable_default_neon_stops_before_scout_or_review(self) -> None:
+        self.gemini_selection.return_value = {"ok": False, "error": "Gemini Neon high unavailable"}
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "packet.md").write_text("A review packet")
+            with patch.object(model_review.sys, "argv", [
+                "model-review.py", "--project", temp, "--context", "packet.md",
+            ]), patch.object(model_review, "dispatch") as review:
+                self.assertEqual(model_review.main(), 1)
+            self.assertFalse((root / ".model-review").exists())
+        self.gemini_selection.assert_called_once()
+        self.mock_run_premise_scout.assert_not_called()
+        review.assert_not_called()
+
+    def test_explicit_metered_route_preserves_api_profile(self) -> None:
+        for flags, expected in (([], ("agy", "subscription")), (["--gemini-api"], ("google", "api"))):
+            seen = []
+            def observe(*args, **kwargs):
+                profile = model_review.dispatch_core.PROFILES["deep_review"]
+                seen.append((profile.provider, profile.auth))
+                return 0
+            with patch.object(model_review, "run_preflight", side_effect=observe), patch.object(
+                model_review.sys, "argv", ["model-review.py", "--preflight", "--axes", "standard", *flags],
+            ):
+                self.assertEqual(model_review.main(), 0)
+            self.assertEqual(seen, [expected])
 
     def test_cli_uses_named_question_and_repeatable_context_files(self) -> None:
         with (

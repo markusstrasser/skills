@@ -22,7 +22,7 @@ Optional axes are outside the presets:
 | Axis | Use and contract |
 |---|---|
 | `formal` | Math, Bayes/stats, proofs or formal invariants; `formal_review` profile at high effort |
-| `gaps`, `domain`, `alternatives` | Extra Gemini calls (mechanism pass, domain-fact check, alternative approaches); each adds a metered call, so name one only when its lens is the point, e.g. `--axes deep,domain` |
+| `gaps`, `domain`, `alternatives` | Extra Gemini calls for mechanism, domain facts or alternative approaches. Each uses the selected Gemini transport. |
 | `glm` | Explicit additional model family; metered profile |
 | `grok` | Off since 2026-10-30 (Markus: reviews run on Astra or Opus, no Cursor/Grok). Was: repo-grounded premise falsification; exact Cursor registry and repo canary required |
 
@@ -103,6 +103,8 @@ Triage can infer packet-only scope when the text has no repo premises, or take e
 ## Transport, billing, and timeouts
 
 Use the shared script for normal model/close design dispatch. The audit-plan lens documents its bounded two-critic exception. Do not replace a failed transport with an unrequested paid route.
+
+Gemini axes default to headless Antigravity through `llmx` on the signed-in consumer account. The runner verifies the exact model and effort via a zero-turn `/model` command before the scout. Presets request `gemini-4-neon-high`. Read `agy models` for this account. To choose a listed sibling, add e.g. `--axes standard --model arch=gemini-4-hydrogen --effort arch=high`. If the selected variant is unavailable, the run stops. Add `--gemini-api` to select the historical metered Google API and its existing fallback policy. Pass that flag to preflight and dispatch together when selecting that route. [Antigravity model availability](https://antigravity.google/docs/models)
 
 - `claude_review` uses the current Opus profile through llmx `anthropic` with `auth=subscription` (claude-cli). Never switch to `anthropic-direct`/API by default. The profile locks overrides to `timeout`; API-only output knobs can force billing or fail.
 - General and mechanical GPT profiles use subscription transport. Subscription extraction uses a strict JSON prompt and local parsing because that transport cannot enforce JSON Schema. Do not add API-only `max_tokens` or search controls.

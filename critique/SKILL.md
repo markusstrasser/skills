@@ -31,6 +31,7 @@ Actual diff review always routes to diff-review. For other artifacts, explicit m
 - Audit-plan is the repo-inventory workflow: fresh same-session lane evidence can be reused; otherwise its first audit pass requires repo lanes before critics. It is not the default for an ordinary plan.
 - Model review is convergent. Use `/brainstorm` for divergent ideation. Extra cosigners, formal review, and broader presets are conditional choices in the selected workflow, not automatic additions.
 - You choose each axis's model and effort: `--model AXIS=MODEL`, `--effort AXIS=LEVEL`. For a non-code packet run the Claude axis on Fable 5.2 (`--model claude=claude-fable-5-2 --effort claude=high`); details in [Dispatch](references/dispatch.md).
+- Gemini axes use headless Antigravity on the signed-in account. Presets request Neon at high effort. Check available variants with `agy models`. Use `--gemini-api` to select the metered Google route.
 
 ## Shared review contracts
 

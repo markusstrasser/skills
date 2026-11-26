@@ -91,7 +91,7 @@ llmx chat --subscription -m claude-opus-5-5 -e low \
 5. **`--timeout` explicit** when the caller owns a tighter budget; `llmx` now defaults agent mode to
    at least 1800s and max effort to 3600s, but an explicit 1800–3600s bound remains clearer in scripts
 6. **Context files** — repeatable `-f a.md -f b.md` concatenates with `=== File: path ===` boundaries (fixed; do not pre-merge unless you want a custom layout). Library: `llmx.api.dispatch(..., context_paths=[...])`.
-7. **Gemini = paid API** since 2026-05-31; add `--flex` for 50% off non-interactive dispatch; name `-m gemini-4-neon` and only when needed (see Current picks; the `-p google` default is the older 3.8 Flash)
+7. Gemini packet reviews can use headless Antigravity on consumer account quota. List exact model/effort pairs with `agy models`, then run e.g. `llmx chat -p agy -m gemini-4-neon -e high -o out.md "Review this"`. The metered Developer API remains `-p google` and supports `--flex`.
 8. **Exit 6 = billing or plan usage limit exhausted** (not retryable; a plan limit's message carries its reset time); exit 3 = rate limit (retry/backoff)
 
 ## When llmx Fails
@@ -104,7 +104,7 @@ Routing table: `critique/lenses/repo-audit-plan-review.md`. Preflight via `model
 
 ## Footgun rules (one line each; when a call misbehaves in a way listed here, read [footgun-history.md](references/footgun-history.md) for the incident and fix commit)
 
-1. Gemini has no free CLI: paid API + `--flex`.
+1. `-p agy` requires an account-entitled model and effort. CLI quota or selection failures stop the call.
 2. GPT xhigh: `--timeout 1800–3600`; `--max-tokens` is the visible-output budget (reasoning headroom added).
 3. Never `> file` or a bare pipeline: `-o` + `set -o pipefail`; don't `2>/dev/null` diagnostics.
 4. Python: list args + `input=`, never `shell=True` with a prompt (parens break it).
@@ -116,7 +116,7 @@ Routing table: `critique/lenses/repo-audit-plan-review.md`. Preflight via `model
 10. Claude subscription: omit `--max-tokens` (the CLI rejects it); set an explicit `--timeout`.
 11. Validate outputs by content, never by rc alone (a Stop-hook reply once came back as rc=0).
 12. Usage rows before 2026-10-12 under-report claude-cli/grok-cli input; a `[DEGRADED]` usage note means unknown or missing token fields.
-13. `--mode agent` implies `--auth subscription`; explicit api auth + agent, or a model with no subscription CLI (Gemini), exits 2.
+13. `--mode agent` implies `--auth subscription` for GPT/Claude. The Antigravity packet transport requires chat mode.
 14. DeepSeek: short tier aliases (`deepseek-flash-fast`) need `-p lithosai` (bare `deepseek-flash` goes to the DeepSeek platform); `-ultra` 429s "at capacity" under concurrent calls, so fan out on base or `-fast`; never send `promptCacheKey` (400). `-p deepinfra` and `deepinfra/…` ids exit 2 (retired 2026-10-26).
 15. Gemini `--max-tokens` caps thinking and visible output together; llmx adds no headroom there. Neon at `xhigh` thinks about 57K tokens even on a 2K-token prompt: at 32000 it returns nothing (exit 5, still billed) and at 65536 the answer is cut at the ceiling. Pass `--max-tokens 65536` and use `-e high` for long answers; keep `xhigh` for short ones.
 

@@ -41,8 +41,7 @@ batch` is the answer and nothing else is needed.
 - **`-p google` goes DIRECT to the paid Gemini Developer API** (`GEMINI_API_KEY`). There is
   no CLI in the path — the only subprocess is the `llmx` binary itself. (So "gemini-cli
   OAuth corruption under concurrency" is a dead concern — there is no gemini-cli.)
-- **`agy` (Antigravity CLI) is NOT an llmx transport** — it can't pin a model in headless
-  mode. It's an interactive CLI only; ignore it for programmatic dispatch.
+- Headless Antigravity packet calls use `-p agy` with a model and effort listed by `agy models`. Batch submissions use the Developer API.
 - Practical concurrency cap on the per-call CLI path is the `llmx` process-spawn tax +
   provider rate limits — which is exactly why bulk work should go through `llmx batch`,
   not a wider `ThreadPoolExecutor`.
