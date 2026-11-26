@@ -113,9 +113,13 @@ the shipped product's metric.
 - One block of seeds is one draw. Run a second fresh block before telling anyone.
 - A fork reproduces its source's score before any change is measured on it.
 - Print per-suite rows beside any pooled number, on the items every arm shares.
+- After any clean, controlled lever result (win or null) on an immutable referee, append one row to
+  `references/effect-ledger.md` so future RL projects inherit what actually worked and at what scale.
 
 ## Where the rest lives
 
+- `references/effect-ledger.md`: cross-project table of RL levers, measured referee deltas, compute
+  scale, verdicts (wins and nulls) and transferable lessons. Check it before designing a new RL run.
 - `references/examples.md`: our own incidents by lever, each with what the agent did, what to do and
   the check. Read the section for the lever you are about to pull.
 - `references/procedures.md`: the field's ladders (Karpathy, Jones's probe environments, Schulman, Ng,
