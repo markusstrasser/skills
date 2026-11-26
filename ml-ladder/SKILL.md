@@ -18,13 +18,11 @@ negative fixtures, trace recounts) into one immutable repo referee once — neve
 scorers per run or pay a frontier model to recount raw logs. If ceremony, review, or artifact
 repacking exceeds compute by >2× on a local $0 run, fix the loop before launching another run.
 
-## 1. Preflight: fill these rows, in order, before any trained arm is scored
+## 1. Preflight: scale rigor to the spend
 
-Scale it to the run. An experiment of minutes needs rows 1, 2 and 9, written as three lines in its
-result. Fill the rest before a paid run, a run of hours, or a result that goes to the operator.
-`scripts/preflight_check.py --template` prints `preflight.json` for those; keep it beside the run's
-outputs and run `scripts/preflight_check.py preflight.json --arm-score <k/n>`. It checks rows 1, 2
-and 4 to 9; row 3 is yours to write.
+- **Local $0 dev iterations:** Do **not** generate `preflight.json`, `source.zip`, `registration.md`, `serial-witness.json`, or a new recount script. Run the repo's immutable referee and write 3 lines: hypothesis, referee score vs strongest control, keep/kill — plus one watched episode or cheap-agentic fight story (row 9).
+- **Paid runs (>$5), multi-hour runs, or promotion claims to the operator:** Fill the full block below, keep `preflight.json` beside the outputs, and run `scripts/preflight_check.py preflight.json --arm-score <k/n>` (checks rows 1, 2 and 4 to 9; row 3 is yours to write).
+- **Effectiveness > efficiency:** Never spend >20 minutes on <20% speed tweaks, bitwise trajectory parity across trainer refactors, or artifact repacking while the headline referee score is flat. Fix a 5–10× throughput wall or change the learning mechanism.
 
 1. **The thing ran.** A case known to be solvable scores above zero through this exact harness. Every
    action or tool the learner is offered changes state once. Each arm's effective config is printed,
@@ -56,10 +54,13 @@ and 4 to 9; row 3 is yours to write.
    is scored once, and a list of what each held-out item has already been used for.
 8. **The learner can see what the player sees.** Two states a player tells apart give different
    inputs; list zero-variance columns; the learner's own last action is in its input.
-9. **One episode watched (or played).** Open one trace or replay before any table, and write what
-   happened in the task's own words (casts started, casts finished, why they broke). In an
-   interactive environment, step through 1–2 live episodes — or run a fast geometry/physics
-   reachability check — before theorizing from logs.
+9. **One episode watched (or read by a cheap trace reader).** Open one trace or replay before any
+   table, and write what happened in the task's own words (casts started, casts finished, why they
+   broke). For repeated runs, export a compact ~50-line play-by-play story per fight so a cheap
+   agentic model can cluster recurring tactical failures across 8–12 losses with exact tick/event
+   citations (propose hypotheses only; the immutable referee decides). In an interactive
+   environment, step through 1–2 live episodes — or run a fast geometry/physics reachability check —
+   before theorizing from logs.
 
 ## 2. When it fails or stalls, pick the lever; a third run of the same thing is not one
 
