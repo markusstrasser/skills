@@ -27,6 +27,8 @@ One append-only table across projects recording **what lever was pulled, what it
 - **Native Rust/GPU CUDA-graph actor inference** (`throughput` — target 5,000–15,000 dec/s).
 - **Scale BC + DAgger founder** from 47 wins → 300–500 wins, then **1M–2M dec Modal PPO**.
 - **Dense auxiliary future-state prediction with pure win/loss reward** (`representation/critic` — sharpen $V^*(s)$ without fake subgoals).
-- **Reverse endgame-first curriculum** (`curriculum` — learn $V(s)$ backward from 10–20 s lethal forks).
-- **Counterfactual `Episode::fork(Some(seed))` tree advantages + 2–3 ply search distillation** (`credit/search` — zero-variance causal $\Delta V$ using common random numbers).
+- **Reverse endgame-first curriculum** (`curriculum` — per-context `Episode::fork` ladders paced by win-rate band $p(s) \in [0.2, 0.8]$ [`arXiv:2607.26417`] + tactical constraint spread $\max_a Q - \min_a Q$ / critic-ensemble variance [`TEACH`, `2512.22824`]).
+- **Counterfactual `Episode::fork(Some(seed))` tree advantages + 2–3 ply search distillation** (`credit/search` — zero-variance causal $\Delta V$ using common random numbers; breaks $V^\pi$ myopia on low-prob multi-step combos).
+- **Rare-win replay & non-derivative novelty** (`exploration/data` — amplify wins with high $-\log \pi(\tau)$, archive wins across `arena-core` physical behavior grids [MAP-Elites], or score learnable novelty via untrained critical reservoir epiplexity [`arXiv:2607.18433`] / RND [`2602.19964`]).
+- **Learned adaptive chunk / window sizes** (`action/temporal` — prefix multi-chunk Q selection [`ACH`, `2605.10044`], learned switch gate $\beta_t$ [`Internal RL`, `2512.20605`], or consequence-aware early abort [`2610.07949`]).
 - **Sparse critic supervision (`SP³O`, `2609.18708`), centralized Q-boosting (`VRPO`, `2605.19235`), LLM-evolved exploiters (`Digital Red Queen`, `2601.03335`)**.
