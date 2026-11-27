@@ -58,8 +58,8 @@ EXIT_DEGRADED = 75
 INDEX = ".archived.tsv"
 LOCK = ".archive.lock"
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
-# What bin/lane, lane-retire and lane-opencode write after "<name>.", and the .gz of a log (surveyed 2026-10-25).
-OWNED_SUFFIX = re.compile(r"(json|done|KEEP|patch|harvest|checkout-state|opencode-session|log(\.gz)?"
+# What lane and its helpers write after "<name>.", including compressed logs.
+OWNED_SUFFIX = re.compile(r"(json|done|KEEP|patch|harvest|checkout-state|(agy|opencode)-session|log(\.gz)?"
                           r"|stalled-[0-9]+\.log(\.gz)?|review\.(done|pid|md|log(\.gz)?)"
                           r"|resume-note(\.consumed-[0-9]+)?\.md)\Z")
 DISK_FLOOR = Path(__file__).resolve().parent / "disk-floor"

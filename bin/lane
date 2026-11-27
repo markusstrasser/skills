@@ -25,7 +25,7 @@ LAUNCH_LOCK=""
 usage() {
   cat >&2 <<'EOF'
 usage:
-  lane run <name> --repo <path> --brief <file> [--worker codex|claude|opencode] [--no-worktree] [--base <ref>]
+  lane run <name> --repo <path> --brief <file> [--worker codex|claude|opencode|agy] [--no-worktree] [--base <ref>]
            [--keep-checkout] [--seed-patch <patch>] [--seed-file <file>]...
       (a finished lane's checkout is harvested to $LANE_HOME/<name>.harvest/<stamp>/ and removed when the worker
        exits 0, see bin/lane-retire; --keep-checkout keeps it, for a lane you will resume; a failed lane keeps it)
@@ -46,6 +46,11 @@ usage:
       (opencode worker: bin/lane-opencode's default model, DeepSeek V4.1 Flash with thinking on; LANE_OPENCODE_MODEL=<provider/model> overrides it)
       (opencode worker: no sandbox; a scrubbed env and a deny-list guard it, see bin/lane-opencode; exit 86 = balance exhausted)
       (opencode worker: a provider at capacity (429) is retried in the lane's session for ~20 min, then exit 85; lane resume continues it)
+      (agy worker: LANE_AGY_MODEL=<m> LANE_AGY_EFFORT=<e> override Gemini 4 Neon at xhigh; consumer Google Account only)
+      (agy worker: LANE_AGY_ADD_DIRS=<a:b> adds writable roots. Terminal commands use Antigravity's sandbox,
+       with read and network grants and Git metadata write denials. See bin/lane-agy for sandbox limits.)
+      (agy worker: exit 86 means usage quota exhausted; capacity retries use LANE_AGY_CAPACITY_WAIT_S, default 1200, then exit 85)
+      (agy worker: lane resume continues the recorded conversation; use --keep-checkout to resume after a success)
       (codex worker: LANE_CODEX_MODEL=<m> LANE_CODEX_EFFORT=<e> env override the defaults, gpt-6.2-astra at high effort)
       (codex worker: LANE_CODEX_ADD_DIRS=<a:b> adds writable roots; LANE_CODEX_NETWORK=1 enables network; git metadata stays read-only, so the parent merges and commits)
       (codex worker: LANE_CODEX_SANDBOX=<mode>, else `git config lane.codexSandbox <mode>` in the repo, picks codex's sandbox: workspace-write (default), read-only or danger-full-access)
@@ -53,7 +58,7 @@ usage:
       (codex worker: a model at capacity is waited out and codex started again on the checkout for ~30 min, then exit 85; lane resume continues it)
   lane review <name> [--model <m>] [--effort <e>] [--focus <file>] [--report <file>] [--out <file>] [--bg]
   lane ls [--stall-min <minutes>]
-      (WAITING: a claude worker sleeping out the api_retry delay it logged, e.g. a usage-limit reset)
+      (WAITING: a worker sleeping out the api_retry delay it logged, e.g. an agy capacity backoff or Claude usage limit)
   lane state <name>
       (one line of JSON: name, state as ls prints it or NONE without metadata or marker, pid, started_epoch)
   lane slots --repo <path>
@@ -204,6 +209,9 @@ defaults = {
     "claude_code_mode": "0",
     # Empty: bin/lane-opencode's own default applies, so the model is defined once (a copy here overrode it).
     "opencode_model": "",
+    "agy_model": "gemini-4-neon",
+    "agy_effort": "xhigh",
+    "agy_add_dirs": "",
 }
 recorded = {}
 if sys.argv[1]:
@@ -227,7 +235,7 @@ for key, default in defaults.items():
         sys.exit(f"lane: {env_key} must not contain tabs or newlines")
     if key.endswith(("_model", "_effort")):
         value = value or default
-    elif key in ("codex_add_dirs", "claude_add_dirs"):
+    elif key.endswith("_add_dirs"):
         value = ":".join(directory for directory in value.split(":") if directory)
     elif key in ("codex_network", "claude_code_mode"):
         value = "1" if value == "1" else "0"
@@ -256,6 +264,9 @@ print_worker_settings() {
       ;;
     opencode)
       echo "lane: settings opencode_model=${LANE_OPENCODE_MODEL:-default}"
+      ;;
+    agy)
+      echo "lane: settings agy_model=$LANE_AGY_MODEL agy_effort=$LANE_AGY_EFFORT add_dirs=$LANE_AGY_ADD_DIRS"
       ;;
     *)
       echo "lane: settings codex_model=$LANE_CODEX_MODEL codex_effort=$LANE_CODEX_EFFORT add_dirs=$LANE_CODEX_ADD_DIRS network=$LANE_CODEX_NETWORK sandbox=$LANE_CODEX_SANDBOX"
@@ -636,8 +647,8 @@ format_age() {
   fi
 }
 
-# A claude worker waiting out a usage limit logs one stream-json api_retry event, then
-# stays quiet for up to the watchdog cap; the event's retry_delay_ms says how long.
+# A worker waiting out a usage limit or capacity logs an api_retry event, then
+# stays quiet for the duration in retry_delay_ms, with up to five minutes of grace.
 retry_wait_covers() {
   local log="$1"
   local age="$2"
@@ -655,7 +666,7 @@ try:
     delay_ms = int(event["retry_delay_ms"]) if event.get("subtype") == "api_retry" else 0
 except (IndexError, ValueError, KeyError, TypeError, AttributeError):
     delay_ms = 0
-sys.exit(0 if int(sys.argv[2]) * 1000 < delay_ms + 300000 else 1)
+sys.exit(0 if delay_ms > 0 and int(sys.argv[2]) * 1000 < delay_ms + 300000 else 1)
 PY
 }
 
@@ -912,9 +923,8 @@ build_prompt() {
   local prompt
   if [ "$worker" = "claude" ]; then
     prompt=$(<"$brief")
-  elif [ "$worker" = "opencode" ]; then
-    # OpenCode has no sandbox to keep git metadata read-only, so the contract is in the prompt (and in
-    # lane-opencode's deny-list).
+  elif [ "$worker" = "opencode" ] || [ "$worker" = "agy" ]; then
+    # The prompt repeats the git contract for both third-party workers. Their helpers set the tool permissions.
     prompt="$(<"$brief")
 
 Git state belongs to the parent: edit files and run checks, but do not stage, commit, merge, stash or switch branches. Do not stop or kill processes you did not start. End by listing every path you changed."
@@ -1021,7 +1031,8 @@ launch_worker() {
   fi
 
   mkdir -p "$LANE_HOME"
-  rm -f "$marker" "$checkout_state"
+  rm -f "$marker" "$checkout_state" "$LANE_HOME/$name.agy-session.tmp"
+  if [ "$resume_mode" = false ]; then rm -f "$LANE_HOME/$name.agy-session"; fi
   : >"$log"
   prompt=$(build_prompt "$worker" "$brief" "$resume_note")
   started_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
@@ -1132,6 +1143,9 @@ A provider capacity error stopped your previous attempt. The checkout keeps its 
         # capacity and logs usage. On a resume it continues the last session of the lane.
         LANE_RESUME="$resume_mode" caffeinate -i "$LANE_OPENCODE_HELPER" "$prompt" < /dev/null
         ;;
+      agy)
+        caffeinate -i "$LANE_AGY_HELPER" "$resume_mode" "$prompt" < /dev/null
+        ;;
       fake)
         if [ "$resume_mode" = true ]; then printf "%s\n" "$prompt"; fi
         # A test holds the fake RUNNING until it releases it: the bare 1 s sleep lost the
@@ -1211,7 +1225,8 @@ A provider capacity error stopped your previous attempt. The checkout keeps its 
   # playtest client competed with them as equals.
   nohup /usr/bin/nice -n "$(lane_nice)" /usr/bin/perl -MPOSIX -e 'POSIX::setsid() or die "lane: setsid: $!\n"; exec { $ARGV[0] } @ARGV or die "lane: exec: $!\n"' \
     env PYTHONUNBUFFERED=1 LANE_WORKER=1 UV_CACHE_DIR="$HOME/.cache/uv" LANE_NAME="$name" LANE_REPO="$repo" LANE_LOG="$log" \
-    LANE_OPENCODE_HELPER="$LANE_BIN_DIR/lane-opencode" LANE_RETIRE="$LANE_BIN_DIR/lane-retire" LANE_HOME="$LANE_HOME" \
+    LANE_OPENCODE_HELPER="$LANE_BIN_DIR/lane-opencode" LANE_AGY_HELPER="$LANE_BIN_DIR/lane-agy" \
+    LANE_RETIRE="$LANE_BIN_DIR/lane-retire" LANE_HOME="$LANE_HOME" \
     LANE_ARCHIVE="$LANE_BIN_DIR/lane-archive" \
     LANE_CHECKOUT_MODE="$checkout_mode" LANE_CHECKOUT_BASE="$checkout_base" LANE_BRANCH="$branch" \
     LANE_KEEP_CHECKOUT="$keep_checkout" LANE_CHECKOUT_ENV="$checkout_env_names" \
@@ -1551,7 +1566,7 @@ cmd_run() {
   done
   [ -n "$repo" ] || die "run requires --repo"
   [ -n "$brief" ] || die "run requires --brief"
-  case "$worker" in codex | claude | opencode | fake | fake-hang) ;; *) die "worker must be codex, claude or opencode" ;; esac
+  case "$worker" in codex | claude | opencode | agy | fake | fake-hang) ;; *) die "worker must be codex, claude, opencode or agy" ;; esac
   validate_plain_value "repo" "$repo"
   validate_plain_value "brief" "$brief"
   validate_plain_value "base" "$base"
@@ -2380,8 +2395,8 @@ cmd_reap() {
       echo "lane: branch $branch stays: lane-retire kept it because no other ref holds its commits"
     fi
   fi
-  rm -f "$metadata" "$(done_path "$name")" "$(log_path "$name")" "$LANE_HOME/$name.opencode-session" \
-    "$(checkout_state_path "$name")"
+  rm -f "$metadata" "$(done_path "$name")" "$(log_path "$name")" "$LANE_HOME/$name.opencode-session" "$LANE_HOME/$name.agy-session" \
+    "$LANE_HOME/$name.agy-session.tmp" "$(checkout_state_path "$name")"
   echo "lane: reaped $name; harvests stay in $LANE_HOME/$name.harvest/"
   [ "$retired" = false ] || archive_pass
 }

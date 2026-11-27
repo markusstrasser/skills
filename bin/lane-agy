@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+"""Run one lane turn with Antigravity, retaining its conversation across attempts.
+
+Antigravity's terminal sandbox and file permission rules grant workspace and
+--add-dir writes, read access, and web access through its network policy. They
+deny writes to the checkout's .git and its resolved Git directories. The CLI
+can still write its own state, and the terminal sandbox has its own scratch,
+cache, sensitive-path, and network restrictions. This is AGY's tool sandbox,
+with filesystem enforcement for shell commands subject to host support. It
+allows sandboxed web traffic via AGY's proxy. Native sockets and sensitive
+reads remain subject to its sandbox policy. AGY can apply project permission
+grants in addition to the session settings.
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+EFFORTS = {"low", "medium", "high", "xhigh", "max"}
+QUOTA = re.compile(r"quota[_ ](?:has been |is )?(?:reached|exceeded|exhausted)|insufficient quota|"
+                   r"usage[_ ]limit|out of (?:ai )?credits", re.IGNORECASE)
+CAPACITY = re.compile(r'\b(?:http|code|status)[\s":=]+(?:429|503)\b|resource_?exhausted|'
+                      r"model_capacity_exhausted|at capacity|overloaded|rate limit", re.IGNORECASE)
+CONVERSATION_ID = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def consumer_env():
+    # Same consumer-only gate as llmx/llmx/agy.py. A saved cloud project can bill
+    # even when there is no API key in the environment.
+    settings = Path.home() / ".gemini/antigravity-cli/settings.json"
+    saved = json.loads(settings.read_text()) if settings.exists() else {}
+    if not isinstance(saved, dict):
+        raise TypeError("expected an Antigravity settings JSON object")
+    if saved.get("gcp") or saved.get("modelProvider") or os.environ.get("AGY_ADC_AUTH"):
+        raise ValueError("consumer Google Account sign-in required (cloud project or API provider configured)")
+    env = os.environ.copy()
+    for key in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"):
+        env.pop(key, None)
+    env["GIT_OPTIONAL_LOCKS"] = "0"
+    return env
+
+
+def worker_command(model, effort):
+    # Pin the published variant, as llmx/llmx/agy.py does. A bare model name can
+    # select a different effort depending on the CLI's saved settings.
+    if not model.startswith("gemini-") or effort not in EFFORTS:
+        raise ValueError("agy requires a Gemini model and an explicit supported effort")
+    suffix = model.rsplit("-", 1)[-1]
+    if suffix in EFFORTS and suffix != effort:
+        raise ValueError(f"model {model!r} conflicts with effort {effort!r}")
+    variant = model if suffix == effort else f"{model}-{effort}"
+
+    extra_dirs = [Path(directory).expanduser().resolve(strict=True)
+                  for directory in os.environ["LANE_AGY_ADD_DIRS"].split(":") if directory]
+    for directory in extra_dirs:
+        if not directory.is_dir():
+            raise ValueError(f"LANE_AGY_ADD_DIRS entry is not a directory: {directory}")
+    git_dirs = subprocess.check_output(
+        ["git", "rev-parse", "--absolute-git-dir", "--path-format=absolute", "--git-common-dir"], text=True,
+    ).splitlines()
+    protected = {Path(directory).resolve() for directory in git_dirs}
+    protected.update(root / ".git" for root in [Path.cwd(), *extra_dirs])
+    if any(any(path == directory or path in directory.parents for path in protected) for directory in extra_dirs):
+        raise ValueError("LANE_AGY_ADD_DIRS cannot grant write access to a Git metadata directory")
+    settings = {
+        "allowNonWorkspaceAccess": False,
+        "disableSlashCommands": False,
+        "enableTerminalSandbox": True,
+        "toolPermission": "proceed-in-sandbox",
+        "useG1Credits": False,
+        "permissions": {
+            # A command(*) allow rule would also auto-approve commands outside the sandbox.
+            "allow": ["read_file(*)", "read_url(*)"],
+            "ask": [],
+            "deny": ["mcp(*)", "command(git push)", *[f"write_file({path})" for path in sorted(protected)]],
+        },
+    }
+    command = ["agy", "--model", variant, "--effort", effort, "--mode", "accept-edits",
+               "--sandbox", "--settings", json.dumps(settings)]
+    for directory in extra_dirs:
+        command += ["--add-dir", str(directory)]
+    return variant, command
+
+
+def check_selection(command, variant, effort):
+    # /model is answered by the CLI, without spending a model turn.
+    with tempfile.TemporaryDirectory(prefix="lane-agy-model-") as cwd:
+        probe = subprocess.run(command + ["--disable-slash-commands=false", "-p", "/model", "--output-format", "json"], cwd=cwd,
+                               env=consumer_env(), capture_output=True, text=True, timeout=30, check=False)
+    try:
+        reply = json.loads(probe.stdout)
+    except ValueError as exc:
+        raise ValueError(f"agy returned no model selection: {probe.stderr.strip()[-400:]}") from exc
+    if probe.returncode or reply.get("status") != "SUCCESS":
+        raise ValueError(f"agy cannot select {variant}: {reply.get('error') or probe.stderr.strip()[-400:]}")
+    selected = reply.get("command", {}).get("data", {})
+    if reply.get("num_turns") != 0 or selected.get("id") != variant or selected.get("effort") != effort:
+        raise ValueError(f"agy did not confirm {variant} with effort {effort}")
+
+
+def run_turn(command, variant, prompt, conversation, session_file):
+    args = command + ["--disable-slash-commands", "--output-format", "stream-json", "-p", prompt]
+    if conversation:
+        args += ["--conversation", conversation]
+    result = {}
+    quota = capacity = initialized = False
+    with subprocess.Popen(args, env=consumer_env(), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT, text=True, errors="replace") as process:
+        for line in process.stdout:
+            print(line, end="", flush=True)
+            try:
+                event = json.loads(line)
+            except ValueError:
+                # agy also reports API failures on stderr as AGY_ERROR: {...}.
+                quota |= bool(QUOTA.search(line))
+                capacity |= bool(CAPACITY.search(line))
+                continue
+            if not isinstance(event, dict):
+                continue
+            if event.get("event") == "init":
+                new_id = event.get("conversation_id", "")
+                init = event.get("init", {})
+                if (initialized or not isinstance(new_id, str) or not CONVERSATION_ID.fullmatch(new_id)
+                        or (conversation and new_id != conversation)
+                        or init.get("model") != variant or init.get("permission_mode") != "proceed-in-sandbox"):
+                    process.kill()
+                    raise ValueError("agy did not confirm the requested conversation, model and permission mode")
+                conversation = new_id
+                # Save before any tool calls finish, so a stalled/stopped lane can resume.
+                pending = session_file.with_name(f"{session_file.name}.tmp")
+                pending.write_text(conversation + "\n")
+                pending.replace(session_file)
+                initialized = True
+            elif event.get("event") == "result":
+                result = event["result"]
+        rc = process.wait()
+
+    if result.get("status") == "SUCCESS" and rc == 0:
+        if not initialized or result.get("conversation_id") != conversation:
+            raise ValueError("agy success lacks a matching conversation header")
+        return 0, conversation
+    error = str(result.get("error", ""))
+    if quota or QUOTA.search(error):
+        return 86, conversation
+    if capacity or CAPACITY.search(error):
+        return 85, conversation
+    if rc == 0:
+        raise ValueError("agy exited without a successful result")
+    return rc if rc > 0 else 128 - rc, conversation
+
+
+def main(resume, prompt):
+    session_file = Path(os.environ["LANE_HOME"]) / f"{os.environ['LANE_NAME']}.agy-session"
+    conversation = ""
+    if resume == "true" and session_file.exists():
+        conversation = session_file.read_text().strip()
+        if not CONVERSATION_ID.fullmatch(conversation):
+            raise ValueError(f"invalid conversation ID in {session_file}")
+        print(f"lane-agy: resuming conversation {conversation}")
+    effort = os.environ["LANE_AGY_EFFORT"]
+    variant, command = worker_command(os.environ["LANE_AGY_MODEL"], effort)
+    check_selection(command, variant, effort)
+    print(f"lane-agy: selected {variant}")
+
+    deadline = None
+    wait_limit = max(0, int(os.environ.get("LANE_AGY_CAPACITY_WAIT_S", "1200")))
+    delay = 5
+    attempt_prompt = "Continue the lane from where you stopped.\n\n" + prompt if conversation else prompt
+    while True:
+        rc, conversation = run_turn(command, variant, attempt_prompt, conversation, session_file)
+        if rc == 86:
+            print("lane-agy: Antigravity usage quota exhausted (exit 86). After it resets, run lane resume.")
+        if rc != 85:
+            return rc
+        now = time.monotonic()
+        if deadline is None:
+            deadline = now + wait_limit
+        if now + delay > deadline:
+            print(f"lane-agy: capacity retry budget of {wait_limit}s exhausted (exit 85). Run lane resume.")
+            return 85
+        print(f"lane-agy: Antigravity is at capacity or rate-limiting. Retrying in {delay}s.")
+        print(json.dumps({"type": "system", "subtype": "api_retry", "retry_delay_ms": delay * 1000}), flush=True)
+        time.sleep(delay)
+        delay = min(delay * 2, 120)
+        if conversation:
+            attempt_prompt = "The previous turn hit a capacity limit. Continue the task where you stopped.\n\n" + prompt
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(*sys.argv[1:]))
+    except (OSError, ValueError, TypeError, subprocess.SubprocessError) as error:
+        sys.exit(f"lane-agy: {error}")

@@ -60,8 +60,9 @@ def archived(ssd):
 
 
 def test_a_lane_takes_only_the_files_its_tools_write(lab):
-    home, ssd, _, env = lab
-    lane(home, "a", {"a.log": "log\n", "a.stalled-1.log": "stall\n", "a.harvest/1/lane.patch": "patch\n",
+    home, _, _, env = lab
+    lane(home, "a", {"a.agy-session": "fake-conversation\n", "a.log": "log\n",
+                     "a.stalled-1.log": "stall\n", "a.harvest/1/lane.patch": "patch\n",
                      "a.review.md": "review\n"})
     # Left by a reaped lane a.b, and a note made by hand: neither is a's.
     extra = {"a.b.stalled-1.log": "b stall\n", "a.b.harvest/1/lane.patch": "b patch\n", "a.note4.done": "EXIT=0\n"}
@@ -73,7 +74,7 @@ def test_a_lane_takes_only_the_files_its_tools_write(lab):
         assert f"NO-LANE  {entry}\n" in result.stdout, result.stdout
     final = Path(archive(home, env, "--where", "a").stdout.strip())
     entries = json.loads((final / "MANIFEST.json").read_text(encoding="utf-8"))["entries"]
-    assert sorted(entries) == ["a.done", "a.harvest", "a.harvest/1", "a.harvest/1/lane.patch", "a.json", "a.log",
+    assert sorted(entries) == ["a.agy-session", "a.done", "a.harvest", "a.harvest/1", "a.harvest/1/lane.patch", "a.json", "a.log",
                                "a.review.md", "a.stalled-1.log"]
     assert all((home / relative).is_file() for relative in extra)
     assert not (home / "a.json").exists() and not (home / "a.harvest").exists()
