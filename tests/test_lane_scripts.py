@@ -149,8 +149,15 @@ def test_agy_lane_captures_conversation_and_resumes_in_its_checkout(tmp_path, ag
     lane, home, repo, brief = agy_lane
     shared = tmp_path / "shared cache"
     shared.mkdir()
+    env_deny, repo_deny = shared / "env denied", shared / "repo denied"
+    alias = tmp_path / "alias"
+    alias.symlink_to(shared, target_is_directory=True)
+    other_deny = tmp_path / "another repo denial"
+    for path in (repo_deny, other_deny):
+        subprocess.run(["git", "-C", str(repo), "config", "--add", "lane.agyDenyRead", str(path)], check=True)
     launch = lane("run", "gem", "--repo", str(repo), "--brief", str(brief), "--worker", "agy", "--keep-checkout",
-                  FAKE_AGY_MODE="hold", LANE_AGY_ADD_DIRS=str(shared))
+                  FAKE_AGY_MODE="hold", LANE_AGY_ADD_DIRS=str(shared),
+                  LANE_AGY_DENY_READ=f"{alias / env_deny.name}:{repo_deny}")
     assert "agy_model=gemini-4-neon agy_effort=xhigh" in launch
     assert wait_for_lane_file(home / "gem.agy-session") == "fake-conversation"
     assert json.loads(lane("state", "gem"))["state"] == "RUNNING"
@@ -171,25 +178,66 @@ def test_agy_lane_captures_conversation_and_resumes_in_its_checkout(tmp_path, ag
     settings = json.loads(args[args.index("--settings") + 1])
     assert settings["useG1Credits"] is False and settings["allowNonWorkspaceAccess"] is False
     assert settings["permissions"]["allow"] == ["read_file(*)", "read_url(*)"]
-    assert {f"write_file({checkout}/.git)", f"write_file({repo}/.git)",
-            f"write_file({repo}/.git/worktrees/codex-gem)"} <= set(settings["permissions"]["deny"])
+    deny = settings["permissions"]["deny"]
+    assert {rule for rule in deny if rule.startswith("read_file(")} == {
+        f"read_file({path})" for path in (
+            env_deny, repo_deny, alias / env_deny.name, other_deny,
+            *(tmp_path / "account" / suffix for suffix in
+              (".modal.toml", ".config/secrets", ".config/sops", ".ssh", ".aws", ".netrc")),
+        )
+    }
+    assert {f"write_file({checkout}/.git)", f"write_file({repo}/.git)", f"write_file({repo}/.git/worktrees/codex-gem)"} <= set(deny)
     assert "Do the fake AGY task." in args[args.index("-p") + 1]
     assert '"event": "step_update"' in (home / "gem.log").read_text()
 
     note = tmp_path / "resume.md"
     note.write_text("Continue the AGY task.\n")
-    lane("resume", "gem", "--note", str(note), LANE_AGY_MODEL="gemini-4-carbon", LANE_AGY_EFFORT="medium")
+    new_env_deny, new_repo_deny = shared / "new env denial", shared / "new repo denial"
+    subprocess.run(["git", "-C", str(repo), "config", "--add", "lane.agyDenyRead", str(new_repo_deny)], check=True)
+    lane("resume", "gem", "--note", str(note), LANE_AGY_MODEL="gemini-4-carbon", LANE_AGY_EFFORT="medium",
+         LANE_AGY_DENY_READ=str(new_env_deny))
     assert wait_for_lane_file(home / "gem.done") == "EXIT=0"
     assert json.loads(lane("state", "gem"))["state"] == "DONE:0"
     resumed = agy_calls(tmp_path)[-1]["args"]
     assert resumed[resumed.index("--conversation") + 1] == "fake-conversation"
     assert resumed[resumed.index("--model") + 1] == "gemini-4-carbon-medium"
     assert resumed[resumed.index("--add-dir") + 1] == str(shared)
+    resumed_deny = json.loads(resumed[resumed.index("--settings") + 1])["permissions"]["deny"]
+    assert set(resumed_deny) == {*deny, f"read_file({new_env_deny})", f"read_file({new_repo_deny})"}
     assert "Continue the AGY task." in resumed[resumed.index("-p") + 1]
     assert "agy changed this" in (checkout / "tracked.txt").read_text()
     lane("reap", "gem", "--force")
     assert not checkout.exists() and not (home / "gem.agy-session").exists()
     assert "+agy changed this" in next((home / "gem.harvest").glob("*/lane.patch")).read_text()
+
+
+def test_agy_lane_reads_deny_config_from_source_repo_of_hook_checkout(tmp_path, agy_lane):
+    lane, home, repo, brief = agy_lane
+    hook = tmp_path / "checkout"
+    hook.write_text('#!/bin/sh\nexec git clone -q --no-local "$LANE_REPO" "$1"\n')
+    hook.chmod(0o755)
+    for key, value in (("lane.checkout", hook), ("lane.agyDenyRead", repo)):
+        subprocess.run(["git", "-C", str(repo), "config", "--add", key, str(value)], check=True)
+    lane("run", "gem", "--repo", str(repo), "--brief", str(brief), "--worker", "agy", "--keep-checkout")
+    assert wait_for_lane_file(home / "gem.done") == "EXIT=0"
+    turn = agy_calls(tmp_path)[-1]
+    assert turn["cwd"] == str(home / "checkouts/gem")
+    settings = json.loads(turn["args"][turn["args"].index("--settings") + 1])
+    assert f"read_file({repo})" in settings["permissions"]["deny"]
+
+
+@pytest.mark.parametrize("source", ["LANE_AGY_DENY_READ", "lane.agyDenyRead"])
+def test_agy_lane_rejects_relative_denials_before_launch(tmp_path, agy_lane, source):
+    lane, home, repo, brief = agy_lane
+    overrides = {}
+    if source == "lane.agyDenyRead":
+        subprocess.run(["git", "-C", str(repo), "config", "--add", source, "donor"], check=True)
+    else:
+        overrides[source] = "donor"
+    lane("run", "gem", "--repo", str(repo), "--brief", str(brief), "--worker", "agy", "--no-worktree", **overrides)
+    assert wait_for_lane_file(home / "gem.done") == "EXIT=1"
+    assert f"{source} must name absolute paths" in (home / "gem.log").read_text()
+    assert not agy_calls(tmp_path)
 
 
 @pytest.mark.parametrize(("mode", "budget", "rc", "message"), [

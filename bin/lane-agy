@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 """Run one lane turn with Antigravity, retaining its conversation across attempts.
 
-Antigravity's terminal sandbox and file permission rules grant workspace and
---add-dir writes, read access, and web access through its network policy. They
-deny writes to the checkout's .git and its resolved Git directories. The CLI
-can still write its own state, and the terminal sandbox has its own scratch,
-cache, sensitive-path, and network restrictions. This is AGY's tool sandbox,
-with filesystem enforcement for shell commands subject to host support. It
-allows sandboxed web traffic via AGY's proxy. Native sockets and sensitive
-reads remain subject to its sandbox policy. AGY can apply project permission
-grants in addition to the session settings.
+Antigravity's permission rules grant workspace and --add-dir writes, general
+reads and web access. They deny reads of credential paths and paths named by
+LANE_AGY_DENY_READ or lane.agyDenyRead, and writes to Git metadata. AGY uses
+the file rules for native file tools and to configure its terminal sandbox
+where the host supports it. The CLI maintains its own state, and the terminal
+sandbox has its own scratch, cache, sensitive-path and network restrictions.
 """
 
 import json
@@ -27,6 +24,9 @@ QUOTA = re.compile(r"quota[_ ](?:has been |is )?(?:reached|exceeded|exhausted)|i
 CAPACITY = re.compile(r'\b(?:http|code|status)[\s":=]+(?:429|503)\b|resource_?exhausted|'
                       r"model_capacity_exhausted|at capacity|overloaded|rate limit", re.IGNORECASE)
 CONVERSATION_ID = re.compile(r"[A-Za-z0-9_-]+")
+DEFAULT_READ_DENIALS = (
+    ".modal.toml", ".config/secrets", ".config/sops", ".ssh", ".aws", ".netrc",
+)
 
 
 def consumer_env():
@@ -43,6 +43,32 @@ def consumer_env():
         env.pop(key, None)
     env["GIT_OPTIONAL_LOCKS"] = "0"
     return env
+
+
+def read_denials(repo):
+    env_paths = os.environ.get("LANE_AGY_DENY_READ", "").split(":")
+    config = subprocess.run(
+        ["git", "-C", repo, "config", "--null", "--get-all", "lane.agyDenyRead"],
+        capture_output=True, check=False,
+    )
+    if config.returncode and (config.returncode != 1 or config.stderr or config.stdout):
+        raise ValueError(f"cannot read lane.agyDenyRead in {repo}: {os.fsdecode(config.stderr).strip()}")
+    repo_paths = os.fsdecode(config.stdout).removesuffix("\0").split("\0") if config.stdout else []
+    sources = (
+        ("default credential paths", [str(Path.home() / path) for path in DEFAULT_READ_DENIALS]),
+        ("LANE_AGY_DENY_READ", [path for path in env_paths if path]),
+        ("lane.agyDenyRead", repo_paths),
+    )
+    denials = set()
+    for source, paths in sources:
+        for raw_path in paths:
+            path = Path(raw_path)
+            if not path.is_absolute() or any(char in raw_path for char in "\r\n\t"):
+                raise ValueError(f"{source} must name absolute paths without tabs or newlines: {raw_path!r}")
+            # Retain the configured name for file tools and the resolved target
+            # for the OS sandbox, including aliases such as /tmp on macOS.
+            denials.update((Path(os.path.normpath(path)), path.resolve()))
+    return denials
 
 
 def worker_command(model, effort):
@@ -67,6 +93,7 @@ def worker_command(model, effort):
     protected.update(root / ".git" for root in [Path.cwd(), *extra_dirs])
     if any(any(path == directory or path in directory.parents for path in protected) for directory in extra_dirs):
         raise ValueError("LANE_AGY_ADD_DIRS cannot grant write access to a Git metadata directory")
+    denied_reads = read_denials(os.environ["LANE_REPO"])
     settings = {
         "allowNonWorkspaceAccess": False,
         "disableSlashCommands": False,
@@ -77,7 +104,11 @@ def worker_command(model, effort):
             # A command(*) allow rule would also auto-approve commands outside the sandbox.
             "allow": ["read_file(*)", "read_url(*)"],
             "ask": [],
-            "deny": ["mcp(*)", "command(git push)", *[f"write_file({path})" for path in sorted(protected)]],
+            "deny": [
+                "mcp(*)", "command(git push)",
+                *[f"read_file({path})" for path in sorted(denied_reads)],
+                *[f"write_file({path})" for path in sorted(protected)],
+            ],
         },
     }
     command = ["agy", "--model", variant, "--effort", effort, "--mode", "accept-edits",

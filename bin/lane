@@ -47,8 +47,9 @@ usage:
       (opencode worker: no sandbox; a scrubbed env and a deny-list guard it, see bin/lane-opencode; exit 86 = balance exhausted)
       (opencode worker: a provider at capacity (429) is retried in the lane's session for ~20 min, then exit 85; lane resume continues it)
       (agy worker: LANE_AGY_MODEL=<m> LANE_AGY_EFFORT=<e> override Gemini 4 Neon at xhigh; consumer Google Account only)
-      (agy worker: LANE_AGY_ADD_DIRS=<a:b> adds writable roots. Terminal commands use Antigravity's sandbox,
-       with read and network grants and Git metadata write denials. See bin/lane-agy for sandbox limits.)
+      (agy worker: LANE_AGY_ADD_DIRS=<a:b> adds writable roots. LANE_AGY_DENY_READ=<a:b> and each
+       `git config --add lane.agyDenyRead <absolute path>` add read denials to the default credential paths.
+       Terminal commands use Antigravity's sandbox. See bin/lane-agy for sandbox limits.)
       (agy worker: exit 86 means usage quota exhausted; capacity retries use LANE_AGY_CAPACITY_WAIT_S, default 1200, then exit 85)
       (agy worker: lane resume continues the recorded conversation; use --keep-checkout to resume after a success)
       (codex worker: LANE_CODEX_MODEL=<m> LANE_CODEX_EFFORT=<e> env override the defaults, gpt-6.2-astra at high effort)
@@ -212,6 +213,7 @@ defaults = {
     "agy_model": "gemini-4-neon",
     "agy_effort": "xhigh",
     "agy_add_dirs": "",
+    "agy_deny_read": "",
 }
 recorded = {}
 if sys.argv[1]:
@@ -231,6 +233,10 @@ settings = {}
 for key, default in defaults.items():
     env_key = "LANE_" + key.upper()
     value = os.environ.get(env_key, recorded.get(key, default))
+    if key == "agy_deny_read":
+        # A resume can add denials to the lane's saved set.
+        paths = (recorded.get(key, "") + ":" + value).split(":")
+        value = ":".join(dict.fromkeys(path for path in paths if path))
     if any(char in value for char in "\t\r\n"):
         sys.exit(f"lane: {env_key} must not contain tabs or newlines")
     if key.endswith(("_model", "_effort")):
