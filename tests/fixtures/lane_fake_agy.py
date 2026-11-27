@@ -18,8 +18,10 @@ prompt = args[args.index("-p") + 1]
 mode = os.environ.get("FAKE_AGY_MODE", "success")
 calls = Path(os.environ["FAKE_AGY_CALLS"])
 assert all(key not in os.environ for key in ("GOOGLE_API_KEY", "GEMINI_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"))
+zdotdir = os.environ.get("ZDOTDIR")
 with calls.open("a") as f:
-    print(json.dumps({"args": args, "cwd": str(Path.cwd())}), file=f)
+    print(json.dumps({"args": args, "cwd": str(Path.cwd()), "env": sorted(os.environ),
+                      "zdotdir": sorted(os.listdir(zdotdir)) if zdotdir else None}), file=f)
 
 if prompt == "/model":
     assert "--disable-slash-commands=false" in args

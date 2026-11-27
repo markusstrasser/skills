@@ -110,7 +110,8 @@ def agy_lane(tmp_path):
     env.update(HOME=str(account), PATH=f"{fake_bin}:{env['PATH']}", FAKE_AGY_CALLS=str(tmp_path / "calls"),
                LANE_HOME=str(home), LANE_NICE="0", LANE_MAX_RUNNING="none",
                LANE_ARCHIVE_VOLUME=str(tmp_path / "no-archive"), DISK_FLOOR_GIB="0",
-               GOOGLE_API_KEY="remove", GEMINI_API_KEY="remove", GOOGLE_APPLICATION_CREDENTIALS="remove")
+               GOOGLE_API_KEY="remove", GEMINI_API_KEY="remove", GOOGLE_APPLICATION_CREDENTIALS="remove",
+               LANE_AGY_PASS_ENV="FAKE_AGY_MODE:FAKE_AGY_CALLS")
     repo.mkdir()
     (repo / "tracked.txt").write_text("base\n")
     brief.write_text("Do the fake AGY task.\n")
@@ -188,6 +189,7 @@ def test_agy_lane_captures_conversation_and_resumes_in_its_checkout(tmp_path, ag
         )
     }
     assert {f"write_file({checkout}/.git)", f"write_file({repo}/.git)", f"write_file({repo}/.git/worktrees/codex-gem)"} <= set(deny)
+    assert {"command(security)", "command(/usr/bin/security)"} <= set(deny)
     assert "Do the fake AGY task." in args[args.index("-p") + 1]
     assert '"event": "step_update"' in (home / "gem.log").read_text()
 
@@ -257,6 +259,20 @@ def test_agy_lane_classifies_quota_and_retries_capacity(tmp_path, agy_lane, mode
     if rc == 0:
         args = calls[-1]["args"]
         assert args[args.index("--conversation") + 1] == "fake-conversation"
+
+
+def test_agy_lane_passes_no_credentials_and_skips_shell_startup(tmp_path, agy_lane):
+    lane, home, repo, brief = agy_lane
+    lane("run", "gem", "--repo", str(repo), "--brief", str(brief), "--worker", "agy", "--no-worktree",
+         CANARY_API_KEY="canary", LANE_CANARY_TOKEN="canary", GIT_ASKPASS="canary", ODD_PASSWORD="canary")
+    assert wait_for_lane_file(home / "gem.done") == "EXIT=0"
+    calls = agy_calls(tmp_path)
+    assert len(calls) == 2
+    for call in calls:
+        names = set(call["env"])
+        assert not names & {"CANARY_API_KEY", "LANE_CANARY_TOKEN", "GIT_ASKPASS", "ODD_PASSWORD"}
+        assert {"HOME", "PATH", "ZDOTDIR", "GIT_OPTIONAL_LOCKS"} <= names
+        assert call["zdotdir"] == []
 
 
 @pytest.mark.parametrize(("mode", "rc", "message"), [

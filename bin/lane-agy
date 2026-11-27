@@ -7,11 +7,17 @@ LANE_AGY_DENY_READ or lane.agyDenyRead, and writes to Git metadata. AGY uses
 the file rules for native file tools and to configure its terminal sandbox
 where the host supports it. The CLI maintains its own state, and the terminal
 sandbox has its own scratch, cache, sensitive-path and network restrictions.
+
+agy and every command it runs get an allowlisted environment: no variable
+whose name looks like a credential, and an empty ZDOTDIR so zsh skips the
+user's startup files (a ~/.zshenv can load API keys into every shell).
 """
 
+import atexit
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -29,6 +35,22 @@ DEFAULT_READ_DENIALS = (
     ".env", ".codex", ".claude", ".config/gh", ".git-credentials", ".docker", ".npmrc", ".pypirc",
 )
 PROBE_ATTEMPTS = 3
+# agy matches command rules by prefix, so these stop the direct forms only; sh -c 'security ...'
+# still reaches the keychain (live check 2026-11-27). Only a separate macOS account closes that.
+KEYCHAIN_COMMANDS = ("security", "/usr/bin/security")
+ENV_NAMES = frozenset({"HOME", "USER", "LOGNAME", "PATH", "SHELL", "TERM", "LANG", "TMPDIR", "TZ",
+                       "__CF_USER_TEXT_ENCODING", "COLUMNS", "LINES", "MANPATH", "INFOPATH", "NO_COLOR"})
+ENV_PREFIXES = ("LC_", "UV_", "PYTHON", "GIT_", "LANE_", "HOMEBREW_", "XDG_", "AGY_")
+SECRET_NAME = re.compile(r"KEY|TOKEN|SECRET|PASS|AUTH|CRED|COOKIE|SESSION", re.IGNORECASE)
+_ZDOTDIR = []
+
+
+def shell_dotdir():
+    if not _ZDOTDIR:
+        path = tempfile.mkdtemp(prefix="lane-agy-zdotdir-")
+        atexit.register(shutil.rmtree, path, True)
+        _ZDOTDIR.append(path)
+    return _ZDOTDIR[0]
 
 
 def consumer_env():
@@ -40,10 +62,13 @@ def consumer_env():
         raise TypeError("expected an Antigravity settings JSON object")
     if saved.get("gcp") or saved.get("modelProvider") or os.environ.get("AGY_ADC_AUTH"):
         raise ValueError("consumer Google Account sign-in required (cloud project or API provider configured)")
-    env = os.environ.copy()
-    for key in ("GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"):
-        env.pop(key, None)
+    # LANE_AGY_PASS_ENV names extra variables to keep; the tests use it for the fake CLI.
+    passthrough = {name for name in os.environ.get("LANE_AGY_PASS_ENV", "").split(":") if name}
+    env = {name: value for name, value in os.environ.items()
+           if name in passthrough or ((name in ENV_NAMES or name.startswith(ENV_PREFIXES))
+                                      and not SECRET_NAME.search(name))}
     env["GIT_OPTIONAL_LOCKS"] = "0"
+    env["ZDOTDIR"] = shell_dotdir()
     return env
 
 
@@ -108,6 +133,8 @@ def worker_command(model, effort):
             "ask": [],
             "deny": [
                 "mcp(*)", "command(git push)",
+                # Keychain reads: securityd answers sandboxed shells, so file denials cannot stop them.
+                *[f"command({rule})" for rule in KEYCHAIN_COMMANDS],
                 *[f"read_file({path})" for path in sorted(denied_reads)],
                 *[f"write_file({path})" for path in sorted(protected)],
             ],
