@@ -24,6 +24,10 @@ with calls.open("a") as f:
 if prompt == "/model":
     assert "--disable-slash-commands=false" in args
     assert args[args.index("--output-format") + 1] == "json"
+    slow_marker = calls.with_suffix(".slow")
+    if mode == "slow-model" or (mode == "slow-model-once" and not slow_marker.exists()):
+        slow_marker.touch()
+        time.sleep(3)
     emit({"status": "SUCCESS", "num_turns": 0, "command": {"name": "model", "data": {
         "id": "unexpected-variant" if mode == "wrong-selection" else model, "effort": effort,
     }}})

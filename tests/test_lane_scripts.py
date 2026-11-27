@@ -183,7 +183,8 @@ def test_agy_lane_captures_conversation_and_resumes_in_its_checkout(tmp_path, ag
         f"read_file({path})" for path in (
             env_deny, repo_deny, alias / env_deny.name, other_deny,
             *(tmp_path / "account" / suffix for suffix in
-              (".modal.toml", ".config/secrets", ".config/sops", ".ssh", ".aws", ".netrc")),
+              (".modal.toml", ".config/secrets", ".config/sops", ".ssh", ".aws", ".netrc", ".env", ".codex",
+               ".claude", ".config/gh", ".git-credentials", ".docker", ".npmrc", ".pypirc")),
         )
     }
     assert {f"write_file({checkout}/.git)", f"write_file({repo}/.git)", f"write_file({repo}/.git/worktrees/codex-gem)"} <= set(deny)
@@ -256,6 +257,18 @@ def test_agy_lane_classifies_quota_and_retries_capacity(tmp_path, agy_lane, mode
     if rc == 0:
         args = calls[-1]["args"]
         assert args[args.index("--conversation") + 1] == "fake-conversation"
+
+
+@pytest.mark.parametrize(("mode", "rc", "message"), [
+    ("slow-model-once", 0, "/model probe timed out after 1s (attempt 1/3); retrying in 0s"),
+    ("slow-model", 1, "agy /model probe timed out after 1s, 3 attempts"),
+])
+def test_agy_lane_retries_a_slow_model_probe(tmp_path, agy_lane, mode, rc, message):
+    lane, home, repo, brief = agy_lane
+    lane("run", "gem", "--repo", str(repo), "--brief", str(brief), "--worker", "agy", "--no-worktree",
+         FAKE_AGY_MODE=mode, LANE_AGY_PROBE_TIMEOUT_S="1", LANE_AGY_PROBE_RETRY_S="0")
+    assert wait_for_lane_file(home / "gem.done") == f"EXIT={rc}"
+    assert message in (home / "gem.log").read_text()
 
 
 @pytest.mark.parametrize("config", ["gcp", "modelProvider", "adc", "wrong-selection"])

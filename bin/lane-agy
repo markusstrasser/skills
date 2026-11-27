@@ -26,7 +26,9 @@ CAPACITY = re.compile(r'\b(?:http|code|status)[\s":=]+(?:429|503)\b|resource_?ex
 CONVERSATION_ID = re.compile(r"[A-Za-z0-9_-]+")
 DEFAULT_READ_DENIALS = (
     ".modal.toml", ".config/secrets", ".config/sops", ".ssh", ".aws", ".netrc",
+    ".env", ".codex", ".claude", ".config/gh", ".git-credentials", ".docker", ".npmrc", ".pypirc",
 )
+PROBE_ATTEMPTS = 3
 
 
 def consumer_env():
@@ -119,10 +121,23 @@ def worker_command(model, effort):
 
 
 def check_selection(command, variant, effort):
-    # /model is answered by the CLI, without spending a model turn.
-    with tempfile.TemporaryDirectory(prefix="lane-agy-model-") as cwd:
-        probe = subprocess.run(command + ["--disable-slash-commands=false", "-p", "/model", "--output-format", "json"], cwd=cwd,
-                               env=consumer_env(), capture_output=True, text=True, timeout=30, check=False)
+    # /model is answered by the CLI, without spending a model turn. With several
+    # lanes launching at once the CLI has taken longer than 30 s to answer it.
+    timeout = float(os.environ.get("LANE_AGY_PROBE_TIMEOUT_S", "120"))
+    delay = float(os.environ.get("LANE_AGY_PROBE_RETRY_S", "5"))
+    for attempt in range(1, PROBE_ATTEMPTS + 1):
+        with tempfile.TemporaryDirectory(prefix="lane-agy-model-") as cwd:
+            try:
+                probe = subprocess.run(command + ["--disable-slash-commands=false", "-p", "/model", "--output-format", "json"],
+                                       cwd=cwd, env=consumer_env(), capture_output=True, text=True, timeout=timeout,
+                                       check=False)
+                break
+            except subprocess.TimeoutExpired:
+                if attempt == PROBE_ATTEMPTS:
+                    raise ValueError(f"agy /model probe timed out after {timeout:g}s, {PROBE_ATTEMPTS} attempts") from None
+                print(f"lane-agy: /model probe timed out after {timeout:g}s (attempt {attempt}/{PROBE_ATTEMPTS}); "
+                      f"retrying in {delay:g}s", file=sys.stderr, flush=True)
+        time.sleep(delay)
     try:
         reply = json.loads(probe.stdout)
     except ValueError as exc:
